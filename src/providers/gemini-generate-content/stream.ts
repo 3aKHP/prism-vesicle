@@ -1,4 +1,5 @@
 import { ProviderError } from "../shared/errors";
+import { readSseEvents } from "../shared/sse";
 import type { ProviderStreamEvent } from "../shared/types";
 import { responseFromGeminiParts } from "./response";
 import type { GeminiPart, GeminiResponse } from "./types";
@@ -60,7 +61,11 @@ function absorbGeminiStreamChunk(
   state.chunks.push(chunk);
 
   const candidate = chunk.candidates?.[0];
-  for (const part of candidate?.content?.parts ?? []) {
+  const chunkParts = candidate?.content?.parts ?? [];
+  const newParts = hasProcessedPrefix(state.parts, chunkParts)
+    ? chunkParts.slice(state.parts.length)
+    : chunkParts;
+  for (const part of newParts) {
     const index = state.parts.length;
     state.parts.push(part);
     if (part.text) {
@@ -83,6 +88,9 @@ function absorbGeminiStreamChunk(
         index,
         id: part.functionCall.id || `gemini_tool_${index + 1}`,
         name,
+        // Gemini functionCall parts are atomic. Consumers still receive them
+        // through argumentsDelta so the provider-neutral stream event stays
+        // compatible with OpenAI/Anthropic accumulation.
         argumentsDelta: jsonString(part.functionCall.args),
       });
     }
@@ -91,49 +99,6 @@ function absorbGeminiStreamChunk(
   if (candidate?.finishReason) state.finishReason = candidate.finishReason;
   if (chunk.usageMetadata) state.usage = chunk.usageMetadata;
   return events;
-}
-
-async function* readSseEvents(body: ReadableStream<Uint8Array>): AsyncIterable<{ event: string; data: string }> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split(/\r?\n\r?\n/);
-      buffer = parts.pop() ?? "";
-      for (const part of parts) {
-        const event = parseSseBlock(part);
-        if (event) yield event;
-      }
-    }
-
-    buffer += decoder.decode();
-    const trailing = parseSseBlock(buffer);
-    if (trailing) yield trailing;
-  } finally {
-    try {
-      reader.releaseLock();
-    } catch {
-      // Preserve original stream errors if the reader lock was already released.
-    }
-  }
-}
-
-function parseSseBlock(block: string): { event: string; data: string } | undefined {
-  const lines = block.split(/\r?\n/);
-  let event = "message";
-  const dataLines: string[] = [];
-  for (const line of lines) {
-    const trimmed = line.trimEnd();
-    if (trimmed.startsWith("event:")) event = trimmed.slice("event:".length).trimStart();
-    if (trimmed.startsWith("data:")) dataLines.push(trimmed.slice("data:".length).trimStart());
-  }
-  if (dataLines.length === 0) return undefined;
-  return { event, data: dataLines.join("\n") };
 }
 
 function parseStreamChunk(data: string, providerId?: string): GeminiResponse {
@@ -147,6 +112,15 @@ function parseStreamChunk(data: string, providerId?: string): GeminiResponse {
       cause: error,
     });
   }
+}
+
+function hasProcessedPrefix(processed: GeminiPart[], incoming: GeminiPart[]): boolean {
+  if (processed.length === 0) return true;
+  if (incoming.length < processed.length) return false;
+  for (let index = 0; index < processed.length; index++) {
+    if (jsonString(incoming[index]) !== jsonString(processed[index])) return false;
+  }
+  return true;
 }
 
 function jsonString(value: unknown): string {

@@ -326,6 +326,34 @@ describe("Gemini generateContent adapter", () => {
     });
   });
 
+  test("deduplicates cumulative stream parts", async () => {
+    globalThis.fetch = (async () => new Response(rawSse([
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hello"}]}}]}',
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hello"},{"text":" world"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":2,"totalTokenCount":4}}',
+    ]), {
+      headers: { "content-type": "text/event-stream" },
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+
+    expect(events.filter((event) => event.type === "content_delta")).toEqual([
+      { type: "content_delta", delta: "hello" },
+      { type: "content_delta", delta: " world" },
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: { content: "hello world" },
+    });
+  });
+
   test("falls back to non-stream parsing when a stream request returns JSON", async () => {
     globalThis.fetch = (async () => Response.json({
       candidates: [{ content: { parts: [{ text: "ok" }] } }],
