@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -6,15 +6,17 @@ import { resolveGate, runPrompt } from "../src/core/agent-loop/run";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
+const providerConfigDirs: string[] = [];
 
 describe("agent loop sessions", () => {
   beforeEach(async () => {
     await configureTestProviderEnv();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
+    await cleanupProviderConfigDirs();
   });
 
   test("reuses one session and sends prior turns to the provider", async () => {
@@ -163,9 +165,10 @@ describe("agent loop gates", () => {
     await configureTestProviderEnv();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
+    await cleanupProviderConfigDirs();
   });
 
   test("surfaces request_confirmation as needs_user and persists the gate call", async () => {
@@ -464,6 +467,7 @@ async function createPromptRoot(options: { stopGates?: string[]; validators?: st
 
 async function configureTestProviderEnv(): Promise<void> {
   const configDir = await mkdtemp(join(tmpdir(), "vesicle-agent-provider-"));
+  providerConfigDirs.push(configDir);
   const configPath = join(configDir, "providers.yaml");
   await writeFile(configPath, [
     "default:",
@@ -485,4 +489,9 @@ async function configureTestProviderEnv(): Promise<void> {
   delete process.env.VESICLE_PROVIDER;
   delete process.env.VESICLE_BASE_URL;
   delete process.env.VESICLE_MODEL;
+}
+
+async function cleanupProviderConfigDirs(): Promise<void> {
+  const dirs = providerConfigDirs.splice(0);
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
 }

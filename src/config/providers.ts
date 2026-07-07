@@ -54,6 +54,9 @@ async function loadProviderRegistryWithEnv(
     throw error;
   });
   if (!source) {
+    if (env.VESICLE_PROVIDERS_FILE) {
+      throw new Error(`VESICLE_PROVIDERS_FILE points to a provider config that does not exist: ${configPath}.`);
+    }
     throw new Error(`Provider config not found at ${configPath}. Copy docs/examples/providers.yaml there or set VESICLE_PROVIDERS_FILE.`);
   }
   const providerEnv = await loadProviderEnvironment(configPath, env);
@@ -158,7 +161,10 @@ function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
     if (!raw) continue;
     const line = raw.startsWith("export ") ? raw.slice("export ".length).trimStart() : raw;
     const equals = line.indexOf("=");
-    if (equals === -1) throw new Error(`Environment file parse error on line ${index + 1} in ${path}: missing "=".`);
+    if (equals === -1) {
+      const hint = raw.startsWith("export ") ? "use KEY=value syntax, not bare export statements" : 'missing "="';
+      throw new Error(`Environment file parse error on line ${index + 1} in ${path}: ${hint}.`);
+    }
     const key = line.slice(0, equals).trim();
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
       throw new Error(`Environment file parse error on line ${index + 1} in ${path}: invalid variable name "${key}".`);

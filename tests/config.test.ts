@@ -1,12 +1,20 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfigForSelection, loadProviderRegistry } from "../src/config/providers";
 
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  const dirs = tempDirs.splice(0);
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
 describe("config loading", () => {
   test("requires a provider registry file instead of legacy single-key env fallback", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-missing-provider-config-"));
+    tempDirs.push(rootDir);
     const env = {
       VESICLE_CONFIG_DIR: join(rootDir, "config"),
       VESICLE_API_KEY: "legacy-key",
@@ -15,6 +23,16 @@ describe("config loading", () => {
     };
 
     await expect(loadProviderRegistry(env)).rejects.toThrow("Provider config not found");
+  });
+
+  test("reports a missing explicit VESICLE_PROVIDERS_FILE path clearly", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-missing-explicit-provider-config-"));
+    tempDirs.push(rootDir);
+    const configPath = join(rootDir, "missing.yaml");
+
+    await expect(loadProviderRegistry({ VESICLE_PROVIDERS_FILE: configPath })).rejects.toThrow(
+      "VESICLE_PROVIDERS_FILE points to a provider config that does not exist",
+    );
   });
 
   test("loads provider registry from the configured global providers file", async () => {
@@ -129,6 +147,24 @@ describe("config loading", () => {
     await expect(loadProviderRegistry(env)).rejects.toThrow("use apiKeyEnv instead of inline apiKey");
   });
 
+  test("reports bare export statements in provider .env files clearly", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: local",
+      "  model: qwen3",
+      "providers:",
+      "  local:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: http://127.0.0.1:11434/v1",
+      "    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY",
+      "    models:",
+      "      - qwen3",
+      "",
+    ], ["export LOCAL_OPENAI_COMPAT_API_KEY"]);
+
+    await expect(loadProviderRegistry(env)).rejects.toThrow("use KEY=value syntax, not bare export statements");
+  });
+
   test("rejects duplicate provider ids", async () => {
     const { env } = await writeProvidersFile([
       "default:",
@@ -156,6 +192,7 @@ describe("config loading", () => {
 
 async function writeProvidersFile(lines: string[], envLines: string[] = []): Promise<{ env: NodeJS.ProcessEnv }> {
   const rootDir = await mkdtemp(join(tmpdir(), "vesicle-provider-config-"));
+  tempDirs.push(rootDir);
   const configDir = join(rootDir, "config");
   await mkdir(configDir, { recursive: true });
   const configPath = join(configDir, "providers.yaml");
