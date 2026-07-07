@@ -2,7 +2,7 @@ import { createMemo, createSignal, For, Show, onMount } from "solid-js";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { inspectProviderConfig, resolveProviderConfig } from "../config/providers";
+import { inspectProviderConfig } from "../config/providers";
 import type { ProviderRegistry, ProviderSelection } from "../config/providers";
 import { resolveGate, runPrompt } from "../core/agent-loop/run";
 import type { RunPromptResult } from "../core/agent-loop/run";
@@ -107,11 +107,15 @@ export function App() {
   ));
 
   let lastCtrlCAt = 0;
+  let providerConfigLoad: Promise<void> | null = null;
 
   // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
     void refreshArtifacts();
-    void refreshProviderConfig();
+    void loadProviderConfigOnce().catch((error) => {
+      setProviderConfigReady(true);
+      reportError(error);
+    });
     void listSessions().then((sessions) => {
       setResumableSessions(sessions);
       if (sessions.length > 0) {
@@ -261,8 +265,9 @@ export function App() {
 	    if (!providerConfigReady()) {
 	      setStatus("loading provider config");
 	      try {
-	        await refreshProviderConfig();
+	        await loadProviderConfigOnce();
 	      } catch (error) {
+	        setProviderConfigReady(true);
 	        reportError(error);
 	        return;
 	      }
@@ -446,7 +451,7 @@ export function App() {
   }
 
   async function refreshProviderConfig(selection?: Partial<ProviderSelection>) {
-    const inspected = await inspectProviderConfig(process.cwd(), selection);
+    const inspected = await inspectProviderConfig(selection);
     setProviderRegistry(inspected.registry);
     setActiveProvider(inspected.providerId);
     setActiveModel(inspected.model);
@@ -462,23 +467,28 @@ export function App() {
   async function ensureProviderRegistry(): Promise<ProviderRegistry> {
     const existing = providerRegistry();
     if (existing) return existing;
-    const inspected = await inspectProviderConfig(process.cwd());
+    await loadProviderConfigOnce();
+    const loaded = providerRegistry();
+    if (!loaded) throw new Error("Provider registry did not load.");
+    return loaded;
+  }
+
+  function loadProviderConfigOnce(): Promise<void> {
+    providerConfigLoad ??= refreshProviderConfig().finally(() => {
+      providerConfigLoad = null;
+    });
+    return providerConfigLoad;
+  }
+
+  async function applyProviderSelection(selection: Partial<ProviderSelection>): Promise<ProviderSelection> {
+    const inspected = await inspectProviderConfig(selection);
     setProviderRegistry(inspected.registry);
     setActiveProvider(inspected.providerId);
     setActiveModel(inspected.model);
     setProviderHasApiKey(inspected.hasApiKey);
-    setProviderConfigReady(true);
-    return inspected.registry;
-  }
-
-  function applyProviderSelection(registry: ProviderRegistry, selection: Partial<ProviderSelection>): ProviderSelection {
-    const resolved = resolveProviderConfig(registry, selection);
-    setActiveProvider(resolved.providerId);
-    setActiveModel(resolved.model);
-    setProviderHasApiKey(Boolean(resolved.apiKey));
-    setStatus(Boolean(resolved.apiKey) ? `provider ${resolved.providerId}` : `missing API key for ${resolved.providerId}`);
-    recordActivity({ kind: "provider", text: `switched to ${resolved.providerId}/${resolved.model}` });
-    return { provider: resolved.providerId, model: resolved.model };
+    setStatus(inspected.hasApiKey ? `provider ${inspected.providerId}` : `missing API key for ${inspected.providerId}`);
+    recordActivity({ kind: "provider", text: `switched to ${inspected.providerId}/${inspected.model}` });
+    return { provider: inspected.providerId, model: inspected.model };
   }
 
   function activeProviderSelection(): ProviderSelection {
@@ -569,8 +579,7 @@ export function App() {
 	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /use <provider> <model>" }]);
 	        return;
 	      }
-	      const registry = await ensureProviderRegistry();
-	      const selection = applyProviderSelection(registry, { provider: providerId, model });
+	      const selection = await applyProviderSelection({ provider: providerId, model });
 	      await persistProviderSwitch(selection);
 	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
 	      return;
@@ -581,8 +590,7 @@ export function App() {
 	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /model <model>" }]);
 	        return;
 	      }
-	      const registry = await ensureProviderRegistry();
-	      const selection = applyProviderSelection(registry, { provider: activeProvider(), model: arg });
+	      const selection = await applyProviderSelection({ provider: activeProvider(), model: arg });
 	      await persistProviderSwitch(selection);
 	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
 	      return;
@@ -698,8 +706,7 @@ export function App() {
 	      if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
 	      if (snapshot.providerSelection) {
 	        try {
-	          const registry = await ensureProviderRegistry();
-	          const selection = applyProviderSelection(registry, snapshot.providerSelection);
+	          const selection = await applyProviderSelection(snapshot.providerSelection);
 	          hostMessages.push({ role: "system", content: `Restored provider ${selection.provider}/${selection.model} from session.` });
 	        } catch (error) {
 	          const message = error instanceof Error ? error.message : String(error);

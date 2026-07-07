@@ -63,7 +63,7 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
 
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     if (!this.config.apiKey) {
-      throw new Error(`${this.config.apiKeyLabel ?? "VESICLE_API_KEY"} is required before making a provider request.`);
+      throw new Error(`${this.config.apiKeyLabel ?? "provider API key"} is required before making a provider request.`);
     }
 
     const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
@@ -86,7 +86,7 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
 
   async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
     if (!this.config.apiKey) {
-      throw new Error(`${this.config.apiKeyLabel ?? "VESICLE_API_KEY"} is required before making a provider request.`);
+      throw new Error(`${this.config.apiKeyLabel ?? "provider API key"} is required before making a provider request.`);
     }
 
     const response = await this.fetchChatCompletion(request, true, true);

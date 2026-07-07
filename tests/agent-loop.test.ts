@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -6,18 +6,17 @@ import { resolveGate, runPrompt } from "../src/core/agent-loop/run";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
+const providerConfigDirs: string[] = [];
 
 describe("agent loop sessions", () => {
-  beforeEach(() => {
-    process.env.VESICLE_PROVIDER = "openai-chat-compatible";
-    process.env.VESICLE_BASE_URL = "https://provider.test/v1";
-    process.env.VESICLE_MODEL = "test-model";
-    process.env.VESICLE_API_KEY = "test-key";
+  beforeEach(async () => {
+    await configureTestProviderEnv();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
+    await cleanupProviderConfigDirs();
   });
 
   test("reuses one session and sends prior turns to the provider", async () => {
@@ -162,16 +161,14 @@ describe("agent loop sessions", () => {
 });
 
 describe("agent loop gates", () => {
-  beforeEach(() => {
-    process.env.VESICLE_PROVIDER = "openai-chat-compatible";
-    process.env.VESICLE_BASE_URL = "https://provider.test/v1";
-    process.env.VESICLE_MODEL = "test-model";
-    process.env.VESICLE_API_KEY = "test-key";
+  beforeEach(async () => {
+    await configureTestProviderEnv();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
+    await cleanupProviderConfigDirs();
   });
 
   test("surfaces request_confirmation as needs_user and persists the gate call", async () => {
@@ -466,4 +463,35 @@ async function createPromptRoot(options: { stopGates?: string[]; validators?: st
   await writeFile(join(enginesDir, "etl.profile.yaml"), profileYaml, "utf8");
 
   return rootDir;
+}
+
+async function configureTestProviderEnv(): Promise<void> {
+  const configDir = await mkdtemp(join(tmpdir(), "vesicle-agent-provider-"));
+  providerConfigDirs.push(configDir);
+  const configPath = join(configDir, "providers.yaml");
+  await writeFile(configPath, [
+    "default:",
+    "  provider: test",
+    "  model: test-model",
+    "providers:",
+    "  test:",
+    "    protocol: openai-chat-compatible",
+    "    baseUrl: https://provider.test/v1",
+    "    apiKeyEnv: TEST_PROVIDER_API_KEY",
+    "    models:",
+    "      - test-model",
+    "",
+  ].join("\n"), "utf8");
+  await writeFile(join(configDir, ".env"), "TEST_PROVIDER_API_KEY=test-key\n", "utf8");
+  process.env.VESICLE_PROVIDERS_FILE = configPath;
+  delete process.env.TEST_PROVIDER_API_KEY;
+  delete process.env.VESICLE_API_KEY;
+  delete process.env.VESICLE_PROVIDER;
+  delete process.env.VESICLE_BASE_URL;
+  delete process.env.VESICLE_MODEL;
+}
+
+async function cleanupProviderConfigDirs(): Promise<void> {
+  const dirs = providerConfigDirs.splice(0);
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
 }

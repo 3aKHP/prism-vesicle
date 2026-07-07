@@ -22,6 +22,18 @@ project follows Semantic Versioning once releases begin.
   deltas.
 - TUI live assistant draft rendering while a provider response is in flight.
 
+### Changed
+
+- Provider configuration now requires the user-level `providers.yaml`; Vesicle
+  no longer falls back to a single `VESICLE_API_KEY` environment configuration
+  when that file is missing.
+- Provider API keys can now be loaded from the `.env` file beside the
+  user-level `providers.yaml`; that user-level `.env` takes precedence over
+  inherited process variables so legacy project-root `.env` files cannot mask
+  it.
+- `vesicle doctor` now reports whether the user-level provider `.env` file was
+  found, without printing secret values.
+
 ### Fixed
 
 - TUI tool calls/results now render as compact transcript summaries instead of
@@ -30,6 +42,9 @@ project follows Semantic Versioning once releases begin.
   provider-stream error, retries without OpenAI-specific `stream_options` for
   stricter compatible providers, and preserves the final assistant turn in the
   in-memory conversation history.
+- TUI provider/model switches now resolve API-key availability through the
+  user-level provider `.env`, so `/use`, `/model`, and session resume do not
+  incorrectly show "API key: missing" when the selected key is stored there.
 
 ## [0.1.0] - 2026-07-07
 

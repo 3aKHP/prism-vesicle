@@ -12,6 +12,7 @@ export async function runDoctor(): Promise<void> {
   console.log(`Base URL: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
   console.log(`Provider config: ${config.registry.source}${config.registry.path ? ` (${config.registry.path})` : ""}`);
+  console.log(`Provider env: ${config.hasProviderEnvFile ? "file" : "missing"} (${config.providerEnvPath})`);
   console.log(`API key: ${config.hasApiKey ? "available" : "missing"}`);
   console.log(`Missing: ${config.missing.length > 0 ? config.missing.join(", ") : "none"}`);
 }

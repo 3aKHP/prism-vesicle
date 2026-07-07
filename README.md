@@ -11,19 +11,14 @@ Vesicle runs directly.
 
 ```powershell
 bun install
-Copy-Item .env.example .env
+New-Item -ItemType Directory -Force $env:APPDATA\prism-vesicle
+Copy-Item docs\examples\providers.yaml $env:APPDATA\prism-vesicle\providers.yaml
+Copy-Item .env.example $env:APPDATA\prism-vesicle\.env
 ```
 
-Set:
-
-- `VESICLE_PROVIDER=openai-chat-compatible`
-- `VESICLE_BASE_URL`
-- `VESICLE_MODEL`
-- `VESICLE_API_KEY`
-
-For multiple OpenAI-compatible providers, copy
-`docs/examples/providers.yaml` to your user-level provider config file and set
-each provider's `apiKeyEnv` environment variable. The default config path is
+Edit your user-level provider config and set the environment variables named
+by each provider's `apiKeyEnv` in the `.env` file beside it. The default
+config path is
 `%APPDATA%\prism-vesicle\providers.yaml` on Windows and
 `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
 `~/.config/prism-vesicle/providers.yaml` on Linux/macOS. The TUI can then
@@ -32,8 +27,13 @@ switch with `/providers`, `/models`, `/use <provider> <model>`, and
 The provider file intentionally supports only Vesicle's small YAML subset:
 `default`, `providers`, scalar provider fields, and `models` string lists.
 Provider secrets are not read from this file; every provider must name an
-`apiKeyEnv` variable and the actual key belongs in `.env` or the process
-environment.
+`apiKeyEnv` variable and the actual key belongs in the same user-level
+directory's `.env` file. Process environment variables are used only when the
+user-level `.env` does not define that key.
+
+If you still have an old project-root `.env` from early testing, move the
+provider key variables into the user-level `.env` beside `providers.yaml`, then
+delete or rename the root file so local runs cannot depend on stale secrets.
 
 Then run:
 
@@ -50,10 +50,11 @@ return to an unresolved gate.
 ## Scripts
 
 - `bun run dev`: launch the TUI
-- `bun run doctor`: print runtime and provider configuration status
+- `bun run doctor`: print runtime, provider configuration, and user-level
+  provider `.env` status
 - `bun run typecheck`: TypeScript validation
-- `bun test`: test suite (includes a real-provider
-  E2E gate test that auto-skips without `VESICLE_API_KEY`)
+- `bun test`: test suite (includes a real-provider E2E gate test that returns
+  early when the selected provider's `apiKeyEnv` is missing)
 - `vesicle prompt dump --engine <id>`: print the fully composed system prompt
   the model receives — the primary "is there host pollution?" audit tool
 - `vesicle prompt shape --engine <id>`: print profile structure only
@@ -63,8 +64,8 @@ return to an unresolved gate.
 - OpenAI-compatible Chat Completions provider path
 - Streaming OpenAI-compatible Chat Completions responses when the provider
   supports SSE, including streamed tool-call reconstruction
-- Provider/model registry from `.vesicle/providers.yaml`, with TUI commands to
-  switch provider and model inside a session
+- Provider/model registry from the user-level `providers.yaml`, with TUI
+  commands to switch provider and model inside a session
 - Engine profiles drive systemPrompt, tools, validators, and stop gates from
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker

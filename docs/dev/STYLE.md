@@ -59,7 +59,10 @@ project `.vesicle/` runtime state directory. The default path is
 `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
 `~/.config/prism-vesicle/providers.yaml` elsewhere. API keys must be referenced
 via per-provider environment variables (`apiKeyEnv`) and must not be stored
-inline in the provider file.
+inline in the provider file. The user-level `.env` file beside
+`providers.yaml` is the default place for those secret values; process
+environment variables are fallback only so a legacy project-root `.env` loaded
+by the runtime cannot override the user-level secret file.
 
 ## Tool Runtime
 
