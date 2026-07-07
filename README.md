@@ -97,8 +97,11 @@ return to an unresolved gate.
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker
   support and interactive pending-gate recovery
-- Tool-calling loop for `list_files`, `read_file`, and `write_file` with a
-  high ceiling and no-progress circuit breaker (not a coding-agent hard cap)
+- Tool-calling loop for guarded filesystem CRUD/search tools (`stat_path`,
+  `list_files`, `grep_files`, `read_file`, `create_file`, `write_file`,
+  `replace_in_file`, `append_file`, `delete_file`, `copy_file`, `move_file`)
+  with a high ceiling and no-progress circuit breaker (not a coding-agent hard
+  cap)
 - `request_confirmation` gate runtime: the model pauses for user confirmation
   at declared stop gates (ETL blueprint and phase checkpoints wired)
 - Module A (character card) and Module B (scenario card) v9 schema validators;

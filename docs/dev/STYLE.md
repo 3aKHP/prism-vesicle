@@ -97,10 +97,13 @@ Model-visible tools are a security boundary.
 
 - Only project-relative paths are allowed.
 - Absolute paths and traversal outside the project root are rejected.
-- Read/list roots: `assets/`, `source_materials/`, `workspace/`, `test_runs/`,
-  `novels/`, `reports/`.
-- Write roots: `workspace/`, `test_runs/`, `novels/`, `reports/`.
-- A model must not claim a file was written unless `write_file` returned success.
+- Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`,
+  `test_runs/`, `novels/`, `reports/`.
+- Create/write/replace/append/delete/copy-target/move roots: `workspace/`,
+  `test_runs/`, `novels/`, `reports/`.
+- `delete_file` must delete only files, never directories or directory trees.
+- A model must not claim a file was created, written, edited, deleted, copied,
+  or moved unless the corresponding file tool returned success.
 - The `request_confirmation` gate tool is attached only when the active engine
   profile declares at least one stop gate. Undeclared gates are refused with a
   tool result, not paused — the model self-corrects on the next turn.
