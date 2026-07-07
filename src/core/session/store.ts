@@ -148,6 +148,7 @@ export async function listSessions(rootDir = process.cwd()): Promise<SessionSumm
 export type ResumedMessage = {
   role: "user" | "assistant" | "tool";
   content: string;
+  reasoningContent?: string;
   toolCallId?: string;
   toolCalls?: ResumedToolCall[];
 };
@@ -204,9 +205,11 @@ export async function loadSessionSnapshot(
 
     if (record.role === "assistant") {
       const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
+      const reasoningContent = record.metadata?.reasoningContent as string | undefined;
       messages.push({
         role: "assistant",
         content: record.content,
+        ...(reasoningContent ? { reasoningContent } : {}),
         ...(toolCalls ? { toolCalls } : {}),
       });
       continue;

@@ -82,7 +82,7 @@ describe("agent loop sessions", () => {
 
   test("executes model-requested write_file calls", async () => {
     const rootDir = await createPromptRoot();
-    const requestBodies: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    const requestBodies: Array<{ messages: Array<{ role: string; content: string; reasoning_content?: string }> }> = [];
 
     globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
       requestBodies.push(JSON.parse(String(init?.body)));
@@ -95,6 +95,7 @@ describe("agent loop sessions", () => {
               finish_reason: "tool_calls",
               message: {
                 content: "",
+                reasoning_content: "Need to write the requested artifact before answering.",
                 tool_calls: [
                   {
                     id: "call-write",
@@ -139,6 +140,10 @@ describe("agent loop sessions", () => {
     expect(result.response.content).toBe("File written.");
     expect(written).toBe("# Tool Test\n\nwritten");
     expect(requestBodies[1].messages.some((message) => message.role === "tool")).toBe(true);
+    expect(requestBodies[1].messages.some((message) => (
+      message.role === "assistant" &&
+      message.reasoning_content === "Need to write the requested artifact before answering."
+    ))).toBe(true);
   });
 
   test("does not run artifact validators on ordinary assistant prose", async () => {

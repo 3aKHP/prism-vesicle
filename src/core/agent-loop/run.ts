@@ -243,6 +243,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     messages.push({
       role: "assistant",
       content: response.content,
+      ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
       toolCalls,
     });
     await session.append({
@@ -251,6 +252,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       metadata: {
         providerResponseId: response.id,
         finishReason: response.finishReason,
+        ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
         toolCalls,
       },
     });
@@ -362,12 +364,17 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
 
   const finalResponseHasToolCalls = (response.toolCalls?.length ?? 0) > 0;
   if (!finalResponseHasToolCalls) {
-    messages.push({ role: "assistant", content: response.content });
+    messages.push({
+      role: "assistant",
+      content: response.content,
+      ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
+    });
     await session.append({
       role: "assistant",
       content: response.content,
       metadata: {
         providerResponseId: response.id,
+        ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
         usage: response.usage,
       },
     });
@@ -418,6 +425,8 @@ async function completeWithStreaming(
     switch (event.type) {
       case "content_delta":
         onEvent?.({ type: "assistant_delta", delta: event.delta });
+        break;
+      case "reasoning_delta":
         break;
       case "tool_call_delta":
         onEvent?.({

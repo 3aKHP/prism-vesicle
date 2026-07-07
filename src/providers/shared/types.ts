@@ -8,6 +8,7 @@ export type ModelRef = {
 export type VesicleMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
+  reasoningContent?: string;
   toolCallId?: string;
   toolCalls?: ToolCall[];
 };
@@ -28,6 +29,7 @@ export type VesicleRequest = {
 export type VesicleResponse = {
   id: string;
   content: string;
+  reasoningContent?: string;
   toolCalls?: ToolCall[];
   finishReason?: string;
   raw?: unknown;
@@ -40,6 +42,7 @@ export type VesicleResponse = {
 
 export type ProviderStreamEvent =
   | { type: "content_delta"; delta: string }
+  | { type: "reasoning_delta"; delta: string }
   | { type: "tool_call_delta"; index: number; id?: string; name?: string; argumentsDelta?: string }
   | { type: "complete"; response: VesicleResponse };
 

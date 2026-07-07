@@ -30,6 +30,9 @@ project follows Semantic Versioning once releases begin.
 - Added a rapid-development workflow exception that treats `develop` as the
   active trunk for low-risk internal iteration while preserving PR/CR flow for
   high-risk or release-bound work.
+- Split the OpenAI-compatible provider backend into request shaping, response
+  parsing, streaming, wire types, and structured provider errors to harden the
+  transport foundation before adding more protocols.
 - Provider configuration now requires the user-level `providers.yaml`; Vesicle
   no longer falls back to a single `VESICLE_API_KEY` environment configuration
   when that file is missing.
@@ -48,6 +51,13 @@ project follows Semantic Versioning once releases begin.
   provider-stream error, retries without OpenAI-specific `stream_options` for
   stricter compatible providers, and preserves the final assistant turn in the
   in-memory conversation history.
+- OpenAI-compatible streamed tool-call names now keep the latest provider value
+  instead of concatenating repeated `function.name` deltas, avoiding duplicated
+  names from non-conformant streams.
+- OpenAI-compatible reasoning responses now preserve provider
+  `reasoning_content` through non-streaming, streaming, tool-loop follow-up
+  requests, and session resume so reasoning models can use tools without losing
+  required thinking context.
 - TUI provider/model switches now resolve API-key availability through the
   user-level provider `.env`, so `/use`, `/model`, and session resume do not
   incorrectly show "API key: missing" when the selected key is stored there.
