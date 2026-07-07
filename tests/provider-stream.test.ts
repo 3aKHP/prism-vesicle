@@ -157,6 +157,7 @@ describe("OpenAI-compatible streaming adapter", () => {
 function streamAdapter() {
   return new OpenAIChatCompatibleAdapter({
     provider: "openai-chat-compatible",
+    providerId: "test",
     baseUrl: "https://provider.test/v1",
     model: "test-model",
     apiKey: "test-key",

@@ -1,4 +1,6 @@
 import { loadConfig } from "../../config/env";
+import { loadConfigForSelection } from "../../config/providers";
+import type { ProviderSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
 import type { ProviderAdapter, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { executeFileTool, fileToolDefinitions } from "../tools";
@@ -24,6 +26,7 @@ export type RunPromptOptions = {
   rootDir?: string;
   sessionId?: string;
   messages?: VesicleMessage[];
+  providerSelection?: Partial<ProviderSelection>;
   onEvent?: (event: AgentLoopEvent) => void;
 };
 
@@ -128,7 +131,7 @@ const maxConsecutiveFailedTools = 4;
 export async function runPrompt(options: RunPromptOptions): Promise<RunPromptResult> {
   const engine = options.engine ?? "etl";
   const rootDir = options.rootDir ?? process.cwd();
-  const config = loadConfig();
+  const config = await loadConfigForSelection(rootDir, options.providerSelection);
   const provider = createProvider(config);
   const profile = await loadEngineProfile(engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
@@ -144,6 +147,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
       metadata: {
         engine,
         provider: config.provider,
+        providerId: config.providerId,
         model: config.model,
         profile: {
           displayName: profile.displayName,
@@ -156,7 +160,15 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     });
   }
 
-  await session.append({ role: "user", content: options.input });
+  await session.append({
+    role: "user",
+    content: options.input,
+    metadata: {
+      provider: config.provider,
+      providerId: config.providerId,
+      model: config.model,
+    },
+  });
 
   const messages: VesicleMessage[] = options.messages ?? [
     {
@@ -192,7 +204,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     response = await completeWithStreaming(provider, {
       id: session.sessionId,
       model: {
-        provider: config.provider,
+        provider: config.providerId,
         model: config.model,
       },
       system: [systemPrompt],
@@ -468,10 +480,11 @@ export async function resolveGate(options: {
   toolCallId: string;
   gate: GateRequest;
   resolution: GateResolution;
+  providerSelection?: Partial<ProviderSelection>;
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
-  const config = loadConfig();
+  const config = await loadConfigForSelection(rootDir, options.providerSelection);
   const provider = createProvider(config);
   const profile = await loadEngineProfile(options.engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
@@ -507,7 +520,15 @@ export async function resolveGate(options: {
 
   const userFollowUp = gateFollowUpMessage(options.gate, options.resolution);
   messages.push({ role: "user", content: userFollowUp });
-  await session.append({ role: "user", content: userFollowUp });
+  await session.append({
+    role: "user",
+    content: userFollowUp,
+    metadata: {
+      provider: config.provider,
+      providerId: config.providerId,
+      model: config.model,
+    },
+  });
 
   return runLoop({ rootDir, config, provider, systemPrompt, tools, messages, session, profile, onEvent: options.onEvent });
 }

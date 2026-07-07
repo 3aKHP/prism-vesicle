@@ -132,6 +132,31 @@ describe("session resume", () => {
     expect(snapshot.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
 
+  test("loadSessionSnapshot restores the latest provider/model selection", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-provider-session-"));
+    const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-provider");
+
+    await store.append({
+      role: "system",
+      content: "prompt",
+      metadata: { providerId: "deepseek", model: "deepseek-v4-flash" },
+    });
+    await store.append({
+      role: "user",
+      content: "first",
+      metadata: { providerId: "deepseek", model: "deepseek-v4-flash" },
+    });
+    await store.append({
+      role: "user",
+      content: "second",
+      metadata: { providerId: "local", model: "qwen3" },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-05-01T00-00-00-000Z-provider");
+
+    expect(snapshot.providerSelection).toEqual({ provider: "local", model: "qwen3" });
+  });
+
   test("loadSessionMessages does not synthesise results when tool results already exist", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-answered-"));
     const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-eeeeeeee");

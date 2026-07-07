@@ -21,6 +21,11 @@ Set:
 - `VESICLE_MODEL`
 - `VESICLE_API_KEY`
 
+For multiple OpenAI-compatible providers, copy
+`docs/examples/providers.yaml` to `.vesicle/providers.yaml` and set each
+provider's `apiKeyEnv` environment variable. The TUI can then switch with
+`/providers`, `/models`, `/use <provider> <model>`, and `/model <model>`.
+
 Then run:
 
 ```powershell
@@ -49,6 +54,8 @@ return to an unresolved gate.
 - OpenAI-compatible Chat Completions provider path
 - Streaming OpenAI-compatible Chat Completions responses when the provider
   supports SSE, including streamed tool-call reconstruction
+- Provider/model registry from `.vesicle/providers.yaml`, with TUI commands to
+  switch provider and model inside a session
 - Engine profiles drive systemPrompt, tools, validators, and stop gates from
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker
@@ -63,6 +70,8 @@ return to an unresolved gate.
   sidebar at medium widths, and activity/artifact pane at wide widths
 - Activity pane for provider requests, assistant responses, tool calls, gate
   events, validation, and recent artifacts
+- Artifact workbench commands: `/artifacts`, `/artifact`, `/validate`, and
+  `/revise` list, preview, validate, and revise generated files
 - Markdown rendering in the TUI for assistant messages
 - Select-style gate UI (Confirm / Revise / Chat with Tab amend), rendered as a
   dedicated confirmation panel
@@ -85,8 +94,8 @@ Prism v9 prompt/spec/template assets are copied under `assets/`. See `assets/REA
 
 ## Scope
 
-0.1.0 focuses on making Vesicle a credible Prism Engine host: profile-driven
-prompt/tool/gate composition, a real Stop & Wait gate runtime, v9 schema
-validators, Markdown-rendered TUI, and session resume. Multi-provider support,
-MCP, Skills, streaming, long-form engines, and prompt-cache engineering are
-deferred to later milestones — see `STATUS.md` for the full known-limits list.
+0.3.0 development focuses on making Vesicle usable across multiple
+OpenAI-compatible provider profiles and on treating generated artifact files as
+first-class workflow objects. Native Anthropic, Gemini, OpenAI Responses, MCP,
+Skills, long-form engines, and prompt-cache engineering are deferred to later
+milestones — see `STATUS.md` for the full known-limits list.

@@ -13,6 +13,8 @@ _Last updated: 2026-07-07_
 | Gate runtime | request_confirmation + needs_user loop | ETL blueprint + phase gates wired |
 | Validators | Module A + Module B v9 schemas | Implemented |
 | Streaming | OpenAI-compatible SSE | In progress on 0.2 branch |
+| Provider registry | OpenAI-compatible profiles | In progress on 0.3 branch |
+| Artifact workbench | TUI commands + validation | In progress on 0.3 branch |
 
 ## Current Scope
 
@@ -25,6 +27,9 @@ Chat wrapper:
   responsive workspace/artifact sidebar, wide-screen activity/artifact pane,
   slash hints, prompt history recall, and input bar.
 - Call an OpenAI-compatible Chat Completions endpoint.
+- Load multiple OpenAI-compatible provider/model profiles from
+  `.vesicle/providers.yaml`; the TUI can list and switch provider/model during
+  a session.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
 - Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a
@@ -35,6 +40,8 @@ Chat wrapper:
 - Validate artifact-shaped ETL output against Module A (character card) and
   Module B (scenario card) v9 schemas; ordinary prose replies are not reported
   as schema failures.
+- List, preview, validate, and revise generated artifacts through TUI commands
+  that operate on actual files in the artifact roots.
 - Dump the fully composed system prompt via `vesicle prompt dump --engine <id>`
   for host-pollution auditing.
 
@@ -116,6 +123,10 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 
 - Only OpenAI-compatible Chat Completions is implemented (Anthropic Messages,
   OpenAI Responses, Gemini are deferred).
+- The provider registry supports multiple configured providers, but all
+  configured providers must currently use the `openai-chat-compatible`
+  protocol. Native Anthropic Messages, Gemini, and OpenAI Responses adapters are
+  deferred.
 - OpenAI-compatible SSE streaming is implemented on the 0.2 branch for
   assistant content deltas and streamed tool-call reconstruction. Other
   provider protocols are still deferred.

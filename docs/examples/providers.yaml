@@ -1,0 +1,19 @@
+default:
+  provider: deepseek
+  model: deepseek-v4-flash
+
+providers:
+  deepseek:
+    protocol: openai-chat-compatible
+    baseUrl: https://api.deepseek.com/v1
+    apiKeyEnv: DEEPSEEK_API_KEY
+    models:
+      - deepseek-v4-flash
+      - deepseek-reasoner
+
+  local:
+    protocol: openai-chat-compatible
+    baseUrl: http://127.0.0.1:11434/v1
+    apiKey: local
+    models:
+      - qwen3
