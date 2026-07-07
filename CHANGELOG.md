@@ -21,6 +21,9 @@ project follows Semantic Versioning once releases begin.
 - Agent-loop streaming events for assistant deltas and streamed tool-call
   deltas.
 - TUI live assistant draft rendering while a provider response is in flight.
+- TUI `/think off|low|midium|high|xhigh|max` command for runtime thinking-tier
+  control. Selected tiers are passed through the agent loop, persisted in
+  session metadata, and restored on resume.
 
 ### Changed
 
@@ -42,6 +45,10 @@ project follows Semantic Versioning once releases begin.
   it.
 - `vesicle doctor` now reports whether the user-level provider `.env` file was
   found, without printing secret values.
+- OpenAI-compatible request shaping now maps normalized thinking tiers to
+  provider wire controls: `off` disables thinking, `low`/`midium`/`high` map to
+  high effort, and `xhigh`/`max` map to max effort. Unset sessions keep the
+  provider/model default and do not send thinking control fields.
 
 ### Fixed
 

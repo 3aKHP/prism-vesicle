@@ -1,4 +1,4 @@
-import type { VesicleRequest } from "../shared/types";
+import type { ReasoningTier, VesicleRequest } from "../shared/types";
 
 export function toChatCompletionBody(request: VesicleRequest, stream: boolean, includeUsage = false): Record<string, unknown> {
   const hasTools = Boolean(request.tools && request.tools.length > 0);
@@ -45,7 +45,19 @@ export function toChatCompletionBody(request: VesicleRequest, stream: boolean, i
     tool_choice: hasTools ? "auto" : undefined,
     temperature: request.generation?.temperature ?? 0.7,
     max_tokens: request.generation?.maxTokens,
+    ...reasoningControls(request.generation?.reasoningTier),
     stream,
     stream_options: stream && includeUsage ? { include_usage: true } : undefined,
+  };
+}
+
+function reasoningControls(tier: ReasoningTier | undefined): Record<string, unknown> {
+  if (!tier) return {};
+  if (tier === "off") {
+    return { thinking: { type: "disabled" } };
+  }
+  return {
+    thinking: { type: "enabled" },
+    reasoning_effort: tier === "xhigh" || tier === "max" ? "max" : "high",
   };
 }

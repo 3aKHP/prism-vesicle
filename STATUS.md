@@ -1,6 +1,6 @@
 # Prism Vesicle Project Status
 
-_Last updated: 2026-07-07_
+_Last updated: 2026-07-08_
 
 ## Current Version
 
@@ -14,6 +14,7 @@ _Last updated: 2026-07-07_
 | Validators | Module A + Module B v9 schemas | Implemented |
 | Streaming | OpenAI-compatible SSE | In progress on 0.2 branch |
 | Provider registry | OpenAI-compatible profiles | In progress on 0.3 branch |
+| Thinking control | OpenAI-compatible reasoning controls | In progress on 0.3 branch |
 | Artifact workbench | TUI commands + validation | In progress on 0.3 branch |
 
 ## Current Scope
@@ -34,6 +35,9 @@ Chat wrapper:
   switch provider/model during a session. Provider files name `apiKeyEnv`
   variables only; actual secrets stay in the same user-level directory's
   `.env` file, with process environment variables used only as fallback.
+- Control thinking behavior for subsequent TUI turns with
+  `/think off|low|midium|high|xhigh|max`; unset sessions preserve the
+  provider/model default instead of sending control fields.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
 - Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a
@@ -134,6 +138,9 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - OpenAI-compatible SSE streaming is implemented on the 0.2 branch for
   assistant content deltas and streamed tool-call reconstruction. Other
   provider protocols are still deferred.
+- Thinking-tier control maps to OpenAI-compatible `thinking` and
+  `reasoning_effort` request fields. Reasoning content is preserved for
+  tool-loop continuity but is not rendered as a user-visible thinking stream.
 - TUI engine switching is hardcoded to ETL (runtime/evaluate profiles exist
   and load, but the TUI does not yet offer a selector).
 - Gate UI is Select-style for ETL blueprint and phase checkpoints, with a

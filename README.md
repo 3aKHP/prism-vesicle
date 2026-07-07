@@ -23,7 +23,9 @@ config path is
 `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
 `~/.config/prism-vesicle/providers.yaml` on Linux/macOS. The TUI can then
 switch with `/providers`, `/models`, `/use <provider> <model>`, and
-`/model <model>`.
+`/model <model>`. Use `/think off|low|midium|high|xhigh|max` to set the
+thinking tier for subsequent provider requests; before this command is used,
+Vesicle leaves thinking behavior at the provider/model default.
 The provider file intentionally supports only Vesicle's small YAML subset:
 `default`, `providers`, scalar provider fields, and `models` string lists.
 Provider secrets are not read from this file; every provider must name an
@@ -66,6 +68,9 @@ return to an unresolved gate.
   supports SSE, including streamed tool-call reconstruction
 - Provider/model registry from the user-level `providers.yaml`, with TUI
   commands to switch provider and model inside a session
+- Runtime thinking-tier control with `/think off|low|midium|high|xhigh|max`;
+  OpenAI-compatible requests map `off` to disabled thinking, `low`/`midium`/
+  `high` to high effort, and `xhigh`/`max` to max effort
 - Engine profiles drive systemPrompt, tools, validators, and stop gates from
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker

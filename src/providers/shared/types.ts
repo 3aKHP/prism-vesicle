@@ -1,5 +1,8 @@
 import type { ToolCall, ToolDefinition } from "../../core/tools";
 
+export const reasoningTiers = ["off", "low", "midium", "high", "xhigh", "max"] as const;
+export type ReasoningTier = typeof reasoningTiers[number];
+
 export type ModelRef = {
   provider: string;
   model: string;
@@ -22,6 +25,7 @@ export type VesicleRequest = {
   generation?: {
     temperature?: number;
     maxTokens?: number;
+    reasoningTier?: ReasoningTier;
   };
   metadata?: Record<string, unknown>;
 };

@@ -53,6 +53,10 @@ Tool calls are normalized into `ToolCall` and executed by `core/tools`.
 Provider selection is host state, not prompt state. The TUI may switch among
 configured provider/model profiles, but adapters still receive a normalized
 `VesicleRequest` and must not know about sessions, artifacts, or Prism phases.
+Generation controls follow the same rule: core/TUI may pass the normalized
+`reasoningTier` values (`off`, `low`, `midium`, `high`, `xhigh`, `max`), but
+only the provider adapter maps them to wire fields such as `thinking` and
+`reasoning_effort`.
 Persistent provider profiles live in the user-level provider config, not in the
 project `.vesicle/` runtime state directory. The default path is
 `%APPDATA%\prism-vesicle\providers.yaml` on Windows and
@@ -125,6 +129,10 @@ Prompts are runtime assets, not hardcoded source literals.
 - Provider requests must include prior user/assistant turns when continuing a
   session.
 - Tool calls and tool results should be persisted for replay/debugging.
+- User-selected reasoning tiers should be persisted as session metadata so
+  interactive resume restores runtime generation behavior. Provider
+  `reasoning_content` is preserved for protocol continuity, not treated as
+  user-visible assistant prose by default.
 - Session lists should mark unresolved gates so the user can distinguish a
   normal transcript from a workflow waiting for confirmation.
 - Long-running turns should emit host-visible activity events before and after

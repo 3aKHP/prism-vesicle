@@ -27,6 +27,7 @@ export type RunPromptOptions = {
   sessionId?: string;
   messages?: VesicleMessage[];
   providerSelection?: Partial<ProviderSelection>;
+  generation?: VesicleRequest["generation"];
   onEvent?: (event: AgentLoopEvent) => void;
 };
 
@@ -149,6 +150,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
         provider: config.provider,
         providerId: config.providerId,
         model: config.model,
+        ...(options.generation?.reasoningTier ? { reasoningTier: options.generation.reasoningTier } : {}),
         profile: {
           displayName: profile.displayName,
           protocolVersion: profile.protocolVersion,
@@ -167,6 +169,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
       provider: config.provider,
       providerId: config.providerId,
       model: config.model,
+      ...(options.generation?.reasoningTier ? { reasoningTier: options.generation.reasoningTier } : {}),
     },
   });
 
@@ -177,7 +180,18 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     },
   ];
 
-  return runLoop({ rootDir, config, provider, systemPrompt, tools, messages, session, profile, onEvent: options.onEvent });
+  return runLoop({
+    rootDir,
+    config,
+    provider,
+    systemPrompt,
+    tools,
+    messages,
+    session,
+    profile,
+    generation: options.generation,
+    onEvent: options.onEvent,
+  });
 }
 
 type RunLoopArgs = {
@@ -189,11 +203,12 @@ type RunLoopArgs = {
   messages: VesicleMessage[];
   session: SessionStore;
   profile: EngineProfile;
+  generation?: VesicleRequest["generation"];
   onEvent?: (event: AgentLoopEvent) => void;
 };
 
 async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
-  const { rootDir, config, provider, systemPrompt, tools, messages, session, profile, onEvent } = args;
+  const { rootDir, config, provider, systemPrompt, tools, messages, session, profile, generation, onEvent } = args;
   const declaredGates = new Set(profile.stopGates);
 
   let response: VesicleResponse | undefined;
@@ -210,6 +225,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       system: [systemPrompt],
       messages,
       tools,
+      generation,
     }, onEvent);
 
     const toolCalls = response.toolCalls ?? [];
@@ -490,6 +506,7 @@ export async function resolveGate(options: {
   gate: GateRequest;
   resolution: GateResolution;
   providerSelection?: Partial<ProviderSelection>;
+  generation?: VesicleRequest["generation"];
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
@@ -535,11 +552,23 @@ export async function resolveGate(options: {
     metadata: {
       provider: config.provider,
       providerId: config.providerId,
-      model: config.model,
-    },
-  });
+        model: config.model,
+        ...(options.generation?.reasoningTier ? { reasoningTier: options.generation.reasoningTier } : {}),
+      },
+    });
 
-  return runLoop({ rootDir, config, provider, systemPrompt, tools, messages, session, profile, onEvent: options.onEvent });
+  return runLoop({
+    rootDir,
+    config,
+    provider,
+    systemPrompt,
+    tools,
+    messages,
+    session,
+    profile,
+    generation: options.generation,
+    onEvent: options.onEvent,
+  });
 }
 
 function gateResultMessage(resolution: GateResolution): string {

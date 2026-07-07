@@ -80,6 +80,32 @@ describe("agent loop sessions", () => {
     ]);
   });
 
+  test("passes generation thinking tier to the provider request", async () => {
+    const rootDir = await createPromptRoot();
+    const requestBodies: Array<{ thinking?: unknown; reasoning_effort?: string }> = [];
+
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+
+      return Response.json({
+        id: "chatcmpl-thinking",
+        choices: [{ message: { content: "reply" } }],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "think hard",
+      rootDir,
+      generation: { reasoningTier: "max" },
+    });
+
+    if (result.kind !== "complete") throw new Error("expected complete");
+    expect(requestBodies[0]).toMatchObject({
+      thinking: { type: "enabled" },
+      reasoning_effort: "max",
+    });
+  });
+
   test("executes model-requested write_file calls", async () => {
     const rootDir = await createPromptRoot();
     const requestBodies: Array<{ messages: Array<{ role: string; content: string; reasoning_content?: string }> }> = [];
