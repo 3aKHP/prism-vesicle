@@ -259,6 +259,35 @@ describe("Anthropic Messages adapter", () => {
       providerId: "anthropic",
     });
   });
+
+  test("streams redacted thinking blocks into the final response", async () => {
+    globalThis.fetch = (async () => new Response(rawSse([
+      'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_redacted","model":"claude-test"}}',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"redacted_thinking","data":"opaque"}}',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"done"}}',
+      'event: message_stop\ndata: {"type":"message_stop"}',
+    ]))) as unknown as typeof fetch;
+
+    const adapter = new AnthropicMessagesAdapter({
+      provider: "anthropic-messages",
+      providerId: "anthropic",
+      baseUrl: "https://api.anthropic.com/v1",
+      model: "claude-test",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        content: "done",
+        reasoningContent: "[redacted thinking]",
+        thinkingBlocks: [{ type: "redacted_thinking", data: "opaque" }],
+      },
+    });
+  });
 });
 
 function request(): VesicleRequest {

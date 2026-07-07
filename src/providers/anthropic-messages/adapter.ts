@@ -388,6 +388,7 @@ function absorbAnthropicStreamEvent(
     }
     if (delta.type === "thinking_delta" && delta.thinking) {
       const current = state.thinkingBlocks.get(index);
+      if (current && !("thinking" in current)) return events;
       const next = current && "thinking" in current
         ? { ...current, thinking: `${current.thinking}${delta.thinking}` }
         : { thinking: delta.thinking };
