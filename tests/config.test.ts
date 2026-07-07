@@ -124,6 +124,26 @@ describe("config loading", () => {
     await expect(loadProviderRegistry(env)).rejects.toThrow('Provider "local" declares duplicate model "qwen3".');
   });
 
+  test("preserves colon-bearing string model ids", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: local",
+      "  model: anthropic:claude-3-opus",
+      "providers:",
+      "  local:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: http://127.0.0.1:11434/v1",
+      "    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY",
+      "    models:",
+      "      - anthropic:claude-3-opus",
+      "",
+    ]);
+
+    const registry = await loadProviderRegistry(env);
+
+    expect(registry.providers[0].models[0].id).toBe("anthropic:claude-3-opus");
+  });
+
   test("prefers the user-level provider .env over inherited process variables", async () => {
     const { env } = await writeProvidersFile([
       "default:",

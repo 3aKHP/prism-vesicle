@@ -310,7 +310,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
         throw new Error(`Provider config parse error on line ${index + 1}: model entries must start with "- ".`);
       }
       const entry = line.slice(2).trim();
-      if (entry.includes(":")) {
+      if (/^id\s*:/.test(entry)) {
         const [key, value] = readKeyValue(entry, index, path);
         if (key !== "id") {
           throw new Error(`Provider config parse error on line ${index + 1}: model object entries must start with id.`);

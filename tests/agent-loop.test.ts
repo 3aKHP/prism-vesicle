@@ -141,6 +141,41 @@ describe("agent loop sessions", () => {
     });
   });
 
+  test("does not let undefined generation overrides erase configured defaults", async () => {
+    await cleanupProviderConfigDirs();
+    await configureTestProviderEnv({
+      models: [
+        "      - id: test-model",
+        "        generation:",
+        "          temperature: 0.2",
+        "          maxTokens: 1234",
+      ],
+    });
+    const rootDir = await createPromptRoot();
+    const requestBodies: Array<{ temperature?: number; max_tokens?: number }> = [];
+
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      requestBodies.push(JSON.parse(String(init?.body)));
+
+      return Response.json({
+        id: "chatcmpl-generation-defined",
+        choices: [{ message: { content: "reply" } }],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "keep configured defaults",
+      rootDir,
+      generation: { temperature: undefined, maxTokens: undefined },
+    });
+
+    if (result.kind !== "complete") throw new Error("expected complete");
+    expect(requestBodies[0]).toMatchObject({
+      temperature: 0.2,
+      max_tokens: 1234,
+    });
+  });
+
   test("emits streamed reasoning deltas from the provider", async () => {
     const rootDir = await createPromptRoot();
     const events: AgentLoopEvent[] = [];

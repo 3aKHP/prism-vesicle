@@ -586,10 +586,18 @@ function mergeGeneration(
   override: VesicleRequest["generation"],
 ): VesicleRequest["generation"] | undefined {
   const merged = {
-    ...(defaults ?? {}),
-    ...(override ?? {}),
+    ...definedGeneration(defaults),
+    ...definedGeneration(override),
   };
   return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function definedGeneration(source: VesicleRequest["generation"] | undefined): VesicleRequest["generation"] {
+  return {
+    ...(source?.temperature !== undefined ? { temperature: source.temperature } : {}),
+    ...(source?.maxTokens !== undefined ? { maxTokens: source.maxTokens } : {}),
+    ...(source?.reasoningTier !== undefined ? { reasoningTier: source.reasoningTier } : {}),
+  };
 }
 
 function generationMetadata(generation: VesicleRequest["generation"] | undefined): Record<string, unknown> {
