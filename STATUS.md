@@ -32,7 +32,8 @@ Chat wrapper:
   `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
   `~/.config/prism-vesicle/providers.yaml` elsewhere); the TUI can list and
   switch provider/model during a session. Provider files name `apiKeyEnv`
-  variables only; actual secrets stay in `.env` or the process environment.
+  variables only; actual secrets stay in the same user-level directory's
+  `.env` file, with process environment variables used only as fallback.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
 - Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a
@@ -153,8 +154,9 @@ bun test
 bun run doctor
 ```
 
-The `tests/e2e-gate.test.ts` suite runs against the real provider when
-`VESICLE_API_KEY` is present; it is skipped otherwise.
+The `tests/e2e-gate.test.ts` suite runs against the real provider when the
+selected provider's `apiKeyEnv` is present through the user-level `.env` file
+or process environment; it returns early otherwise.
 
 ## Workflow Docs
 

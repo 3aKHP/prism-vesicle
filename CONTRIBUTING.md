@@ -27,13 +27,13 @@ Common types:
 
 Do not commit local runtime state or secrets:
 
-- `.env`
+- user-level `.env`
 - `.vesicle/`
 - local prompt experiments
 - generated test workspaces
 - provider API keys, tokens, or private base URLs
 
-Use `.env.example` for configuration shape.
+Use `.env.example` for the user-level secret file shape.
 
 ## Local Development
 
@@ -47,10 +47,13 @@ bun run dev
 
 The TUI reads provider settings from:
 
-- `VESICLE_PROVIDER`
-- `VESICLE_BASE_URL`
-- `VESICLE_MODEL`
-- `VESICLE_API_KEY`
+- the user-level provider registry at `%APPDATA%\prism-vesicle\providers.yaml`
+  on Windows or `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` /
+  `~/.config/prism-vesicle/providers.yaml` elsewhere
+- provider-specific environment variables from the `.env` file beside
+  `providers.yaml`, with process environment variables used only as fallback
+- old project-root `.env` files should be migrated to the user-level config
+  directory and removed or renamed locally
 
 ## Pull Request Checklist
 

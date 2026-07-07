@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { VesicleConfig, VesicleProvider } from "./env";
 
 export type ProviderProtocol = VesicleProvider;
@@ -21,7 +21,7 @@ export type ProviderProfile = {
 export type ProviderRegistry = {
   default: ProviderSelection;
   providers: ProviderProfile[];
-  source: "file" | "environment";
+  source: "file";
   path?: string;
 };
 
@@ -29,38 +29,56 @@ export type ProviderConfigStatus = VesicleConfig & {
   hasApiKey: boolean;
   missing: string[];
   registry: ProviderRegistry;
+  providerEnvPath: string;
+  hasProviderEnvFile: boolean;
 };
 
 export async function loadProviderRegistry(
-  rootDir = process.cwd(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ProviderRegistry> {
-  void rootDir;
+  const { registry } = await loadProviderRegistryWithEnv(env);
+  return registry;
+}
+
+async function loadProviderRegistryWithEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{
+  registry: ProviderRegistry;
+  effectiveEnv: NodeJS.ProcessEnv;
+  providerEnvPath: string;
+  hasProviderEnvFile: boolean;
+}> {
   const configPath = providerConfigPathFromEnv(env);
   const source = await readFile(configPath, "utf8").catch((error: unknown) => {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
     throw error;
   });
-  if (!source) return legacyRegistryFromEnv(env);
-  return parseProviderConfig(source, configPath, env);
+  if (!source) {
+    throw new Error(`Provider config not found at ${configPath}. Copy docs/examples/providers.yaml there or set VESICLE_PROVIDERS_FILE.`);
+  }
+  const providerEnv = await loadProviderEnvironment(configPath, env);
+  return {
+    registry: parseProviderConfig(source, configPath, providerEnv.effectiveEnv),
+    effectiveEnv: providerEnv.effectiveEnv,
+    providerEnvPath: providerEnv.path,
+    hasProviderEnvFile: providerEnv.exists,
+  };
 }
 
 export async function loadConfigForSelection(
-  rootDir = process.cwd(),
   selection?: Partial<ProviderSelection>,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<VesicleConfig> {
-  const registry = await loadProviderRegistry(rootDir, env);
-  return resolveProviderConfig(registry, selection, env);
+  const { registry, effectiveEnv } = await loadProviderRegistryWithEnv(env);
+  return resolveProviderConfig(registry, selection, effectiveEnv);
 }
 
 export async function inspectProviderConfig(
-  rootDir = process.cwd(),
   selection?: Partial<ProviderSelection>,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ProviderConfigStatus> {
-  const registry = await loadProviderRegistry(rootDir, env);
-  const config = resolveProviderConfig(registry, selection, env);
+  const { registry, effectiveEnv, providerEnvPath, hasProviderEnvFile } = await loadProviderRegistryWithEnv(env);
+  const config = resolveProviderConfig(registry, selection, effectiveEnv);
   const missing: string[] = [];
   if (!config.apiKey) {
     const profile = requireProvider(registry, config.providerId);
@@ -73,6 +91,8 @@ export async function inspectProviderConfig(
     hasApiKey: Boolean(config.apiKey),
     missing,
     registry,
+    providerEnvPath,
+    hasProviderEnvFile,
   };
 }
 
@@ -117,21 +137,35 @@ function providerConfigDir(env: NodeJS.ProcessEnv): string {
   return join(homedir(), ".config", "prism-vesicle");
 }
 
-function legacyRegistryFromEnv(env: NodeJS.ProcessEnv): ProviderRegistry {
-  const protocol = readProtocol(env.VESICLE_PROVIDER ?? "openai-chat-compatible", "VESICLE_PROVIDER");
-  const providerId = env.VESICLE_PROVIDER_ID ?? "default";
-  const model = env.VESICLE_MODEL ?? "gpt-4.1-mini";
-  return {
-    source: "environment",
-    default: { provider: providerId, model },
-    providers: [{
-      id: providerId,
-      protocol,
-      baseUrl: env.VESICLE_BASE_URL ?? "https://api.openai.com/v1",
-      apiKeyEnv: "VESICLE_API_KEY",
-      models: [model],
-    }],
-  };
+async function loadProviderEnvironment(
+  configPath: string,
+  env: NodeJS.ProcessEnv,
+): Promise<{ effectiveEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
+  const envPath = join(dirname(configPath), ".env");
+  const source = await readFile(envPath, "utf8").catch((error: unknown) => {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return "";
+    throw error;
+  });
+  if (!source) return { effectiveEnv: env, path: envPath, exists: false };
+  return { effectiveEnv: { ...env, ...parseEnvFile(source, envPath) }, path: envPath, exists: true };
+}
+
+function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
+  const values: NodeJS.ProcessEnv = {};
+  const lines = source.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    const raw = stripComment(lines[index]).trim();
+    if (!raw) continue;
+    const line = raw.startsWith("export ") ? raw.slice("export ".length).trimStart() : raw;
+    const equals = line.indexOf("=");
+    if (equals === -1) throw new Error(`Environment file parse error on line ${index + 1} in ${path}: missing "=".`);
+    const key = line.slice(0, equals).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`Environment file parse error on line ${index + 1} in ${path}: invalid variable name "${key}".`);
+    }
+    values[key] = unquote(line.slice(equals + 1).trim());
+  }
+  return values;
 }
 
 function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEnv): ProviderRegistry {
@@ -152,6 +186,9 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     if (!id) throw new Error(`Provider config ${path} has a provider without an id.`);
     const protocol = currentProvider.protocol;
     if (!protocol) throw new Error(`Provider "${id}" is missing protocol.`);
+    if (registry.providers.some((provider) => provider.id === id)) {
+      throw new Error(`Duplicate provider id "${id}".`);
+    }
     const baseUrl = currentProvider.baseUrl;
     if (!baseUrl) throw new Error(`Provider "${id}" is missing baseUrl.`);
     const apiKeyEnv = currentProvider.apiKeyEnv;

@@ -2,23 +2,23 @@ import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { inspectProviderConfig } from "../src/config/providers";
 import { resolveGate, runPrompt } from "../src/core/agent-loop/run";
 import { validateCharacterCard } from "../src/core/validators";
 
 /**
- * End-to-end gate flow against the real provider configured in .env.
+ * End-to-end gate flow against the real provider selected by providers.yaml.
  *
- * Skips automatically when VESICLE_API_KEY is absent, so this test is safe
- * to leave in the suite; it only runs when a key is available (locally or
- * in CI with secrets injected). The user confirmed the .env key is dedicated
- * to testing.
+ * Returns early when the selected provider's apiKeyEnv is missing, so this
+ * test is safe to leave in the suite; it only runs when provider-specific
+ * credentials are available locally or in CI secrets.
  *
  * Verifies the full chain: ETL prompt -> model reads its instructions ->
  * model calls request_confirmation for blueprint-confirmation -> loop
  * returns needs_user -> resolveGate(confirm) -> model advances to Phase 1,
  * writes the character card file, and may pause again on phase-confirmation.
  */
-describe.skipIf(!process.env.VESICLE_API_KEY)("E2E: ETL Phase 0 gate flow", () => {
+describe("E2E: ETL Phase 0 gate flow", () => {
   let rootDir: string | undefined;
 
   beforeEach(async () => {
@@ -37,6 +37,16 @@ describe.skipIf(!process.env.VESICLE_API_KEY)("E2E: ETL Phase 0 gate flow", () =
 
   test("model calls request_confirmation, then on confirm writes a validatable card", async () => {
     if (!rootDir) throw new Error("E2E rootDir was not initialized.");
+    const providerStatus = await inspectProviderConfig().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`[E2E] provider config unavailable; skipping real-provider run. ${message}`);
+      return undefined;
+    });
+    if (!providerStatus?.hasApiKey) {
+      const missing = providerStatus?.missing.join(", ") ?? "provider config";
+      console.log(`[E2E] selected provider credentials missing (${missing}); skipping real-provider run.`);
+      return;
+    }
 
     const first = await runPrompt({
       input:

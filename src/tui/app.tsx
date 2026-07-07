@@ -107,11 +107,15 @@ export function App() {
   ));
 
   let lastCtrlCAt = 0;
+  let providerConfigLoad: Promise<void> | null = null;
 
   // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
     void refreshArtifacts();
-    void refreshProviderConfig();
+    void loadProviderConfigOnce().catch((error) => {
+      setProviderConfigReady(true);
+      reportError(error);
+    });
     void listSessions().then((sessions) => {
       setResumableSessions(sessions);
       if (sessions.length > 0) {
@@ -261,8 +265,9 @@ export function App() {
 	    if (!providerConfigReady()) {
 	      setStatus("loading provider config");
 	      try {
-	        await refreshProviderConfig();
+	        await loadProviderConfigOnce();
 	      } catch (error) {
+	        setProviderConfigReady(true);
 	        reportError(error);
 	        return;
 	      }
@@ -446,7 +451,7 @@ export function App() {
   }
 
   async function refreshProviderConfig(selection?: Partial<ProviderSelection>) {
-    const inspected = await inspectProviderConfig(process.cwd(), selection);
+    const inspected = await inspectProviderConfig(selection);
     setProviderRegistry(inspected.registry);
     setActiveProvider(inspected.providerId);
     setActiveModel(inspected.model);
@@ -462,13 +467,17 @@ export function App() {
   async function ensureProviderRegistry(): Promise<ProviderRegistry> {
     const existing = providerRegistry();
     if (existing) return existing;
-    const inspected = await inspectProviderConfig(process.cwd());
-    setProviderRegistry(inspected.registry);
-    setActiveProvider(inspected.providerId);
-    setActiveModel(inspected.model);
-    setProviderHasApiKey(inspected.hasApiKey);
-    setProviderConfigReady(true);
-    return inspected.registry;
+    await loadProviderConfigOnce();
+    const loaded = providerRegistry();
+    if (!loaded) throw new Error("Provider registry did not load.");
+    return loaded;
+  }
+
+  function loadProviderConfigOnce(): Promise<void> {
+    providerConfigLoad ??= refreshProviderConfig().finally(() => {
+      providerConfigLoad = null;
+    });
+    return providerConfigLoad;
   }
 
   function applyProviderSelection(registry: ProviderRegistry, selection: Partial<ProviderSelection>): ProviderSelection {

@@ -1,4 +1,4 @@
-import { loadConfig } from "../../config/env";
+import type { VesicleConfig } from "../../config/env";
 import { loadConfigForSelection } from "../../config/providers";
 import type { ProviderSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
@@ -131,7 +131,7 @@ const maxConsecutiveFailedTools = 4;
 export async function runPrompt(options: RunPromptOptions): Promise<RunPromptResult> {
   const engine = options.engine ?? "etl";
   const rootDir = options.rootDir ?? process.cwd();
-  const config = await loadConfigForSelection(rootDir, options.providerSelection);
+  const config = await loadConfigForSelection(options.providerSelection);
   const provider = createProvider(config);
   const profile = await loadEngineProfile(engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
@@ -182,7 +182,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
 
 type RunLoopArgs = {
   rootDir: string;
-  config: ReturnType<typeof loadConfig>;
+  config: VesicleConfig;
   provider: ReturnType<typeof createProvider>;
   systemPrompt: string;
   tools: ToolDefinition[];
@@ -484,7 +484,7 @@ export async function resolveGate(options: {
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
-  const config = await loadConfigForSelection(rootDir, options.providerSelection);
+  const config = await loadConfigForSelection(options.providerSelection);
   const provider = createProvider(config);
   const profile = await loadEngineProfile(options.engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
