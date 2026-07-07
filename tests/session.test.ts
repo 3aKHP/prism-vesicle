@@ -159,6 +159,48 @@ describe("session resume", () => {
     expect(snapshot.providerSelection).toEqual({ provider: "local", model: "qwen3" });
   });
 
+  test("loadSessionSnapshot restores the latest thinking tier", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-thinking-session-"));
+    const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-thinking");
+
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "system",
+      content: "Thinking tier switched to low.",
+      metadata: { kind: "thinking-switch", reasoningTier: "low" },
+    });
+    await store.append({
+      role: "user",
+      content: "second",
+      metadata: { reasoningTier: "max" },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-05-01T00-00-00-000Z-thinking");
+
+    expect(snapshot.reasoningTier).toBe("max");
+  });
+
+  test("loadSessionSnapshot restores cleared thinking tier as provider default", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-thinking-clear-session-"));
+    const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-thinking-clear");
+
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "system",
+      content: "Thinking tier switched to max.",
+      metadata: { kind: "thinking-switch", reasoningTier: "max" },
+    });
+    await store.append({
+      role: "system",
+      content: "Thinking tier reset to provider default.",
+      metadata: { kind: "thinking-switch", reasoningTier: null },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-05-01T00-00-00-000Z-thinking-clear");
+
+    expect(snapshot.reasoningTier).toBeUndefined();
+  });
+
   test("loadSessionMessages does not synthesise results when tool results already exist", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-answered-"));
     const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-eeeeeeee");

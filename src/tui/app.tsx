@@ -8,6 +8,8 @@ import { resolveGate, runPrompt } from "../core/agent-loop/run";
 import type { RunPromptResult } from "../core/agent-loop/run";
 import type { AgentLoopEvent } from "../core/agent-loop/run";
 import type { VesicleMessage } from "../providers/shared/types";
+import { reasoningTiers } from "../providers/shared/types";
+import type { ReasoningTier } from "../providers/shared/types";
 import type { GateResolution } from "../core/gate/types";
 import { copySelectionToClipboard } from "./clipboard";
 import { sharedSyntaxStyle, palette } from "./theme";
@@ -65,6 +67,7 @@ export function App() {
   const [providerRegistry, setProviderRegistry] = createSignal<ProviderRegistry | null>(null);
   const [activeProvider, setActiveProvider] = createSignal("loading");
   const [activeModel, setActiveModel] = createSignal("loading");
+  const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
   const [providerHasApiKey, setProviderHasApiKey] = createSignal(false);
   const [providerConfigReady, setProviderConfigReady] = createSignal(false);
   const [messages, setMessages] = createSignal<Message[]>([
@@ -293,6 +296,7 @@ export function App() {
 	        sessionId: sessionId(),
 	        messages: requestMessages,
 	        providerSelection: activeProviderSelection(),
+	        generation: activeGeneration(),
 	        onEvent: handleAgentEvent,
 	      });
       handleResult(result, requestMessages);
@@ -327,6 +331,7 @@ export function App() {
 	        gate: gate.gate,
 	        resolution,
 	        providerSelection: activeProviderSelection(),
+	        generation: activeGeneration(),
 	        onEvent: handleAgentEvent,
 	      });
       handleResult(result, gate.messages);
@@ -495,6 +500,11 @@ export function App() {
     return { provider: activeProvider(), model: activeModel() };
   }
 
+  function activeGeneration() {
+    const reasoningTier = thinkingTier();
+    return reasoningTier ? { reasoningTier } : undefined;
+  }
+
   async function persistProviderSwitch(selection: ProviderSelection) {
     const id = sessionId();
     if (!id) return;
@@ -506,6 +516,20 @@ export function App() {
         kind: "provider-switch",
         providerId: selection.provider,
         model: selection.model,
+      },
+    });
+  }
+
+  async function persistThinkingSwitch(tier: ReasoningTier | undefined) {
+    const id = sessionId();
+    if (!id) return;
+    const store = await createSessionStore(process.cwd(), id);
+    await store.append({
+      role: "system",
+      content: tier ? `Thinking tier switched to ${tier}.` : "Thinking tier reset to provider default.",
+      metadata: {
+        kind: "thinking-switch",
+        reasoningTier: tier ?? null,
       },
     });
   }
@@ -528,6 +552,7 @@ export function App() {
 	 *   /models [id]      list models for a provider
 	 *   /use <id> <model> switch provider and model
 	 *   /model <model>    switch model within the active provider
+	 *   /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto
 	 *   /artifacts        list generated artifacts
 	 *   /artifact <n|path> preview an artifact
 	 *   /validate <n|path> validate an artifact file
@@ -545,7 +570,7 @@ export function App() {
         { role: "user", content: input },
         {
 	          role: "system",
-	          content: "Commands:\n  /providers        list configured providers\n  /models [id]      list models for a provider\n  /use <id> <model> switch provider/model\n  /model <model>    switch model in active provider\n  /artifacts        list generated artifacts\n  /artifact <n|path> preview an artifact\n  /validate <n|path> validate an artifact file\n  /revise <n|path> <instructions> revise an artifact\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
+	          content: "Commands:\n  /providers        list configured providers\n  /models [id]      list models for a provider\n  /use <id> <model> switch provider/model\n  /model <model>    switch model in active provider\n  /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto\n  /artifacts        list generated artifacts\n  /artifact <n|path> preview an artifact\n  /validate <n|path> validate an artifact file\n  /revise <n|path> <instructions> revise an artifact\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
 	        },
 	      ]);
 	      return;
@@ -593,6 +618,36 @@ export function App() {
 	      const selection = await applyProviderSelection({ provider: activeProvider(), model: arg });
 	      await persistProviderSwitch(selection);
 	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
+	      return;
+	    }
+
+	    if (command === "think") {
+	      if (!arg) {
+	        setMessages((prev) => [
+	          ...prev,
+	          { role: "user", content: input },
+	          { role: "system", content: `Thinking tier: ${thinkingTier() ?? "provider default"}. Use /think off|low|midium|high|xhigh|max|auto.` },
+	        ]);
+	        return;
+	      }
+	      const tier = parseThinkingTier(arg);
+	      if (!tier) {
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /think off|low|midium|high|xhigh|max|auto" }]);
+	        return;
+	      }
+	      if (tier === "auto") {
+	        setThinkingTier(undefined);
+	        setStatus("thinking provider default");
+	        recordActivity({ kind: "provider", text: "thinking tier provider default" });
+	        await persistThinkingSwitch(undefined);
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Thinking tier reset to provider default." }]);
+	        return;
+	      }
+	      setThinkingTier(tier);
+	      setStatus(`thinking ${tier}`);
+	      recordActivity({ kind: "provider", text: `thinking tier ${tier}` });
+	      await persistThinkingSwitch(tier);
+	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Thinking tier set to ${tier}.` }]);
 	      return;
 	    }
 
@@ -713,6 +768,10 @@ export function App() {
 	          hostMessages.push({ role: "system", content: `Session provider was not restored: ${message}` });
 	        }
 	      }
+	      if (snapshot.reasoningTier) {
+	        setThinkingTier(snapshot.reasoningTier);
+	        hostMessages.push({ role: "system", content: `Restored thinking tier ${snapshot.reasoningTier} from session.` });
+	      }
 
 	      if (snapshot.pendingGate) {
         setPendingGate({
@@ -813,6 +872,7 @@ export function App() {
 	            <PanelLine content="Provider" fg={palette.textMuted} />
 	            <PanelLine content={truncateLine(`${activeProvider()}/${activeModel()}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
 	            <PanelLine content={providerHasApiKey() ? "API key: available" : "API key: missing"} fg={providerHasApiKey() ? palette.success : palette.error} />
+	            <PanelLine content={truncateLine(`Thinking: ${thinkingTier() ?? "provider default"}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
             <PanelLine content=" " fg={palette.textDim} />
             <PanelLine content="Session" fg={palette.textMuted} />
             <PanelLine content={truncateMiddle(sessionPath(), layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
@@ -884,7 +944,8 @@ export function App() {
                 <Show when={inputValue().startsWith("/")} fallback={<box height={0} />}>
                   <box flexDirection="column">
 	                    <text content="/providers  list providers    /models  list models    /use <p> <m>  switch" fg={palette.textDim} />
-	                    <text content="/resume  list sessions    /new  start fresh    /help  commands" fg={palette.textDim} />
+	                    <text content="/think <tier>  off/low/midium/high/xhigh/max/auto    /help" fg={palette.textDim} />
+	                    <text content="/resume  list sessions    /new  start fresh" fg={palette.textDim} />
                     <text content="Up/Down recalls prompt history" fg={palette.textDim} />
                   </box>
                 </Show>
@@ -955,6 +1016,13 @@ function renderModelList(registry: ProviderRegistry, providerId: string, activeM
   lines.push("");
   lines.push(`Use /use ${provider.id} <model> or /model <model> to switch.`);
   return lines.join("\n");
+}
+
+function parseThinkingTier(value: string): ReasoningTier | "auto" | null {
+  const raw = value.trim().toLowerCase();
+  if (raw === "auto" || raw === "unset" || raw === "default") return "auto";
+  const normalized = raw === "medium" ? "midium" : raw;
+  return (reasoningTiers as readonly string[]).includes(normalized) ? normalized as ReasoningTier : null;
 }
 
 function renderArtifactList(entries: ArtifactEntry[]): string {

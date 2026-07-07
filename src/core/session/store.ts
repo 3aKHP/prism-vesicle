@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { parseGateRequest } from "../gate/types";
 import type { GateRequest } from "../gate/types";
 import type { ProviderSelection } from "../../config/providers";
+import { reasoningTiers } from "../../providers/shared/types";
+import type { ReasoningTier } from "../../providers/shared/types";
 
 export type SessionRole = "user" | "assistant" | "system" | "tool";
 
@@ -157,6 +159,7 @@ export type SessionSnapshot = {
   sessionId: string;
   messages: ResumedMessage[];
   providerSelection?: ProviderSelection;
+  reasoningTier?: ReasoningTier;
   pendingGate?: {
     gate: GateRequest;
     toolCallId: string;
@@ -182,12 +185,16 @@ export async function loadSessionSnapshot(
   const messages: ResumedMessage[] = [];
   let skippedFirstSystem = false;
   let providerSelection: ProviderSelection | undefined;
+  let reasoningTier: ReasoningTier | undefined;
 
   for (const record of records) {
     const providerId = record.metadata?.providerId;
     const model = record.metadata?.model;
     if (typeof providerId === "string" && typeof model === "string") {
       providerSelection = { provider: providerId, model };
+    }
+    if (record.metadata && Object.hasOwn(record.metadata, "reasoningTier")) {
+      reasoningTier = readReasoningTier(record.metadata.reasoningTier);
     }
 
     if (record.role === "system") {
@@ -245,6 +252,7 @@ export async function loadSessionSnapshot(
     sessionId,
     messages,
     ...(providerSelection ? { providerSelection } : {}),
+    ...(reasoningTier ? { reasoningTier } : {}),
     ...(pendingGate
       ? {
           pendingGate: {
@@ -255,6 +263,12 @@ export async function loadSessionSnapshot(
         }
       : {}),
   };
+}
+
+function readReasoningTier(value: unknown): ReasoningTier | undefined {
+  return typeof value === "string" && (reasoningTiers as readonly string[]).includes(value)
+    ? value as ReasoningTier
+    : undefined;
 }
 
 function findPendingGate(records: SessionRecord[]): { gate: GateRequest; toolCallId: string; assistantContent: string } | undefined {

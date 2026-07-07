@@ -23,6 +23,26 @@ describe("OpenAI-compatible request shaping", () => {
     expect(body.stream).toBe(false);
     expect(body.tools).toBeUndefined();
     expect(body.tool_choice).toBeUndefined();
+    expect(body.thinking).toBeUndefined();
+    expect(body.reasoning_effort).toBeUndefined();
+  });
+
+  test("maps normalized thinking tiers to OpenAI-compatible reasoning controls", () => {
+    const off = toChatCompletionBody({ ...request(), generation: { reasoningTier: "off" } }, false);
+    expect(off.thinking).toEqual({ type: "disabled" });
+    expect(off.reasoning_effort).toBeUndefined();
+
+    for (const tier of ["low", "midium", "high"] as const) {
+      const body = toChatCompletionBody({ ...request(), generation: { reasoningTier: tier } }, false);
+      expect(body.thinking).toEqual({ type: "enabled" });
+      expect(body.reasoning_effort).toBe("high");
+    }
+
+    for (const tier of ["xhigh", "max"] as const) {
+      const body = toChatCompletionBody({ ...request(), generation: { reasoningTier: tier } }, false);
+      expect(body.thinking).toEqual({ type: "enabled" });
+      expect(body.reasoning_effort).toBe("max");
+    }
   });
 
   test("serializes assistant tool calls and tool results for Chat Completions", () => {
