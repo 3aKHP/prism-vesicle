@@ -56,6 +56,12 @@ describe("file tools v2", () => {
 
     const statResult = await executeFileTool(rootDir, call("stat_path", { path: "workspace/a.md" }));
     expect(statResult.ok).toBe(true);
+    expect(statResult.fileEvent).toMatchObject({
+      kind: "file_operation",
+      operation: "stat",
+      path: "workspace/a.md",
+      changed: false,
+    });
     expect(JSON.parse(statResult.content)).toMatchObject({
       path: "workspace/a.md",
       type: "file",
@@ -67,6 +73,13 @@ describe("file tools v2", () => {
       maxMatches: 10,
     }));
     expect(grepResult.ok).toBe(true);
+    expect(grepResult.fileEvent).toMatchObject({
+      kind: "file_operation",
+      operation: "grep",
+      path: "workspace",
+      matches: 2,
+      changed: false,
+    });
     expect(JSON.parse(grepResult.content)).toMatchObject({
       matches: [
         { path: "workspace/a.md", line: 1, text: "gamma" },
@@ -215,6 +228,7 @@ async function expectTool(name: string, args: Record<string, unknown>, content: 
   const result = await executeFileTool(rootDir, call(name, args));
   expect(result.ok).toBe(true);
   expect(result.content).toBe(content);
+  expect(result.fileEvent).toMatchObject({ kind: "file_operation" });
 }
 
 async function expectToolFailure(name: string, args: Record<string, unknown>, content: string): Promise<void> {

@@ -4,7 +4,7 @@ import type { ProviderSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
 import type { ProviderAdapter, ProviderThinkingBlock, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { executeFileTool, fileToolDefinitions } from "../tools";
-import type { ToolCall, ToolDefinition } from "../tools";
+import type { FileToolEvent, ToolCall, ToolDefinition } from "../tools";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import type { EngineId } from "../engine/profile";
 import { loadEngineProfile } from "../engine/profile";
@@ -44,7 +44,7 @@ export type AgentLoopEvent =
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
-  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string }
+  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent }
   | { type: "gate_pending"; gate: string }
   | { type: "validation"; ok: boolean };
 
@@ -307,6 +307,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
           name: toolResult.name,
           ok: toolResult.ok,
           toolCallId: toolResult.callId,
+          ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
         },
       });
 
@@ -319,6 +320,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         callId: toolResult.callId,
         ok: toolResult.ok,
         content: toolResult.content,
+        ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
       });
     }
 

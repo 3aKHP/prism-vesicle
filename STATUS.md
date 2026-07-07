@@ -56,6 +56,9 @@ Chat wrapper:
   natively.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
+- Persist successful filesystem tool operations as structured `fileEvent`
+  metadata on session tool records, so generated file changes can be replayed
+  or audited without scraping prose.
 - Execute a guarded filesystem tool loop (`stat_path`, `list_files`,
   `grep_files`, `read_file`, `create_file`, `write_file`, `replace_in_file`,
   `append_file`, `delete_file`, `copy_file`, `move_file`) with a high ceiling

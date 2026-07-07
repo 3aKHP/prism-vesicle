@@ -7,11 +7,37 @@ export type ToolCall = {
   arguments: string;
 };
 
+export type FileToolEvent = {
+  kind: "file_operation";
+  operation:
+    | "stat"
+    | "list"
+    | "grep"
+    | "read"
+    | "create"
+    | "write"
+    | "replace"
+    | "append"
+    | "delete"
+    | "copy"
+    | "move";
+  path?: string;
+  sourcePath?: string;
+  targetPath?: string;
+  changed: boolean;
+  bytes?: number;
+  lines?: number;
+  matches?: number;
+  occurrences?: number;
+  truncated?: boolean;
+};
+
 export type ToolResult = {
   callId: string;
   name: string;
   ok: boolean;
   content: string;
+  fileEvent?: FileToolEvent;
 };
 
 export type ToolDefinition = {
@@ -315,14 +341,26 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
           type: info.isDirectory() ? "directory" : info.isFile() ? "file" : "other",
           size: info.size,
           modifiedAt: info.mtime.toISOString(),
-        }));
+        }), {
+          kind: "file_operation",
+          operation: "stat",
+          path: toProjectPath(rootDir, resolved),
+          changed: false,
+          bytes: info.size,
+        });
       }
 
       case "list_files": {
         const args = parseArgs<{ path: string; recursive?: boolean }>(call.arguments);
         const dir = resolveAllowed(rootDir, args.path, readableRoots);
         const entries = await listFiles(dir, Boolean(args.recursive));
-        return ok(call, entries.map((entry) => toProjectPath(rootDir, entry)).join("\n") || "(empty)");
+        return ok(call, entries.map((entry) => toProjectPath(rootDir, entry)).join("\n") || "(empty)", {
+          kind: "file_operation",
+          operation: "list",
+          path: toProjectPath(rootDir, dir),
+          changed: false,
+          matches: entries.length,
+        });
       }
 
       case "grep_files": {
@@ -336,13 +374,28 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         }>(call.arguments);
         const resolved = resolveAllowed(rootDir, args.path, readableRoots);
         const result = await grepFiles(rootDir, resolved, args);
-        return ok(call, JSON.stringify(result));
+        return ok(call, JSON.stringify(result), {
+          kind: "file_operation",
+          operation: "grep",
+          path: toProjectPath(rootDir, resolved),
+          changed: false,
+          matches: result.matches.length,
+          truncated: result.truncated,
+        });
       }
 
       case "read_file": {
         const args = parseArgs<{ path: string; startLine?: number; endLine?: number }>(call.arguments);
         const filePath = resolveAllowed(rootDir, args.path, readableRoots);
-        return ok(call, sliceLines(await readFile(filePath, "utf8"), args.startLine, args.endLine));
+        const content = sliceLines(await readFile(filePath, "utf8"), args.startLine, args.endLine);
+        return ok(call, content, {
+          kind: "file_operation",
+          operation: "read",
+          path: toProjectPath(rootDir, filePath),
+          changed: false,
+          bytes: textByteLength(content),
+          lines: content ? content.split(/\r?\n/).length : 0,
+        });
       }
 
       case "create_file": {
@@ -350,7 +403,13 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, { encoding: "utf8", flag: "wx" });
-        return ok(call, `Created ${toProjectPath(rootDir, filePath)}`);
+        return ok(call, `Created ${toProjectPath(rootDir, filePath)}`, {
+          kind: "file_operation",
+          operation: "create",
+          path: toProjectPath(rootDir, filePath),
+          changed: true,
+          bytes: textByteLength(args.content),
+        });
       }
 
       case "write_file": {
@@ -358,7 +417,13 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, "utf8");
-        return ok(call, `Wrote ${toProjectPath(rootDir, filePath)}`);
+        return ok(call, `Wrote ${toProjectPath(rootDir, filePath)}`, {
+          kind: "file_operation",
+          operation: "write",
+          path: toProjectPath(rootDir, filePath),
+          changed: true,
+          bytes: textByteLength(args.content),
+        });
       }
 
       case "replace_in_file": {
@@ -375,7 +440,14 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         // designed for concurrent external writers.
         const next = original.split(args.oldText).join(args.newText);
         await writeFile(filePath, next, "utf8");
-        return ok(call, `Replaced ${args.replaceAll ? count : 1} occurrence(s) in ${toProjectPath(rootDir, filePath)}`);
+        return ok(call, `Replaced ${args.replaceAll ? count : 1} occurrence(s) in ${toProjectPath(rootDir, filePath)}`, {
+          kind: "file_operation",
+          operation: "replace",
+          path: toProjectPath(rootDir, filePath),
+          changed: true,
+          bytes: textByteLength(next),
+          occurrences: args.replaceAll ? count : 1,
+        });
       }
 
       case "append_file": {
@@ -384,7 +456,13 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         await mkdir(dirname(filePath), { recursive: true });
         if (!args.createIfMissing) await assertFile(filePath);
         await appendFile(filePath, args.content, { encoding: "utf8", flag: "a" });
-        return ok(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`);
+        return ok(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`, {
+          kind: "file_operation",
+          operation: "append",
+          path: toProjectPath(rootDir, filePath),
+          changed: true,
+          bytes: textByteLength(args.content),
+        });
       }
 
       case "delete_file": {
@@ -394,7 +472,12 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         // Single-user TUI contract: the path is expected not to change between
         // the file check and unlink.
         await unlink(filePath);
-        return ok(call, `Deleted ${toProjectPath(rootDir, filePath)}`);
+        return ok(call, `Deleted ${toProjectPath(rootDir, filePath)}`, {
+          kind: "file_operation",
+          operation: "delete",
+          path: toProjectPath(rootDir, filePath),
+          changed: true,
+        });
       }
 
       case "copy_file": {
@@ -404,7 +487,15 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         await assertFile(sourcePath);
         await prepareTarget(targetPath, Boolean(args.overwrite));
         await copyFile(sourcePath, targetPath);
-        return ok(call, `Copied ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`);
+        const copied = await stat(targetPath);
+        return ok(call, `Copied ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
+          kind: "file_operation",
+          operation: "copy",
+          sourcePath: toProjectPath(rootDir, sourcePath),
+          targetPath: toProjectPath(rootDir, targetPath),
+          changed: true,
+          bytes: copied.size,
+        });
       }
 
       case "move_file": {
@@ -414,7 +505,15 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         await assertFile(sourcePath);
         await prepareTarget(targetPath, Boolean(args.overwrite));
         await rename(sourcePath, targetPath);
-        return ok(call, `Moved ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`);
+        const moved = await stat(targetPath);
+        return ok(call, `Moved ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
+          kind: "file_operation",
+          operation: "move",
+          sourcePath: toProjectPath(rootDir, sourcePath),
+          targetPath: toProjectPath(rootDir, targetPath),
+          changed: true,
+          bytes: moved.size,
+        });
       }
 
       default:
@@ -576,12 +675,17 @@ function toProjectPath(rootDir: string, filePath: string): string {
   return relative(rootDir, filePath).split(sep).join("/");
 }
 
-function ok(call: ToolCall, content: string): ToolResult {
+function textByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function ok(call: ToolCall, content: string, fileEvent?: FileToolEvent): ToolResult {
   return {
     callId: call.id,
     name: call.name,
     ok: true,
     content,
+    ...(fileEvent ? { fileEvent } : {}),
   };
 }
 

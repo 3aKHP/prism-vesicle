@@ -158,6 +158,9 @@ Prompts are runtime assets, not hardcoded source literals.
 - Provider requests must include prior user/assistant turns when continuing a
   session.
 - Tool calls and tool results should be persisted for replay/debugging.
+- Successful filesystem tool results should persist structured `fileEvent`
+  metadata on the session tool record. Callers may use this for artifact
+  audit/ledger views without parsing natural-language tool result text.
 - User-selected reasoning tiers should be persisted as session metadata so
   interactive resume restores runtime generation behavior. Provider
   thinking state is preserved as thinking blocks for protocol continuity and
