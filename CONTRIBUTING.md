@@ -1,12 +1,19 @@
 # Contributing
 
-Prism Vesicle is still in M0, so the main goal is to keep the runtime small,
-testable, and honest about what it can execute.
+Prism Vesicle is in rapid internal development, so the main goal is to keep the
+runtime small, testable, and honest about what it can execute while preserving
+enough process to recover from risky changes.
 
 ## Branch And Commit Style
 
 For the full branch and independent CR workflow, see
 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
+
+During rapid internal development, `develop` is the active trunk. Small and
+medium low-risk changes may go directly to `develop` when commit/push work is
+explicitly requested. Use a short-lived branch and PR for high-risk provider,
+tool, session, prompt, validator, engine-profile, large-refactor, release, or
+review-heavy work. Do not push directly to `main`.
 
 Use Conventional Commits:
 

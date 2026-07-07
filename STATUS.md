@@ -161,7 +161,7 @@ or process environment; it returns early otherwise.
 ## Workflow Docs
 
 - `AGENTS.md`: AI collaborator startup rules and guardrails.
-- `CLAUDE.md`: Claude Code startup pointer.
-- `docs/dev/WORKFLOW.md`: branch model, iteration loop, hotfix path, and
-  independent CR process.
+- `CLAUDE.md`: Claude Code collaborator startup rules.
+- `docs/dev/WORKFLOW.md`: branch model, rapid-development exception, iteration
+  loop, hotfix path, and independent CR process.
 - `docs/dev/STYLE.md`: architecture, tool-runtime, prompt, session, and TUI rules.

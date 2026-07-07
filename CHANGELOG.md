@@ -24,6 +24,12 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Expanded `AGENTS.md` and `CLAUDE.md` into full AI-collaborator entry points
+  that link the repo's workflow, style, status, contribution, provider config,
+  verification, and documentation-sweep rules.
+- Added a rapid-development workflow exception that treats `develop` as the
+  active trunk for low-risk internal iteration while preserving PR/CR flow for
+  high-risk or release-bound work.
 - Provider configuration now requires the user-level `providers.yaml`; Vesicle
   no longer falls back to a single `VESICLE_API_KEY` environment configuration
   when that file is missing.

@@ -1,7 +1,7 @@
 # Prism Vesicle Workflow
 
 This document adapts the PRTS-MCP branch and independent review workflow to
-Prism Vesicle's current M0 stage.
+Prism Vesicle's current rapid internal development stage.
 
 ## Hard Rules
 
@@ -10,25 +10,19 @@ Prism Vesicle's current M0 stage.
 - Keep work reviewable: one branch/PR should have one main intent.
 - Update docs and changelog when behavior, config, tool surface, or runtime
   contracts change.
+- Never commit secrets, generated session state, or local runtime artifacts.
 
 ## Branch Model
 
-### Bootstrap Exception
-
-Before the first baseline commit, M0 scaffold work may remain on `main` because
-there is no stable baseline to branch from yet.
-
-### Normal Development
-
-Once the baseline exists:
+### Long-Lived Branches
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Stable baseline |
-| `develop` | Integration branch for normal development |
+| `main` | Stable milestone snapshot and future public-release baseline |
+| `develop` | Rapid internal development trunk |
 | `feature/fix/docs/test/...` | Short-lived work branches |
 
-Flow:
+Default full GitFlow remains available:
 
 ```text
 feat/refactor/docs/test/chore/* -> develop
@@ -48,12 +42,56 @@ Examples:
 - `fix/v0.1.0-tool-path-guard`
 - `docs/v0.1.0-runtime-contract`
 
+## Rapid Development Exception
+
+Prism Vesicle is currently in a fast internal development phase with no public
+release pressure and no external user dependency on `main`. During this phase,
+`develop` is the active trunk.
+
+Small and medium changes may be committed and pushed directly to `develop` when
+the user explicitly asks for commit/push work and the change is easy to review
+from the commit itself. Examples:
+
+- documentation-only updates
+- prompt or asset copy edits that do not change runtime contracts
+- focused TUI interaction fixes
+- tests and local verification improvements
+- small bug fixes with low blast radius
+- narrow refactors that preserve behavior and boundaries
+
+Use a short-lived branch and PR for higher-risk work:
+
+- provider protocol, streaming, or adapter changes
+- model-visible tool contracts, path guards, or write semantics
+- session schema, replay, resume, or migration behavior
+- prompt contracts, stop gates, validator contracts, or engine profiles
+- large refactors or cross-module changes
+- changes intended for `main`, a tag, or release readiness
+- changes where Bot review or independent CR is useful
+
+`main` does not need to be updated on every iteration in this phase. Update
+`main` only for milestone snapshots, release-readiness checkpoints, or explicit
+user requests.
+
+The exception does not relax these rules:
+
+- no direct push to `main`
+- no force-push to `develop` unless the user explicitly requests it
+- no secrets or runtime state in git
+- no provider/filesystem/prompt boundary violations
+- Conventional Commits still apply
+- verification must match the risk of the change
+
+When the project approaches a public release or external users depend on
+`main`, retire this exception and return to branch + PR as the default.
+
 ## Iteration Loop
 
 ### Normal Change
 
 1. Align scope: state what changes, files likely touched, risks, and validation.
-2. Branch from `develop` once `develop` exists.
+2. Decide whether the Rapid Development Exception allows direct `develop`
+   work. Otherwise branch from `develop`.
 3. Implement in small, reviewable commits when committing is requested.
 4. Run local verification:
 
@@ -67,12 +105,25 @@ bun run doctor
    - `README.md` for user-facing usage
    - `STATUS.md` for current project shape or limits
    - `CHANGELOG.md` for user-visible changes
-- `docs/dev/STYLE.md` for architecture rules
+   - `docs/dev/STYLE.md` for architecture rules
    - `docs/dev/WORKFLOW.md` for process changes
-6. Open PR when requested.
-7. Run independent CR before merge.
+6. Push directly to `develop` only when allowed by the Rapid Development
+   Exception and explicitly requested by the user; otherwise open a PR when
+   requested.
+7. Run independent CR before merge for non-trivial PRs.
 8. Address Blocking and Should-fix findings.
-9. Wait for human merge.
+9. Wait for human merge when using PR flow.
+
+### Verification Matrix
+
+Use the smallest verification set that proves the change:
+
+| Change type | Minimum verification |
+|-------------|----------------------|
+| docs only | targeted docs grep and, when cheap, `bun run typecheck` |
+| small code | `bun run typecheck` plus focused tests |
+| provider/session/tool/gate/TUI runtime | `bun run typecheck`, relevant tests, `bun run doctor` |
+| release or `main` snapshot | `bun run typecheck`, `bun test`, `bun run doctor`, and real TUI/provider smoke when practical |
 
 ### Hotfix
 
@@ -84,7 +135,10 @@ Use this for regressions that block real use, such as:
 - path guards are unsafe
 - TUI cannot exit or accept input
 
-Flow:
+Use the hotfix path only when `main` or a tagged milestone must be repaired.
+During rapid internal development, most urgent fixes can go through `develop`.
+
+Full hotfix flow:
 
 1. Branch from `main`.
 2. Patch the smallest concrete failing path.
