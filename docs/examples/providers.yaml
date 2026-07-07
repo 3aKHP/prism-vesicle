@@ -38,3 +38,18 @@ providers:
         capabilities:
           tools: true
           reasoningTier: true
+
+  google:
+    protocol: gemini-generate-content
+    baseUrl: https://generativelanguage.googleapis.com/v1beta
+    apiKeyEnv: GEMINI_API_KEY
+    authMethod: x-goog-api-key
+    models:
+      - id: gemini-2.5-pro
+        generation:
+          maxTokens: 8192
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true

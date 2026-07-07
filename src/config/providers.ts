@@ -384,14 +384,14 @@ function requireModel(profile: ProviderProfile, modelId: string): ProviderModelP
 }
 
 function readProtocol(value: string, field: string): ProviderProtocol {
-  if (value !== "openai-chat-compatible" && value !== "anthropic-messages") {
+  if (value !== "openai-chat-compatible" && value !== "anthropic-messages" && value !== "gemini-generate-content") {
     throw new Error(`Unsupported provider protocol "${value}" in ${field}.`);
   }
   return value;
 }
 
 function readAuthMethod(value: string, field: string): ProviderAuthMethod {
-  if (value !== "bearer" && value !== "x-api-key") {
+  if (value !== "bearer" && value !== "x-api-key" && value !== "x-goog-api-key") {
     throw new Error(`Unsupported provider authMethod "${value}" in ${field}.`);
   }
   return value;

@@ -139,6 +139,44 @@ describe("config loading", () => {
     });
   });
 
+  test("loads Gemini generateContent provider profiles", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: google",
+      "  model: gemini-test",
+      "providers:",
+      "  google:",
+      "    protocol: gemini-generate-content",
+      "    baseUrl: https://generativelanguage.googleapis.com/v1beta",
+      "    apiKeyEnv: GEMINI_API_KEY",
+      "    authMethod: x-goog-api-key",
+      "    models:",
+      "      - id: gemini-test",
+      "        capabilities:",
+      "          streaming: true",
+      "          tools: true",
+      "          reasoningTier: true",
+      "          reasoningContent: true",
+      "",
+    ], ["GEMINI_API_KEY=secret"]);
+
+    const config = await loadConfigForSelection(undefined, env);
+
+    expect(config).toMatchObject({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      model: "gemini-test",
+      authMethod: "x-goog-api-key",
+      apiKey: "secret",
+      capabilities: {
+        streaming: true,
+        tools: true,
+        reasoningTier: true,
+        reasoningContent: true,
+      },
+    });
+  });
+
   test("rejects duplicate model ids across string and object entries", async () => {
     const { env } = await writeProvidersFile([
       "default:",

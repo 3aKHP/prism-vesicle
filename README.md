@@ -73,6 +73,9 @@ return to an unresolved gate.
 - OpenAI-compatible Chat Completions provider path
 - Anthropic Messages provider path for text, streaming, tool calls, and
   thinking block preservation
+- Gemini `generateContent` provider path for text, streaming, function calls,
+  function responses, thinking-tier controls, and Gemini thought-signature
+  replay
 - Streaming OpenAI-compatible Chat Completions responses when the provider
   supports SSE, including streamed tool-call reconstruction
 - Provider/model registry from the user-level `providers.yaml`, with TUI
@@ -81,9 +84,9 @@ return to an unresolved gate.
   low-frequency generation knobs such as `temperature` and `maxTokens` stay in
   config while high-frequency thinking control stays in the TUI
 - Runtime thinking-tier control with `/think off|low|midium|high|xhigh|max`
-  plus `/think auto` to return to provider defaults; OpenAI-compatible requests
-  map `off` to disabled thinking, `low`/`midium`/`high` to high effort, and
-  `xhigh`/`max` to max effort
+  plus `/think auto` to return to provider defaults; adapters map the
+  normalized tier to OpenAI-compatible, Anthropic, or Gemini-native thinking
+  controls
 - Reasoning visibility for models that return `reasoning_content`: the TUI
   renders reasoning as a separate bounded block, defaults to collapsed preview,
   and offers `/reasoning hidden|collapsed|expanded`
@@ -129,8 +132,8 @@ Prism v9 prompt/spec/template assets are copied under `assets/`. See `assets/REA
 ## Scope
 
 0.3.0 development focuses on making Vesicle usable across multiple
-OpenAI-compatible and Anthropic Messages provider profiles and on treating
-generated artifact files as first-class workflow objects. Native Gemini,
-OpenAI Responses, MCP, Skills, long-form engines, and prompt-cache engineering
-are deferred to later milestones — see `STATUS.md` for the full known-limits
-list.
+OpenAI-compatible, Anthropic Messages, and Gemini `generateContent` provider
+profiles and on treating generated artifact files as first-class workflow
+objects. OpenAI Responses, MCP, Skills, long-form engines, and prompt-cache
+engineering are deferred to later milestones — see `STATUS.md` for the full
+known-limits list.
