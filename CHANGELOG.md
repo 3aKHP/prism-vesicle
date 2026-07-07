@@ -31,6 +31,9 @@ project follows Semantic Versioning once releases begin.
 - Object model entries in `providers.yaml` for config-driven generation
   defaults (`temperature`, `maxTokens`) and model capability metadata, while
   preserving existing string model entries.
+- Anthropic Messages provider protocol for non-streaming text responses,
+  `tool_use` / `tool_result` loops, and `thinking` / `redacted_thinking` block
+  preservation.
 
 ### Changed
 
@@ -62,6 +65,9 @@ project follows Semantic Versioning once releases begin.
   provider/model default and do not send thinking control fields.
 - OpenAI-compatible request shaping now receives generation defaults from the
   selected model config instead of inventing a hardcoded adapter temperature.
+- Provider configuration now accepts the `anthropic-messages` protocol and an
+  optional `authMethod` (`x-api-key` or `bearer`) for Anthropic-compatible
+  endpoints.
 
 ### Fixed
 

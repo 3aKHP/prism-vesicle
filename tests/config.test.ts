@@ -105,6 +105,40 @@ describe("config loading", () => {
     });
   });
 
+  test("loads Anthropic Messages provider profiles", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: anthropic",
+      "  model: claude-sonnet",
+      "providers:",
+      "  anthropic:",
+      "    protocol: anthropic-messages",
+      "    baseUrl: https://api.anthropic.com/v1",
+      "    apiKeyEnv: ANTHROPIC_API_KEY",
+      "    authMethod: x-api-key",
+      "    models:",
+      "      - id: claude-sonnet",
+      "        generation:",
+      "          maxTokens: 4096",
+      "        capabilities:",
+      "          tools: true",
+      "          reasoningTier: true",
+      "",
+    ], ["ANTHROPIC_API_KEY=secret"]);
+
+    const config = await loadConfigForSelection(undefined, env);
+
+    expect(config).toMatchObject({
+      provider: "anthropic-messages",
+      providerId: "anthropic",
+      model: "claude-sonnet",
+      authMethod: "x-api-key",
+      apiKey: "secret",
+      generation: { maxTokens: 4096 },
+      capabilities: { tools: true, reasoningTier: true },
+    });
+  });
+
   test("rejects duplicate model ids across string and object entries", async () => {
     const { env } = await writeProvidersFile([
       "default:",

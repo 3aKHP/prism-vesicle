@@ -1,4 +1,5 @@
-export type VesicleProvider = "openai-chat-compatible";
+export type VesicleProvider = "openai-chat-compatible" | "anthropic-messages";
+export type ProviderAuthMethod = "bearer" | "x-api-key";
 
 export type GenerationDefaults = {
   temperature?: number;
@@ -21,6 +22,7 @@ export type VesicleConfig = {
   model: string;
   apiKey?: string;
   apiKeyLabel?: string;
+  authMethod?: ProviderAuthMethod;
   generation?: GenerationDefaults;
   capabilities?: ModelCapabilities;
 };
