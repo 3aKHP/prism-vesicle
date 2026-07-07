@@ -48,6 +48,9 @@ Chat wrapper:
 - Show provider `reasoning_content` as a separate TUI thinking block before
   assistant text, with `/reasoning hidden|collapsed|expanded`; the default
   collapsed mode keeps long reasoning bounded to a short tail preview.
+- Preserve provider thinking state as session-replayed thinking blocks, with
+  OpenAI-compatible `reasoning_content` mapped into that structure as a bridge
+  for future Anthropic Messages and Gemini adapters.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
 - Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a
@@ -150,9 +153,8 @@ never abort a turn. Validators run only on artifact-shaped assistant content
   provider protocols are still deferred.
 - Thinking-tier control maps to OpenAI-compatible `thinking` and
   `reasoning_effort` request fields. User-visible reasoning is currently a TUI
-  display feature for preserved OpenAI-compatible `reasoning_content`; native
-  Anthropic, Gemini, and OpenAI Responses thinking surfaces are deferred with
-  their provider adapters.
+  display feature for preserved provider thinking blocks; native Anthropic,
+  Gemini, and OpenAI Responses adapters are deferred.
 - TUI engine switching is hardcoded to ETL (runtime/evaluate profiles exist
   and load, but the TUI does not yet offer a selector).
 - Gate UI is Select-style for ETL blueprint and phase checkpoints, with a

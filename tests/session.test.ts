@@ -42,6 +42,7 @@ describe("session resume", () => {
       content: "here is the blueprint",
       metadata: {
         reasoningContent: "I should pause before proceeding.",
+        thinkingBlocks: [{ type: "reasoning", reasoningContent: "I should pause before proceeding." }],
         toolCalls: [{ id: "call-1", name: "request_confirmation", arguments: "{}" }],
       },
     });
@@ -69,6 +70,7 @@ describe("session resume", () => {
     ]);
     expect(messages[1].toolCalls?.[0]?.id).toBe("call-1");
     expect(messages[1].reasoningContent).toBe("I should pause before proceeding.");
+    expect(messages[1].thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "I should pause before proceeding." }]);
     expect(messages[2].toolCallId).toBe("call-1");
     // The composed system prompt must not leak into the resumed message list.
     expect(messages.some((m) => m.content.includes("composed prompt"))).toBe(false);
@@ -77,6 +79,28 @@ describe("session resume", () => {
   test("loadSessionMessages on a non-existent session throws", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-missing-"));
     await expect(loadSessionMessages(rootDir, "does-not-exist")).rejects.toThrow();
+  });
+
+  test("loadSessionMessages filters malformed thinking blocks", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-thinking-blocks-"));
+    const store = await createSessionStore(rootDir, "2026-03-02T00-00-00-000Z-blocks");
+
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "assistant",
+      content: "answer",
+      metadata: {
+        thinkingBlocks: [
+          { type: "reasoning", reasoningContent: "valid" },
+          { type: "reasoning", reasoningContent: 42 },
+          { type: "unknown", value: "ignored" },
+        ],
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, "2026-03-02T00-00-00-000Z-blocks");
+
+    expect(messages[0].thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "valid" }]);
   });
 
   test("loadSessionMessages synthesizes tool results for an unresolved gate (CR B1)", async () => {

@@ -8,10 +8,16 @@ export type ModelRef = {
   model: string;
 };
 
+export type ProviderThinkingBlock = {
+  type: string;
+  [key: string]: unknown;
+};
+
 export type VesicleMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   reasoningContent?: string;
+  thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
   toolCalls?: ToolCall[];
 };
@@ -34,6 +40,7 @@ export type VesicleResponse = {
   id: string;
   content: string;
   reasoningContent?: string;
+  thinkingBlocks?: ProviderThinkingBlock[];
   toolCalls?: ToolCall[];
   finishReason?: string;
   raw?: unknown;

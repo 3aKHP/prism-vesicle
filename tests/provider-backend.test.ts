@@ -53,7 +53,7 @@ describe("OpenAI-compatible request shaping", () => {
         {
           role: "assistant",
           content: "",
-          reasoningContent: "Need to read the file first.",
+          thinkingBlocks: [{ type: "reasoning", reasoningContent: "Need to read the file first." }],
           toolCalls: [{ id: "call-read", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" }],
         },
         { role: "tool", toolCallId: "call-read", content: "{\"ok\":true}" },
@@ -131,6 +131,7 @@ describe("OpenAI-compatible response parsing", () => {
       id: "chatcmpl-reasoning",
       content: "final answer",
       reasoningContent: "Think before answering.",
+      thinkingBlocks: [{ type: "reasoning", reasoningContent: "Think before answering." }],
     });
   });
 });
@@ -174,6 +175,7 @@ describe("Chat Completions stream integration", () => {
         id: "chatcmpl-stream",
         content: "hello",
         reasoningContent: "think",
+        thinkingBlocks: [{ type: "reasoning", reasoningContent: "think" }],
         finishReason: "stop",
         toolCalls: undefined,
         usage: undefined,

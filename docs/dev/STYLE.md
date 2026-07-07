@@ -140,8 +140,10 @@ Prompts are runtime assets, not hardcoded source literals.
 - Tool calls and tool results should be persisted for replay/debugging.
 - User-selected reasoning tiers should be persisted as session metadata so
   interactive resume restores runtime generation behavior. Provider
-  `reasoning_content` is preserved for protocol continuity and TUI display,
-  but it is metadata and must not be merged into normal assistant prose.
+  thinking state is preserved as thinking blocks for protocol continuity and
+  TUI display, but it is metadata and must not be merged into normal assistant
+  prose. OpenAI-compatible `reasoning_content` is a compatibility bridge into
+  that block structure.
 - Session lists should mark unresolved gates so the user can distinguish a
   normal transcript from a workflow waiting for confirmation.
 - Long-running turns should emit host-visible activity events before and after

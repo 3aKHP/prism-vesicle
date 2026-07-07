@@ -1,4 +1,5 @@
 import type { ReasoningTier, VesicleRequest } from "../shared/types";
+import { reasoningContentFromThinkingBlocks } from "../shared/thinking";
 
 export function toChatCompletionBody(request: VesicleRequest, stream: boolean, includeUsage = false): Record<string, unknown> {
   const hasTools = Boolean(request.tools && request.tools.length > 0);
@@ -16,10 +17,11 @@ export function toChatCompletionBody(request: VesicleRequest, stream: boolean, i
         }
 
         if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
+          const reasoningContent = assistantReasoningContent(message);
           return {
             role: "assistant",
             content: message.content || null,
-            ...(message.reasoningContent ? { reasoning_content: message.reasoningContent } : {}),
+            ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
             tool_calls: message.toolCalls.map((call) => ({
               id: call.id,
               type: "function",
@@ -35,8 +37,9 @@ export function toChatCompletionBody(request: VesicleRequest, stream: boolean, i
           role: message.role,
           content: message.content,
         };
-        if (message.role === "assistant" && message.reasoningContent) {
-          body.reasoning_content = message.reasoningContent;
+        if (message.role === "assistant") {
+          const reasoningContent = assistantReasoningContent(message);
+          if (reasoningContent) body.reasoning_content = reasoningContent;
         }
         return body;
       }),
@@ -49,6 +52,10 @@ export function toChatCompletionBody(request: VesicleRequest, stream: boolean, i
     stream,
     stream_options: stream && includeUsage ? { include_usage: true } : undefined,
   };
+}
+
+function assistantReasoningContent(message: VesicleRequest["messages"][number]): string | undefined {
+  return reasoningContentFromThinkingBlocks(message.thinkingBlocks) ?? message.reasoningContent;
 }
 
 function reasoningControls(tier: ReasoningTier | undefined): Record<string, unknown> {
