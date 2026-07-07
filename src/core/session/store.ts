@@ -6,6 +6,8 @@ import type { ProviderSelection } from "../../config/providers";
 import { reasoningTiers } from "../../providers/shared/types";
 import type { ReasoningTier } from "../../providers/shared/types";
 
+export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
+
 export type SessionRole = "user" | "assistant" | "system" | "tool";
 
 type ResumedToolCall = {
@@ -160,6 +162,7 @@ export type SessionSnapshot = {
   messages: ResumedMessage[];
   providerSelection?: ProviderSelection;
   reasoningTier?: ReasoningTier;
+  reasoningDisplayMode?: ReasoningDisplayMode;
   pendingGate?: {
     gate: GateRequest;
     toolCallId: string;
@@ -186,6 +189,7 @@ export async function loadSessionSnapshot(
   let skippedFirstSystem = false;
   let providerSelection: ProviderSelection | undefined;
   let reasoningTier: ReasoningTier | undefined;
+  let reasoningDisplayMode: ReasoningDisplayMode | undefined;
 
   for (const record of records) {
     const providerId = record.metadata?.providerId;
@@ -195,6 +199,9 @@ export async function loadSessionSnapshot(
     }
     if (record.metadata && Object.hasOwn(record.metadata, "reasoningTier")) {
       reasoningTier = readReasoningTier(record.metadata.reasoningTier);
+    }
+    if (record.metadata && Object.hasOwn(record.metadata, "reasoningDisplayMode")) {
+      reasoningDisplayMode = readReasoningDisplayMode(record.metadata.reasoningDisplayMode);
     }
 
     if (record.role === "system") {
@@ -253,6 +260,7 @@ export async function loadSessionSnapshot(
     messages,
     ...(providerSelection ? { providerSelection } : {}),
     ...(reasoningTier ? { reasoningTier } : {}),
+    ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}),
     ...(pendingGate
       ? {
           pendingGate: {
@@ -268,6 +276,12 @@ export async function loadSessionSnapshot(
 function readReasoningTier(value: unknown): ReasoningTier | undefined {
   return typeof value === "string" && (reasoningTiers as readonly string[]).includes(value)
     ? value as ReasoningTier
+    : undefined;
+}
+
+function readReasoningDisplayMode(value: unknown): ReasoningDisplayMode | undefined {
+  return value === "hidden" || value === "collapsed" || value === "expanded"
+    ? value
     : undefined;
 }
 

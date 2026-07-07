@@ -26,7 +26,9 @@ switch with `/providers`, `/models`, `/use <provider> <model>`, and
 `/model <model>`. Use `/think off|low|midium|high|xhigh|max` to set the
 thinking tier for subsequent provider requests, or `/think auto` to clear the
 explicit choice. Before this command is used, Vesicle leaves thinking behavior
-at the provider/model default.
+at the provider/model default. Use `/reasoning hidden|collapsed|expanded` to
+control whether provider reasoning content is shown in the TUI; the default is
+collapsed with a bounded tail preview.
 The provider file intentionally supports only Vesicle's small YAML subset:
 `default`, `providers`, scalar provider fields, and `models` string lists.
 Provider secrets are not read from this file; every provider must name an
@@ -73,6 +75,9 @@ return to an unresolved gate.
   plus `/think auto` to return to provider defaults; OpenAI-compatible requests
   map `off` to disabled thinking, `low`/`midium`/`high` to high effort, and
   `xhigh`/`max` to max effort
+- Reasoning visibility for models that return `reasoning_content`: the TUI
+  renders reasoning as a separate bounded block, defaults to collapsed preview,
+  and offers `/reasoning hidden|collapsed|expanded`
 - Engine profiles drive systemPrompt, tools, validators, and stop gates from
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker

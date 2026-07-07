@@ -15,6 +15,7 @@ _Last updated: 2026-07-08_
 | Streaming | OpenAI-compatible SSE | In progress on 0.2 branch |
 | Provider registry | OpenAI-compatible profiles | In progress on 0.3 branch |
 | Thinking control | OpenAI-compatible reasoning controls | In progress on 0.3 branch |
+| Reasoning visibility | TUI collapsed/expanded reasoning blocks | In progress on 0.3 branch |
 | Artifact workbench | TUI commands + validation | In progress on 0.3 branch |
 
 ## Current Scope
@@ -39,6 +40,9 @@ Chat wrapper:
   `/think off|low|midium|high|xhigh|max`; `/think auto` clears the explicit
   choice. Unset sessions preserve the provider/model default instead of
   sending control fields.
+- Show provider `reasoning_content` as a separate TUI thinking block before
+  assistant text, with `/reasoning hidden|collapsed|expanded`; the default
+  collapsed mode keeps long reasoning bounded to a short tail preview.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
 - Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a
@@ -140,8 +144,10 @@ never abort a turn. Validators run only on artifact-shaped assistant content
   assistant content deltas and streamed tool-call reconstruction. Other
   provider protocols are still deferred.
 - Thinking-tier control maps to OpenAI-compatible `thinking` and
-  `reasoning_effort` request fields. Reasoning content is preserved for
-  tool-loop continuity but is not rendered as a user-visible thinking stream.
+  `reasoning_effort` request fields. User-visible reasoning is currently a TUI
+  display feature for preserved OpenAI-compatible `reasoning_content`; native
+  Anthropic, Gemini, and OpenAI Responses thinking surfaces are deferred with
+  their provider adapters.
 - TUI engine switching is hardcoded to ETL (runtime/evaluate profiles exist
   and load, but the TUI does not yet offer a selector).
 - Gate UI is Select-style for ETL blueprint and phase checkpoints, with a

@@ -132,8 +132,8 @@ Prompts are runtime assets, not hardcoded source literals.
 - Tool calls and tool results should be persisted for replay/debugging.
 - User-selected reasoning tiers should be persisted as session metadata so
   interactive resume restores runtime generation behavior. Provider
-  `reasoning_content` is preserved for protocol continuity, not treated as
-  user-visible assistant prose by default.
+  `reasoning_content` is preserved for protocol continuity and TUI display,
+  but it is metadata and must not be merged into normal assistant prose.
 - Session lists should mark unresolved gates so the user can distinguish a
   normal transcript from a workflow waiting for confirmation.
 - Long-running turns should emit host-visible activity events before and after
@@ -163,6 +163,10 @@ Prompts are runtime assets, not hardcoded source literals.
 - Provider/model switching commands and artifact workbench commands are local
   host actions. They should add concise host notices to the transcript and must
   not call the provider unless the command explicitly starts a revision prompt.
+- Reasoning content should follow the RikkaHub-style pattern of a separate
+  thinking block before assistant text: it is independent from the assistant
+  markdown body, collapsible or hideable, and bounded by height/tail display so
+  long thinking does not dominate the transcript.
 - Ctrl+C behavior:
   - With a selectable OpenTUI range, copy selection.
   - Without a selection, first press arms exit and the second press exits.

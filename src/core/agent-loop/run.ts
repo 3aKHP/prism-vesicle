@@ -34,8 +34,14 @@ export type RunPromptOptions = {
 export type AgentLoopEvent =
   | { type: "provider_request"; iteration: number }
   | { type: "assistant_delta"; delta: string }
+  | { type: "assistant_reasoning_delta"; delta: string }
   | { type: "tool_call_delta"; name?: string; argumentsDelta?: string }
-  | { type: "assistant_response"; content: string; toolCalls: Array<{ id: string; name: string; arguments: string }> }
+  | {
+      type: "assistant_response";
+      content: string;
+      reasoningContent?: string;
+      toolCalls: Array<{ id: string; name: string; arguments: string }>;
+    }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
   | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string }
   | { type: "gate_pending"; gate: string }
@@ -232,6 +238,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     onEvent?.({
       type: "assistant_response",
       content: response.content,
+      ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
       toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name, arguments: call.arguments })),
     });
     if (toolCalls.length === 0) {
@@ -443,6 +450,7 @@ async function completeWithStreaming(
         onEvent?.({ type: "assistant_delta", delta: event.delta });
         break;
       case "reasoning_delta":
+        onEvent?.({ type: "assistant_reasoning_delta", delta: event.delta });
         break;
       case "tool_call_delta":
         onEvent?.({
