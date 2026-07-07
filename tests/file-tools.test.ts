@@ -110,6 +110,10 @@ describe("file tools v2", () => {
       sourcePath: "source_materials/seed.md",
       targetPath: "workspace/seed.md",
     }, "Copied source_materials/seed.md to workspace/seed.md");
+
+    await expectToolFailure("delete_file", {
+      path: "workspace/nope.md",
+    }, "ENOENT");
   });
 
   test("append_file requires an existing file unless createIfMissing is set", async () => {
@@ -125,6 +129,85 @@ describe("file tools v2", () => {
     }, "Appended 4 char(s) to workspace/missing.md");
 
     expect(await readFile(join(rootDir, "workspace", "missing.md"), "utf8")).toBe("tail");
+
+    await expectTool("append_file", {
+      path: "workspace/nested/new.md",
+      content: "nested",
+      createIfMissing: true,
+    }, "Appended 6 char(s) to workspace/nested/new.md");
+    expect(await readFile(join(rootDir, "workspace", "nested", "new.md"), "utf8")).toBe("nested");
+  });
+
+  test("handles literal replacement text, regex grep, overwrite paths, and validation edges", async () => {
+    await expectTool("create_file", {
+      path: "workspace/edge.md",
+      content: "PRICE\nAlpha\nalpha\nBeta42",
+    }, "Created workspace/edge.md");
+
+    await expectTool("replace_in_file", {
+      path: "workspace/edge.md",
+      oldText: "PRICE",
+      newText: "Price: $50 and $&",
+    }, "Replaced 1 occurrence(s) in workspace/edge.md");
+    expect(await readFile(join(rootDir, "workspace", "edge.md"), "utf8")).toContain("Price: $50 and $&");
+
+    await expectToolFailure("replace_in_file", {
+      path: "workspace/edge.md",
+      oldText: "",
+      newText: "x",
+    }, "oldText must not be empty");
+
+    const regexResult = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace/edge.md",
+      pattern: "^Alpha$",
+      regex: true,
+      caseSensitive: true,
+    }));
+    expect(regexResult.ok).toBe(true);
+    expect(JSON.parse(regexResult.content)).toMatchObject({
+      matches: [{ path: "workspace/edge.md", line: 2, text: "Alpha" }],
+      truncated: false,
+    });
+
+    const dirStat = await executeFileTool(rootDir, call("stat_path", { path: "workspace" }));
+    expect(dirStat.ok).toBe(true);
+    expect(JSON.parse(dirStat.content)).toMatchObject({ path: "workspace", type: "directory" });
+
+    await expectToolFailure("read_file", {
+      path: "workspace/edge.md",
+      startLine: 0,
+    }, "startLine must be a positive integer");
+    await expectToolFailure("read_file", {
+      path: "workspace/edge.md",
+      startLine: 3,
+      endLine: 2,
+    }, "endLine must be greater than or equal to startLine");
+    await expectToolFailure("read_file", {
+      path: "workspace/edge.md",
+      startLine: "1",
+    }, "startLine must be a number");
+
+    await expectTool("create_file", {
+      path: "workspace/target.md",
+      content: "old",
+    }, "Created workspace/target.md");
+    await expectTool("copy_file", {
+      sourcePath: "workspace/edge.md",
+      targetPath: "workspace/target.md",
+      overwrite: true,
+    }, "Copied workspace/edge.md to workspace/target.md");
+    expect(await readFile(join(rootDir, "workspace", "target.md"), "utf8")).toContain("Beta42");
+
+    await expectTool("create_file", {
+      path: "reports/move-target.md",
+      content: "old move",
+    }, "Created reports/move-target.md");
+    await expectTool("move_file", {
+      sourcePath: "workspace/target.md",
+      targetPath: "reports/move-target.md",
+      overwrite: true,
+    }, "Moved workspace/target.md to reports/move-target.md");
+    expect(await readFile(join(rootDir, "reports", "move-target.md"), "utf8")).toContain("Beta42");
   });
 });
 

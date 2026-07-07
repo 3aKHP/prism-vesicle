@@ -371,9 +371,9 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         if (!args.replaceAll && count !== 1) {
           throw new Error(`oldText matched ${count} times. Set replaceAll=true or provide a more specific oldText.`);
         }
-        const next = args.replaceAll
-          ? original.split(args.oldText).join(args.newText)
-          : original.replace(args.oldText, args.newText);
+        // Single-user TUI contract: this read/count/write sequence is not
+        // designed for concurrent external writers.
+        const next = original.split(args.oldText).join(args.newText);
         await writeFile(filePath, next, "utf8");
         return ok(call, `Replaced ${args.replaceAll ? count : 1} occurrence(s) in ${toProjectPath(rootDir, filePath)}`);
       }
@@ -391,6 +391,8 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const args = parseArgs<{ path: string }>(call.arguments);
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
         await assertFile(filePath);
+        // Single-user TUI contract: the path is expected not to change between
+        // the file check and unlink.
         await unlink(filePath);
         return ok(call, `Deleted ${toProjectPath(rootDir, filePath)}`);
       }
@@ -457,6 +459,8 @@ function sliceLines(content: string, startLine: number | undefined, endLine: num
   if (startLine === undefined && endLine === undefined) return content;
   const start = startLine ?? 1;
   const end = endLine ?? Number.POSITIVE_INFINITY;
+  if (typeof start !== "number") throw new Error("startLine must be a number.");
+  if (typeof end !== "number") throw new Error("endLine must be a number.");
   if (!Number.isInteger(start) || start <= 0) throw new Error("startLine must be a positive integer.");
   if (!Number.isInteger(end) && end !== Number.POSITIVE_INFINITY) throw new Error("endLine must be a positive integer.");
   if (end < start) throw new Error("endLine must be greater than or equal to startLine.");
@@ -493,6 +497,9 @@ async function grepFiles(
 
 function createMatcher(pattern: string, regex: boolean, caseSensitive: boolean): (line: string) => boolean {
   if (regex) {
+    // Regex patterns are model-provided but currently trusted inside the
+    // single-user TUI. If Vesicle exposes untrusted providers, move regex
+    // matching behind a timeout-capable engine such as RE2 or a worker.
     const expression = new RegExp(pattern, caseSensitive ? "" : "i");
     return (line) => expression.test(line);
   }
@@ -530,6 +537,8 @@ async function prepareTarget(targetPath: string, overwrite: boolean): Promise<vo
   if (!existing) return;
   if (!existing.isFile()) throw new Error("Target path exists and is not a file.");
   if (!overwrite) throw new Error("Target file already exists. Set overwrite=true to replace it.");
+  // Single-user TUI contract: overwrite is a stat/unlink/write sequence, not
+  // a cross-process atomic replacement protocol.
   await unlink(targetPath);
 }
 
@@ -549,7 +558,13 @@ async function listFiles(dir: string, recursive: boolean): Promise<string[]> {
       continue;
     }
 
-    if ((await stat(fullPath)).isFile()) {
+    if (entry.isFile()) {
+      result.push(fullPath);
+      continue;
+    }
+
+    const info = await stat(fullPath).catch(() => undefined);
+    if (info?.isFile()) {
       result.push(fullPath);
     }
   }

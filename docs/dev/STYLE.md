@@ -102,6 +102,9 @@ Model-visible tools are a security boundary.
 - Create/write/replace/append/delete/copy-target/move roots: `workspace/`,
   `test_runs/`, `novels/`, `reports/`.
 - `delete_file` must delete only files, never directories or directory trees.
+- `grep_files` regex mode is for trusted single-user model input. If Vesicle
+  ever exposes untrusted model/plugin input, regex matching needs a timeout
+  boundary such as RE2 or a worker-thread sandbox.
 - A model must not claim a file was created, written, edited, deleted, copied,
   or moved unless the corresponding file tool returned success.
 - The `request_confirmation` gate tool is attached only when the active engine
