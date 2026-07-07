@@ -7,6 +7,25 @@ project follows Semantic Versioning once releases begin.
 
 ## [Unreleased]
 
+### Added
+
+- OpenAI-compatible Chat Completions streaming path: provider responses now use
+  SSE when available, emitting assistant content deltas and reconstructing
+  streamed `tool_calls` into the same final `VesicleResponse` shape used by
+  non-streaming calls.
+- Agent-loop streaming events for assistant deltas and streamed tool-call
+  deltas.
+- TUI live assistant draft rendering while a provider response is in flight.
+
+### Fixed
+
+- TUI tool calls/results now render as compact transcript summaries instead of
+  dumping full tool arguments or full file contents into the main chat stream.
+- Streaming now rejects premature SSE EOF, reports malformed chunks with a
+  provider-stream error, retries without OpenAI-specific `stream_options` for
+  stricter compatible providers, and preserves the final assistant turn in the
+  in-memory conversation history.
+
 ## [0.1.0] - 2026-07-07
 
 ### Added

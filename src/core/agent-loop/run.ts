@@ -1,6 +1,6 @@
 import { loadConfig } from "../../config/env";
 import { createProvider } from "../../providers";
-import type { VesicleMessage, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderAdapter, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { executeFileTool, fileToolDefinitions } from "../tools";
 import type { ToolCall, ToolDefinition } from "../tools";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
@@ -29,8 +29,10 @@ export type RunPromptOptions = {
 
 export type AgentLoopEvent =
   | { type: "provider_request"; iteration: number }
-  | { type: "assistant_response"; content: string; toolCallCount: number }
-  | { type: "tool_call"; name: string; callId: string }
+  | { type: "assistant_delta"; delta: string }
+  | { type: "tool_call_delta"; name?: string; argumentsDelta?: string }
+  | { type: "assistant_response"; content: string; toolCalls: Array<{ id: string; name: string; arguments: string }> }
+  | { type: "tool_call"; name: string; callId: string; arguments: string }
   | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string }
   | { type: "gate_pending"; gate: string }
   | { type: "validation"; ok: boolean };
@@ -187,7 +189,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
 
   for (let iteration = 0; iteration < maxToolIterations; iteration++) {
     onEvent?.({ type: "provider_request", iteration });
-    response = await provider.complete({
+    response = await completeWithStreaming(provider, {
       id: session.sessionId,
       model: {
         provider: config.provider,
@@ -196,10 +198,14 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       system: [systemPrompt],
       messages,
       tools,
-    });
+    }, onEvent);
 
     const toolCalls = response.toolCalls ?? [];
-    onEvent?.({ type: "assistant_response", content: response.content, toolCallCount: toolCalls.length });
+    onEvent?.({
+      type: "assistant_response",
+      content: response.content,
+      toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name, arguments: call.arguments })),
+    });
     if (toolCalls.length === 0) {
       break;
     }
@@ -240,7 +246,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     let anyFailed = false;
 
     for (const call of fileCalls) {
-      onEvent?.({ type: "tool_call", name: call.name, callId: call.id });
+      onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
       const toolResult = await executeFileTool(rootDir, call);
       const content = JSON.stringify({
         ok: toolResult.ok,
@@ -342,14 +348,18 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     throw new Error("Provider did not return a response.");
   }
 
-  await session.append({
-    role: "assistant",
-    content: response.content,
-    metadata: {
-      providerResponseId: response.id,
-      usage: response.usage,
-    },
-  });
+  const finalResponseHasToolCalls = (response.toolCalls?.length ?? 0) > 0;
+  if (!finalResponseHasToolCalls) {
+    messages.push({ role: "assistant", content: response.content });
+    await session.append({
+      role: "assistant",
+      content: response.content,
+      metadata: {
+        providerResponseId: response.id,
+        usage: response.usage,
+      },
+    });
+  }
 
   // Run declared validators on the final assistant content. Validators are
   // advisory — failures surface to the TUI and session but never abort the
@@ -380,6 +390,40 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
      */
     messages,
   };
+}
+
+async function completeWithStreaming(
+  provider: ProviderAdapter,
+  request: VesicleRequest,
+  onEvent?: (event: AgentLoopEvent) => void,
+): Promise<VesicleResponse> {
+  if (!provider.stream) {
+    return provider.complete(request);
+  }
+
+  let response: VesicleResponse | undefined;
+  for await (const event of provider.stream(request)) {
+    switch (event.type) {
+      case "content_delta":
+        onEvent?.({ type: "assistant_delta", delta: event.delta });
+        break;
+      case "tool_call_delta":
+        onEvent?.({
+          type: "tool_call_delta",
+          name: event.name,
+          argumentsDelta: event.argumentsDelta,
+        });
+        break;
+      case "complete":
+        response = event.response;
+        break;
+    }
+  }
+
+  if (!response) {
+    throw new Error("Provider stream ended without a final response.");
+  }
+  return response;
 }
 
 function shouldValidateAssistantContent(content: string): boolean {

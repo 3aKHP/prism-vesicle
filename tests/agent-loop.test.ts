@@ -47,10 +47,11 @@ describe("agent loop sessions", () => {
     });
     if (first.kind !== "complete") throw new Error("expected complete");
     const firstReply = first.response.content;
+    expect(first.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(first.messages.at(-1)?.content).toBe(firstReply);
 
     const secondMessages = [
-      ...firstMessages,
-      { role: "assistant" as const, content: firstReply },
+      ...first.messages,
       { role: "user" as const, content: "second" },
     ];
     const second = await runPrompt({

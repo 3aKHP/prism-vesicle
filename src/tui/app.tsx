@@ -16,6 +16,12 @@ import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { SessionSummary } from "../core/session/store";
 import { resolveTuiLayout } from "./layout";
 import { SessionPicker } from "./SessionPicker";
+import {
+  renderAssistantToolTurn,
+  renderResumedToolResultSummary,
+  renderToolCallSummary,
+  renderToolResultSummary,
+} from "./tool-summary";
 
 type Role = "user" | "assistant" | "system" | "tool";
 
@@ -68,6 +74,8 @@ export function App() {
   const [activity, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
+  const [streamingAssistant, setStreamingAssistant] = createSignal("");
+  const [lastDisplayedToolAssistantContent, setLastDisplayedToolAssistantContent] = createSignal<string | null>(null);
   const [promptHistory, setPromptHistory] = createSignal<string[]>([]);
   const [historyIndex, setHistoryIndex] = createSignal<number | null>(null);
 
@@ -235,6 +243,7 @@ export function App() {
     setPromptHistory((prev) => [...prev.filter((entry) => entry !== prompt), prompt].slice(-50));
     setHistoryIndex(null);
     setSessionPicker(null);
+    setLastDisplayedToolAssistantContent(null);
     setBusy(true);
     setStatus("sending request");
     recordActivity({ kind: "provider", text: "sending provider request" });
@@ -309,9 +318,10 @@ export function App() {
       setGateFeedbackMode(null);
       setGateFeedback("");
       setOutput(result.assistantContent);
+      const alreadyDisplayed = lastDisplayedToolAssistantContent() === result.assistantContent;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: result.assistantContent },
+        ...(alreadyDisplayed ? [] : [{ role: "assistant" as const, content: result.assistantContent }]),
         { role: "system", content: `Stop gate pending: ${result.gate.gate}. Use ↑/↓ + Enter, or type into the amend box (Tab).` },
       ]);
       setStatus(`gate pending: ${result.gate.gate}`);
@@ -321,6 +331,7 @@ export function App() {
     setPendingGate(null);
     setGateFeedbackMode(null);
     setGateFeedback("");
+    setLastDisplayedToolAssistantContent(null);
 
     const profileValidation = result.validation;
     const ok = profileValidation ? profileValidation.ok : true;
@@ -335,7 +346,10 @@ export function App() {
     setOutput(result.response.content);
     void refreshArtifacts();
 
-    const appended: Message[] = [{ role: "assistant", content: result.response.content }];
+    const appended: Message[] = [];
+    if (!result.response.toolCalls?.length && result.response.content.trim()) {
+      appended.push({ role: "assistant", content: result.response.content });
+    }
     if (profileValidation) {
       appended.push({ role: "system", content: renderValidationNotice(profileValidation) });
     }
@@ -347,6 +361,7 @@ export function App() {
     const message = error instanceof Error ? error.message : String(error);
     setStatus("error");
     setOutput(message);
+    setStreamingAssistant("");
     recordActivity({ kind: "system", text: `error: ${message}` });
     setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${message}` }]);
   }
@@ -354,20 +369,37 @@ export function App() {
   function handleAgentEvent(event: AgentLoopEvent) {
     switch (event.type) {
       case "provider_request":
+        setStreamingAssistant("");
         recordActivity({ kind: "provider", text: `provider request #${event.iteration + 1}` });
         return;
+      case "assistant_delta":
+        setStreamingAssistant((prev) => `${prev}${event.delta}`);
+        return;
+      case "tool_call_delta":
+        if (event.name) {
+          recordActivity({ kind: "tool", text: `tool call forming: ${event.name}` });
+        }
+        return;
       case "assistant_response":
+        setStreamingAssistant("");
+        if (event.toolCalls.length > 0) {
+          const content = renderAssistantToolTurn(event.content, event.toolCalls);
+          setMessages((prev) => [...prev, { role: "assistant", content }]);
+          setLastDisplayedToolAssistantContent(event.content);
+        }
         recordActivity({
           kind: "assistant",
-          text: event.toolCallCount > 0
-            ? `assistant response with ${event.toolCallCount} tool call${event.toolCallCount > 1 ? "s" : ""}`
+          text: event.toolCalls.length > 0
+            ? `assistant response with ${event.toolCalls.length} tool call${event.toolCalls.length > 1 ? "s" : ""}`
             : "assistant response complete",
         });
         return;
       case "tool_call":
+        setMessages((prev) => [...prev, { role: "tool", content: renderToolCallSummary(event.name, event.arguments) }]);
         recordActivity({ kind: "tool", text: `calling ${event.name}` });
         return;
       case "tool_result":
+        setMessages((prev) => [...prev, { role: "tool", content: renderToolResultSummary(event.name, event.ok, event.content) }]);
         recordActivity({ kind: "tool", text: `${event.ok ? "ok" : "failed"} ${event.name}: ${event.content}` });
         return;
       case "gate_pending":
@@ -527,18 +559,20 @@ export function App() {
     // visually distinct from rendered model output.
     if (message.role === "assistant" && message.content.trim()) {
       return (
-        <box flexDirection="column" border borderColor={palette.assistant} paddingX={1}>
-          <text content="assistant" fg={palette.assistant} attributes={1} />
+        <box flexDirection="column">
+          <text content="━━━━━━━━ assistant" fg={palette.assistant} attributes={1} />
           <markdown content={message.content} syntaxStyle={sharedSyntaxStyle} conceal={true} />
+          <text content=" " fg={palette.textDim} />
         </box>
       );
     }
 
     if (message.role === "user") {
       return (
-        <box flexDirection="column" border borderColor={palette.user} paddingX={1}>
-          <text content="you" fg={palette.user} attributes={1} />
+        <box flexDirection="column">
+          <text content="━━━━━━━━ you" fg={palette.user} attributes={1} />
           <text content={message.content} fg={palette.textPrimary} />
+          <text content=" " fg={palette.textDim} />
         </box>
       );
     }
@@ -587,6 +621,12 @@ export function App() {
           <scrollbox width="100%" height="100%" stickyScroll stickyStart="bottom">
             <box flexDirection="column">
               {messages().map((message) => renderMessage(message))}
+              <Show when={streamingAssistant().trim().length > 0} fallback={<box height={0} />}>
+                <box flexDirection="column">
+                  <text content="━━━━━━━━ assistant streaming" fg={palette.assistant} attributes={1} />
+                  <markdown content={streamingAssistant()} syntaxStyle={sharedSyntaxStyle} conceal={true} />
+                </box>
+              </Show>
             </box>
           </scrollbox>
         </box>
@@ -697,7 +737,16 @@ function activityColor(kind: ActivityEntry["kind"]): string {
 }
 
 function displayMessageFromResumed(message: VesicleMessage): Message {
-  if (message.role === "user" || message.role === "assistant" || message.role === "tool") {
+  if (message.role === "assistant") {
+    const content = message.toolCalls && message.toolCalls.length > 0
+      ? renderAssistantToolTurn(message.content, message.toolCalls)
+      : message.content;
+    return { role: "assistant", content };
+  }
+  if (message.role === "tool") {
+    return { role: "tool", content: renderResumedToolResultSummary(message.content) };
+  }
+  if (message.role === "user") {
     return { role: message.role, content: message.content };
   }
   return { role: "system", content: message.content };

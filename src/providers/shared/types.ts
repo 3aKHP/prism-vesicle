@@ -38,7 +38,13 @@ export type VesicleResponse = {
   };
 };
 
+export type ProviderStreamEvent =
+  | { type: "content_delta"; delta: string }
+  | { type: "tool_call_delta"; index: number; id?: string; name?: string; argumentsDelta?: string }
+  | { type: "complete"; response: VesicleResponse };
+
 export interface ProviderAdapter {
   id: string;
   complete(request: VesicleRequest): Promise<VesicleResponse>;
+  stream?(request: VesicleRequest): AsyncIterable<ProviderStreamEvent>;
 }
