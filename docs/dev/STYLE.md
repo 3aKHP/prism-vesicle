@@ -58,6 +58,11 @@ Generation controls follow the same rule: core/TUI may pass the normalized
 only the provider adapter maps them to wire fields such as `thinking` and
 `reasoning_effort`. TUI commands may offer `auto`/`unset` to clear an explicit
 selection; that means no `reasoningTier` is sent.
+High-frequency thinking controls may be interactive TUI state. Lower-frequency
+generation defaults such as `temperature` and `maxTokens` belong in the
+user-level provider model config and are merged by `core/agent-loop` before
+calling adapters. Adapters should only map the normalized request shape to wire
+fields; they should not invent host policy defaults.
 Persistent provider profiles live in the user-level provider config, not in the
 project `.vesicle/` runtime state directory. The default path is
 `%APPDATA%\prism-vesicle\providers.yaml` on Windows and
@@ -68,6 +73,9 @@ inline in the provider file. The user-level `.env` file beside
 `providers.yaml` is the default place for those secret values; process
 environment variables are fallback only so a legacy project-root `.env` loaded
 by the runtime cannot override the user-level secret file.
+`providers.yaml` supports string model entries for the common case and object
+model entries for `id`, `generation`, and `capabilities` metadata. Keep this
+schema small and explicit until native protocol adapters require more fields.
 
 ## Tool Runtime
 

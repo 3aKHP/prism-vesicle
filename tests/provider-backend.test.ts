@@ -25,6 +25,7 @@ describe("OpenAI-compatible request shaping", () => {
     expect(body.tool_choice).toBeUndefined();
     expect(body.thinking).toBeUndefined();
     expect(body.reasoning_effort).toBeUndefined();
+    expect(body.temperature).toBeUndefined();
   });
 
   test("maps normalized thinking tiers to OpenAI-compatible reasoning controls", () => {

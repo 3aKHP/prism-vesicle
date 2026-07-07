@@ -1102,12 +1102,24 @@ function renderModelList(registry: ProviderRegistry, providerId: string, activeM
   if (!provider) return `Unknown provider "${providerId}". Use /providers to list configured providers.`;
   const lines = [`Models for ${provider.id}:`];
   for (const model of provider.models) {
-    const marker = model === activeModel ? "*" : " ";
-    lines.push(`${marker} ${model}`);
+    const marker = model.id === activeModel ? "*" : " ";
+    const details = renderModelDetails(model);
+    lines.push(`${marker} ${model.id}${details ? ` (${details})` : ""}`);
   }
   lines.push("");
   lines.push(`Use /use ${provider.id} <model> or /model <model> to switch.`);
   return lines.join("\n");
+}
+
+function renderModelDetails(model: ProviderRegistry["providers"][number]["models"][number]): string {
+  const details: string[] = [];
+  if (model.generation?.temperature !== undefined) details.push(`temp ${model.generation.temperature}`);
+  if (model.generation?.maxTokens !== undefined) details.push(`max ${model.generation.maxTokens}`);
+  const capabilities = Object.entries(model.capabilities ?? {})
+    .filter(([, enabled]) => enabled === true)
+    .map(([name]) => name);
+  if (capabilities.length > 0) details.push(`cap ${capabilities.join("/")}`);
+  return details.join(", ");
 }
 
 function parseThinkingTier(value: string): ReasoningTier | "auto" | null {

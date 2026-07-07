@@ -28,6 +28,9 @@ project follows Semantic Versioning once releases begin.
 - TUI `/reasoning hidden|collapsed|expanded` command and independent thinking
   blocks for provider `reasoning_content`, including live streamed reasoning
   display and bounded collapsed/expanded tail views.
+- Object model entries in `providers.yaml` for config-driven generation
+  defaults (`temperature`, `maxTokens`) and model capability metadata, while
+  preserving existing string model entries.
 
 ### Changed
 
@@ -53,6 +56,8 @@ project follows Semantic Versioning once releases begin.
   provider wire controls: `off` disables thinking, `low`/`midium`/`high` map to
   high effort, and `xhigh`/`max` map to max effort. Unset sessions keep the
   provider/model default and do not send thinking control fields.
+- OpenAI-compatible request shaping now receives generation defaults from the
+  selected model config instead of inventing a hardcoded adapter temperature.
 
 ### Fixed
 

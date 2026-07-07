@@ -68,6 +68,62 @@ describe("config loading", () => {
     expect(config.apiKey).toBe("secret");
   });
 
+  test("loads object model generation defaults and capabilities", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: deepseek",
+      "  model: deepseek-reasoner",
+      "providers:",
+      "  deepseek:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://api.deepseek.com/v1",
+      "    apiKeyEnv: DEEPSEEK_API_KEY",
+      "    models:",
+      "      - deepseek-v4-flash",
+      "      - id: deepseek-reasoner",
+      "        generation:",
+      "          temperature: 0.4",
+      "          maxTokens: 8192",
+      "        capabilities:",
+      "          streaming: true",
+      "          tools: true",
+      "          reasoningTier: true",
+      "          reasoningContent: true",
+      "",
+    ], ["DEEPSEEK_API_KEY=secret"]);
+
+    const registry = await loadProviderRegistry(env);
+    const config = await loadConfigForSelection(undefined, env);
+
+    expect(registry.providers[0].models.map((model) => model.id)).toEqual(["deepseek-v4-flash", "deepseek-reasoner"]);
+    expect(config.generation).toEqual({ temperature: 0.4, maxTokens: 8192 });
+    expect(config.capabilities).toMatchObject({
+      streaming: true,
+      tools: true,
+      reasoningTier: true,
+      reasoningContent: true,
+    });
+  });
+
+  test("rejects duplicate model ids across string and object entries", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: local",
+      "  model: qwen3",
+      "providers:",
+      "  local:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: http://127.0.0.1:11434/v1",
+      "    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY",
+      "    models:",
+      "      - qwen3",
+      "      - id: qwen3",
+      "",
+    ]);
+
+    await expect(loadProviderRegistry(env)).rejects.toThrow('Provider "local" declares duplicate model "qwen3".');
+  });
+
   test("prefers the user-level provider .env over inherited process variables", async () => {
     const { env } = await writeProvidersFile([
       "default:",

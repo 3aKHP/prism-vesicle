@@ -9,7 +9,15 @@ providers:
     apiKeyEnv: DEEPSEEK_API_KEY
     models:
       - deepseek-v4-flash
-      - deepseek-reasoner
+      - id: deepseek-reasoner
+        generation:
+          temperature: 0.4
+          maxTokens: 8192
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
 
   local:
     protocol: openai-chat-compatible

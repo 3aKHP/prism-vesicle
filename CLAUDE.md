@@ -31,6 +31,8 @@ Also read:
   docs-status, or tool-surface changes.
 - `assets/README.md` before editing copied Prism assets.
 - `docs/examples/providers.yaml` before changing provider config behavior.
+- `docs/examples/provider.env.example` before changing provider secret loading
+  behavior.
 
 For architecture, provider, TUI, session, or command-UX changes, first check
 whether the documented reference projects already solved a similar problem.
