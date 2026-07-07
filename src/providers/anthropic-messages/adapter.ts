@@ -1,5 +1,6 @@
 import type { VesicleConfig } from "../../config/env";
 import { ProviderError } from "../shared/errors";
+import { displayTextFromThinkingBlocks } from "../shared/thinking";
 import type { ProviderAdapter, ProviderThinkingBlock, ReasoningTier, VesicleRequest, VesicleResponse } from "../shared/types";
 import type { ToolCall } from "../../core/tools";
 
@@ -99,10 +100,12 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
   const serialized: AnthropicMessage[] = [];
   let pendingToolResults: AnthropicContentBlock[] = [];
 
-  const flushToolResults = () => {
-    if (pendingToolResults.length === 0) return;
-    serialized.push({ role: "user", content: pendingToolResults });
+  const flushToolResults = (): AnthropicMessage | undefined => {
+    if (pendingToolResults.length === 0) return undefined;
+    const message: AnthropicMessage = { role: "user", content: pendingToolResults };
+    serialized.push(message);
     pendingToolResults = [];
+    return message;
   };
 
   for (const message of messages) {
@@ -116,7 +119,7 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
       continue;
     }
 
-    flushToolResults();
+    const flushedToolResults = flushToolResults();
     if (message.role === "assistant") {
       const content: AnthropicContentBlock[] = [
         ...anthropicThinkingBlocks(message.thinkingBlocks),
@@ -132,6 +135,10 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
       continue;
     }
 
+    if (flushedToolResults && Array.isArray(flushedToolResults.content)) {
+      if (message.content) flushedToolResults.content.push({ type: "text", text: message.content });
+      continue;
+    }
     serialized.push({ role: "user", content: message.content });
   }
 
@@ -186,8 +193,14 @@ function responseFromAnthropicBody(
       continue;
     }
     if (block.type === "tool_use") {
+      if (!block.id || !block.name) {
+        throw new ProviderError("Provider response included a tool_use block without id or name.", {
+          kind: "malformed_response",
+          providerId,
+        });
+      }
       toolCalls.push({
-        id: block.id || `tool_${index + 1}`,
+        id: block.id,
         name: block.name,
         arguments: jsonString(block.input),
       });
@@ -195,6 +208,7 @@ function responseFromAnthropicBody(
   }
 
   const content = textParts.join("");
+  const reasoningContent = displayTextFromThinkingBlocks(thinkingBlocks);
   if (!content && toolCalls.length === 0) {
     throw new ProviderError("Provider response did not include assistant content or tool calls.", {
       kind: "malformed_response",
@@ -205,6 +219,7 @@ function responseFromAnthropicBody(
   return {
     id: body?.id ?? fallbackId,
     content,
+    ...(reasoningContent ? { reasoningContent } : {}),
     ...(thinkingBlocks.length > 0 ? { thinkingBlocks } : {}),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     finishReason: body?.stop_reason,
@@ -233,6 +248,7 @@ function thinkingBudgetForTier(tier: "low" | "midium" | "high" | "xhigh" | "max"
   switch (tier) {
     case "low":
       return 1024;
+    // Keep the existing shared `midium` spelling until ReasoningTier is migrated.
     case "midium":
       return 2048;
     case "high":
@@ -248,7 +264,9 @@ function parseToolArguments(value: string): unknown {
   try {
     return JSON.parse(value || "{}");
   } catch {
-    return {};
+    throw new ProviderError("Cannot serialize malformed tool-call arguments for Anthropic Messages.", {
+      kind: "malformed_response",
+    });
   }
 }
 

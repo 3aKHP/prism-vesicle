@@ -62,6 +62,35 @@ describe("Anthropic Messages request shaping", () => {
       input_schema: { type: "object", properties: { path: { type: "string" } } },
     }]);
   });
+
+  test("merges user follow-up text into the tool_result user message", () => {
+    const body = toAnthropicMessagesBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "toolu_gate", name: "request_confirmation", arguments: "{\"gate\":\"phase\"}" }],
+        },
+        { role: "tool", toolCallId: "toolu_gate", content: "{\"ok\":true}" },
+        { role: "user", content: "[gate:phase resolved as confirm]" },
+      ],
+    });
+
+    expect(body.messages).toEqual([
+      {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "toolu_gate", name: "request_confirmation", input: { gate: "phase" } }],
+      },
+      {
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: "toolu_gate", content: "{\"ok\":true}" },
+          { type: "text", text: "[gate:phase resolved as confirm]" },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("Anthropic Messages adapter", () => {
@@ -96,10 +125,32 @@ describe("Anthropic Messages adapter", () => {
     await expect(adapter.complete(request())).resolves.toMatchObject({
       id: "msg_123",
       content: "I need a file.",
+      reasoningContent: "Think first.",
       thinkingBlocks: [{ type: "thinking", thinking: "Think first.", signature: "sig" }],
       toolCalls: [{ id: "toolu_1", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" }],
       finishReason: "tool_use",
       usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+    });
+  });
+
+  test("rejects malformed tool_use blocks clearly", async () => {
+    globalThis.fetch = (async () => Response.json({
+      id: "msg_bad_tool",
+      content: [{ type: "tool_use", id: "toolu_1", input: {} }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new AnthropicMessagesAdapter({
+      provider: "anthropic-messages",
+      providerId: "anthropic",
+      baseUrl: "https://api.anthropic.com/v1",
+      model: "claude-test",
+      apiKey: "test-key",
+    });
+
+    await expect(adapter.complete(request())).rejects.toMatchObject({
+      name: "ProviderError",
+      kind: "malformed_response",
+      providerId: "anthropic",
     });
   });
 
