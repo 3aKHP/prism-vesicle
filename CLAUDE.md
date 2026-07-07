@@ -35,8 +35,9 @@ Also read:
 For architecture, provider, TUI, session, or command-UX changes, first check
 whether the documented reference projects already solved a similar problem.
 Ignored local notes under `dev/docs/` may describe private reference locations;
-use them when available, but never copy local absolute paths or machine-private
-details into public docs.
+when present, start with `dev/docs/REFERENCE_PROJECTS.md` to find those local
+absolute paths. Use the notes, but never copy local absolute paths or
+machine-private details into public docs.
 
 ## High-Risk Boundaries
 

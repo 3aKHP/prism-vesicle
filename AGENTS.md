@@ -35,8 +35,10 @@ Read asset-specific docs when touching assets:
 If a task touches architecture, provider behavior, TUI interaction, session
 semantics, or command UX, look for existing implementation patterns before
 inventing a new one. The ignored local `dev/docs/` area may contain private
-reference-project notes and local paths; use those notes when available, but do
-not copy local absolute paths or private machine details into public docs.
+reference-project notes and local paths. When present, start with
+`dev/docs/REFERENCE_PROJECTS.md` to find the local reference project locations;
+use those notes when available, but do not copy local absolute paths or private
+machine details into public docs.
 
 ## Documentation Map
 
