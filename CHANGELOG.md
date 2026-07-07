@@ -25,6 +25,9 @@ project follows Semantic Versioning once releases begin.
   control, plus `/think auto`/`unset` to return to provider defaults. Selected
   tiers are passed through the agent loop, persisted in session metadata, and
   restored on resume.
+- TUI `/reasoning hidden|collapsed|expanded` command and independent thinking
+  blocks for provider `reasoning_content`, including live streamed reasoning
+  display and bounded collapsed/expanded tail views.
 
 ### Changed
 

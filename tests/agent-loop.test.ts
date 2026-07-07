@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveGate, runPrompt } from "../src/core/agent-loop/run";
+import type { AgentLoopEvent } from "../src/core/agent-loop/run";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -103,6 +104,37 @@ describe("agent loop sessions", () => {
     expect(requestBodies[0]).toMatchObject({
       thinking: { type: "enabled" },
       reasoning_effort: "max",
+    });
+  });
+
+  test("emits streamed reasoning deltas from the provider", async () => {
+    const rootDir = await createPromptRoot();
+    const events: AgentLoopEvent[] = [];
+
+    globalThis.fetch = (async () => {
+      return new Response(rawSse([
+        'data: {"id":"chatcmpl-reasoning","choices":[{"delta":{"reasoning_content":"considering context"}}]}',
+        'data: {"id":"chatcmpl-reasoning","choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}]}',
+        "data: [DONE]",
+      ]), {
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "stream reasoning",
+      rootDir,
+      onEvent: (event) => events.push(event),
+    });
+
+    if (result.kind !== "complete") throw new Error("expected complete");
+    expect(result.response.reasoningContent).toBe("considering context");
+    expect(events).toContainEqual({ type: "assistant_reasoning_delta", delta: "considering context" });
+    expect(events).toContainEqual({
+      type: "assistant_response",
+      content: "answer",
+      reasoningContent: "considering context",
+      toolCalls: [],
     });
   });
 
@@ -525,4 +557,16 @@ async function configureTestProviderEnv(): Promise<void> {
 async function cleanupProviderConfigDirs(): Promise<void> {
   const dirs = providerConfigDirs.splice(0);
   await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+}
+
+function rawSse(blocks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const block of blocks) {
+        controller.enqueue(encoder.encode(`${block}\n\n`));
+      }
+      controller.close();
+    },
+  });
 }

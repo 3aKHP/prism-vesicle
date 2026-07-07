@@ -201,6 +201,27 @@ describe("session resume", () => {
     expect(snapshot.reasoningTier).toBeUndefined();
   });
 
+  test("loadSessionSnapshot restores the latest reasoning display mode", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-reasoning-display-session-"));
+    const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-reasoning-display");
+
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "system",
+      content: "Reasoning display switched to hidden.",
+      metadata: { kind: "reasoning-switch", reasoningDisplayMode: "hidden" },
+    });
+    await store.append({
+      role: "system",
+      content: "Reasoning display switched to expanded.",
+      metadata: { kind: "reasoning-switch", reasoningDisplayMode: "expanded" },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-05-01T00-00-00-000Z-reasoning-display");
+
+    expect(snapshot.reasoningDisplayMode).toBe("expanded");
+  });
+
   test("loadSessionMessages does not synthesise results when tool results already exist", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-answered-"));
     const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-eeeeeeee");

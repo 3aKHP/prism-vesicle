@@ -16,7 +16,7 @@ import { sharedSyntaxStyle, palette } from "./theme";
 import { GatePrompt, gateFocusOrder, gateResolutionFromState } from "./GatePrompt";
 import type { GateFocusTarget } from "./GatePrompt";
 import { createSessionStore, listSessions, loadSessionSnapshot } from "../core/session/store";
-import type { SessionSummary } from "../core/session/store";
+import type { ReasoningDisplayMode, ResumedMessage, SessionSummary } from "../core/session/store";
 import { resolveValidators, runValidators } from "../core/validators/registry";
 import { executeFileTool } from "../core/tools";
 import { resolveTuiLayout } from "./layout";
@@ -29,10 +29,10 @@ import {
 } from "./tool-summary";
 
 type Role = "user" | "assistant" | "system" | "tool";
-
 type Message = {
   role: Role;
   content: string;
+  kind?: "reasoning";
 };
 
 type PendingGate = Extract<RunPromptResult, { kind: "needs_user" }>;
@@ -68,6 +68,7 @@ export function App() {
   const [activeProvider, setActiveProvider] = createSignal("loading");
   const [activeModel, setActiveModel] = createSignal("loading");
   const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
+  const [reasoningDisplayMode, setReasoningDisplayMode] = createSignal<ReasoningDisplayMode>("collapsed");
   const [providerHasApiKey, setProviderHasApiKey] = createSignal(false);
   const [providerConfigReady, setProviderConfigReady] = createSignal(false);
   const [messages, setMessages] = createSignal<Message[]>([
@@ -91,6 +92,7 @@ export function App() {
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
   const [streamingAssistant, setStreamingAssistant] = createSignal("");
+  const [streamingReasoning, setStreamingReasoning] = createSignal("");
   const [lastDisplayedToolAssistantContent, setLastDisplayedToolAssistantContent] = createSignal<string | null>(null);
   const [promptHistory, setPromptHistory] = createSignal<string[]>([]);
   const [historyIndex, setHistoryIndex] = createSignal<number | null>(null);
@@ -251,30 +253,30 @@ export function App() {
     }
   }
 
-	  const submitPrompt = async (value: string) => {
-	    const prompt = value.trim();
-	    if (!prompt || busy()) return;
+  const submitPrompt = async (value: string) => {
+    const prompt = value.trim();
+    if (!prompt || busy()) return;
 
-	    // Slash commands for session management. These never hit the provider.
-	    if (prompt.startsWith("/")) {
-	      try {
-	        await handleCommand(prompt);
-	      } catch (error) {
-	        reportError(error);
-	      }
-	      return;
-	    }
+    // Slash commands for session management. These never hit the provider.
+    if (prompt.startsWith("/")) {
+      try {
+        await handleCommand(prompt);
+      } catch (error) {
+        reportError(error);
+      }
+      return;
+    }
 
-	    if (!providerConfigReady()) {
-	      setStatus("loading provider config");
-	      try {
-	        await loadProviderConfigOnce();
-	      } catch (error) {
-	        setProviderConfigReady(true);
-	        reportError(error);
-	        return;
-	      }
-	    }
+    if (!providerConfigReady()) {
+      setStatus("loading provider config");
+      try {
+        await loadProviderConfigOnce();
+      } catch (error) {
+        setProviderConfigReady(true);
+        reportError(error);
+        return;
+      }
+    }
 
     setPromptHistory((prev) => [...prev.filter((entry) => entry !== prompt), prompt].slice(-50));
     setHistoryIndex(null);
@@ -282,7 +284,7 @@ export function App() {
     setLastDisplayedToolAssistantContent(null);
     setBusy(true);
     setStatus("sending request");
-	    recordActivity({ kind: "provider", text: "sending provider request" });
+    recordActivity({ kind: "provider", text: "sending provider request" });
     const requestMessages: VesicleMessage[] = [
       ...conversation(),
       { role: "user", content: prompt },
@@ -293,12 +295,12 @@ export function App() {
       const result = await runPrompt({
         input: prompt,
         engine: "etl",
-	        sessionId: sessionId(),
-	        messages: requestMessages,
-	        providerSelection: activeProviderSelection(),
-	        generation: activeGeneration(),
-	        onEvent: handleAgentEvent,
-	      });
+        sessionId: sessionId(),
+        messages: requestMessages,
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        onEvent: handleAgentEvent,
+      });
       handleResult(result, requestMessages);
     } catch (error) {
       reportError(error);
@@ -328,12 +330,12 @@ export function App() {
         sessionId: gate.sessionId,
         messages: gate.messages,
         toolCallId: gate.toolCallId,
-	        gate: gate.gate,
-	        resolution,
-	        providerSelection: activeProviderSelection(),
-	        generation: activeGeneration(),
-	        onEvent: handleAgentEvent,
-	      });
+        gate: gate.gate,
+        resolution,
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        onEvent: handleAgentEvent,
+      });
       handleResult(result, gate.messages);
     } catch (error) {
       setPendingGate(gate);
@@ -387,6 +389,9 @@ export function App() {
     void refreshArtifacts();
 
     const appended: Message[] = [];
+    if (!result.response.toolCalls?.length && result.response.reasoningContent?.trim()) {
+      appended.push({ role: "system", content: result.response.reasoningContent, kind: "reasoning" });
+    }
     if (!result.response.toolCalls?.length && result.response.content.trim()) {
       appended.push({ role: "assistant", content: result.response.content });
     }
@@ -402,6 +407,7 @@ export function App() {
     setStatus("error");
     setOutput(message);
     setStreamingAssistant("");
+    setStreamingReasoning("");
     recordActivity({ kind: "system", text: `error: ${message}` });
     setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${message}` }]);
   }
@@ -410,10 +416,14 @@ export function App() {
     switch (event.type) {
       case "provider_request":
         setStreamingAssistant("");
+        setStreamingReasoning("");
         recordActivity({ kind: "provider", text: `provider request #${event.iteration + 1}` });
         return;
       case "assistant_delta":
         setStreamingAssistant((prev) => `${prev}${event.delta}`);
+        return;
+      case "assistant_reasoning_delta":
+        setStreamingReasoning((prev) => `${prev}${event.delta}`);
         return;
       case "tool_call_delta":
         if (event.name) {
@@ -422,6 +432,10 @@ export function App() {
         return;
       case "assistant_response":
         setStreamingAssistant("");
+        setStreamingReasoning("");
+        if (event.reasoningContent && event.toolCalls.length > 0) {
+          appendReasoningMessage(event.reasoningContent);
+        }
         if (event.toolCalls.length > 0) {
           const content = renderAssistantToolTurn(event.content, event.toolCalls);
           setMessages((prev) => [...prev, { role: "assistant", content }]);
@@ -453,6 +467,11 @@ export function App() {
 
   function recordActivity(entry: ActivityEntry) {
     setActivity((prev) => [...prev, entry].slice(-60));
+  }
+
+  function appendReasoningMessage(content: string) {
+    if (!content.trim()) return;
+    setMessages((prev) => [...prev, { role: "system", content, kind: "reasoning" }]);
   }
 
   async function refreshProviderConfig(selection?: Partial<ProviderSelection>) {
@@ -534,6 +553,20 @@ export function App() {
     });
   }
 
+  async function persistReasoningSwitch(mode: ReasoningDisplayMode) {
+    const id = sessionId();
+    if (!id) return;
+    const store = await createSessionStore(process.cwd(), id);
+    await store.append({
+      role: "system",
+      content: `Reasoning display switched to ${mode}.`,
+      metadata: {
+        kind: "reasoning-switch",
+        reasoningDisplayMode: mode,
+      },
+    });
+  }
+
   const handleSubmit = (value: unknown) => {
     if (pendingGate()) return; // gate mode owns the input
     const submitted = typeof value === "string" ? value : inputValue();
@@ -546,20 +579,21 @@ export function App() {
    * Slash commands for session management and help. These run locally and
    * never touch the provider:
    *   /resume           list resumable sessions with numeric indices
-	 *   /resume <n>       resume the nth session from the last /resume list
-	 *   /resume <id>      resume a session by full id prefix
-	 *   /providers        list configured providers
-	 *   /models [id]      list models for a provider
-	 *   /use <id> <model> switch provider and model
-	 *   /model <model>    switch model within the active provider
-	 *   /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto
-	 *   /artifacts        list generated artifacts
-	 *   /artifact <n|path> preview an artifact
-	 *   /validate <n|path> validate an artifact file
-	 *   /revise <n|path> <instructions> revise an artifact
-	 *   /new              abandon the current session and start fresh
-	 *   /help             show available commands
-	 */
+   *   /resume <n>       resume the nth session from the last /resume list
+   *   /resume <id>      resume a session by full id prefix
+   *   /providers        list configured providers
+   *   /models [id]      list models for a provider
+   *   /use <id> <model> switch provider and model
+   *   /model <model>    switch model within the active provider
+   *   /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto
+   *   /reasoning <mode> show reasoning: hidden/collapsed/expanded
+   *   /artifacts        list generated artifacts
+   *   /artifact <n|path> preview an artifact
+   *   /validate <n|path> validate an artifact file
+   *   /revise <n|path> <instructions> revise an artifact
+   *   /new              abandon the current session and start fresh
+   *   /help             show available commands
+   */
   async function handleCommand(input: string) {
     const [command, ...rest] = input.slice(1).split(/\s+/);
     const arg = rest.join(" ").trim();
@@ -569,136 +603,158 @@ export function App() {
         ...prev,
         { role: "user", content: input },
         {
-	          role: "system",
-	          content: "Commands:\n  /providers        list configured providers\n  /models [id]      list models for a provider\n  /use <id> <model> switch provider/model\n  /model <model>    switch model in active provider\n  /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto\n  /artifacts        list generated artifacts\n  /artifact <n|path> preview an artifact\n  /validate <n|path> validate an artifact file\n  /revise <n|path> <instructions> revise an artifact\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
-	        },
-	      ]);
-	      return;
-	    }
+          role: "system",
+          content: "Commands:\n  /providers        list configured providers\n  /models [id]      list models for a provider\n  /use <id> <model> switch provider/model\n  /model <model>    switch model in active provider\n  /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto\n  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)\n  /artifacts        list generated artifacts\n  /artifact <n|path> preview an artifact\n  /validate <n|path> validate an artifact file\n  /revise <n|path> <instructions> revise an artifact\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
+        },
+      ]);
+      return;
+    }
 
-	    if (command === "providers") {
-	      const registry = await ensureProviderRegistry();
-	      setMessages((prev) => [
-	        ...prev,
-	        { role: "user", content: input },
-	        { role: "system", content: renderProviderList(registry, activeProvider()) },
-	      ]);
-	      return;
-	    }
+    if (command === "providers") {
+      const registry = await ensureProviderRegistry();
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: input },
+        { role: "system", content: renderProviderList(registry, activeProvider()) },
+      ]);
+      return;
+    }
 
-	    if (command === "models") {
-	      const registry = await ensureProviderRegistry();
-	      const providerId = arg || activeProvider();
-	      setMessages((prev) => [
-	        ...prev,
-	        { role: "user", content: input },
-	        { role: "system", content: renderModelList(registry, providerId, activeModel()) },
-	      ]);
-	      return;
-	    }
+    if (command === "models") {
+      const registry = await ensureProviderRegistry();
+      const providerId = arg || activeProvider();
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: input },
+        { role: "system", content: renderModelList(registry, providerId, activeModel()) },
+      ]);
+      return;
+    }
 
-	    if (command === "use") {
-	      const [providerId, ...modelParts] = arg.split(/\s+/).filter(Boolean);
-	      const model = modelParts.join(" ");
-	      if (!providerId || !model) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /use <provider> <model>" }]);
-	        return;
-	      }
-	      const selection = await applyProviderSelection({ provider: providerId, model });
-	      await persistProviderSwitch(selection);
-	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
-	      return;
-	    }
+    if (command === "use") {
+      const [providerId, ...modelParts] = arg.split(/\s+/).filter(Boolean);
+      const model = modelParts.join(" ");
+      if (!providerId || !model) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /use <provider> <model>" }]);
+        return;
+      }
+      const selection = await applyProviderSelection({ provider: providerId, model });
+      await persistProviderSwitch(selection);
+      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
+      return;
+    }
 
-	    if (command === "model") {
-	      if (!arg) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /model <model>" }]);
-	        return;
-	      }
-	      const selection = await applyProviderSelection({ provider: activeProvider(), model: arg });
-	      await persistProviderSwitch(selection);
-	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
-	      return;
-	    }
+    if (command === "model") {
+      if (!arg) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /model <model>" }]);
+        return;
+      }
+      const selection = await applyProviderSelection({ provider: activeProvider(), model: arg });
+      await persistProviderSwitch(selection);
+      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
+      return;
+    }
 
-	    if (command === "think") {
-	      if (!arg) {
-	        setMessages((prev) => [
-	          ...prev,
-	          { role: "user", content: input },
-	          { role: "system", content: `Thinking tier: ${thinkingTier() ?? "provider default"}. Use /think off|low|midium|high|xhigh|max|auto.` },
-	        ]);
-	        return;
-	      }
-	      const tier = parseThinkingTier(arg);
-	      if (!tier) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /think off|low|midium|high|xhigh|max|auto" }]);
-	        return;
-	      }
-	      if (tier === "auto") {
-	        setThinkingTier(undefined);
-	        setStatus("thinking provider default");
-	        recordActivity({ kind: "provider", text: "thinking tier provider default" });
-	        await persistThinkingSwitch(undefined);
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Thinking tier reset to provider default." }]);
-	        return;
-	      }
-	      setThinkingTier(tier);
-	      setStatus(`thinking ${tier}`);
-	      recordActivity({ kind: "provider", text: `thinking tier ${tier}` });
-	      await persistThinkingSwitch(tier);
-	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Thinking tier set to ${tier}.` }]);
-	      return;
-	    }
+    if (command === "think") {
+      if (!arg) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: input },
+          { role: "system", content: `Thinking tier: ${thinkingTier() ?? "provider default"}. Use /think off|low|midium|high|xhigh|max|auto.` },
+        ]);
+        return;
+      }
+      const tier = parseThinkingTier(arg);
+      if (!tier) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /think off|low|midium|high|xhigh|max|auto" }]);
+        return;
+      }
+      if (tier === "auto") {
+        setThinkingTier(undefined);
+        setStatus("thinking provider default");
+        recordActivity({ kind: "provider", text: "thinking tier provider default" });
+        await persistThinkingSwitch(undefined);
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Thinking tier reset to provider default." }]);
+        return;
+      }
+      setThinkingTier(tier);
+      setStatus(`thinking ${tier}`);
+      recordActivity({ kind: "provider", text: `thinking tier ${tier}` });
+      await persistThinkingSwitch(tier);
+      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Thinking tier set to ${tier}.` }]);
+      return;
+    }
 
-	    if (command === "artifacts") {
-	      const entries = await refreshArtifacts();
-	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: renderArtifactList(entries) }]);
-	      return;
-	    }
+    if (command === "reasoning") {
+      if (!arg) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: input },
+          { role: "system", content: `Reasoning display: ${reasoningDisplayMode()}. Use /reasoning hidden|collapsed|expanded (aliases: off|preview|on).` },
+        ]);
+        return;
+      }
+      const mode = parseReasoningDisplayMode(arg);
+      if (!mode) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /reasoning hidden|collapsed|expanded" }]);
+        return;
+      }
+      setReasoningDisplayMode(mode);
+      setStatus(`reasoning ${mode}`);
+      recordActivity({ kind: "provider", text: `reasoning display ${mode}` });
+      await persistReasoningSwitch(mode);
+      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Reasoning display set to ${mode}.` }]);
+      return;
+    }
 
-	    if (command === "artifact" || command === "open") {
-	      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
-	      const artifact = resolveArtifactTarget(entries, arg);
-	      if (!artifact) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${arg || "(empty)"}". Use /artifacts to list.` }]);
-	        return;
-	      }
-	      const selected = await loadArtifactPreview(artifact);
-	      setSelectedArtifact(selected);
-	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Selected artifact ${selected.path}. Preview is shown in the right pane.` }]);
-	      return;
-	    }
+    if (command === "artifacts") {
+      const entries = await refreshArtifacts();
+      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: renderArtifactList(entries) }]);
+      return;
+    }
 
-	    if (command === "validate") {
-	      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
-	      const artifact = resolveArtifactTarget(entries, arg);
-	      if (!artifact) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${arg || "(empty)"}". Use /artifacts to list.` }]);
-	        return;
-	      }
-	      const selected = await loadArtifactPreview(artifact, { validate: true });
-	      setSelectedArtifact(selected);
-	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: selected.validation ?? `No validator matched ${selected.path}.` }]);
-	      return;
-	    }
+    if (command === "artifact" || command === "open") {
+      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
+      const artifact = resolveArtifactTarget(entries, arg);
+      if (!artifact) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${arg || "(empty)"}". Use /artifacts to list.` }]);
+        return;
+      }
+      const selected = await loadArtifactPreview(artifact);
+      setSelectedArtifact(selected);
+      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Selected artifact ${selected.path}. Preview is shown in the right pane.` }]);
+      return;
+    }
 
-	    if (command === "revise") {
-	      const [targetArg, ...instructionParts] = arg.split(/\s+/).filter(Boolean);
-	      const instructions = instructionParts.join(" ");
-	      if (!targetArg || !instructions) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /revise <n|path> <instructions>" }]);
-	        return;
-	      }
-	      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
-	      const artifact = resolveArtifactTarget(entries, targetArg);
-	      if (!artifact) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${targetArg}". Use /artifacts to list.` }]);
-	        return;
-	      }
-	      await submitPrompt(`Revise artifact ${artifact.path}. First read_file that path, then apply this request and write_file the revised artifact back to the same path: ${instructions}`);
-	      return;
-	    }
+    if (command === "validate") {
+      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
+      const artifact = resolveArtifactTarget(entries, arg);
+      if (!artifact) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${arg || "(empty)"}". Use /artifacts to list.` }]);
+        return;
+      }
+      const selected = await loadArtifactPreview(artifact, { validate: true });
+      setSelectedArtifact(selected);
+      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: selected.validation ?? `No validator matched ${selected.path}.` }]);
+      return;
+    }
+
+    if (command === "revise") {
+      const [targetArg, ...instructionParts] = arg.split(/\s+/).filter(Boolean);
+      const instructions = instructionParts.join(" ");
+      if (!targetArg || !instructions) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /revise <n|path> <instructions>" }]);
+        return;
+      }
+      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
+      const artifact = resolveArtifactTarget(entries, targetArg);
+      if (!artifact) {
+        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${targetArg}". Use /artifacts to list.` }]);
+        return;
+      }
+      await submitPrompt(`Revise artifact ${artifact.path}. First read_file that path, then apply this request and write_file the revised artifact back to the same path: ${instructions}`);
+      return;
+    }
 
     if (command === "new") {
       setMessages((prev) => [...prev, { role: "user", content: input }]);
@@ -749,31 +805,35 @@ export function App() {
       const snapshot = await loadSessionSnapshot(process.cwd(), target.sessionId, {
         synthesizeDanglingToolResults: false,
       });
-      const resumedMessages = snapshot.messages as VesicleMessage[];
-      const transcript = resumedMessages.map(displayMessageFromResumed);
+      const resumedMessages = vesicleMessagesFromResumed(snapshot.messages);
+      const transcript = snapshot.messages.flatMap(displayMessagesFromResumed);
       setSessionId(target.sessionId);
       setSessionPath(joinSessionPath(target.sessionId));
       setConversation(resumedMessages);
       setOutput(snapshot.pendingGate?.assistantContent ?? "");
       setSessionPicker(null);
 
-	      const hostMessages: Message[] = [];
-	      if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
-	      if (snapshot.providerSelection) {
-	        try {
-	          const selection = await applyProviderSelection(snapshot.providerSelection);
-	          hostMessages.push({ role: "system", content: `Restored provider ${selection.provider}/${selection.model} from session.` });
-	        } catch (error) {
-	          const message = error instanceof Error ? error.message : String(error);
-	          hostMessages.push({ role: "system", content: `Session provider was not restored: ${message}` });
-	        }
-	      }
-	      if (snapshot.reasoningTier) {
-	        setThinkingTier(snapshot.reasoningTier);
-	        hostMessages.push({ role: "system", content: `Restored thinking tier ${snapshot.reasoningTier} from session.` });
-	      }
+      const hostMessages: Message[] = [];
+      if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
+      if (snapshot.providerSelection) {
+        try {
+          const selection = await applyProviderSelection(snapshot.providerSelection);
+          hostMessages.push({ role: "system", content: `Restored provider ${selection.provider}/${selection.model} from session.` });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          hostMessages.push({ role: "system", content: `Session provider was not restored: ${message}` });
+        }
+      }
+      if (snapshot.reasoningTier) {
+        setThinkingTier(snapshot.reasoningTier);
+        hostMessages.push({ role: "system", content: `Restored thinking tier ${snapshot.reasoningTier} from session.` });
+      }
+      if (snapshot.reasoningDisplayMode) {
+        setReasoningDisplayMode(snapshot.reasoningDisplayMode);
+        hostMessages.push({ role: "system", content: `Restored reasoning display ${snapshot.reasoningDisplayMode} from session.` });
+      }
 
-	      if (snapshot.pendingGate) {
+      if (snapshot.pendingGate) {
         setPendingGate({
           kind: "needs_user",
           sessionId: target.sessionId,
@@ -807,14 +867,42 @@ export function App() {
     }
   }
 
-	  async function refreshArtifacts(): Promise<ArtifactEntry[]> {
-	    const entries = await scanArtifacts(process.cwd());
-	    setArtifacts(entries);
-	    setSelectedArtifact((selected) => selected && entries.some((entry) => entry.path === selected.path) ? selected : null);
-	    return entries;
-	  }
+  async function refreshArtifacts(): Promise<ArtifactEntry[]> {
+    const entries = await scanArtifacts(process.cwd());
+    setArtifacts(entries);
+    setSelectedArtifact((selected) => selected && entries.some((entry) => entry.path === selected.path) ? selected : null);
+    return entries;
+  }
+
+  function renderReasoningBlock(content: string, streaming: boolean) {
+    const mode = reasoningDisplayMode();
+    if (mode === "hidden" || !content.trim()) return <box height={0} />;
+
+    const sideWidth = (layout().showWorkspace ? layout().leftPanelWidth : 0) + (layout().showOutput ? layout().rightPanelWidth : 0);
+    const width = Math.max(20, layout().width - sideWidth - 12);
+    const maxLines = mode === "expanded" ? 14 : 4;
+    const lines = reasoningDisplayLines(content, width, maxLines);
+    const rawLines = content.split(/\r?\n/).length;
+    const label = mode === "expanded" ? "thinking expanded" : "thinking collapsed";
+    const hint = mode === "expanded" ? "/reasoning collapse" : "/reasoning expand";
+    const stats = `${content.length} chars, ${rawLines} line${rawLines === 1 ? "" : "s"}`;
+
+    return (
+      <box flexDirection="column">
+        <text content={`━━━━━━━━ ${streaming ? "thinking streaming" : label} (${stats}) ${hint}`} fg={palette.textMuted} attributes={1} />
+        <For each={lines}>
+          {(line) => <text content={line} fg={palette.textDim} />}
+        </For>
+        <text content=" " fg={palette.textDim} />
+      </box>
+    );
+  }
 
   const renderMessage = (message: Message) => {
+    if (message.kind === "reasoning") {
+      return renderReasoningBlock(message.content, false);
+    }
+
     const color =
       message.role === "user" ? palette.user
         : message.role === "assistant" ? palette.assistant
@@ -856,8 +944,8 @@ export function App() {
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
-	        <text
-	          content={headerLine(activeProvider(), activeModel(), status(), layout().width)}
+        <text
+          content={headerLine(activeProvider(), activeModel(), status(), layout().width)}
           fg={busy() ? palette.warn : pendingGate() ? palette.gateAccent : palette.success}
           attributes={1}
         />
@@ -869,10 +957,11 @@ export function App() {
             <PanelLine content="Engine" fg={palette.textMuted} />
             <PanelLine content="etl" fg={palette.textPrimary} attributes={1} />
             <PanelLine content=" " fg={palette.textDim} />
-	            <PanelLine content="Provider" fg={palette.textMuted} />
-	            <PanelLine content={truncateLine(`${activeProvider()}/${activeModel()}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
-	            <PanelLine content={providerHasApiKey() ? "API key: available" : "API key: missing"} fg={providerHasApiKey() ? palette.success : palette.error} />
-	            <PanelLine content={truncateLine(`Thinking: ${thinkingTier() ?? "provider default"}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
+            <PanelLine content="Provider" fg={palette.textMuted} />
+            <PanelLine content={truncateLine(`${activeProvider()}/${activeModel()}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
+            <PanelLine content={providerHasApiKey() ? "API key: available" : "API key: missing"} fg={providerHasApiKey() ? palette.success : palette.error} />
+            <PanelLine content={truncateLine(`Thinking: ${thinkingTier() ?? "provider default"}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
+            <PanelLine content={truncateLine(`Reasoning: ${reasoningDisplayMode()}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
             <PanelLine content=" " fg={palette.textDim} />
             <PanelLine content="Session" fg={palette.textMuted} />
             <PanelLine content={truncateMiddle(sessionPath(), layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
@@ -890,6 +979,9 @@ export function App() {
           <scrollbox width="100%" height="100%" stickyScroll stickyStart="bottom">
             <box flexDirection="column">
               {messages().map((message) => renderMessage(message))}
+              <Show when={streamingReasoning().trim().length > 0 && reasoningDisplayMode() !== "hidden"} fallback={<box height={0} />}>
+                {renderReasoningBlock(streamingReasoning(), true)}
+              </Show>
               <Show when={streamingAssistant().trim().length > 0} fallback={<box height={0} />}>
                 <box flexDirection="column">
                   <text content="━━━━━━━━ assistant streaming" fg={palette.assistant} attributes={1} />
@@ -905,24 +997,24 @@ export function App() {
             <scrollbox width="100%" height="100%" stickyScroll stickyStart="top">
               <box flexDirection="column">
                 <text content="Activity" fg={palette.textMuted} />
-	                <For each={activity().slice(-10)}>
-	                  {(entry) => <text content={activityLine(entry, layout().rightPanelWidth - 4)} fg={activityColor(entry.kind)} />}
-	                </For>
-	                <text content=" " />
-	                <text content="Selected artifact" fg={palette.textMuted} />
-	                <Show when={selectedArtifact()} fallback={<text content="none selected" fg={palette.textDim} />}>
-	                  {(artifact) => (
-	                    <box flexDirection="column">
-	                      <text content={truncateMiddle(artifact().path, layout().rightPanelWidth - 4)} fg={palette.textSecondary} />
-	                      <Show when={artifact().validation} fallback={<box height={0} />}>
-	                        {(validation) => <text content={truncateLine(validation().split("\n")[0] ?? "", layout().rightPanelWidth - 4)} fg={validation().includes("found issues") ? palette.warn : palette.success} />}
-	                      </Show>
-	                      <text content={truncateLine(artifact().preview, layout().rightPanelWidth - 4)} fg={palette.textPrimary} />
-	                    </box>
-	                  )}
-	                </Show>
-	                <text content=" " />
-	                <text content="Recent artifacts" fg={palette.textMuted} />
+                <For each={activity().slice(-10)}>
+                  {(entry) => <text content={activityLine(entry, layout().rightPanelWidth - 4)} fg={activityColor(entry.kind)} />}
+                </For>
+                <text content=" " />
+                <text content="Selected artifact" fg={palette.textMuted} />
+                <Show when={selectedArtifact()} fallback={<text content="none selected" fg={palette.textDim} />}>
+                  {(artifact) => (
+                    <box flexDirection="column">
+                      <text content={truncateMiddle(artifact().path, layout().rightPanelWidth - 4)} fg={palette.textSecondary} />
+                      <Show when={artifact().validation} fallback={<box height={0} />}>
+                        {(validation) => <text content={truncateLine(validation().split("\n")[0] ?? "", layout().rightPanelWidth - 4)} fg={validation().includes("found issues") ? palette.warn : palette.success} />}
+                      </Show>
+                      <text content={truncateLine(artifact().preview, layout().rightPanelWidth - 4)} fg={palette.textPrimary} />
+                    </box>
+                  )}
+                </Show>
+                <text content=" " />
+                <text content="Recent artifacts" fg={palette.textMuted} />
                 <Show when={artifacts().length > 0} fallback={<text content="none yet" fg={palette.textDim} />}>
                   <For each={artifacts().slice(0, 6)}>
                     {(artifact) => <text content={truncateMiddle(artifact.path, layout().rightPanelWidth - 4)} fg={palette.textSecondary} />}
@@ -943,15 +1035,15 @@ export function App() {
               <box height={inputValue().startsWith("/") ? layout().bottomHeight : 3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="column">
                 <Show when={inputValue().startsWith("/")} fallback={<box height={0} />}>
                   <box flexDirection="column">
-	                    <text content="/providers  list providers    /models  list models    /use <p> <m>  switch" fg={palette.textDim} />
-	                    <text content="/think <tier>  off/low/midium/high/xhigh/max/auto    /help" fg={palette.textDim} />
-	                    <text content="/resume  list sessions    /new  start fresh" fg={palette.textDim} />
+                    <text content="/providers  list providers    /models  list models    /use <p> <m>  switch" fg={palette.textDim} />
+                    <text content="/think <tier> off/low/midium/high/xhigh/max/auto    /reasoning <mode>" fg={palette.textDim} />
+                    <text content="/resume  list sessions    /new  start fresh    /help" fg={palette.textDim} />
                     <text content="Up/Down recalls prompt history" fg={palette.textDim} />
                   </box>
                 </Show>
-	                <input
-	                  focused
-	                  placeholder={busy() ? "Request in flight..." : !providerConfigReady() ? "Loading provider config..." : "Type prompt, Enter to send, /help for commands"}
+                <input
+                  focused
+                  placeholder={busy() ? "Request in flight..." : !providerConfigReady() ? "Loading provider config..." : "Type prompt, Enter to send, /help for commands"}
                   value={inputValue()}
                   onInput={setInputValue}
                   onSubmit={handleSubmit}
@@ -1023,6 +1115,14 @@ function parseThinkingTier(value: string): ReasoningTier | "auto" | null {
   if (raw === "auto" || raw === "unset" || raw === "default") return "auto";
   const normalized = raw === "medium" ? "midium" : raw;
   return (reasoningTiers as readonly string[]).includes(normalized) ? normalized as ReasoningTier : null;
+}
+
+function parseReasoningDisplayMode(value: string): ReasoningDisplayMode | null {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "hide" || normalized === "hidden" || normalized === "off") return "hidden";
+  if (normalized === "collapse" || normalized === "collapsed" || normalized === "fold" || normalized === "preview") return "collapsed";
+  if (normalized === "expand" || normalized === "expanded" || normalized === "show" || normalized === "on") return "expanded";
+  return null;
 }
 
 function renderArtifactList(entries: ArtifactEntry[]): string {
@@ -1112,26 +1212,51 @@ function activityColor(kind: ActivityEntry["kind"]): string {
   }
 }
 
-function displayMessageFromResumed(message: VesicleMessage): Message {
+function vesicleMessagesFromResumed(messages: ResumedMessage[]): VesicleMessage[] {
+  return messages.map((message) => ({
+    role: message.role,
+    content: message.content,
+    ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
+    ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+    ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+  }));
+}
+
+function displayMessagesFromResumed(message: ResumedMessage): Message[] {
   if (message.role === "assistant") {
     const content = message.toolCalls && message.toolCalls.length > 0
       ? renderAssistantToolTurn(message.content, message.toolCalls)
       : message.content;
-    return { role: "assistant", content };
+    return [
+      ...(message.reasoningContent?.trim() ? [{ role: "system" as const, content: message.reasoningContent, kind: "reasoning" as const }] : []),
+      { role: "assistant", content },
+    ];
   }
   if (message.role === "tool") {
-    return { role: "tool", content: renderResumedToolResultSummary(message.content) };
+    return [{ role: "tool", content: renderResumedToolResultSummary(message.content) }];
   }
   if (message.role === "user") {
-    return { role: message.role, content: message.content };
+    return [{ role: message.role, content: message.content }];
   }
-  return { role: "system", content: message.content };
+  return [{ role: "system", content: message.content }];
 }
 
 function truncateLine(value: string, width: number): string {
   const limit = Math.max(8, width);
   if (value.length <= limit) return value;
   return `${value.slice(0, limit - 3)}...`;
+}
+
+function reasoningDisplayLines(content: string, width: number, maxLines: number): string[] {
+  const cleaned = content.replace(/\t/g, "  ");
+  const rawLines = cleaned.split(/\r?\n/).map((line) => truncateLine(line || " ", width));
+  if (rawLines.length <= maxLines) return rawLines;
+  const visibleTailLines = Math.max(0, maxLines - 1);
+  const hidden = rawLines.length - visibleTailLines;
+  return [
+    `... ${hidden} earlier reasoning line${hidden === 1 ? "" : "s"} hidden`,
+    ...rawLines.slice(-visibleTailLines),
+  ];
 }
 
 function truncateMiddle(value: string, width: number): string {
