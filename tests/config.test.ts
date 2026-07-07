@@ -81,4 +81,26 @@ describe("config loading", () => {
       'Provider "local" does not declare model "missing".',
     );
   });
+
+  test("preserves hash characters inside quoted provider config values", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-provider-config-"));
+    await mkdir(join(rootDir, ".vesicle"), { recursive: true });
+    await writeFile(join(rootDir, ".vesicle", "providers.yaml"), [
+      "default:",
+      "  provider: local",
+      "  model: qwen3",
+      "providers:",
+      "  local:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: http://127.0.0.1:11434/v1",
+      "    apiKey: \"abc#def\"",
+      "    models:",
+      "      - qwen3",
+      "",
+    ].join("\n"));
+
+    const config = await loadConfigForSelection(rootDir);
+
+    expect(config.apiKey).toBe("abc#def");
+  });
 });

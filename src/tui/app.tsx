@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show, onMount } from "solid-js";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { inspectConfig } from "../config/env";
 import { inspectProviderConfig, resolveProviderConfig } from "../config/providers";
@@ -17,6 +17,7 @@ import type { GateFocusTarget } from "./GatePrompt";
 import { createSessionStore, listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { SessionSummary } from "../core/session/store";
 import { resolveValidators, runValidators } from "../core/validators/registry";
+import { executeFileTool } from "../core/tools";
 import { resolveTuiLayout } from "./layout";
 import { SessionPicker } from "./SessionPicker";
 import {
@@ -67,6 +68,7 @@ export function App() {
   const [activeProvider, setActiveProvider] = createSignal(config.providerId);
   const [activeModel, setActiveModel] = createSignal(config.model);
   const [providerHasApiKey, setProviderHasApiKey] = createSignal(config.hasApiKey);
+  const [providerConfigReady, setProviderConfigReady] = createSignal(false);
   const [messages, setMessages] = createSignal<Message[]>([
     {
       role: "system",
@@ -244,9 +246,9 @@ export function App() {
     }
   }
 
-  const submitPrompt = async (value: string) => {
-    const prompt = value.trim();
-    if (!prompt || busy()) return;
+	  const submitPrompt = async (value: string) => {
+	    const prompt = value.trim();
+	    if (!prompt || busy()) return;
 
 	    // Slash commands for session management. These never hit the provider.
 	    if (prompt.startsWith("/")) {
@@ -256,6 +258,16 @@ export function App() {
 	        reportError(error);
 	      }
 	      return;
+	    }
+
+	    if (!providerConfigReady()) {
+	      setStatus("loading provider config");
+	      try {
+	        await refreshProviderConfig();
+	      } catch (error) {
+	        reportError(error);
+	        return;
+	      }
 	    }
 
     setPromptHistory((prev) => [...prev.filter((entry) => entry !== prompt), prompt].slice(-50));
@@ -445,6 +457,7 @@ export function App() {
       kind: "provider",
       text: `active ${inspected.providerId}/${inspected.model} (${inspected.registry.source})`,
     });
+    setProviderConfigReady(true);
     setStatus(inspected.hasApiKey ? `provider ${inspected.providerId}` : `missing API key for ${inspected.providerId}`);
   }
 
@@ -867,9 +880,9 @@ export function App() {
                     <text content="Up/Down recalls prompt history" fg={palette.textDim} />
                   </box>
                 </Show>
-                <input
-                  focused
-                  placeholder={busy() ? "Request in flight..." : "Type prompt, Enter to send, /help for commands"}
+	                <input
+	                  focused
+	                  placeholder={busy() ? "Request in flight..." : !providerConfigReady() ? "Loading provider config..." : "Type prompt, Enter to send, /help for commands"}
                   value={inputValue()}
                   onInput={setInputValue}
                   onSubmit={handleSubmit}
@@ -956,7 +969,13 @@ function resolveArtifactTarget(entries: ArtifactEntry[], arg: string): ArtifactE
 }
 
 async function loadArtifactPreview(artifact: ArtifactEntry, options: { validate?: boolean } = {}): Promise<SelectedArtifact> {
-  const content = await readFile(join(process.cwd(), artifact.path), "utf8");
+  const result = await executeFileTool(process.cwd(), {
+    id: "artifact-preview",
+    name: "read_file",
+    arguments: JSON.stringify({ path: artifact.path }),
+  });
+  if (!result.ok) throw new Error(result.content);
+  const content = result.content;
   const preview = content.replace(/\s+/g, " ").trim().slice(0, 500) || "(empty)";
   const validation = options.validate ? validateArtifactContent(content) : undefined;
   return { ...artifact, preview, ...(validation ? { validation } : {}) };
@@ -970,11 +989,25 @@ function validateArtifactContent(content: string): string {
 }
 
 function selectArtifactValidators(content: string): string[] {
-  const trimmed = content.trimStart();
-  if (!trimmed.startsWith("---")) return [];
-  if (/^scenario_name:/m.test(trimmed)) return ["scenario-card"];
-  if (/^name:/m.test(trimmed) && /^archetype:/m.test(trimmed)) return ["character-card"];
+  const keys = frontmatterKeys(content);
+  if (keys.size === 0) return [];
+  if (keys.has("scenario_name")) return ["scenario-card"];
+  if (keys.has("name") && keys.has("archetype")) return ["character-card"];
   return ["character-card", "scenario-card"];
+}
+
+function frontmatterKeys(content: string): Set<string> {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith("---")) return new Set();
+  const lines = trimmed.split(/\r?\n/);
+  const keys = new Set<string>();
+  for (let index = 1; index < lines.length; index++) {
+    const line = lines[index].trim();
+    if (line === "---") break;
+    const colon = line.indexOf(":");
+    if (colon > 0) keys.add(line.slice(0, colon).trim());
+  }
+  return keys;
 }
 
 function headerLine(provider: string, model: string, status: string, width: number): string {

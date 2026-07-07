@@ -96,6 +96,7 @@ export function resolveProviderConfig(
     baseUrl: trimTrailingSlash(profile.baseUrl),
     model,
     apiKey: profile.apiKey ?? (profile.apiKeyEnv ? env[profile.apiKeyEnv] : undefined),
+    apiKeyLabel: profile.apiKeyEnv ?? "apiKey",
   };
 }
 
@@ -256,8 +257,16 @@ function readKeyValue(line: string, index: number, path: string): [string, strin
 }
 
 function stripComment(line: string): string {
-  const hash = line.indexOf("#");
-  return hash === -1 ? line : line.slice(0, hash);
+  let quote: "\"" | "'" | null = null;
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index];
+    if ((char === "\"" || char === "'") && (index === 0 || line[index - 1] !== "\\")) {
+      quote = quote === char ? null : quote ?? char;
+      continue;
+    }
+    if (char === "#" && quote === null) return line.slice(0, index);
+  }
+  return line;
 }
 
 function leadingSpaces(line: string): number {

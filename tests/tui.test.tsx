@@ -17,8 +17,8 @@ describe("TUI", () => {
     // Initial system notice should render as plain text (not the old role> prefix).
     expect(frame).toContain("Ready. Enter one Prism");
     expect(frame).not.toContain("system>");
-    // Input bar present.
-    expect(frame).toContain("Type prompt, Enter to send");
+    // Input bar present; provider registry loads asynchronously before the first send.
+    expect(frame).toContain("Loading provider config");
   });
 
   test("renders the activity pane only when the terminal is wide enough", async () => {

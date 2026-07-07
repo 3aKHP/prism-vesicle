@@ -25,6 +25,8 @@ For multiple OpenAI-compatible providers, copy
 `docs/examples/providers.yaml` to `.vesicle/providers.yaml` and set each
 provider's `apiKeyEnv` environment variable. The TUI can then switch with
 `/providers`, `/models`, `/use <provider> <model>`, and `/model <model>`.
+The provider file intentionally supports only Vesicle's small YAML subset:
+`default`, `providers`, scalar provider fields, and `models` string lists.
 
 Then run:
 
