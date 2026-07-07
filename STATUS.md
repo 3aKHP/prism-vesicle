@@ -56,9 +56,10 @@ Chat wrapper:
   natively.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
-- Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a
-  high ceiling and a no-progress circuit breaker instead of a coding-agent
-  hard cap.
+- Execute a guarded filesystem tool loop (`stat_path`, `list_files`,
+  `grep_files`, `read_file`, `create_file`, `write_file`, `replace_in_file`,
+  `append_file`, `delete_file`, `copy_file`, `move_file`) with a high ceiling
+  and a no-progress circuit breaker instead of a coding-agent hard cap.
 - Pause the workflow on `request_confirmation` gates; the user confirms,
   revises, or retreats to chat, then the loop continues.
 - Validate artifact-shaped ETL output against Module A (character card) and
@@ -109,9 +110,17 @@ prism-vesicle/
 
 | Tool | Status | Write scope |
 |------|--------|-------------|
+| `stat_path` | Implemented | Read-only |
 | `list_files` | Implemented | Read-only |
-| `read_file` | Implemented | Read-only |
-| `write_file` | Implemented | `workspace/`, `test_runs/`, `novels/`, `reports/` |
+| `grep_files` | Implemented | Read-only |
+| `read_file` | Implemented, with optional line ranges | Read-only |
+| `create_file` | Implemented, no overwrite | `workspace/`, `test_runs/`, `novels/`, `reports/` |
+| `write_file` | Implemented, full overwrite | `workspace/`, `test_runs/`, `novels/`, `reports/` |
+| `replace_in_file` | Implemented, exact text replacement | `workspace/`, `test_runs/`, `novels/`, `reports/` |
+| `append_file` | Implemented | `workspace/`, `test_runs/`, `novels/`, `reports/` |
+| `delete_file` | Implemented, files only | `workspace/`, `test_runs/`, `novels/`, `reports/` |
+| `copy_file` | Implemented | Source: read roots; target: artifact roots |
+| `move_file` | Implemented | `workspace/`, `test_runs/`, `novels/`, `reports/` |
 | `request_confirmation` | Implemented (gate) | No filesystem access |
 | `config.load` | Internal contract | N/A |
 | `prompt.load` | Internal contract | N/A |

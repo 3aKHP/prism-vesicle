@@ -8,9 +8,17 @@ defaultTools:
   - config.load
   - prompt.load
   - session.write
+  - stat_path
   - list_files
+  - grep_files
   - read_file
+  - create_file
   - write_file
+  - replace_in_file
+  - append_file
+  - delete_file
+  - copy_file
+  - move_file
 validators: []
 stopGates: []
 stateRoots:

@@ -14,6 +14,10 @@ project follows Semantic Versioning once releases begin.
   `/models`, `/use`, and `/model`.
 - Artifact workbench commands for `/artifacts`, `/artifact`, `/validate`, and
   `/revise`, including validation against the selected artifact file on disk.
+- Filesystem tool v2 surface: `stat_path`, `grep_files`, ranged `read_file`,
+  `create_file`, `replace_in_file`, `append_file`, `delete_file`, `copy_file`,
+  and `move_file`, all behind the existing project-relative path guards and
+  artifact-root write boundaries.
 - OpenAI-compatible Chat Completions streaming path: provider responses now use
   SSE when available, emitting assistant content deltas and reconstructing
   streamed `tool_calls` into the same final `VesicleResponse` shape used by
