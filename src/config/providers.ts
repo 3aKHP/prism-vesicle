@@ -41,7 +41,7 @@ export async function loadProviderRegistry(
     throw error;
   });
   if (!source) return legacyRegistryFromEnv(env);
-  return parseProviderConfig(source, configPath);
+  return parseProviderConfig(source, configPath, env);
 }
 
 export async function loadConfigForSelection(
@@ -121,7 +121,7 @@ function legacyRegistryFromEnv(env: NodeJS.ProcessEnv): ProviderRegistry {
   };
 }
 
-function parseProviderConfig(source: string, path: string): ProviderRegistry {
+function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEnv): ProviderRegistry {
   const lines = source.split(/\r?\n/);
   const registry: ProviderRegistry = {
     source: "file",
@@ -230,7 +230,7 @@ function parseProviderConfig(source: string, path: string): ProviderRegistry {
   finishProvider();
   if (!registry.default.provider) throw new Error(`Provider config ${path} is missing default.provider.`);
   if (!registry.default.model) throw new Error(`Provider config ${path} is missing default.model.`);
-  resolveProviderConfig(registry, registry.default, process.env);
+  resolveProviderConfig(registry, registry.default, env);
   return registry;
 }
 

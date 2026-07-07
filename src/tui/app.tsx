@@ -2,7 +2,6 @@ import { createMemo, createSignal, For, Show, onMount } from "solid-js";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { inspectConfig } from "../config/env";
 import { inspectProviderConfig, resolveProviderConfig } from "../config/providers";
 import type { ProviderRegistry, ProviderSelection } from "../config/providers";
 import { resolveGate, runPrompt } from "../core/agent-loop/run";
@@ -63,11 +62,10 @@ type SessionPickerState = {
 export function App() {
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
-  const config = inspectConfig();
   const [providerRegistry, setProviderRegistry] = createSignal<ProviderRegistry | null>(null);
-  const [activeProvider, setActiveProvider] = createSignal(config.providerId);
-  const [activeModel, setActiveModel] = createSignal(config.model);
-  const [providerHasApiKey, setProviderHasApiKey] = createSignal(config.hasApiKey);
+  const [activeProvider, setActiveProvider] = createSignal("loading");
+  const [activeModel, setActiveModel] = createSignal("loading");
+  const [providerHasApiKey, setProviderHasApiKey] = createSignal(false);
   const [providerConfigReady, setProviderConfigReady] = createSignal(false);
   const [messages, setMessages] = createSignal<Message[]>([
     {
@@ -75,7 +73,7 @@ export function App() {
       content: "Ready. Enter one Prism prompt and press Enter.",
     },
   ]);
-  const [status, setStatus] = createSignal(config.hasApiKey ? "provider configured" : "missing API key");
+  const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
@@ -464,9 +462,12 @@ export function App() {
   async function ensureProviderRegistry(): Promise<ProviderRegistry> {
     const existing = providerRegistry();
     if (existing) return existing;
-    const inspected = await inspectProviderConfig(process.cwd(), { provider: activeProvider(), model: activeModel() });
+    const inspected = await inspectProviderConfig(process.cwd());
     setProviderRegistry(inspected.registry);
+    setActiveProvider(inspected.providerId);
+    setActiveModel(inspected.model);
     setProviderHasApiKey(inspected.hasApiKey);
+    setProviderConfigReady(true);
     return inspected.registry;
   }
 
@@ -965,7 +966,7 @@ function resolveArtifactTarget(entries: ArtifactEntry[], arg: string): ArtifactE
   if (!trimmed) return entries[0] ?? null;
   const numeric = Number(trimmed);
   if (Number.isInteger(numeric) && numeric >= 1 && numeric <= entries.length) return entries[numeric - 1];
-  return entries.find((entry) => entry.path === trimmed || entry.path.endsWith(trimmed)) ?? null;
+  return entries.find((entry) => entry.path === trimmed) ?? null;
 }
 
 async function loadArtifactPreview(artifact: ArtifactEntry, options: { validate?: boolean } = {}): Promise<SelectedArtifact> {
