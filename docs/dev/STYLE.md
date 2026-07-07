@@ -50,6 +50,17 @@ back. They must not:
 
 Tool calls are normalized into `ToolCall` and executed by `core/tools`.
 
+Provider selection is host state, not prompt state. The TUI may switch among
+configured provider/model profiles, but adapters still receive a normalized
+`VesicleRequest` and must not know about sessions, artifacts, or Prism phases.
+Persistent provider profiles live in the user-level provider config, not in the
+project `.vesicle/` runtime state directory. The default path is
+`%APPDATA%\prism-vesicle\providers.yaml` on Windows and
+`$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
+`~/.config/prism-vesicle/providers.yaml` elsewhere. API keys must be referenced
+via per-provider environment variables (`apiKeyEnv`) and must not be stored
+inline in the provider file.
+
 ## Tool Runtime
 
 Model-visible tools are a security boundary.
@@ -123,9 +134,10 @@ Prompts are runtime assets, not hardcoded source literals.
 - Profile validators check Prism artifact documents, not every assistant turn.
 - Ordinary phase-transition prose such as "confirmed, moving to Phase 1" must
   not be reported as a Module A/B schema failure.
-- Artifact-shaped assistant content starts with YAML frontmatter. Future
-  artifact-file validation should read the corresponding `write_file` output or
-  artifact on disk before presenting findings.
+- Artifact-shaped assistant content starts with YAML frontmatter. Artifact
+  workbench validation reads the selected artifact file from disk before
+  presenting findings, so validation reflects what was actually written rather
+  than only the last assistant message.
 
 ## TUI Interaction
 
@@ -136,6 +148,9 @@ Prompts are runtime assets, not hardcoded source literals.
   hidden during those modes so confirmation controls stay legible.
 - The wide right pane should show operational activity or artifact context, not
   duplicate the last assistant message already visible in the main stream.
+- Provider/model switching commands and artifact workbench commands are local
+  host actions. They should add concise host notices to the transcript and must
+  not call the provider unless the command explicitly starts a revision prompt.
 - Ctrl+C behavior:
   - With a selectable OpenTUI range, copy selection.
   - Without a selection, first press arms exit and the second press exits.

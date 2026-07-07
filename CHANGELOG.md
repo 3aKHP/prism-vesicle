@@ -9,6 +9,11 @@ project follows Semantic Versioning once releases begin.
 
 ### Added
 
+- Provider/model registry: a user-level `providers.yaml` can declare multiple
+  OpenAI-compatible providers and models, with TUI commands for `/providers`,
+  `/models`, `/use`, and `/model`.
+- Artifact workbench commands for `/artifacts`, `/artifact`, `/validate`, and
+  `/revise`, including validation against the selected artifact file on disk.
 - OpenAI-compatible Chat Completions streaming path: provider responses now use
   SSE when available, emitting assistant content deltas and reconstructing
   streamed `tool_calls` into the same final `VesicleResponse` shape used by

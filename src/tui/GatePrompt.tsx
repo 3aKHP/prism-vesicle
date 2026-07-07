@@ -40,7 +40,7 @@ export function GatePrompt(props: GatePromptProps) {
   const reviseLabel = labelFor(props.gate, "revise", DEFAULT_REVISE_LABEL);
   const chatLabel = labelFor(props.gate, "chat", DEFAULT_CHAT_LABEL);
   const summaryLines = () => visibleGateSummaryLines(
-    props.gate.summary,
+    renderGateSummaryText(props.gate.summary),
     Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 4),
     props.maxSummaryLines ?? 4,
   );
@@ -126,6 +126,14 @@ export function sanitizeGateLabel(value: string): string {
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function renderGateSummaryText(value: string): string {
+  return value
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/__([^_\n]+)__/g, "$1")
+    .replace(/`([^`\n]+)`/g, "$1");
 }
 
 export function wrapGateSummary(value: string, maxWidth: number): string[] {

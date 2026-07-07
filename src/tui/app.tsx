@@ -2,7 +2,8 @@ import { createMemo, createSignal, For, Show, onMount } from "solid-js";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { inspectConfig } from "../config/env";
+import { inspectProviderConfig, resolveProviderConfig } from "../config/providers";
+import type { ProviderRegistry, ProviderSelection } from "../config/providers";
 import { resolveGate, runPrompt } from "../core/agent-loop/run";
 import type { RunPromptResult } from "../core/agent-loop/run";
 import type { AgentLoopEvent } from "../core/agent-loop/run";
@@ -12,8 +13,10 @@ import { copySelectionToClipboard } from "./clipboard";
 import { sharedSyntaxStyle, palette } from "./theme";
 import { GatePrompt, gateFocusOrder, gateResolutionFromState } from "./GatePrompt";
 import type { GateFocusTarget } from "./GatePrompt";
-import { listSessions, loadSessionSnapshot } from "../core/session/store";
+import { createSessionStore, listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { SessionSummary } from "../core/session/store";
+import { resolveValidators, runValidators } from "../core/validators/registry";
+import { executeFileTool } from "../core/tools";
 import { resolveTuiLayout } from "./layout";
 import { SessionPicker } from "./SessionPicker";
 import {
@@ -41,6 +44,11 @@ type ArtifactEntry = {
   updatedAt: string;
 };
 
+type SelectedArtifact = ArtifactEntry & {
+  preview: string;
+  validation?: string;
+};
+
 type ActivityEntry = {
   kind: "provider" | "assistant" | "tool" | "gate" | "validation" | "system";
   text: string;
@@ -54,14 +62,18 @@ type SessionPickerState = {
 export function App() {
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
-  const config = inspectConfig();
+  const [providerRegistry, setProviderRegistry] = createSignal<ProviderRegistry | null>(null);
+  const [activeProvider, setActiveProvider] = createSignal("loading");
+  const [activeModel, setActiveModel] = createSignal("loading");
+  const [providerHasApiKey, setProviderHasApiKey] = createSignal(false);
+  const [providerConfigReady, setProviderConfigReady] = createSignal(false);
   const [messages, setMessages] = createSignal<Message[]>([
     {
       role: "system",
       content: "Ready. Enter one Prism prompt and press Enter.",
     },
   ]);
-  const [status, setStatus] = createSignal(config.hasApiKey ? "provider configured" : "missing API key");
+  const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
@@ -71,6 +83,7 @@ export function App() {
   const [resumableSessions, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
+  const [selectedArtifact, setSelectedArtifact] = createSignal<SelectedArtifact | null>(null);
   const [activity, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
@@ -98,6 +111,7 @@ export function App() {
   // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
     void refreshArtifacts();
+    void refreshProviderConfig();
     void listSessions().then((sessions) => {
       setResumableSessions(sessions);
       if (sessions.length > 0) {
@@ -230,15 +244,29 @@ export function App() {
     }
   }
 
-  const submitPrompt = async (value: string) => {
-    const prompt = value.trim();
-    if (!prompt || busy()) return;
+	  const submitPrompt = async (value: string) => {
+	    const prompt = value.trim();
+	    if (!prompt || busy()) return;
 
-    // Slash commands for session management. These never hit the provider.
-    if (prompt.startsWith("/")) {
-      await handleCommand(prompt);
-      return;
-    }
+	    // Slash commands for session management. These never hit the provider.
+	    if (prompt.startsWith("/")) {
+	      try {
+	        await handleCommand(prompt);
+	      } catch (error) {
+	        reportError(error);
+	      }
+	      return;
+	    }
+
+	    if (!providerConfigReady()) {
+	      setStatus("loading provider config");
+	      try {
+	        await refreshProviderConfig();
+	      } catch (error) {
+	        reportError(error);
+	        return;
+	      }
+	    }
 
     setPromptHistory((prev) => [...prev.filter((entry) => entry !== prompt), prompt].slice(-50));
     setHistoryIndex(null);
@@ -246,7 +274,7 @@ export function App() {
     setLastDisplayedToolAssistantContent(null);
     setBusy(true);
     setStatus("sending request");
-    recordActivity({ kind: "provider", text: "sending provider request" });
+	    recordActivity({ kind: "provider", text: "sending provider request" });
     const requestMessages: VesicleMessage[] = [
       ...conversation(),
       { role: "user", content: prompt },
@@ -257,10 +285,11 @@ export function App() {
       const result = await runPrompt({
         input: prompt,
         engine: "etl",
-        sessionId: sessionId(),
-        messages: requestMessages,
-        onEvent: handleAgentEvent,
-      });
+	        sessionId: sessionId(),
+	        messages: requestMessages,
+	        providerSelection: activeProviderSelection(),
+	        onEvent: handleAgentEvent,
+	      });
       handleResult(result, requestMessages);
     } catch (error) {
       reportError(error);
@@ -290,10 +319,11 @@ export function App() {
         sessionId: gate.sessionId,
         messages: gate.messages,
         toolCallId: gate.toolCallId,
-        gate: gate.gate,
-        resolution,
-        onEvent: handleAgentEvent,
-      });
+	        gate: gate.gate,
+	        resolution,
+	        providerSelection: activeProviderSelection(),
+	        onEvent: handleAgentEvent,
+	      });
       handleResult(result, gate.messages);
     } catch (error) {
       setPendingGate(gate);
@@ -415,6 +445,61 @@ export function App() {
     setActivity((prev) => [...prev, entry].slice(-60));
   }
 
+  async function refreshProviderConfig(selection?: Partial<ProviderSelection>) {
+    const inspected = await inspectProviderConfig(process.cwd(), selection);
+    setProviderRegistry(inspected.registry);
+    setActiveProvider(inspected.providerId);
+    setActiveModel(inspected.model);
+    setProviderHasApiKey(inspected.hasApiKey);
+    recordActivity({
+      kind: "provider",
+      text: `active ${inspected.providerId}/${inspected.model} (${inspected.registry.source})`,
+    });
+    setProviderConfigReady(true);
+    setStatus(inspected.hasApiKey ? `provider ${inspected.providerId}` : `missing API key for ${inspected.providerId}`);
+  }
+
+  async function ensureProviderRegistry(): Promise<ProviderRegistry> {
+    const existing = providerRegistry();
+    if (existing) return existing;
+    const inspected = await inspectProviderConfig(process.cwd());
+    setProviderRegistry(inspected.registry);
+    setActiveProvider(inspected.providerId);
+    setActiveModel(inspected.model);
+    setProviderHasApiKey(inspected.hasApiKey);
+    setProviderConfigReady(true);
+    return inspected.registry;
+  }
+
+  function applyProviderSelection(registry: ProviderRegistry, selection: Partial<ProviderSelection>): ProviderSelection {
+    const resolved = resolveProviderConfig(registry, selection);
+    setActiveProvider(resolved.providerId);
+    setActiveModel(resolved.model);
+    setProviderHasApiKey(Boolean(resolved.apiKey));
+    setStatus(Boolean(resolved.apiKey) ? `provider ${resolved.providerId}` : `missing API key for ${resolved.providerId}`);
+    recordActivity({ kind: "provider", text: `switched to ${resolved.providerId}/${resolved.model}` });
+    return { provider: resolved.providerId, model: resolved.model };
+  }
+
+  function activeProviderSelection(): ProviderSelection {
+    return { provider: activeProvider(), model: activeModel() };
+  }
+
+  async function persistProviderSwitch(selection: ProviderSelection) {
+    const id = sessionId();
+    if (!id) return;
+    const store = await createSessionStore(process.cwd(), id);
+    await store.append({
+      role: "system",
+      content: `Provider switched to ${selection.provider}/${selection.model}.`,
+      metadata: {
+        kind: "provider-switch",
+        providerId: selection.provider,
+        model: selection.model,
+      },
+    });
+  }
+
   const handleSubmit = (value: unknown) => {
     if (pendingGate()) return; // gate mode owns the input
     const submitted = typeof value === "string" ? value : inputValue();
@@ -427,11 +512,19 @@ export function App() {
    * Slash commands for session management and help. These run locally and
    * never touch the provider:
    *   /resume           list resumable sessions with numeric indices
-   *   /resume <n>       resume the nth session from the last /resume list
-   *   /resume <id>      resume a session by full id prefix
-   *   /new              abandon the current session and start fresh
-   *   /help             show available commands
-   */
+	 *   /resume <n>       resume the nth session from the last /resume list
+	 *   /resume <id>      resume a session by full id prefix
+	 *   /providers        list configured providers
+	 *   /models [id]      list models for a provider
+	 *   /use <id> <model> switch provider and model
+	 *   /model <model>    switch model within the active provider
+	 *   /artifacts        list generated artifacts
+	 *   /artifact <n|path> preview an artifact
+	 *   /validate <n|path> validate an artifact file
+	 *   /revise <n|path> <instructions> revise an artifact
+	 *   /new              abandon the current session and start fresh
+	 *   /help             show available commands
+	 */
   async function handleCommand(input: string) {
     const [command, ...rest] = input.slice(1).split(/\s+/);
     const arg = rest.join(" ").trim();
@@ -441,12 +534,108 @@ export function App() {
         ...prev,
         { role: "user", content: input },
         {
-          role: "system",
-          content: "Commands:\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
-        },
-      ]);
-      return;
-    }
+	          role: "system",
+	          content: "Commands:\n  /providers        list configured providers\n  /models [id]      list models for a provider\n  /use <id> <model> switch provider/model\n  /model <model>    switch model in active provider\n  /artifacts        list generated artifacts\n  /artifact <n|path> preview an artifact\n  /validate <n|path> validate an artifact file\n  /revise <n|path> <instructions> revise an artifact\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
+	        },
+	      ]);
+	      return;
+	    }
+
+	    if (command === "providers") {
+	      const registry = await ensureProviderRegistry();
+	      setMessages((prev) => [
+	        ...prev,
+	        { role: "user", content: input },
+	        { role: "system", content: renderProviderList(registry, activeProvider()) },
+	      ]);
+	      return;
+	    }
+
+	    if (command === "models") {
+	      const registry = await ensureProviderRegistry();
+	      const providerId = arg || activeProvider();
+	      setMessages((prev) => [
+	        ...prev,
+	        { role: "user", content: input },
+	        { role: "system", content: renderModelList(registry, providerId, activeModel()) },
+	      ]);
+	      return;
+	    }
+
+	    if (command === "use") {
+	      const [providerId, ...modelParts] = arg.split(/\s+/).filter(Boolean);
+	      const model = modelParts.join(" ");
+	      if (!providerId || !model) {
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /use <provider> <model>" }]);
+	        return;
+	      }
+	      const registry = await ensureProviderRegistry();
+	      const selection = applyProviderSelection(registry, { provider: providerId, model });
+	      await persistProviderSwitch(selection);
+	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
+	      return;
+	    }
+
+	    if (command === "model") {
+	      if (!arg) {
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /model <model>" }]);
+	        return;
+	      }
+	      const registry = await ensureProviderRegistry();
+	      const selection = applyProviderSelection(registry, { provider: activeProvider(), model: arg });
+	      await persistProviderSwitch(selection);
+	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Using ${selection.provider}/${selection.model}.` }]);
+	      return;
+	    }
+
+	    if (command === "artifacts") {
+	      const entries = await refreshArtifacts();
+	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: renderArtifactList(entries) }]);
+	      return;
+	    }
+
+	    if (command === "artifact" || command === "open") {
+	      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
+	      const artifact = resolveArtifactTarget(entries, arg);
+	      if (!artifact) {
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${arg || "(empty)"}". Use /artifacts to list.` }]);
+	        return;
+	      }
+	      const selected = await loadArtifactPreview(artifact);
+	      setSelectedArtifact(selected);
+	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `Selected artifact ${selected.path}. Preview is shown in the right pane.` }]);
+	      return;
+	    }
+
+	    if (command === "validate") {
+	      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
+	      const artifact = resolveArtifactTarget(entries, arg);
+	      if (!artifact) {
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${arg || "(empty)"}". Use /artifacts to list.` }]);
+	        return;
+	      }
+	      const selected = await loadArtifactPreview(artifact, { validate: true });
+	      setSelectedArtifact(selected);
+	      setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: selected.validation ?? `No validator matched ${selected.path}.` }]);
+	      return;
+	    }
+
+	    if (command === "revise") {
+	      const [targetArg, ...instructionParts] = arg.split(/\s+/).filter(Boolean);
+	      const instructions = instructionParts.join(" ");
+	      if (!targetArg || !instructions) {
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /revise <n|path> <instructions>" }]);
+	        return;
+	      }
+	      const entries = artifacts().length > 0 ? artifacts() : await refreshArtifacts();
+	      const artifact = resolveArtifactTarget(entries, targetArg);
+	      if (!artifact) {
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No artifact matches "${targetArg}". Use /artifacts to list.` }]);
+	        return;
+	      }
+	      await submitPrompt(`Revise artifact ${artifact.path}. First read_file that path, then apply this request and write_file the revised artifact back to the same path: ${instructions}`);
+	      return;
+	    }
 
     if (command === "new") {
       setMessages((prev) => [...prev, { role: "user", content: input }]);
@@ -505,10 +694,20 @@ export function App() {
       setOutput(snapshot.pendingGate?.assistantContent ?? "");
       setSessionPicker(null);
 
-      const hostMessages: Message[] = [];
-      if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
+	      const hostMessages: Message[] = [];
+	      if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
+	      if (snapshot.providerSelection) {
+	        try {
+	          const registry = await ensureProviderRegistry();
+	          const selection = applyProviderSelection(registry, snapshot.providerSelection);
+	          hostMessages.push({ role: "system", content: `Restored provider ${selection.provider}/${selection.model} from session.` });
+	        } catch (error) {
+	          const message = error instanceof Error ? error.message : String(error);
+	          hostMessages.push({ role: "system", content: `Session provider was not restored: ${message}` });
+	        }
+	      }
 
-      if (snapshot.pendingGate) {
+	      if (snapshot.pendingGate) {
         setPendingGate({
           kind: "needs_user",
           sessionId: target.sessionId,
@@ -542,9 +741,12 @@ export function App() {
     }
   }
 
-  async function refreshArtifacts() {
-    setArtifacts(await scanArtifacts(process.cwd()));
-  }
+	  async function refreshArtifacts(): Promise<ArtifactEntry[]> {
+	    const entries = await scanArtifacts(process.cwd());
+	    setArtifacts(entries);
+	    setSelectedArtifact((selected) => selected && entries.some((entry) => entry.path === selected.path) ? selected : null);
+	    return entries;
+	  }
 
   const renderMessage = (message: Message) => {
     const color =
@@ -588,8 +790,8 @@ export function App() {
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
-        <text
-          content={headerLine(config.provider, config.model, status(), layout().width)}
+	        <text
+	          content={headerLine(activeProvider(), activeModel(), status(), layout().width)}
           fg={busy() ? palette.warn : pendingGate() ? palette.gateAccent : palette.success}
           attributes={1}
         />
@@ -601,9 +803,9 @@ export function App() {
             <PanelLine content="Engine" fg={palette.textMuted} />
             <PanelLine content="etl" fg={palette.textPrimary} attributes={1} />
             <PanelLine content=" " fg={palette.textDim} />
-            <PanelLine content="Provider" fg={palette.textMuted} />
-            <PanelLine content={truncateLine(config.model, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
-            <PanelLine content={config.hasApiKey ? "API key: available" : "API key: missing"} fg={config.hasApiKey ? palette.success : palette.error} />
+	            <PanelLine content="Provider" fg={palette.textMuted} />
+	            <PanelLine content={truncateLine(`${activeProvider()}/${activeModel()}`, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
+	            <PanelLine content={providerHasApiKey() ? "API key: available" : "API key: missing"} fg={providerHasApiKey() ? palette.success : palette.error} />
             <PanelLine content=" " fg={palette.textDim} />
             <PanelLine content="Session" fg={palette.textMuted} />
             <PanelLine content={truncateMiddle(sessionPath(), layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
@@ -636,11 +838,24 @@ export function App() {
             <scrollbox width="100%" height="100%" stickyScroll stickyStart="top">
               <box flexDirection="column">
                 <text content="Activity" fg={palette.textMuted} />
-                <For each={activity().slice(-10)}>
-                  {(entry) => <text content={activityLine(entry, layout().rightPanelWidth - 4)} fg={activityColor(entry.kind)} />}
-                </For>
-                <text content=" " />
-                <text content="Recent artifacts" fg={palette.textMuted} />
+	                <For each={activity().slice(-10)}>
+	                  {(entry) => <text content={activityLine(entry, layout().rightPanelWidth - 4)} fg={activityColor(entry.kind)} />}
+	                </For>
+	                <text content=" " />
+	                <text content="Selected artifact" fg={palette.textMuted} />
+	                <Show when={selectedArtifact()} fallback={<text content="none selected" fg={palette.textDim} />}>
+	                  {(artifact) => (
+	                    <box flexDirection="column">
+	                      <text content={truncateMiddle(artifact().path, layout().rightPanelWidth - 4)} fg={palette.textSecondary} />
+	                      <Show when={artifact().validation} fallback={<box height={0} />}>
+	                        {(validation) => <text content={truncateLine(validation().split("\n")[0] ?? "", layout().rightPanelWidth - 4)} fg={validation().includes("found issues") ? palette.warn : palette.success} />}
+	                      </Show>
+	                      <text content={truncateLine(artifact().preview, layout().rightPanelWidth - 4)} fg={palette.textPrimary} />
+	                    </box>
+	                  )}
+	                </Show>
+	                <text content=" " />
+	                <text content="Recent artifacts" fg={palette.textMuted} />
                 <Show when={artifacts().length > 0} fallback={<text content="none yet" fg={palette.textDim} />}>
                   <For each={artifacts().slice(0, 6)}>
                     {(artifact) => <text content={truncateMiddle(artifact.path, layout().rightPanelWidth - 4)} fg={palette.textSecondary} />}
@@ -661,13 +876,14 @@ export function App() {
               <box height={inputValue().startsWith("/") ? layout().bottomHeight : 3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="column">
                 <Show when={inputValue().startsWith("/")} fallback={<box height={0} />}>
                   <box flexDirection="column">
-                    <text content="/resume  list and resume sessions    /new  start fresh    /help  commands" fg={palette.textDim} />
+	                    <text content="/providers  list providers    /models  list models    /use <p> <m>  switch" fg={palette.textDim} />
+	                    <text content="/resume  list sessions    /new  start fresh    /help  commands" fg={palette.textDim} />
                     <text content="Up/Down recalls prompt history" fg={palette.textDim} />
                   </box>
                 </Show>
-                <input
-                  focused
-                  placeholder={busy() ? "Request in flight..." : "Type prompt, Enter to send, /help for commands"}
+	                <input
+	                  focused
+	                  placeholder={busy() ? "Request in flight..." : !providerConfigReady() ? "Loading provider config..." : "Type prompt, Enter to send, /help for commands"}
                   value={inputValue()}
                   onInput={setInputValue}
                   onSubmit={handleSubmit}
@@ -708,6 +924,91 @@ function PanelLine(props: { content: string; fg: string; attributes?: number }) 
       <text content={props.content} fg={props.fg} attributes={props.attributes} width="100%" />
     </box>
   );
+}
+
+function renderProviderList(registry: ProviderRegistry, activeProvider: string): string {
+  const lines = [`Configured providers (${registry.source}):`];
+  for (const provider of registry.providers) {
+    const marker = provider.id === activeProvider ? "*" : " ";
+    lines.push(`${marker} ${provider.id} [${provider.protocol}] ${provider.models.length} model${provider.models.length === 1 ? "" : "s"}`);
+  }
+  lines.push("");
+  lines.push("Use /models <provider> to inspect models, /use <provider> <model> to switch.");
+  return lines.join("\n");
+}
+
+function renderModelList(registry: ProviderRegistry, providerId: string, activeModel: string): string {
+  const provider = registry.providers.find((entry) => entry.id === providerId);
+  if (!provider) return `Unknown provider "${providerId}". Use /providers to list configured providers.`;
+  const lines = [`Models for ${provider.id}:`];
+  for (const model of provider.models) {
+    const marker = model === activeModel ? "*" : " ";
+    lines.push(`${marker} ${model}`);
+  }
+  lines.push("");
+  lines.push(`Use /use ${provider.id} <model> or /model <model> to switch.`);
+  return lines.join("\n");
+}
+
+function renderArtifactList(entries: ArtifactEntry[]): string {
+  if (entries.length === 0) return "No artifacts found yet.";
+  const lines = ["Artifacts:"];
+  entries.forEach((entry, index) => {
+    lines.push(`${index + 1}. ${entry.path}`);
+  });
+  lines.push("");
+  lines.push("Use /artifact <n|path> to preview, /validate <n|path> to validate, /revise <n|path> <instructions> to edit.");
+  return lines.join("\n");
+}
+
+function resolveArtifactTarget(entries: ArtifactEntry[], arg: string): ArtifactEntry | null {
+  const trimmed = arg.trim();
+  if (!trimmed) return entries[0] ?? null;
+  const numeric = Number(trimmed);
+  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= entries.length) return entries[numeric - 1];
+  return entries.find((entry) => entry.path === trimmed) ?? null;
+}
+
+async function loadArtifactPreview(artifact: ArtifactEntry, options: { validate?: boolean } = {}): Promise<SelectedArtifact> {
+  const result = await executeFileTool(process.cwd(), {
+    id: "artifact-preview",
+    name: "read_file",
+    arguments: JSON.stringify({ path: artifact.path }),
+  });
+  if (!result.ok) throw new Error(result.content);
+  const content = result.content;
+  const preview = content.replace(/\s+/g, " ").trim().slice(0, 500) || "(empty)";
+  const validation = options.validate ? validateArtifactContent(content) : undefined;
+  return { ...artifact, preview, ...(validation ? { validation } : {}) };
+}
+
+function validateArtifactContent(content: string): string {
+  const names = selectArtifactValidators(content);
+  if (names.length === 0) return "No validator matched this artifact.";
+  const validation = runValidators(resolveValidators(names), content);
+  return renderValidationNotice(validation);
+}
+
+function selectArtifactValidators(content: string): string[] {
+  const keys = frontmatterKeys(content);
+  if (keys.size === 0) return [];
+  if (keys.has("scenario_name")) return ["scenario-card"];
+  if (keys.has("name") && keys.has("archetype")) return ["character-card"];
+  return ["character-card", "scenario-card"];
+}
+
+function frontmatterKeys(content: string): Set<string> {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith("---")) return new Set();
+  const lines = trimmed.split(/\r?\n/);
+  const keys = new Set<string>();
+  for (let index = 1; index < lines.length; index++) {
+    const line = lines[index].trim();
+    if (line === "---") break;
+    const colon = line.indexOf(":");
+    if (colon > 0) keys.add(line.slice(0, colon).trim());
+  }
+  return keys;
 }
 
 function headerLine(provider: string, model: string, status: string, width: number): string {

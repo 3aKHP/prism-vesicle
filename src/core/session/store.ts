@@ -2,6 +2,7 @@ import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseGateRequest } from "../gate/types";
 import type { GateRequest } from "../gate/types";
+import type { ProviderSelection } from "../../config/providers";
 
 export type SessionRole = "user" | "assistant" | "system" | "tool";
 
@@ -154,6 +155,7 @@ export type ResumedMessage = {
 export type SessionSnapshot = {
   sessionId: string;
   messages: ResumedMessage[];
+  providerSelection?: ProviderSelection;
   pendingGate?: {
     gate: GateRequest;
     toolCallId: string;
@@ -178,8 +180,15 @@ export async function loadSessionSnapshot(
 
   const messages: ResumedMessage[] = [];
   let skippedFirstSystem = false;
+  let providerSelection: ProviderSelection | undefined;
 
   for (const record of records) {
+    const providerId = record.metadata?.providerId;
+    const model = record.metadata?.model;
+    if (typeof providerId === "string" && typeof model === "string") {
+      providerSelection = { provider: providerId, model };
+    }
+
     if (record.role === "system") {
       // Skip the initial composed prompt; resume recomposes it. Also skip
       // trailing diagnostic system notices (validation, breaker notes).
@@ -232,6 +241,7 @@ export async function loadSessionSnapshot(
   return {
     sessionId,
     messages,
+    ...(providerSelection ? { providerSelection } : {}),
     ...(pendingGate
       ? {
           pendingGate: {

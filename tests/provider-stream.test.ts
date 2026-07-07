@@ -152,11 +152,24 @@ describe("OpenAI-compatible streaming adapter", () => {
       },
     });
   });
+
+  test("reports the selected provider api key label when credentials are missing", async () => {
+    const adapter = new OpenAIChatCompatibleAdapter({
+      provider: "openai-chat-compatible",
+      providerId: "deepseek",
+      baseUrl: "https://provider.test/v1",
+      model: "test-model",
+      apiKeyLabel: "DEEPSEEK_API_KEY",
+    });
+
+    await expect(adapter.complete(request())).rejects.toThrow("DEEPSEEK_API_KEY is required");
+  });
 });
 
 function streamAdapter() {
   return new OpenAIChatCompatibleAdapter({
     provider: "openai-chat-compatible",
+    providerId: "test",
     baseUrl: "https://provider.test/v1",
     model: "test-model",
     apiKey: "test-key",

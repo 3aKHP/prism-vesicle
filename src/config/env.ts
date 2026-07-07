@@ -2,9 +2,11 @@ export type VesicleProvider = "openai-chat-compatible";
 
 export type VesicleConfig = {
   provider: VesicleProvider;
+  providerId: string;
   baseUrl: string;
   model: string;
   apiKey?: string;
+  apiKeyLabel?: string;
 };
 
 export type ConfigStatus = VesicleConfig & {
@@ -20,9 +22,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): VesicleConfig 
 
   return {
     provider,
+    providerId: env.VESICLE_PROVIDER_ID ?? "default",
     baseUrl: trimTrailingSlash(env.VESICLE_BASE_URL ?? "https://api.openai.com/v1"),
     model: env.VESICLE_MODEL ?? "gpt-4.1-mini",
     apiKey: env.VESICLE_API_KEY,
+    apiKeyLabel: "VESICLE_API_KEY",
   };
 }
 
