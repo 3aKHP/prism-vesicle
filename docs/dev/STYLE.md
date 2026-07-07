@@ -114,8 +114,9 @@ Prompts are runtime assets, not hardcoded source literals.
 - Session lists should mark unresolved gates so the user can distinguish a
   normal transcript from a workflow waiting for confirmation.
 - Long-running turns should emit host-visible activity events before and after
-  provider requests, tool calls, gate pauses, and validation. Token-level
-  streaming can build on this event path later.
+  provider requests, tool calls, gate pauses, and validation. Provider
+  streaming should emit assistant deltas as they arrive while still
+  reconstructing a final provider response for session replay.
 
 ## Validation Semantics
 

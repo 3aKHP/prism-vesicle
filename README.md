@@ -47,6 +47,8 @@ return to an unresolved gate.
 ## Current Capabilities
 
 - OpenAI-compatible Chat Completions provider path
+- Streaming OpenAI-compatible Chat Completions responses when the provider
+  supports SSE, including streamed tool-call reconstruction
 - Engine profiles drive systemPrompt, tools, validators, and stop gates from
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker

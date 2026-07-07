@@ -12,6 +12,7 @@ _Last updated: 2026-07-07_
 | TUI | OpenTUI + Solid | Responsive shell + gate/session panels |
 | Gate runtime | request_confirmation + needs_user loop | ETL blueprint + phase gates wired |
 | Validators | Module A + Module B v9 schemas | Implemented |
+| Streaming | OpenAI-compatible SSE | In progress on 0.2 branch |
 
 ## Current Scope
 
@@ -115,10 +116,9 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 
 - Only OpenAI-compatible Chat Completions is implemented (Anthropic Messages,
   OpenAI Responses, Gemini are deferred).
-- Tool calls are non-streaming; assistant text is non-streaming.
-- The agent loop now emits coarse activity events for provider requests, tool
-  calls, gate pauses, and validation, but token-level provider streaming is
-  still deferred.
+- OpenAI-compatible SSE streaming is implemented on the 0.2 branch for
+  assistant content deltas and streamed tool-call reconstruction. Other
+  provider protocols are still deferred.
 - TUI engine switching is hardcoded to ETL (runtime/evaluate profiles exist
   and load, but the TUI does not yet offer a selector).
 - Gate UI is Select-style for ETL blueprint and phase checkpoints, with a
