@@ -520,16 +520,16 @@ export function App() {
     });
   }
 
-  async function persistThinkingSwitch(tier: ReasoningTier) {
+  async function persistThinkingSwitch(tier: ReasoningTier | undefined) {
     const id = sessionId();
     if (!id) return;
     const store = await createSessionStore(process.cwd(), id);
     await store.append({
       role: "system",
-      content: `Thinking tier switched to ${tier}.`,
+      content: tier ? `Thinking tier switched to ${tier}.` : "Thinking tier reset to provider default.",
       metadata: {
         kind: "thinking-switch",
-        reasoningTier: tier,
+        reasoningTier: tier ?? null,
       },
     });
   }
@@ -552,7 +552,7 @@ export function App() {
 	 *   /models [id]      list models for a provider
 	 *   /use <id> <model> switch provider and model
 	 *   /model <model>    switch model within the active provider
-	 *   /think <tier>     set thinking tier: off/low/midium/high/xhigh/max
+	 *   /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto
 	 *   /artifacts        list generated artifacts
 	 *   /artifact <n|path> preview an artifact
 	 *   /validate <n|path> validate an artifact file
@@ -570,7 +570,7 @@ export function App() {
         { role: "user", content: input },
         {
 	          role: "system",
-	          content: "Commands:\n  /providers        list configured providers\n  /models [id]      list models for a provider\n  /use <id> <model> switch provider/model\n  /model <model>    switch model in active provider\n  /think <tier>     set thinking tier: off/low/midium/high/xhigh/max\n  /artifacts        list generated artifacts\n  /artifact <n|path> preview an artifact\n  /validate <n|path> validate an artifact file\n  /revise <n|path> <instructions> revise an artifact\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
+	          content: "Commands:\n  /providers        list configured providers\n  /models [id]      list models for a provider\n  /use <id> <model> switch provider/model\n  /model <model>    switch model in active provider\n  /think <tier>     set thinking tier: off/low/midium/high/xhigh/max/auto\n  /artifacts        list generated artifacts\n  /artifact <n|path> preview an artifact\n  /validate <n|path> validate an artifact file\n  /revise <n|path> <instructions> revise an artifact\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
 	        },
 	      ]);
 	      return;
@@ -626,13 +626,21 @@ export function App() {
 	        setMessages((prev) => [
 	          ...prev,
 	          { role: "user", content: input },
-	          { role: "system", content: `Thinking tier: ${thinkingTier() ?? "provider default"}. Use /think off|low|midium|high|xhigh|max.` },
+	          { role: "system", content: `Thinking tier: ${thinkingTier() ?? "provider default"}. Use /think off|low|midium|high|xhigh|max|auto.` },
 	        ]);
 	        return;
 	      }
 	      const tier = parseThinkingTier(arg);
 	      if (!tier) {
-	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /think off|low|midium|high|xhigh|max" }]);
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Usage: /think off|low|midium|high|xhigh|max|auto" }]);
+	        return;
+	      }
+	      if (tier === "auto") {
+	        setThinkingTier(undefined);
+	        setStatus("thinking provider default");
+	        recordActivity({ kind: "provider", text: "thinking tier provider default" });
+	        await persistThinkingSwitch(undefined);
+	        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "Thinking tier reset to provider default." }]);
 	        return;
 	      }
 	      setThinkingTier(tier);
@@ -936,7 +944,7 @@ export function App() {
                 <Show when={inputValue().startsWith("/")} fallback={<box height={0} />}>
                   <box flexDirection="column">
 	                    <text content="/providers  list providers    /models  list models    /use <p> <m>  switch" fg={palette.textDim} />
-	                    <text content="/think <tier>  off/low/midium/high/xhigh/max    /help  commands" fg={palette.textDim} />
+	                    <text content="/think <tier>  off/low/midium/high/xhigh/max/auto    /help" fg={palette.textDim} />
 	                    <text content="/resume  list sessions    /new  start fresh" fg={palette.textDim} />
                     <text content="Up/Down recalls prompt history" fg={palette.textDim} />
                   </box>
@@ -1010,8 +1018,10 @@ function renderModelList(registry: ProviderRegistry, providerId: string, activeM
   return lines.join("\n");
 }
 
-function parseThinkingTier(value: string): ReasoningTier | null {
-  const normalized = value.trim().toLowerCase() === "medium" ? "midium" : value.trim().toLowerCase();
+function parseThinkingTier(value: string): ReasoningTier | "auto" | null {
+  const raw = value.trim().toLowerCase();
+  if (raw === "auto" || raw === "unset" || raw === "default") return "auto";
+  const normalized = raw === "medium" ? "midium" : raw;
   return (reasoningTiers as readonly string[]).includes(normalized) ? normalized as ReasoningTier : null;
 }
 

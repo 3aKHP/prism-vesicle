@@ -32,6 +32,12 @@ Read asset-specific docs when touching assets:
   plan; useful context, but current code plus `STATUS.md` and `docs/dev/*` are
   authoritative when they differ.
 
+If a task touches architecture, provider behavior, TUI interaction, session
+semantics, or command UX, look for existing implementation patterns before
+inventing a new one. The ignored local `dev/docs/` area may contain private
+reference-project notes and local paths; use those notes when available, but do
+not copy local absolute paths or private machine details into public docs.
+
 ## Documentation Map
 
 Use the docs by responsibility:
@@ -115,6 +121,10 @@ as supported configuration.
 
 These are non-negotiable boundaries; see `docs/dev/STYLE.md` for detail.
 
+- Prefer adapting proven patterns from the documented reference projects over
+  rebuilding familiar agent/runtime behavior from scratch. Record borrowed
+  behavior in public docs/tests when it affects Vesicle's runtime contract, but
+  keep private reference paths confined to ignored local notes.
 - Provider adapters convert normalized Vesicle requests to provider wire
   format and back. They must not read/write project files, mutate sessions,
   know Prism phases, or execute host tools.

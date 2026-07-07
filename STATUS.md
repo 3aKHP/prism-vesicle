@@ -36,8 +36,9 @@ Chat wrapper:
   variables only; actual secrets stay in the same user-level directory's
   `.env` file, with process environment variables used only as fallback.
 - Control thinking behavior for subsequent TUI turns with
-  `/think off|low|midium|high|xhigh|max`; unset sessions preserve the
-  provider/model default instead of sending control fields.
+  `/think off|low|midium|high|xhigh|max`; `/think auto` clears the explicit
+  choice. Unset sessions preserve the provider/model default instead of
+  sending control fields.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
 - Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a

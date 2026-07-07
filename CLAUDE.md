@@ -32,8 +32,16 @@ Also read:
 - `assets/README.md` before editing copied Prism assets.
 - `docs/examples/providers.yaml` before changing provider config behavior.
 
+For architecture, provider, TUI, session, or command-UX changes, first check
+whether the documented reference projects already solved a similar problem.
+Ignored local notes under `dev/docs/` may describe private reference locations;
+use them when available, but never copy local absolute paths or machine-private
+details into public docs.
+
 ## High-Risk Boundaries
 
+- Prefer proven reference-project patterns over needless reinvention, while
+  preserving Vesicle's Prism-host product boundary.
 - Do not store provider secrets in `providers.yaml`.
 - Do not depend on a project-root `.env`; provider secrets belong beside the
   user-level `providers.yaml`.

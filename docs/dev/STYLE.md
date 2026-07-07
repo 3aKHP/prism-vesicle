@@ -56,7 +56,8 @@ configured provider/model profiles, but adapters still receive a normalized
 Generation controls follow the same rule: core/TUI may pass the normalized
 `reasoningTier` values (`off`, `low`, `midium`, `high`, `xhigh`, `max`), but
 only the provider adapter maps them to wire fields such as `thinking` and
-`reasoning_effort`.
+`reasoning_effort`. TUI commands may offer `auto`/`unset` to clear an explicit
+selection; that means no `reasoningTier` is sent.
 Persistent provider profiles live in the user-level provider config, not in the
 project `.vesicle/` runtime state directory. The default path is
 `%APPDATA%\prism-vesicle\providers.yaml` on Windows and

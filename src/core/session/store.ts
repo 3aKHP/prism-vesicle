@@ -193,9 +193,8 @@ export async function loadSessionSnapshot(
     if (typeof providerId === "string" && typeof model === "string") {
       providerSelection = { provider: providerId, model };
     }
-    const recordReasoningTier = readReasoningTier(record.metadata?.reasoningTier);
-    if (recordReasoningTier) {
-      reasoningTier = recordReasoningTier;
+    if (record.metadata && Object.hasOwn(record.metadata, "reasoningTier")) {
+      reasoningTier = readReasoningTier(record.metadata.reasoningTier);
     }
 
     if (record.role === "system") {
