@@ -212,6 +212,7 @@ describe("agent loop sessions", () => {
   test("executes model-requested write_file calls", async () => {
     const rootDir = await createPromptRoot();
     const requestBodies: Array<{ messages: Array<{ role: string; content: string; reasoning_content?: string }> }> = [];
+    const events: AgentLoopEvent[] = [];
 
     globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
       requestBodies.push(JSON.parse(String(init?.body)));
@@ -261,10 +262,13 @@ describe("agent loop sessions", () => {
       input: "write a file",
       rootDir,
       messages: [{ role: "user", content: "write a file" }],
+      onEvent: (event) => events.push(event),
     });
     if (result.kind !== "complete") throw new Error("expected complete");
 
     const written = await readFile(join(rootDir, "workspace", "tool-test.md"), "utf8");
+    const records = (await readFile(result.sessionPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const toolRecord = records.find((record) => record.role === "tool");
 
     expect(result.response.content).toBe("File written.");
     expect(written).toBe("# Tool Test\n\nwritten");
@@ -273,6 +277,20 @@ describe("agent loop sessions", () => {
       message.role === "assistant" &&
       message.reasoning_content === "Need to write the requested artifact before answering."
     ))).toBe(true);
+    expect(toolRecord?.metadata.fileEvent).toMatchObject({
+      kind: "file_operation",
+      operation: "write",
+      path: "workspace/tool-test.md",
+      changed: true,
+    });
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "tool_result",
+      name: "write_file",
+      fileEvent: expect.objectContaining({
+        operation: "write",
+        path: "workspace/tool-test.md",
+      }),
+    }));
   });
 
   test("does not run artifact validators on ordinary assistant prose", async () => {

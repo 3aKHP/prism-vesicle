@@ -14,7 +14,7 @@ export type BuiltInToolName =
   | "copy_file"
   | "move_file";
 export { executeFileTool, fileToolDefinitions } from "./fs";
-export type { ToolCall, ToolDefinition, ToolResult } from "./fs";
+export type { FileToolEvent, ToolCall, ToolDefinition, ToolResult } from "./fs";
 
 export type ToolContract = {
   name: BuiltInToolName;

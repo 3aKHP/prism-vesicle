@@ -18,6 +18,9 @@ project follows Semantic Versioning once releases begin.
   `create_file`, `replace_in_file`, `append_file`, `delete_file`, `copy_file`,
   and `move_file`, all behind the existing project-relative path guards and
   artifact-root write boundaries.
+- File tool operation ledger: successful filesystem tools now emit structured
+  `fileEvent` metadata through agent-loop activity events and session JSONL
+  tool records.
 - OpenAI-compatible Chat Completions streaming path: provider responses now use
   SSE when available, emitting assistant content deltas and reconstructing
   streamed `tool_calls` into the same final `VesicleResponse` shape used by

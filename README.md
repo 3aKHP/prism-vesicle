@@ -97,6 +97,9 @@ return to an unresolved gate.
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker
   support and interactive pending-gate recovery
+- Structured `fileEvent` metadata in session tool records for successful
+  filesystem operations, enabling artifact/file-operation audit views without
+  parsing prose
 - Tool-calling loop for guarded filesystem CRUD/search tools (`stat_path`,
   `list_files`, `grep_files`, `read_file`, `create_file`, `write_file`,
   `replace_in_file`, `append_file`, `delete_file`, `copy_file`, `move_file`)
