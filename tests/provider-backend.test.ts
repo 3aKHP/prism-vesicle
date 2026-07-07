@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { OpenAIChatCompatibleAdapter } from "../src/providers/openai-chat/adapter";
 import { toChatCompletionBody } from "../src/providers/openai-chat/request";
-import { readChatCompletionStream, readSseData } from "../src/providers/openai-chat/stream";
+import { readChatCompletionStream } from "../src/providers/openai-chat/stream";
 import type { VesicleRequest } from "../src/providers/shared/types";
 
 const originalFetch = globalThis.fetch;
+const testDir = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = join(testDir, "..");
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -74,9 +77,10 @@ describe("Provider backend errors", () => {
   test("uses a structured malformed-response error for bad SSE JSON", async () => {
     const response = new Response(rawSse(["data: {not-json}\n\n", "data: [DONE]\n\n"]));
 
-    await expect(collect(readSseResponse(response))).rejects.toMatchObject({
+    await expect(collect(readSseResponse(response, "deepseek"))).rejects.toMatchObject({
       name: "ProviderError",
       kind: "malformed_response",
+      providerId: "deepseek",
     });
   });
 });
@@ -114,12 +118,18 @@ describe("SSE parsing", () => {
   test("reads CRLF, comments, multiline data, and chunk boundaries", async () => {
     const body = chunkedSse([
       ": keepalive\r\n",
-      "data: {\"a\":\r\n",
-      "data: 1}\r\n\r\n",
+      "data: {\"id\":\"chatcmpl-crlf\",\"choices\":[{\"delta\":{\"content\":\r\n",
+      "data: \"ok\"},\"finish_reason\":\"stop\"}]}\r\n\r\n",
       "data: [DONE]\r\n\r\n",
     ]);
 
-    await expect(collect(readSseData(body))).resolves.toEqual(["{\"a\":\n1}", "[DONE]"]);
+    const events = await collect(readChatCompletionStream(new Response(body), "fallback", "deepseek"));
+
+    expect(events).toContainEqual({ type: "content_delta", delta: "ok" });
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: { id: "chatcmpl-crlf", content: "ok" },
+    });
   });
 });
 
@@ -176,6 +186,27 @@ describe("Chat Completions stream integration", () => {
     });
   });
 
+  test("uses the latest streamed tool call function name instead of concatenating", async () => {
+    const response = new Response(rawSse([
+      "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-read\",\"type\":\"function\",\"function\":{\"name\":\"stale_name\",\"arguments\":\"{}\"}}]}}]}\n\n",
+      "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"read_file\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
+      "data: [DONE]\n\n",
+    ]));
+
+    const events = await collect(readChatCompletionStream(response, "fallback", "deepseek"));
+
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        toolCalls: [{
+          id: "call-read",
+          name: "read_file",
+          arguments: "{}",
+        }],
+      },
+    });
+  });
+
   test("adapter stream accepts an OK JSON response fallback", async () => {
     const bodies: unknown[] = [];
     globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
@@ -215,7 +246,7 @@ describe("Provider backend boundaries", () => {
     ];
 
     for (const file of providerFiles) {
-      const source = await readFile(join(process.cwd(), file), "utf8");
+      const source = await readFile(join(repoRoot, file), "utf8");
       expect(source).not.toMatch(/from\s+["']node:fs/);
       expect(source).not.toMatch(/from\s+["'][^"']*core\/session/);
       expect(source).not.toMatch(/from\s+["'][^"']*tui/);
@@ -232,8 +263,8 @@ function request(): VesicleRequest {
   };
 }
 
-async function* readSseResponse(response: Response) {
-  yield* readChatCompletionStream(response, "fallback");
+async function* readSseResponse(response: Response, providerId?: string) {
+  yield* readChatCompletionStream(response, "fallback", providerId);
 }
 
 async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {

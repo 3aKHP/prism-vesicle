@@ -2,7 +2,11 @@ import { ProviderError } from "../shared/errors";
 import type { VesicleResponse } from "../shared/types";
 import type { ChatCompletionResponse } from "./types";
 
-export function responseFromChatCompletionBody(body: ChatCompletionResponse | undefined, fallbackId: string): VesicleResponse {
+export function responseFromChatCompletionBody(
+  body: ChatCompletionResponse | undefined,
+  fallbackId: string,
+  providerId?: string,
+): VesicleResponse {
   const choice = body?.choices?.[0];
   const content = choice?.message?.content ?? "";
   const reasoningContent = choice?.message?.reasoning_content ?? undefined;
@@ -15,6 +19,7 @@ export function responseFromChatCompletionBody(body: ChatCompletionResponse | un
   if (!content && (!toolCalls || toolCalls.length === 0)) {
     throw new ProviderError("Provider response did not include assistant content or tool calls.", {
       kind: "malformed_response",
+      providerId,
     });
   }
 

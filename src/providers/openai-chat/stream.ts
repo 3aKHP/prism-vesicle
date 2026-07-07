@@ -15,9 +15,13 @@ export function isRetryableStreamRequestFailure(status: number): boolean {
   return status === 400 || status === 404 || status === 422;
 }
 
-export async function* readChatCompletionStream(response: Response, fallbackId: string): AsyncIterable<ProviderStreamEvent> {
+export async function* readChatCompletionStream(
+  response: Response,
+  fallbackId: string,
+  providerId?: string,
+): AsyncIterable<ProviderStreamEvent> {
   if (!response.body) {
-    throw new ProviderError("Provider streaming response did not include a body.", { kind: "stream_error" });
+    throw new ProviderError("Provider streaming response did not include a body.", { kind: "stream_error", providerId });
   }
 
   const state = createStreamAccumulator(fallbackId);
@@ -27,19 +31,19 @@ export async function* readChatCompletionStream(response: Response, fallbackId: 
       sawDone = true;
       break;
     }
-    const chunk = parseStreamChunk(payload);
+    const chunk = parseStreamChunk(payload, providerId);
     if (chunk.error?.message) {
-      throw new ProviderError(`Provider stream failed: ${chunk.error.message}`, { kind: "stream_error" });
+      throw new ProviderError(`Provider stream failed: ${chunk.error.message}`, { kind: "stream_error", providerId });
     }
     for (const event of absorbStreamChunk(state, chunk)) {
       yield event;
     }
   }
   if (!sawDone) {
-    throw new ProviderError("Provider stream ended before [DONE].", { kind: "stream_error" });
+    throw new ProviderError("Provider stream ended before [DONE].", { kind: "stream_error", providerId });
   }
 
-  yield { type: "complete", response: finalizeStream(state) };
+  yield { type: "complete", response: finalizeStream(state, providerId) };
 }
 
 function createStreamAccumulator(fallbackId: string): StreamAccumulator {
@@ -96,7 +100,7 @@ function absorbStreamChunk(state: StreamAccumulator, chunk: ChatCompletionStream
   return events;
 }
 
-function finalizeStream(state: StreamAccumulator): VesicleResponse {
+function finalizeStream(state: StreamAccumulator, providerId?: string): VesicleResponse {
   const toolCalls = [...state.toolCalls.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, call]) => ({
@@ -109,6 +113,7 @@ function finalizeStream(state: StreamAccumulator): VesicleResponse {
   if (!state.content && toolCalls.length === 0) {
     throw new ProviderError("Provider response did not include assistant content or tool calls.", {
       kind: "malformed_response",
+      providerId,
     });
   }
 
@@ -122,7 +127,7 @@ function finalizeStream(state: StreamAccumulator): VesicleResponse {
   };
 }
 
-export async function* readSseData(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
+async function* readSseData(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -153,13 +158,14 @@ export async function* readSseData(body: ReadableStream<Uint8Array>): AsyncItera
   }
 }
 
-function parseStreamChunk(payload: string): ChatCompletionStreamChunk {
+function parseStreamChunk(payload: string, providerId?: string): ChatCompletionStreamChunk {
   try {
     return JSON.parse(payload) as ChatCompletionStreamChunk;
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new ProviderError(`Provider stream delivered unparseable data: ${detail}`, {
       kind: "malformed_response",
+      providerId,
       cause: error,
     });
   }

@@ -51,6 +51,9 @@ project follows Semantic Versioning once releases begin.
   provider-stream error, retries without OpenAI-specific `stream_options` for
   stricter compatible providers, and preserves the final assistant turn in the
   in-memory conversation history.
+- OpenAI-compatible streamed tool-call names now keep the latest provider value
+  instead of concatenating repeated `function.name` deltas, avoiding duplicated
+  names from non-conformant streams.
 - OpenAI-compatible reasoning responses now preserve provider
   `reasoning_content` through non-streaming, streaming, tool-loop follow-up
   requests, and session resume so reasoning models can use tools without losing

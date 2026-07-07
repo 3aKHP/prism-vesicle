@@ -25,7 +25,7 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
       });
     }
 
-    return responseFromChatCompletionBody(body, request.id);
+    return responseFromChatCompletionBody(body, request.id, this.config.providerId);
   }
 
   async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
@@ -52,11 +52,11 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
     }
     if (streamResponse.headers.get("content-type")?.includes("application/json")) {
       const body = await streamResponse.json().catch(() => undefined) as ChatCompletionResponse | undefined;
-      yield { type: "complete", response: responseFromChatCompletionBody(body, request.id) };
+      yield { type: "complete", response: responseFromChatCompletionBody(body, request.id, this.config.providerId) };
       return;
     }
 
-    yield* readChatCompletionStream(streamResponse, request.id);
+    yield* readChatCompletionStream(streamResponse, request.id, this.config.providerId);
   }
 
   private fetchChatCompletion(request: VesicleRequest, stream: boolean, includeUsage: boolean): Promise<Response> {
