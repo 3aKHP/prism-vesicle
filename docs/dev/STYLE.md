@@ -58,6 +58,11 @@ Generation controls follow the same rule: core/TUI may pass the normalized
 only the provider adapter maps them to wire fields such as `thinking` and
 `reasoning_effort`. TUI commands may offer `auto`/`unset` to clear an explicit
 selection; that means no `reasoningTier` is sent.
+Anthropic Messages adapters map Vesicle messages to Anthropic content blocks:
+assistant thinking blocks must be emitted before text/tool_use blocks, and
+tool results are user messages containing `tool_result` blocks. The agent loop
+and session store must not interpret these native blocks beyond preserving
+their typed metadata.
 High-frequency thinking controls may be interactive TUI state. Lower-frequency
 generation defaults such as `temperature` and `maxTokens` belong in the
 user-level provider model config and are merged by `core/agent-loop` before

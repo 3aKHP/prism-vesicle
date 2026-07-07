@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { VesicleConfig, VesicleProvider } from "./env";
+import type { ProviderAuthMethod } from "./env";
 import type { GenerationDefaults, ModelCapabilities } from "./env";
 
 export type ProviderProtocol = VesicleProvider;
@@ -22,6 +23,7 @@ export type ProviderProfile = {
   protocol: ProviderProtocol;
   baseUrl: string;
   apiKeyEnv: string;
+  authMethod?: ProviderAuthMethod;
   models: ProviderModelProfile[];
 };
 
@@ -126,6 +128,7 @@ export function resolveProviderConfig(
     model,
     apiKey: env[profile.apiKeyEnv],
     apiKeyLabel: profile.apiKeyEnv,
+    ...(profile.authMethod ? { authMethod: profile.authMethod } : {}),
     ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
     ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
   };
@@ -234,6 +237,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
       protocol,
       baseUrl,
       apiKeyEnv,
+      ...(currentProvider.authMethod ? { authMethod: currentProvider.authMethod } : {}),
       models,
     });
     currentProvider = null;
@@ -299,6 +303,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
       if (key === "protocol") currentProvider.protocol = readProtocol(value, `provider ${currentProvider.id}`);
       else if (key === "baseUrl") currentProvider.baseUrl = value;
       else if (key === "apiKeyEnv") currentProvider.apiKeyEnv = value;
+      else if (key === "authMethod") currentProvider.authMethod = readAuthMethod(value, `provider ${currentProvider.id}`);
       else if (key === "apiKey") throw new Error(`Provider config parse error on line ${index + 1}: use apiKeyEnv instead of inline apiKey.`);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown provider field "${key}".`);
       continue;
@@ -379,8 +384,15 @@ function requireModel(profile: ProviderProfile, modelId: string): ProviderModelP
 }
 
 function readProtocol(value: string, field: string): ProviderProtocol {
-  if (value !== "openai-chat-compatible") {
+  if (value !== "openai-chat-compatible" && value !== "anthropic-messages") {
     throw new Error(`Unsupported provider protocol "${value}" in ${field}.`);
+  }
+  return value;
+}
+
+function readAuthMethod(value: string, field: string): ProviderAuthMethod {
+  if (value !== "bearer" && value !== "x-api-key") {
+    throw new Error(`Unsupported provider authMethod "${value}" in ${field}.`);
   }
   return value;
 }

@@ -71,6 +71,8 @@ return to an unresolved gate.
 ## Current Capabilities
 
 - OpenAI-compatible Chat Completions provider path
+- Anthropic Messages provider path for non-streaming text, tool calls, and
+  thinking block preservation
 - Streaming OpenAI-compatible Chat Completions responses when the provider
   supports SSE, including streamed tool-call reconstruction
 - Provider/model registry from the user-level `providers.yaml`, with TUI
@@ -127,7 +129,8 @@ Prism v9 prompt/spec/template assets are copied under `assets/`. See `assets/REA
 ## Scope
 
 0.3.0 development focuses on making Vesicle usable across multiple
-OpenAI-compatible provider profiles and on treating generated artifact files as
-first-class workflow objects. Native Anthropic, Gemini, OpenAI Responses, MCP,
-Skills, long-form engines, and prompt-cache engineering are deferred to later
-milestones — see `STATUS.md` for the full known-limits list.
+OpenAI-compatible and Anthropic Messages provider profiles and on treating
+generated artifact files as first-class workflow objects. Native Gemini,
+OpenAI Responses, MCP, Skills, long-form engines, and prompt-cache engineering
+are deferred to later milestones — see `STATUS.md` for the full known-limits
+list.
