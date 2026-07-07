@@ -56,6 +56,31 @@ describe("TUI", () => {
     expect(frame).toContain(">1. Confirm");
   });
 
+  test("renders stop gate markdown summaries instead of raw markdown markers", async () => {
+    const setup = await testRender(() => (
+      <GatePrompt
+        gate={{
+          gate: "blueprint-confirmation",
+          summary: "**Target Concept:** 测试角色\n\n**Archetype:** Mirror",
+        }}
+        focused="confirm"
+        feedbackMode={null}
+        feedback=""
+        onFeedbackInput={() => undefined}
+        width={100}
+        maxSummaryLines={4}
+      />
+    ), { width: 100, height: 10 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    expect(frame).toContain("Target Concept:");
+    expect(frame).toContain("Archetype:");
+    expect(frame).not.toContain("**Target Concept:**");
+    expect(frame).not.toContain("**Archetype:**");
+  });
+
   test("builds stop gate options as stable single-line labels", () => {
     expect(gateOptionLine(1, "Confirm - proceed to next phase", true)).toBe(">1. Confirm - proceed to next phase");
     expect(gateOptionLine(2, "Revise - tell the engine what to change", false)).toBe(" 2. Revise - tell the engine what to change");
