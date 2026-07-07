@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 
@@ -25,9 +26,15 @@ export type FileToolEvent = {
   sourcePath?: string;
   targetPath?: string;
   changed: boolean;
+  /** Size of the resulting or observed file, or the deleted file for delete_file. */
   bytes?: number;
+  /** Bytes added by append_file. */
+  deltaBytes?: number;
   lines?: number;
+  /** grep_files hit count. */
   matches?: number;
+  /** list_files entry count. */
+  entryCount?: number;
   occurrences?: number;
   truncated?: boolean;
 };
@@ -359,7 +366,7 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
           operation: "list",
           path: toProjectPath(rootDir, dir),
           changed: false,
-          matches: entries.length,
+          entryCount: entries.length,
         });
       }
 
@@ -456,19 +463,21 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         await mkdir(dirname(filePath), { recursive: true });
         if (!args.createIfMissing) await assertFile(filePath);
         await appendFile(filePath, args.content, { encoding: "utf8", flag: "a" });
+        const appended = await stat(filePath);
         return ok(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`, {
           kind: "file_operation",
           operation: "append",
           path: toProjectPath(rootDir, filePath),
           changed: true,
-          bytes: textByteLength(args.content),
+          bytes: appended.size,
+          deltaBytes: textByteLength(args.content),
         });
       }
 
       case "delete_file": {
         const args = parseArgs<{ path: string }>(call.arguments);
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
-        await assertFile(filePath);
+        const deleted = await assertFile(filePath);
         // Single-user TUI contract: the path is expected not to change between
         // the file check and unlink.
         await unlink(filePath);
@@ -477,6 +486,7 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
           operation: "delete",
           path: toProjectPath(rootDir, filePath),
           changed: true,
+          bytes: deleted.size,
         });
       }
 
@@ -484,17 +494,16 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const args = parseArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
         const sourcePath = resolveAllowed(rootDir, args.sourcePath, readableRoots);
         const targetPath = resolveAllowed(rootDir, args.targetPath, writableRoots);
-        await assertFile(sourcePath);
+        const source = await assertFile(sourcePath);
         await prepareTarget(targetPath, Boolean(args.overwrite));
         await copyFile(sourcePath, targetPath);
-        const copied = await stat(targetPath);
         return ok(call, `Copied ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
           kind: "file_operation",
           operation: "copy",
           sourcePath: toProjectPath(rootDir, sourcePath),
           targetPath: toProjectPath(rootDir, targetPath),
           changed: true,
-          bytes: copied.size,
+          bytes: source.size,
         });
       }
 
@@ -502,17 +511,16 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const args = parseArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
         const sourcePath = resolveAllowed(rootDir, args.sourcePath, writableRoots);
         const targetPath = resolveAllowed(rootDir, args.targetPath, writableRoots);
-        await assertFile(sourcePath);
+        const source = await assertFile(sourcePath);
         await prepareTarget(targetPath, Boolean(args.overwrite));
         await rename(sourcePath, targetPath);
-        const moved = await stat(targetPath);
         return ok(call, `Moved ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
           kind: "file_operation",
           operation: "move",
           sourcePath: toProjectPath(rootDir, sourcePath),
           targetPath: toProjectPath(rootDir, targetPath),
           changed: true,
-          bytes: moved.size,
+          bytes: source.size,
         });
       }
 
@@ -622,9 +630,10 @@ function countOccurrences(content: string, needle: string): number {
   }
 }
 
-async function assertFile(filePath: string): Promise<void> {
+async function assertFile(filePath: string): Promise<Stats> {
   const info = await stat(filePath);
   if (!info.isFile()) throw new Error("Path must be a file.");
+  return info;
 }
 
 async function prepareTarget(targetPath: string, overwrite: boolean): Promise<void> {
