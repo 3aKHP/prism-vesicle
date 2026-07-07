@@ -30,6 +30,9 @@ project follows Semantic Versioning once releases begin.
 - Added a rapid-development workflow exception that treats `develop` as the
   active trunk for low-risk internal iteration while preserving PR/CR flow for
   high-risk or release-bound work.
+- Split the OpenAI-compatible provider backend into request shaping, response
+  parsing, streaming, wire types, and structured provider errors to harden the
+  transport foundation before adding more protocols.
 - Provider configuration now requires the user-level `providers.yaml`; Vesicle
   no longer falls back to a single `VESICLE_API_KEY` environment configuration
   when that file is missing.
