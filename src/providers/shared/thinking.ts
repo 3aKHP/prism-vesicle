@@ -6,12 +6,14 @@ export function thinkingBlocksFromReasoningContent(reasoningContent: string | un
 }
 
 export function reasoningContentFromThinkingBlocks(blocks: ProviderThinkingBlock[] | undefined): string | undefined {
+  const parts: string[] = [];
   for (const block of blocks ?? []) {
     if (block.type !== "reasoning") continue;
     const reasoningContent = block.reasoningContent;
-    if (typeof reasoningContent === "string" && reasoningContent) return reasoningContent;
+    if (typeof reasoningContent === "string" && reasoningContent) parts.push(reasoningContent);
   }
-  return undefined;
+  const text = parts.join("\n").trim();
+  return text || undefined;
 }
 
 export function displayTextFromThinkingBlocks(blocks: ProviderThinkingBlock[] | undefined): string | undefined {
@@ -34,6 +36,7 @@ export function displayTextFromThinkingBlocks(blocks: ProviderThinkingBlock[] | 
     if (block.type === "thought_summary") {
       const text = block.text ?? block.summary;
       if (typeof text === "string" && text) parts.push(text);
+      continue;
     }
   }
   const text = parts.join("\n").trim();

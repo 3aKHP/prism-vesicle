@@ -81,6 +81,28 @@ describe("session resume", () => {
     await expect(loadSessionMessages(rootDir, "does-not-exist")).rejects.toThrow();
   });
 
+  test("loadSessionMessages filters malformed thinking blocks", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-thinking-blocks-"));
+    const store = await createSessionStore(rootDir, "2026-03-02T00-00-00-000Z-blocks");
+
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "assistant",
+      content: "answer",
+      metadata: {
+        thinkingBlocks: [
+          { type: "reasoning", reasoningContent: "valid" },
+          { type: "reasoning", reasoningContent: 42 },
+          { type: "unknown", value: "ignored" },
+        ],
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, "2026-03-02T00-00-00-000Z-blocks");
+
+    expect(messages[0].thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "valid" }]);
+  });
+
   test("loadSessionMessages synthesizes tool results for an unresolved gate (CR B1)", async () => {
     // A session that paused at a gate ends with an assistant message
     // carrying a request_confirmation tool call but no tool result (the

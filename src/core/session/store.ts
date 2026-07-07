@@ -319,12 +319,25 @@ function findPendingGate(records: SessionRecord[]): { gate: GateRequest; toolCal
 
 function readThinkingBlocks(value: unknown): ProviderThinkingBlock[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const blocks = value.filter((item): item is ProviderThinkingBlock => (
-    Boolean(item) &&
-    typeof item === "object" &&
-    typeof (item as { type?: unknown }).type === "string"
-  ));
+  const blocks = value.filter(isKnownThinkingBlock);
   return blocks.length > 0 ? blocks : undefined;
+}
+
+function isKnownThinkingBlock(value: unknown): value is ProviderThinkingBlock {
+  if (!value || typeof value !== "object") return false;
+  const block = value as ProviderThinkingBlock;
+  switch (block.type) {
+    case "reasoning":
+      return typeof block.reasoningContent === "string";
+    case "thinking":
+      return typeof block.thinking === "string";
+    case "redacted_thinking":
+      return typeof block.data === "string";
+    case "thought_summary":
+      return typeof block.text === "string" || typeof block.summary === "string";
+    default:
+      return false;
+  }
 }
 
 /**
