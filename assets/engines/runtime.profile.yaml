@@ -1,0 +1,19 @@
+id: runtime
+displayName: Prism Runtime Engine
+protocolVersion: v9.0-state-space
+systemPrompt:
+  - assets/prompts/shared/vesicle-base.md
+  - assets/prompts/engines/runtime.md
+defaultTools:
+  - config.load
+  - prompt.load
+  - session.write
+  - list_files
+  - read_file
+  - write_file
+validators: []
+stopGates:
+  - runtime-turn
+stateRoots:
+  - workspace
+  - test_runs

@@ -1,0 +1,20 @@
+id: evaluate
+displayName: Prism Evaluate Engine
+protocolVersion: v9.0-state-space
+systemPrompt:
+  - assets/prompts/shared/vesicle-base.md
+  - assets/prompts/engines/evaluate.md
+defaultTools:
+  - config.load
+  - prompt.load
+  - session.write
+  - list_files
+  - read_file
+  - write_file
+validators: []
+stopGates: []
+stateRoots:
+  - source_materials
+  - workspace
+  - test_runs
+  - reports

@@ -1,0 +1,22 @@
+id: etl
+displayName: Prism ETL Engine
+protocolVersion: v9.0-state-space
+systemPrompt:
+  - assets/prompts/shared/vesicle-base.md
+  - assets/prompts/engines/etl.md
+defaultTools:
+  - config.load
+  - prompt.load
+  - session.write
+  - list_files
+  - read_file
+  - write_file
+validators:
+  - character-card
+  - scenario-card
+stopGates:
+  - blueprint-confirmation
+  - phase-confirmation
+stateRoots:
+  - source_materials
+  - workspace

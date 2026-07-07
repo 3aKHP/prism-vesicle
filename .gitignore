@@ -1,0 +1,45 @@
+# Bun / Node
+node_modules/
+bun.lockb
+
+# Build output
+dist/
+build/
+coverage/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Runtime state
+.vesicle/
+logs/
+*.log
+
+# Durable artifact roots (runtime output, not source)
+# Kept out of git so model/user-produced artifacts do not pollute history;
+# the directory structure itself is preserved via .gitkeep stubs.
+workspace/*
+!workspace/.gitkeep
+test_runs/*
+!test_runs/.gitkeep
+novels/*
+!novels/.gitkeep
+reports/*
+!reports/.gitkeep
+source_materials/*
+!source_materials/.gitkeep
+
+# Local non-public development notes
+/dev/
+
+# Generated test workspaces
+tmp/
+temp/
+test-workspaces/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

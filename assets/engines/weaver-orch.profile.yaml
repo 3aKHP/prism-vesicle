@@ -1,0 +1,19 @@
+id: weaver-orch
+displayName: Prism Weaver-Orch Engine
+protocolVersion: v9.0-state-space
+systemPrompt:
+  - assets/prompts/shared/vesicle-base.md
+  - assets/prompts/engines/weaver-orch.md
+defaultTools:
+  - config.load
+  - prompt.load
+  - session.write
+  - list_files
+  - read_file
+  - write_file
+validators: []
+stopGates: []
+stateRoots:
+  - workspace
+  - novels
+  - reports

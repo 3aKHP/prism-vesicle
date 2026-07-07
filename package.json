@@ -1,0 +1,25 @@
+{
+  "name": "@prism/vesicle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "vesicle": "./src/cli/main.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/cli/main.ts",
+    "doctor": "bun run src/cli/main.ts doctor",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@opentui/core": "latest",
+    "@opentui/keymap": "latest",
+    "@opentui/solid": "latest",
+    "solid-js": "^1.9.14"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}
