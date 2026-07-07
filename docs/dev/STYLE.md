@@ -62,7 +62,9 @@ Anthropic Messages adapters map Vesicle messages to Anthropic content blocks:
 assistant thinking blocks must be emitted before text/tool_use blocks, and
 tool results are user messages containing `tool_result` blocks. The agent loop
 and session store must not interpret these native blocks beyond preserving
-their typed metadata.
+their typed metadata. Anthropic streaming must reconstruct text, thinking, and
+tool_use blocks by provider content-block index before emitting the final
+`VesicleResponse`.
 High-frequency thinking controls may be interactive TUI state. Lower-frequency
 generation defaults such as `temperature` and `maxTokens` belong in the
 user-level provider model config and are merged by `core/agent-loop` before

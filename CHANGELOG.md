@@ -34,6 +34,8 @@ project follows Semantic Versioning once releases begin.
 - Anthropic Messages provider protocol for non-streaming text responses,
   `tool_use` / `tool_result` loops, and `thinking` / `redacted_thinking` block
   preservation.
+- Anthropic Messages SSE streaming for text deltas, thinking deltas,
+  streamed tool-use JSON, and final response reconstruction.
 
 ### Changed
 

@@ -1,7 +1,7 @@
 import type { VesicleConfig } from "../../config/env";
 import { ProviderError } from "../shared/errors";
 import { displayTextFromThinkingBlocks } from "../shared/thinking";
-import type { ProviderAdapter, ProviderThinkingBlock, ReasoningTier, VesicleRequest, VesicleResponse } from "../shared/types";
+import type { ProviderAdapter, ProviderStreamEvent, ProviderThinkingBlock, ReasoningTier, VesicleRequest, VesicleResponse } from "../shared/types";
 import type { ToolCall } from "../../core/tools";
 
 type AnthropicContentBlock =
@@ -30,6 +30,40 @@ type AnthropicResponse = {
   };
 };
 
+type AnthropicStreamEvent = {
+  type?: string;
+  index?: number;
+  message?: {
+    id?: string;
+    model?: string;
+    usage?: AnthropicResponse["usage"];
+  };
+  content_block?: AnthropicContentBlock;
+  delta?: {
+    type?: string;
+    text?: string;
+    thinking?: string;
+    signature?: string;
+    partial_json?: string;
+    stop_reason?: string;
+  };
+  usage?: AnthropicResponse["usage"];
+  error?: {
+    message?: string;
+  };
+};
+
+type AnthropicStreamState = {
+  id: string;
+  model: string;
+  textParts: string[];
+  thinkingBlocks: Map<number, { thinking: string; signature?: string } | { redactedData: string }>;
+  toolCalls: Map<number, { id: string; name: string; inputJson: string }>;
+  finishReason?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+};
+
 const defaultMaxTokens = 4096;
 
 export class AnthropicMessagesAdapter implements ProviderAdapter {
@@ -56,6 +90,27 @@ export class AnthropicMessagesAdapter implements ProviderAdapter {
     }
 
     return responseFromAnthropicBody(body, request.id, this.config.providerId);
+  }
+
+  async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
+    this.requireApiKey();
+
+    const response = await fetch(`${this.config.baseUrl}/messages`, {
+      method: "POST",
+      headers: { ...this.headers(), "Accept": "text/event-stream" },
+      body: JSON.stringify({ ...toAnthropicMessagesBody(request), stream: true }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => undefined) as AnthropicResponse | undefined;
+      const providerMessage = body?.error?.message ?? response.statusText;
+      throw new ProviderError(`Provider request failed (${response.status}): ${providerMessage}`, {
+        kind: "http_error",
+        providerId: this.config.providerId,
+        status: response.status,
+      });
+    }
+
+    yield* readAnthropicMessagesStream(response, request.id, request.model.model, this.config.providerId);
   }
 
   private headers(): Record<string, string> {
@@ -232,6 +287,228 @@ function responseFromAnthropicBody(
         : undefined,
     },
   };
+}
+
+async function* readAnthropicMessagesStream(
+  response: Response,
+  fallbackId: string,
+  fallbackModel: string,
+  providerId?: string,
+): AsyncIterable<ProviderStreamEvent> {
+  if (!response.body) {
+    throw new ProviderError("Provider streaming response did not include a body.", { kind: "stream_error", providerId });
+  }
+
+  const state: AnthropicStreamState = {
+    id: fallbackId,
+    model: fallbackModel,
+    textParts: [],
+    thinkingBlocks: new Map(),
+    toolCalls: new Map(),
+  };
+  let sawStop = false;
+
+  for await (const event of readSseEvents(response.body)) {
+    const data = parseStreamEvent(event.data, providerId);
+    if (event.event === "error" || data.error?.message) {
+      throw new ProviderError(`Provider stream failed: ${data.error?.message ?? event.data}`, {
+        kind: "stream_error",
+        providerId,
+      });
+    }
+    for (const emitted of absorbAnthropicStreamEvent(state, event.event, data, providerId)) {
+      yield emitted;
+    }
+    if (event.event === "message_stop") sawStop = true;
+  }
+
+  if (!sawStop) {
+    throw new ProviderError("Provider stream ended before message_stop.", { kind: "stream_error", providerId });
+  }
+
+  yield { type: "complete", response: finalizeAnthropicStream(state, providerId) };
+}
+
+function absorbAnthropicStreamEvent(
+  state: AnthropicStreamState,
+  eventName: string,
+  data: AnthropicStreamEvent,
+  providerId?: string,
+): ProviderStreamEvent[] {
+  const events: ProviderStreamEvent[] = [];
+
+  if (eventName === "message_start") {
+    if (data.message?.id) state.id = data.message.id;
+    if (data.message?.model) state.model = data.message.model;
+    if (data.message?.usage?.input_tokens !== undefined) state.inputTokens = data.message.usage.input_tokens;
+    return events;
+  }
+
+  if (eventName === "content_block_start") {
+    const index = data.index ?? 0;
+    const block = data.content_block;
+    if (!block) return events;
+    if (block.type === "tool_use") {
+      if (!block.id || !block.name) {
+        throw new ProviderError("Provider stream included a tool_use block without id or name.", {
+          kind: "malformed_response",
+          providerId,
+        });
+      }
+      state.toolCalls.set(index, { id: block.id, name: block.name, inputJson: "" });
+      events.push({ type: "tool_call_delta", index, id: block.id, name: block.name });
+      return events;
+    }
+    if (block.type === "thinking") {
+      state.thinkingBlocks.set(index, { thinking: block.thinking ?? "", ...(block.signature ? { signature: block.signature } : {}) });
+      return events;
+    }
+    if (block.type === "redacted_thinking") {
+      state.thinkingBlocks.set(index, { redactedData: block.data });
+    }
+    return events;
+  }
+
+  if (eventName === "content_block_delta") {
+    const index = data.index ?? 0;
+    const delta = data.delta;
+    if (!delta) return events;
+    if (delta.type === "text_delta" && delta.text) {
+      state.textParts.push(delta.text);
+      events.push({ type: "content_delta", delta: delta.text });
+      return events;
+    }
+    if (delta.type === "input_json_delta" && delta.partial_json) {
+      const current = state.toolCalls.get(index);
+      if (current) {
+        current.inputJson += delta.partial_json;
+        events.push({ type: "tool_call_delta", index, argumentsDelta: delta.partial_json });
+      }
+      return events;
+    }
+    if (delta.type === "thinking_delta" && delta.thinking) {
+      const current = state.thinkingBlocks.get(index);
+      if (current && !("thinking" in current)) return events;
+      const next = current && "thinking" in current
+        ? { ...current, thinking: `${current.thinking}${delta.thinking}` }
+        : { thinking: delta.thinking };
+      state.thinkingBlocks.set(index, next);
+      events.push({ type: "reasoning_delta", delta: delta.thinking });
+      return events;
+    }
+    if (delta.type === "signature_delta" && delta.signature) {
+      const current = state.thinkingBlocks.get(index);
+      if (current && "thinking" in current) {
+        state.thinkingBlocks.set(index, { ...current, signature: delta.signature });
+      }
+    }
+    return events;
+  }
+
+  if (eventName === "message_delta") {
+    if (data.delta?.stop_reason) state.finishReason = data.delta.stop_reason;
+    if (data.usage?.output_tokens !== undefined) state.outputTokens = data.usage.output_tokens;
+  }
+
+  return events;
+}
+
+function finalizeAnthropicStream(state: AnthropicStreamState, providerId?: string): VesicleResponse {
+  const content = state.textParts.join("");
+  const thinkingBlocks: ProviderThinkingBlock[] = [...state.thinkingBlocks.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, block]) => (
+      "thinking" in block
+        ? { type: "thinking", thinking: block.thinking, ...(block.signature ? { signature: block.signature } : {}) }
+        : { type: "redacted_thinking", data: block.redactedData }
+    ));
+  const toolCalls: ToolCall[] = [...state.toolCalls.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, call]) => ({
+      id: call.id,
+      name: call.name,
+      arguments: call.inputJson || "{}",
+    }));
+  const reasoningContent = displayTextFromThinkingBlocks(thinkingBlocks);
+
+  if (!content && toolCalls.length === 0) {
+    throw new ProviderError("Provider response did not include assistant content or tool calls.", {
+      kind: "malformed_response",
+      providerId,
+    });
+  }
+
+  return {
+    id: state.id,
+    content,
+    ...(reasoningContent ? { reasoningContent } : {}),
+    ...(thinkingBlocks.length > 0 ? { thinkingBlocks } : {}),
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    finishReason: state.finishReason,
+    usage: {
+      inputTokens: state.inputTokens,
+      outputTokens: state.outputTokens,
+      totalTokens: state.inputTokens !== undefined && state.outputTokens !== undefined
+        ? state.inputTokens + state.outputTokens
+        : undefined,
+    },
+  };
+}
+
+async function* readSseEvents(body: ReadableStream<Uint8Array>): AsyncIterable<{ event: string; data: string }> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\r?\n\r?\n/);
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        const event = parseSseBlock(part);
+        if (event) yield event;
+      }
+    }
+
+    buffer += decoder.decode();
+    const trailing = parseSseBlock(buffer);
+    if (trailing) yield trailing;
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Preserve original stream errors if the reader lock was already released.
+    }
+  }
+}
+
+function parseSseBlock(block: string): { event: string; data: string } | undefined {
+  const lines = block.split(/\r?\n/);
+  let event = "message";
+  const dataLines: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trimEnd();
+    if (trimmed.startsWith("event:")) event = trimmed.slice("event:".length).trimStart();
+    if (trimmed.startsWith("data:")) dataLines.push(trimmed.slice("data:".length).trimStart());
+  }
+  if (dataLines.length === 0) return undefined;
+  return { event, data: dataLines.join("\n") };
+}
+
+function parseStreamEvent(data: string, providerId?: string): AnthropicStreamEvent {
+  try {
+    return JSON.parse(data) as AnthropicStreamEvent;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new ProviderError(`Provider stream delivered unparseable data: ${detail}`, {
+      kind: "malformed_response",
+      providerId,
+      cause: error,
+    });
+  }
 }
 
 function anthropicThinkingControl(tier: ReasoningTier | undefined, maxTokens: number): Record<string, unknown> | undefined {

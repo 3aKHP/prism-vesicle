@@ -71,7 +71,7 @@ return to an unresolved gate.
 ## Current Capabilities
 
 - OpenAI-compatible Chat Completions provider path
-- Anthropic Messages provider path for non-streaming text, tool calls, and
+- Anthropic Messages provider path for text, streaming, tool calls, and
   thinking block preservation
 - Streaming OpenAI-compatible Chat Completions responses when the provider
   supports SSE, including streamed tool-call reconstruction

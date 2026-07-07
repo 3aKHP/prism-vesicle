@@ -29,8 +29,8 @@ Chat wrapper:
 - Run a terminal UI with provider status, markdown-rendered message stream,
   responsive workspace/artifact sidebar, wide-screen activity/artifact pane,
   slash hints, prompt history recall, and input bar.
-- Call OpenAI-compatible Chat Completions endpoints and non-streaming
-  Anthropic Messages endpoints.
+- Call OpenAI-compatible Chat Completions endpoints and Anthropic Messages
+  endpoints, including SSE streaming on both protocols.
 - Load multiple OpenAI-compatible provider/model profiles from the user-level
   provider config (`%APPDATA%\prism-vesicle\providers.yaml` on Windows,
   `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
@@ -144,8 +144,8 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 
 ## Known Limits
 
-- OpenAI-compatible Chat Completions and non-streaming Anthropic Messages are
-  implemented. OpenAI Responses and Gemini are deferred.
+- OpenAI-compatible Chat Completions and Anthropic Messages are implemented.
+  OpenAI Responses and Gemini are deferred.
 - The provider registry supports multiple configured providers using
   `openai-chat-compatible` or `anthropic-messages`.
 - OpenAI-compatible SSE streaming is implemented on the 0.2 branch for
