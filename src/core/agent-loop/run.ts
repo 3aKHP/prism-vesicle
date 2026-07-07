@@ -139,6 +139,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
   const engine = options.engine ?? "etl";
   const rootDir = options.rootDir ?? process.cwd();
   const config = await loadConfigForSelection(options.providerSelection);
+  const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
   const profile = await loadEngineProfile(engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
@@ -156,7 +157,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
         provider: config.provider,
         providerId: config.providerId,
         model: config.model,
-        ...(options.generation?.reasoningTier ? { reasoningTier: options.generation.reasoningTier } : {}),
+        ...generationMetadata(generation),
         profile: {
           displayName: profile.displayName,
           protocolVersion: profile.protocolVersion,
@@ -175,7 +176,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
       provider: config.provider,
       providerId: config.providerId,
       model: config.model,
-      ...(options.generation?.reasoningTier ? { reasoningTier: options.generation.reasoningTier } : {}),
+      ...generationMetadata(generation),
     },
   });
 
@@ -195,7 +196,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     messages,
     session,
     profile,
-    generation: options.generation,
+    generation,
     onEvent: options.onEvent,
   });
 }
@@ -519,6 +520,7 @@ export async function resolveGate(options: {
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
   const config = await loadConfigForSelection(options.providerSelection);
+  const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
   const profile = await loadEngineProfile(options.engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
@@ -560,10 +562,10 @@ export async function resolveGate(options: {
     metadata: {
       provider: config.provider,
       providerId: config.providerId,
-        model: config.model,
-        ...(options.generation?.reasoningTier ? { reasoningTier: options.generation.reasoningTier } : {}),
-      },
-    });
+      model: config.model,
+      ...generationMetadata(generation),
+    },
+  });
 
   return runLoop({
     rootDir,
@@ -574,9 +576,36 @@ export async function resolveGate(options: {
     messages,
     session,
     profile,
-    generation: options.generation,
+    generation,
     onEvent: options.onEvent,
   });
+}
+
+function mergeGeneration(
+  defaults: VesicleConfig["generation"],
+  override: VesicleRequest["generation"],
+): VesicleRequest["generation"] | undefined {
+  const merged = {
+    ...definedGeneration(defaults),
+    ...definedGeneration(override),
+  };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function definedGeneration(source: VesicleRequest["generation"] | undefined): VesicleRequest["generation"] {
+  return {
+    ...(source?.temperature !== undefined ? { temperature: source.temperature } : {}),
+    ...(source?.maxTokens !== undefined ? { maxTokens: source.maxTokens } : {}),
+    ...(source?.reasoningTier !== undefined ? { reasoningTier: source.reasoningTier } : {}),
+  };
+}
+
+function generationMetadata(generation: VesicleRequest["generation"] | undefined): Record<string, unknown> {
+  return {
+    ...(generation?.temperature !== undefined ? { temperature: generation.temperature } : {}),
+    ...(generation?.maxTokens !== undefined ? { maxTokens: generation.maxTokens } : {}),
+    ...(generation?.reasoningTier ? { reasoningTier: generation.reasoningTier } : {}),
+  };
 }
 
 function gateResultMessage(resolution: GateResolution): string {

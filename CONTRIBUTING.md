@@ -40,7 +40,7 @@ Do not commit local runtime state or secrets:
 - generated test workspaces
 - provider API keys, tokens, or private base URLs
 
-Use `.env.example` for the user-level secret file shape.
+Use `docs/examples/provider.env.example` for the user-level secret file shape.
 
 ## Local Development
 

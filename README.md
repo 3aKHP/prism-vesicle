@@ -13,7 +13,7 @@ Vesicle runs directly.
 bun install
 New-Item -ItemType Directory -Force $env:APPDATA\prism-vesicle
 Copy-Item docs\examples\providers.yaml $env:APPDATA\prism-vesicle\providers.yaml
-Copy-Item .env.example $env:APPDATA\prism-vesicle\.env
+Copy-Item docs\examples\provider.env.example $env:APPDATA\prism-vesicle\.env
 ```
 
 Edit your user-level provider config and set the environment variables named
@@ -30,11 +30,15 @@ at the provider/model default. Use `/reasoning hidden|collapsed|expanded` to
 control whether provider reasoning content is shown in the TUI; the default is
 collapsed with a bounded tail preview.
 The provider file intentionally supports only Vesicle's small YAML subset:
-`default`, `providers`, scalar provider fields, and `models` string lists.
-Provider secrets are not read from this file; every provider must name an
-`apiKeyEnv` variable and the actual key belongs in the same user-level
-directory's `.env` file. Process environment variables are used only when the
-user-level `.env` does not define that key.
+`default`, `providers`, scalar provider fields, and `models` entries. The
+canonical templates live together under `docs/examples/`: `providers.yaml` for
+the registry and `provider.env.example` for the sibling user-level `.env`.
+Models may be simple strings or object entries with `id`, optional
+`generation` defaults (`temperature`, `maxTokens`), and optional
+`capabilities`. Provider secrets are not read from the YAML file; every
+provider must name an `apiKeyEnv` variable and the actual key belongs in the
+same user-level directory's `.env` file. Process environment variables are
+used only when the user-level `.env` does not define that key.
 
 If you still have an old project-root `.env` from early testing, move the
 provider key variables into the user-level `.env` beside `providers.yaml`, then
@@ -71,6 +75,9 @@ return to an unresolved gate.
   supports SSE, including streamed tool-call reconstruction
 - Provider/model registry from the user-level `providers.yaml`, with TUI
   commands to switch provider and model inside a session
+- Config-driven model defaults and capability metadata in `providers.yaml`:
+  low-frequency generation knobs such as `temperature` and `maxTokens` stay in
+  config while high-frequency thinking control stays in the TUI
 - Runtime thinking-tier control with `/think off|low|midium|high|xhigh|max`
   plus `/think auto` to return to provider defaults; OpenAI-compatible requests
   map `off` to disabled thinking, `low`/`midium`/`high` to high effort, and

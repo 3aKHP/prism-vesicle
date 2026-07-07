@@ -43,7 +43,7 @@ export function toChatCompletionBody(request: VesicleRequest, stream: boolean, i
     ],
     tools: hasTools ? request.tools : undefined,
     tool_choice: hasTools ? "auto" : undefined,
-    temperature: request.generation?.temperature ?? 0.7,
+    temperature: request.generation?.temperature,
     max_tokens: request.generation?.maxTokens,
     ...reasoningControls(request.generation?.reasoningTier),
     stream,

@@ -28,6 +28,7 @@ Read asset-specific docs when touching assets:
 
 - `assets/README.md`: Prism asset source and adaptation notes.
 - `docs/examples/providers.yaml`: canonical provider registry shape.
+- `docs/examples/provider.env.example`: user-level provider secret file shape.
 - `dev/docs/working/PLAN-Prism-Vesicle-architecture.md`: older architecture
   plan; useful context, but current code plus `STATUS.md` and `docs/dev/*` are
   authoritative when they differ.
@@ -110,10 +111,10 @@ Provider/model profiles are user-level host state, not project runtime state.
   `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` and sibling `.env`, or
   `~/.config/prism-vesicle/providers.yaml` and sibling `.env`.
 
-`providers.yaml` must contain provider ids, protocols, base URLs, model lists,
-and `apiKeyEnv` names only. It must not contain API keys. The sibling `.env`
-contains the provider-specific secret values. Process environment variables are
-fallback only.
+`providers.yaml` must contain provider ids, protocols, base URLs, model entries,
+generation defaults, capability metadata, and `apiKeyEnv` names only. It must
+not contain API keys. The sibling `.env` contains the provider-specific secret
+values. Process environment variables are fallback only.
 
 Do not reintroduce a project-root `.env` dependency. If an old root `.env`
 appears during local work, treat it as legacy state to migrate or remove, not

@@ -14,6 +14,7 @@ _Last updated: 2026-07-08_
 | Validators | Module A + Module B v9 schemas | Implemented |
 | Streaming | OpenAI-compatible SSE | In progress on 0.2 branch |
 | Provider registry | OpenAI-compatible profiles | In progress on 0.3 branch |
+| Model config | Generation defaults + capability metadata | In progress on 0.3 branch |
 | Thinking control | OpenAI-compatible reasoning controls | In progress on 0.3 branch |
 | Reasoning visibility | TUI collapsed/expanded reasoning blocks | In progress on 0.3 branch |
 | Artifact workbench | TUI commands + validation | In progress on 0.3 branch |
@@ -36,6 +37,10 @@ Chat wrapper:
   switch provider/model during a session. Provider files name `apiKeyEnv`
   variables only; actual secrets stay in the same user-level directory's
   `.env` file, with process environment variables used only as fallback.
+- Configure low-frequency model defaults in `providers.yaml` object model
+  entries: `generation.temperature`, `generation.maxTokens`, and capability
+  metadata for display and future protocol gating. String model entries remain
+  supported.
 - Control thinking behavior for subsequent TUI turns with
   `/think off|low|midium|high|xhigh|max`; `/think auto` clears the explicit
   choice. Unset sessions preserve the provider/model default instead of

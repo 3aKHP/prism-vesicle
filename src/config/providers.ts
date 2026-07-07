@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { VesicleConfig, VesicleProvider } from "./env";
+import type { GenerationDefaults, ModelCapabilities } from "./env";
 
 export type ProviderProtocol = VesicleProvider;
 
@@ -10,12 +11,18 @@ export type ProviderSelection = {
   model: string;
 };
 
+export type ProviderModelProfile = {
+  id: string;
+  generation?: GenerationDefaults;
+  capabilities?: ModelCapabilities;
+};
+
 export type ProviderProfile = {
   id: string;
   protocol: ProviderProtocol;
   baseUrl: string;
   apiKeyEnv: string;
-  models: string[];
+  models: ProviderModelProfile[];
 };
 
 export type ProviderRegistry = {
@@ -106,13 +113,11 @@ export function resolveProviderConfig(
 ): VesicleConfig {
   const providerId = selection?.provider ?? registry.default.provider;
   const profile = requireProvider(registry, providerId);
-  const model = selection?.model ?? (providerId === registry.default.provider ? registry.default.model : profile.models[0]);
+  const model = selection?.model ?? (providerId === registry.default.provider ? registry.default.model : profile.models[0]?.id);
   if (!model) {
     throw new Error(`Provider "${providerId}" does not declare any models.`);
   }
-  if (!profile.models.includes(model)) {
-    throw new Error(`Provider "${providerId}" does not declare model "${model}".`);
-  }
+  const modelProfile = requireModel(profile, model);
 
   return {
     provider: profile.protocol,
@@ -121,6 +126,8 @@ export function resolveProviderConfig(
     model,
     apiKey: env[profile.apiKeyEnv],
     apiKeyLabel: profile.apiKeyEnv,
+    ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
+    ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
   };
 }
 
@@ -185,8 +192,27 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
   let section: "default" | "providers" | null = null;
   let currentProvider: Partial<ProviderProfile> | null = null;
   let currentList: "models" | null = null;
+  let currentModel: Partial<ProviderModelProfile> | null = null;
+  let currentModelBlock: "generation" | "capabilities" | null = null;
+
+  const finishModel = () => {
+    if (!currentModel) return;
+    const id = currentModel.id;
+    if (!id) throw new Error(`Provider config ${path} has a model without an id.`);
+    currentProvider!.models = [
+      ...(currentProvider!.models ?? []),
+      {
+        id,
+        ...(currentModel.generation ? { generation: currentModel.generation } : {}),
+        ...(currentModel.capabilities ? { capabilities: currentModel.capabilities } : {}),
+      },
+    ];
+    currentModel = null;
+    currentModelBlock = null;
+  };
 
   const finishProvider = () => {
+    finishModel();
     if (!currentProvider) return;
     const id = currentProvider.id;
     if (!id) throw new Error(`Provider config ${path} has a provider without an id.`);
@@ -201,6 +227,8 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     if (!apiKeyEnv) throw new Error(`Provider "${id}" is missing apiKeyEnv.`);
     const models = currentProvider.models ?? [];
     if (models.length === 0) throw new Error(`Provider "${id}" must declare at least one model.`);
+    const duplicateModel = firstDuplicate(models.map((model) => model.id));
+    if (duplicateModel) throw new Error(`Provider "${id}" declares duplicate model "${duplicateModel}".`);
     registry.providers.push({
       id,
       protocol,
@@ -210,6 +238,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     });
     currentProvider = null;
     currentList = null;
+    currentModelBlock = null;
   };
 
   for (let index = 0; index < lines.length; index++) {
@@ -221,6 +250,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     if (indent === 0) {
       finishProvider();
       currentList = null;
+      currentModelBlock = null;
       if (line === "default:") {
         section = "default";
         continue;
@@ -259,6 +289,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     }
 
     if (indent === 4) {
+      finishModel();
       if (line === "models:") {
         currentList = "models";
         continue;
@@ -274,10 +305,54 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     }
 
     if (indent === 6 && currentList === "models") {
+      finishModel();
       if (!line.startsWith("- ")) {
         throw new Error(`Provider config parse error on line ${index + 1}: model entries must start with "- ".`);
       }
-      currentProvider.models = [...(currentProvider.models ?? []), unquote(line.slice(2).trim())];
+      const entry = line.slice(2).trim();
+      if (/^id\s*:/.test(entry)) {
+        const [key, value] = readKeyValue(entry, index, path);
+        if (key !== "id") {
+          throw new Error(`Provider config parse error on line ${index + 1}: model object entries must start with id.`);
+        }
+        currentModel = { id: value };
+      } else {
+        currentProvider.models = [...(currentProvider.models ?? []), { id: unquote(entry) }];
+      }
+      continue;
+    }
+
+    if (indent === 8 && currentList === "models" && currentModel) {
+      if (line === "generation:") {
+        currentModel.generation = currentModel.generation ?? {};
+        currentModelBlock = "generation";
+        continue;
+      }
+      if (line === "capabilities:") {
+        currentModel.capabilities = currentModel.capabilities ?? {};
+        currentModelBlock = "capabilities";
+        continue;
+      }
+      currentModelBlock = null;
+      const [key, value] = readKeyValue(line, index, path);
+      if (key === "id") currentModel.id = value;
+      else throw new Error(`Provider config parse error on line ${index + 1}: unknown model field "${key}".`);
+      continue;
+    }
+
+    if (indent === 10 && currentList === "models" && currentModel && currentModelBlock) {
+      const [key, value] = readKeyValue(line, index, path);
+      if (currentModelBlock === "generation") {
+        currentModel.generation = {
+          ...(currentModel.generation ?? {}),
+          ...readGenerationField(key, value, index, path),
+        };
+        continue;
+      }
+      currentModel.capabilities = {
+        ...(currentModel.capabilities ?? {}),
+        ...readCapabilityField(key, value, index, path),
+      };
       continue;
     }
 
@@ -297,6 +372,12 @@ function requireProvider(registry: ProviderRegistry, providerId: string): Provid
   return profile;
 }
 
+function requireModel(profile: ProviderProfile, modelId: string): ProviderModelProfile {
+  const model = profile.models.find((entry) => entry.id === modelId);
+  if (!model) throw new Error(`Provider "${profile.id}" does not declare model "${modelId}".`);
+  return model;
+}
+
 function readProtocol(value: string, field: string): ProviderProtocol {
   if (value !== "openai-chat-compatible") {
     throw new Error(`Unsupported provider protocol "${value}" in ${field}.`);
@@ -311,6 +392,54 @@ function readKeyValue(line: string, index: number, path: string): [string, strin
   const value = unquote(line.slice(colon + 1).trim());
   if (!value) throw new Error(`Provider config parse error on line ${index + 1} in ${path}: empty value for ${key}.`);
   return [key, value];
+}
+
+function readGenerationField(key: string, value: string, index: number, path: string): GenerationDefaults {
+  if (key === "temperature") return { temperature: readFiniteNumber(value, key, index, path) };
+  if (key === "maxTokens") return { maxTokens: readPositiveInteger(value, key, index, path) };
+  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown generation field "${key}".`);
+}
+
+function readCapabilityField(key: string, value: string, index: number, path: string): ModelCapabilities {
+  const enabled = readBoolean(value, key, index, path);
+  if (key === "streaming") return { streaming: enabled };
+  if (key === "tools") return { tools: enabled };
+  if (key === "reasoningTier") return { reasoningTier: enabled };
+  if (key === "reasoningContent") return { reasoningContent: enabled };
+  if (key === "temperature") return { temperature: enabled };
+  if (key === "maxTokens") return { maxTokens: enabled };
+  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
+}
+
+function readFiniteNumber(value: string, key: string, index: number, path: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: ${key} must be a finite number.`);
+  }
+  return parsed;
+}
+
+function readPositiveInteger(value: string, key: string, index: number, path: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: ${key} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function readBoolean(value: string, key: string, index: number, path: string): boolean {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: ${key} must be true or false.`);
+}
+
+function firstDuplicate(values: string[]): string | undefined {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+  }
+  return undefined;
 }
 
 function stripComment(line: string): string {
