@@ -51,6 +51,10 @@ project follows Semantic Versioning once releases begin.
   provider-stream error, retries without OpenAI-specific `stream_options` for
   stricter compatible providers, and preserves the final assistant turn in the
   in-memory conversation history.
+- OpenAI-compatible reasoning responses now preserve provider
+  `reasoning_content` through non-streaming, streaming, tool-loop follow-up
+  requests, and session resume so reasoning models can use tools without losing
+  required thinking context.
 - TUI provider/model switches now resolve API-key availability through the
   user-level provider `.env`, so `/use`, `/model`, and session resume do not
   incorrectly show "API key: missing" when the selected key is stored there.

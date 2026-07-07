@@ -19,6 +19,7 @@ export function toChatCompletionBody(request: VesicleRequest, stream: boolean, i
           return {
             role: "assistant",
             content: message.content || null,
+            ...(message.reasoningContent ? { reasoning_content: message.reasoningContent } : {}),
             tool_calls: message.toolCalls.map((call) => ({
               id: call.id,
               type: "function",
@@ -30,10 +31,14 @@ export function toChatCompletionBody(request: VesicleRequest, stream: boolean, i
           };
         }
 
-        return {
+        const body: Record<string, unknown> = {
           role: message.role,
           content: message.content,
         };
+        if (message.role === "assistant" && message.reasoningContent) {
+          body.reasoning_content = message.reasoningContent;
+        }
+        return body;
       }),
     ],
     tools: hasTools ? request.tools : undefined,

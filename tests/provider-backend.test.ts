@@ -29,6 +29,7 @@ describe("OpenAI-compatible request shaping", () => {
         {
           role: "assistant",
           content: "",
+          reasoningContent: "Need to read the file first.",
           toolCalls: [{ id: "call-read", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" }],
         },
         { role: "tool", toolCallId: "call-read", content: "{\"ok\":true}" },
@@ -41,6 +42,7 @@ describe("OpenAI-compatible request shaping", () => {
       {
         role: "assistant",
         content: null,
+        reasoning_content: "Need to read the file first.",
         tool_calls: [{
           id: "call-read",
           type: "function",
@@ -79,6 +81,35 @@ describe("Provider backend errors", () => {
   });
 });
 
+describe("OpenAI-compatible response parsing", () => {
+  test("preserves non-stream reasoning_content", async () => {
+    globalThis.fetch = (async () => Response.json({
+      id: "chatcmpl-reasoning",
+      choices: [{
+        finish_reason: "stop",
+        message: {
+          reasoning_content: "Think before answering.",
+          content: "final answer",
+        },
+      }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new OpenAIChatCompatibleAdapter({
+      provider: "openai-chat-compatible",
+      providerId: "deepseek",
+      baseUrl: "https://provider.test/v1",
+      model: "test-model",
+      apiKey: "test-key",
+    });
+
+    await expect(adapter.complete(request())).resolves.toMatchObject({
+      id: "chatcmpl-reasoning",
+      content: "final answer",
+      reasoningContent: "Think before answering.",
+    });
+  });
+});
+
 describe("SSE parsing", () => {
   test("reads CRLF, comments, multiline data, and chunk boundaries", async () => {
     const body = chunkedSse([
@@ -96,6 +127,7 @@ describe("Chat Completions stream integration", () => {
   test("emits content deltas and a final complete event", async () => {
     const response = new Response(rawSse([
       "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"content\":\"hel\"}}]}\n\n",
+      "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"reasoning_content\":\"think\"}}]}\n\n",
       "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"content\":\"lo\"},\"finish_reason\":\"stop\"}]}\n\n",
       "data: [DONE]\n\n",
     ]));
@@ -103,12 +135,14 @@ describe("Chat Completions stream integration", () => {
     const events = await collect(readChatCompletionStream(response, "fallback"));
 
     expect(events).toContainEqual({ type: "content_delta", delta: "hel" });
+    expect(events).toContainEqual({ type: "reasoning_delta", delta: "think" });
     expect(events).toContainEqual({ type: "content_delta", delta: "lo" });
     expect(events.at(-1)).toEqual({
       type: "complete",
       response: {
         id: "chatcmpl-stream",
         content: "hello",
+        reasoningContent: "think",
         finishReason: "stop",
         toolCalls: undefined,
         usage: undefined,

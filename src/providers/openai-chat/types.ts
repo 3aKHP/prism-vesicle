@@ -2,6 +2,7 @@ export type ChatCompletionChoice = {
   finish_reason?: string | null;
   message?: {
     content?: string | null;
+    reasoning_content?: string | null;
     tool_calls?: Array<{
       id: string;
       type: "function";
@@ -32,6 +33,7 @@ export type ChatCompletionStreamChunk = {
     finish_reason?: string | null;
     delta?: {
       content?: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{
         index: number;
         id?: string;

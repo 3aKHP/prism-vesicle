@@ -5,6 +5,7 @@ import type { ChatCompletionStreamChunk } from "./types";
 type StreamAccumulator = {
   id: string;
   content: string;
+  reasoningContent: string;
   finishReason?: string;
   toolCalls: Map<number, { index: number; id?: string; name?: string; arguments: string }>;
   usage?: VesicleResponse["usage"];
@@ -45,6 +46,7 @@ function createStreamAccumulator(fallbackId: string): StreamAccumulator {
   return {
     id: fallbackId,
     content: "",
+    reasoningContent: "",
     toolCalls: new Map(),
   };
 }
@@ -68,6 +70,12 @@ function absorbStreamChunk(state: StreamAccumulator, chunk: ChatCompletionStream
   if (contentDelta) {
     state.content += contentDelta;
     events.push({ type: "content_delta", delta: contentDelta });
+  }
+
+  const reasoningDelta = choice.delta?.reasoning_content ?? "";
+  if (reasoningDelta) {
+    state.reasoningContent += reasoningDelta;
+    events.push({ type: "reasoning_delta", delta: reasoningDelta });
   }
 
   for (const delta of choice.delta?.tool_calls ?? []) {
@@ -107,6 +115,7 @@ function finalizeStream(state: StreamAccumulator): VesicleResponse {
   return {
     id: state.id,
     content: state.content,
+    ...(state.reasoningContent ? { reasoningContent: state.reasoningContent } : {}),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     finishReason: state.finishReason,
     usage: state.usage,
