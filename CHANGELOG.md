@@ -9,7 +9,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Added
 
-- Provider/model registry: `.vesicle/providers.yaml` can declare multiple
+- Provider/model registry: a user-level `providers.yaml` can declare multiple
   OpenAI-compatible providers and models, with TUI commands for `/providers`,
   `/models`, `/use`, and `/model`.
 - Artifact workbench commands for `/artifacts`, `/artifact`, `/validate`, and

@@ -27,10 +27,12 @@ Chat wrapper:
   responsive workspace/artifact sidebar, wide-screen activity/artifact pane,
   slash hints, prompt history recall, and input bar.
 - Call an OpenAI-compatible Chat Completions endpoint.
-- Load multiple OpenAI-compatible provider/model profiles from
-  `.vesicle/providers.yaml`; the TUI can list and switch provider/model during
-  a session. Provider files name `apiKeyEnv` variables only; actual secrets
-  stay in `.env` or the process environment.
+- Load multiple OpenAI-compatible provider/model profiles from the user-level
+  provider config (`%APPDATA%\prism-vesicle\providers.yaml` on Windows,
+  `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
+  `~/.config/prism-vesicle/providers.yaml` elsewhere); the TUI can list and
+  switch provider/model during a session. Provider files name `apiKeyEnv`
+  variables only; actual secrets stay in `.env` or the process environment.
 - Persist sessions as JSONL under `.vesicle/sessions/`; resume them through a
   TUI picker, including unresolved `request_confirmation` gates.
 - Execute a file-tool loop (`list_files` / `read_file` / `write_file`) with a

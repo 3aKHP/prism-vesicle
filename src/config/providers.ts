@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { VesicleConfig, VesicleProvider } from "./env";
 
@@ -34,7 +35,8 @@ export async function loadProviderRegistry(
   rootDir = process.cwd(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ProviderRegistry> {
-  const configPath = providerConfigPath(rootDir);
+  void rootDir;
+  const configPath = providerConfigPathFromEnv(env);
   const source = await readFile(configPath, "utf8").catch((error: unknown) => {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
     throw error;
@@ -99,8 +101,20 @@ export function resolveProviderConfig(
   };
 }
 
-export function providerConfigPath(rootDir = process.cwd()): string {
-  return join(rootDir, ".vesicle", "providers.yaml");
+export function providerConfigPath(): string {
+  return providerConfigPathFromEnv(process.env);
+}
+
+export function providerConfigPathFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.VESICLE_PROVIDERS_FILE) return env.VESICLE_PROVIDERS_FILE;
+  return join(providerConfigDir(env), "providers.yaml");
+}
+
+function providerConfigDir(env: NodeJS.ProcessEnv): string {
+  if (env.VESICLE_CONFIG_DIR) return env.VESICLE_CONFIG_DIR;
+  if (env.APPDATA) return join(env.APPDATA, "prism-vesicle");
+  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, "prism-vesicle");
+  return join(homedir(), ".config", "prism-vesicle");
 }
 
 function legacyRegistryFromEnv(env: NodeJS.ProcessEnv): ProviderRegistry {

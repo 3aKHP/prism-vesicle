@@ -53,9 +53,13 @@ Tool calls are normalized into `ToolCall` and executed by `core/tools`.
 Provider selection is host state, not prompt state. The TUI may switch among
 configured provider/model profiles, but adapters still receive a normalized
 `VesicleRequest` and must not know about sessions, artifacts, or Prism phases.
-Persistent provider profiles live under `.vesicle/providers.yaml`; API keys
-must be referenced via per-provider environment variables (`apiKeyEnv`) and
-must not be stored inline in the provider file.
+Persistent provider profiles live in the user-level provider config, not in the
+project `.vesicle/` runtime state directory. The default path is
+`%APPDATA%\prism-vesicle\providers.yaml` on Windows and
+`$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
+`~/.config/prism-vesicle/providers.yaml` elsewhere. API keys must be referenced
+via per-provider environment variables (`apiKeyEnv`) and must not be stored
+inline in the provider file.
 
 ## Tool Runtime
 
