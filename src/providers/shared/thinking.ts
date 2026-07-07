@@ -38,7 +38,16 @@ export function displayTextFromThinkingBlocks(blocks: ProviderThinkingBlock[] | 
       if (typeof text === "string" && text) parts.push(text);
       continue;
     }
+    if (block.type === "gemini_part" && isRecord(block.part)) {
+      const part = block.part;
+      if (part.thought === true && typeof part.text === "string" && part.text) parts.push(part.text);
+      continue;
+    }
   }
   const text = parts.join("\n").trim();
   return text || undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
