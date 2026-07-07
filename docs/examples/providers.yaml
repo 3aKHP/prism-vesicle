@@ -14,6 +14,6 @@ providers:
   local:
     protocol: openai-chat-compatible
     baseUrl: http://127.0.0.1:11434/v1
-    apiKey: local
+    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY
     models:
       - qwen3

@@ -13,8 +13,7 @@ export type ProviderProfile = {
   id: string;
   protocol: ProviderProtocol;
   baseUrl: string;
-  apiKey?: string;
-  apiKeyEnv?: string;
+  apiKeyEnv: string;
   models: string[];
 };
 
@@ -95,8 +94,8 @@ export function resolveProviderConfig(
     providerId,
     baseUrl: trimTrailingSlash(profile.baseUrl),
     model,
-    apiKey: profile.apiKey ?? (profile.apiKeyEnv ? env[profile.apiKeyEnv] : undefined),
-    apiKeyLabel: profile.apiKeyEnv ?? "apiKey",
+    apiKey: env[profile.apiKeyEnv],
+    apiKeyLabel: profile.apiKeyEnv,
   };
 }
 
@@ -141,14 +140,15 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     if (!protocol) throw new Error(`Provider "${id}" is missing protocol.`);
     const baseUrl = currentProvider.baseUrl;
     if (!baseUrl) throw new Error(`Provider "${id}" is missing baseUrl.`);
+    const apiKeyEnv = currentProvider.apiKeyEnv;
+    if (!apiKeyEnv) throw new Error(`Provider "${id}" is missing apiKeyEnv.`);
     const models = currentProvider.models ?? [];
     if (models.length === 0) throw new Error(`Provider "${id}" must declare at least one model.`);
     registry.providers.push({
       id,
       protocol,
       baseUrl,
-      apiKey: currentProvider.apiKey,
-      apiKeyEnv: currentProvider.apiKeyEnv,
+      apiKeyEnv,
       models,
     });
     currentProvider = null;
@@ -210,8 +210,8 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
       const [key, value] = readKeyValue(line, index, path);
       if (key === "protocol") currentProvider.protocol = readProtocol(value, `provider ${currentProvider.id}`);
       else if (key === "baseUrl") currentProvider.baseUrl = value;
-      else if (key === "apiKey") currentProvider.apiKey = value;
       else if (key === "apiKeyEnv") currentProvider.apiKeyEnv = value;
+      else if (key === "apiKey") throw new Error(`Provider config parse error on line ${index + 1}: use apiKeyEnv instead of inline apiKey.`);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown provider field "${key}".`);
       continue;
     }

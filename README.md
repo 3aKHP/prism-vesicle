@@ -27,6 +27,9 @@ provider's `apiKeyEnv` environment variable. The TUI can then switch with
 `/providers`, `/models`, `/use <provider> <model>`, and `/model <model>`.
 The provider file intentionally supports only Vesicle's small YAML subset:
 `default`, `providers`, scalar provider fields, and `models` string lists.
+Provider secrets are not read from this file; every provider must name an
+`apiKeyEnv` variable and the actual key belongs in `.env` or the process
+environment.
 
 Then run:
 

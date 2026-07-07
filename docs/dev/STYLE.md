@@ -54,8 +54,8 @@ Provider selection is host state, not prompt state. The TUI may switch among
 configured provider/model profiles, but adapters still receive a normalized
 `VesicleRequest` and must not know about sessions, artifacts, or Prism phases.
 Persistent provider profiles live under `.vesicle/providers.yaml`; API keys
-should be referenced via environment variables unless a local-only provider
-uses a dummy key.
+must be referenced via per-provider environment variables (`apiKeyEnv`) and
+must not be stored inline in the provider file.
 
 ## Tool Runtime
 

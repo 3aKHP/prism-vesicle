@@ -43,7 +43,7 @@ describe("config loading", () => {
       "  local:",
       "    protocol: openai-chat-compatible",
       "    baseUrl: http://127.0.0.1:11434/v1",
-      "    apiKey: local",
+      "    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY",
       "    models:",
       "      - qwen3",
       "",
@@ -71,7 +71,7 @@ describe("config loading", () => {
       "  local:",
       "    protocol: openai-chat-compatible",
       "    baseUrl: http://127.0.0.1:11434/v1",
-      "    apiKey: local",
+      "    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY",
       "    models:",
       "      - qwen3",
       "",
@@ -88,19 +88,40 @@ describe("config loading", () => {
     await writeFile(join(rootDir, ".vesicle", "providers.yaml"), [
       "default:",
       "  provider: local",
+      "  model: \"qwen#3\"",
+      "providers:",
+      "  local:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: http://127.0.0.1:11434/v1",
+      "    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY",
+      "    models:",
+      "      - \"qwen#3\"",
+      "",
+    ].join("\n"));
+
+    const config = await loadConfigForSelection(rootDir, undefined, { LOCAL_OPENAI_COMPAT_API_KEY: "local" });
+
+    expect(config.model).toBe("qwen#3");
+    expect(config.apiKey).toBe("local");
+  });
+
+  test("rejects inline provider api keys in providers.yaml", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-provider-config-"));
+    await mkdir(join(rootDir, ".vesicle"), { recursive: true });
+    await writeFile(join(rootDir, ".vesicle", "providers.yaml"), [
+      "default:",
+      "  provider: local",
       "  model: qwen3",
       "providers:",
       "  local:",
       "    protocol: openai-chat-compatible",
       "    baseUrl: http://127.0.0.1:11434/v1",
-      "    apiKey: \"abc#def\"",
+      "    apiKey: local",
       "    models:",
       "      - qwen3",
       "",
     ].join("\n"));
 
-    const config = await loadConfigForSelection(rootDir);
-
-    expect(config.apiKey).toBe("abc#def");
+    await expect(loadProviderRegistry(rootDir)).rejects.toThrow("use apiKeyEnv instead of inline apiKey");
   });
 });
