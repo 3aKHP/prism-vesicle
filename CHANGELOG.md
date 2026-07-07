@@ -36,6 +36,9 @@ project follows Semantic Versioning once releases begin.
   preservation.
 - Anthropic Messages SSE streaming for text deltas, thinking deltas,
   streamed tool-use JSON, and final response reconstruction.
+- Gemini `generateContent` provider protocol for non-streaming and SSE
+  streaming text, function calls / function responses, thinking-tier controls,
+  thought-summary display, and `thoughtSignature` replay across tool loops.
 
 ### Changed
 
@@ -70,6 +73,8 @@ project follows Semantic Versioning once releases begin.
 - Provider configuration now accepts the `anthropic-messages` protocol and an
   optional `authMethod` (`x-api-key` or `bearer`) for Anthropic-compatible
   endpoints.
+- Provider configuration now accepts the `gemini-generate-content` protocol
+  and `authMethod: x-goog-api-key` for Gemini API keys.
 
 ### Fixed
 

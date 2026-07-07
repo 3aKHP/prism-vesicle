@@ -65,6 +65,13 @@ and session store must not interpret these native blocks beyond preserving
 their typed metadata. Anthropic streaming must reconstruct text, thinking, and
 tool_use blocks by provider content-block index before emitting the final
 `VesicleResponse`.
+Gemini `generateContent` adapters map Vesicle messages to `systemInstruction`
+plus `contents`, and tool results to `functionResponse` parts. If Gemini
+returns `thought` / `thoughtSignature` metadata, preserve the original model
+parts as provider-native `gemini_part` thinking blocks and replay those parts
+on the next request instead of reconstructing them from assistant prose. This
+keeps Gemini's tool-loop thought signatures attached to the exact parts that
+the provider expects.
 High-frequency thinking controls may be interactive TUI state. Lower-frequency
 generation defaults such as `temperature` and `maxTokens` belong in the
 user-level provider model config and are merged by `core/agent-loop` before

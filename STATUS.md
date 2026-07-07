@@ -8,12 +8,12 @@ _Last updated: 2026-07-08_
 |------|---------|--------|
 | Prism Vesicle | 0.1.0 | Profile-driven engine host with gate runtime |
 | Prism assets | v9.0 State-Space | Copied and host-adapted |
-| Provider protocols | OpenAI-compatible Chat + Anthropic Messages | Implemented / in progress |
+| Provider protocols | OpenAI-compatible Chat + Anthropic Messages + Gemini generateContent | Implemented / in progress |
 | TUI | OpenTUI + Solid | Responsive shell + gate/session panels |
 | Gate runtime | request_confirmation + needs_user loop | ETL blueprint + phase gates wired |
 | Validators | Module A + Module B v9 schemas | Implemented |
-| Streaming | OpenAI-compatible SSE | In progress on 0.2 branch |
-| Provider registry | OpenAI-compatible profiles | In progress on 0.3 branch |
+| Streaming | OpenAI-compatible + Anthropic + Gemini SSE | In progress on 0.3 branch |
+| Provider registry | OpenAI-compatible + Anthropic + Gemini profiles | In progress on 0.3 branch |
 | Model config | Generation defaults + capability metadata | In progress on 0.3 branch |
 | Thinking control | OpenAI-compatible reasoning controls | In progress on 0.3 branch |
 | Reasoning visibility | TUI collapsed/expanded reasoning blocks | In progress on 0.3 branch |
@@ -29,8 +29,9 @@ Chat wrapper:
 - Run a terminal UI with provider status, markdown-rendered message stream,
   responsive workspace/artifact sidebar, wide-screen activity/artifact pane,
   slash hints, prompt history recall, and input bar.
-- Call OpenAI-compatible Chat Completions endpoints and Anthropic Messages
-  endpoints, including SSE streaming on both protocols.
+- Call OpenAI-compatible Chat Completions endpoints, Anthropic Messages
+  endpoints, and Gemini `generateContent` endpoints, including SSE streaming
+  on all three protocols.
 - Load multiple OpenAI-compatible provider/model profiles from the user-level
   provider config (`%APPDATA%\prism-vesicle\providers.yaml` on Windows,
   `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
@@ -144,17 +145,19 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 
 ## Known Limits
 
-- OpenAI-compatible Chat Completions and Anthropic Messages are implemented.
-  OpenAI Responses and Gemini are deferred.
+- OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini
+  `generateContent` are implemented. OpenAI Responses is deferred.
 - The provider registry supports multiple configured providers using
-  `openai-chat-compatible` or `anthropic-messages`.
-- OpenAI-compatible SSE streaming is implemented on the 0.2 branch for
-  assistant content deltas and streamed tool-call reconstruction. Other
-  provider protocols are still deferred.
+  `openai-chat-compatible`, `anthropic-messages`, or
+  `gemini-generate-content`.
+- OpenAI-compatible, Anthropic Messages, and Gemini `generateContent` SSE
+  streaming are implemented for assistant content deltas, provider thinking
+  deltas where available, and streamed tool-call/function-call reconstruction.
 - Thinking-tier control maps to OpenAI-compatible `thinking` /
-  `reasoning_effort` and Anthropic `thinking` request fields. User-visible
-  reasoning is currently a TUI display feature for preserved provider thinking
-  blocks; Gemini and OpenAI Responses thinking surfaces are deferred.
+  `reasoning_effort`, Anthropic `thinking`, and Gemini `thinkingConfig`
+  request fields. User-visible reasoning is currently a TUI display feature
+  for preserved provider thinking blocks; OpenAI Responses thinking surfaces
+  are deferred.
 - TUI engine switching is hardcoded to ETL (runtime/evaluate profiles exist
   and load, but the TUI does not yet offer a selector).
 - Gate UI is Select-style for ETL blueprint and phase checkpoints, with a

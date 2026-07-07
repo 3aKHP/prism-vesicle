@@ -236,6 +236,113 @@ describe("Gemini generateContent adapter", () => {
       providerId: "google",
     });
   });
+
+  test("streams text, thought parts, tool calls, and a final response", async () => {
+    globalThis.fetch = (async (input: unknown, init: RequestInit & { body?: unknown }) => {
+      expect(String(input)).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-test:streamGenerateContent?alt=sse");
+      expect(JSON.parse(String(init.body))).toMatchObject({
+        contents: [{ role: "user", parts: [{ text: "hello" }] }],
+      });
+      return new Response(rawSse([
+        'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"think","thought":true,"thoughtSignature":"thought-sig"}]}}]}',
+        'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hello"}]}}]}',
+        'data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_1","name":"read_file","args":{"path":"workspace/a.md"}},"thoughtSignature":"call-sig"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":5,"totalTokenCount":8}}',
+      ]), {
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+
+    expect(events).toContainEqual({ type: "reasoning_delta", delta: "think" });
+    expect(events).toContainEqual({ type: "content_delta", delta: "hello" });
+    expect(events).toContainEqual({
+      type: "tool_call_delta",
+      index: 2,
+      id: "call_1",
+      name: "read_file",
+      argumentsDelta: "{\"path\":\"workspace/a.md\"}",
+    });
+    expect(events.at(-1)).toEqual({
+      type: "complete",
+      response: {
+        id: "session-test",
+        content: "hello",
+        reasoningContent: "think",
+        thinkingBlocks: [
+          { type: "gemini_part", part: { text: "think", thought: true, thoughtSignature: "thought-sig" } },
+          { type: "gemini_part", part: { text: "hello" } },
+          {
+            type: "gemini_part",
+            part: {
+              functionCall: { id: "call_1", name: "read_file", args: { path: "workspace/a.md" } },
+              thoughtSignature: "call-sig",
+            },
+          },
+        ],
+        toolCalls: [{ id: "call_1", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" }],
+        finishReason: "STOP",
+        raw: [
+          {
+            candidates: [{
+              content: {
+                role: "model",
+                parts: [{ text: "think", thought: true, thoughtSignature: "thought-sig" }],
+              },
+            }],
+          },
+          {
+            candidates: [{
+              content: {
+                role: "model",
+                parts: [{ text: "hello" }],
+              },
+            }],
+          },
+          {
+            candidates: [{
+              content: {
+                role: "model",
+                parts: [{
+                  functionCall: { id: "call_1", name: "read_file", args: { path: "workspace/a.md" } },
+                  thoughtSignature: "call-sig",
+                }],
+              },
+              finishReason: "STOP",
+            }],
+            usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 5, totalTokenCount: 8 },
+          },
+        ],
+        usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
+      },
+    });
+  });
+
+  test("falls back to non-stream parsing when a stream request returns JSON", async () => {
+    globalThis.fetch = (async () => Response.json({
+      candidates: [{ content: { parts: [{ text: "ok" }] } }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    await expect(collect(adapter.stream!(request()))).resolves.toEqual([
+      { type: "complete", response: expect.objectContaining({ content: "ok" }) },
+    ]);
+  });
 });
 
 function request(): VesicleRequest {
@@ -245,4 +352,20 @@ function request(): VesicleRequest {
     system: ["system"],
     messages: [{ role: "user", content: "hello" }],
   };
+}
+
+async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+  for await (const event of events) result.push(event);
+  return result;
+}
+
+function rawSse(blocks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const block of blocks) controller.enqueue(encoder.encode(`${block}\n\n`));
+      controller.close();
+    },
+  });
 }
