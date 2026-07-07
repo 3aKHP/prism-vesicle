@@ -1,10 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { OpenAIChatCompatibleAdapter } from "../src/providers/openai-chat/adapter";
 import { toChatCompletionBody } from "../src/providers/openai-chat/request";
 import { readChatCompletionStream, readSseData } from "../src/providers/openai-chat/stream";
 import type { VesicleRequest } from "../src/providers/shared/types";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 describe("OpenAI-compatible request shaping", () => {
   test("omits tool fields when no tools are available", () => {
@@ -83,6 +89,84 @@ describe("SSE parsing", () => {
     ]);
 
     await expect(collect(readSseData(body))).resolves.toEqual(["{\"a\":\n1}", "[DONE]"]);
+  });
+});
+
+describe("Chat Completions stream integration", () => {
+  test("emits content deltas and a final complete event", async () => {
+    const response = new Response(rawSse([
+      "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"content\":\"hel\"}}]}\n\n",
+      "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"content\":\"lo\"},\"finish_reason\":\"stop\"}]}\n\n",
+      "data: [DONE]\n\n",
+    ]));
+
+    const events = await collect(readChatCompletionStream(response, "fallback"));
+
+    expect(events).toContainEqual({ type: "content_delta", delta: "hel" });
+    expect(events).toContainEqual({ type: "content_delta", delta: "lo" });
+    expect(events.at(-1)).toEqual({
+      type: "complete",
+      response: {
+        id: "chatcmpl-stream",
+        content: "hello",
+        finishReason: "stop",
+        toolCalls: undefined,
+        usage: undefined,
+      },
+    });
+  });
+
+  test("accumulates streamed tool call deltas into the final response", async () => {
+    const response = new Response(rawSse([
+      "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-read\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\"}}]}}]}\n\n",
+      "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"read_file\",\"arguments\":\"\\\"workspace/a.md\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
+      "data: [DONE]\n\n",
+    ]));
+
+    const events = await collect(readChatCompletionStream(response, "fallback"));
+
+    expect(events.filter((event) => event.type === "tool_call_delta")).toHaveLength(2);
+    expect(events.at(-1)).toEqual({
+      type: "complete",
+      response: {
+        id: "chatcmpl-tools",
+        content: "",
+        finishReason: "tool_calls",
+        toolCalls: [{
+          id: "call-read",
+          name: "read_file",
+          arguments: "{\"path\":\"workspace/a.md\"}",
+        }],
+        usage: undefined,
+      },
+    });
+  });
+
+  test("adapter stream accepts an OK JSON response fallback", async () => {
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({
+        id: "chatcmpl-json",
+        choices: [{ finish_reason: "stop", message: { content: "json fallback" } }],
+      }, { headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    const adapter = new OpenAIChatCompatibleAdapter({
+      provider: "openai-chat-compatible",
+      providerId: "test",
+      baseUrl: "https://provider.test/v1",
+      model: "test-model",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+
+    expect((bodies[0] as { stream: boolean }).stream).toBe(true);
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: { id: "chatcmpl-json", content: "json fallback", finishReason: "stop" },
+    });
   });
 });
 

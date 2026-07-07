@@ -73,7 +73,7 @@ function absorbStreamChunk(state: StreamAccumulator, chunk: ChatCompletionStream
   for (const delta of choice.delta?.tool_calls ?? []) {
     const current = state.toolCalls.get(delta.index) ?? { index: delta.index, arguments: "" };
     if (delta.id) current.id = delta.id;
-    if (delta.function?.name) current.name = `${current.name ?? ""}${delta.function.name}`;
+    if (delta.function?.name) current.name = delta.function.name;
     if (delta.function?.arguments) current.arguments += delta.function.arguments;
     state.toolCalls.set(delta.index, current);
     events.push({
@@ -135,7 +135,12 @@ export async function* readSseData(body: ReadableStream<Uint8Array>): AsyncItera
     const trailing = parseSseDataBlock(buffer);
     if (trailing) yield trailing;
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch {
+      // Streams that error can auto-release the reader lock; preserve the
+      // original stream failure instead of replacing it with a release error.
+    }
   }
 }
 
