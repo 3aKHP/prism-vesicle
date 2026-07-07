@@ -4,7 +4,7 @@ import { parseGateRequest } from "../gate/types";
 import type { GateRequest } from "../gate/types";
 import type { ProviderSelection } from "../../config/providers";
 import { reasoningTiers } from "../../providers/shared/types";
-import type { ReasoningTier } from "../../providers/shared/types";
+import type { ProviderThinkingBlock, ReasoningTier } from "../../providers/shared/types";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -153,6 +153,7 @@ export type ResumedMessage = {
   role: "user" | "assistant" | "tool";
   content: string;
   reasoningContent?: string;
+  thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
   toolCalls?: ResumedToolCall[];
 };
@@ -220,10 +221,12 @@ export async function loadSessionSnapshot(
     if (record.role === "assistant") {
       const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
       const reasoningContent = record.metadata?.reasoningContent as string | undefined;
+      const thinkingBlocks = readThinkingBlocks(record.metadata?.thinkingBlocks);
       messages.push({
         role: "assistant",
         content: record.content,
         ...(reasoningContent ? { reasoningContent } : {}),
+        ...(thinkingBlocks ? { thinkingBlocks } : {}),
         ...(toolCalls ? { toolCalls } : {}),
       });
       continue;
@@ -312,6 +315,16 @@ function findPendingGate(records: SessionRecord[]): { gate: GateRequest; toolCal
   }
 
   return undefined;
+}
+
+function readThinkingBlocks(value: unknown): ProviderThinkingBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const blocks = value.filter((item): item is ProviderThinkingBlock => (
+    Boolean(item) &&
+    typeof item === "object" &&
+    typeof (item as { type?: unknown }).type === "string"
+  ));
+  return blocks.length > 0 ? blocks : undefined;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { ProviderError } from "../shared/errors";
+import { thinkingBlocksFromReasoningContent } from "../shared/thinking";
 import type { VesicleResponse } from "../shared/types";
 import type { ChatCompletionResponse } from "./types";
 
@@ -27,6 +28,7 @@ export function responseFromChatCompletionBody(
     id: body?.id ?? fallbackId,
     content,
     ...(reasoningContent ? { reasoningContent } : {}),
+    ...(reasoningContent ? { thinkingBlocks: thinkingBlocksFromReasoningContent(reasoningContent) } : {}),
     toolCalls,
     finishReason: choice?.finish_reason ?? undefined,
     raw: body,

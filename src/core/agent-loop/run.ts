@@ -2,7 +2,7 @@ import type { VesicleConfig } from "../../config/env";
 import { loadConfigForSelection } from "../../config/providers";
 import type { ProviderSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { ProviderAdapter, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderAdapter, ProviderThinkingBlock, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { executeFileTool, fileToolDefinitions } from "../tools";
 import type { ToolCall, ToolDefinition } from "../tools";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
@@ -40,6 +40,7 @@ export type AgentLoopEvent =
       type: "assistant_response";
       content: string;
       reasoningContent?: string;
+      thinkingBlocks?: ProviderThinkingBlock[];
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
@@ -240,6 +241,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       type: "assistant_response",
       content: response.content,
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
+      ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
       toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name, arguments: call.arguments })),
     });
     if (toolCalls.length === 0) {
@@ -268,6 +270,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       role: "assistant",
       content: response.content,
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
+      ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
       toolCalls,
     });
     await session.append({
@@ -277,6 +280,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         providerResponseId: response.id,
         finishReason: response.finishReason,
         ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
+        ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
         toolCalls,
       },
     });
@@ -392,6 +396,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       role: "assistant",
       content: response.content,
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
+      ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
     });
     await session.append({
       role: "assistant",
@@ -399,6 +404,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       metadata: {
         providerResponseId: response.id,
         ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
+        ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
         usage: response.usage,
       },
     });

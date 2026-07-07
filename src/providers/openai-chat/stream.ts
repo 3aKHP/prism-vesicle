@@ -1,4 +1,5 @@
 import { ProviderError } from "../shared/errors";
+import { thinkingBlocksFromReasoningContent } from "../shared/thinking";
 import type { ProviderStreamEvent, VesicleResponse } from "../shared/types";
 import type { ChatCompletionStreamChunk } from "./types";
 
@@ -121,6 +122,7 @@ function finalizeStream(state: StreamAccumulator, providerId?: string): VesicleR
     id: state.id,
     content: state.content,
     ...(state.reasoningContent ? { reasoningContent: state.reasoningContent } : {}),
+    ...(state.reasoningContent ? { thinkingBlocks: thinkingBlocksFromReasoningContent(state.reasoningContent) } : {}),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     finishReason: state.finishReason,
     usage: state.usage,

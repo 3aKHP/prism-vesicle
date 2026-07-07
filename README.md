@@ -85,6 +85,9 @@ return to an unresolved gate.
 - Reasoning visibility for models that return `reasoning_content`: the TUI
   renders reasoning as a separate bounded block, defaults to collapsed preview,
   and offers `/reasoning hidden|collapsed|expanded`
+- Provider thinking state is preserved as replayable thinking blocks in
+  sessions, with OpenAI-compatible `reasoning_content` mapped into that shape
+  for future native protocol adapters
 - Engine profiles drive systemPrompt, tools, validators, and stop gates from
   `assets/engines/*.yaml`
 - JSONL session persistence under `.vesicle/sessions/` with `/resume` picker

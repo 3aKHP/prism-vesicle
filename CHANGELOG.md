@@ -34,6 +34,10 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Reasoning preservation now uses provider-neutral thinking blocks internally,
+  while keeping OpenAI-compatible `reasoningContent` as a compatibility bridge.
+  Agent-loop events, session replay, and TUI display can now carry provider
+  thinking state without flattening it into assistant prose.
 - Expanded `AGENTS.md` and `CLAUDE.md` into full AI-collaborator entry points
   that link the repo's workflow, style, status, contribution, provider config,
   verification, and documentation-sweep rules.

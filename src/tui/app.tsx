@@ -10,6 +10,7 @@ import type { AgentLoopEvent } from "../core/agent-loop/run";
 import type { VesicleMessage } from "../providers/shared/types";
 import { reasoningTiers } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
+import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
 import type { GateResolution } from "../core/gate/types";
 import { copySelectionToClipboard } from "./clipboard";
 import { sharedSyntaxStyle, palette } from "./theme";
@@ -389,8 +390,9 @@ export function App() {
     void refreshArtifacts();
 
     const appended: Message[] = [];
-    if (!result.response.toolCalls?.length && result.response.reasoningContent?.trim()) {
-      appended.push({ role: "system", content: result.response.reasoningContent, kind: "reasoning" });
+    const reasoningText = displayTextFromThinkingBlocks(result.response.thinkingBlocks) ?? result.response.reasoningContent;
+    if (!result.response.toolCalls?.length && reasoningText?.trim()) {
+      appended.push({ role: "system", content: reasoningText, kind: "reasoning" });
     }
     if (!result.response.toolCalls?.length && result.response.content.trim()) {
       appended.push({ role: "assistant", content: result.response.content });
@@ -433,8 +435,9 @@ export function App() {
       case "assistant_response":
         setStreamingAssistant("");
         setStreamingReasoning("");
-        if (event.reasoningContent && event.toolCalls.length > 0) {
-          appendReasoningMessage(event.reasoningContent);
+        if (event.toolCalls.length > 0) {
+          const reasoningText = displayTextFromThinkingBlocks(event.thinkingBlocks) ?? event.reasoningContent;
+          if (reasoningText) appendReasoningMessage(reasoningText);
         }
         if (event.toolCalls.length > 0) {
           const content = renderAssistantToolTurn(event.content, event.toolCalls);
@@ -1229,6 +1232,7 @@ function vesicleMessagesFromResumed(messages: ResumedMessage[]): VesicleMessage[
     role: message.role,
     content: message.content,
     ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
+    ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks.map((block) => ({ ...block })) } : {}),
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
   }));
@@ -1236,11 +1240,12 @@ function vesicleMessagesFromResumed(messages: ResumedMessage[]): VesicleMessage[
 
 function displayMessagesFromResumed(message: ResumedMessage): Message[] {
   if (message.role === "assistant") {
+    const reasoningText = displayTextFromThinkingBlocks(message.thinkingBlocks) ?? message.reasoningContent;
     const content = message.toolCalls && message.toolCalls.length > 0
       ? renderAssistantToolTurn(message.content, message.toolCalls)
       : message.content;
     return [
-      ...(message.reasoningContent?.trim() ? [{ role: "system" as const, content: message.reasoningContent, kind: "reasoning" as const }] : []),
+      ...(reasoningText?.trim() ? [{ role: "system" as const, content: reasoningText, kind: "reasoning" as const }] : []),
       { role: "assistant", content },
     ];
   }

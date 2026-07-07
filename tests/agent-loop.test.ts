@@ -198,11 +198,13 @@ describe("agent loop sessions", () => {
 
     if (result.kind !== "complete") throw new Error("expected complete");
     expect(result.response.reasoningContent).toBe("considering context");
+    expect(result.response.thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "considering context" }]);
     expect(events).toContainEqual({ type: "assistant_reasoning_delta", delta: "considering context" });
     expect(events).toContainEqual({
       type: "assistant_response",
       content: "answer",
       reasoningContent: "considering context",
+      thinkingBlocks: [{ type: "reasoning", reasoningContent: "considering context" }],
       toolCalls: [],
     });
   });

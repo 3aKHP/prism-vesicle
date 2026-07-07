@@ -42,6 +42,7 @@ describe("session resume", () => {
       content: "here is the blueprint",
       metadata: {
         reasoningContent: "I should pause before proceeding.",
+        thinkingBlocks: [{ type: "reasoning", reasoningContent: "I should pause before proceeding." }],
         toolCalls: [{ id: "call-1", name: "request_confirmation", arguments: "{}" }],
       },
     });
@@ -69,6 +70,7 @@ describe("session resume", () => {
     ]);
     expect(messages[1].toolCalls?.[0]?.id).toBe("call-1");
     expect(messages[1].reasoningContent).toBe("I should pause before proceeding.");
+    expect(messages[1].thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "I should pause before proceeding." }]);
     expect(messages[2].toolCallId).toBe("call-1");
     // The composed system prompt must not leak into the resumed message list.
     expect(messages.some((m) => m.content.includes("composed prompt"))).toBe(false);
