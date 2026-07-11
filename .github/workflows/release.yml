@@ -163,7 +163,7 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-      - run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public --tag latest
 
   npm-retry:
     name: Retry npm package publish
@@ -191,4 +191,4 @@ jobs:
             echo "prism-vesicle@$VERSION is already published; nothing to retry."
             exit 0
           fi
-          npm publish --provenance --access public
+          npm publish --provenance --access public --tag latest

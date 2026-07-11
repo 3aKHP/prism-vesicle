@@ -21,7 +21,7 @@ if (forbidden.length > 0) {
   throw new Error(`npm package contains development-only files: ${forbidden.join(", ")}`);
 }
 
-for (const required of ["src/cli/main.ts", "assets/manifest.json"]) {
+for (const required of ["bin/vesicle", "src/cli/main.ts", "assets/manifest.json"]) {
   if (!paths.includes(required)) throw new Error(`npm package is missing required runtime file: ${required}`);
 }
 
