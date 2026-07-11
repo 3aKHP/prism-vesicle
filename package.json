@@ -34,7 +34,7 @@
     "src/"
   ],
   "bin": {
-    "vesicle": "./bin/vesicle"
+    "vesicle": "./bin/vesicle.mjs"
   },
   "scripts": {
     "dev": "bun run src/cli/main.ts",

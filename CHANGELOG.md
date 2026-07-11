@@ -9,8 +9,8 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
-- npm/Bun installs now expose `vesicle` through a JavaScript-compatible Bun
-  launcher, instead of a TypeScript path npm 11 rejects during publication.
+- npm/Bun installs now expose `vesicle` through an `.mjs` Bun launcher, which
+  npm 11 retains during publication.
 - Standalone binaries now use their embedded tree-sitter worker even when the
   build directory's `node_modules/` remains reachable, preventing that
   development-only path from overriding the single-file runtime in Linux ELF

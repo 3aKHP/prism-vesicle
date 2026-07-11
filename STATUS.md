@@ -57,7 +57,7 @@ subject to alpha-level change while feature/fix work remains the priority.
   and assets-ZIP candidate artifacts without publishing them.
 - A protected `v<package.json version>` tag rebuilds the verified artifacts,
   publishes a GitHub prerelease with SHA-256 checksums, and publishes the npm
-  package through npm trusted publishing.
+  package through npm trusted publishing with provenance.
 - Attach PNG, JPEG, GIF, or WebP clipboard images through `Alt+V` (including
   `Ctrl+Alt+V` when reported under WSL). Image references are atomic composer
   elements, survive history/rewind/session resume, and are sent only when the
