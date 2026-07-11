@@ -1,11 +1,17 @@
 #!/usr/bin/env bun
 import { dirname } from "node:path";
+import { isCompiledBinaryRuntime } from "./runtime";
+
+declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 
 // Bun's compiled single-file executable reports Bun.main from the bundled
 // virtual root while process.execPath points at the real compiled binary. Switch cwd
 // before loading project modules so asset/session/workspace roots resolve next
 // to the moved binary instead of the build-time directory.
-const isCompiledBinary = Bun.main.includes("~BUN/root");
+const compiledMarker = typeof VESICLE_COMPILED_BINARY === "boolean"
+  ? VESICLE_COMPILED_BINARY
+  : undefined;
+const isCompiledBinary = isCompiledBinaryRuntime(compiledMarker, Bun.main);
 if (isCompiledBinary) {
   process.chdir(dirname(process.execPath));
 }

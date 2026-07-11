@@ -7,6 +7,13 @@ project follows Semantic Versioning once releases begin.
 
 ## [Unreleased]
 
+### Fixed
+
+- Standalone binaries now use their embedded tree-sitter worker even when the
+  build directory's `node_modules/` remains reachable, preventing that
+  development-only path from overriding the single-file runtime in Linux ELF
+  release smoke checks.
+
 ### Changed
 
 - Declared the public alpha documentation boundary: setup, diagnostics, prompt

@@ -35,6 +35,9 @@ const WIN32_NATIVE_MARKER = `${WIN32_NATIVE_DIR}/opentui.dll`;
 // reliably, while the emitted root entry is available as a `.js` module.
 export const TREE_SITTER_WORKER_ENTRYPOINT = "tree-sitter-worker.ts";
 export const TREE_SITTER_WORKER_RUNTIME_NAME = "tree-sitter-worker.js";
+export const STANDALONE_BUILD_DEFINES = {
+  VESICLE_COMPILED_BINARY: "true",
+} as const;
 
 export function treeSitterWorkerPathForTarget(targetId: string): string {
   const bunfsRoot = targetId.includes("windows") ? "B:/~BUN/root/" : "/$bunfs/root/";
@@ -95,6 +98,7 @@ async function buildTarget(target: Target): Promise<void> {
     target: target.id as Bun.BuildConfig["target"],
     plugins: [solidPlugin],
     define: {
+      ...STANDALONE_BUILD_DEFINES,
       OTUI_TREE_SITTER_WORKER_PATH: JSON.stringify(treeSitterWorkerPathForTarget(target.id)),
       VESICLE_TREE_SITTER_WORKER_PATH: JSON.stringify(treeSitterWorkerPathForTarget(target.id)),
     },
