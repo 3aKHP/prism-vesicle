@@ -86,15 +86,17 @@ describe("session resume", () => {
 
   test("listSessions returns summaries newest-first with previews", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-"));
-
-    const older = await createSessionStore(rootDir, "2026-01-01T00-00-00-000Z-aaaaaaaa");
-    await older.append({ role: "system", content: "prompt" });
-    await older.append({ role: "user", content: "first session question" });
-    await older.append({ role: "assistant", content: "answer" });
-
-    const newer = await createSessionStore(rootDir, "2026-02-01T00-00-00-000Z-bbbbbbbb");
-    await newer.append({ role: "system", content: "prompt" });
-    await newer.append({ role: "user", content: "second session, a different question" });
+    const sessionDir = join(rootDir, ".vesicle", "sessions");
+    await mkdir(sessionDir, { recursive: true });
+    await writeSessionFixture(sessionDir, "2026-01-01T00-00-00-000Z-aaaaaaaa", [
+      { ts: "2026-01-01T00:00:00.000Z", role: "system", content: "prompt" },
+      { ts: "2026-01-01T00:00:01.000Z", role: "user", content: "first session question" },
+      { ts: "2026-01-01T00:00:02.000Z", role: "assistant", content: "answer" },
+    ]);
+    await writeSessionFixture(sessionDir, "2026-02-01T00-00-00-000Z-bbbbbbbb", [
+      { ts: "2026-02-01T00:00:00.000Z", role: "system", content: "prompt" },
+      { ts: "2026-02-01T00:00:01.000Z", role: "user", content: "second session, a different question" },
+    ]);
 
     const summaries = await listSessions(rootDir);
     expect(summaries).toHaveLength(2);
@@ -508,3 +510,12 @@ describe("session resume", () => {
     expect(messages.filter((m) => m.role === "tool")).toHaveLength(1);
   });
 });
+
+async function writeSessionFixture(
+  sessionDir: string,
+  sessionId: string,
+  records: Array<{ ts: string; role: string; content: string }>,
+): Promise<void> {
+  const lines = records.map((record) => JSON.stringify({ ...record, sessionId })).join("\n");
+  await writeFile(join(sessionDir, `${sessionId}.jsonl`), `${lines}\n`, "utf8");
+}
