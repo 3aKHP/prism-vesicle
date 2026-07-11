@@ -16,6 +16,8 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Renamed the npm/Bun package from the unowned scoped candidate
+  `@prism/vesicle` to the available public package name `prism-vesicle`.
 - Declared the public alpha documentation boundary: setup, diagnostics, prompt
   shape inspection, and bundled examples are the supported onboarding path;
   comprehensive user documentation is intentionally deferred while feature and

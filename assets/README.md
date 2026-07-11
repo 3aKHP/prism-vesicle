@@ -11,7 +11,7 @@ the executable. Run `bun run build:assets` to create the release attachment
 beside the selected binary.
 
 The npm/Bun package also ships this directory as package data, so `npm install
-@prism/vesicle` is independent of the standalone binary layout. Package-owned
+prism-vesicle` is independent of the standalone binary layout. Package-owned
 assets are the default only when the current project has no `assets/` directory.
 Run `bunx vesicle assets init` to copy an editable project-local override;
 never edit the copy under `node_modules/`.

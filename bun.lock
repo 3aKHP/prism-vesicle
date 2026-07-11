@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@prism/vesicle",
+      "name": "prism-vesicle",
       "dependencies": {
         "@opentui/core": "0.4.3",
         "@opentui/keymap": "0.4.3",

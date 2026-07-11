@@ -1,5 +1,5 @@
 {
-  "name": "@prism/vesicle",
+  "name": "prism-vesicle",
   "version": "1.0.0-alpha.1",
   "description": "Bun terminal host for Prism Engine prompt workflows.",
   "license": "MIT",

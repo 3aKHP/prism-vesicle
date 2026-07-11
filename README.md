@@ -118,7 +118,7 @@ assets, so it works from an ordinary project directory without copying
 `node_modules` or extracting a binary release pack:
 
 ```bash
-npm install @prism/vesicle
+npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 bunx vesicle
 ```
