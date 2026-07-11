@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v* tag whose npm publish should be retried
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -19,20 +25,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - id: version
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           VERSION="$(bun -e 'console.log((await Bun.file("package.json").json()).version)')"
           test "$TAG" = "v$VERSION"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
       - run: bun run typecheck
       - run: bun test
       - run: bun audit
@@ -41,6 +51,7 @@ jobs:
 
   linux:
     name: Build Linux release artifact
+    if: github.event_name != 'workflow_dispatch'
     needs: checks
     runs-on: ubuntu-latest
     steps:
@@ -75,6 +86,7 @@ jobs:
 
   windows:
     name: Build Windows release artifact
+    if: github.event_name != 'workflow_dispatch'
     needs: checks
     runs-on: windows-latest
     steps:
@@ -114,6 +126,7 @@ jobs:
 
   github-release:
     name: Publish GitHub Release
+    if: github.event_name != 'workflow_dispatch'
     needs: [checks, linux, windows]
     runs-on: ubuntu-latest
     steps:
@@ -134,6 +147,7 @@ jobs:
 
   npm:
     name: Publish npm package
+    if: github.event_name != 'workflow_dispatch'
     needs: [checks, github-release]
     runs-on: ubuntu-latest
     environment: npm
@@ -143,4 +157,38 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      # npm Trusted Publishing requires Node 24's npm 11 OIDC implementation;
+      # setup-node also writes the public registry configuration.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
       - run: npm publish --provenance --access public
+
+  npm-retry:
+    name: Retry npm package publish
+    if: github.event_name == 'workflow_dispatch'
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.checks.outputs.tag }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Publish the verified tag package
+        env:
+          VERSION: ${{ needs.checks.outputs.version }}
+        run: |
+          if npm view "prism-vesicle@$VERSION" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            echo "prism-vesicle@$VERSION is already published; nothing to retry."
+            exit 0
+          fi
+          npm publish --provenance --access public
