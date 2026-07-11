@@ -9,9 +9,9 @@ import { validateCharacterCard } from "../src/core/validators";
 /**
  * End-to-end gate flow against the real provider selected by providers.yaml.
  *
- * Returns early when the selected provider's apiKeyEnv is missing, so this
- * test is safe to leave in the suite; it only runs when provider-specific
- * credentials are available locally or in CI secrets.
+ * Runs only when BUN_E2E_REAL_PROVIDER=1 is explicitly supplied. Real model
+ * output is intentionally non-deterministic and must not turn a developer's
+ * local credentials into a surprise failure of the deterministic test suite.
  *
  * Verifies the full chain: ETL prompt -> model reads its instructions ->
  * model calls request_confirmation for blueprint-confirmation -> loop
@@ -37,6 +37,10 @@ describe("E2E: ETL Phase 0 gate flow", () => {
 
   test("model calls request_confirmation, then on confirm writes a validatable card", async () => {
     if (!rootDir) throw new Error("E2E rootDir was not initialized.");
+    if (process.env.BUN_E2E_REAL_PROVIDER !== "1") {
+      console.log("[E2E] BUN_E2E_REAL_PROVIDER is not set; skipping real-provider run.");
+      return;
+    }
     const providerStatus = await inspectProviderConfig().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.log(`[E2E] provider config unavailable; skipping real-provider run. ${message}`);
@@ -71,6 +75,16 @@ describe("E2E: ETL Phase 0 gate flow", () => {
       expect(first.response.content.length).toBeGreaterThan(0);
       return;
     }
+    if (first.kind === "needs_engine_switch") {
+      console.log(`[E2E] model requested engine switch to ${first.request.targetEngine}; skipping ETL gate assertions.`);
+      expect(first.request.reason.length).toBeGreaterThan(0);
+      return;
+    }
+    if (first.kind === "needs_user_question") {
+      console.log(`[E2E] model asked question ${first.question.header}; skipping ETL gate assertions.`);
+      expect(first.question.options.length).toBeGreaterThanOrEqual(2);
+      return;
+    }
 
     expect(first.kind).toBe("needs_user");
     expect(first.gate.gate).toBe("blueprint-confirmation");
@@ -88,9 +102,21 @@ describe("E2E: ETL Phase 0 gate flow", () => {
       resolution: { decision: "confirm" },
     });
 
+    if (resumed.kind === "needs_engine_switch") {
+      console.log(`[E2E] post-confirm engine switch requested: ${resumed.request.targetEngine}`);
+      expect(resumed.request.reason.length).toBeGreaterThan(0);
+      return;
+    }
+    if (resumed.kind === "needs_user_question") {
+      console.log(`[E2E] post-confirm question requested: ${resumed.question.header}`);
+      expect(resumed.question.options.length).toBeGreaterThanOrEqual(2);
+      return;
+    }
     if (resumed.kind === "needs_user") {
       expect(resumed.gate.gate).toBe("phase-confirmation");
-      expect(resumed.assistantContent.length).toBeGreaterThan(0);
+      // A provider may legally emit the next tool call with no adjacent prose.
+      // The gate summary is the durable user-visible checkpoint contract.
+      expect(resumed.gate.summary.length).toBeGreaterThan(0);
       console.log(`[E2E] post-confirm gate paused: ${resumed.gate.gate}`);
       console.log(`[E2E] post-confirm content preview: ${resumed.assistantContent.slice(0, 200)}`);
     } else {
@@ -103,10 +129,7 @@ describe("E2E: ETL Phase 0 gate flow", () => {
     const workspaceDir = join(rootDir, "workspace");
     const files = await readdir(workspaceDir).catch(() => [] as string[]);
     const cardFiles = files.filter((f) => f.endsWith(".md"));
-    if (cardFiles.length === 0) {
-      console.log("[E2E] no workspace artifact written; model may have only narrated Phase 1. Skipping card validation.");
-      return;
-    }
+    expect(cardFiles.length).toBeGreaterThan(0);
 
     const cardPath = join(workspaceDir, cardFiles[0]);
     const cardContent = await readFile(cardPath, "utf8");

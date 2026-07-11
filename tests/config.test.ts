@@ -68,6 +68,48 @@ describe("config loading", () => {
     expect(config.apiKey).toBe("secret");
   });
 
+  test("loads a provider-level User-Agent override", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: custom",
+      "  model: test-model",
+      "providers:",
+      "  custom:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://example.test/v1",
+      "    apiKeyEnv: CUSTOM_API_KEY",
+      "    userAgent: custom-client/2.0 runtime/test",
+      "    models:",
+      "      - test-model",
+      "",
+    ], ["CUSTOM_API_KEY=secret"]);
+
+    const registry = await loadProviderRegistry(env);
+    const config = await loadConfigForSelection(undefined, env);
+
+    expect(registry.providers[0].userAgent).toBe("custom-client/2.0 runtime/test");
+    expect(config.userAgent).toBe("custom-client/2.0 runtime/test");
+  });
+
+  test("rejects control characters in a provider User-Agent override", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: custom",
+      "  model: test-model",
+      "providers:",
+      "  custom:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://example.test/v1",
+      "    apiKeyEnv: CUSTOM_API_KEY",
+      "    userAgent: custom-client/2.0\u0001bad",
+      "    models:",
+      "      - test-model",
+      "",
+    ]);
+
+    await expect(loadProviderRegistry(env)).rejects.toThrow("userAgent contains an invalid control character");
+  });
+
   test("loads object model generation defaults and capabilities", async () => {
     const { env } = await writeProvidersFile([
       "default:",
@@ -89,6 +131,14 @@ describe("config loading", () => {
       "          tools: true",
       "          reasoningTier: true",
       "          reasoningContent: true",
+      "          vision: true",
+      "        limits:",
+      "          contextWindow: 1000000",
+      "          autoCompact:",
+      "            enabled: true",
+      "            threshold: 0.85",
+      "            reserveOutputTokens: 20000",
+      "          maxOutputTokens: 65536",
       "",
     ], ["DEEPSEEK_API_KEY=secret"]);
 
@@ -102,6 +152,16 @@ describe("config loading", () => {
       tools: true,
       reasoningTier: true,
       reasoningContent: true,
+      vision: true,
+    });
+    expect(config.limits).toEqual({
+      contextWindow: 1000000,
+      autoCompact: {
+        enabled: true,
+        threshold: 0.85,
+        reserveOutputTokens: 20000,
+      },
+      maxOutputTokens: 65536,
     });
   });
 
@@ -335,6 +395,73 @@ describe("config loading", () => {
     ]);
 
     await expect(loadProviderRegistry(env)).rejects.toThrow('Duplicate provider id "local".');
+  });
+
+  test("uses provider defaultModel when switching without an explicit model", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: deepseek",
+      "  model: deepseek-v4-flash",
+      "providers:",
+      "  deepseek:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://api.deepseek.com/v1",
+      "    apiKeyEnv: DEEPSEEK_API_KEY",
+      "    defaultModel: deepseek-reasoner",
+      "    models:",
+      "      - deepseek-v4-flash",
+      "      - deepseek-reasoner",
+      "",
+    ], ["DEEPSEEK_API_KEY=secret"]);
+
+    const registry = await loadProviderRegistry(env);
+    expect(registry.providers[0].defaultModel).toBe("deepseek-reasoner");
+
+    // Switching to deepseek with no explicit model picks defaultModel, not models[0].
+    const config = await loadConfigForSelection({ provider: "deepseek" }, env);
+    expect(config.model).toBe("deepseek-reasoner");
+  });
+
+  test("an explicit selection.model wins over provider defaultModel", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: deepseek",
+      "  model: deepseek-v4-flash",
+      "providers:",
+      "  deepseek:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://api.deepseek.com/v1",
+      "    apiKeyEnv: DEEPSEEK_API_KEY",
+      "    defaultModel: deepseek-reasoner",
+      "    models:",
+      "      - deepseek-v4-flash",
+      "      - deepseek-reasoner",
+      "",
+    ], ["DEEPSEEK_API_KEY=secret"]);
+
+    const config = await loadConfigForSelection({ provider: "deepseek", model: "deepseek-v4-flash" }, env);
+    expect(config.model).toBe("deepseek-v4-flash");
+  });
+
+  test("rejects a provider defaultModel outside its model catalog", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: deepseek",
+      "  model: deepseek-v4-flash",
+      "providers:",
+      "  deepseek:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://api.deepseek.com/v1",
+      "    apiKeyEnv: DEEPSEEK_API_KEY",
+      "    defaultModel: missing-model",
+      "    models:",
+      "      - deepseek-v4-flash",
+      "",
+    ]);
+
+    await expect(loadProviderRegistry(env)).rejects.toThrow(
+      'Provider "deepseek" defaultModel "missing-model" is not declared in models.',
+    );
   });
 });
 

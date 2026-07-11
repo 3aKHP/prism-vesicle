@@ -2,6 +2,20 @@
 
 This directory contains the Prism v9 assets needed by M0.
 
+## Release Distribution
+
+Standalone PE and ELF releases intentionally keep this directory external so
+users can inspect, edit, and replace prompt/profile assets without rebuilding
+the executable. Run `bun run build:assets` to create the release attachment
+`dist/prism-vesicle-assets.zip`, then extract its top-level `assets/` directory
+beside the selected binary.
+
+The npm/Bun package also ships this directory as package data, so `npm install
+@prism/vesicle` is independent of the standalone binary layout. Package-owned
+assets are the default only when the current project has no `assets/` directory.
+Run `bunx vesicle assets init` to copy an editable project-local override;
+never edit the copy under `node_modules/`.
+
 ## Source Paths
 
 The source project is the public GitHub repository
@@ -15,7 +29,7 @@ The source project is the public GitHub repository
 ## M0 Adaptation Notes
 
 - Engine prompt headings and host identity lines were changed from Codex-specific wording to Vesicle wording.
-- Host-specific file roots were normalized to Vesicle project roots such as `assets/specs`, `assets/templates`, `workspace`, `test_runs`, `novels`, and `reports`.
+- Host-specific file roots were normalized to Vesicle project roots such as `assets/specs`, `assets/templates`, `source_materials`, `workspace`, `test_runs`, `novels`, and `reports`. `source_materials` is writable for gathered or generated research; final artifacts stay in the other output roots.
 - `new_task` references in copied specs were renamed to the Vesicle delegated subtask contract.
 - The six engine prompts were otherwise preserved for M0. Full prompt redesign is intentionally deferred.
 

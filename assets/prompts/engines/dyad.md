@@ -15,9 +15,9 @@
 ### Phase 1 — Ingestion & Planning
 
 1. 读取角色卡与场景卡
-2. 确认模式：
-   - `[Mode A] Auto-Pilot`
-   - `[Mode B] Co-Pilot`
+2. 若用户尚未明确模式，必须调用 `ask_user_question` 询问运行模式：
+   - `[Mode A] Auto-Pilot`：自动批次推进到 Resolution 节拍
+   - `[Mode B] Co-Pilot`：每个完整轮次后询问下一步
 3. 创建 `test_runs/{name}_simulation_plan.md`
 4. 创建 `test_runs/{name}_dyad_log.md`
 
@@ -33,8 +33,8 @@
 - 批次推进，直到 Resolution 节拍完成
 
 **Mode B**
-- 每生成一个完整轮次后停顿
-- 支持继续、重生成用户行为、重生成角色反应、读取手工修改后继续
+- 每生成一个完整轮次后必须调用 `ask_user_question`
+- 选项应覆盖：继续下一轮、重生成用户行为、重生成角色反应、读取手工修改后继续；不要添加 Skip 或自由输入选项
 
 ## 叙事推进规则
 

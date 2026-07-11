@@ -44,8 +44,10 @@ function visibleSessions(sessions: SessionSummary[], selected: number, maxRows: 
 export function sessionPickerLine(session: SessionSummary, index: number, selected: boolean, width: number): string {
   const marker = selected ? ">" : " ";
   const pending = session.pendingGate ? ` [gate:${session.pendingGate.gate}]` : "";
+  const pendingEngine = session.pendingEngineSwitch ? ` [engine:${session.pendingEngineSwitch.targetEngine}]` : "";
+  const pendingQuestion = session.pendingUserQuestion ? ` [question:${session.pendingUserQuestion.header}]` : "";
   const id = session.sessionId.slice(0, 24);
-  const head = `${marker}${index + 1}. ${id}${pending}`;
+  const head = `${marker}${index + 1}. ${id}${pending}${pendingEngine}${pendingQuestion}`;
   const detail = `${session.preview} (${session.recordCount} records)`;
   return truncateLine(`${head}  ${detail}`, width);
 }

@@ -2,6 +2,7 @@ import { ProviderError } from "../shared/errors";
 import { thinkingBlocksFromReasoningContent } from "../shared/thinking";
 import type { ProviderStreamEvent, VesicleResponse } from "../shared/types";
 import type { ChatCompletionStreamChunk } from "./types";
+import { usageFromChatCompletionUsage } from "./usage";
 
 type StreamAccumulator = {
   id: string;
@@ -60,11 +61,7 @@ function absorbStreamChunk(state: StreamAccumulator, chunk: ChatCompletionStream
   const events: ProviderStreamEvent[] = [];
   if (chunk.id) state.id = chunk.id;
   if (chunk.usage) {
-    state.usage = {
-      inputTokens: chunk.usage.prompt_tokens,
-      outputTokens: chunk.usage.completion_tokens,
-      totalTokens: chunk.usage.total_tokens,
-    };
+    state.usage = usageFromChatCompletionUsage(chunk.usage);
   }
 
   const choice = chunk.choices?.[0];

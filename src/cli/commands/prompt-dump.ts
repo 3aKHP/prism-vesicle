@@ -3,6 +3,7 @@ import type { EngineId, EngineProfile } from "../../core/engine/profile";
 import { engineIds } from "../../core/engine/profile";
 import type { PromptBundle } from "../../core/prompt/loader";
 import { composeSystemPrompt, loadPromptBundle } from "../../core/prompt/loader";
+import { createMcpRegistryForEngine, type McpRegistryOptions } from "../../mcp/registry";
 
 /**
  * `vesicle prompt dump` — print the fully composed system prompt the model
@@ -30,14 +31,55 @@ export async function runPromptDump(args: string[]): Promise<void> {
   const systemPrompt = composeSystemPrompt(bundle);
 
   if (shapeOnly) {
-    printShape(profile, systemPrompt);
+    await printShape(profile, systemPrompt);
     return;
   }
 
-  printFullDump(profile, bundle, systemPrompt);
+  await printFullDump(profile, bundle, systemPrompt);
 }
 
 type ParsedArgs = { ok: true; value: { engine: EngineId; shapeOnly: boolean } } | { ok: false; error: string };
+
+const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
+const alwaysVisibleToolNames = ["ask_user_question", "request_engine_switch"];
+
+export type EffectivePromptToolNames = {
+  modelVisible: string[];
+  hostContracts: string[];
+};
+
+export async function getEffectivePromptToolNames(
+  profile: EngineProfile,
+  options: McpRegistryOptions = {},
+): Promise<EffectivePromptToolNames> {
+  const modelVisible: string[] = [];
+  const hostContracts: string[] = [];
+
+  for (const name of profile.defaultTools) {
+    if (hostContractNames.has(name)) {
+      pushUnique(hostContracts, name);
+      continue;
+    }
+    pushUnique(modelVisible, name);
+  }
+
+  if (profile.stopGates.length > 0) {
+    pushUnique(modelVisible, "request_confirmation");
+  }
+  for (const name of alwaysVisibleToolNames) {
+    pushUnique(modelVisible, name);
+  }
+  const mcp = await createMcpRegistryForEngine(profile.id, options);
+  for (const definition of mcp.definitions) {
+    pushUnique(modelVisible, definition.function.name);
+  }
+
+  return { modelVisible, hostContracts };
+}
+
+function pushUnique(values: string[], value: string): void {
+  if (!values.includes(value)) values.push(value);
+}
 
 function parseArgs(args: string[]): ParsedArgs {
   let engine: string | undefined;
@@ -78,7 +120,9 @@ function printUsage(): void {
   console.error(`Engines: ${engineIds.join(", ")}`);
 }
 
-function printShape(profile: EngineProfile, systemPrompt: string): void {
+async function printShape(profile: EngineProfile, systemPrompt: string): Promise<void> {
+  const effectiveTools = await getEffectivePromptToolNames(profile);
+
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
   console.log(`System prompt length: ${systemPrompt.length} chars`);
@@ -86,18 +130,21 @@ function printShape(profile: EngineProfile, systemPrompt: string): void {
   for (const path of profile.systemPrompt) {
     console.log(`  - ${path}`);
   }
-  console.log(`Model-visible tools: ${profile.defaultTools.filter((t) => !["config.load", "prompt.load", "session.write"].includes(t)).join(", ")}`);
-  console.log(`Host contracts: ${profile.defaultTools.filter((t) => ["config.load", "prompt.load", "session.write"].includes(t)).join(", ")}`);
+  console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
+  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log(`State roots: ${profile.stateRoots.join(", ")}`);
 }
 
-function printFullDump(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string): void {
+async function printFullDump(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string): Promise<void> {
+  const effectiveTools = await getEffectivePromptToolNames(profile);
+
   console.log("=== Prism Vesicle Prompt Dump ===");
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
-  console.log(`Tools: ${profile.defaultTools.join(", ")}`);
+  console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
+  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log("");

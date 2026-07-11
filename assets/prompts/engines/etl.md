@@ -16,7 +16,8 @@
 3. 若用户请求 DLC，再读取 `assets/specs/schema_dlc.md`
 4. 若用户请求 Lite 输出，再读取 `assets/specs/schema_persona_prompt_immersive.md`、`assets/specs/schema_persona_prompt_compatible.md`、`assets/templates/tpl_persona_prompt_immersive.md`、`assets/templates/tpl_persona_prompt_compatible.md`
 5. 枚举并读取 `source_materials/` 中的相关素材
-6. 仅在读完素材后生成蓝图
+6. 若用户要求补资料、素材明显不足，或主题依赖外部现实信息，使用联网工具补齐来源：先用 `web_search` 找来源；已知站点但路径不明时先用 `web_map`；需要多页资料时用受限的 `web_crawl`；对关键 URL 用 `web_fetch` 抽取正文；需要快速建立多源背景报告时可用 `web_research`。将有用结果整理为带来源 URL 的简短资料笔记并写入 `source_materials/`
+7. 仅在读完素材后生成蓝图
 
 ## 工作流 A：角色卡
 
@@ -27,7 +28,7 @@
 - 完成蓝图后，**必须**调用 `request_confirmation` 工具，参数：
   - `gate`: `"blueprint-confirmation"`
   - `summary`: 把上述四项压缩成可读的纯文本摘要（每项一行），用户会看到这段内容并决定是否推进
-- 用户 `confirm` 后才进入 Phase 1；`revise` 时按反馈重做蓝图并再次请求确认；`chat` 时留在对话中讨论
+- 用户 `confirm` 后才进入 Phase 1；`reject` 时不得推进，若有反馈则按反馈重做或讨论，若无反馈则先询问用户希望修改什么，然后再次请求确认
 
 ### Phase 1 — The Shell
 
@@ -57,7 +58,7 @@
 
 1. 读取目标角色卡
 2. 根据角色拓扑与目标强度提出 3 个剧情钩子（含建议节拍图草案）
-3. 等待用户选择
+3. 必须调用 `ask_user_question`，让用户在 3 个剧情钩子中选择一个；问题应简短，3 个选项分别对应 3 个钩子，选项描述包含该钩子的核心冲突与节拍走向；不要添加 Skip 或自由输入选项
 4. 生成 `workspace/{char_name}_scenario_{tag}.md`
 
 ## 工作流 C：Affine Transform Agent（DLC 文档）

@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run pack:check
+
+  linux-artifact:
+    name: Linux ELF smoke
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run build:exe linux
+      - run: bun run build:assets
+      - name: Smoke the release shape
+        run: |
+          mkdir smoke
+          cp prism-vesicle smoke/prism-vesicle
+          unzip -q dist/prism-vesicle-assets.zip -d smoke
+          (
+            cd smoke
+            ./prism-vesicle debug markdown-runtime
+            ./prism-vesicle prompt shape --engine etl
+          )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prism-vesicle-linux-x64
+          path: |
+            prism-vesicle
+            dist/prism-vesicle-assets.zip
+          retention-days: 7
+
+  windows-artifact:
+    name: Windows PE smoke
+    needs: checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run build:exe windows
+      - run: bun run build:assets
+      - name: Smoke the release shape
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          Copy-Item prism-vesicle.exe smoke/prism-vesicle.exe
+          Expand-Archive -LiteralPath dist/prism-vesicle-assets.zip -DestinationPath smoke
+          Push-Location smoke
+          try {
+            & .\prism-vesicle.exe debug markdown-runtime
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & .\prism-vesicle.exe prompt shape --engine etl
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prism-vesicle-windows-x64
+          path: |
+            prism-vesicle.exe
+            dist/prism-vesicle-assets.zip
+          retention-days: 7

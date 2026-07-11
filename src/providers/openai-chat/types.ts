@@ -21,6 +21,14 @@ export type ChatCompletionResponse = {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+      [key: string]: unknown;
+    };
+    completion_tokens_details?: {
+      reasoning_tokens?: number;
+      [key: string]: unknown;
+    };
   };
   error?: {
     message?: string;
@@ -49,6 +57,14 @@ export type ChatCompletionStreamChunk = {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+      [key: string]: unknown;
+    };
+    completion_tokens_details?: {
+      reasoning_tokens?: number;
+      [key: string]: unknown;
+    };
   };
   error?: {
     message?: string;

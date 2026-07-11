@@ -13,6 +13,9 @@ beforeEach(async () => {
   await mkdir(join(rootDir, "reports"), { recursive: true });
   await mkdir(join(rootDir, "source_materials"), { recursive: true });
   await writeFile(join(rootDir, "source_materials", "seed.md"), "Alpha seed\nBeta seed\n", "utf8");
+  await writeFile(join(rootDir, "source_materials", "reference.png"), Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+  ]));
 });
 
 afterEach(async () => {
@@ -20,6 +23,20 @@ afterEach(async () => {
 });
 
 describe("file tools v2", () => {
+  test("views guarded project images as structured attachments", async () => {
+    const result = await expectTool("view_image", {
+      path: "source_materials/reference.png",
+      detail: "high",
+    }, "Viewed source_materials/reference.png");
+    expect(result.fileEvent).toMatchObject({ operation: "view", changed: false });
+    expect(result.images?.[0]).toMatchObject({
+      source: "project",
+      sourcePath: "source_materials/reference.png",
+      mediaType: "image/png",
+      detail: "high",
+    });
+    await expectToolFailure("view_image", { path: "../reference.png" }, "escapes project root");
+  });
   test("supports create, ranged read, exact replace, append, grep, stat, copy, move, and delete", async () => {
     const createResult = await expectTool("create_file", {
       path: "workspace/a.md",
@@ -68,6 +85,7 @@ describe("file tools v2", () => {
       changed: true,
       bytes: 16,
       occurrences: 2,
+      matchLines: [1, 3],
     });
 
     const appendResult = await expectTool("append_file", {
@@ -162,7 +180,7 @@ describe("file tools v2", () => {
     });
   });
 
-  test("keeps write operations inside artifact roots and refuses risky deletes", async () => {
+  test("writes source material inside writable project roots and refuses unsafe paths", async () => {
     await expectToolFailure("write_file", {
       path: "assets/leak.md",
       content: "nope",
@@ -172,19 +190,43 @@ describe("file tools v2", () => {
       path: "workspace",
     }, "Path must be a file");
 
-    await expectToolFailure("move_file", {
-      sourcePath: "source_materials/seed.md",
-      targetPath: "workspace/seed.md",
-    }, "Path must be under one of");
-
     await expectTool("copy_file", {
       sourcePath: "source_materials/seed.md",
       targetPath: "workspace/seed.md",
     }, "Copied source_materials/seed.md to workspace/seed.md");
 
+    await expectTool("create_file", {
+      path: "source_materials/generated-research.md",
+      content: "Initial research",
+    }, "Created source_materials/generated-research.md");
+
+    await expectTool("append_file", {
+      path: "source_materials/generated-research.md",
+      content: "\nSearch capture",
+    }, "Appended 15 char(s) to source_materials/generated-research.md");
+
+    await expectTool("move_file", {
+      sourcePath: "source_materials/generated-research.md",
+      targetPath: "source_materials/archive/generated-research.md",
+    }, "Moved source_materials/generated-research.md to source_materials/archive/generated-research.md");
+
     await expectToolFailure("delete_file", {
       path: "workspace/nope.md",
     }, "ENOENT");
+  });
+
+  test("replace_in_file records the affected line range for a single match", async () => {
+    await writeFile(join(rootDir, "workspace", "lines.md"), "one\ntwo\nthree\nfour\n", "utf8");
+    const result = await expectTool("replace_in_file", {
+      path: "workspace/lines.md",
+      oldText: "two\nthree",
+      newText: "TWO\nTHREE\nTHREE-B",
+    }, "Replaced 1 occurrence(s) in workspace/lines.md");
+    expect(result.fileEvent).toMatchObject({
+      operation: "replace",
+      occurrences: 1,
+      matchLines: [2],
+    });
   });
 
   test("append_file requires an existing file unless createIfMissing is set", async () => {

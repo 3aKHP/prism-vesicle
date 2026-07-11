@@ -2,9 +2,18 @@ import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseGateRequest } from "../gate/types";
 import type { GateRequest } from "../gate/types";
+import { engineIds } from "../engine/profile";
+import type { EngineId } from "../engine/profile";
+import { parseEngineSwitchRequest } from "../engine/switch";
+import type { EngineSwitchRequest } from "../engine/switch";
 import type { ProviderSelection } from "../../config/providers";
+import { parseUserQuestionRequest } from "../user-question/types";
+import type { UserQuestionRequest } from "../user-question/types";
 import { reasoningTiers } from "../../providers/shared/types";
-import type { ProviderThinkingBlock, ReasoningTier } from "../../providers/shared/types";
+import type { ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
+import type { VesicleImageAttachment } from "../../providers/shared/types";
+import type { FileToolEvent, McpToolEvent, WebToolEvent } from "../tools";
+import { parseImageAttachments } from "../attachments/store";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -17,6 +26,8 @@ type ResumedToolCall = {
 };
 
 export type SessionRecord = {
+  uuid: string;
+  parentUuid: string | null;
   ts: string;
   sessionId: string;
   role: SessionRole;
@@ -27,25 +38,38 @@ export type SessionRecord = {
 export type SessionStore = {
   sessionId: string;
   sessionPath: string;
-  append(record: Omit<SessionRecord, "ts" | "sessionId">): Promise<void>;
+  append(record: Omit<SessionRecord, "uuid" | "parentUuid" | "ts" | "sessionId">): Promise<SessionRecord>;
+  headUuid(): string | null;
 };
 
-export async function createSessionStore(rootDir = process.cwd(), sessionId = createSessionId()): Promise<SessionStore> {
+export async function createSessionStore(
+  rootDir = process.cwd(),
+  sessionId = createSessionId(),
+  options: { parentUuid?: string | null } = {},
+): Promise<SessionStore> {
   const sessionDir = join(rootDir, ".vesicle", "sessions");
   await mkdir(sessionDir, { recursive: true });
   const sessionPath = join(sessionDir, `${sessionId}.jsonl`);
+  let headUuid = Object.hasOwn(options, "parentUuid")
+    ? options.parentUuid ?? null
+    : await readLatestRecordUuid(sessionPath);
 
   return {
     sessionId,
     sessionPath,
     async append(record) {
       const line: SessionRecord = {
+        uuid: crypto.randomUUID(),
+        parentUuid: headUuid,
         ts: new Date().toISOString(),
         sessionId,
         ...record,
       };
       await appendFile(sessionPath, `${JSON.stringify(line)}\n`, "utf8");
+      headUuid = line.uuid;
+      return line;
     },
+    headUuid: () => headUuid,
   };
 }
 
@@ -71,13 +95,21 @@ export type SessionSummary = {
    */
   preview: string;
   /**
-   * True when the session currently ends at an unresolved request_confirmation
-   * call. The TUI can resume this as an interactive gate instead of treating
-   * it as an ordinary transcript.
+   * True when the session currently ends at an unresolved
+   * request_confirmation call. The TUI can resume this as an interactive gate
+   * instead of treating it as an ordinary transcript.
    */
   pendingGate?: {
     gate: string;
     summary: string;
+  };
+  pendingEngineSwitch?: {
+    targetEngine: EngineId;
+    reason: string;
+  };
+  pendingUserQuestion?: {
+    header: string;
+    question: string;
   };
 };
 
@@ -110,10 +142,9 @@ export async function listSessions(rootDir = process.cwd()): Promise<SessionSumm
     let firstRecord: SessionRecord | null = null;
     let lastRecord: SessionRecord | null = null;
     let preview = "(no user message)";
-    const records: SessionRecord[] = [];
-    for (const line of lines) {
-      const record = JSON.parse(line) as SessionRecord;
-      records.push(record);
+    const allRecords = normalizeSessionRecords(lines.map((line) => JSON.parse(line) as Partial<SessionRecord>));
+    const records = buildActiveSessionBranch(allRecords);
+    for (const record of records) {
       if (!firstRecord) firstRecord = record;
       lastRecord = record;
       if (preview === "(no user message)" && record.role === "user") {
@@ -122,13 +153,21 @@ export async function listSessions(rootDir = process.cwd()): Promise<SessionSumm
     }
     if (!firstRecord || !lastRecord) continue;
     const pendingGate = findPendingGate(records);
+    const pendingEngineSwitch = findPendingEngineSwitch(records);
+    const pendingUserQuestion = findPendingUserQuestion(records);
     summaries.push({
       sessionId,
       startedAt: firstRecord.ts,
       updatedAt: lastRecord.ts,
-      recordCount: lines.length,
+      recordCount: allRecords.length,
       preview,
       ...(pendingGate ? { pendingGate: { gate: pendingGate.gate.gate, summary: pendingGate.gate.summary } } : {}),
+      ...(pendingEngineSwitch
+        ? { pendingEngineSwitch: { targetEngine: pendingEngineSwitch.request.targetEngine, reason: pendingEngineSwitch.request.reason } }
+        : {}),
+      ...(pendingUserQuestion
+        ? { pendingUserQuestion: { header: pendingUserQuestion.question.header, question: pendingUserQuestion.question.question } }
+        : {}),
     });
   }
 
@@ -156,16 +195,43 @@ export type ResumedMessage = {
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
   toolCalls?: ResumedToolCall[];
+  toolOk?: boolean;
+  toolFileEvent?: FileToolEvent;
+  toolWebEvent?: WebToolEvent;
+  toolMcpEvent?: McpToolEvent;
+  /** Engine/model that produced an assistant record (for the per-turn marker). */
+  engine?: EngineId;
+  model?: string;
+  /** Host-only response telemetry; not forwarded to providers on resume. */
+  usage?: ResponseUsage;
+  /** Host-only display classification; not forwarded to providers. */
+  kind?: string;
+  images?: VesicleImageAttachment[];
 };
 
 export type SessionSnapshot = {
   sessionId: string;
+  /** Active append-only branch, including host/system records. */
+  records: SessionRecord[];
+  /** Current leaf of the active branch. */
+  headUuid: string | null;
   messages: ResumedMessage[];
+  engine?: EngineId;
   providerSelection?: ProviderSelection;
   reasoningTier?: ReasoningTier;
   reasoningDisplayMode?: ReasoningDisplayMode;
   pendingGate?: {
     gate: GateRequest;
+    toolCallId: string;
+    assistantContent: string;
+  };
+  pendingEngineSwitch?: {
+    request: EngineSwitchRequest;
+    toolCallId: string;
+    assistantContent: string;
+  };
+  pendingUserQuestion?: {
+    question: UserQuestionRequest;
     toolCallId: string;
     assistantContent: string;
   };
@@ -176,23 +242,69 @@ export async function loadSessionMessages(rootDir: string, sessionId: string): P
   return snapshot.messages;
 }
 
+export async function loadSessionRecords(rootDir: string, sessionId: string): Promise<SessionRecord[]> {
+  const filePath = join(rootDir, ".vesicle", "sessions", `${sessionId}.jsonl`);
+  const text = await readFile(filePath, "utf8");
+  const lines = text.split("\n").filter((line) => line.trim().length > 0);
+  return normalizeSessionRecords(lines.map((line) => JSON.parse(line) as Partial<SessionRecord>));
+}
+
+/**
+ * Project one active branch from the append-only record graph. The newest
+ * physical record is the default leaf, matching Claude Code's transcript
+ * behavior after a fork has appended its first new message.
+ */
+export function buildActiveSessionBranch(
+  records: SessionRecord[],
+  options: { headUuid?: string | null } = {},
+): SessionRecord[] {
+  const requestedHead = Object.hasOwn(options, "headUuid")
+    ? options.headUuid ?? null
+    : records.at(-1)?.uuid ?? null;
+  if (requestedHead === null) return [];
+
+  const byUuid = new Map(records.map((record) => [record.uuid, record]));
+  if (!byUuid.has(requestedHead)) {
+    throw new Error(`Session branch head not found: ${requestedHead}`);
+  }
+
+  const branch: SessionRecord[] = [];
+  const visited = new Set<string>();
+  let cursor: string | null = requestedHead;
+  while (cursor) {
+    if (visited.has(cursor)) throw new Error(`Session branch contains a parent cycle at ${cursor}`);
+    visited.add(cursor);
+    const record = byUuid.get(cursor);
+    if (!record) throw new Error(`Session branch parent not found: ${cursor}`);
+    branch.push(record);
+    cursor = record.parentUuid;
+  }
+  return branch.reverse();
+}
+
 export async function loadSessionSnapshot(
   rootDir: string,
   sessionId: string,
-  options: { synthesizeDanglingToolResults?: boolean } = {},
+  options: { synthesizeDanglingToolResults?: boolean; headUuid?: string | null } = {},
 ): Promise<SessionSnapshot> {
   const filePath = join(rootDir, ".vesicle", "sessions", `${sessionId}.jsonl`);
   const text = await readFile(filePath, "utf8");
   const lines = text.split("\n").filter((line) => line.trim().length > 0);
-  const records = lines.map((line) => JSON.parse(line) as SessionRecord);
+  const allRecords = normalizeSessionRecords(lines.map((line) => JSON.parse(line) as Partial<SessionRecord>));
+  const records = buildActiveSessionBranch(allRecords, options);
 
   const messages: ResumedMessage[] = [];
   let skippedFirstSystem = false;
+  let engine: EngineId | undefined;
   let providerSelection: ProviderSelection | undefined;
   let reasoningTier: ReasoningTier | undefined;
   let reasoningDisplayMode: ReasoningDisplayMode | undefined;
 
   for (const record of records) {
+    if (record.metadata && Object.hasOwn(record.metadata, "engine")) {
+      const nextEngine = readEngineId(record.metadata.engine);
+      if (nextEngine) engine = nextEngine;
+    }
     const providerId = record.metadata?.providerId;
     const model = record.metadata?.model;
     if (typeof providerId === "string" && typeof model === "string") {
@@ -222,36 +334,61 @@ export async function loadSessionSnapshot(
       const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
       const reasoningContent = record.metadata?.reasoningContent as string | undefined;
       const thinkingBlocks = readThinkingBlocks(record.metadata?.thinkingBlocks);
+      const engine = readEngineId(record.metadata?.engine);
+      const model = typeof record.metadata?.model === "string" ? record.metadata.model : undefined;
+      const usage = readResponseUsage(record.metadata?.usage);
       messages.push({
         role: "assistant",
         content: record.content,
+        ...(engine ? { engine } : {}),
+        ...(model ? { model } : {}),
         ...(reasoningContent ? { reasoningContent } : {}),
         ...(thinkingBlocks ? { thinkingBlocks } : {}),
         ...(toolCalls ? { toolCalls } : {}),
+        ...(usage ? { usage } : {}),
       });
       continue;
     }
 
     if (record.role === "user") {
-      messages.push({ role: "user", content: record.content });
+      const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
+      const images = parseImageAttachments(record.metadata?.images);
+      messages.push({
+        role: "user",
+        content: record.content,
+        ...(kind ? { kind } : {}),
+        ...(images ? { images } : {}),
+      });
       continue;
     }
 
     if (record.role === "tool") {
       const toolCallId = record.metadata?.toolCallId as string | undefined;
+      const toolOk = record.metadata?.ok as boolean | undefined;
+      const toolFileEvent = record.metadata?.fileEvent as FileToolEvent | undefined;
+      const toolWebEvent = record.metadata?.webEvent as WebToolEvent | undefined;
+      const toolMcpEvent = record.metadata?.mcpEvent as McpToolEvent | undefined;
+      const images = parseImageAttachments(record.metadata?.images);
       messages.push({
         role: "tool",
         content: record.content,
         ...(toolCallId ? { toolCallId } : {}),
+        ...(typeof toolOk === "boolean" ? { toolOk } : {}),
+        ...(toolFileEvent ? { toolFileEvent } : {}),
+        ...(toolWebEvent ? { toolWebEvent } : {}),
+        ...(toolMcpEvent ? { toolMcpEvent } : {}),
+        ...(images ? { images } : {}),
       });
     }
   }
 
   const pendingGate = findPendingGate(records);
+  const pendingEngineSwitch = findPendingEngineSwitch(records);
+  const pendingUserQuestion = findPendingUserQuestion(records);
   if (options.synthesizeDanglingToolResults ?? false) {
-    // CR B1: a session that paused at a gate ends with an assistant message
-    // carrying a request_confirmation tool call, but no tool result was ever
-    // written (the user had not resolved the gate before the session ended).
+    // CR B1: a session that paused at an interactive request ends with an
+    // assistant message carrying a tool call, but no tool result was ever
+    // written (the user had not resolved it before the session ended).
     // The OpenAI Chat Completions API rejects an assistant tool_calls message
     // that is not followed by matching tool results. Synthesize a placeholder
     // result for non-interactive resume paths so the provider request is valid.
@@ -260,7 +397,10 @@ export async function loadSessionSnapshot(
 
   return {
     sessionId,
+    records,
+    headUuid: records.at(-1)?.uuid ?? null,
     messages,
+    ...(engine ? { engine } : {}),
     ...(providerSelection ? { providerSelection } : {}),
     ...(reasoningTier ? { reasoningTier } : {}),
     ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}),
@@ -273,7 +413,62 @@ export async function loadSessionSnapshot(
           },
         }
       : {}),
+    ...(pendingEngineSwitch
+      ? {
+          pendingEngineSwitch: {
+            request: pendingEngineSwitch.request,
+            toolCallId: pendingEngineSwitch.toolCallId,
+            assistantContent: pendingEngineSwitch.assistantContent,
+          },
+        }
+      : {}),
+    ...(pendingUserQuestion
+      ? {
+          pendingUserQuestion: {
+            question: pendingUserQuestion.question,
+            toolCallId: pendingUserQuestion.toolCallId,
+            assistantContent: pendingUserQuestion.assistantContent,
+          },
+        }
+      : {}),
   };
+}
+
+function readEngineId(value: unknown): EngineId | undefined {
+  return typeof value === "string" && (engineIds as readonly string[]).includes(value)
+    ? value as EngineId
+    : undefined;
+}
+
+function normalizeSessionRecords(records: Partial<SessionRecord>[]): SessionRecord[] {
+  let previousUuid: string | null = null;
+  return records.map((raw, index) => {
+    const sessionId = typeof raw.sessionId === "string" ? raw.sessionId : "unknown-session";
+    const uuid = typeof raw.uuid === "string" && raw.uuid.length > 0
+      ? raw.uuid
+      : `${sessionId}:legacy:${index}`;
+    const explicitParent = Object.hasOwn(raw, "parentUuid")
+      && (typeof raw.parentUuid === "string" || raw.parentUuid === null);
+    const normalized = {
+      ...raw,
+      uuid,
+      parentUuid: explicitParent ? raw.parentUuid! : previousUuid,
+    } as SessionRecord;
+    previousUuid = uuid;
+    return normalized;
+  });
+}
+
+async function readLatestRecordUuid(sessionPath: string): Promise<string | null> {
+  try {
+    const text = await readFile(sessionPath, "utf8");
+    const lines = text.split("\n").filter((line) => line.trim().length > 0);
+    const records = normalizeSessionRecords(lines.map((line) => JSON.parse(line) as Partial<SessionRecord>));
+    return records.at(-1)?.uuid ?? null;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 function readReasoningTier(value: unknown): ReasoningTier | undefined {
@@ -317,10 +512,95 @@ function findPendingGate(records: SessionRecord[]): { gate: GateRequest; toolCal
   return undefined;
 }
 
+function findPendingEngineSwitch(records: SessionRecord[]): { request: EngineSwitchRequest; toolCallId: string; assistantContent: string } | undefined {
+  const answeredToolCallIds = new Set<string>();
+  for (const record of records) {
+    if (record.role === "tool") {
+      const toolCallId = record.metadata?.toolCallId;
+      if (typeof toolCallId === "string") answeredToolCallIds.add(toolCallId);
+    }
+  }
+
+  for (let index = records.length - 1; index >= 0; index--) {
+    const record = records[index];
+    if (record.role !== "assistant") continue;
+    const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
+    const switchCall = toolCalls?.find((call) => call.name === "request_engine_switch" && !answeredToolCallIds.has(call.id));
+    if (!switchCall) return undefined;
+    try {
+      return {
+        request: parseEngineSwitchRequest(switchCall),
+        toolCallId: switchCall.id,
+        assistantContent: record.content,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function findPendingUserQuestion(records: SessionRecord[]): { question: UserQuestionRequest; toolCallId: string; assistantContent: string } | undefined {
+  const answeredToolCallIds = new Set<string>();
+  for (const record of records) {
+    if (record.role === "tool") {
+      const toolCallId = record.metadata?.toolCallId;
+      if (typeof toolCallId === "string") answeredToolCallIds.add(toolCallId);
+    }
+  }
+
+  for (let index = records.length - 1; index >= 0; index--) {
+    const record = records[index];
+    if (record.role !== "assistant") continue;
+    const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
+    const questionCall = toolCalls?.find((call) => call.name === "ask_user_question" && !answeredToolCallIds.has(call.id));
+    if (!questionCall) return undefined;
+    try {
+      return {
+        question: parseUserQuestionRequest(questionCall),
+        toolCallId: questionCall.id,
+        assistantContent: record.content,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
 function readThinkingBlocks(value: unknown): ProviderThinkingBlock[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const blocks = value.filter(isKnownThinkingBlock);
   return blocks.length > 0 ? blocks : undefined;
+}
+
+function readResponseUsage(value: unknown): ResponseUsage | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const usage: ResponseUsage = {};
+  copyFiniteNumber(source, usage, "contextInputTokens");
+  copyFiniteNumber(source, usage, "inputTokens");
+  copyFiniteNumber(source, usage, "outputTokens");
+  copyFiniteNumber(source, usage, "totalTokens");
+  copyFiniteNumber(source, usage, "cacheReadInputTokens");
+  copyFiniteNumber(source, usage, "cacheWriteInputTokens");
+  copyFiniteNumber(source, usage, "cacheHitInputTokens");
+  copyFiniteNumber(source, usage, "cacheMissInputTokens");
+  copyFiniteNumber(source, usage, "reasoningTokens");
+  copyFiniteNumber(source, usage, "effectiveTokens");
+  if (source.providerDetails && typeof source.providerDetails === "object" && !Array.isArray(source.providerDetails)) {
+    usage.providerDetails = { ...(source.providerDetails as Record<string, unknown>) };
+  }
+  return Object.keys(usage).length > 0 ? usage : undefined;
+}
+
+function copyFiniteNumber(source: Record<string, unknown>, target: ResponseUsage, key: keyof ResponseUsage): void {
+  const value = source[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    (target as Record<string, unknown>)[key] = value;
+  }
 }
 
 function isKnownThinkingBlock(value: unknown): value is ProviderThinkingBlock {
@@ -367,7 +647,7 @@ function appendDanglingToolResults(messages: ResumedMessage[]): void {
       toolCallId: call.id,
       content: JSON.stringify({
         ok: false,
-        result: "This gate was not resolved before the session ended. The user is resuming the conversation.",
+        result: "This interactive request was not resolved before the session ended. The user is resuming the conversation.",
       }),
     }));
     messages.splice(i + 1, 0, ...synthetic);

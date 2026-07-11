@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { EngineProfile } from "../engine/profile";
+import { resolveAssetsRoot } from "../runtime/assets";
 
 export type { EngineId } from "../engine/profile";
 
@@ -23,9 +24,10 @@ export async function loadPromptBundle(
   profile: EngineProfile,
   rootDir = process.cwd(),
 ): Promise<PromptBundle> {
+  const assetRoot = resolveAssetsRoot(rootDir);
   const sections = await Promise.all(
     profile.systemPrompt.map(async (relativePath) => {
-      const absolutePath = join(rootDir, relativePath);
+      const absolutePath = join(assetRoot, relativePath);
       const text = await readFileText(absolutePath);
       return { path: relativePath, text };
     }),

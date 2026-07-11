@@ -30,7 +30,7 @@
 2. 运行项目初始化脚本
 3. 生成并填写 `outline.md`
 4. 生成并填写 `story_bible.md`
-5. 停顿等待用户确认项目骨架
+5. 必须调用 `ask_user_question` 确认项目骨架，选项覆盖：继续进入第一章、调整 outline、调整 story_bible；不要添加 Skip 或自由输入选项
 
 ## Phase 2 — Chapter Loop
 
@@ -39,9 +39,9 @@
 3. 安排正文写作
 4. 章节完成后执行 Story Bible 快照与同步
 5. 触发审计并读取结果
-6. 呈现审计结果并等待用户决策
+6. 呈现审计结果，并必须调用 `ask_user_question` 获取用户决策
 
-### Decision Gate
+### Decision Checkpoint
 
 - `PASS`：继续下一章节
 - `CONDITIONAL`：优先局部返工问题场景，再重编译

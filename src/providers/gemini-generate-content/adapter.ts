@@ -1,6 +1,8 @@
 import type { VesicleConfig } from "../../config/env";
 import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../shared/types";
 import { ProviderError } from "../shared/errors";
+import { fetchProvider } from "../shared/fetch";
+import { geminiGenerateContentHeaders } from "../shared/headers";
 import { toGeminiGenerateContentBody } from "./request";
 import { responseFromGeminiBody } from "./response";
 import { readGeminiGenerateContentStream } from "./stream";
@@ -16,10 +18,14 @@ export class GeminiGenerateContentAdapter implements ProviderAdapter {
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     this.requireApiKey();
 
-    const response = await fetch(this.url(request.model.model, "generateContent"), {
+    const response = await fetchProvider(this.url(request.model.model, "generateContent"), {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(toGeminiGenerateContentBody(request)),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
     });
     const body = await response.json().catch(() => undefined) as GeminiResponse | undefined;
     if (!response.ok) {
@@ -37,10 +43,14 @@ export class GeminiGenerateContentAdapter implements ProviderAdapter {
   async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
     this.requireApiKey();
 
-    const response = await fetch(`${this.url(request.model.model, "streamGenerateContent")}?alt=sse`, {
+    const response = await fetchProvider(`${this.url(request.model.model, "streamGenerateContent")}?alt=sse`, {
       method: "POST",
-      headers: { ...this.headers(), "Accept": "text/event-stream" },
+      headers: this.headers(),
       body: JSON.stringify(toGeminiGenerateContentBody(request)),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
     });
     if (!response.ok) {
       const body = await response.json().catch(() => undefined) as GeminiResponse | undefined;
@@ -69,8 +79,8 @@ export class GeminiGenerateContentAdapter implements ProviderAdapter {
     const apiKey = this.config.apiKey ?? "";
     const authMethod = this.config.authMethod ?? "x-goog-api-key";
     return {
-      "Content-Type": "application/json",
-      ...(authMethod === "bearer" ? { "Authorization": `Bearer ${apiKey}` } : {}),
+      ...geminiGenerateContentHeaders(this.config.userAgent),
+      ...(authMethod === "bearer" ? { "authorization": `Bearer ${apiKey}` } : {}),
       ...(authMethod === "x-api-key" ? { "x-api-key": apiKey } : {}),
       ...(authMethod === "x-goog-api-key" ? { "x-goog-api-key": apiKey } : {}),
     };

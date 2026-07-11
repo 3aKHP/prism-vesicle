@@ -2,6 +2,7 @@ import { ProviderError } from "../shared/errors";
 import { thinkingBlocksFromReasoningContent } from "../shared/thinking";
 import type { VesicleResponse } from "../shared/types";
 import type { ChatCompletionResponse } from "./types";
+import { usageFromChatCompletionUsage } from "./usage";
 
 export function responseFromChatCompletionBody(
   body: ChatCompletionResponse | undefined,
@@ -32,11 +33,7 @@ export function responseFromChatCompletionBody(
     toolCalls,
     finishReason: choice?.finish_reason ?? undefined,
     raw: body,
-    usage: {
-      inputTokens: body?.usage?.prompt_tokens,
-      outputTokens: body?.usage?.completion_tokens,
-      totalTokens: body?.usage?.total_tokens,
-    },
+    usage: usageFromChatCompletionUsage(body?.usage),
   };
 }
 

@@ -7,8 +7,17 @@ providers:
     protocol: openai-chat-compatible
     baseUrl: https://api.deepseek.com/v1
     apiKeyEnv: DEEPSEEK_API_KEY
+    # Optional: which model "/model deepseek" switches to. Falls back to
+    # models[0] (deepseek-v4-flash here) when omitted.
+    defaultModel: deepseek-v4-flash
     models:
-      - deepseek-v4-flash
+      - id: deepseek-v4-flash
+        capabilities:
+          streaming: true
+          tools: true
+        limits:
+          contextWindow: 1000000
+          maxOutputTokens: 65536
       - id: deepseek-reasoner
         generation:
           temperature: 0.4
@@ -18,11 +27,21 @@ providers:
           tools: true
           reasoningTier: true
           reasoningContent: true
+        limits:
+          contextWindow: 1000000
+          maxOutputTokens: 65536
+          autoCompact:
+            enabled: true
+            threshold: 0.85
+            reserveOutputTokens: 20000
 
   local:
     protocol: openai-chat-compatible
     baseUrl: http://127.0.0.1:11434/v1
     apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY
+    # Optional: replace Vesicle's generated branded User-Agent for this
+    # provider only. Other protocol fingerprint and auth headers stay fixed.
+    # userAgent: custom-client/1.0
     models:
       - qwen3
 
@@ -38,6 +57,10 @@ providers:
         capabilities:
           tools: true
           reasoningTier: true
+          vision: true
+        limits:
+          contextWindow: 200000
+          maxOutputTokens: 8192
 
   google:
     protocol: gemini-generate-content
@@ -53,3 +76,7 @@ providers:
           tools: true
           reasoningTier: true
           reasoningContent: true
+          vision: true
+        limits:
+          contextWindow: 1000000
+          maxOutputTokens: 65536

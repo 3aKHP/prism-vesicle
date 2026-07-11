@@ -9,7 +9,9 @@ import { describe, expect, test } from "bun:test";
  * `const gate = pendingGate()` and JSX referenced that frozen local, so
  * Solid could not track the signal dependency and the <Show when={gate}>
  * never re-evaluated after the initial render. The gate Select box never
- * appeared even though pendingGate was set.
+ * appeared even though pendingGate was set. The current code routes both
+ * request_confirmation and request_engine_switch through an activeGateRequest
+ * memo; this test guards that reactive JSX dependency.
  *
  * OpenTUI's testRender does not reliably replay signal-driven re-renders
  * in this Bun version, so a behavioural test is not feasible. This static
@@ -17,18 +19,81 @@ import { describe, expect, test } from "bun:test";
  * directly in JSX, preventing the snapshot pattern from sneaking back in.
  */
 describe("TUI reactivity static guard", () => {
-  test("Show reads pendingGate() directly in JSX (not via a frozen local)", async () => {
+  test("Show reads activeGateRequest() directly in JSX (not via a frozen local)", async () => {
     const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
 
-    // The fix reads the signal directly in the JSX when= prop so Solid
-    // tracks the dependency and re-renders the Show branch when the gate
-    // is set. Assert the positive pattern is present.
-    expect(source).toMatch(/when=\{pendingGate\(\)\}/);
+    // The fix reads a reactive memo directly in the JSX when= prop so Solid
+    // tracks the dependency and re-renders the Show branch when a gate or
+    // engine switch request is set. Assert the positive pattern is present.
+    expect(source).toMatch(/when=\{activeGateRequest\(\)\}/);
 
     // And the buggy pattern — Show reading a bare `gate` local captured at
     // render-body scope — must be absent. The status header used to read
     // `gate ?` off the same snapshot; assert both now reference the signal.
     expect(source).not.toMatch(/when=\{gate\}/);
     expect(source).not.toMatch(/pendingGate\(\) \? palette\.gateAccent : gate \?/);
+  });
+
+  test("main layout does not depend on every prompt character", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const layoutBlock = source.match(/const layout = createMemo\(\(\) => resolveTuiLayout\([\s\S]*?\n  \)\);/)?.[0] ?? "";
+
+    expect(layoutBlock).toContain("inputNeedsExpandedBottom()");
+    expect(layoutBlock).toContain("Boolean(modelPicker())");
+    expect(layoutBlock).not.toContain("inputValue()");
+  });
+
+  test("slash-command rows derive selection reactively", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "widgets", "CommandMenu.tsx"), "utf8");
+
+    expect(source).toContain("const isSelected = () => index() === safeSelected()");
+    expect(source).not.toMatch(/const isSelected = index === safeSelected\(\)/);
+  });
+
+  test("command argument rows derive selection reactively", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "widgets", "ArgumentMenu.tsx"), "utf8");
+
+    expect(source).toContain("const isSelected = () => index() === safeSelected()");
+  });
+
+  test("slash-command query changes reset the selected row", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+
+    expect(source).toContain("const query = commandMenuOpen() ? commandMenuQuery() : null");
+    expect(source).toContain("if (query !== previousCommandMenuQuery) setCommandMenuSelected(0)");
+  });
+
+  test("Ctrl+Q exits before modal keyboard routing", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const ctrlQ = source.indexOf('if (key.ctrl && key.name === "q")');
+    const modelPickerRouting = source.indexOf("if (modelPicker())");
+
+    expect(ctrlQ).toBeGreaterThan(-1);
+    expect(modelPickerRouting).toBeGreaterThan(ctrlQ);
+  });
+
+  test("image paste is owned by the main composer after modal routing", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const gateRouting = source.indexOf("if (pendingGate() || pendingEngineSwitch())");
+    const imagePaste = source.indexOf('key.name?.toLowerCase() === "v" && (key.meta || key.option)');
+    const composerRouting = source.indexOf("if (handleComposerKey(key))");
+
+    expect(imagePaste).toBeGreaterThan(gateRouting);
+    expect(composerRouting).toBeGreaterThan(imagePaste);
+  });
+
+  test("gate Reject composer owns both keyboard and paste routing", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const activeChecks = source.match(/gateComposerIsActive\(gateFocus\(\), gateFeedbackMode\(\)\)/g) ?? [];
+
+    // Keyboard, paste, and gate summary-height budgeting share the predicate.
+    expect(activeChecks).toHaveLength(3);
+  });
+
+  test("question freeform composer owns both keyboard and paste routing", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const activeChecks = source.match(/questionComposerIsActive\(/g) ?? [];
+
+    expect(activeChecks).toHaveLength(2);
   });
 });

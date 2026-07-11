@@ -48,6 +48,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
           response: { content: message.content },
         },
       });
+      pendingToolResults.push(...geminiImageParts(message.images));
       continue;
     }
 
@@ -72,13 +73,35 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
 
     if (flushedToolResults) {
       if (message.content) flushedToolResults.parts?.push({ text: message.content });
+      flushedToolResults.parts?.push(...geminiImageParts(message.images));
       continue;
     }
-    serialized.push({ role: "user", parts: message.content ? [{ text: message.content }] : [{ text: "" }] });
+    const parts = [
+      ...(message.content ? [{ text: message.content }] : []),
+      ...geminiImageParts(message.images),
+    ];
+    serialized.push({ role: "user", parts: parts.length > 0 ? parts : [{ text: "" }] });
   }
 
   flushToolResults();
   return serialized;
+}
+
+function geminiImageParts(images: VesicleRequest["messages"][number]["images"]): GeminiPart[] {
+  return (images ?? []).flatMap((image, index) => [
+    { text: `[Image #${index + 1}: ${image.sourcePath ?? image.filename ?? image.source}]` },
+    {
+      inlineData: {
+        mimeType: image.mediaType,
+        data: requireImageData(image.data, image.id),
+      },
+    },
+  ]);
+}
+
+function requireImageData(data: string | undefined, id: string): string {
+  if (!data) throw new Error(`Image attachment was not materialized before provider serialization: ${id}.`);
+  return data;
 }
 
 function toolNameFromCallId(contents: GeminiContent[], callId: string | undefined): string {
@@ -125,7 +148,7 @@ function thinkingLevelForTier(tier: ReasoningTier): string {
       return "minimal";
     case "low":
       return "low";
-    case "midium":
+    case "medium":
       return "medium";
     case "high":
     case "xhigh":
@@ -138,7 +161,7 @@ function thinkingBudgetForTier(tier: Exclude<ReasoningTier, "off">): number {
   switch (tier) {
     case "low":
       return 1024;
-    case "midium":
+    case "medium":
       return 2048;
     case "high":
       return 4096;

@@ -2,8 +2,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { resolveGate, runPrompt } from "../src/core/agent-loop/run";
+import { resolveEngineSwitch, resolveGate, resolveUserQuestion, runPrompt } from "../src/core/agent-loop/run";
 import type { AgentLoopEvent } from "../src/core/agent-loop/run";
+import { ingestImageBytes } from "../src/core/attachments/store";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -75,10 +76,69 @@ describe("agent loop sessions", () => {
     expect(records.map((record) => record.role)).toEqual([
       "system",
       "user",
+      "system",
       "assistant",
       "user",
+      "system",
       "assistant",
     ]);
+    expect(records.filter((record) => record.metadata?.kind === "file-history-snapshot")).toHaveLength(2);
+  });
+
+  test("materializes conversation images and persists only attachment references", async () => {
+    await configureTestProviderEnv({ vision: true });
+    const rootDir = await createPromptRoot();
+    const image = await ingestImageBytes(rootDir, testPng(), { source: "clipboard", filename: "capture.png" });
+    let requestBody: any;
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({ id: "chat-image", choices: [{ message: { content: "seen" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "inspect [Image #1]",
+      rootDir,
+      images: [image],
+      messages: [{ role: "user", content: "inspect [Image #1]", images: [image] }],
+    });
+    expect(result.kind).toBe("complete");
+    expect(requestBody.messages[1].content).toContainEqual(expect.objectContaining({
+      type: "image_url",
+      image_url: expect.objectContaining({ url: expect.stringContaining("data:image/png;base64,") }),
+    }));
+    const records = (await readFile(result.sessionPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    expect(records[1].metadata.images[0].data).toBeUndefined();
+  });
+
+  test("passes view_image output back to vision models as image content", async () => {
+    await configureTestProviderEnv({ vision: true });
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "source_materials", "reference.png"), testPng());
+    const bodies: any[] = [];
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      const body = JSON.parse(String(init?.body));
+      bodies.push(body);
+      if (bodies.length === 1) {
+        return Response.json({
+          id: "chat-view-1",
+          choices: [{ message: {
+            content: "",
+            tool_calls: [{
+              id: "call-view",
+              type: "function",
+              function: { name: "view_image", arguments: '{"path":"source_materials/reference.png"}' },
+            }],
+          } }],
+        });
+      }
+      return Response.json({ id: "chat-view-2", choices: [{ message: { content: "seen" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({ input: "inspect the reference", rootDir });
+    expect(result.kind).toBe("complete");
+    const imageFollowUp = bodies[1].messages.find((message: any) =>
+      message.role === "user" && Array.isArray(message.content));
+    expect(imageFollowUp.content).toContainEqual(expect.objectContaining({ type: "image_url" }));
   });
 
   test("passes generation thinking tier to the provider request", async () => {
@@ -105,6 +165,32 @@ describe("agent loop sessions", () => {
       thinking: { type: "enabled" },
       reasoning_effort: "max",
     });
+  });
+
+  test("propagates host cancellation to the provider request", async () => {
+    const rootDir = await createPromptRoot();
+    const controller = new AbortController();
+    let providerSignal: AbortSignal | undefined;
+    let markFetchStarted: () => void = () => undefined;
+    const fetchStarted = new Promise<void>((resolve) => { markFetchStarted = resolve; });
+    globalThis.fetch = ((_input: unknown, init?: RequestInit) => {
+      providerSignal = init?.signal ?? undefined;
+      markFetchStarted();
+      return new Promise<Response>((_resolve, reject) => {
+        if (providerSignal?.aborted) {
+          reject(new DOMException("Aborted", "AbortError"));
+          return;
+        }
+        providerSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      });
+    }) as typeof fetch;
+
+    const turn = runPrompt({ input: "cancel me", rootDir, signal: controller.signal });
+    await fetchStarted;
+    controller.abort("user-cancel");
+
+    await expect(turn).rejects.toMatchObject({ name: "AbortError" });
+    expect(providerSignal).toBe(controller.signal);
   });
 
   test("passes configured model generation defaults to the provider request", async () => {
@@ -368,8 +454,9 @@ describe("agent loop gates", () => {
 
     const jsonl = await readFile(result.sessionPath, "utf8");
     const records = jsonl.trim().split("\n").map((line) => JSON.parse(line));
-    expect(records.map((record) => record.role)).toEqual(["system", "user", "assistant"]);
-    expect(records[2].metadata.toolCalls[0].name).toBe("request_confirmation");
+    expect(records.map((record) => record.role)).toEqual(["system", "user", "system", "assistant"]);
+    expect(records[2]?.metadata?.kind).toBe("file-history-snapshot");
+    expect(records[3].metadata.toolCalls[0].name).toBe("request_confirmation");
   });
 
   test("resolveGate confirm advances the loop and threads the decision to the model", async () => {
@@ -451,7 +538,7 @@ describe("agent loop gates", () => {
     expect(resumedToolMessages.some((m) => m.toolCallId === paused.toolCallId)).toBe(true);
   });
 
-  test("resolveGate revise threads feedback into the follow-up turn", async () => {
+  test("resolveGate reject threads feedback into the follow-up turn", async () => {
     const rootDir = await createPromptRoot({ stopGates: ["blueprint-confirmation"] });
     let callCount = 0;
     const seenBodies: Array<{ messages: Array<{ role: string; content: string }> }> = [];
@@ -505,12 +592,512 @@ describe("agent loop gates", () => {
       messages: paused.messages,
       toolCallId: paused.toolCallId,
       gate: paused.gate,
-      resolution: { decision: "revise", feedback: "change archetype to trickster" },
+      resolution: { decision: "reject", feedback: "change archetype to trickster" },
     });
 
     expect(resumed.kind).toBe("complete");
     const finalMessages = seenBodies[1].messages;
     expect(finalMessages.some((m) => m.role === "user" && m.content.includes("change archetype to trickster"))).toBe(true);
+  });
+
+  test("surfaces request_engine_switch as a user-confirmed handoff", async () => {
+    const rootDir = await createPromptRoot();
+
+    globalThis.fetch = (async () => {
+      return Response.json({
+        id: "chatcmpl-engine-switch",
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              content: "Runtime should handle the next step.",
+              tool_calls: [
+                {
+                  id: "call-engine-switch",
+                  type: "function",
+                  function: {
+                    name: "request_engine_switch",
+                    arguments: JSON.stringify({
+                      targetEngine: "runtime",
+                      reason: "The cards are ready for turn simulation.",
+                      handoffSummary: "Use workspace/a.md and workspace/b.md.",
+                      recommendedNextAction: "Open the runtime log.",
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue workflow",
+      rootDir,
+      messages: [{ role: "user", content: "continue workflow" }],
+    });
+
+    expect(result.kind).toBe("needs_engine_switch");
+    if (result.kind !== "needs_engine_switch") throw new Error("expected needs_engine_switch");
+    expect(result.request.targetEngine).toBe("runtime");
+    expect(result.toolCallId).toBe("call-engine-switch");
+
+    const jsonl = await readFile(result.sessionPath, "utf8");
+    const records = jsonl.trim().split("\n").map((line) => JSON.parse(line));
+    expect(records.map((record) => record.role)).toEqual(["system", "user", "system", "assistant"]);
+    expect(records[2]?.metadata?.kind).toBe("file-history-snapshot");
+    expect(records[3].metadata.toolCalls[0].name).toBe("request_engine_switch");
+  });
+
+  test("resolveEngineSwitch confirms without making another provider request", async () => {
+    const rootDir = await createPromptRoot();
+    let callCount = 0;
+
+    globalThis.fetch = (async () => {
+      callCount += 1;
+      return Response.json({
+        id: "chatcmpl-engine-switch",
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              content: "Runtime should handle this.",
+              tool_calls: [
+                {
+                  id: "call-engine-switch",
+                  type: "function",
+                  function: {
+                    name: "request_engine_switch",
+                    arguments: JSON.stringify({
+                      targetEngine: "runtime",
+                      reason: "Turn simulation is next.",
+                      handoffSummary: "Character and scenario cards are available.",
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+    }) as unknown as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "continue workflow",
+      rootDir,
+      messages: [{ role: "user", content: "continue workflow" }],
+    });
+    if (paused.kind !== "needs_engine_switch") throw new Error("expected needs_engine_switch");
+
+    const resolved = await resolveEngineSwitch({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      toolCallId: paused.toolCallId,
+      request: paused.request,
+      resolution: { decision: "confirm" },
+    });
+
+    expect(callCount).toBe(1);
+    expect(resolved.kind).toBe("engine_switched");
+    if (resolved.kind !== "engine_switched") throw new Error("expected confirmed engine switch");
+    expect(resolved.engine).toBe("runtime");
+    expect(resolved.messages.at(-2)?.role).toBe("tool");
+    expect(resolved.messages.at(-2)?.content).toContain("Engine switch confirmed");
+    expect(resolved.messages.at(-1)).toMatchObject({ role: "user" });
+    expect(resolved.messages.at(-1)?.content).toContain("[engine_handoff]");
+    expect(resolved.messages.at(-1)?.content).toContain("Character and scenario cards are available.");
+
+    const jsonl = await readFile(resolved.sessionPath, "utf8");
+    const records = jsonl.trim().split("\n").map((line) => JSON.parse(line));
+    expect(records.at(-3).metadata.name).toBe("request_engine_switch");
+    expect(records.at(-3).metadata.transition).toMatchObject({
+      source: "model_request",
+      decision: "confirmed",
+      fromEngine: "etl",
+      toEngine: "runtime",
+      contextPolicy: "preserve_full",
+    });
+    expect(records.at(-2).metadata).toMatchObject({ kind: "engine-switch", engine: "runtime" });
+    expect(records.at(-2).metadata.transition).toMatchObject({ source: "model_request", decision: "confirmed" });
+    expect(records.at(-1).role).toBe("user");
+    expect(records.at(-1).content).toContain("[engine_handoff]");
+    expect(records.at(-1).metadata).toMatchObject({ kind: "engine-handoff", engine: "runtime" });
+  });
+
+  test("resolveEngineSwitch can record a summary context policy", async () => {
+    const rootDir = await createPromptRoot();
+
+    globalThis.fetch = (async () => Response.json({
+      id: "chatcmpl-engine-switch-summary",
+      choices: [
+        {
+          finish_reason: "tool_calls",
+          message: {
+            content: "Runtime should handle this.",
+            tool_calls: [
+              {
+                id: "call-engine-switch-summary",
+                type: "function",
+                function: {
+                  name: "request_engine_switch",
+                  arguments: JSON.stringify({
+                    targetEngine: "runtime",
+                    reason: "Turn simulation is next.",
+                    handoffSummary: "Cards are ready.",
+                  }),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })) as unknown as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "continue workflow",
+      rootDir,
+      messages: [{ role: "user", content: "continue workflow" }],
+    });
+    if (paused.kind !== "needs_engine_switch") throw new Error("expected needs_engine_switch");
+
+    const resolved = await resolveEngineSwitch({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      toolCallId: paused.toolCallId,
+      request: paused.request,
+      resolution: { decision: "confirm" },
+      contextPolicy: "summary",
+    });
+
+    expect(resolved.kind).toBe("engine_switched");
+    if (resolved.kind !== "engine_switched") throw new Error("expected confirmed engine switch");
+    expect(resolved.messages.at(-1)?.content).toContain("Context Policy: summary");
+
+    const jsonl = await readFile(resolved.sessionPath, "utf8");
+    const records = jsonl.trim().split("\n").map((line) => JSON.parse(line));
+    expect(records.at(-3).metadata.transition).toMatchObject({
+      source: "model_request",
+      decision: "confirmed",
+      contextPolicy: "summary",
+    });
+    expect(records.at(-1).content).toContain("Context Policy: summary");
+  });
+
+  test("resolveEngineSwitch reject returns the tool result to the current engine", async () => {
+      const rootDir = await createPromptRoot();
+      const requestBodies: Array<{ messages?: Array<{ role?: string; content?: string }> }> = [];
+
+      globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+        const [, init] = args;
+        const body = JSON.parse(String(init?.body ?? "{}")) as { messages?: Array<{ role?: string; content?: string }> };
+        requestBodies.push(body);
+        if (requestBodies.length === 1) {
+          return Response.json({
+            id: "chatcmpl-engine-switch-reject",
+            choices: [{
+              finish_reason: "tool_calls",
+              message: {
+                content: "Runtime should handle this.",
+                tool_calls: [{
+                  id: "call-engine-switch-reject",
+                  type: "function",
+                  function: {
+                    name: "request_engine_switch",
+                    arguments: JSON.stringify({
+                      targetEngine: "runtime",
+                      reason: "Turn simulation is next.",
+                      handoffSummary: "Character and scenario cards are available.",
+                    }),
+                  },
+                }],
+              },
+            }],
+          });
+        }
+        return Response.json({
+          id: "chatcmpl-engine-switch-reject-continued",
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "Stayed in ETL after rejection." },
+          }],
+        });
+      }) as unknown as typeof fetch;
+
+      const paused = await runPrompt({
+        input: "continue workflow",
+        rootDir,
+        messages: [{ role: "user", content: "continue workflow" }],
+      });
+      if (paused.kind !== "needs_engine_switch") throw new Error("expected needs_engine_switch");
+
+      const resolved = await resolveEngineSwitch({
+        engine: "etl",
+        rootDir,
+        sessionId: paused.sessionId,
+        messages: paused.messages,
+        toolCallId: paused.toolCallId,
+        request: paused.request,
+        resolution: { decision: "reject", feedback: "Please revise before switching." },
+      });
+
+      expect(requestBodies).toHaveLength(2);
+      expect(resolved.kind).toBe("complete");
+      if (resolved.kind !== "complete") throw new Error("expected current-engine continuation");
+      expect(resolved.response.content).toBe("Stayed in ETL after rejection.");
+      const continuationMessages = requestBodies[1].messages ?? [];
+      const toolResult = continuationMessages.find((message) => message.role === "tool");
+      expect(toolResult?.content).toContain("Please revise before switching.");
+      expect(toolResult?.content).toContain('"confirmed":false');
+  });
+
+  test("resolveEngineSwitch reject without feedback asks the current engine to clarify", async () => {
+    const rootDir = await createPromptRoot();
+    const requestBodies: Array<{ messages?: Array<{ role?: string; content?: string }> }> = [];
+
+    globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+      const [, init] = args;
+      const body = JSON.parse(String(init?.body ?? "{}")) as { messages?: Array<{ role?: string; content?: string }> };
+      requestBodies.push(body);
+      if (requestBodies.length === 1) {
+        return Response.json({
+          id: "chatcmpl-engine-switch-empty-reject",
+          choices: [{
+            finish_reason: "tool_calls",
+            message: {
+              content: "Runtime should handle this.",
+              tool_calls: [{
+                id: "call-engine-switch-empty-reject",
+                type: "function",
+                function: {
+                  name: "request_engine_switch",
+                  arguments: JSON.stringify({
+                    targetEngine: "runtime",
+                    reason: "Turn simulation is next.",
+                    handoffSummary: "Character and scenario cards are available.",
+                  }),
+                },
+              }],
+            },
+          }],
+        });
+      }
+      return Response.json({
+        id: "chatcmpl-engine-switch-empty-reject-continued",
+        choices: [{ finish_reason: "stop", message: { content: "What should change?" } }],
+      });
+    }) as unknown as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "continue workflow",
+      rootDir,
+      messages: [{ role: "user", content: "continue workflow" }],
+    });
+    if (paused.kind !== "needs_engine_switch") throw new Error("expected needs_engine_switch");
+
+    const resolved = await resolveEngineSwitch({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      toolCallId: paused.toolCallId,
+      request: paused.request,
+      resolution: { decision: "reject" },
+    });
+
+    expect(resolved.kind).toBe("complete");
+    const toolResult = requestBodies[1].messages?.find((message) => message.role === "tool");
+    expect(toolResult?.content).toContain("rejected without specific feedback");
+    expect(toolResult?.content).toContain('"confirmed":false');
+  });
+
+  test("surfaces ask_user_question as a user question pause", async () => {
+    const rootDir = await createPromptRoot();
+
+    globalThis.fetch = (async () => {
+      return Response.json({
+        id: "chatcmpl-question",
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              content: "I need one choice before continuing.",
+              tool_calls: [
+                {
+                  id: "call-question",
+                  type: "function",
+                  function: {
+                    name: "ask_user_question",
+                    arguments: JSON.stringify({
+                      header: "Scope",
+                      question: "Which scope should I use?",
+                      options: [
+                        { label: "Narrow", description: "Only change the minimum needed." },
+                        { label: "Broad", description: "Include adjacent cleanup." },
+                      ],
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue workflow",
+      rootDir,
+      messages: [{ role: "user", content: "continue workflow" }],
+    });
+
+    expect(result.kind).toBe("needs_user_question");
+    if (result.kind !== "needs_user_question") throw new Error("expected needs_user_question");
+    expect(result.question.header).toBe("Scope");
+    expect(result.question.options.map((option) => option.label)).toEqual(["Narrow", "Broad", "Skip", "Answer freely"]);
+    expect(result.question.options[2].kind).toBe("skip");
+    expect(result.question.options[3].kind).toBe("freeform");
+  });
+
+  test("resolveUserQuestion continues the engine loop with the selected answer", async () => {
+    const rootDir = await createPromptRoot();
+    let callCount = 0;
+    const seenBodies: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      callCount += 1;
+      seenBodies.push(JSON.parse(String(init?.body)));
+      if (callCount === 1) {
+        return Response.json({
+          id: "chatcmpl-question",
+          choices: [
+            {
+              finish_reason: "tool_calls",
+              message: {
+                content: "Pick a scope.",
+                tool_calls: [
+                  {
+                    id: "call-question",
+                    type: "function",
+                    function: {
+                      name: "ask_user_question",
+                      arguments: JSON.stringify({
+                        header: "Scope",
+                        question: "Which scope should I use?",
+                        options: [
+                          { label: "Narrow", description: "Only change the minimum needed." },
+                          { label: "Broad", description: "Include adjacent cleanup." },
+                        ],
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        });
+      }
+      return Response.json({
+        id: "chatcmpl-answer",
+        choices: [{ message: { content: "Continuing narrowly." } }],
+      });
+    }) as unknown as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "continue workflow",
+      rootDir,
+      messages: [{ role: "user", content: "continue workflow" }],
+    });
+    if (paused.kind !== "needs_user_question") throw new Error("expected needs_user_question");
+
+    const resumed = await resolveUserQuestion({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      toolCallId: paused.toolCallId,
+      question: paused.question,
+      answer: { selectedIndex: 0, label: "Narrow", description: "Only change the minimum needed." },
+    });
+
+    expect(resumed.kind).toBe("complete");
+    if (resumed.kind !== "complete") throw new Error("expected complete");
+    expect(resumed.response.content).toBe("Continuing narrowly.");
+    expect(seenBodies[1].messages.some((m) => m.role === "tool" && m.content.includes("Narrow"))).toBe(true);
+    expect(seenBodies[1].messages.some((m) => m.role === "user" && m.content.includes("[question:Scope answered]"))).toBe(true);
+  });
+
+  test("resolveUserQuestion threads free-form fallback answers", async () => {
+    const rootDir = await createPromptRoot();
+    let callCount = 0;
+    const seenBodies: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      callCount += 1;
+      seenBodies.push(JSON.parse(String(init?.body)));
+      if (callCount === 1) {
+        return Response.json({
+          id: "chatcmpl-question",
+          choices: [
+            {
+              finish_reason: "tool_calls",
+              message: {
+                content: "Pick a scope.",
+                tool_calls: [
+                  {
+                    id: "call-question",
+                    type: "function",
+                    function: {
+                      name: "ask_user_question",
+                      arguments: JSON.stringify({
+                        header: "Scope",
+                        question: "Which scope should I use?",
+                        options: [
+                          { label: "Narrow", description: "Only change the minimum needed." },
+                          { label: "Broad", description: "Include adjacent cleanup." },
+                        ],
+                      }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        });
+      }
+      return Response.json({
+        id: "chatcmpl-answer",
+        choices: [{ message: { content: "Continuing." } }],
+      });
+    }) as unknown as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "continue workflow",
+      rootDir,
+      messages: [{ role: "user", content: "continue workflow" }],
+    });
+    if (paused.kind !== "needs_user_question") throw new Error("expected needs_user_question");
+
+    await resolveUserQuestion({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      toolCallId: paused.toolCallId,
+      question: paused.question,
+      answer: { selectedIndex: 3, label: "Answer freely", description: "Type freely.", kind: "freeform", freeformText: "Keep the file format unchanged." },
+    });
+
+    expect(seenBodies[1].messages.some((m) => m.role === "tool" && m.content.includes("freeformText"))).toBe(true);
+    expect(seenBodies[1].messages.some((m) => m.role === "user" && m.content.includes("[question:Scope answered freely] Keep the file format unchanged."))).toBe(true);
+
+    const jsonl = await readFile(paused.sessionPath, "utf8");
+    expect(jsonl).toContain('"answerKind":"freeform"');
+    expect(jsonl).toContain("Keep the file format unchanged.");
   });
 
   test("a gate the engine did not declare is refused, not paused", async () => {
@@ -581,6 +1168,7 @@ async function createPromptRoot(options: { stopGates?: string[]; validators?: st
   await mkdir(engineDir, { recursive: true });
   await mkdir(enginesDir, { recursive: true });
   await mkdir(join(rootDir, "workspace"), { recursive: true });
+  await mkdir(join(rootDir, "source_materials"), { recursive: true });
   await writeFile(join(sharedDir, "vesicle-base.md"), "base\n", "utf8");
   await writeFile(join(engineDir, "etl.md"), "etl\n", "utf8");
 
@@ -605,6 +1193,7 @@ async function createPromptRoot(options: { stopGates?: string[]; validators?: st
     "  - session.write",
     "  - list_files",
     "  - read_file",
+    "  - view_image",
     "  - write_file",
     validatorsBlock,
     stopGatesBlock,
@@ -617,7 +1206,7 @@ async function createPromptRoot(options: { stopGates?: string[]; validators?: st
   return rootDir;
 }
 
-async function configureTestProviderEnv(options: { models?: string[] } = {}): Promise<void> {
+async function configureTestProviderEnv(options: { models?: string[]; vision?: boolean } = {}): Promise<void> {
   const configDir = await mkdtemp(join(tmpdir(), "vesicle-agent-provider-"));
   providerConfigDirs.push(configDir);
   const configPath = join(configDir, "providers.yaml");
@@ -631,7 +1220,13 @@ async function configureTestProviderEnv(options: { models?: string[] } = {}): Pr
     "    baseUrl: https://provider.test/v1",
     "    apiKeyEnv: TEST_PROVIDER_API_KEY",
     "    models:",
-    ...(options.models ?? ["      - test-model"]),
+    ...(options.models ?? (options.vision
+      ? [
+          "      - id: test-model",
+          "        capabilities:",
+          "          vision: true",
+        ]
+      : ["      - test-model"])),
     "",
   ].join("\n"), "utf8");
   await writeFile(join(configDir, ".env"), "TEST_PROVIDER_API_KEY=test-key\n", "utf8");
@@ -641,6 +1236,10 @@ async function configureTestProviderEnv(options: { models?: string[] } = {}): Pr
   delete process.env.VESICLE_PROVIDER;
   delete process.env.VESICLE_BASE_URL;
   delete process.env.VESICLE_MODEL;
+}
+
+function testPng(): Uint8Array {
+  return Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 }
 
 async function cleanupProviderConfigDirs(): Promise<void> {

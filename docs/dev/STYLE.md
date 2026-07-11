@@ -11,9 +11,11 @@ cli/            # command dispatch only
 tui/            # OpenTUI rendering and keyboard interaction
 config/         # environment loading and config inspection
 core/engine/    # engine profile YAML loading
+core/artifacts/ # artifact discovery, preview bounds, validation selection
 core/prompt/    # prompt asset loading and composition
 core/session/   # durable session persistence + resume helpers
 core/tools/     # host tool contracts and execution
+mcp/            # external MCP tool discovery and execution
 core/gate/      # request_confirmation tool + GateRequest types
 core/agent-loop/# provider requests, tool loop, gate pause/resume
 core/validators/# Module A/B v9 schema checks + registry
@@ -25,9 +27,12 @@ Allowed dependency direction:
 
 - `cli -> tui, core, config`
 - `tui -> core, config, providers/types`
-- `core/agent-loop -> providers, prompt, session, tools, gate, engine, validators`
+- `core/agent-loop -> providers, prompt, session, tools, gate, engine, validators, mcp`
+- `core/artifacts -> tools, validators`
 - `providers -> providers/shared` and config only
 - `core/tools` must not depend on providers or TUI
+- `mcp` must not depend on providers or TUI; it may depend on core tool types
+  and engine ids for tool definitions and engine scoping
 - `core/gate` depends only on `core/tools` types
 
 ## File Size And Responsibility
@@ -48,16 +53,53 @@ back. They must not:
 - know about Prism engine phases
 - implement host tools directly
 
-Tool calls are normalized into `ToolCall` and executed by `core/tools`.
+Tool calls are normalized into `ToolCall` and executed by `core/tools`. MCP
+tools are the origin exception, not a provider-shape exception: the agent loop
+discovers them through `src/mcp`, exposes them as ordinary function tool
+definitions, and dispatches `mcp_<prefix>_<tool>` aliases back through the MCP
+registry. Provider adapters still see only normalized tool definitions and
+tool-call messages.
 
 Provider selection is host state, not prompt state. The TUI may switch among
 configured provider/model profiles, but adapters still receive a normalized
 `VesicleRequest` and must not know about sessions, artifacts, or Prism phases.
+Provider responses may include normalized usage counters (`contextInputTokens`,
+`inputTokens`, `outputTokens`, cache read/write/hit/miss counts, reasoning
+tokens, and effective tokens). `contextInputTokens` is the request's active
+context-window occupancy after provider-specific cache accounting: do not add
+cached tokens twice for OpenAI-compatible/Gemini providers, but do include
+Anthropic cache creation/read counters. Adapters may map provider-native usage
+detail objects into `providerDetails`, but must keep raw requests, headers,
+URLs, and secrets out of that metadata. Pricing and billing policy belong
+outside adapters.
+User and tool messages may carry durable image attachment references. Core
+materializes those references into base64 before invoking an adapter;
+provider adapters map already-materialized data to native image blocks and
+must not read image files themselves. Models opt in with
+`capabilities.vision: true`; non-vision models receive neither image content
+nor the `view_image` tool.
 Generation controls follow the same rule: core/TUI may pass the normalized
-`reasoningTier` values (`off`, `low`, `midium`, `high`, `xhigh`, `max`), but
+`reasoningTier` values (`off`, `low`, `medium`, `high`, `xhigh`, `max`), but
 only the provider adapter maps them to wire fields such as `thinking` and
 `reasoning_effort`. TUI commands may offer `auto`/`unset` to clear an explicit
 selection; that means no `reasoningTier` is sent.
+Provider HTTP calls share one transport retry policy under `providers/shared`.
+Retry only failures that are safe before a response is consumed: connection
+errors, 408, 429, and 5xx. Use bounded exponential backoff with jitter, honor a
+bounded `Retry-After`, and let host cancellation interrupt both fetch and
+backoff. Do not replay a partially consumed SSE stream inside an adapter; that
+requires agent-loop/TUI reconciliation so deltas and tool calls cannot be
+duplicated.
+Application-level provider headers are centralized under `providers/shared`.
+OpenAI-compatible Chat follows the audited OpenCode header shape, Anthropic
+Messages follows the Claude Code fingerprint, and Gemini follows Gemini CLI's
+Google GenAI SDK shape. Streaming must preserve each protocol's normal
+`Accept` behavior instead of applying a shared `text/event-stream` override;
+Gemini selects SSE through `alt=sse`. Leave `Host`, `Content-Length`,
+`Connection`, and compression negotiation to Bun. Authentication headers are
+injected by the adapter after the fingerprint. The only user-configurable
+header is provider-level `userAgent`; arbitrary header overrides are not part
+of the provider registry contract.
 Anthropic Messages adapters map Vesicle messages to Anthropic content blocks:
 assistant thinking blocks must be emitted before text/tool_use blocks, and
 tool results are user messages containing `tool_result` blocks. The agent loop
@@ -87,9 +129,14 @@ inline in the provider file. The user-level `.env` file beside
 `providers.yaml` is the default place for those secret values; process
 environment variables are fallback only so a legacy project-root `.env` loaded
 by the runtime cannot override the user-level secret file.
-`providers.yaml` supports string model entries for the common case and object
-model entries for `id`, `generation`, and `capabilities` metadata. Keep this
-schema small and explicit until native protocol adapters require more fields.
+`providers.yaml` supports optional provider-level `defaultModel` and
+`userAgent` fields, string model entries for the common case, and object model
+entries for `id`,
+`generation`, `capabilities`, and `limits` metadata. `generation.maxTokens` is
+the provider request default; `limits.contextWindow` is model capacity metadata
+used by `/context` and footer percentages. A `defaultModel` must name a model
+in the same provider catalog. Keep this schema small and explicit until native
+protocol adapters require more fields.
 
 ## Tool Runtime
 
@@ -99,8 +146,18 @@ Model-visible tools are a security boundary.
 - Absolute paths and traversal outside the project root are rejected.
 - Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`,
   `test_runs/`, `novels/`, `reports/`.
-- Create/write/replace/append/delete/copy-target/move roots: `workspace/`,
-  `test_runs/`, `novels/`, `reports/`.
+- Create/write/replace/append/delete/copy-target/move roots:
+  `source_materials/`, `workspace/`, `test_runs/`, `novels/`, `reports/`.
+- The canonical generated-artifact root set and display order live in
+  `core/artifacts/roots.ts`. Filesystem write guards and artifact workbench
+  discovery must consume that shared constant instead of declaring parallel
+  arrays. `source_materials/` is a writable research/input root but is not a
+  final artifact root, so `/artifact` discovery and the Artifacts sidebar stay
+  scoped to the other four roots.
+- `read_file` remains UTF-8 text-only. Binary visual inspection uses
+  `view_image`, which shares the readable-root path guard, validates image
+  magic bytes and size, and emits a structured attachment instead of base64
+  tool text.
 - `delete_file` must delete only files, never directories or directory trees.
 - `grep_files` regex mode is for trusted single-user model input. If Vesicle
   ever exposes untrusted model/plugin input, regex matching needs a timeout
@@ -110,6 +167,44 @@ Model-visible tools are a security boundary.
 - The `request_confirmation` gate tool is attached only when the active engine
   profile declares at least one stop gate. Undeclared gates are refused with a
   tool result, not paused — the model self-corrects on the next turn.
+- The `request_engine_switch` handoff tool is available to all engines. It is
+  a user-confirmed host workflow boundary, not a normal tool side effect:
+  confirmed switches update future turns and must not continue the same tool
+  loop under a different system prompt. Rejected switches must complete the
+  tool call and continue the current engine loop so the model can respond to
+  the user's feedback or ask for clarification when no feedback was supplied.
+- Engine switches use one host-level transition shape whether they come from
+  manual `/engine` commands or model-requested `request_engine_switch`
+  handoffs. Confirmed/in-session transitions may append a bounded user-role
+  `engine_handoff` packet to the conversation instead of adding a dynamic
+  history `system` message or modifying the composed system prompt. This keeps
+  the packet visible to OpenAI-compatible, Anthropic Messages, and Gemini
+  adapters while preserving the engine prompt as the stable prefix-cache
+  boundary. Runtime behavior defaults to full-context preservation; manual
+  `/engine <id> --summary [notes]` compacts first, and model-requested
+  handoffs can use the confirmation panel's `Confirm with summary` option.
+  Both record the transition as `contextPolicy: summary`. The `fresh` policy
+  remains reserved for a future explicit context-discard workflow.
+- The `ask_user_question` tool is available to all engines for one
+  user-facing single-select clarification question. The model supplies 2-4
+  concrete options; the host appends Skip and open-ended answer fallbacks while
+  preserving the model option order. The open-ended fallback exposes an inline
+  composer and continues the current engine loop after the user chooses,
+  unlike engine handoff. Do not collapse Skip and open-ended answer: neither is
+  semantically equivalent to gate rejection.
+- `web_search`, `web_fetch`, `web_map`, `web_crawl`, and `web_research` are
+  host-executed Tavily web tools, not provider adapter features. Attach them
+  only to research/audit engines that declare them, keep provider adapters
+  unaware of Tavily, and persist structured `webEvent` metadata for replay. Web
+  results do not mutate project files; engines must use file tools to write
+  synthesized notes under `source_materials/`.
+- MCP tools are host-executed external tools configured in user-level
+  `mcp.yaml` beside `providers.yaml`, or by `VESICLE_MCP_FILE`. Header values
+  may use `${ENV_VAR}` or `${ENV_VAR:-fallback}` placeholders that expand from
+  the sibling `.env` loaded for provider/Tavily secrets. Do not log or persist
+  resolved header values. The first runtime milestone supports Streamable HTTP
+  `tools/list` and `tools/call` only; stdio, classic HTTP+SSE, prompts, and
+  resources remain separate future work.
 - Tool-loop ceilings protect against genuinely stuck models, not against a
   model that legitimately chains many tool calls. The breaker fires on
   consecutive *failing* tool rounds, not on raw tool count.
@@ -125,19 +220,30 @@ coding agent's "should I let this tool run?" prompt.
 
 - A gate is declared in an engine profile's `stopGates` list and triggered by
   a `request_confirmation` tool call.
+- Engine handoff is triggered by `request_engine_switch` and confirmed through
+  the same Confirm/Reject UI pattern, with an additional Confirm with summary
+  option. It intentionally has no transition allowlist yet; concrete workflow
+  restrictions are deferred.
+- Clarifying questions are triggered by `ask_user_question` and rendered as an
+  option selector with host-owned Skip and open-ended answer fallbacks.
+  Arrow-key selection belongs to the question panel and must not scroll the
+  message history while the panel is active. Keep it distinct from
+  `request_confirmation`; question answers are ordinary information gathering,
+  not workflow gates.
 - The agent loop returns `needs_user` and hands control to the caller (TUI);
   it does not call back into the UI. Session state is durable, so resume is
   just reading the session.
 - `resolveGate()` writes the user's decision as the gate tool result and
-  continues the loop. `confirm` advances, `revise` retries with feedback,
-  `chat` retreats to free conversation.
+  continues the loop. `confirm` advances; `reject` does not advance and either
+  carries user feedback or explicitly asks the model to clarify what should
+  change before retrying.
 - Engines with no declared stop gates never offer the gate tool. A model
   cannot invent a gate the host did not approve.
 - Interactive resume must preserve unresolved gate state for the TUI. A
   non-interactive provider resume may synthesize "gate was not resolved" tool
   results to satisfy Chat Completions tool-call pairing, but the TUI should
-  restore the decision panel when the original request_confirmation arguments
-  are available.
+  restore the decision panel when the original `request_confirmation`,
+  `request_engine_switch`, or `ask_user_question` arguments are available.
 
 ## Prompt Assets
 
@@ -155,8 +261,22 @@ Prompts are runtime assets, not hardcoded source literals.
 - One interactive TUI run should reuse one active session until the user starts
   or resumes another session.
 - JSONL records are append-only.
+- Image bytes live in the ignored content-addressed
+  `.vesicle/attachments/` store. Session JSONL persists attachment ids,
+  hashes, MIME types, sizes, and relative storage/source paths, never base64
+  image payloads.
+- Conversational records carry stable `uuid` and `parentUuid` links. Rewind
+  moves the in-memory head and lets the next persisted record create a new
+  branch; it must not truncate or rewrite JSONL. Legacy linear records are
+  projected as an implicit parent chain when read.
+- A real user prompt owns the file checkpoint for the work it initiates.
+  Mutation tools must capture every affected writable path before changing it;
+  checkpoint metadata remains host-only and must not enter provider messages.
 - Provider requests must include prior user/assistant turns when continuing a
   session.
+- Response usage metadata is host-only. It may be persisted on assistant
+  records and restored for TUI footer display, but must not be forwarded back
+  to providers as part of resumed `VesicleMessage` request history.
 - Tool calls and tool results should be persisted for replay/debugging.
 - Successful filesystem tool results should persist structured `fileEvent`
   metadata on the session tool record. Callers may use this for artifact
@@ -171,6 +291,19 @@ Prompts are runtime assets, not hardcoded source literals.
   TUI display, but it is metadata and must not be merged into normal assistant
   prose. OpenAI-compatible `reasoning_content` is a compatibility bridge into
   that block structure.
+- User-selected engine profiles should be persisted as session metadata so
+  interactive resume restores which Prism workflow profile future turns and
+  gate resolution should use.
+- Engine handoff packets are user-role provider context with host metadata
+  `kind: engine-handoff`. Resume should pass them back to providers as normal
+  user messages for protocol compatibility, but the TUI should render them as
+  host/system notices, and rewind/user-turn accounting must not treat them as
+  authored prompts.
+- Compact summaries are also user-role provider context with host metadata
+  `kind: compact-summary`. `/compact` should create a new append-only branch
+  after the retained system root instead of deleting old records. Resume should
+  pass summaries back to providers, while the TUI renders them as host/system
+  notices and rewind/user-turn accounting skips them as authored prompts.
 - Session lists should mark unresolved gates so the user can distinguish a
   normal transcript from a workflow waiting for confirmation.
 - Long-running turns should emit host-visible activity events before and after
@@ -195,11 +328,54 @@ Prompts are runtime assets, not hardcoded source literals.
   squeezing the message stream below a useful width.
 - Gate and picker panels own the bottom area while active; side panes may be
   hidden during those modes so confirmation controls stay legible.
-- The wide right pane should show operational activity or artifact context, not
-  duplicate the last assistant message already visible in the main stream.
+- Artifact previews belong in the message stream as bounded, structure-
+  preserving cards. The sidebar is an index, not a second preview surface.
+- Markdown extension and LaTeX cleanup is a TUI display concern. Keep
+  terminal-readable formula conversion and static formatting fallbacks outside
+  fenced code blocks, and do not mutate session records, provider messages, or
+  artifact files for rendering-only cleanup. Prefer readable static fallbacks
+  for terminal-hostile constructs such as images and disclosure widgets instead
+  of pretending they are interactive.
+- Avoid shape-near command pairs such as singular/plural twins. Prefer one
+  canonical command that inspects or lists without arguments and acts when an
+  argument is present: `/artifact [n|path]` and `/engine [id]` follow this
+  contract.
+- Use `/effort` for provider generation effort and `/reasoning` for reasoning
+  visibility. Do not give `/engine` a `workflow` alias; that command name is
+  reserved for a future host-owned workflow surface.
+- `/rewind` and empty-input double Esc must open the same selector. The picker
+  defaults to a virtual `(current)` row, selects only authored user prompts,
+  and restores to immediately before the chosen prompt. Keep `/checkpoint` as
+  the Claude Code compatibility alias; do not introduce additional rewind
+  synonyms.
+- `/compact [notes]` is the standalone active-session compaction command. It
+  may call the provider, but it must not expose tools to the summarization
+  request. Keep optional custom instructions as plain text appended to the
+  compaction prompt.
+- Escape uses an 800ms double-press window: empty input opens rewind, non-empty
+  input saves and clears the draft, and an in-flight request is aborted. Active
+  modal panels consume Escape before the prompt-level handler.
 - Provider/model switching commands and artifact workbench commands are local
   host actions. They should add concise host notices to the transcript and must
-  not call the provider unless the command explicitly starts a revision prompt.
+  not call the provider.
+- Opening rewind and restoring checkpoints are host actions. Only `/compact`
+  and the explicit `Summarize from here` restore option call the active
+  provider.
+- Slash commands with fixed argument enums should expose those values through
+  the shared argument-completion popup instead of requiring memorized input.
+  Keep completion values sourced from the runtime enum where one exists, and
+  preserve parser aliases while completing to canonical values.
+- Main prompt editing should go through Vesicle's host-owned composer layer,
+  not directly through OpenTUI's single-line `<input>`. Keep the core keyboard
+  semantics aligned with Claude Code's prompt input model: ordinary editing
+  keys never interrupt a running turn, `Ctrl+Enter` inserts a newline,
+  `Shift+Enter` is inert when reported distinctly, plain Enter submits, and
+  Up/Down first move within soft-wrapped or explicit multiline drafts before
+  falling back to history. The render layer should own visual wrapping,
+  cursor-following viewport selection, and adaptive composer height; the
+  keyboard state machine should stay focused on text mutation and submit/
+  history actions. Trailing backslash+Enter remains a compatibility newline
+  fallback for terminals that cannot distinguish modified Enter keys.
 - Reasoning content should follow the RikkaHub-style pattern of a separate
   thinking block before assistant text: it is independent from the assistant
   markdown body, collapsible or hideable, and bounded by height/tail display so
@@ -216,7 +392,7 @@ Use Bun tests under `tests/`.
 
 Standard checks:
 
-```powershell
+```bash
 bun run typecheck
 bun test
 ```

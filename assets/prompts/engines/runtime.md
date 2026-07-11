@@ -59,7 +59,10 @@
 ### Step 3：PREPARE & WAIT
 
 1. 追加下一轮用户占位符
-2. 停顿等待用户继续或要求重生成
+2. 必须调用 `request_confirmation` 工具，参数：
+   - `gate`: `"runtime-turn"`
+   - `summary`: 写明已追加的日志路径、当前 Beat / tension / variant_config / boundary_proximity、下一轮等待用户继续还是要求重生成
+3. gate 未解决前，不得继续生成下一轮角色回应；用户 `confirm` 后再读取占位符与新输入继续，`reject` 时不得推进，若有反馈则按反馈重生成或讨论本轮回应，若无反馈则先询问用户希望修改什么
 
 ## 输出格式（三段式）
 

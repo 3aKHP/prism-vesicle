@@ -2,20 +2,29 @@ import type { VesicleConfig } from "../../config/env";
 import { loadConfigForSelection } from "../../config/providers";
 import type { ProviderSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { ProviderAdapter, ProviderThinkingBlock, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
-import { executeFileTool, fileToolDefinitions } from "../tools";
-import type { FileToolEvent, ToolCall, ToolDefinition } from "../tools";
+import type { ProviderAdapter, ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import { executeHostTool, hostToolDefinitions } from "../tools";
+import type { FileToolEvent, McpToolEvent, ToolCall, ToolDefinition, WebToolEvent } from "../tools";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import type { EngineId } from "../engine/profile";
 import { loadEngineProfile } from "../engine/profile";
 import type { EngineProfile } from "../engine/profile";
+import { engineSwitchToolDefinition, parseEngineSwitchRequest } from "../engine/switch";
+import type { EngineSwitchRequest } from "../engine/switch";
+import { ENGINE_HANDOFF_KIND, createModelEngineTransition, renderEngineHandoffPacket } from "../engine/transition";
+import type { EngineContextPolicy } from "../engine/transition";
 import { createSessionStore } from "../session/store";
 import type { SessionStore } from "../session/store";
 import { gateToolDefinition } from "../gate/types";
 import { parseGateRequest } from "../gate/types";
 import type { GateRequest, GateResolution } from "../gate/types";
+import { askUserQuestionToolDefinition, parseUserQuestionRequest } from "../user-question/types";
+import type { UserQuestionAnswer, UserQuestionRequest } from "../user-question/types";
 import { resolveValidators, runValidators } from "../validators/registry";
 import type { ValidationResult } from "../validators/registry";
+import { FileCheckpointManager } from "../checkpoints/file-history";
+import { createMcpRegistryForEngine, type McpRegistry } from "../../mcp/registry";
+import { materializeMessageImages, persistedImageAttachments } from "../attachments/store";
 
 export type { EngineId } from "../engine/profile";
 export type { GateRequest, GateResolution } from "../gate/types";
@@ -25,9 +34,13 @@ export type RunPromptOptions = {
   engine?: EngineId;
   rootDir?: string;
   sessionId?: string;
+  /** Explicit append-only branch parent used by rewind on the next user turn. */
+  sessionParentUuid?: string | null;
   messages?: VesicleMessage[];
+  images?: VesicleImageAttachment[];
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
+  signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
 };
 
@@ -41,11 +54,14 @@ export type AgentLoopEvent =
       content: string;
       reasoningContent?: string;
       thinkingBlocks?: ProviderThinkingBlock[];
+      usage?: ResponseUsage;
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
-  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent }
+  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; images?: VesicleImageAttachment[] }
   | { type: "gate_pending"; gate: string }
+  | { type: "engine_switch_pending"; targetEngine: EngineId }
+  | { type: "user_question_pending"; header: string }
   | { type: "validation"; ok: boolean };
 
 /**
@@ -114,6 +130,26 @@ export type RunPromptResult =
        * loop does not close over state across turns; the caller carries it.
        */
       messages: VesicleMessage[];
+    }
+  | {
+      kind: "needs_engine_switch";
+      sessionId: string;
+      sessionPath: string;
+      profile: EngineProfile;
+      request: EngineSwitchRequest;
+      toolCallId: string;
+      assistantContent: string;
+      messages: VesicleMessage[];
+    }
+  | {
+      kind: "needs_user_question";
+      sessionId: string;
+      sessionPath: string;
+      profile: EngineProfile;
+      question: UserQuestionRequest;
+      toolCallId: string;
+      assistantContent: string;
+      messages: VesicleMessage[];
     };
 
 /**
@@ -145,9 +181,13 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
   const profile = await loadEngineProfile(engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
   const systemPrompt = composeSystemPrompt(promptBundle);
-  const tools = resolveTools(profile);
+  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
   const isNewSession = !options.sessionId;
-  const session = await createSessionStore(rootDir, options.sessionId);
+  const session = await createSessionStore(
+    rootDir,
+    options.sessionId,
+    Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
+  );
 
   if (isNewSession) {
     await session.append({
@@ -163,6 +203,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
           displayName: profile.displayName,
           protocolVersion: profile.protocolVersion,
           tools: profile.defaultTools,
+          ...(toolSurface.mcp.definitions.length > 0 ? { mcpTools: toolSurface.mcp.definitions.map((tool) => tool.function.name) } : {}),
           validators: profile.validators,
           stopGates: profile.stopGates,
         },
@@ -170,21 +211,26 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     });
   }
 
-  await session.append({
+  const userRecord = await session.append({
     role: "user",
     content: options.input,
     metadata: {
+      engine,
       provider: config.provider,
       providerId: config.providerId,
       model: config.model,
       ...generationMetadata(generation),
+      ...(options.images ? { images: persistedImageAttachments(options.images) } : {}),
     },
   });
+  const checkpoint = new FileCheckpointManager(rootDir, session, userRecord.uuid);
+  await checkpoint.createSnapshot();
 
   const messages: VesicleMessage[] = options.messages ?? [
     {
       role: "user",
       content: options.input,
+      ...(options.images ? { images: options.images } : {}),
     },
   ];
 
@@ -193,11 +239,14 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     config,
     provider,
     systemPrompt,
-    tools,
+    tools: toolSurface.definitions,
+    mcpRegistry: toolSurface.mcp,
     messages,
     session,
     profile,
     generation,
+    checkpoint,
+    signal: options.signal,
     onEvent: options.onEvent,
   });
 }
@@ -208,15 +257,36 @@ type RunLoopArgs = {
   provider: ReturnType<typeof createProvider>;
   systemPrompt: string;
   tools: ToolDefinition[];
+  mcpRegistry: McpRegistry;
   messages: VesicleMessage[];
   session: SessionStore;
   profile: EngineProfile;
   generation?: VesicleRequest["generation"];
+  checkpoint?: FileCheckpointManager;
+  signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
 };
 
+async function prepareProviderMessages(
+  rootDir: string,
+  messages: VesicleMessage[],
+  visionEnabled: boolean,
+): Promise<VesicleMessage[]> {
+  const hasImages = messages.some((message) => (message.images?.length ?? 0) > 0);
+  if (hasImages && !visionEnabled) {
+    throw new Error("The selected model does not declare capabilities.vision: true; image attachments were not sent.");
+  }
+  return Promise.all(messages.map(async (message) => {
+    const images = await materializeMessageImages(rootDir, message.images);
+    return {
+      ...message,
+      ...(images ? { images } : {}),
+    };
+  }));
+}
+
 async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
-  const { rootDir, config, provider, systemPrompt, tools, messages, session, profile, generation, onEvent } = args;
+  const { rootDir, config, provider, systemPrompt, tools, mcpRegistry, messages, session, profile, generation, checkpoint, signal, onEvent } = args;
   const declaredGates = new Set(profile.stopGates);
 
   let response: VesicleResponse | undefined;
@@ -224,6 +294,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
 
   for (let iteration = 0; iteration < maxToolIterations; iteration++) {
     onEvent?.({ type: "provider_request", iteration });
+    const providerMessages = await prepareProviderMessages(rootDir, messages, config.capabilities?.vision === true);
     response = await completeWithStreaming(provider, {
       id: session.sessionId,
       model: {
@@ -231,9 +302,10 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         model: config.model,
       },
       system: [systemPrompt],
-      messages,
+      messages: providerMessages,
       tools,
       generation,
+      signal,
     }, onEvent);
 
     const toolCalls = response.toolCalls ?? [];
@@ -242,28 +314,29 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       content: response.content,
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
       ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
+      ...(response.usage ? { usage: response.usage } : {}),
       toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name, arguments: call.arguments })),
     });
     if (toolCalls.length === 0) {
       break;
     }
 
-    // Partition tool calls into file tools (execute immediately) and gate
-    // calls (pause the loop). A single assistant turn may legitimately mix
-    // both: the model reads several specs, then calls request_confirmation
-    // for the blueprint. We run the file tools first so their results are
-    // persisted, then hand off to the gate.
-    const fileCalls: ToolCall[] = [];
-    const gateCalls: ToolCall[] = [];
+    // Partition tool calls into host tools (execute immediately) and
+    // interactive host requests (pause the loop). A single assistant turn may
+    // legitimately mix both: the model reads several specs, then asks for a
+    // confirmation or engine handoff. We run host tools first so their results
+    // are persisted, then hand off to one interactive request.
+    const hostToolCalls: ToolCall[] = [];
+    const interactiveCalls: ToolCall[] = [];
     for (const call of toolCalls) {
-      if (call.name === "request_confirmation") {
-        gateCalls.push(call);
+      if (call.name === "request_confirmation" || call.name === "request_engine_switch" || call.name === "ask_user_question") {
+        interactiveCalls.push(call);
       } else {
-        fileCalls.push(call);
+        hostToolCalls.push(call);
       }
     }
 
-    // Persist the assistant turn carrying all tool calls (file + gate) as
+    // Persist the assistant turn carrying all tool calls (host + gate) as
     // one message, mirroring the provider's tool_call grouping. The
     // individual tool results are appended below.
     messages.push({
@@ -277,19 +350,26 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       role: "assistant",
       content: response.content,
       metadata: {
+        engine: profile.id,
+        model: config.model,
         providerResponseId: response.id,
         finishReason: response.finishReason,
         ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
         ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
+        ...(response.usage ? { usage: response.usage } : {}),
         toolCalls,
       },
     });
 
     let anyFailed = false;
 
-    for (const call of fileCalls) {
+    for (const call of hostToolCalls) {
       onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
-      const toolResult = await executeFileTool(rootDir, call);
+      const toolResult = mcpRegistry.hasTool(call.name)
+        ? await mcpRegistry.execute(call)
+        : await executeHostTool(rootDir, call, {
+          beforeMutation: (paths) => checkpoint?.trackBeforeMutation(paths) ?? Promise.resolve(),
+        });
       const content = JSON.stringify({
         ok: toolResult.ok,
         result: toolResult.content,
@@ -299,6 +379,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         role: "tool",
         toolCallId: toolResult.callId,
         content,
+        ...(toolResult.images ? { images: toolResult.images } : {}),
       });
       await session.append({
         role: "tool",
@@ -308,6 +389,9 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
           ok: toolResult.ok,
           toolCallId: toolResult.callId,
           ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
+          ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
+          ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+          ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
         },
       });
 
@@ -321,16 +405,62 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         ok: toolResult.ok,
         content: toolResult.content,
         ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
+        ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
+        ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+        ...(toolResult.images ? { images: toolResult.images } : {}),
       });
     }
 
-    if (gateCalls.length > 0) {
-      // Use the first gate call. If the model emitted several, the extras
-      // are answered with a redirect so the provider's tool_call pairing
-      // stays balanced and the model converges on one gate at a time.
-      const [primary, ...extras] = gateCalls;
-      const gate = parseGateRequest(primary);
+    if (interactiveCalls.length > 0) {
+      // Use the first interactive request. If the model emitted several, the
+      // extras are answered with a redirect so the provider's tool_call pairing
+      // stays balanced and the model converges on one user decision at a time.
+      const [primary, ...extras] = interactiveCalls;
 
+      for (const extra of extras) {
+        const redirect = JSON.stringify({
+          ok: false,
+          result: "Only one interactive request may be open at a time. The primary request is pending user resolution.",
+        });
+        messages.push({ role: "tool", toolCallId: extra.id, content: redirect });
+        await session.append({
+          role: "tool",
+          content: redirect,
+          metadata: { name: extra.name, ok: false, toolCallId: extra.id, reason: "extra-interactive-redirect" },
+        });
+      }
+
+      if (primary.name === "request_engine_switch") {
+        const request = parseEngineSwitchRequest(primary);
+        onEvent?.({ type: "engine_switch_pending", targetEngine: request.targetEngine });
+        return {
+          kind: "needs_engine_switch",
+          sessionId: session.sessionId,
+          sessionPath: session.sessionPath,
+          profile,
+          request,
+          toolCallId: primary.id,
+          assistantContent: response.content,
+          messages,
+        };
+      }
+
+      if (primary.name === "ask_user_question") {
+        const question = parseUserQuestionRequest(primary);
+        onEvent?.({ type: "user_question_pending", header: question.header });
+        return {
+          kind: "needs_user_question",
+          sessionId: session.sessionId,
+          sessionPath: session.sessionPath,
+          profile,
+          question,
+          toolCallId: primary.id,
+          assistantContent: response.content,
+          messages,
+        };
+      }
+
+      const gate = parseGateRequest(primary);
       if (!declaredGates.has(gate.gate)) {
         // Undeclared gate: do not pause. Tell the model this gate is not
         // available so it can self-correct on the next turn.
@@ -346,19 +476,6 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         });
         anyFailed = true;
       } else {
-        for (const extra of extras) {
-          const redirect = JSON.stringify({
-            ok: false,
-            result: "Only one gate may be open at a time. The primary gate request is pending user resolution.",
-          });
-          messages.push({ role: "tool", toolCallId: extra.id, content: redirect });
-          await session.append({
-            role: "tool",
-            content: redirect,
-            metadata: { name: "request_confirmation", ok: false, toolCallId: extra.id, reason: "extra-gate-redirect" },
-          });
-        }
-
         onEvent?.({ type: "gate_pending", gate: gate.gate });
         return {
           kind: "needs_user",
@@ -404,10 +521,12 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       role: "assistant",
       content: response.content,
       metadata: {
+        engine: profile.id,
+        model: config.model,
         providerResponseId: response.id,
         ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
         ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
-        usage: response.usage,
+        ...(response.usage ? { usage: response.usage } : {}),
       },
     });
   }
@@ -415,16 +534,22 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   // Run declared validators on the final assistant content. Validators are
   // advisory — failures surface to the TUI and session but never abort the
   // turn. The model's output is the source of truth; validators check it.
+  // Each validator declares its own applicability predicate, so validation
+  // fires only when the content matches a validator's target shape (YAML
+  // frontmatter for ETL cards, the three-part packet for runtime, the verdict
+  // report for evaluate) and stays silent on ordinary phase-transition prose.
   let validation: ValidatorOutcome | undefined;
-  if (profile.validators.length > 0 && shouldValidateAssistantContent(response.content)) {
+  if (profile.validators.length > 0) {
     const validators = resolveValidators(profile.validators);
-    validation = runValidators(validators, response.content);
-    await session.append({
-      role: "system",
-      content: summariseValidation(validation),
-      metadata: { kind: "validation", ok: validation.ok },
-    });
-    onEvent?.({ type: "validation", ok: validation.ok });
+    if (validators.some((validator) => validator.applies(response.content))) {
+      validation = runValidators(validators, response.content);
+      await session.append({
+        role: "system",
+        content: summariseValidation(validation),
+        metadata: { kind: "validation", ok: validation.ok },
+      });
+      onEvent?.({ type: "validation", ok: validation.ok });
+    }
   }
 
   return {
@@ -480,15 +605,6 @@ async function completeWithStreaming(
   return response;
 }
 
-function shouldValidateAssistantContent(content: string): boolean {
-  const trimmed = content.trimStart();
-  // ETL validators target Prism artifact documents, not ordinary phase
-  // transition prose. A generated artifact starts with YAML frontmatter; prose
-  // such as "confirmed, moving to Phase 1" should remain a normal assistant
-  // message and not be reported as a schema failure.
-  return trimmed.startsWith("---");
-}
-
 function summariseValidation(outcome: ValidatorOutcome): string {
   const lines: string[] = [];
   for (const entry of outcome.results) {
@@ -505,10 +621,9 @@ function summariseValidation(outcome: ValidatorOutcome): string {
  * tool result for the gate call, persists a gate-resolution record, and
  * continues the loop by treating the decision as a new user turn.
  *
- * For `confirm` the engine advances. For `revise` the feedback is forwarded
- * so the engine can rework the artifact. For `chat` the gate is closed
- * without advancing; the user's feedback (if any) still reaches the model
- * as a normal user message.
+ * For `confirm` the engine advances. For `reject` the gate is not advanced;
+ * feedback, when present, tells the engine what to change or discuss. Empty
+ * rejection is valid and asks the engine to clarify before retrying.
  *
  * This mirrors the session shape runPrompt would produce, so a resumed
  * session reads back consistently whether the gate was resolved in-process
@@ -524,6 +639,7 @@ export async function resolveGate(options: {
   resolution: GateResolution;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
+  signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
@@ -533,7 +649,7 @@ export async function resolveGate(options: {
   const profile = await loadEngineProfile(options.engine, rootDir);
   const promptBundle = await loadPromptBundle(profile, rootDir);
   const systemPrompt = composeSystemPrompt(promptBundle);
-  const tools = resolveTools(profile);
+  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
   const session = await createSessionStore(rootDir, options.sessionId);
 
   const toolResultContent = JSON.stringify({
@@ -554,6 +670,8 @@ export async function resolveGate(options: {
     role: "tool",
     content: toolResultContent,
     metadata: {
+      kind: "gate-resolution",
+      engine: options.engine,
       name: "request_confirmation",
       ok: true,
       toolCallId: options.toolCallId,
@@ -568,6 +686,8 @@ export async function resolveGate(options: {
     role: "user",
     content: userFollowUp,
     metadata: {
+      kind: "gate-resolution",
+      engine: options.engine,
       provider: config.provider,
       providerId: config.providerId,
       model: config.model,
@@ -580,13 +700,260 @@ export async function resolveGate(options: {
     config,
     provider,
     systemPrompt,
-    tools,
+    tools: toolSurface.definitions,
+    mcpRegistry: toolSurface.mcp,
     messages,
     session,
     profile,
     generation,
+    checkpoint: await FileCheckpointManager.resumeLatest(rootDir, session),
+    signal: options.signal,
     onEvent: options.onEvent,
   });
+}
+
+export type EngineSwitchConfirmedResult = {
+  kind: "engine_switched";
+  sessionId: string;
+  sessionPath: string;
+  messages: VesicleMessage[];
+  request: EngineSwitchRequest;
+  resolution: GateResolution;
+  engine: EngineId;
+};
+
+export type ResolveEngineSwitchResult = EngineSwitchConfirmedResult | RunPromptResult;
+
+export async function resolveEngineSwitch(options: {
+  engine: EngineId;
+  rootDir?: string;
+  sessionId: string;
+  messages: VesicleMessage[];
+  toolCallId: string;
+  request: EngineSwitchRequest;
+  resolution: GateResolution;
+  contextPolicy?: EngineContextPolicy;
+  contextSummary?: string;
+  providerSelection?: Partial<ProviderSelection>;
+  generation?: VesicleRequest["generation"];
+  signal?: AbortSignal;
+  onEvent?: (event: AgentLoopEvent) => void;
+}): Promise<ResolveEngineSwitchResult> {
+  const rootDir = options.rootDir ?? process.cwd();
+  const confirmed = options.resolution.decision === "confirm";
+
+  // A rejected/revised handoff remains in the current engine and must return
+  // the tool result to that engine's model. Load the continuation context
+  // before persisting the resolution so a config failure leaves the original
+  // pending request resumable.
+  const continuation = confirmed ? null : await (async () => {
+    const config = await loadConfigForSelection(options.providerSelection);
+    const generation = mergeGeneration(config.generation, options.generation);
+    const provider = createProvider(config);
+    const profile = await loadEngineProfile(options.engine, rootDir);
+    const promptBundle = await loadPromptBundle(profile, rootDir);
+    const systemPrompt = composeSystemPrompt(promptBundle);
+    const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
+    return { config, generation, provider, profile, systemPrompt, toolSurface };
+  })();
+
+  const session = await createSessionStore(rootDir, options.sessionId);
+  const transitionDecision = options.resolution.decision === "confirm" ? "confirmed" : "rejected";
+  const transition = createModelEngineTransition(options.engine, options.request, transitionDecision, {
+    ...(options.contextPolicy ? { contextPolicy: options.contextPolicy } : {}),
+    ...(options.contextSummary ? { contextSummary: options.contextSummary } : {}),
+  });
+  const toolResultContent = JSON.stringify({
+    ok: true,
+    confirmed,
+    result: engineSwitchResultMessage(options.request, options.resolution),
+  });
+  const messages: VesicleMessage[] = [
+    ...options.messages,
+    {
+      role: "tool",
+      toolCallId: options.toolCallId,
+      content: toolResultContent,
+    },
+  ];
+
+  await session.append({
+    role: "tool",
+    content: toolResultContent,
+    metadata: {
+      engine: options.engine,
+      name: "request_engine_switch",
+      ok: true,
+      confirmed,
+      toolCallId: options.toolCallId,
+      targetEngine: options.request.targetEngine,
+      decision: options.resolution.decision,
+      ...(options.resolution.feedback ? { feedback: options.resolution.feedback } : {}),
+      transition,
+    },
+  });
+
+  if (confirmed) {
+    const handoffPacket = renderEngineHandoffPacket(transition);
+    await session.append({
+      role: "system",
+      content: `Engine switched to ${options.request.targetEngine}.`,
+      metadata: {
+        kind: "engine-switch",
+        engine: options.request.targetEngine,
+        targetEngine: options.request.targetEngine,
+        reason: options.request.reason,
+        handoffSummary: options.request.handoffSummary,
+        ...(options.request.recommendedNextAction ? { recommendedNextAction: options.request.recommendedNextAction } : {}),
+        transition,
+      },
+    });
+    await session.append({
+      role: "user",
+      content: handoffPacket,
+      metadata: {
+        kind: ENGINE_HANDOFF_KIND,
+        engine: options.request.targetEngine,
+        transition,
+      },
+    });
+    messages.push({
+      role: "user",
+      content: handoffPacket,
+    });
+    return {
+      kind: "engine_switched",
+      sessionId: session.sessionId,
+      sessionPath: session.sessionPath,
+      messages,
+      request: options.request,
+      resolution: options.resolution,
+      engine: options.request.targetEngine,
+    };
+  }
+
+  if (!continuation) throw new Error("Missing engine-switch continuation context.");
+  return runLoop({
+    rootDir,
+    config: continuation.config,
+    provider: continuation.provider,
+    systemPrompt: continuation.systemPrompt,
+    tools: continuation.toolSurface.definitions,
+    mcpRegistry: continuation.toolSurface.mcp,
+    messages,
+    session,
+    profile: continuation.profile,
+    generation: continuation.generation,
+    checkpoint: await FileCheckpointManager.resumeLatest(rootDir, session),
+    signal: options.signal,
+    onEvent: options.onEvent,
+  });
+}
+
+export async function resolveUserQuestion(options: {
+  engine: EngineId;
+  rootDir?: string;
+  sessionId: string;
+  messages: VesicleMessage[];
+  toolCallId: string;
+  question: UserQuestionRequest;
+  answer: UserQuestionAnswer;
+  providerSelection?: Partial<ProviderSelection>;
+  generation?: VesicleRequest["generation"];
+  signal?: AbortSignal;
+  onEvent?: (event: AgentLoopEvent) => void;
+}): Promise<RunPromptResult> {
+  const rootDir = options.rootDir ?? process.cwd();
+  const config = await loadConfigForSelection(options.providerSelection);
+  const generation = mergeGeneration(config.generation, options.generation);
+  const provider = createProvider(config);
+  const profile = await loadEngineProfile(options.engine, rootDir);
+  const promptBundle = await loadPromptBundle(profile, rootDir);
+  const systemPrompt = composeSystemPrompt(promptBundle);
+  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
+  const session = await createSessionStore(rootDir, options.sessionId);
+
+  const toolResultContent = JSON.stringify({
+    ok: true,
+    answer: {
+      question: options.question.question,
+      selectedIndex: options.answer.selectedIndex,
+      label: options.answer.label,
+      description: options.answer.description,
+      ...(options.answer.kind ? { kind: options.answer.kind } : {}),
+      ...(options.answer.freeformText ? { freeformText: options.answer.freeformText } : {}),
+    },
+  });
+  const messages: VesicleMessage[] = [...options.messages];
+  messages.push({
+    role: "tool",
+    toolCallId: options.toolCallId,
+    content: toolResultContent,
+  });
+  await session.append({
+    role: "tool",
+    content: toolResultContent,
+    metadata: {
+      engine: options.engine,
+      name: "ask_user_question",
+      ok: true,
+      toolCallId: options.toolCallId,
+      header: options.question.header,
+      question: options.question.question,
+      selectedIndex: options.answer.selectedIndex,
+      label: options.answer.label,
+      ...(options.answer.kind ? { kind: options.answer.kind } : {}),
+      ...(options.answer.freeformText ? { freeformText: options.answer.freeformText } : {}),
+    },
+  });
+
+  const userFollowUp = userQuestionFollowUpMessage(options.question, options.answer);
+  messages.push({ role: "user", content: userFollowUp });
+  await session.append({
+    role: "user",
+    content: userFollowUp,
+    metadata: {
+      engine: options.engine,
+      provider: config.provider,
+      providerId: config.providerId,
+      model: config.model,
+      ...generationMetadata(generation),
+      kind: "user-question-answer",
+      questionHeader: options.question.header,
+      selectedIndex: options.answer.selectedIndex,
+      label: options.answer.label,
+      ...(options.answer.kind ? { answerKind: options.answer.kind } : {}),
+    },
+  });
+
+  return runLoop({
+    rootDir,
+    config,
+    provider,
+    systemPrompt,
+    tools: toolSurface.definitions,
+    mcpRegistry: toolSurface.mcp,
+    messages,
+    session,
+    profile,
+    generation,
+    checkpoint: await FileCheckpointManager.resumeLatest(rootDir, session),
+    signal: options.signal,
+    onEvent: options.onEvent,
+  });
+}
+
+function userQuestionFollowUpMessage(question: UserQuestionRequest, answer: UserQuestionAnswer): string {
+  if (answer.kind === "skip") {
+    return `[question:${question.header} skipped] User skipped the question. Continue with best judgment.`;
+  }
+  if (answer.kind === "freeform") {
+    const text = answer.freeformText?.trim();
+    return text
+      ? `[question:${question.header} answered freely] ${text}`
+      : `[question:${question.header} answered freely] User selected Other but did not provide additional text.`;
+  }
+  return `[question:${question.header} answered] ${answer.label} — ${answer.description}`;
 }
 
 function mergeGeneration(
@@ -622,20 +989,28 @@ function gateResultMessage(resolution: GateResolution): string {
       return resolution.feedback
         ? `Confirmed. Note from user: ${resolution.feedback}`
         : "Confirmed. Proceed to the next phase.";
-    case "revise":
+    case "reject":
       return resolution.feedback
-        ? `User requests revision: ${resolution.feedback}`
-        : "User requests revision without specific feedback. Ask for clarification if needed.";
-    case "chat":
-      return resolution.feedback
-        ? `User wants to discuss before deciding: ${resolution.feedback}`
-        : "User wants to discuss this further before deciding.";
+        ? `User rejected proceeding for now. Discuss this or revise according to the user's note: ${resolution.feedback}`
+        : "User rejected proceeding for now without specific feedback. Ask what should change or discuss the blocked decision before retrying.";
   }
 }
 
 function gateFollowUpMessage(gate: GateRequest, resolution: GateResolution): string {
   const head = `[gate:${gate.gate} resolved as ${resolution.decision}]`;
   return resolution.feedback ? `${head} ${resolution.feedback}` : head;
+}
+
+function engineSwitchResultMessage(request: EngineSwitchRequest, resolution: GateResolution): string {
+  if (resolution.decision === "confirm") {
+    const next = request.recommendedNextAction
+      ? ` Recommended next action: ${request.recommendedNextAction}`
+      : "";
+    return `Engine switch confirmed. Future turns will use "${request.targetEngine}". Handoff summary: ${request.handoffSummary}${next}`;
+  }
+  return resolution.feedback
+    ? `Engine switch rejected; stay in the current engine. Discuss this or revise the handoff according to the user's note: ${resolution.feedback}`
+    : "Engine switch rejected without specific feedback; stay in the current engine and ask what should change before retrying.";
 }
 
 /**
@@ -652,13 +1027,32 @@ const hostContractNames = new Set(["config.load", "prompt.load", "session.write"
  * model-visible tools). The request_confirmation gate tool is attached
  * automatically when the profile declares at least one stopGate, so an
  * engine with no declared gates never offers it and cannot be paused.
+ * request_engine_switch is a host handoff request available to all engines;
+ * it pauses for user confirmation before changing future turns.
  */
-function resolveTools(profile: EngineProfile): ToolDefinition[] {
-  const byName = new Map(fileToolDefinitions.map((definition) => [definition.function.name, definition]));
+type ToolSurface = {
+  definitions: ToolDefinition[];
+  mcp: McpRegistry;
+};
+
+async function resolveToolSurface(profile: EngineProfile, visionEnabled: boolean): Promise<ToolSurface> {
+  const mcp = await createMcpRegistryForEngine(profile.id);
+  return {
+    definitions: [
+      ...resolveBuiltInTools(profile, visionEnabled),
+      ...mcp.definitions,
+    ],
+    mcp,
+  };
+}
+
+function resolveBuiltInTools(profile: EngineProfile, visionEnabled: boolean): ToolDefinition[] {
+  const byName = new Map(hostToolDefinitions.map((definition) => [definition.function.name, definition]));
   const resolved: ToolDefinition[] = [];
 
   for (const name of profile.defaultTools) {
     if (hostContractNames.has(name)) continue;
+    if (name === "view_image" && !visionEnabled) continue;
     const definition = byName.get(name);
     if (!definition) {
       throw new Error(
@@ -671,6 +1065,8 @@ function resolveTools(profile: EngineProfile): ToolDefinition[] {
   if (profile.stopGates.length > 0) {
     resolved.push(gateToolDefinition);
   }
+  resolved.push(askUserQuestionToolDefinition);
+  resolved.push(engineSwitchToolDefinition);
 
   return resolved;
 }

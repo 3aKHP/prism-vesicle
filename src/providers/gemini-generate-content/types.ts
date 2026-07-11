@@ -31,6 +31,13 @@ export type GeminiResponse = {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
     totalTokenCount?: number;
+    cachedContentTokenCount?: number;
+    thoughtsTokenCount?: number;
+    toolUsePromptTokenCount?: number;
+    promptTokensDetails?: unknown;
+    cacheTokensDetails?: unknown;
+    candidatesTokensDetails?: unknown;
+    toolUsePromptTokensDetails?: unknown;
   };
   error?: {
     message?: string;

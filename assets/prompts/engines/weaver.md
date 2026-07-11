@@ -30,10 +30,11 @@
 - 场景组完成后，运行章节编译脚本
 - 编译产物输出到 `novels/{project}/Chapter_XX.md`
 
-### Phase 4 — Pause Gate
+### Phase 4 — User Checkpoint
 
-- `Mode A`：章级停顿
-- `Mode B`：场景级停顿
+- `Mode A`：章级检查点，章节产物完成后调用 `ask_user_question`
+- `Mode B`：场景级检查点，每个完整场景写入后调用 `ask_user_question`
+- 检查点选项应覆盖：继续下一场/下一章、修订当前场景、停止并交接；不要添加 Skip 或自由输入选项
 
 ## 连贯性规则
 

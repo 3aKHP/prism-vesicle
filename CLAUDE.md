@@ -56,7 +56,7 @@ machine-private details into public docs.
 
 ## Standard Verification
 
-```powershell
+```bash
 bun run typecheck
 bun test
 bun run doctor

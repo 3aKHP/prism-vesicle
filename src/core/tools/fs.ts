@@ -1,63 +1,12 @@
 import type { Stats } from "node:fs";
 import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
+import { writableProjectRoots } from "../artifacts/roots";
+import type { FileToolEvent, FileToolExecutionOptions, ToolCall, ToolDefinition, ToolResult } from "./types";
+import { ingestImageFile } from "../attachments/store";
 
-export type ToolCall = {
-  id: string;
-  name: string;
-  arguments: string;
-};
-
-export type FileToolEvent = {
-  kind: "file_operation";
-  operation:
-    | "stat"
-    | "list"
-    | "grep"
-    | "read"
-    | "create"
-    | "write"
-    | "replace"
-    | "append"
-    | "delete"
-    | "copy"
-    | "move";
-  path?: string;
-  sourcePath?: string;
-  targetPath?: string;
-  changed: boolean;
-  /** Size of the resulting or observed file, or the deleted file for delete_file. */
-  bytes?: number;
-  /** Bytes added by append_file. */
-  deltaBytes?: number;
-  lines?: number;
-  /** grep_files hit count. */
-  matches?: number;
-  /** list_files entry count. */
-  entryCount?: number;
-  occurrences?: number;
-  truncated?: boolean;
-};
-
-export type ToolResult = {
-  callId: string;
-  name: string;
-  ok: boolean;
-  content: string;
-  fileEvent?: FileToolEvent;
-};
-
-export type ToolDefinition = {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-};
-
-const readableRoots = ["assets", "source_materials", "workspace", "test_runs", "novels", "reports"];
-const writableRoots = ["workspace", "test_runs", "novels", "reports"];
+const readableRoots = ["assets", ...writableProjectRoots];
+const writableRoots = [...writableProjectRoots];
 
 export const fileToolDefinitions: ToolDefinition[] = [
   {
@@ -167,14 +116,37 @@ export const fileToolDefinitions: ToolDefinition[] = [
   {
     type: "function",
     function: {
-      name: "create_file",
-      description: "Create a new UTF-8 artifact file. Fails if the file already exists.",
+      name: "view_image",
+      description: "View an image under an allowed project root. Use this for visual inspection of files in source_materials, workspace, assets, novels, reports, or test_runs.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Project-relative output path under workspace, test_runs, novels, or reports.",
+            description: "Project-relative image path under an allowed read root.",
+          },
+          detail: {
+            type: "string",
+            enum: ["auto", "high", "original"],
+            description: "Image detail hint. Defaults to auto.",
+          },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_file",
+      description: "Create a new UTF-8 project file. Fails if the file already exists.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Project-relative output path under source_materials, workspace, novels, reports, or test_runs.",
           },
           content: {
             type: "string",
@@ -190,13 +162,13 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "write_file",
-      description: "Create or overwrite a UTF-8 artifact file under workspace, test_runs, novels, or reports.",
+      description: "Create or overwrite a UTF-8 project file under source_materials, workspace, novels, reports, or test_runs.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Project-relative output path, such as workspace/luotianyi.md.",
+            description: "Project-relative output path, such as source_materials/research.md or workspace/luotianyi.md.",
           },
           content: {
             type: "string",
@@ -212,13 +184,13 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "replace_in_file",
-      description: "Replace exact text inside an existing UTF-8 artifact file.",
+      description: "Replace exact text inside an existing writable UTF-8 project file.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file path under workspace, test_runs, novels, or reports.",
+            description: "Project-relative file path under source_materials, workspace, novels, reports, or test_runs.",
           },
           oldText: {
             type: "string",
@@ -242,13 +214,13 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "append_file",
-      description: "Append UTF-8 text to an existing artifact file.",
+      description: "Append UTF-8 text to an existing writable project file.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file path under workspace, test_runs, novels, or reports.",
+            description: "Project-relative file path under source_materials, workspace, novels, reports, or test_runs.",
           },
           content: {
             type: "string",
@@ -268,13 +240,13 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "delete_file",
-      description: "Delete a single artifact file. Directories are not deleted.",
+      description: "Delete a single writable project file. Directories are not deleted.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file path under workspace, test_runs, novels, or reports.",
+            description: "Project-relative file path under source_materials, workspace, novels, reports, or test_runs.",
           },
         },
         required: ["path"],
@@ -286,7 +258,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "copy_file",
-      description: "Copy an allowed file to an artifact root.",
+      description: "Copy an allowed file to a writable project root.",
       parameters: {
         type: "object",
         properties: {
@@ -296,7 +268,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
           },
           targetPath: {
             type: "string",
-            description: "Project-relative target path under workspace, test_runs, novels, or reports.",
+            description: "Project-relative target path under source_materials, workspace, novels, reports, or test_runs.",
           },
           overwrite: {
             type: "boolean",
@@ -312,17 +284,17 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "move_file",
-      description: "Move or rename an artifact file inside artifact roots.",
+      description: "Move or rename a file inside writable project roots.",
       parameters: {
         type: "object",
         properties: {
           sourcePath: {
             type: "string",
-            description: "Project-relative source file path under workspace, test_runs, novels, or reports.",
+            description: "Project-relative source file path under source_materials, workspace, novels, reports, or test_runs.",
           },
           targetPath: {
             type: "string",
-            description: "Project-relative target path under workspace, test_runs, novels, or reports.",
+            description: "Project-relative target path under source_materials, workspace, novels, reports, or test_runs.",
           },
           overwrite: {
             type: "boolean",
@@ -336,7 +308,11 @@ export const fileToolDefinitions: ToolDefinition[] = [
   },
 ];
 
-export async function executeFileTool(rootDir: string, call: ToolCall): Promise<ToolResult> {
+export async function executeFileTool(
+  rootDir: string,
+  call: ToolCall,
+  options: FileToolExecutionOptions = {},
+): Promise<ToolResult> {
   try {
     switch (call.name) {
       case "stat_path": {
@@ -405,9 +381,34 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         });
       }
 
+      case "view_image": {
+        const args = parseArgs<{ path: string; detail?: "auto" | "high" | "original" }>(call.arguments);
+        if (args.detail && !["auto", "high", "original"].includes(args.detail)) {
+          throw new Error("view_image.detail must be auto, high, or original.");
+        }
+        const filePath = resolveAllowed(rootDir, args.path, readableRoots);
+        const projectPath = toProjectPath(rootDir, filePath);
+        const image = await ingestImageFile(rootDir, filePath, {
+          source: "project",
+          sourcePath: projectPath,
+          detail: args.detail ?? "auto",
+        });
+        return {
+          ...ok(call, `Viewed ${projectPath}`, {
+            kind: "file_operation",
+            operation: "view",
+            path: projectPath,
+            changed: false,
+            bytes: image.bytes,
+          }),
+          images: [image],
+        };
+      }
+
       case "create_file": {
         const args = parseArgs<{ path: string; content: string }>(call.arguments);
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
+        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, { encoding: "utf8", flag: "wx" });
         return ok(call, `Created ${toProjectPath(rootDir, filePath)}`, {
@@ -422,6 +423,7 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
       case "write_file": {
         const args = parseArgs<{ path: string; content: string }>(call.arguments);
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
+        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, "utf8");
         return ok(call, `Wrote ${toProjectPath(rootDir, filePath)}`, {
@@ -443,10 +445,15 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         if (!args.replaceAll && count !== 1) {
           throw new Error(`oldText matched ${count} times. Set replaceAll=true or provide a more specific oldText.`);
         }
+        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
         // Single-user TUI contract: this read/count/write sequence is not
         // designed for concurrent external writers.
         const next = original.split(args.oldText).join(args.newText);
         await writeFile(filePath, next, "utf8");
+        // 1-based start line of every matched occurrence (single → length 1,
+        // replaceAll → one per region). Used for the diff's line-number gutter
+        // and to list affected lines.
+        const matchLines = collectMatchLines(original, args.oldText);
         return ok(call, `Replaced ${args.replaceAll ? count : 1} occurrence(s) in ${toProjectPath(rootDir, filePath)}`, {
           kind: "file_operation",
           operation: "replace",
@@ -454,6 +461,7 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
           changed: true,
           bytes: textByteLength(next),
           occurrences: args.replaceAll ? count : 1,
+          ...(matchLines.length > 0 ? { matchLines } : {}),
         });
       }
 
@@ -462,6 +470,7 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
         await mkdir(dirname(filePath), { recursive: true });
         if (!args.createIfMissing) await assertFile(filePath);
+        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
         await appendFile(filePath, args.content, { encoding: "utf8", flag: "a" });
         const appended = await stat(filePath);
         return ok(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`, {
@@ -478,6 +487,7 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const args = parseArgs<{ path: string }>(call.arguments);
         const filePath = resolveAllowed(rootDir, args.path, writableRoots);
         const deleted = await assertFile(filePath);
+        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
         // Single-user TUI contract: the path is expected not to change between
         // the file check and unlink.
         await unlink(filePath);
@@ -495,6 +505,7 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const sourcePath = resolveAllowed(rootDir, args.sourcePath, readableRoots);
         const targetPath = resolveAllowed(rootDir, args.targetPath, writableRoots);
         const source = await assertFile(sourcePath);
+        await options.beforeMutation?.([toProjectPath(rootDir, targetPath)]);
         await prepareTarget(targetPath, Boolean(args.overwrite));
         await copyFile(sourcePath, targetPath);
         return ok(call, `Copied ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
@@ -512,6 +523,10 @@ export async function executeFileTool(rootDir: string, call: ToolCall): Promise<
         const sourcePath = resolveAllowed(rootDir, args.sourcePath, writableRoots);
         const targetPath = resolveAllowed(rootDir, args.targetPath, writableRoots);
         const source = await assertFile(sourcePath);
+        await options.beforeMutation?.([
+          toProjectPath(rootDir, sourcePath),
+          toProjectPath(rootDir, targetPath),
+        ]);
         await prepareTarget(targetPath, Boolean(args.overwrite));
         await rename(sourcePath, targetPath);
         return ok(call, `Moved ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
@@ -627,6 +642,18 @@ function countOccurrences(content: string, needle: string): number {
     if (next === -1) return count;
     count += 1;
     index = next + needle.length;
+  }
+}
+
+/** 1-based start line of every occurrence of `needle` in `content`. */
+function collectMatchLines(content: string, needle: string): number[] {
+  const lines: number[] = [];
+  let from = 0;
+  while (true) {
+    const idx = content.indexOf(needle, from);
+    if (idx === -1) return lines;
+    lines.push(content.slice(0, idx).split("\n").length);
+    from = idx + needle.length;
   }
 }
 

@@ -1,16 +1,20 @@
 import type { VesicleConfig } from "../../config/env";
 import { ProviderError } from "../shared/errors";
+import { fetchProvider } from "../shared/fetch";
+import { anthropicMessagesHeaders } from "../shared/headers";
 import { readSseEvents } from "../shared/sse";
 import { displayTextFromThinkingBlocks } from "../shared/thinking";
+import { normalizeResponseUsage } from "../shared/usage";
 import type { ProviderAdapter, ProviderStreamEvent, ProviderThinkingBlock, ReasoningTier, VesicleRequest, VesicleResponse } from "../shared/types";
 import type { ToolCall } from "../../core/tools";
 
 type AnthropicContentBlock =
   | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
   | { type: "thinking"; thinking: string; signature?: string }
   | { type: "redacted_thinking"; data: string }
   | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
+  | { type: "tool_result"; tool_use_id: string; content: string | AnthropicContentBlock[]; is_error?: boolean };
 
 type AnthropicMessage = {
   role: "user" | "assistant";
@@ -25,6 +29,8 @@ type AnthropicResponse = {
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
   };
   error?: {
     message?: string;
@@ -63,6 +69,8 @@ type AnthropicStreamState = {
   finishReason?: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
 };
 
 const defaultMaxTokens = 4096;
@@ -75,10 +83,15 @@ export class AnthropicMessagesAdapter implements ProviderAdapter {
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     this.requireApiKey();
 
-    const response = await fetch(`${this.config.baseUrl}/messages`, {
+    const response = await fetchProvider(`${this.config.baseUrl}/messages?beta=true`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(toAnthropicMessagesBody(request)),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
+      attemptHeaders: (retryCount) => ({ "x-stainless-retry-count": String(retryCount) }),
     });
     const body = await response.json().catch(() => undefined) as AnthropicResponse | undefined;
     if (!response.ok) {
@@ -96,10 +109,15 @@ export class AnthropicMessagesAdapter implements ProviderAdapter {
   async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
     this.requireApiKey();
 
-    const response = await fetch(`${this.config.baseUrl}/messages`, {
+    const response = await fetchProvider(`${this.config.baseUrl}/messages?beta=true`, {
       method: "POST",
-      headers: { ...this.headers(), "Accept": "text/event-stream" },
+      headers: this.headers(),
       body: JSON.stringify({ ...toAnthropicMessagesBody(request), stream: true }),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
+      attemptHeaders: (retryCount) => ({ "x-stainless-retry-count": String(retryCount) }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => undefined) as AnthropicResponse | undefined;
@@ -118,9 +136,8 @@ export class AnthropicMessagesAdapter implements ProviderAdapter {
     const apiKey = this.config.apiKey ?? "";
     const authMethod = this.config.authMethod ?? "x-api-key";
     return {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      ...(authMethod === "bearer" ? { "Authorization": `Bearer ${apiKey}` } : { "x-api-key": apiKey }),
+      ...anthropicMessagesHeaders(this.config.userAgent),
+      ...(authMethod === "bearer" ? { "authorization": `Bearer ${apiKey}` } : { "x-api-key": apiKey }),
     };
   }
 
@@ -170,7 +187,9 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
       pendingToolResults.push({
         type: "tool_result",
         tool_use_id: message.toolCallId ?? "",
-        content: message.content,
+        content: message.images?.length
+          ? anthropicUserBlocks(message.content, message.images)
+          : message.content,
       });
       continue;
     }
@@ -192,14 +211,46 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
     }
 
     if (flushedToolResults && Array.isArray(flushedToolResults.content)) {
-      if (message.content) flushedToolResults.content.push({ type: "text", text: message.content });
+      if (message.images?.length) {
+        flushedToolResults.content.push(...anthropicUserBlocks(message.content, message.images));
+      } else if (message.content) {
+        flushedToolResults.content.push({ type: "text", text: message.content });
+      }
       continue;
     }
-    serialized.push({ role: "user", content: message.content });
+    serialized.push({
+      role: "user",
+      content: message.images?.length ? anthropicUserBlocks(message.content, message.images) : message.content,
+    });
   }
 
   flushToolResults();
   return serialized;
+}
+
+function anthropicUserBlocks(
+  text: string,
+  images: NonNullable<VesicleRequest["messages"][number]["images"]>,
+): AnthropicContentBlock[] {
+  return [
+    ...(text ? [{ type: "text" as const, text }] : []),
+    ...images.flatMap((image, index) => [
+      { type: "text" as const, text: `[Image #${index + 1}: ${image.sourcePath ?? image.filename ?? image.source}]` },
+      {
+        type: "image" as const,
+        source: {
+          type: "base64" as const,
+          media_type: image.mediaType,
+          data: requireImageData(image.data, image.id),
+        },
+      },
+    ]),
+  ];
+}
+
+function requireImageData(data: string | undefined, id: string): string {
+  if (!data) throw new Error(`Image attachment was not materialized before provider serialization: ${id}.`);
+  return data;
 }
 
 function anthropicThinkingBlocks(blocks: ProviderThinkingBlock[] | undefined): AnthropicContentBlock[] {
@@ -280,13 +331,7 @@ function responseFromAnthropicBody(
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     finishReason: body?.stop_reason,
     raw: body,
-    usage: {
-      inputTokens: body?.usage?.input_tokens,
-      outputTokens: body?.usage?.output_tokens,
-      totalTokens: body?.usage?.input_tokens !== undefined && body?.usage?.output_tokens !== undefined
-        ? body.usage.input_tokens + body.usage.output_tokens
-        : undefined,
-    },
+    usage: usageFromAnthropicUsage(body?.usage),
   };
 }
 
@@ -342,6 +387,8 @@ function absorbAnthropicStreamEvent(
     if (data.message?.id) state.id = data.message.id;
     if (data.message?.model) state.model = data.message.model;
     if (data.message?.usage?.input_tokens !== undefined) state.inputTokens = data.message.usage.input_tokens;
+    if (data.message?.usage?.cache_creation_input_tokens !== undefined) state.cacheCreationInputTokens = data.message.usage.cache_creation_input_tokens;
+    if (data.message?.usage?.cache_read_input_tokens !== undefined) state.cacheReadInputTokens = data.message.usage.cache_read_input_tokens;
     return events;
   }
 
@@ -409,6 +456,9 @@ function absorbAnthropicStreamEvent(
   if (eventName === "message_delta") {
     if (data.delta?.stop_reason) state.finishReason = data.delta.stop_reason;
     if (data.usage?.output_tokens !== undefined) state.outputTokens = data.usage.output_tokens;
+    if (data.usage?.input_tokens !== undefined) state.inputTokens = data.usage.input_tokens;
+    if (data.usage?.cache_creation_input_tokens !== undefined) state.cacheCreationInputTokens = data.usage.cache_creation_input_tokens;
+    if (data.usage?.cache_read_input_tokens !== undefined) state.cacheReadInputTokens = data.usage.cache_read_input_tokens;
   }
 
   return events;
@@ -446,14 +496,48 @@ function finalizeAnthropicStream(state: AnthropicStreamState, providerId?: strin
     ...(thinkingBlocks.length > 0 ? { thinkingBlocks } : {}),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     finishReason: state.finishReason,
-    usage: {
+    usage: normalizeResponseUsage({
+      contextInputTokens: sumDefined(state.inputTokens, state.cacheCreationInputTokens, state.cacheReadInputTokens),
       inputTokens: state.inputTokens,
       outputTokens: state.outputTokens,
-      totalTokens: state.inputTokens !== undefined && state.outputTokens !== undefined
-        ? state.inputTokens + state.outputTokens
-        : undefined,
-    },
+      cacheReadInputTokens: state.cacheReadInputTokens,
+      cacheHitInputTokens: state.cacheReadInputTokens,
+      cacheWriteInputTokens: state.cacheCreationInputTokens,
+      cacheMissInputTokens: state.cacheCreationInputTokens,
+      providerDetails: {
+        ...(state.cacheCreationInputTokens !== undefined ? { cacheCreationInputTokens: state.cacheCreationInputTokens } : {}),
+        ...(state.cacheReadInputTokens !== undefined ? { cacheReadInputTokens: state.cacheReadInputTokens } : {}),
+      },
+    }),
   };
+}
+
+function usageFromAnthropicUsage(usage: AnthropicResponse["usage"] | undefined): VesicleResponse["usage"] {
+  if (!usage) return undefined;
+  return normalizeResponseUsage({
+    contextInputTokens: sumDefined(usage.input_tokens, usage.cache_creation_input_tokens, usage.cache_read_input_tokens),
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    cacheReadInputTokens: usage.cache_read_input_tokens,
+    cacheHitInputTokens: usage.cache_read_input_tokens,
+    cacheWriteInputTokens: usage.cache_creation_input_tokens,
+    cacheMissInputTokens: usage.cache_creation_input_tokens,
+    providerDetails: {
+      ...(usage.cache_creation_input_tokens !== undefined ? { cacheCreationInputTokens: usage.cache_creation_input_tokens } : {}),
+      ...(usage.cache_read_input_tokens !== undefined ? { cacheReadInputTokens: usage.cache_read_input_tokens } : {}),
+    },
+  });
+}
+
+function sumDefined(...values: Array<number | undefined>): number | undefined {
+  let total = 0;
+  let seen = false;
+  for (const value of values) {
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    total += value;
+    seen = true;
+  }
+  return seen ? total : undefined;
 }
 
 function parseStreamEvent(data: string, providerId?: string): AnthropicStreamEvent {
@@ -479,12 +563,11 @@ function anthropicThinkingControl(tier: ReasoningTier | undefined, maxTokens: nu
   return { type: "enabled", budget_tokens: budget };
 }
 
-function thinkingBudgetForTier(tier: "low" | "midium" | "high" | "xhigh" | "max"): number {
+function thinkingBudgetForTier(tier: "low" | "medium" | "high" | "xhigh" | "max"): number {
   switch (tier) {
     case "low":
       return 1024;
-    // Keep the existing shared `midium` spelling until ReasoningTier is migrated.
-    case "midium":
+    case "medium":
       return 2048;
     case "high":
       return 4096;

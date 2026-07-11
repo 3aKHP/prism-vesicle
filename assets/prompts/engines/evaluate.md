@@ -10,6 +10,7 @@
 - Blueprint：`workspace/`
 - Reality：`test_runs/` 或 `novels/`
 - 参考：`novels/{project}/outline.md` 与 `story_bible.md`
+- 外部核查：当用户要求事实校验、资料补强或当前项目素材不足时，使用联网工具补齐证据：`web_search` 找来源，`web_fetch` 抽关键正文，`web_map` 发现站点路径，`web_crawl` 做受限多页抽取，`web_research` 生成带引用的多源综合。若结果会影响审计结论，将简短来源笔记写入 `source_materials/`
 
 ## 审计维度
 

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { resolveAssetsRoot } from "../runtime/assets";
 
 /**
  * Engine identity. Mirrors the engine folders under assets/engines/ and
@@ -66,7 +67,8 @@ export async function loadEngineProfile(
   engine: EngineId,
   rootDir = process.cwd(),
 ): Promise<EngineProfile> {
-  const profilePath = join(rootDir, "assets", "engines", `${engine}.profile.yaml`);
+  const assetRoot = resolveAssetsRoot(rootDir);
+  const profilePath = join(assetRoot, "assets", "engines", `${engine}.profile.yaml`);
   const source = await readFile(profilePath, "utf8");
   const raw = parseProfileYaml(source);
 

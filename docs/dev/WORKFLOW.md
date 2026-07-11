@@ -82,8 +82,10 @@ The exception does not relax these rules:
 - Conventional Commits still apply
 - verification must match the risk of the change
 
-When the project approaches a public release or external users depend on
-`main`, retire this exception and return to branch + PR as the default.
+For the `1.0.0-alpha.1` public-release path, this exception is retired:
+release-readiness changes use a release branch and PR, require independent CR,
+and must not be tagged from an unreviewed dogfood worktree. Keep `develop` as
+the integration trunk for subsequent internal iteration.
 
 ## Iteration Loop
 
@@ -95,7 +97,7 @@ When the project approaches a public release or external users depend on
 3. Implement in small, reviewable commits when committing is requested.
 4. Run local verification:
 
-```powershell
+```bash
 bun run typecheck
 bun test
 bun run doctor
@@ -124,6 +126,28 @@ Use the smallest verification set that proves the change:
 | small code | `bun run typecheck` plus focused tests |
 | provider/session/tool/gate/TUI runtime | `bun run typecheck`, relevant tests, `bun run doctor` |
 | release or `main` snapshot | `bun run typecheck`, `bun test`, `bun run doctor`, and real TUI/provider smoke when practical |
+
+## CI And Release Verification
+
+The GitHub Actions CI workflow runs for pull requests into `develop`/`main`
+and pushes to `develop`. It runs deterministic typecheck/test gates, builds the
+Linux ELF and native Windows PE, then smoke-tests each binary beside extracted
+`assets/` with `debug markdown-runtime` and `prompt shape --engine etl`.
+
+`Release verification` is manual and does not publish. Supply the current
+`package.json` semver as its candidate label; after the same gates it uploads
+labelled PE, ELF, and assets-ZIP workflow artifacts. It is the required
+preflight before the protected tag workflow runs. A tag must exactly match
+`v<package.json version>`; the publish workflow rebuilds the PE, ELF, assets
+ZIP, and checksums, creates the GitHub prerelease, then runs npm trusted
+publishing with provenance. Configure GitHub tag protection and the npm trusted
+publisher before creating the tag.
+
+The real-provider gate acceptance test is intentionally opt-in because it is
+model-output dependent: run `BUN_E2E_REAL_PROVIDER=1 bun test
+tests/e2e-gate.test.ts` from the trusted dogfood environment and record the
+result before creating a public tag. It validates a real provider without
+making ordinary CI depend on provider credentials or model determinism.
 
 ### Hotfix
 
@@ -209,7 +233,7 @@ Return:
 
 Before finishing behavior changes, run a targeted stale-term pass. Examples:
 
-```powershell
+```bash
 rg "write_file|tool_calls|session|VESICLE_|workspace|provider|OpenTUI" README.md STATUS.md CHANGELOG.md CONTRIBUTING.md docs assets
 ```
 

@@ -16,6 +16,34 @@ afterEach(() => {
 });
 
 describe("OpenAI-compatible request shaping", () => {
+  test("serializes user and tool images as multimodal content", () => {
+    const body = toChatCompletionBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "inspect", images: [image()] },
+        { role: "tool", toolCallId: "call-view", content: "viewed", images: [image()] },
+      ],
+    }, false);
+    expect(body.messages).toEqual([
+      { role: "system", content: "system" },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "inspect" },
+          { type: "text", text: "[Image #1: source_materials/reference.png]" },
+          { type: "image_url", image_url: { url: "data:image/png;base64,cG5n", detail: "high" } },
+        ],
+      },
+      { role: "tool", tool_call_id: "call-view", content: "viewed" },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "[Image #1: source_materials/reference.png]" },
+          { type: "image_url", image_url: { url: "data:image/png;base64,cG5n", detail: "high" } },
+        ],
+      },
+    ]);
+  });
   test("omits tool fields when no tools are available", () => {
     const body = JSON.parse(JSON.stringify(toChatCompletionBody(request(), false))) as Record<string, unknown>;
 
@@ -33,7 +61,7 @@ describe("OpenAI-compatible request shaping", () => {
     expect(off.thinking).toEqual({ type: "disabled" });
     expect(off.reasoning_effort).toBeUndefined();
 
-    for (const tier of ["low", "midium", "high"] as const) {
+    for (const tier of ["low", "medium", "high"] as const) {
       const body = toChatCompletionBody({ ...request(), generation: { reasoningTier: tier } }, false);
       expect(body.thinking).toEqual({ type: "enabled" });
       expect(body.reasoning_effort).toBe("high");
@@ -132,6 +160,49 @@ describe("OpenAI-compatible response parsing", () => {
       content: "final answer",
       reasoningContent: "Think before answering.",
       thinkingBlocks: [{ type: "reasoning", reasoningContent: "Think before answering." }],
+    });
+  });
+
+  test("normalizes non-stream usage details", async () => {
+    globalThis.fetch = (async () => Response.json({
+      id: "chatcmpl-usage",
+      choices: [{
+        finish_reason: "stop",
+        message: { content: "answer" },
+      }],
+      usage: {
+        prompt_tokens: 18000,
+        completion_tokens: 1400,
+        total_tokens: 19400,
+        prompt_tokens_details: { cached_tokens: 12000 },
+        completion_tokens_details: { reasoning_tokens: 320 },
+      },
+    })) as unknown as typeof fetch;
+
+    const adapter = new OpenAIChatCompatibleAdapter({
+      provider: "openai-chat-compatible",
+      providerId: "deepseek",
+      baseUrl: "https://provider.test/v1",
+      model: "test-model",
+      apiKey: "test-key",
+    });
+
+    await expect(adapter.complete(request())).resolves.toMatchObject({
+      id: "chatcmpl-usage",
+      usage: {
+        contextInputTokens: 18000,
+        inputTokens: 18000,
+        outputTokens: 1400,
+        totalTokens: 19400,
+        cacheReadInputTokens: 12000,
+        cacheHitInputTokens: 12000,
+        reasoningTokens: 320,
+        effectiveTokens: 7400,
+        providerDetails: {
+          promptTokensDetails: { cached_tokens: 12000 },
+          completionTokensDetails: { reasoning_tokens: 320 },
+        },
+      },
     });
   });
 });
@@ -234,6 +305,9 @@ describe("Chat Completions stream integration", () => {
     const bodies: unknown[] = [];
     globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
       bodies.push(JSON.parse(String(init?.body)));
+      const headers = new Headers(init?.headers);
+      expect(headers.get("accept")).toBe("*/*");
+      expect(headers.get("user-agent")).toMatch(/^prism-vesicle\/[^ ]+ runtime\/bun\/[^ ]+$/);
       return Response.json({
         id: "chatcmpl-json",
         choices: [{ finish_reason: "stop", message: { content: "json fallback" } }],
@@ -266,6 +340,7 @@ describe("Provider backend boundaries", () => {
       "src/providers/openai-chat/response.ts",
       "src/providers/openai-chat/stream.ts",
       "src/providers/openai-chat/types.ts",
+      "src/providers/shared/fetch.ts",
     ];
 
     for (const file of providerFiles) {
@@ -283,6 +358,20 @@ function request(): VesicleRequest {
     model: { provider: "openai-chat-compatible", model: "test-model" },
     system: ["system"],
     messages: [{ role: "user", content: "hello" }],
+  };
+}
+
+function image(): NonNullable<VesicleRequest["messages"][number]["images"]>[number] {
+  return {
+    id: "img_test",
+    path: ".vesicle/attachments/test.png",
+    mediaType: "image/png",
+    bytes: 3,
+    sha256: "0".repeat(64),
+    source: "project",
+    sourcePath: "source_materials/reference.png",
+    detail: "high",
+    data: "cG5n",
   };
 }
 

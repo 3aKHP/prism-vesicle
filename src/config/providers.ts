@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { VesicleConfig, VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
-import type { GenerationDefaults, ModelCapabilities } from "./env";
+import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 
 export type ProviderProtocol = VesicleProvider;
 
@@ -16,6 +16,7 @@ export type ProviderModelProfile = {
   id: string;
   generation?: GenerationDefaults;
   capabilities?: ModelCapabilities;
+  limits?: ModelLimits;
 };
 
 export type ProviderProfile = {
@@ -24,6 +25,8 @@ export type ProviderProfile = {
   baseUrl: string;
   apiKeyEnv: string;
   authMethod?: ProviderAuthMethod;
+  userAgent?: string;
+  defaultModel?: string;
   models: ProviderModelProfile[];
 };
 
@@ -77,6 +80,12 @@ async function loadProviderRegistryWithEnv(
   };
 }
 
+export async function loadUserConfigEnvironment(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ effectiveEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
+  return loadProviderEnvironment(providerConfigPathFromEnv(env), env);
+}
+
 export async function loadConfigForSelection(
   selection?: Partial<ProviderSelection>,
   env: NodeJS.ProcessEnv = process.env,
@@ -115,7 +124,7 @@ export function resolveProviderConfig(
 ): VesicleConfig {
   const providerId = selection?.provider ?? registry.default.provider;
   const profile = requireProvider(registry, providerId);
-  const model = selection?.model ?? (providerId === registry.default.provider ? registry.default.model : profile.models[0]?.id);
+  const model = selection?.model ?? profile.defaultModel ?? (providerId === registry.default.provider ? registry.default.model : profile.models[0]?.id);
   if (!model) {
     throw new Error(`Provider "${providerId}" does not declare any models.`);
   }
@@ -129,8 +138,10 @@ export function resolveProviderConfig(
     apiKey: env[profile.apiKeyEnv],
     apiKeyLabel: profile.apiKeyEnv,
     ...(profile.authMethod ? { authMethod: profile.authMethod } : {}),
+    ...(profile.userAgent ? { userAgent: profile.userAgent } : {}),
     ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
     ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
+    ...(modelProfile.limits ? { limits: modelProfile.limits } : {}),
   };
 }
 
@@ -196,7 +207,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
   let currentProvider: Partial<ProviderProfile> | null = null;
   let currentList: "models" | null = null;
   let currentModel: Partial<ProviderModelProfile> | null = null;
-  let currentModelBlock: "generation" | "capabilities" | null = null;
+  let currentModelBlock: "generation" | "capabilities" | "limits" | "autoCompact" | null = null;
 
   const finishModel = () => {
     if (!currentModel) return;
@@ -208,6 +219,7 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
         id,
         ...(currentModel.generation ? { generation: currentModel.generation } : {}),
         ...(currentModel.capabilities ? { capabilities: currentModel.capabilities } : {}),
+        ...(currentModel.limits ? { limits: currentModel.limits } : {}),
       },
     ];
     currentModel = null;
@@ -232,12 +244,18 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     if (models.length === 0) throw new Error(`Provider "${id}" must declare at least one model.`);
     const duplicateModel = firstDuplicate(models.map((model) => model.id));
     if (duplicateModel) throw new Error(`Provider "${id}" declares duplicate model "${duplicateModel}".`);
+    const defaultModel = currentProvider.defaultModel;
+    if (defaultModel && !models.some((model) => model.id === defaultModel)) {
+      throw new Error(`Provider "${id}" defaultModel "${defaultModel}" is not declared in models.`);
+    }
     registry.providers.push({
       id,
       protocol,
       baseUrl,
       apiKeyEnv,
       ...(currentProvider.authMethod ? { authMethod: currentProvider.authMethod } : {}),
+      ...(currentProvider.userAgent ? { userAgent: currentProvider.userAgent } : {}),
+      ...(defaultModel ? { defaultModel } : {}),
       models,
     });
     currentProvider = null;
@@ -304,6 +322,8 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
       else if (key === "baseUrl") currentProvider.baseUrl = value;
       else if (key === "apiKeyEnv") currentProvider.apiKeyEnv = value;
       else if (key === "authMethod") currentProvider.authMethod = readAuthMethod(value, `provider ${currentProvider.id}`);
+      else if (key === "userAgent") currentProvider.userAgent = readUserAgent(value, `provider ${currentProvider.id}`);
+      else if (key === "defaultModel") currentProvider.defaultModel = value;
       else if (key === "apiKey") throw new Error(`Provider config parse error on line ${index + 1}: use apiKeyEnv instead of inline apiKey.`);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown provider field "${key}".`);
       continue;
@@ -338,6 +358,11 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
         currentModelBlock = "capabilities";
         continue;
       }
+      if (line === "limits:") {
+        currentModel.limits = currentModel.limits ?? {};
+        currentModelBlock = "limits";
+        continue;
+      }
       currentModelBlock = null;
       const [key, value] = readKeyValue(line, index, path);
       if (key === "id") currentModel.id = value;
@@ -346,6 +371,15 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
     }
 
     if (indent === 10 && currentList === "models" && currentModel && currentModelBlock) {
+      if (currentModelBlock === "autoCompact") currentModelBlock = "limits";
+      if (currentModelBlock === "limits" && line === "autoCompact:") {
+        currentModel.limits = {
+          ...(currentModel.limits ?? {}),
+          autoCompact: currentModel.limits?.autoCompact ?? {},
+        };
+        currentModelBlock = "autoCompact";
+        continue;
+      }
       const [key, value] = readKeyValue(line, index, path);
       if (currentModelBlock === "generation") {
         currentModel.generation = {
@@ -354,9 +388,38 @@ function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEn
         };
         continue;
       }
-      currentModel.capabilities = {
-        ...(currentModel.capabilities ?? {}),
-        ...readCapabilityField(key, value, index, path),
+      if (currentModelBlock === "capabilities") {
+        currentModel.capabilities = {
+          ...(currentModel.capabilities ?? {}),
+          ...readCapabilityField(key, value, index, path),
+        };
+        continue;
+      }
+      if (currentModelBlock === "limits") {
+        currentModel.limits = {
+          ...(currentModel.limits ?? {}),
+          ...readLimitsField(key, value, index, path),
+        };
+        continue;
+      }
+      currentModel.limits = {
+        ...(currentModel.limits ?? {}),
+        autoCompact: {
+          ...(currentModel.limits?.autoCompact ?? {}),
+          ...readAutoCompactField(key, value, index, path),
+        },
+      };
+      continue;
+    }
+
+    if (indent === 12 && currentList === "models" && currentModel && currentModelBlock === "autoCompact") {
+      const [key, value] = readKeyValue(line, index, path);
+      currentModel.limits = {
+        ...(currentModel.limits ?? {}),
+        autoCompact: {
+          ...(currentModel.limits?.autoCompact ?? {}),
+          ...readAutoCompactField(key, value, index, path),
+        },
       };
       continue;
     }
@@ -397,6 +460,13 @@ function readAuthMethod(value: string, field: string): ProviderAuthMethod {
   return value;
 }
 
+function readUserAgent(value: string, field: string): string {
+  if (/[\x00-\x1f\x7f]/.test(value)) {
+    throw new Error(`Provider ${field} userAgent contains an invalid control character.`);
+  }
+  return value;
+}
+
 function readKeyValue(line: string, index: number, path: string): [string, string] {
   const colon = line.indexOf(":");
   if (colon === -1) throw new Error(`Provider config parse error on line ${index + 1} in ${path}: missing colon.`);
@@ -420,7 +490,21 @@ function readCapabilityField(key: string, value: string, index: number, path: st
   if (key === "reasoningContent") return { reasoningContent: enabled };
   if (key === "temperature") return { temperature: enabled };
   if (key === "maxTokens") return { maxTokens: enabled };
+  if (key === "vision") return { vision: enabled };
   throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
+}
+
+function readLimitsField(key: string, value: string, index: number, path: string): ModelLimits {
+  if (key === "contextWindow") return { contextWindow: readPositiveInteger(value, key, index, path) };
+  if (key === "maxOutputTokens") return { maxOutputTokens: readPositiveInteger(value, key, index, path) };
+  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown limits field "${key}".`);
+}
+
+function readAutoCompactField(key: string, value: string, index: number, path: string): AutoCompactLimits {
+  if (key === "enabled") return { enabled: readBoolean(value, key, index, path) };
+  if (key === "threshold") return { threshold: readFraction(value, key, index, path) };
+  if (key === "reserveOutputTokens") return { reserveOutputTokens: readPositiveInteger(value, key, index, path) };
+  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown autoCompact field "${key}".`);
 }
 
 function readFiniteNumber(value: string, key: string, index: number, path: string): number {
@@ -435,6 +519,14 @@ function readPositiveInteger(value: string, key: string, index: number, path: st
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new Error(`Provider config parse error on line ${index + 1} in ${path}: ${key} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function readFraction(value: string, key: string, index: number, path: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= 1) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: ${key} must be a number greater than 0 and less than 1.`);
   }
   return parsed;
 }

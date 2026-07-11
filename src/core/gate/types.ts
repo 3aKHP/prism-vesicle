@@ -14,7 +14,7 @@ export type GateId = string;
  * host renders this verbatim above the gate options.
  *
  * `options` is optional: when omitted the host renders the default
- * Confirm/Revise/Chat triple. When provided, the model may narrow the
+ * Confirm/Reject pair. When provided, the model may narrow the
  * choices to engine-specific labels (still paired with the standard
  * decisions so the host semantics stay stable).
  */
@@ -38,20 +38,19 @@ export type GateOption = {
 
 /**
  * The canonical decisions a gate can resolve to. Every gate UI offers these
- * three semantics regardless of how the option labels are phrased:
+ * two semantics regardless of how the option labels are phrased:
  *
  * - `confirm`  — proceed past the gate (advance to the next phase).
- * - `revise`   — reject this attempt; the optional feedback tells the
- *                engine what to change before retrying.
- * - `chat`     — abandon the gate and return to free conversation. The
- *                user stays in the session; nothing is committed.
+ * - `reject`   — do not proceed yet. Optional feedback may ask for changes,
+ *                discussion, or clarification; an empty rejection is valid
+ *                and should make the model ask what to change next.
  */
-export type GateDecisionKind = "confirm" | "revise" | "chat";
+export type GateDecisionKind = "confirm" | "reject";
 
 /**
- * A user's resolution of a gate. `feedback` is present only for `revise`
- * (and optionally `confirm` when the user adds a "proceed, but also do X"
- * note). The loop turns this into a tool result and a follow-up user turn.
+ * A user's resolution of a gate. `feedback` is present when the user adds a
+ * note; empty `reject` is still a valid resolution and asks the model to
+ * clarify or discuss before retrying.
  */
 export type GateResolution = {
   decision: GateDecisionKind;
@@ -81,11 +80,13 @@ export function parseGateRequest(call: ToolCall): GateRequest {
       if (typeof option?.label !== "string" || typeof option?.decision !== "string") {
         throw new Error("request_confirmation option requires `label` and `decision`.");
       }
-      if (option.decision !== "confirm" && option.decision !== "revise" && option.decision !== "chat") {
+      const decision = normalizeGateDecision(option.decision);
+      if (!decision) {
         throw new Error(
-          `request_confirmation option.decision must be confirm|revise|chat, got "${option.decision}".`,
+          `request_confirmation option.decision must be confirm|reject, got "${option.decision}".`,
         );
       }
+      option.decision = decision;
     }
   }
   return {
@@ -106,7 +107,7 @@ export const gateToolDefinition: ToolDefinition = {
   function: {
     name: "request_confirmation",
     description:
-      "Pause the workflow and ask the user to confirm, revise, or chat about the current blueprint, plan, or phase artifact before proceeding. Only call this when the active engine prompt instructs a stop gate (e.g. ETL blueprint-confirmation or phase-confirmation). Do not call it for ordinary conversation.",
+      "Pause the workflow and ask the user to confirm or reject the current blueprint, plan, or phase artifact before proceeding. Rejection may include change requests or discussion; empty rejection is valid and means the model should ask what to change. Only call this when the active engine prompt instructs a stop gate (e.g. ETL blueprint-confirmation or phase-confirmation). Do not call it for ordinary conversation.",
     parameters: {
       type: "object",
       properties: {
@@ -123,12 +124,12 @@ export const gateToolDefinition: ToolDefinition = {
         options: {
           type: "array",
           description:
-            "Optional custom option labels. When omitted the host shows the standard Confirm/Revise/Chat triple. Each option carries a canonical decision the host knows how to act on.",
+            "Optional custom option labels. When omitted the host shows the standard Confirm/Reject pair. Each option carries a canonical decision the host knows how to act on.",
           items: {
             type: "object",
             properties: {
               label: { type: "string" },
-              decision: { type: "string", enum: ["confirm", "revise", "chat"] },
+              decision: { type: "string", enum: ["confirm", "reject"] },
               hint: { type: "string" },
             },
             required: ["label", "decision"],
@@ -141,3 +142,11 @@ export const gateToolDefinition: ToolDefinition = {
     },
   },
 };
+
+function normalizeGateDecision(value: string): GateDecisionKind | null {
+  if (value === "confirm" || value === "reject") return value;
+  // Compatibility for old prompts or in-flight sessions from before the
+  // non-confirm paths were collapsed into a single rejection decision.
+  if (value === "revise" || value === "chat") return "reject";
+  return null;
+}

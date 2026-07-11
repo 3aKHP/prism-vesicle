@@ -1,15 +1,14 @@
 # Contributing
 
-Prism Vesicle is in rapid internal development, so the main goal is to keep the
-runtime small, testable, and honest about what it can execute while preserving
-enough process to recover from risky changes.
+Prism Vesicle's internal development remains rapid, but public alpha release
+work follows the release branch and PR path in `docs/dev/WORKFLOW.md`.
 
 ## Branch And Commit Style
 
 For the full branch and independent CR workflow, see
 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
 
-During rapid internal development, `develop` is the active trunk. Small and
+During ordinary rapid internal development, `develop` is the active trunk. Small and
 medium low-risk changes may go directly to `develop` when commit/push work is
 explicitly requested. Use a short-lived branch and PR for high-risk provider,
 tool, session, prompt, validator, engine-profile, large-refactor, release, or
@@ -44,7 +43,7 @@ Use `docs/examples/provider.env.example` for the user-level secret file shape.
 
 ## Local Development
 
-```powershell
+```bash
 bun install
 bun run doctor
 bun run typecheck
@@ -59,6 +58,11 @@ The TUI reads provider settings from:
   `~/.config/prism-vesicle/providers.yaml` elsewhere
 - provider-specific environment variables from the `.env` file beside
   `providers.yaml`, with process environment variables used only as fallback
+- an optional provider-level `userAgent`; Vesicle otherwise builds its branded
+  value from the package version and active Bun runtime version
+- optional Streamable HTTP MCP server settings from sibling `mcp.yaml`, or
+  `VESICLE_MCP_FILE`; MCP header secrets still belong in the same user-level
+  `.env`, not in `mcp.yaml`
 - old project-root `.env` files should be migrated to the user-level config
   directory and removed or renamed locally
 
@@ -75,6 +79,6 @@ The TUI reads provider settings from:
 When tool names, provider behavior, session semantics, config variables, or
 artifact roots change, grep the docs for stale terms before finishing:
 
-```powershell
+```bash
 rg "tool|session|provider|workspace|VESICLE_|M0|OpenTUI" README.md STATUS.md CHANGELOG.md CONTRIBUTING.md docs assets
 ```

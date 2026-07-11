@@ -1,16 +1,34 @@
 #!/usr/bin/env bun
-import { runDoctor } from "./doctor";
-import { runPrompt } from "../core/agent-loop/run";
-import { runPromptDump } from "./commands/prompt-dump";
-import { runTui } from "../tui";
+import { dirname } from "node:path";
+
+// Bun's compiled single-file executable reports Bun.main from the bundled
+// virtual root while process.execPath points at the real compiled binary. Switch cwd
+// before loading project modules so asset/session/workspace roots resolve next
+// to the moved binary instead of the build-time directory.
+const isCompiledBinary = Bun.main.includes("~BUN/root");
+if (isCompiledBinary) {
+  process.chdir(dirname(process.execPath));
+}
 
 const command = process.argv[2];
 
+async function configureTreeSitterRuntime(): Promise<void> {
+  // Compiled executables receive an explicit flat worker entrypoint through
+  // the build-time OTUI_TREE_SITTER_WORKER_PATH define. Source/Bun-package
+  // runs use the installed OpenTUI worker from node_modules instead.
+  if (isCompiledBinary) return;
+  const { configureTreeSitterWorkerPath } = await import("../tui/tree-sitter-runtime");
+  configureTreeSitterWorkerPath();
+}
+
 switch (command) {
-  case "doctor":
+  case "doctor": {
+    const { runDoctor } = await import("./doctor");
     await runDoctor();
     break;
+  }
   case "once": {
+    const { runPrompt } = await import("../core/agent-loop/run");
     const input = process.argv.slice(3).join(" ").trim();
     if (!input) {
       console.error("Usage: vesicle once <prompt>");
@@ -21,6 +39,19 @@ switch (command) {
       console.log(result.assistantContent);
       console.log(`\n[gate:${result.gate.gate}] This turn needs user confirmation; the 'once' subcommand is non-interactive.`);
       console.log(`Session: ${result.sessionPath}`);
+    } else if (result.kind === "needs_engine_switch") {
+      console.log(result.assistantContent);
+      console.log(`\n[engine-switch:${result.request.targetEngine}] This turn needs user confirmation; the 'once' subcommand is non-interactive.`);
+      console.log(`Reason: ${result.request.reason}`);
+      console.log(`Session: ${result.sessionPath}`);
+    } else if (result.kind === "needs_user_question") {
+      console.log(result.assistantContent);
+      console.log(`\n[question:${result.question.header}] This turn needs user input; the 'once' subcommand is non-interactive.`);
+      console.log(result.question.question);
+      for (const [index, option] of result.question.options.entries()) {
+        console.log(`${index + 1}. ${option.label} - ${option.description}`);
+      }
+      console.log(`Session: ${result.sessionPath}`);
     } else {
       console.log(result.response.content);
       console.log(`\nSession: ${result.sessionPath}`);
@@ -28,6 +59,7 @@ switch (command) {
     break;
   }
   case "prompt": {
+    const { runPromptDump } = await import("./commands/prompt-dump");
     const subcommand = process.argv[3];
     const rest = process.argv.slice(4);
     if (subcommand === "dump") {
@@ -40,12 +72,39 @@ switch (command) {
     }
     break;
   }
+  case "debug": {
+    if (process.argv[3] !== "markdown-runtime") {
+      console.error("Usage: vesicle debug markdown-runtime");
+      process.exit(1);
+    }
+    await configureTreeSitterRuntime();
+    const { runMarkdownRuntimeDiagnostic } = await import("../tui/markdown-runtime-diagnostic");
+    const result = await runMarkdownRuntimeDiagnostic();
+    console.log(JSON.stringify(result));
+    if (!result.ok) process.exitCode = 1;
+    break;
+  }
+  case "assets": {
+    if (process.argv[3] !== "init" || process.argv[4] !== undefined) {
+      console.error("Usage: vesicle assets init");
+      process.exit(1);
+    }
+    const { initializeEditableAssets } = await import("./assets");
+    await initializeEditableAssets();
+    break;
+  }
   case undefined:
-  case "dev":
+  case "dev": {
+    if (!isCompiledBinary) {
+      await import("@opentui/solid/preload");
+    }
+    await configureTreeSitterRuntime();
+    const { runTui } = await import("../tui");
     await runTui();
     break;
+  }
   default:
     console.error(`Unknown command: ${command}`);
-    console.error("Commands: doctor, once, prompt, dev");
+    console.error("Commands: doctor, once, prompt, debug, assets, dev");
     process.exit(1);
 }

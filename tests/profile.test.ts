@@ -27,6 +27,18 @@ describe("engine profile loader", () => {
     expect(runtime.stopGates).toContain("runtime-turn");
   });
 
+  test("Tavily web tools are scoped to research and audit engines", async () => {
+    const webTools = ["web_search", "web_fetch", "web_map", "web_crawl", "web_research"];
+    const etlTools = (await loadEngineProfile("etl")).defaultTools;
+    const evaluateTools = (await loadEngineProfile("evaluate")).defaultTools;
+    const runtimeTools = (await loadEngineProfile("runtime")).defaultTools;
+    for (const tool of webTools) {
+      expect(etlTools).toContain(tool);
+      expect(evaluateTools).toContain(tool);
+      expect(runtimeTools).not.toContain(tool);
+    }
+  });
+
   test("rejects a profile whose id does not match the filename", async () => {
     const rootDir = await createProfileRoot(
       "dyad",

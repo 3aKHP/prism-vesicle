@@ -9,6 +9,20 @@ afterEach(() => {
 });
 
 describe("Gemini generateContent request shaping", () => {
+  test("serializes image attachments as inlineData parts", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [{ role: "user", content: "inspect", images: [image()] }],
+    });
+    expect(body.contents).toEqual([{
+      role: "user",
+      parts: [
+        { text: "inspect" },
+        { text: "[Image #1: capture.png]" },
+        { inlineData: { mimeType: "image/png", data: "cG5n" } },
+      ],
+    }]);
+  });
   test("serializes system, messages, tools, tool results, and thinking config", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
@@ -114,7 +128,7 @@ describe("Gemini generateContent request shaping", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
       model: { provider: "google", model: "gemini-3-pro-preview" },
-      generation: { reasoningTier: "midium" },
+      generation: { reasoningTier: "medium" },
     });
 
     expect(body.generationConfig).toMatchObject({
@@ -147,7 +161,16 @@ describe("Gemini generateContent adapter", () => {
             ],
           },
         }],
-        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 20, totalTokenCount: 30 },
+        usageMetadata: {
+          promptTokenCount: 1000,
+          candidatesTokenCount: 200,
+          totalTokenCount: 1200,
+          cachedContentTokenCount: 400,
+          thoughtsTokenCount: 80,
+          toolUsePromptTokenCount: 25,
+          promptTokensDetails: [{ modality: "TEXT", tokenCount: 900 }],
+          cacheTokensDetails: [{ modality: "TEXT", tokenCount: 400 }],
+        },
       });
     }) as unknown as typeof fetch;
 
@@ -177,7 +200,21 @@ describe("Gemini generateContent adapter", () => {
       ],
       toolCalls: [{ id: "call_1", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" }],
       finishReason: "STOP",
-      usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+      usage: {
+        contextInputTokens: 1000,
+        inputTokens: 1000,
+        outputTokens: 200,
+        totalTokens: 1200,
+        cacheReadInputTokens: 400,
+        cacheHitInputTokens: 400,
+        reasoningTokens: 80,
+        effectiveTokens: 800,
+        providerDetails: {
+          promptTokensDetails: [{ modality: "TEXT", tokenCount: 900 }],
+          cacheTokensDetails: [{ modality: "TEXT", tokenCount: 400 }],
+          toolUsePromptTokenCount: 25,
+        },
+      },
     });
   });
 
@@ -203,7 +240,7 @@ describe("Gemini generateContent adapter", () => {
 
   test("uses bearer auth for compatible relays", async () => {
     globalThis.fetch = (async (_input: unknown, init: RequestInit) => {
-      expect(init.headers).toMatchObject({ "Authorization": "Bearer test-key" });
+      expect(new Headers(init.headers).get("authorization")).toBe("Bearer test-key");
       return Response.json({
         candidates: [{ content: { parts: [{ text: "ok" }] } }],
       });
@@ -240,13 +277,16 @@ describe("Gemini generateContent adapter", () => {
   test("streams text, thought parts, tool calls, and a final response", async () => {
     globalThis.fetch = (async (input: unknown, init: RequestInit & { body?: unknown }) => {
       expect(String(input)).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-test:streamGenerateContent?alt=sse");
+      const headers = new Headers(init.headers);
+      expect(headers.get("x-goog-api-client")).toBe(`google-genai-sdk/1.30.0 gl-node/${process.version}`);
+      expect(headers.get("accept")).toBeNull();
       expect(JSON.parse(String(init.body))).toMatchObject({
         contents: [{ role: "user", parts: [{ text: "hello" }] }],
       });
       return new Response(rawSse([
         'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"think","thought":true,"thoughtSignature":"thought-sig"}]}}]}',
         'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hello"}]}}]}',
-        'data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_1","name":"read_file","args":{"path":"workspace/a.md"}},"thoughtSignature":"call-sig"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":5,"totalTokenCount":8}}',
+        'data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_1","name":"read_file","args":{"path":"workspace/a.md"}},"thoughtSignature":"call-sig"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":3000,"candidatesTokenCount":500,"totalTokenCount":3500,"cachedContentTokenCount":1000,"thoughtsTokenCount":120}}',
       ]), {
         headers: { "content-type": "text/event-stream" },
       });
@@ -318,10 +358,25 @@ describe("Gemini generateContent adapter", () => {
               },
               finishReason: "STOP",
             }],
-            usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 5, totalTokenCount: 8 },
+            usageMetadata: {
+              promptTokenCount: 3000,
+              candidatesTokenCount: 500,
+              totalTokenCount: 3500,
+              cachedContentTokenCount: 1000,
+              thoughtsTokenCount: 120,
+            },
           },
         ],
-        usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
+        usage: {
+          contextInputTokens: 3000,
+          inputTokens: 3000,
+          outputTokens: 500,
+          totalTokens: 3500,
+          cacheReadInputTokens: 1000,
+          cacheHitInputTokens: 1000,
+          reasoningTokens: 120,
+          effectiveTokens: 2500,
+        },
       },
     });
   });
@@ -379,6 +434,19 @@ function request(): VesicleRequest {
     model: { provider: "google", model: "gemini-test" },
     system: ["system"],
     messages: [{ role: "user", content: "hello" }],
+  };
+}
+
+function image(): NonNullable<VesicleRequest["messages"][number]["images"]>[number] {
+  return {
+    id: "img_test",
+    path: ".vesicle/attachments/test.png",
+    mediaType: "image/png",
+    bytes: 3,
+    sha256: "0".repeat(64),
+    source: "clipboard",
+    filename: "capture.png",
+    data: "cG5n",
   };
 }
 

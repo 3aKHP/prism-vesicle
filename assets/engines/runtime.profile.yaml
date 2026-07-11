@@ -12,6 +12,7 @@ defaultTools:
   - list_files
   - grep_files
   - read_file
+  - view_image
   - create_file
   - write_file
   - replace_in_file
@@ -19,7 +20,8 @@ defaultTools:
   - delete_file
   - copy_file
   - move_file
-validators: []
+validators:
+  - runtime-packet
 stopGates:
   - runtime-turn
 stateRoots:

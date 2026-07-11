@@ -1,5 +1,7 @@
 import type { VesicleConfig } from "../../config/env";
 import { ProviderError } from "../shared/errors";
+import { fetchProvider } from "../shared/fetch";
+import { openAIChatHeaders } from "../shared/headers";
 import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../shared/types";
 import { toChatCompletionBody } from "./request";
 import { readProviderErrorMessage, responseFromChatCompletionBody } from "./response";
@@ -60,13 +62,17 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
   }
 
   private fetchChatCompletion(request: VesicleRequest, stream: boolean, includeUsage: boolean): Promise<Response> {
-    return fetch(`${this.config.baseUrl}/chat/completions`, {
+    return fetchProvider(`${this.config.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${this.config.apiKey}`,
-        "Content-Type": "application/json",
+        ...openAIChatHeaders(this.config.userAgent),
+        "authorization": `Bearer ${this.config.apiKey}`,
       },
       body: JSON.stringify(toChatCompletionBody(request, stream, includeUsage)),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
     });
   }
 

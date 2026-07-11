@@ -1,6 +1,7 @@
 import type { ToolCall } from "../../core/tools";
 import { ProviderError } from "../shared/errors";
 import { displayTextFromThinkingBlocks } from "../shared/thinking";
+import { normalizeResponseUsage } from "../shared/usage";
 import type { ProviderThinkingBlock, VesicleResponse } from "../shared/types";
 import type { GeminiPart, GeminiResponse } from "./types";
 
@@ -72,12 +73,28 @@ export function responseFromGeminiParts(args: {
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     finishReason: args.finishReason,
     raw: args.raw,
-    usage: {
-      inputTokens: args.usage?.promptTokenCount,
-      outputTokens: args.usage?.candidatesTokenCount,
-      totalTokens: args.usage?.totalTokenCount,
-    },
+    usage: usageFromGeminiMetadata(args.usage),
   };
+}
+
+function usageFromGeminiMetadata(usage: GeminiResponse["usageMetadata"] | undefined): VesicleResponse["usage"] {
+  if (!usage) return undefined;
+  return normalizeResponseUsage({
+    contextInputTokens: usage.promptTokenCount,
+    inputTokens: usage.promptTokenCount,
+    outputTokens: usage.candidatesTokenCount,
+    totalTokens: usage.totalTokenCount,
+    cacheReadInputTokens: usage.cachedContentTokenCount,
+    cacheHitInputTokens: usage.cachedContentTokenCount,
+    reasoningTokens: usage.thoughtsTokenCount,
+    providerDetails: {
+      ...(usage.promptTokensDetails !== undefined ? { promptTokensDetails: usage.promptTokensDetails } : {}),
+      ...(usage.cacheTokensDetails !== undefined ? { cacheTokensDetails: usage.cacheTokensDetails } : {}),
+      ...(usage.candidatesTokensDetails !== undefined ? { candidatesTokensDetails: usage.candidatesTokensDetails } : {}),
+      ...(usage.toolUsePromptTokensDetails !== undefined ? { toolUsePromptTokensDetails: usage.toolUsePromptTokensDetails } : {}),
+      ...(usage.toolUsePromptTokenCount !== undefined ? { toolUsePromptTokenCount: usage.toolUsePromptTokenCount } : {}),
+    },
+  });
 }
 
 function normalizeGeminiPart(part: GeminiPart, index: number): GeminiPart {

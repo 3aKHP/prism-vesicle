@@ -1,10 +1,89 @@
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { createSessionStore, listSessions, loadSessionMessages, loadSessionSnapshot } from "../src/core/session/store";
 
 describe("session resume", () => {
+  test("restores durable image attachment references without base64", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-images-"));
+    const store = await createSessionStore(rootDir);
+    const image = {
+      id: "img_test",
+      path: ".vesicle/attachments/test.png",
+      mediaType: "image/png" as const,
+      bytes: 3,
+      sha256: "0".repeat(64),
+      source: "clipboard" as const,
+      filename: "capture.png",
+    };
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "user",
+      content: "inspect [Image #1]",
+      metadata: { images: [{ ...image, data: "must-not-survive" }] },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages[0]).toMatchObject({ role: "user", images: [image] });
+    expect(messages[0].images?.[0].data).toBeUndefined();
+  });
+  test("append-only session records fork from an explicit parent and resume the newest branch", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-branch-"));
+    const sessionId = "2026-01-01T00-00-00-000Z-branching";
+    const original = await createSessionStore(rootDir, sessionId);
+    await original.append({ role: "system", content: "prompt" });
+    await original.append({ role: "user", content: "first prompt" });
+    const firstAnswer = await original.append({ role: "assistant", content: "first answer" });
+    const oldPrompt = await original.append({ role: "user", content: "old second prompt" });
+    const oldAnswer = await original.append({ role: "assistant", content: "old second answer" });
+
+    const fork = await createSessionStore(rootDir, sessionId, { parentUuid: firstAnswer.uuid });
+    const revisedPrompt = await fork.append({ role: "user", content: "revised second prompt" });
+    await fork.append({ role: "assistant", content: "revised second answer" });
+
+    expect(oldPrompt.parentUuid).toBe(firstAnswer.uuid);
+    expect(revisedPrompt.parentUuid).toBe(firstAnswer.uuid);
+
+    const active = await loadSessionSnapshot(rootDir, sessionId);
+    expect(active.messages.map((message) => message.content)).toEqual([
+      "first prompt",
+      "first answer",
+      "revised second prompt",
+      "revised second answer",
+    ]);
+
+    const oldBranch = await loadSessionSnapshot(rootDir, sessionId, { headUuid: oldAnswer.uuid });
+    expect(oldBranch.messages.map((message) => message.content)).toEqual([
+      "first prompt",
+      "first answer",
+      "old second prompt",
+      "old second answer",
+    ]);
+  });
+
+  test("legacy linear JSONL records receive deterministic implicit parents", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-legacy-"));
+    const sessionId = "2026-01-01T00-00-00-000Z-legacy";
+    const sessionDir = join(rootDir, ".vesicle", "sessions");
+    await mkdir(sessionDir, { recursive: true });
+    const records = [
+      { ts: "2026-01-01T00:00:00.000Z", sessionId, role: "system", content: "prompt" },
+      { ts: "2026-01-01T00:00:01.000Z", sessionId, role: "user", content: "legacy prompt" },
+      { ts: "2026-01-01T00:00:02.000Z", sessionId, role: "assistant", content: "legacy answer" },
+    ];
+    await writeFile(join(sessionDir, `${sessionId}.jsonl`), records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+
+    const snapshot = await loadSessionSnapshot(rootDir, sessionId);
+    expect(snapshot.records.map((record) => record.uuid)).toEqual([
+      `${sessionId}:legacy:0`,
+      `${sessionId}:legacy:1`,
+      `${sessionId}:legacy:2`,
+    ]);
+    expect(snapshot.records[1]?.parentUuid).toBe(`${sessionId}:legacy:0`);
+    expect(snapshot.messages.map((message) => message.content)).toEqual(["legacy prompt", "legacy answer"]);
+  });
+
   test("listSessions returns summaries newest-first with previews", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-"));
 
@@ -41,8 +120,11 @@ describe("session resume", () => {
       role: "assistant",
       content: "here is the blueprint",
       metadata: {
+        engine: "etl",
+        model: "test-model",
         reasoningContent: "I should pause before proceeding.",
         thinkingBlocks: [{ type: "reasoning", reasoningContent: "I should pause before proceeding." }],
+        usage: { contextInputTokens: 1300, inputTokens: 1200, outputTokens: 300, totalTokens: 1500, cacheReadInputTokens: 500, effectiveTokens: 1000 },
         toolCalls: [{ id: "call-1", name: "request_confirmation", arguments: "{}" }],
       },
     });
@@ -69,6 +151,18 @@ describe("session resume", () => {
       "assistant",
     ]);
     expect(messages[1].toolCalls?.[0]?.id).toBe("call-1");
+    expect(messages[1].engine).toBe("etl");
+    expect(messages[1].model).toBe("test-model");
+    expect(messages[1].usage).toEqual({
+      contextInputTokens: 1300,
+      inputTokens: 1200,
+      outputTokens: 300,
+      totalTokens: 1500,
+      cacheReadInputTokens: 500,
+      effectiveTokens: 1000,
+    });
+    // The second assistant carries no engine/model metadata → left absent.
+    expect(messages[4].engine).toBeUndefined();
     expect(messages[1].reasoningContent).toBe("I should pause before proceeding.");
     expect(messages[1].thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "I should pause before proceeding." }]);
     expect(messages[2].toolCallId).toBe("call-1");
@@ -158,6 +252,110 @@ describe("session resume", () => {
     expect(snapshot.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
 
+  test("loadSessionSnapshot preserves an unresolved engine switch for interactive resume", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-pending-engine-"));
+    const store = await createSessionStore(rootDir, "2026-04-01T00-00-00-000Z-engine");
+
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "handoff" });
+    await store.append({
+      role: "assistant",
+      content: "Runtime should continue.",
+      metadata: {
+        toolCalls: [
+          {
+            id: "call-engine",
+            name: "request_engine_switch",
+            arguments: JSON.stringify({
+              targetEngine: "runtime",
+              reason: "Runtime owns turn simulation.",
+              handoffSummary: "Cards are ready.",
+            }),
+          },
+        ],
+      },
+    });
+
+    const summaries = await listSessions(rootDir);
+    expect(summaries[0].pendingEngineSwitch?.targetEngine).toBe("runtime");
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-04-01T00-00-00-000Z-engine");
+    expect(snapshot.pendingEngineSwitch?.toolCallId).toBe("call-engine");
+    expect(snapshot.pendingEngineSwitch?.request.handoffSummary).toBe("Cards are ready.");
+    expect(snapshot.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+  });
+
+  test("loadSessionSnapshot preserves engine handoff packets as user-role context", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-engine-handoff-"));
+    const store = await createSessionStore(rootDir, "2026-04-01T00-00-00-000Z-handoff");
+
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "start" });
+    await store.append({ role: "assistant", content: "ready" });
+    await store.append({
+      role: "system",
+      content: "Engine switched to runtime.",
+      metadata: {
+        kind: "engine-switch",
+        engine: "runtime",
+      },
+    });
+    await store.append({
+      role: "user",
+      content: "[engine_handoff]\nSource: manual\n[/engine_handoff]",
+      metadata: {
+        kind: "engine-handoff",
+        engine: "runtime",
+      },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-04-01T00-00-00-000Z-handoff");
+    expect(snapshot.engine).toBe("runtime");
+    expect(snapshot.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(snapshot.messages.at(-1)).toMatchObject({
+      role: "user",
+      kind: "engine-handoff",
+      content: "[engine_handoff]\nSource: manual\n[/engine_handoff]",
+    });
+  });
+
+  test("loadSessionSnapshot preserves an unresolved user question for interactive resume", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-pending-question-"));
+    const store = await createSessionStore(rootDir, "2026-04-01T00-00-00-000Z-question");
+
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "ask" });
+    await store.append({
+      role: "assistant",
+      content: "Choose one.",
+      metadata: {
+        toolCalls: [
+          {
+            id: "call-question",
+            name: "ask_user_question",
+            arguments: JSON.stringify({
+              header: "Scope",
+              question: "Which scope should I use?",
+              options: [
+                { label: "Narrow", description: "Minimum change." },
+                { label: "Broad", description: "Include cleanup." },
+              ],
+            }),
+          },
+        ],
+      },
+    });
+
+    const summaries = await listSessions(rootDir);
+    expect(summaries[0].pendingUserQuestion?.header).toBe("Scope");
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-04-01T00-00-00-000Z-question");
+    expect(snapshot.pendingUserQuestion?.toolCallId).toBe("call-question");
+    expect(snapshot.pendingUserQuestion?.question.options[1].label).toBe("Broad");
+    expect(snapshot.pendingUserQuestion?.question.options.map((option) => option.label)).toEqual(["Narrow", "Broad", "Skip", "Answer freely"]);
+    expect(snapshot.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+  });
+
   test("loadSessionSnapshot restores the latest provider/model selection", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-provider-session-"));
     const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-provider");
@@ -183,6 +381,46 @@ describe("session resume", () => {
     expect(snapshot.providerSelection).toEqual({ provider: "local", model: "qwen3" });
   });
 
+  test("loadSessionSnapshot restores the latest engine selection", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-engine-session-"));
+    const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-engine");
+
+    await store.append({
+      role: "system",
+      content: "prompt",
+      metadata: { engine: "etl" },
+    });
+    await store.append({
+      role: "system",
+      content: "Engine switched to runtime.",
+      metadata: { kind: "engine-switch", engine: "runtime" },
+    });
+    await store.append({
+      role: "user",
+      content: "continue",
+      metadata: { engine: "weaver-orch" },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-05-01T00-00-00-000Z-engine");
+
+    expect(snapshot.engine).toBe("weaver-orch");
+  });
+
+  test("loadSessionSnapshot ignores unknown engine metadata", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-engine-invalid-session-"));
+    const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-engine-invalid");
+
+    await store.append({
+      role: "system",
+      content: "prompt",
+      metadata: { engine: "not-real" },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "2026-05-01T00-00-00-000Z-engine-invalid");
+
+    expect(snapshot.engine).toBeUndefined();
+  });
+
   test("loadSessionSnapshot restores the latest thinking tier", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-thinking-session-"));
     const store = await createSessionStore(rootDir, "2026-05-01T00-00-00-000Z-thinking");
@@ -190,7 +428,7 @@ describe("session resume", () => {
     await store.append({ role: "system", content: "prompt" });
     await store.append({
       role: "system",
-      content: "Thinking tier switched to low.",
+      content: "Thinking effort switched to low.",
       metadata: { kind: "thinking-switch", reasoningTier: "low" },
     });
     await store.append({
@@ -211,12 +449,12 @@ describe("session resume", () => {
     await store.append({ role: "system", content: "prompt" });
     await store.append({
       role: "system",
-      content: "Thinking tier switched to max.",
+      content: "Thinking effort switched to max.",
       metadata: { kind: "thinking-switch", reasoningTier: "max" },
     });
     await store.append({
       role: "system",
-      content: "Thinking tier reset to provider default.",
+      content: "Thinking effort reset to provider default.",
       metadata: { kind: "thinking-switch", reasoningTier: null },
     });
 

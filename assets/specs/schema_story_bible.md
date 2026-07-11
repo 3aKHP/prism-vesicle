@@ -117,7 +117,7 @@ total_chapters_planned: 0
 **Rules:**
 - Added by the Continuity Editor when a contradiction is detected.
 - Severity: `Minor` (cosmetic, e.g., eye color discrepancy) | `Major` (plot-breaking, e.g., dead character reappears).
-- The Orchestrator reads this section at each Decision Gate to determine if re-writing is needed.
+- The Orchestrator reads this section at each decision checkpoint to determine if re-writing is needed.
 
 ## 4. Update Protocol
 

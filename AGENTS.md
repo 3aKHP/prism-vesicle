@@ -86,11 +86,11 @@ before merge.
 
 ## Local Runtime
 
-- Shell: PowerShell on Windows; prefer PowerShell 7 when available.
+- Shell: zsh on WSL2 (Linux); Bun runtime. PowerShell also works on Windows.
 - Runtime: Bun.
 - Standard verification:
 
-```powershell
+```bash
 bun run typecheck
 bun test
 bun run doctor
@@ -134,8 +134,10 @@ These are non-negotiable boundaries; see `docs/dev/STYLE.md` for detail.
 - Model-visible tools must stay behind `core/tools` path guards.
 - Tool paths are project-relative only; absolute paths and `..` escapes are
   rejected.
-- Write tools are limited to approved roots such as `workspace/`, `test_runs/`,
-  `novels/`, and `reports/`.
+- Write tools are limited to approved roots: `source_materials/`, `workspace/`,
+  `test_runs/`, `novels/`, and `reports/`. `source_materials/` holds imported,
+  researched, or model-generated source material; deployed artifacts belong in
+  the other four roots.
 - Prompt assets are runtime files under `assets/`; do not hardcode Prism
   prompts into TypeScript source.
 - Host-specific prompts, coding-agent identities, and tool assumptions must
@@ -163,7 +165,7 @@ These are non-negotiable boundaries; see `docs/dev/STYLE.md` for detail.
 
 Choose verification proportional to risk. For most changes, run:
 
-```powershell
+```bash
 bun run typecheck
 bun test
 bun run doctor
@@ -175,7 +177,7 @@ When practical, also run a real TUI or provider smoke.
 Before finishing behavior/config/docs changes, run a targeted stale-term pass.
 Examples:
 
-```powershell
+```bash
 rg "VESICLE_|providers.yaml|apiKeyEnv|session|write_file|tool_calls|OpenTUI" README.md STATUS.md CHANGELOG.md CONTRIBUTING.md docs assets
 rg "provider|engine|artifact|gate|validator|workspace" README.md STATUS.md CHANGELOG.md CONTRIBUTING.md docs assets
 ```

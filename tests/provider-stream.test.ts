@@ -36,6 +36,42 @@ describe("OpenAI-compatible streaming adapter", () => {
     });
   });
 
+  test("captures streamed usage chunks", async () => {
+    globalThis.fetch = (async () => new Response(sse([
+      { id: "chatcmpl-usage", choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] },
+      {
+        id: "chatcmpl-usage",
+        choices: [],
+        usage: {
+          prompt_tokens: 18000,
+          completion_tokens: 1400,
+          total_tokens: 19400,
+          prompt_tokens_details: { cached_tokens: 12000 },
+          completion_tokens_details: { reasoning_tokens: 320 },
+        },
+      },
+    ]))) as unknown as typeof fetch;
+
+    const events = await collect(streamAdapter().stream!(request()));
+
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        content: "ok",
+        usage: {
+          contextInputTokens: 18000,
+          inputTokens: 18000,
+          outputTokens: 1400,
+          totalTokens: 19400,
+          cacheReadInputTokens: 12000,
+          cacheHitInputTokens: 12000,
+          reasoningTokens: 320,
+          effectiveTokens: 7400,
+        },
+      },
+    });
+  });
+
   test("streams and reconstructs tool call argument deltas", async () => {
     globalThis.fetch = (async () => new Response(sse([
       {
@@ -86,11 +122,16 @@ describe("OpenAI-compatible streaming adapter", () => {
   });
 
   test("rejects a stream that ends before the [DONE] marker", async () => {
-    globalThis.fetch = (async () => new Response(sse([
-      { id: "chatcmpl-cut", choices: [{ delta: { content: "partial" } }] },
-    ], { done: false }))) as unknown as typeof fetch;
+    let attempts = 0;
+    globalThis.fetch = (async () => {
+      attempts += 1;
+      return new Response(sse([
+        { id: "chatcmpl-cut", choices: [{ delta: { content: "partial" } }] },
+      ], { done: false }));
+    }) as unknown as typeof fetch;
 
     await expect(collect(streamAdapter().stream!(request()))).rejects.toThrow("Provider stream ended before [DONE].");
+    expect(attempts).toBe(1);
   });
 
   test("reports malformed SSE payloads with a provider-stream error", async () => {
