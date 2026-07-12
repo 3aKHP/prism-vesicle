@@ -90,6 +90,15 @@ export type McpToolEvent = {
   isError: boolean;
 };
 
+export type AgentToolEvent = {
+  kind: "subagent";
+  handle: string;
+  profileId: string;
+  mode: "foreground" | "background";
+  status: "accepted" | "completed" | "failed" | "cancelled";
+  usage?: import("../../providers/shared/types").ResponseUsage;
+};
+
 export type ToolResult = {
   callId: string;
   name: string;
@@ -98,6 +107,7 @@ export type ToolResult = {
   fileEvent?: FileToolEvent;
   webEvent?: WebToolEvent;
   mcpEvent?: McpToolEvent;
+  agentEvent?: AgentToolEvent;
   images?: import("../../providers/shared/types").VesicleImageAttachment[];
 };
 

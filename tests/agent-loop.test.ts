@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveEngineSwitch, resolveGate, resolveUserQuestion, runPrompt } from "../src/core/agent-loop/run";
 import type { AgentLoopEvent } from "../src/core/agent-loop/run";
 import { ingestImageBytes } from "../src/core/attachments/store";
+import { AgentManager } from "../src/core/agents/manager";
+import { AgentStore } from "../src/core/agents/store";
+import { runChildAgent } from "../src/core/agents/child-runner";
+import { AgentContinuationScheduler } from "../src/core/agents/scheduler";
+import { createSessionStore, loadSessionRecords } from "../src/core/session/store";
+import { fileCheckpointDiffStats } from "../src/core/checkpoints/file-history";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -403,6 +409,221 @@ describe("agent loop sessions", () => {
 
     if (result.kind !== "complete") throw new Error("expected complete");
     expect(result.validation).toBeUndefined();
+  });
+
+  test("launches multiple foreground SubAgents in parallel and resumes the same parent turn", async () => {
+    const rootDir = await createPromptRoot();
+    const childResolvers: Array<(response: Response) => void> = [];
+    const childSystems: string[] = [];
+    let parentRequests = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const system = String(body.messages?.[0]?.content ?? "");
+      if (system.includes("Explore Agent") || system.includes("Reviewer Agent")) {
+        childSystems.push(system);
+        return new Promise<Response>((resolve) => childResolvers.push(resolve));
+      }
+      parentRequests += 1;
+      if (parentRequests === 1) {
+        return Response.json({
+          id: "parent-spawn",
+          choices: [{ message: {
+            content: "Delegating both checks.",
+            tool_calls: [
+              {
+                id: "call-explore",
+                type: "function",
+                function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "explore", description: "Explore sources", prompt: "Map the sources.", mode: "foreground" }) },
+              },
+              {
+                id: "call-review",
+                type: "function",
+                function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "reviewer", description: "Review evidence", prompt: "Review the evidence.", mode: "foreground" }) },
+              },
+            ],
+          } }],
+        });
+      }
+      expect(body.messages.filter((message: any) => message.role === "tool")).toHaveLength(2);
+      return Response.json({ id: "parent-complete", choices: [{ message: { content: "Combined child results." } }] });
+    }) as typeof fetch;
+
+    const turn = runPrompt({ input: "delegate", rootDir });
+    await eventually(() => expect(childResolvers).toHaveLength(2));
+    expect(parentRequests).toBe(1);
+    childResolvers[0]!(Response.json({ id: "child-a", choices: [{ message: { content: "source map" } }] }));
+    childResolvers[1]!(Response.json({ id: "child-b", choices: [{ message: { content: "review" } }] }));
+    const result = await turn;
+    expect(result.kind).toBe("complete");
+    if (result.kind !== "complete") return;
+    expect(result.response.content).toBe("Combined child results.");
+    expect(parentRequests).toBe(2);
+    expect(childSystems).toHaveLength(2);
+  });
+
+  test("attributes child file mutations to the parent user-turn checkpoint", async () => {
+    const rootDir = await createPromptRoot();
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    const manager = new AgentManager(new AgentStore(rootDir), async ({ invocation }) => {
+      expect(invocation?.beforeMutation).toBeFunction();
+      await invocation!.beforeMutation!(["workspace/child-output.md"]);
+      await writeFile(join(rootDir, "workspace", "child-output.md"), "child output\n", "utf8");
+      return { content: "wrote child output" };
+    });
+    let parentRequests = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      parentRequests += 1;
+      if (parentRequests === 1) {
+        return Response.json({
+          id: "parent-child-write",
+          choices: [{ message: {
+            content: "Delegating write.",
+            tool_calls: [{
+              id: "call-child-write",
+              type: "function",
+              function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "general", description: "Write child output", prompt: "Write the output.", mode: "foreground" }) },
+            }],
+          } }],
+        });
+      }
+      expect(body.messages.some((message: any) => message.role === "tool")).toBe(true);
+      return Response.json({ id: "parent-child-write-done", choices: [{ message: { content: "Child output integrated." } }] });
+    }) as typeof fetch;
+
+    const result = await runPrompt({ input: "delegate writer", rootDir, agentManager: manager });
+    expect(result.kind).toBe("complete");
+    if (result.kind !== "complete") return;
+    const records = await loadSessionRecords(rootDir, result.sessionId);
+    const user = records.find((record) => record.role === "user" && record.content === "delegate writer");
+    expect(user).toBeDefined();
+    const diff = await fileCheckpointDiffStats(rootDir, result.sessionId, user!.uuid);
+    expect(diff?.filesChanged).toContain("workspace/child-output.md");
+  });
+
+  test("background SubAgent returns accepted without blocking the parent", async () => {
+    const rootDir = await createPromptRoot();
+    const store = new AgentStore(rootDir);
+    const manager = new AgentManager(store, runChildAgent);
+    let resolveChild: (response: Response) => void = () => undefined;
+    let childStarted = false;
+    let parentRequests = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const system = String(body.messages?.[0]?.content ?? "");
+      if (system.includes("Explore Agent")) {
+        childStarted = true;
+        return new Promise<Response>((resolve) => { resolveChild = resolve; });
+      }
+      parentRequests += 1;
+      if (parentRequests === 1) {
+        return Response.json({
+          id: "parent-background",
+          choices: [{ message: {
+            content: "Starting background exploration.",
+            tool_calls: [{
+              id: "call-background",
+              type: "function",
+              function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "explore", description: "Explore later", prompt: "Explore in background.", mode: "background" }) },
+            }],
+          } }],
+        });
+      }
+      const tool = body.messages.find((message: any) => message.role === "tool");
+      expect(tool.content).toContain("accepted");
+      return Response.json({ id: "parent-free", choices: [{ message: { content: "Parent is free." } }] });
+    }) as typeof fetch;
+
+    const result = await runPrompt({ input: "start background", rootDir, agentManager: manager });
+    expect(result.kind).toBe("complete");
+    if (result.kind !== "complete") return;
+    expect(result.response.content).toBe("Parent is free.");
+    expect(manager.listActive(result.sessionId)).toHaveLength(1);
+    await eventually(() => expect(childStarted).toBe(true));
+    resolveChild(Response.json({ id: "child-later", choices: [{ message: { content: "late result" } }] }));
+    await eventually(async () => expect(await store.listInbox(result.sessionId, "pending")).toHaveLength(1));
+  });
+
+  test("delivers background completion through an automatic parent continuation", async () => {
+    const rootDir = await createPromptRoot();
+    const store = new AgentStore(rootDir);
+    const manager = new AgentManager(store, runChildAgent);
+    let resolveChild: (response: Response) => void = () => undefined;
+    let childStarted = false;
+    let parentRequests = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const system = String(body.messages?.[0]?.content ?? "");
+      if (system.includes("Explore Agent")) {
+        childStarted = true;
+        return new Promise<Response>((resolve) => { resolveChild = resolve; });
+      }
+      parentRequests += 1;
+      if (parentRequests === 1) {
+        return Response.json({
+          id: "parent-background-start",
+          choices: [{ message: {
+            content: "Delegating.",
+            tool_calls: [{
+              id: "call-auto-background",
+              type: "function",
+              function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "explore", description: "Explore automatically", prompt: "Explore.", mode: "background" }) },
+            }],
+          } }],
+        });
+      }
+      if (parentRequests === 2) return Response.json({ id: "parent-continues", choices: [{ message: { content: "Continuing while it runs." } }] });
+      expect(body.messages.at(-1).content).toContain("<subagent-results>");
+      return Response.json({ id: "parent-integrates", choices: [{ message: { content: "Integrated late evidence." } }] });
+    }) as typeof fetch;
+
+    const initial = await runPrompt({ input: "start", rootDir, agentManager: manager });
+    expect(initial.kind).toBe("complete");
+    if (initial.kind !== "complete") return;
+    await eventually(() => expect(childStarted).toBe(true));
+    resolveChild(Response.json({ id: "child-complete", choices: [{ message: { content: "late evidence" } }] }));
+    await eventually(async () => expect(await store.listInbox(initial.sessionId, "pending")).toHaveLength(1));
+    let integrated = "";
+    const scheduler = new AgentContinuationScheduler(store, async (parentSessionId, _entries, packet) => {
+      const continuation = await runPrompt({
+        input: packet,
+        rootDir,
+        sessionId: parentSessionId,
+        messages: [...initial.messages, { role: "user", content: packet }],
+        agentManager: manager,
+      });
+      if (continuation.kind !== "complete") throw new Error("expected complete continuation");
+      integrated = continuation.response.content;
+    }, { debounceMs: 0 });
+    await scheduler.notify(initial.sessionId);
+    expect(integrated).toBe("Integrated late evidence.");
+    expect(await store.listInbox(initial.sessionId, "acknowledged")).toHaveLength(1);
+  });
+
+  test("reuses a pre-persisted durable delivery input without appending it twice", async () => {
+    const rootDir = await createPromptRoot();
+    const session = await createSessionStore(rootDir);
+    await session.append({ role: "system", content: "parent" });
+    const delivery = await session.append({
+      role: "user",
+      content: "<subagent-results>done</subagent-results>",
+      metadata: { kind: "subagent-results", inboxIds: ["inbox-1"] },
+    });
+    globalThis.fetch = (async () => Response.json({
+      id: "delivery-retry",
+      choices: [{ message: { content: "integrated" } }],
+    })) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "<subagent-results>done</subagent-results>",
+      rootDir,
+      sessionId: session.sessionId,
+      messages: [{ role: "user", content: "<subagent-results>done</subagent-results>" }],
+      prePersistedInputUuid: delivery.uuid,
+    });
+    expect(result.kind).toBe("complete");
+    const records = (await readFile(session.sessionPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    expect(records.filter((record) => record.metadata?.kind === "subagent-results")).toHaveLength(1);
   });
 });
 
@@ -1207,7 +1428,9 @@ async function createPromptRoot(options: { stopGates?: string[]; validators?: st
     "  - config.load",
     "  - prompt.load",
     "  - session.write",
+    "  - stat_path",
     "  - list_files",
+    "  - grep_files",
     "  - read_file",
     "  - view_image",
     "  - write_file",
@@ -1273,4 +1496,18 @@ function rawSse(blocks: string[]): ReadableStream<Uint8Array> {
       controller.close();
     },
   });
+}
+
+async function eventually(assertion: () => void | Promise<void>): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try {
+      await assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await Bun.sleep(5);
+    }
+  }
+  throw lastError;
 }

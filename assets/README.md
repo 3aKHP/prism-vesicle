@@ -34,6 +34,8 @@ The source project is the public GitHub repository
 ## Layout
 
 - `prompts/shared/vesicle-base.md`: stable Vesicle host boundary contract
+- `agents/*.agent.yaml`: built-in and overridable SubAgent profiles
+- `prompts/agents/*.md`: shared and role-specific SubAgent instructions
 - `prompts/engines/*.md`: copied Prism v9 engine prompts with factual host adaptation
 - `specs/*.md`: Prism v9 schemas
 - `templates/*.md`: Prism v9 templates

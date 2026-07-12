@@ -47,7 +47,7 @@ export {
   webResearchToolDefinition,
   webSearchToolDefinition,
 } from "./web";
-export type { FileToolEvent, FileToolExecutionOptions, McpToolEvent, ToolCall, ToolDefinition, ToolResult, WebToolEvent } from "./types";
+export type { AgentToolEvent, FileToolEvent, FileToolExecutionOptions, McpToolEvent, ToolCall, ToolDefinition, ToolResult, WebToolEvent } from "./types";
 
 export type ToolContract = {
   name: BuiltInToolName;

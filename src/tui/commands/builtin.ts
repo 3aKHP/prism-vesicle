@@ -27,6 +27,7 @@ const HELP_TEXT = [
   "  /engine [id] [--summary [notes]] list or switch the Prism engine",
   "  /compact [notes]  summarize this session and replace old context",
   "  /context          show current context window usage",
+  "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
   "  /artifact [n|path] list or preview generated artifacts",
@@ -48,6 +49,16 @@ export const builtinCommands: Command[] = [
         { role: "user", content: raw },
         { role: "system", content: HELP_TEXT },
       ]);
+    },
+  },
+
+  {
+    name: "agents",
+    description: "List Agent Profiles and current SubAgents",
+    usage: "/agents [handle|stop <handle>|retry]",
+    async run(ctx, args, raw) {
+      const result = await ctx.agentCommand(args);
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: result }]);
     },
   },
 

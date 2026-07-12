@@ -96,4 +96,22 @@ describe("TUI reactivity static guard", () => {
 
     expect(activeChecks).toHaveLength(2);
   });
+
+  test("SubAgent lifecycle events do not overwrite the parent STATUS line", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const handler = source.match(/function handleAgentEvent\(event: AgentLoopEvent\) \{[\s\S]*?\n  \}\n\n  function recordActivity/)?.[0] ?? "";
+    const lifecycleCases = handler.match(/case "agent_created":[\s\S]*?case "agent_completed":/)?.[0] ?? "";
+
+    expect(lifecycleCases).not.toContain("setStatus(");
+    expect(handler).toContain("setAgentCards((cards) => applyAgentEvent(cards, event))");
+    expect(handler).toContain("recordActivity({ kind: \"agent\"");
+  });
+
+  test("session restoration blocks background delivery until restored state is coherent", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+
+    expect(source).toContain("&& !restoringSession()");
+    expect(source).toContain("const ready = !restoringSession()");
+    expect(source).toMatch(/async function resumeSession[\s\S]*?setRestoringSession\(true\);[\s\S]*?finally \{\n\s+setRestoringSession\(false\);/);
+  });
 });

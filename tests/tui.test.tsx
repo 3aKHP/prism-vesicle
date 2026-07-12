@@ -128,6 +128,12 @@ describe("TUI", () => {
         content: "{}",
       },
       {
+        role: "tool" as const,
+        content: "subagent result",
+        kind: "subagent-result",
+        usage: { inputTokens: 300, outputTokens: 30, cacheReadInputTokens: 50 },
+      },
+      {
         role: "assistant" as const,
         content: "second final",
         usage: { inputTokens: 2000, outputTokens: 200, contextInputTokens: 2000, cacheHitInputTokens: 500, reasoningTokens: 30, effectiveTokens: 1700 },
@@ -140,15 +146,15 @@ describe("TUI", () => {
     ];
 
     expect(sumSessionUsage(messages)).toEqual({
-      inputTokens: 2500,
-      outputTokens: 350,
-      cachedInputTokens: 600,
+      inputTokens: 2800,
+      outputTokens: 380,
+      cachedInputTokens: 650,
       contextInputTokens: 2000,
     });
     expect(latestTurnUsage(messages)).toEqual({
-      inputTokens: 2000,
-      outputTokens: 300,
-      cachedInputTokens: 500,
+      inputTokens: 2300,
+      outputTokens: 330,
+      cachedInputTokens: 550,
       contextInputTokens: 2000,
     });
   });

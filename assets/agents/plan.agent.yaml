@@ -1,0 +1,15 @@
+id: plan
+displayName: Plan Agent
+description: Convert a supplied goal and context into a concrete executable plan.
+systemPrompt:
+  - assets/prompts/agents/base.md
+  - assets/prompts/agents/plan.md
+tools:
+  - stat_path
+  - list_files
+  - grep_files
+  - read_file
+contextMode: summary
+modelPolicy: inherit
+defaultMode: foreground
+maxTurns: 16

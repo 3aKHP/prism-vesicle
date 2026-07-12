@@ -43,6 +43,8 @@ export type SessionStore = {
   headUuid(): string | null;
 };
 
+const sessionAppendTails = new Map<string, Promise<void>>();
+
 export async function createSessionStore(
   rootDir = process.cwd(),
   sessionId = createSessionId(),
@@ -51,7 +53,8 @@ export async function createSessionStore(
   const sessionDir = join(rootDir, ".vesicle", "sessions");
   await mkdir(sessionDir, { recursive: true });
   const sessionPath = join(sessionDir, `${sessionId}.jsonl`);
-  let headUuid = Object.hasOwn(options, "parentUuid")
+  let useExplicitParent = Object.hasOwn(options, "parentUuid");
+  let headUuid = useExplicitParent
     ? options.parentUuid ?? null
     : await readLatestRecordUuid(sessionPath);
 
@@ -59,19 +62,36 @@ export async function createSessionStore(
     sessionId,
     sessionPath,
     async append(record) {
-      const line: SessionRecord = {
-        uuid: crypto.randomUUID(),
-        parentUuid: headUuid,
-        ts: new Date().toISOString(),
-        sessionId,
-        ...record,
-      };
-      await appendFile(sessionPath, `${JSON.stringify(line)}\n`, "utf8");
-      headUuid = line.uuid;
-      return line;
+      return serializeSessionAppend(sessionPath, async () => {
+        const parentUuid = useExplicitParent
+          ? headUuid
+          : await readLatestRecordUuid(sessionPath);
+        useExplicitParent = false;
+        const line: SessionRecord = {
+          uuid: crypto.randomUUID(),
+          parentUuid,
+          ts: new Date().toISOString(),
+          sessionId,
+          ...record,
+        };
+        await appendFile(sessionPath, `${JSON.stringify(line)}\n`, "utf8");
+        headUuid = line.uuid;
+        return line;
+      });
     },
     headUuid: () => headUuid,
   };
+}
+
+function serializeSessionAppend<T>(sessionPath: string, operation: () => Promise<T>): Promise<T> {
+  const previous = sessionAppendTails.get(sessionPath) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(operation);
+  const tail = result.then(() => undefined, () => undefined);
+  sessionAppendTails.set(sessionPath, tail);
+  void tail.finally(() => {
+    if (sessionAppendTails.get(sessionPath) === tail) sessionAppendTails.delete(sessionPath);
+  });
+  return result;
 }
 
 function createSessionId(): string {
@@ -121,7 +141,10 @@ export type SessionSummary = {
  * first/last timestamps, the record count, and the first user message as a
  * preview. Fully reconstructing messages is loadSession's job.
  */
-export async function listSessions(rootDir = process.cwd()): Promise<SessionSummary[]> {
+export async function listSessions(
+  rootDir = process.cwd(),
+  options: { includeSubagents?: boolean } = {},
+): Promise<SessionSummary[]> {
   const sessionDir = join(rootDir, ".vesicle", "sessions");
   let files: string[];
   try {
@@ -144,6 +167,7 @@ export async function listSessions(rootDir = process.cwd()): Promise<SessionSumm
     let lastRecord: SessionRecord | null = null;
     let preview = "(no user message)";
     const allRecords = normalizeSessionRecords(lines.map((line) => JSON.parse(line) as Partial<SessionRecord>));
+    if (!options.includeSubagents && allRecords[0]?.metadata?.kind === "subagent-session") continue;
     const records = buildActiveSessionBranch(allRecords);
     for (const record of records) {
       if (!firstRecord) firstRecord = record;
@@ -357,11 +381,13 @@ export async function loadSessionSnapshot(
 
     if (record.role === "user") {
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
+      const usage = readResponseUsage(record.metadata?.usage);
       const images = parseImageAttachments(record.metadata?.images);
       messages.push({
         role: "user",
         content: record.content,
         ...(kind ? { kind } : {}),
+        ...(usage ? { usage } : {}),
         ...(images ? { images } : {}),
       });
       continue;
@@ -374,6 +400,8 @@ export async function loadSessionSnapshot(
       const toolWebEvent = record.metadata?.webEvent as WebToolEvent | undefined;
       const toolMcpEvent = record.metadata?.mcpEvent as McpToolEvent | undefined;
       const images = parseImageAttachments(record.metadata?.images);
+      const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
+      const usage = readResponseUsage(record.metadata?.usage);
       messages.push({
         role: "tool",
         content: record.content,
@@ -382,6 +410,8 @@ export async function loadSessionSnapshot(
         ...(toolFileEvent ? { toolFileEvent } : {}),
         ...(toolWebEvent ? { toolWebEvent } : {}),
         ...(toolMcpEvent ? { toolMcpEvent } : {}),
+        ...(kind ? { kind } : {}),
+        ...(usage ? { usage } : {}),
         ...(images ? { images } : {}),
       });
     }

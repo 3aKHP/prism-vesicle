@@ -9,6 +9,9 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
+- Cancelling a background SubAgent no longer enqueues a synthetic result or wakes the parent Engine for another provider turn. Cancellation remains a durable terminal Agent state, and legacy queued cancellation notices are acknowledged without delivery.
+- SubAgent lifecycle and progress events no longer overwrite the parent Engine's Workspace STATUS line. Agent activity remains visible through its dedicated cards, header summary, Agents sidebar, and activity records without causing concurrent parent/child status flicker.
+- Interrupted foreground Agents now close their original `spawn_agent` tool call during crash recovery, session restoration blocks background delivery until provider/gate state is coherent, terminal children reject late control requests, and `/agents retry` explicitly resumes a delivery paused after exhausted provider retries.
 - npm/Bun installs now expose `vesicle` through an `.mjs` Bun launcher, which
   npm 11 retains during publication.
 - Standalone binaries now use their embedded tree-sitter worker even when the
@@ -39,6 +42,11 @@ project follows Semantic Versioning once releases begin.
   after the same release gates.
 
 ### Added
+
+- Profile-driven SubAgent runtime with bundled Explore, Plan, Research, Reviewer, and General agents plus sparse project/user Agent Profile overrides under `assets/agents/`. Foreground children pause only the parent model loop while streaming progress; background children return immediately, run concurrently, persist completion in a durable parent inbox, and trigger an automatic parent continuation when the session is idle. The model can spawn, list, message, interrupt, and explicitly wait for children, while the TUI exposes `/agents` status and cancellation.
+- Parent/child SubAgent metadata, concurrency management, crash recovery, foreground cancellation propagation, background-result coalescing, child usage capture, explicit-wait inbox consumption, and child/parent parallel-write ownership checks.
+- First-class SubAgent observability in the TUI: dedicated lifecycle cards, live progress and bounded result previews, persistent active/ready summaries in the header and Workspace sidebar, background delivery states, restored cards on session resume, and `/agents <handle>` detail with argument completion.
+- Dual SubAgent identity: opaque UUID `runId` values remain host-only while model tools and user commands use stable parent-scoped handles such as `explore-1`. Existing UUID metadata and control references remain compatible.
 
 - `vesicle assets status`, `vesicle assets materialize <assets/path> [--global]`, and global `vesicle assets init --global` support inspecting and creating user-wide or project-specific editable asset layers. Existing full project initialization remains compatible, while sparse materialization is the recommended upgrade-safe path.
 

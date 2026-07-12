@@ -14,6 +14,11 @@ export type FixedArgumentDraft = {
   query: string;
 };
 
+export type AgentArgumentDraft = {
+  stage: "command" | "stop";
+  query: string;
+};
+
 /** Parse the editable portion after `/model ` into its completion stage. */
 export function parseModelArgumentDraft(value: string): ModelArgumentDraft | null {
   if (value.length < 7 || value.slice(0, 7).toLowerCase() !== "/model ") return null;
@@ -32,6 +37,13 @@ export function parseFixedArgumentDraft(value: string): FixedArgumentDraft | nul
   const command = value.slice(1, separator).toLowerCase();
   if (!isFixedArgumentCommand(command)) return null;
   return { command, query: value.slice(separator + 1) };
+}
+
+export function parseAgentArgumentDraft(value: string): AgentArgumentDraft | null {
+  if (value.length < 8 || value.slice(0, 8).toLowerCase() !== "/agents ") return null;
+  const rest = value.slice(8);
+  if (rest.toLowerCase().startsWith("stop ")) return { stage: "stop", query: rest.slice(5) };
+  return { stage: "command", query: rest };
 }
 
 export function fixedArgumentOptions(command: FixedArgumentCommand): OptionItem[] {
@@ -82,6 +94,11 @@ export function completeModelArgument(draft: ModelArgumentDraft, item: OptionIte
 
 export function completeFixedArgument(draft: FixedArgumentDraft, item: OptionItem): string {
   return `/${draft.command} ${item.id}`;
+}
+
+export function completeAgentArgument(draft: AgentArgumentDraft, item: OptionItem): string {
+  if (draft.stage === "stop") return `/agents stop ${item.id}`;
+  return item.id === "stop" ? "/agents stop " : `/agents ${item.id}`;
 }
 
 function isFixedArgumentCommand(value: string): value is FixedArgumentCommand {

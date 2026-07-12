@@ -18,6 +18,7 @@ core/tools/     # host tool contracts and execution
 mcp/            # external MCP tool discovery and execution
 core/gate/      # request_confirmation tool + GateRequest types
 core/agent-loop/# provider requests, tool loop, gate pause/resume
+core/agents/    # Agent profiles, child lifecycle, concurrency, inbox delivery
 core/validators/# Module A/B v9 schema checks + registry
 providers/      # protocol adapters only
 assets/         # runtime prompt/spec/template/profile assets
@@ -28,6 +29,7 @@ Allowed dependency direction:
 - `cli -> tui, core, config`
 - `tui -> core, config, providers/types`
 - `core/agent-loop -> providers, prompt, session, tools, gate, engine, validators, mcp`
+- `core/agents -> providers, session, tools, runtime assets, mcp`
 - `core/artifacts -> tools, validators`
 - `providers -> providers/shared` and config only
 - `core/tools` must not depend on providers or TUI
@@ -211,6 +213,21 @@ Model-visible tools are a security boundary.
 
 Add tests when adding or changing a tool. Include both the successful behavior
 and the boundary check that prevents overreach.
+
+## SubAgent Runtime
+
+- Agent Profiles are runtime assets under `assets/agents/`, independent of the six Prism Engine profiles. Bundled, user-global, Harness-provided, and sparse project profiles use one loader; do not hardcode the available profile ids in TypeScript.
+- Foreground/background controls whether the parent provider loop joins the child. Sequential/parallel is separate: multiple spawn calls from one assistant response must begin before any foreground join is awaited.
+- A foreground child shares parent-turn cancellation but keeps the Bun event loop and TUI responsive. A background child owns an independent controller, returns an accepted handle immediately, and delivers its terminal result through the durable parent inbox.
+- Never append a late result to the original `spawn_agent` tool call. The accepted background handle completes that call; later completion is a host-owned user-role packet delivered by the continuation scheduler when the parent session is idle.
+- `SessionRecord.parentUuid` is only an intra-session branch edge. Persist `parentSessionId` and `parentToolCallId` separately for child ownership.
+- Keep host identity and interaction identity separate. Persist an opaque `runId` for storage/recovery and a parent-scoped `<profile>-<ordinal>` handle for model tools and user commands. Never expose new run UUIDs merely because an internal map or error message uses them; legacy ids remain input-only compatibility references.
+- Render `spawn_agent` as a first-class Agent card rather than a generic tool card. The stream card owns lifecycle/progress, while the header and sidebar retain a compact active/ready summary after the spawn position scrolls away. Background `ready`, `integrating`, and `integrated` are delivery states and must not be conflated with provider execution.
+- Agent `*` inherits the parent's effective tools. An explicit installed profile allowlist may select guarded host tools outside the parent Engine's ordinary surface; MCP tools remain subject to their configured server and Engine scope. Task arguments cannot widen the installed profile.
+- Parallel writers are supported. Claim mutated paths for the lifetime of a child and coordinate parent file-tool mutations through the same ownership table. Reject conflicting ownership instead of globally forcing children to be read-only.
+- Parent completion delivery is serialized with user turns, gates, questions, and engine handoffs. Never mutate an in-flight provider request.
+
+See `docs/dev/SUBAGENTS.md` for the complete lifecycle and delivery contract.
 
 ## Gate Runtime
 

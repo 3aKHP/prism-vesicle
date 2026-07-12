@@ -8,13 +8,16 @@ import type { SessionSummary } from "../core/session/store";
 import type { ArtifactPreview } from "../core/artifacts/workbench";
 import type { RewindPoint } from "../core/rewind/service";
 import type { VesicleImageAttachment } from "../providers/shared/types";
+import type { AgentExecutionMode } from "../core/agents/profile";
+import type { ResponseUsage } from "../providers/shared/types";
 
 export type Role = "user" | "assistant" | "system" | "tool";
 
 export type Message = {
   role: Role;
   content: string;
-  kind?: "reasoning" | "artifact";
+  kind?: "reasoning" | "artifact" | "agent";
+  agentRunId?: string;
   artifactPath?: string;
   artifactTruncated?: boolean;
   toolStage?: "call" | "result";
@@ -30,10 +33,30 @@ export type Message = {
   images?: VesicleImageAttachment[];
 };
 
+export type AgentCardStatus = "queued" | "running" | "ready" | "integrating" | "integrated" | "completed" | "failed" | "cancelled";
+
+export type AgentCardState = {
+  runId: string;
+  handle: string;
+  profileId: string;
+  parentToolCallId: string;
+  parentSessionId: string;
+  description: string;
+  mode: AgentExecutionMode;
+  status: AgentCardStatus;
+  delivery?: "pending" | "integrating" | "integrated";
+  progress?: string;
+  resultPreview?: string;
+  createdAt: string;
+  updatedAt: string;
+  usage?: ResponseUsage;
+  toolUses?: number;
+};
+
 export type SelectedArtifact = ArtifactPreview;
 
 export type ActivityEntry = {
-  kind: "provider" | "assistant" | "tool" | "gate" | "validation" | "system";
+  kind: "provider" | "assistant" | "tool" | "agent" | "gate" | "validation" | "system";
   text: string;
 };
 

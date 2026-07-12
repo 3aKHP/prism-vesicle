@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  completeAgentArgument,
   completeFixedArgument,
   fixedArgumentOptions,
   matchOptionItems,
+  parseAgentArgumentDraft,
   parseFixedArgumentDraft,
 } from "../src/tui/commands/argument-completion";
 
@@ -56,5 +58,22 @@ describe("fixed slash-command argument completion", () => {
       { command: "engine", query: "run" },
       { id: "runtime", label: "runtime" },
     )).toBe("/engine runtime");
+  });
+
+  test("parses and completes handle-based Agent commands", () => {
+    expect(parseAgentArgumentDraft("/agents exp")).toEqual({ stage: "command", query: "exp" });
+    expect(parseAgentArgumentDraft("/agents stop rev")).toEqual({ stage: "stop", query: "rev" });
+    expect(completeAgentArgument(
+      { stage: "command", query: "" },
+      { id: "stop", label: "stop" },
+    )).toBe("/agents stop ");
+    expect(completeAgentArgument(
+      { stage: "command", query: "ret" },
+      { id: "retry", label: "retry" },
+    )).toBe("/agents retry");
+    expect(completeAgentArgument(
+      { stage: "stop", query: "exp" },
+      { id: "explore-1", label: "explore-1" },
+    )).toBe("/agents stop explore-1");
   });
 });
