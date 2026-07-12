@@ -58,6 +58,12 @@ To enable optional MCP tools, also copy the example registry and edit it before 
 cp docs/examples/mcp.yaml ~/.config/prism-vesicle/mcp.yaml
 ```
 
+To opt into the guarded host shell or choose a more cautious default approval mode, copy the permission settings example:
+
+```bash
+cp docs/examples/permissions.yaml ~/.config/prism-vesicle/permissions.yaml
+```
+
 ## Configure Providers
 
 Vesicle reads provider and model profiles from user-level configuration rather than from the project repository.
@@ -76,6 +82,8 @@ Do not place secrets in `providers.yaml`, and do not depend on a project-root `.
 The current provider protocols are OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini `generateContent`. Model entries may declare generation defaults, capability metadata such as vision support, and context limits. See the annotated example registry for the canonical shape.
 
 Optional Streamable HTTP MCP servers are configured in a sibling `mcp.yaml`; [`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) documents header expansion, tool prefixes, filters, engine scoping, and timeouts. `TAVILY_API_KEY` in the user-level `.env` enables Vesicle's web research tools for the ETL and Evaluate engines.
+
+Host tool approval settings live in sibling `permissions.yaml`; [`docs/examples/permissions.yaml`](./docs/examples/permissions.yaml) documents the MANUAL, INERTIA, and MOMENTUM defaults plus the explicit `shellExec` opt-in. YOLO cannot be persisted as a default. `/permissions YOLO` requires two red confirmations, while `vesicle --dangerously-skip-permissions` enables YOLO only for that process and keeps the danger indicator visible.
 
 ## First Run
 
@@ -103,6 +111,7 @@ Useful commands:
 | `/engine [id]` | Inspect or switch the active Prism engine |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | Control provider thinking effort |
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display |
+| `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Inspect or change tool approval behavior |
 | `/artifact [n\|path]` | List or preview generated artifacts |
 | `/validate <n\|path>` | Validate an artifact by index or path |
 | `/resume` | Resume a persisted session |
@@ -120,6 +129,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
+- Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with exact-plan approval, filtered environment, bounded output, timeout, process-tree cleanup, and durable audit metadata.
 - Foreground and background SubAgents with parallel execution, independent built-in or custom Agent Profiles, dedicated live Agent cards, short model/user-facing handles, durable completion delivery, and parent continuation without polling.
 - npm distribution plus standalone Windows and Linux builds with an immutable external default asset pack and sparse editable global/project overrides.
 

@@ -218,6 +218,17 @@ Model-visible tools are a security boundary.
 Add tests when adding or changing a tool. Include both the successful behavior
 and the boundary check that prevents overreach.
 
+## Tool Permission Runtime
+
+- Permission modes control approval friction and never widen the effective tool surface or bypass runtime guards. MANUAL asks for every model-visible execution, INERTIA auto-allows observation tools, MOMENTUM auto-allows every tool except `shell_exec`, and YOLO auto-allows all effective tools.
+- `request_confirmation`, `request_engine_switch`, and `ask_user_question` are interaction requests and remain outside Tool Permission Runtime. Gates continue to represent workflow discipline rather than security approval.
+- Unknown tools fail closed into the mutate class. Every MCP tool is mutate regardless of its remote name, description, or schema.
+- Permission requests bind to the originating session and tool call. Shell approval additionally binds to the exact normalized execution plan hash. Rejection returns a failed tool result; it does not add a synthetic user turn.
+- Child requests are routed through the parent-owned permission broker. A foreground or background child pauses at its call boundary until the parent TUI resolves the request. Child `shell_exec` remains disabled in the first runtime.
+- YOLO cannot be persisted as a user default. Interactive activation requires two red confirmations, resume downgrades a prior YOLO session to MOMENTUM, and `--dangerously-skip-permissions` applies only to the current process while keeping a visible red indicator.
+- Permission bypass never disables path guards, MCP/Agent capability scopes, argument validation, output bounds, timeout, environment filtering, process-tree cleanup, or concurrency controls.
+- `shell_exec` is opt-in through user-level `permissions.yaml`. It is a non-interactive host command with host-user filesystem and network authority, not an OS sandbox. Shell mutations must mark checkpoint completeness as tainted and must never be described as rewind-safe.
+
 ## SubAgent Runtime
 
 - Agent Profiles are runtime assets under `assets/agents/`, independent of the six Prism Engine profiles. Bundled, user-global, Harness-provided, and sparse project profiles use one loader; do not hardcode the available profile ids in TypeScript.

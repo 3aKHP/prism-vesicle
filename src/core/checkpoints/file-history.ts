@@ -24,6 +24,8 @@ export type FileCheckpointSnapshot = {
   messageId: string;
   files: Record<string, FileCheckpointEntry>;
   timestamp: string;
+  /** shell_exec may mutate paths outside the guarded file-tool ledger. */
+  taintedByHostProcess?: true;
 };
 
 export type FileCheckpointDiffStats = {
@@ -97,6 +99,12 @@ export class FileCheckpointManager {
     if (changed) await this.persist(true);
   }
 
+  async markTaintedByHostProcess(): Promise<void> {
+    if (!fileCheckpointingEnabled() || !this.current || this.current.taintedByHostProcess) return;
+    this.current.taintedByHostProcess = true;
+    await this.persist(true);
+  }
+
   private async persist(isSnapshotUpdate: boolean): Promise<void> {
     if (!this.current) return;
     const envelope: SnapshotEnvelope = {
@@ -154,6 +162,21 @@ export async function fileCheckpointTurnDiffStats(
     result.deletions += counts.deletions;
   }
   return result;
+}
+
+export async function fileCheckpointIsTainted(
+  rootDir: string,
+  sessionId: string,
+  messageId: string,
+  options: { headUuid?: string | null } = {},
+): Promise<boolean> {
+  if (!fileCheckpointingEnabled()) return false;
+  const records = await loadSessionRecords(rootDir, sessionId);
+  const activeBranch = buildActiveSessionBranch(records, options);
+  const snapshot = [...snapshotsFromRecords(activeBranch)]
+    .reverse()
+    .find((candidate) => candidate.messageId === messageId);
+  return snapshot?.taintedByHostProcess === true;
 }
 
 export async function restoreFileCheckpoint(

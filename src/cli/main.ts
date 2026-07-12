@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { isCompiledBinaryRuntime } from "./runtime";
+import { parseCliInvocation } from "./args";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 
@@ -12,7 +13,8 @@ const compiledMarker = typeof VESICLE_COMPILED_BINARY === "boolean"
   : undefined;
 const isCompiledBinary = isCompiledBinaryRuntime(compiledMarker, Bun.main);
 
-const command = process.argv[2];
+const invocation = parseCliInvocation(process.argv.slice(2));
+const command = invocation.args[0];
 
 async function configureTreeSitterRuntime(): Promise<void> {
   // Compiled executables receive an explicit flat worker entrypoint through
@@ -31,12 +33,19 @@ switch (command) {
   }
   case "once": {
     const { runPrompt } = await import("../core/agent-loop/run");
-    const input = process.argv.slice(3).join(" ").trim();
+    const { loadPermissionSettings } = await import("../config/permissions");
+    const permissionSettings = invocation.dangerouslySkipPermissions ? undefined : await loadPermissionSettings();
+    const input = invocation.args.slice(1).join(" ").trim();
     if (!input) {
       console.error("Usage: vesicle once <prompt>");
       process.exit(1);
     }
-    const result = await runPrompt({ input });
+    const result = await runPrompt({
+      input,
+      permission: invocation.dangerouslySkipPermissions
+        ? { mode: "YOLO", dangerouslySkipPermissions: true, shellExecEnabled: true }
+        : { mode: permissionSettings!.defaultMode, shellExecEnabled: permissionSettings!.shellExec },
+    });
     if (result.kind === "needs_user") {
       console.log(result.assistantContent);
       console.log(`\n[gate:${result.gate.gate}] This turn needs user confirmation; the 'once' subcommand is non-interactive.`);
@@ -54,6 +63,10 @@ switch (command) {
         console.log(`${index + 1}. ${option.label} - ${option.description}`);
       }
       console.log(`Session: ${result.sessionPath}`);
+    } else if (result.kind === "needs_permission") {
+      console.log(result.assistantContent);
+      console.log(`\n[permission:${result.request.toolName}] This turn needs user approval; the 'once' subcommand is non-interactive.`);
+      console.log(`Session: ${result.sessionPath}`);
     } else {
       console.log(result.response.content);
       console.log(`\nSession: ${result.sessionPath}`);
@@ -62,8 +75,8 @@ switch (command) {
   }
   case "prompt": {
     const { runPromptDump } = await import("./commands/prompt-dump");
-    const subcommand = process.argv[3];
-    const rest = process.argv.slice(4);
+    const subcommand = invocation.args[1];
+    const rest = invocation.args.slice(2);
     if (subcommand === "dump") {
       await runPromptDump(rest);
     } else if (subcommand === "shape") {
@@ -75,7 +88,7 @@ switch (command) {
     break;
   }
   case "debug": {
-    if (process.argv[3] !== "markdown-runtime") {
+    if (invocation.args[1] !== "markdown-runtime") {
       console.error("Usage: vesicle debug markdown-runtime");
       process.exit(1);
     }
@@ -88,7 +101,7 @@ switch (command) {
   }
   case "assets": {
     const { runAssetsCommand } = await import("./assets");
-    await runAssetsCommand(process.argv.slice(3));
+    await runAssetsCommand(invocation.args.slice(1));
     break;
   }
   case undefined:
@@ -98,7 +111,7 @@ switch (command) {
     }
     await configureTreeSitterRuntime();
     const { runTui } = await import("../tui");
-    await runTui();
+    await runTui({ dangerouslySkipPermissions: invocation.dangerouslySkipPermissions });
     break;
   }
   default:

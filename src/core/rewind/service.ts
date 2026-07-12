@@ -1,5 +1,6 @@
 import {
   fileCheckpointDiffStats,
+  fileCheckpointIsTainted,
   fileCheckpointTurnDiffStats,
   restoreFileCheckpoint,
   type FileCheckpointDiffStats,
@@ -23,6 +24,7 @@ export type RewindPoint = {
   turnDiffStats?: FileCheckpointDiffStats;
   diffStats?: FileCheckpointDiffStats;
   images?: VesicleImageAttachment[];
+  checkpointTainted?: true;
 };
 
 export type ConversationRewind = {
@@ -51,6 +53,7 @@ export async function listRewindPoints(
       next?.uuid,
       { headUuid: snapshot.headUuid },
     );
+    const checkpointTainted = await fileCheckpointIsTainted(rootDir, sessionId, record.uuid, { headUuid: snapshot.headUuid });
     points.push({
       uuid: record.uuid,
       parentUuid: record.parentUuid,
@@ -59,6 +62,7 @@ export async function listRewindPoints(
       branchHeadUuid: snapshot.headUuid,
       ...(turnDiffStats ? { turnDiffStats } : {}),
       ...(diffStats ? { diffStats } : {}),
+      ...(checkpointTainted ? { checkpointTainted: true as const } : {}),
       ...(parseImageAttachments(record.metadata?.images)
         ? { images: parseImageAttachments(record.metadata?.images) }
         : {}),

@@ -94,6 +94,21 @@ export type McpToolEvent = {
   isError: boolean;
 };
 
+export type ProcessToolEvent = {
+  kind: "process_exec";
+  command: string;
+  cwd: ".";
+  shell: "posix-sh" | "powershell";
+  exitCode?: number;
+  durationMs: number;
+  timedOut: boolean;
+  aborted: boolean;
+  stdoutBytes: number;
+  stderrBytes: number;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+};
+
 export type AgentToolEvent = {
   kind: "subagent";
   handle: string;
@@ -111,6 +126,7 @@ export type ToolResult = {
   fileEvent?: FileToolEvent;
   webEvent?: WebToolEvent;
   mcpEvent?: McpToolEvent;
+  processEvent?: ProcessToolEvent;
   agentEvent?: AgentToolEvent;
   images?: import("../../providers/shared/types").VesicleImageAttachment[];
 };

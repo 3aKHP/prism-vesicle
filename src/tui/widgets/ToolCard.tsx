@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from "solid-js";
-import type { FileToolEvent, McpToolEvent, WebToolEvent } from "../../core/tools";
+import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../../core/tools";
 import { palette } from "../theme";
 import { truncateLine } from "../format";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
@@ -45,6 +45,7 @@ type Props = {
   toolFileEvent?: FileToolEvent;
   toolWebEvent?: WebToolEvent;
   toolMcpEvent?: McpToolEvent;
+  toolProcessEvent?: ProcessToolEvent;
   /** Raw tool-result content; used only for failure messages. */
   content?: string;
   width: number;
@@ -54,7 +55,7 @@ type Props = {
 export function ToolCard(props: Props) {
   if (props.toolStage === "result") {
     const ok = props.toolOk ?? true;
-    const footer = toolResultFooter(props.toolName ?? "tool", ok, props.content ?? "", props.toolFileEvent, props.toolWebEvent, props.toolMcpEvent);
+    const footer = toolResultFooter(props.toolName ?? "tool", ok, props.content ?? "", props.toolFileEvent, props.toolWebEvent, props.toolMcpEvent, props.toolProcessEvent);
     return (
       <box flexDirection="column">
         <text content={`  ⎿ ${footer}`} fg={ok ? palette.textMuted : palette.error} />

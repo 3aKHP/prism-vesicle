@@ -13,7 +13,7 @@
  * right beneath it. `fileEvent`/`webEvent`/`mcpEvent` carry structured outcomes; `content`
  * is only used for failure messages.
  */
-import type { FileToolEvent, McpToolEvent, WebToolEvent } from "../core/tools";
+import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../core/tools";
 
 export type DiffKind = "ctx" | "add" | "del" | "elide";
 export type DiffLine = { kind: DiffKind; text: string };
@@ -33,6 +33,7 @@ export type ToolKind =
   | "stat"
   | "web"
   | "mcp"
+  | "process"
   | "unknown";
 
 /** Categorise a tool name for rendering decisions. */
@@ -59,6 +60,7 @@ export function toolKind(name: string): ToolKind {
     case "web_map": return "web";
     case "web_crawl": return "web";
     case "web_research": return "web";
+    case "shell_exec": return "process";
     default:
       if (name.startsWith("mcp_")) return "mcp";
       return "unknown";
@@ -111,6 +113,7 @@ export function toolTarget(name: string, args: Record<string, unknown> | null): 
     return [path, pattern ? `"${pattern}"` : null].filter(Boolean).join("  ");
   }
   if (kind === "web") return str(args?.query) ?? str(args?.input) ?? str(args?.url) ?? "";
+  if (kind === "process") return str(args?.command) ?? "";
   return str(args?.path) ?? "";
 }
 
@@ -266,12 +269,22 @@ export function toolResultFooter(
   fileEvent?: FileToolEvent,
   webEvent?: WebToolEvent,
   mcpEvent?: McpToolEvent,
+  processEvent?: ProcessToolEvent,
 ): string {
+  if (processEvent) return processEventDetail(processEvent);
   if (!ok) return joinDetail("failed", firstLine(content));
   if (fileEvent) return fileEventDetail(fileEvent);
   if (webEvent) return webEventDetail(webEvent);
   if (mcpEvent) return mcpEventDetail(mcpEvent);
   return firstLine(content) || joinDetail(name);
+}
+
+function processEventDetail(e: ProcessToolEvent): string {
+  return joinDetail(
+    e.timedOut ? "timed out" : e.aborted ? "cancelled" : `exit ${e.exitCode ?? "unknown"}`,
+    `${e.durationMs}ms`,
+    e.stdoutTruncated || e.stderrTruncated ? "truncated" : null,
+  );
 }
 
 function mcpEventDetail(e: McpToolEvent): string {

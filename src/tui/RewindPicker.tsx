@@ -28,7 +28,7 @@ export function rewindRestoreOptions(point: RewindPoint): RewindOption[] {
 export function rewindPickerPanelHeight(state: RewindPickerState): number {
   if (!state.target) return 8;
   const optionRows = rewindRestoreOptions(state.target).length;
-  const warningRows = state.target.diffStats?.filesChanged.length ? 1 : 0;
+  const warningRows = (state.target.diffStats?.filesChanged.length ? 1 : 0) + (state.target.checkpointTainted ? 1 : 0);
   return Math.min(14, 8 + optionRows + warningRows);
 }
 
@@ -94,6 +94,9 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
             </For>
             <For each={point().diffStats?.filesChanged.length ? [true] : []}>
               {() => <text content="⚠ Rewinding does not affect files edited manually outside Vesicle tools." fg={palette.warn} />}
+            </For>
+            <For each={point().checkpointTainted ? [true] : []}>
+              {() => <text content="⚠ This turn ran shell_exec; its file changes may not be restored." fg={palette.error} />}
             </For>
             <text content={props.state.busy
               ? props.state.restoringOption === "summarize" ? "Summarizing…" : "Restoring…"

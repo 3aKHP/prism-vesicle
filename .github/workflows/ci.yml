@@ -72,6 +72,8 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Test Windows permission and process runtime
+        run: bun test tests/permission-config.test.ts tests/permissions.test.ts tests/process-runtime.test.ts
       - run: bun run build:exe windows
       - run: bun run build:assets
       - name: Smoke the release shape

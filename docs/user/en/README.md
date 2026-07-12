@@ -31,19 +31,23 @@ Chapters `00`–`06` form the first complete learning path: understand the produ
 
 10. [09 — A Complete ETL Workflow](./09-complete-etl-workflow.md)
 
+## Advanced Operation
+
+11. [10 — Tool Permissions and the Host Shell](./10-tool-permissions-and-shell.md)
+
 ## Planned Learning Path
 
 The following chapters will extend the manual from everyday use to advanced operation:
 
-- `10` — Artifacts and validation
-- `11` — Gates, questions, and engine handoffs
-- `12` — Rewind and file checkpoints
-- `13` — Context, compaction, effort, and reasoning
-- `14` — Images and web research
-- `15` — MCP tools
-- `16` — Advanced provider configuration
-- `17` — Troubleshooting and recovery
-- `18` — Updates, backups, migration, and removal
+- `11` — Artifacts and validation
+- `12` — Gates, questions, and engine handoffs
+- `13` — Rewind and file checkpoints
+- `14` — Context, compaction, effort, and reasoning
+- `15` — Images and web research
+- `16` — MCP tools
+- `17` — Advanced provider configuration
+- `18` — Troubleshooting and recovery
+- `19` — Updates, backups, migration, and removal
 
 Reference pages for commands, configuration, terminology, and frequently asked questions will be added separately from the numbered learning path.
 

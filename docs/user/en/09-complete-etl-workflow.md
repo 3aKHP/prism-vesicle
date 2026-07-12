@@ -193,7 +193,7 @@ Validate it:
 
 A clean result says validation passed. Findings are advisory rather than fatal. Common Module A findings involve missing sections, incorrect YAML fields, too few invariant or variant axes, no positive shift, or production-only L-System labels leaking into the artifact.
 
-If validation reports issues, keep the session and exact file. Chapter 10 will teach a disciplined inspect–revise–validate loop. You may continue this tutorial if the card exists and is recognizable, but do not treat a failing card as publication-ready.
+If validation reports issues, keep the session and exact file. Chapter 11 will teach a disciplined inspect–revise–validate loop. You may continue this tutorial if the card exists and is recognizable, but do not treat a failing card as publication-ready.
 
 ## Step 9 — Request Three Module B Hooks
 
@@ -252,7 +252,7 @@ mira_vale.md
 mira_vale_scenario_practice.md
 ```
 
-Open the files in a text editor if you want to inspect the complete documents. Do not edit them during this exercise; Chapter 10 will introduce revision and revalidation.
+Open the files in a text editor if you want to inspect the complete documents. Do not edit them during this exercise; Chapter 11 will introduce revision and revalidation.
 
 ## If the Workflow Deviates
 

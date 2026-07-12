@@ -65,4 +65,18 @@ describe("rewind service", () => {
     expect(rewound.snapshot.messages).toEqual([]);
     expect(rewound.prompt).toBe("change card");
   });
+
+  test("marks rewind points whose file completeness was tainted by shell_exec", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-rewind-tainted-"));
+    const store = await createSessionStore(rootDir, "rewind-tainted");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "run shell" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    await checkpoint.markTaintedByHostProcess();
+    await store.append({ role: "assistant", content: "done" });
+
+    const point = (await listRewindPoints(rootDir, store.sessionId))[0]!;
+    expect(point.checkpointTainted).toBe(true);
+  });
 });

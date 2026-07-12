@@ -12,9 +12,11 @@ import type { UserQuestionRequest } from "../user-question/types";
 import { reasoningTiers } from "../../providers/shared/types";
 import type { ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
-import type { FileToolEvent, McpToolEvent, WebToolEvent } from "../tools";
+import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import { parseImageAttachments } from "../attachments/store";
 import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets";
+import { parsePermissionRequest } from "../permissions";
+import type { PermissionMode, PermissionRequest } from "../permissions";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -132,6 +134,10 @@ export type SessionSummary = {
     header: string;
     question: string;
   };
+  pendingPermission?: {
+    tool: string;
+    command?: string;
+  };
 };
 
 /**
@@ -180,6 +186,7 @@ export async function listSessions(
     const pendingGate = findPendingGate(records);
     const pendingEngineSwitch = findPendingEngineSwitch(records);
     const pendingUserQuestion = findPendingUserQuestion(records);
+    const pendingPermission = findPendingPermission(records);
     summaries.push({
       sessionId,
       startedAt: firstRecord.ts,
@@ -192,6 +199,9 @@ export async function listSessions(
         : {}),
       ...(pendingUserQuestion
         ? { pendingUserQuestion: { header: pendingUserQuestion.question.header, question: pendingUserQuestion.question.question } }
+        : {}),
+      ...(pendingPermission
+        ? { pendingPermission: { tool: pendingPermission.toolName, ...(pendingPermission.executionPlan ? { command: pendingPermission.executionPlan.command } : {}) } }
         : {}),
     });
   }
@@ -224,6 +234,7 @@ export type ResumedMessage = {
   toolFileEvent?: FileToolEvent;
   toolWebEvent?: WebToolEvent;
   toolMcpEvent?: McpToolEvent;
+  toolProcessEvent?: ProcessToolEvent;
   /** Engine/model that produced an assistant record (for the per-turn marker). */
   engine?: EngineId;
   model?: string;
@@ -245,6 +256,7 @@ export type SessionSnapshot = {
   providerSelection?: ProviderSelection;
   reasoningTier?: ReasoningTier;
   reasoningDisplayMode?: ReasoningDisplayMode;
+  permissionMode?: PermissionMode;
   /** Asset profile/prompt fingerprint recorded when the session began. */
   assets?: AssetFingerprint;
   pendingGate?: {
@@ -262,6 +274,7 @@ export type SessionSnapshot = {
     toolCallId: string;
     assistantContent: string;
   };
+  pendingPermission?: PermissionRequest;
 };
 
 export async function loadSessionMessages(rootDir: string, sessionId: string): Promise<ResumedMessage[]> {
@@ -326,6 +339,7 @@ export async function loadSessionSnapshot(
   let providerSelection: ProviderSelection | undefined;
   let reasoningTier: ReasoningTier | undefined;
   let reasoningDisplayMode: ReasoningDisplayMode | undefined;
+  let permissionMode: PermissionMode | undefined;
   let assets: AssetFingerprint | undefined;
 
   for (const record of records) {
@@ -344,6 +358,7 @@ export async function loadSessionSnapshot(
     if (record.metadata && Object.hasOwn(record.metadata, "reasoningDisplayMode")) {
       reasoningDisplayMode = readReasoningDisplayMode(record.metadata.reasoningDisplayMode);
     }
+    if (isPermissionMode(record.metadata?.permissionMode)) permissionMode = record.metadata!.permissionMode as PermissionMode;
 
     if (record.role === "system") {
       // Skip the initial composed prompt; resume recomposes it. Also skip
@@ -399,6 +414,7 @@ export async function loadSessionSnapshot(
       const toolFileEvent = record.metadata?.fileEvent as FileToolEvent | undefined;
       const toolWebEvent = record.metadata?.webEvent as WebToolEvent | undefined;
       const toolMcpEvent = record.metadata?.mcpEvent as McpToolEvent | undefined;
+      const toolProcessEvent = record.metadata?.processEvent as ProcessToolEvent | undefined;
       const images = parseImageAttachments(record.metadata?.images);
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
       const usage = readResponseUsage(record.metadata?.usage);
@@ -410,6 +426,7 @@ export async function loadSessionSnapshot(
         ...(toolFileEvent ? { toolFileEvent } : {}),
         ...(toolWebEvent ? { toolWebEvent } : {}),
         ...(toolMcpEvent ? { toolMcpEvent } : {}),
+        ...(toolProcessEvent ? { toolProcessEvent } : {}),
         ...(kind ? { kind } : {}),
         ...(usage ? { usage } : {}),
         ...(images ? { images } : {}),
@@ -420,15 +437,20 @@ export async function loadSessionSnapshot(
   const pendingGate = findPendingGate(records);
   const pendingEngineSwitch = findPendingEngineSwitch(records);
   const pendingUserQuestion = findPendingUserQuestion(records);
-  if (options.synthesizeDanglingToolResults ?? false) {
-    // CR B1: a session that paused at an interactive request ends with an
-    // assistant message carrying a tool call, but no tool result was ever
-    // written (the user had not resolved it before the session ended).
-    // The OpenAI Chat Completions API rejects an assistant tool_calls message
-    // that is not followed by matching tool results. Synthesize a placeholder
-    // result for non-interactive resume paths so the provider request is valid.
-    appendDanglingToolResults(messages);
-  }
+  const pendingPermission = findPendingPermission(records);
+  appendIndeterminateProcessResults(messages, records);
+  const preservedPendingCallIds = options.synthesizeDanglingToolResults
+    ? new Set<string>()
+    : new Set([
+        pendingGate?.toolCallId,
+        pendingEngineSwitch?.toolCallId,
+        pendingUserQuestion?.toolCallId,
+        pendingPermission?.toolCallId,
+      ].filter((value): value is string => typeof value === "string"));
+  // Preserve the one request that the interactive TUI can still resolve. Any
+  // other unpaired call belongs to an interrupted execution window and must
+  // receive a synthetic failure instead of being replayed implicitly.
+  appendDanglingToolResults(messages, preservedPendingCallIds);
 
   return {
     sessionId,
@@ -439,6 +461,7 @@ export async function loadSessionSnapshot(
     ...(providerSelection ? { providerSelection } : {}),
     ...(reasoningTier ? { reasoningTier } : {}),
     ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}),
+    ...(permissionMode ? { permissionMode } : {}),
     ...(assets ? { assets } : {}),
     ...(pendingGate
       ? {
@@ -467,7 +490,40 @@ export async function loadSessionSnapshot(
           },
         }
       : {}),
+    ...(pendingPermission ? { pendingPermission } : {}),
   };
+}
+
+function appendIndeterminateProcessResults(messages: ResumedMessage[], records: SessionRecord[]): void {
+  const finishedRequestIds = new Set<string>();
+  const answeredToolCallIds = new Set(messages.flatMap((message) => message.toolCallId ? [message.toolCallId] : []));
+  for (const record of records) {
+    if (record.role !== "tool") continue;
+    const requestId = record.metadata?.permissionRequestId;
+    if (typeof requestId === "string") finishedRequestIds.add(requestId);
+  }
+  for (const record of records) {
+    if (record.metadata?.kind !== "process-started") continue;
+    const requestId = record.metadata.requestId;
+    const toolCallId = record.metadata.toolCallId;
+    if (typeof requestId !== "string" || typeof toolCallId !== "string") continue;
+    if (finishedRequestIds.has(requestId) || answeredToolCallIds.has(toolCallId)) continue;
+    messages.push({
+      role: "tool",
+      toolCallId,
+      toolOk: false,
+      kind: "process-indeterminate",
+      content: JSON.stringify({
+        ok: false,
+        result: "The approved shell process started before Vesicle stopped, but no completion record exists. Its side effects are indeterminate and the command was not replayed.",
+      }),
+    });
+    answeredToolCallIds.add(toolCallId);
+  }
+}
+
+function isPermissionMode(value: unknown): value is PermissionMode {
+  return value === "MANUAL" || value === "INERTIA" || value === "MOMENTUM" || value === "YOLO";
 }
 
 function readEngineId(value: unknown): EngineId | undefined {
@@ -606,6 +662,22 @@ function findPendingUserQuestion(records: SessionRecord[]): { question: UserQues
   return undefined;
 }
 
+function findPendingPermission(records: SessionRecord[]): PermissionRequest | undefined {
+  const resolved = new Set<string>();
+  for (const record of records) {
+    if (record.metadata?.kind !== "permission-resolution") continue;
+    const requestId = record.metadata.requestId;
+    if (typeof requestId === "string") resolved.add(requestId);
+  }
+  for (let index = records.length - 1; index >= 0; index--) {
+    const record = records[index];
+    if (record.metadata?.kind !== "permission-request") continue;
+    const request = parsePermissionRequest(record.metadata.request);
+    if (request && !resolved.has(request.id)) return request;
+  }
+  return undefined;
+}
+
 function readThinkingBlocks(value: unknown): ProviderThinkingBlock[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const blocks = value.filter(isKnownThinkingBlock);
@@ -658,11 +730,11 @@ function isKnownThinkingBlock(value: unknown): value is ProviderThinkingBlock {
 
 /**
  * For every assistant tool_calls entry that lacks a following tool result,
- * append a synthetic "gate was not resolved before session ended" result.
- * This lets a resumed session feed a well-formed message list back to the
- * provider without HTTP 400 "tool_call id missing" errors.
+ * append a synthetic interruption result unless the interactive TUI still
+ * owns that exact request. This keeps provider history valid across every
+ * crash window without replaying a possibly side-effecting tool.
  */
-function appendDanglingToolResults(messages: ResumedMessage[]): void {
+function appendDanglingToolResults(messages: ResumedMessage[], preservedCallIds = new Set<string>()): void {
   const answeredToolCallIds = new Set<string>();
   for (const message of messages) {
     if (message.role === "tool" && message.toolCallId) {
@@ -673,7 +745,9 @@ function appendDanglingToolResults(messages: ResumedMessage[]): void {
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i];
     if (message.role !== "assistant" || !message.toolCalls) continue;
-    const dangling = message.toolCalls.filter((call) => !answeredToolCallIds.has(call.id));
+    const dangling = message.toolCalls.filter((call) =>
+      !answeredToolCallIds.has(call.id) && !preservedCallIds.has(call.id)
+    );
     if (dangling.length === 0) continue;
 
     // Insert synthetic tool results immediately after this assistant message
@@ -681,9 +755,11 @@ function appendDanglingToolResults(messages: ResumedMessage[]): void {
     const synthetic: ResumedMessage[] = dangling.map((call) => ({
       role: "tool",
       toolCallId: call.id,
+      toolOk: false,
+      kind: "tool-interrupted",
       content: JSON.stringify({
         ok: false,
-        result: "This interactive request was not resolved before the session ended. The user is resuming the conversation.",
+        result: "This tool call was not resolved with a durable result before Vesicle stopped. It was not replayed because its side effects may be indeterminate.",
       }),
     }));
     messages.splice(i + 1, 0, ...synthetic);

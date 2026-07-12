@@ -2,7 +2,7 @@
 // (src/tui/commands/) can reference them without a circular import on the
 // App component. Keep this module free of runtime code — types only.
 
-import type { FileToolEvent, McpToolEvent, WebToolEvent } from "../core/tools";
+import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../core/tools";
 import type { EngineId } from "../core/engine/profile";
 import type { SessionSummary } from "../core/session/store";
 import type { ArtifactPreview } from "../core/artifacts/workbench";
@@ -28,6 +28,7 @@ export type Message = {
   toolFileEvent?: FileToolEvent;
   toolWebEvent?: WebToolEvent;
   toolMcpEvent?: McpToolEvent;
+  toolProcessEvent?: ProcessToolEvent;
   engine?: EngineId;
   model?: string;
   images?: VesicleImageAttachment[];

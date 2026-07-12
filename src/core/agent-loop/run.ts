@@ -4,14 +4,14 @@ import type { ProviderSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
 import type { ProviderAdapter, ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { executeHostTool, hostToolDefinitions } from "../tools";
-import type { FileToolEvent, McpToolEvent, ToolCall, ToolDefinition, ToolResult, WebToolEvent } from "../tools";
+import type { FileToolEvent, McpToolEvent, ProcessToolEvent, ToolCall, ToolDefinition, ToolResult, WebToolEvent } from "../tools";
 import type { EngineId } from "../engine/profile";
 import type { EngineProfile } from "../engine/profile";
 import { engineSwitchToolDefinition, parseEngineSwitchRequest } from "../engine/switch";
 import type { EngineSwitchRequest } from "../engine/switch";
 import { ENGINE_HANDOFF_KIND, createModelEngineTransition, renderEngineHandoffPacket } from "../engine/transition";
 import type { EngineContextPolicy } from "../engine/transition";
-import { createSessionStore, loadSessionSnapshot } from "../session/store";
+import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../session/store";
 import type { SessionStore } from "../session/store";
 import { gateToolDefinition } from "../gate/types";
 import { parseGateRequest } from "../gate/types";
@@ -30,6 +30,9 @@ import { AgentStore } from "../agents/store";
 import { runChildAgent } from "../agents/child-runner";
 import { agentToolDefinitions, agentToolNames, executeAgentTool } from "../agents/tools";
 import type { AgentRuntimeEvent } from "../agents/types";
+import { createPermissionRequest, defaultPermissionRuntime, evaluatePermissionPolicy, permissionClassForTool } from "../permissions";
+import type { PermissionRequest, PermissionResolution, PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
+import { executionPlanHash, parseShellExecPlan } from "../tools/shell";
 
 export type { EngineId } from "../engine/profile";
 export type { GateRequest, GateResolution } from "../gate/types";
@@ -51,6 +54,8 @@ export type RunPromptOptions = {
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
   agentManager?: AgentManager;
+  permission?: PermissionRuntimeOptions;
+  permissionBroker?: ToolPermissionBroker;
 };
 
 export type AgentLoopEvent =
@@ -69,7 +74,8 @@ export type AgentLoopEvent =
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
-  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; images?: VesicleImageAttachment[] }
+  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; images?: VesicleImageAttachment[] }
+  | { type: "permission_pending"; request: PermissionRequest }
   | { type: "gate_pending"; gate: string }
   | { type: "engine_switch_pending"; targetEngine: EngineId }
   | { type: "user_question_pending"; header: string }
@@ -92,6 +98,11 @@ export type AgentLoopEvent =
 export type ValidatorOutcome = {
   ok: boolean;
   results: Array<{ name: string; result: ValidationResult }>;
+};
+
+type DeferredAgentPermission = {
+  request: PermissionRequest;
+  resolution: PermissionResolution;
 };
 
 export type RunPromptResult =
@@ -161,6 +172,17 @@ export type RunPromptResult =
       toolCallId: string;
       assistantContent: string;
       messages: VesicleMessage[];
+    }
+  | {
+      kind: "needs_permission";
+      sessionId: string;
+      sessionPath: string;
+      profile: EngineProfile;
+      request: PermissionRequest;
+      remainingToolCalls: ToolCall[];
+      deferredAgentPermissions?: DeferredAgentPermission[];
+      assistantContent: string;
+      messages: VesicleMessage[];
     };
 
 /**
@@ -188,10 +210,11 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
   const rootDir = options.rootDir ?? process.cwd();
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
+  const permission = options.permission ?? defaultPermissionRuntime;
   const provider = createProvider(config);
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir);
   const { profile, systemPrompt } = engineAssets;
-  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
+  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true, permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true);
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   const isNewSession = !options.sessionId;
   if (options.sessionId) {
@@ -212,11 +235,14 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
         provider: config.provider,
         providerId: config.providerId,
         model: config.model,
+        permissionMode: permission.mode,
+        ...(permission.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}),
         ...generationMetadata(generation),
         profile: {
           displayName: profile.displayName,
           protocolVersion: profile.protocolVersion,
           tools: profile.defaultTools,
+          effectiveModelTools: toolSurface.definitions.map((tool) => tool.function.name),
           ...(toolSurface.mcp.definitions.length > 0 ? { mcpTools: toolSurface.mcp.definitions.map((tool) => tool.function.name) } : {}),
           validators: profile.validators,
           stopGates: profile.stopGates,
@@ -267,6 +293,8 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     signal: options.signal,
     onEvent: options.onEvent,
     agentManager,
+    permission,
+    permissionBroker: options.permissionBroker,
   });
 }
 
@@ -307,6 +335,8 @@ type RunLoopArgs = {
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
   agentManager?: AgentManager;
+  permission?: PermissionRuntimeOptions;
+  permissionBroker?: ToolPermissionBroker;
 };
 
 async function prepareProviderMessages(
@@ -386,6 +416,22 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         hostToolCalls.push(call);
       }
     }
+    const permissionRuntime = args.permission ?? defaultPermissionRuntime;
+    const invalidShellCallIds = new Set(hostToolCalls.flatMap((call) => {
+      if (call.name !== "shell_exec") return [];
+      try {
+        parseShellExecPlan(call);
+        return [];
+      } catch {
+        return [call.id];
+      }
+    }));
+    const permissionRequiredCalls = hostToolCalls.filter((call) =>
+      !invalidShellCallIds.has(call.id)
+      && evaluatePermissionPolicy(permissionRuntime.mode, permissionClassForTool(call.name)) === "ask"
+    );
+    const permissionRequiredIds = new Set(permissionRequiredCalls.map((call) => call.id));
+    const executableHostToolCalls = hostToolCalls.filter((call) => !permissionRequiredIds.has(call.id));
 
     // Persist the assistant turn carrying all tool calls (host + gate) as
     // one message, mirroring the provider's tool_call grouping. The
@@ -415,7 +461,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
 
     let anyFailed = false;
 
-    const agentExecutions = new Map(hostToolCalls
+    const agentExecutions = new Map(executableHostToolCalls
       .filter((call) => agentToolNames.has(call.name))
       .map((call) => [call.id, executeAgentTool({
         call,
@@ -432,20 +478,45 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
           parentMessages: parentMessagesBeforeToolCall,
           parentSignal: signal,
           beforeMutation: trackCheckpointMutation,
+          permission: permissionRuntime,
+          permissionBroker: args.permissionBroker,
         },
       })]));
 
     let nonAgentError: unknown;
     try {
-      for (const call of hostToolCalls) {
+      for (const call of executableHostToolCalls) {
         if (agentToolNames.has(call.name)) continue;
         onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
+        if (call.name === "shell_exec") {
+          try {
+            const planHash = executionPlanHash(parseShellExecPlan(call));
+            await checkpoint?.markTaintedByHostProcess();
+            await session.append({
+              role: "system",
+              content: "Policy-approved shell process started.",
+              metadata: {
+                kind: "process-started",
+                requestId: `policy:${call.id}`,
+                toolCallId: call.id,
+                planHash,
+                permissionMode: permissionRuntime.mode,
+                decisionSource: permissionRuntime.dangerouslySkipPermissions ? "cli_override" : "policy",
+                checkpointTainted: true,
+              },
+            });
+          } catch {
+            // Invalid arguments are executed through the normal tool wrapper,
+            // which returns a model-visible failure without starting a process.
+          }
+        }
         const mutationOwner = `${session.sessionId}:${call.id}`;
         let toolResult: ToolResult;
         try {
           toolResult = mcpRegistry.hasTool(call.name)
             ? await mcpRegistry.execute(call)
             : await executeHostTool(rootDir, call, {
+              signal,
               beforeMutation: async (paths) => {
                 await agentManager.claimHostMutation(mutationOwner, paths);
                 await trackCheckpointMutation(paths);
@@ -472,9 +543,12 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
             name: toolResult.name,
             ok: toolResult.ok,
             toolCallId: toolResult.callId,
+            permissionMode: permissionRuntime.mode,
+            decisionSource: permissionRuntime.dangerouslySkipPermissions ? "cli_override" : "policy",
             ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
             ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
             ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+            ...(toolResult.processEvent ? { processEvent: toolResult.processEvent } : {}),
             ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
           },
         });
@@ -491,6 +565,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
           ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
           ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
           ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+          ...(toolResult.processEvent ? { processEvent: toolResult.processEvent } : {}),
           ...(toolResult.images ? { images: toolResult.images } : {}),
         });
       }
@@ -499,7 +574,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     }
 
     const agentErrors: unknown[] = [];
-    for (const call of hostToolCalls.filter((candidate) => agentToolNames.has(candidate.name))) {
+    for (const call of executableHostToolCalls.filter((candidate) => agentToolNames.has(candidate.name))) {
       try {
         onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
       } catch (error) {
@@ -524,6 +599,8 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
             name: toolResult.name,
             ok: toolResult.ok,
             toolCallId: toolResult.callId,
+            permissionMode: permissionRuntime.mode,
+            decisionSource: permissionRuntime.dangerouslySkipPermissions ? "cli_override" : "policy",
             ...(toolResult.agentEvent ? {
               kind: "subagent-result",
               agentEvent: toolResult.agentEvent,
@@ -554,6 +631,39 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     if (nonAgentError) throw nonAgentError;
     if (agentErrors.length === 1) throw agentErrors[0];
     if (agentErrors.length > 1) throw new AggregateError(agentErrors, "SubAgent tool processing failed.");
+
+    if (permissionRequiredCalls.length > 0) {
+      for (const interactive of interactiveCalls) {
+        const redirect = JSON.stringify({
+          ok: false,
+          result: "A tool permission request is pending. Retry this interactive request after the permission-controlled tool round completes.",
+        });
+        messages.push({ role: "tool", toolCallId: interactive.id, content: redirect });
+        await session.append({
+          role: "tool",
+          content: redirect,
+          metadata: { name: interactive.name, ok: false, toolCallId: interactive.id, reason: "permission-pending-redirect" },
+        });
+      }
+      const [primary, ...remainingToolCalls] = permissionRequiredCalls;
+      const request = createPermissionRequest(session.sessionId, primary, permissionRuntime.mode);
+      await session.append({
+        role: "system",
+        content: `Permission required for ${primary.name}.`,
+        metadata: { kind: "permission-request", request },
+      });
+      onEvent?.({ type: "permission_pending", request });
+      return {
+        kind: "needs_permission",
+        sessionId: session.sessionId,
+        sessionPath: session.sessionPath,
+        profile,
+        request,
+        remainingToolCalls,
+        assistantContent: response.content,
+        messages,
+      };
+    }
 
     if (interactiveCalls.length > 0) {
       // Use the first interactive request. If the model emitted several, the
@@ -760,6 +870,298 @@ function summariseValidation(outcome: ValidatorOutcome): string {
   return lines.join("\n");
 }
 
+export async function resolvePermission(options: {
+  engine: EngineId;
+  rootDir?: string;
+  sessionId: string;
+  messages: VesicleMessage[];
+  request: PermissionRequest;
+  remainingToolCalls: ToolCall[];
+  deferredAgentPermissions?: DeferredAgentPermission[];
+  resolution: PermissionResolution;
+  providerSelection?: Partial<ProviderSelection>;
+  generation?: VesicleRequest["generation"];
+  permission?: PermissionRuntimeOptions;
+  permissionBroker?: ToolPermissionBroker;
+  signal?: AbortSignal;
+  onEvent?: (event: AgentLoopEvent) => void;
+  agentManager?: AgentManager;
+}): Promise<RunPromptResult> {
+  const rootDir = options.rootDir ?? process.cwd();
+  const permission = options.permission ?? { mode: options.request.mode };
+  const config = await loadConfigForSelection(options.providerSelection);
+  const generation = mergeGeneration(config.generation, options.generation);
+  const provider = createProvider(config);
+  const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
+  const { profile, systemPrompt } = engineAssets;
+  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true, permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true);
+  const session = await createSessionStore(rootDir, options.sessionId);
+  const checkpoint = await FileCheckpointManager.resumeLatest(rootDir, session);
+  const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
+  const messages = [...options.messages];
+  if (options.request.sessionId !== options.sessionId) {
+    throw new Error("Permission request session does not match the session being resumed.");
+  }
+  const sessionRecords = await loadSessionRecords(rootDir, options.sessionId);
+  const requestMatchesRecord = (expected: PermissionRequest, record: (typeof sessionRecords)[number]): boolean => {
+    if (record.metadata?.kind !== "permission-request") return false;
+    const request = record.metadata.request as Partial<PermissionRequest> | undefined;
+    return request?.id === expected.id
+      && request.sessionId === expected.sessionId
+      && request.toolCallId === expected.toolCallId
+      && request.toolName === expected.toolName
+      && request.arguments === expected.arguments;
+  };
+  const callMatchesConversation = (request: PermissionRequest): boolean => options.messages.some((message) =>
+    message.role === "assistant"
+    && message.toolCalls?.some((candidate) =>
+      candidate.id === request.toolCallId
+      && candidate.name === request.toolName
+      && candidate.arguments === request.arguments
+    )
+  );
+  const recordedRequest = sessionRecords.some((record) => requestMatchesRecord(options.request, record));
+  const alreadyResolved = sessionRecords.some((record) =>
+    record.metadata?.kind === "permission-resolution" && record.metadata.requestId === options.request.id
+  );
+  if (!recordedRequest || alreadyResolved) {
+    throw new Error("Permission request is missing from the active session or has already been resolved.");
+  }
+  const deferredRequestIds = new Set<string>([options.request.id]);
+  for (const deferred of options.deferredAgentPermissions ?? []) {
+    const request = deferred.request;
+    if (
+      request.sessionId !== options.sessionId
+      || !agentToolNames.has(request.toolName)
+      || deferredRequestIds.has(request.id)
+      || !sessionRecords.some((record) => requestMatchesRecord(request, record))
+      || !sessionRecords.some((record) =>
+        record.metadata?.kind === "permission-resolution"
+        && record.metadata.requestId === request.id
+        && record.metadata.decision === deferred.resolution.decision
+      )
+      || sessionRecords.some((record) => record.role === "tool" && record.metadata?.permissionRequestId === request.id)
+      || !callMatchesConversation(request)
+      || options.messages.some((message) => message.role === "tool" && message.toolCallId === request.toolCallId)
+    ) {
+      throw new Error("Deferred Agent permission batch does not match unresolved durable session state.");
+    }
+    deferredRequestIds.add(request.id);
+  }
+  const call: ToolCall = {
+    id: options.request.toolCallId,
+    name: options.request.toolName,
+    arguments: options.request.arguments,
+  };
+  const callBelongsToConversation = callMatchesConversation(options.request);
+  const callAlreadyAnswered = messages.some((message) => message.role === "tool" && message.toolCallId === call.id);
+  if (!callBelongsToConversation || callAlreadyAnswered) {
+    throw new Error("Permission request does not match an unresolved tool call in this session.");
+  }
+  const capabilityAvailable = toolSurface.definitions.some((definition) => definition.function.name === call.name);
+  const approvedShellPlanHash = options.resolution.decision === "allow_once" && capabilityAvailable && call.name === "shell_exec"
+    ? executionPlanHash(parseShellExecPlan(call))
+    : undefined;
+  if (approvedShellPlanHash && (!options.request.planHash || approvedShellPlanHash !== options.request.planHash)) {
+    throw new Error("The approved shell execution plan changed before execution; permission was not applied.");
+  }
+
+  await session.append({
+    role: "system",
+    content: `Permission ${options.resolution.decision} for ${call.name}.`,
+    metadata: {
+      kind: "permission-resolution",
+      requestId: options.request.id,
+      toolCallId: call.id,
+      toolName: call.name,
+      decision: options.resolution.decision,
+      resolvedAt: options.resolution.resolvedAt,
+      permissionMode: options.request.mode,
+      decisionSource: "user",
+      capabilityAvailable,
+      ...(options.resolution.decision === "reject" && options.resolution.feedback
+        ? { feedback: options.resolution.feedback }
+        : {}),
+    },
+  });
+
+  const currentEntry: DeferredAgentPermission = { request: options.request, resolution: options.resolution };
+  const deferredAgentPermissions = agentToolNames.has(call.name)
+    ? [...(options.deferredAgentPermissions ?? []), currentEntry]
+    : [];
+  if (agentToolNames.has(call.name)) {
+    const nextAgentIndex = options.remainingToolCalls.findIndex((candidate) => agentToolNames.has(candidate.name));
+    if (nextAgentIndex >= 0) {
+      const next = options.remainingToolCalls[nextAgentIndex]!;
+      const remainingToolCalls = options.remainingToolCalls.filter((_, index) => index !== nextAgentIndex);
+      const request = createPermissionRequest(session.sessionId, next, permission.mode);
+      await session.append({ role: "system", content: `Permission required for ${next.name}.`, metadata: { kind: "permission-request", request } });
+      options.onEvent?.({ type: "permission_pending", request });
+      return {
+        kind: "needs_permission",
+        sessionId: session.sessionId,
+        sessionPath: session.sessionPath,
+        profile,
+        request,
+        remainingToolCalls,
+        deferredAgentPermissions,
+        assistantContent: "",
+        messages,
+      };
+    }
+  }
+
+  const entries = agentToolNames.has(call.name) ? deferredAgentPermissions : [currentEntry];
+  const executionResults = await Promise.all(entries.map(async (entry): Promise<{ entry: DeferredAgentPermission; result: ToolResult }> => {
+    const entryCall: ToolCall = {
+      id: entry.request.toolCallId,
+      name: entry.request.toolName,
+      arguments: entry.request.arguments,
+    };
+    if (entry.resolution.decision === "reject") {
+      return { entry, result: {
+        callId: entryCall.id,
+        name: entryCall.name,
+        ok: false,
+        content: entry.resolution.feedback
+          ? `Permission denied by the user. Feedback: ${entry.resolution.feedback}`
+          : "Permission denied by the user.",
+      } };
+    }
+    const entryCapabilityAvailable = toolSurface.definitions.some((definition) => definition.function.name === entryCall.name);
+    if (!entryCapabilityAvailable) {
+      return { entry, result: {
+        callId: entryCall.id,
+        name: entryCall.name,
+        ok: false,
+        content: `Permission was not applied because ${entryCall.name} is no longer in the current Engine's effective tool surface. The tool was not executed.`,
+      } };
+    }
+    if (entryCall.name === "shell_exec") {
+      await checkpoint?.markTaintedByHostProcess();
+      await session.append({
+        role: "system",
+        content: "Approved shell process started.",
+        metadata: {
+          kind: "process-started",
+          requestId: entry.request.id,
+          toolCallId: entryCall.id,
+          planHash: approvedShellPlanHash,
+          checkpointTainted: true,
+        },
+      });
+    }
+    if (agentToolNames.has(entryCall.name)) {
+      const result = await executeAgentTool({
+        call: entryCall,
+        manager: agentManager,
+        rootDir,
+        parentSessionId: session.sessionId,
+        invocation: {
+          rootDir,
+          parentEngine: profile.id,
+          providerSelection: { provider: config.providerId, model: config.model },
+          generation,
+          parentToolDefinitions: toolSurface.definitions,
+          parentSystemPrompt: systemPrompt,
+          parentMessages: messages,
+          parentSignal: options.signal,
+          beforeMutation: async (paths) => checkpoint?.trackBeforeMutation(paths),
+          permission,
+          permissionBroker: options.permissionBroker,
+        },
+      });
+      return { entry, result };
+    }
+    const mutationOwner = `${session.sessionId}:${entryCall.id}`;
+    try {
+      const result = toolSurface.mcp.hasTool(entryCall.name)
+        ? await toolSurface.mcp.execute(entryCall)
+        : await executeHostTool(rootDir, entryCall, {
+          signal: options.signal,
+          beforeMutation: async (paths) => {
+            await agentManager.claimHostMutation(mutationOwner, paths);
+            await checkpoint?.trackBeforeMutation(paths);
+          },
+        });
+      return { entry, result };
+    } finally {
+      agentManager.releaseHostMutations(mutationOwner);
+    }
+  }));
+
+  for (const { entry, result: toolResult } of executionResults) {
+    const content = JSON.stringify({ ok: toolResult.ok, result: toolResult.content });
+    messages.push({ role: "tool", toolCallId: toolResult.callId, content, ...(toolResult.images ? { images: toolResult.images } : {}) });
+    await session.append({
+      role: "tool",
+      content,
+      metadata: {
+        name: toolResult.name,
+        ok: toolResult.ok,
+        toolCallId: toolResult.callId,
+        permissionRequestId: entry.request.id,
+        permissionMode: entry.request.mode,
+        decisionSource: "user",
+        ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
+        ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
+        ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+        ...(toolResult.processEvent ? { processEvent: toolResult.processEvent } : {}),
+        ...(toolResult.agentEvent ? { agentEvent: toolResult.agentEvent } : {}),
+        ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
+      },
+    });
+    options.onEvent?.({
+      type: "tool_result",
+      name: toolResult.name,
+      callId: toolResult.callId,
+      ok: toolResult.ok,
+      content: toolResult.content,
+      ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
+      ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
+      ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+      ...(toolResult.processEvent ? { processEvent: toolResult.processEvent } : {}),
+      ...(toolResult.images ? { images: toolResult.images } : {}),
+    });
+  }
+
+  if (options.remainingToolCalls.length > 0) {
+    const [next, ...remainingToolCalls] = options.remainingToolCalls;
+    const request = createPermissionRequest(session.sessionId, next, permission.mode);
+    await session.append({ role: "system", content: `Permission required for ${next.name}.`, metadata: { kind: "permission-request", request } });
+    options.onEvent?.({ type: "permission_pending", request });
+    return {
+      kind: "needs_permission",
+      sessionId: session.sessionId,
+      sessionPath: session.sessionPath,
+      profile,
+      request,
+      remainingToolCalls,
+      assistantContent: "",
+      messages,
+    };
+  }
+
+  return runLoop({
+    rootDir,
+    config,
+    provider,
+    systemPrompt,
+    tools: toolSurface.definitions,
+    mcpRegistry: toolSurface.mcp,
+    messages,
+    session,
+    profile,
+    generation,
+    checkpoint,
+    signal: options.signal,
+    onEvent: options.onEvent,
+    agentManager,
+    permission,
+    permissionBroker: options.permissionBroker,
+  });
+}
+
 /**
  * Resolve a gate that paused the loop. Writes the user's decision as the
  * tool result for the gate call, persists a gate-resolution record, and
@@ -783,18 +1185,21 @@ export async function resolveGate(options: {
   resolution: GateResolution;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
+  permission?: PermissionRuntimeOptions;
+  permissionBroker?: ToolPermissionBroker;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
   agentManager?: AgentManager;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
+  const permission = options.permission ?? defaultPermissionRuntime;
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
   const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
   const { profile, systemPrompt } = engineAssets;
   await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
-  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
+  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true, permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true);
   const session = await createSessionStore(rootDir, options.sessionId);
 
   const toolResultContent = JSON.stringify({
@@ -855,6 +1260,8 @@ export async function resolveGate(options: {
     signal: options.signal,
     onEvent: options.onEvent,
     agentManager: options.agentManager,
+    permission,
+    permissionBroker: options.permissionBroker,
   });
 }
 
@@ -882,11 +1289,14 @@ export async function resolveEngineSwitch(options: {
   contextSummary?: string;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
+  permission?: PermissionRuntimeOptions;
+  permissionBroker?: ToolPermissionBroker;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
   agentManager?: AgentManager;
 }): Promise<ResolveEngineSwitchResult> {
   const rootDir = options.rootDir ?? process.cwd();
+  const permission = options.permission ?? defaultPermissionRuntime;
   const confirmed = options.resolution.decision === "confirm";
 
   // A rejected/revised handoff remains in the current engine and must return
@@ -900,7 +1310,7 @@ export async function resolveEngineSwitch(options: {
     const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
     const { profile, systemPrompt } = engineAssets;
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
-    const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
+    const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true, permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true);
     return { config, generation, provider, profile, systemPrompt, toolSurface };
   })();
 
@@ -995,6 +1405,8 @@ export async function resolveEngineSwitch(options: {
     signal: options.signal,
     onEvent: options.onEvent,
     agentManager: options.agentManager,
+    permission,
+    permissionBroker: options.permissionBroker,
   });
 }
 
@@ -1008,18 +1420,21 @@ export async function resolveUserQuestion(options: {
   answer: UserQuestionAnswer;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
+  permission?: PermissionRuntimeOptions;
+  permissionBroker?: ToolPermissionBroker;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
   agentManager?: AgentManager;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
+  const permission = options.permission ?? defaultPermissionRuntime;
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
   const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
   const { profile, systemPrompt } = engineAssets;
   await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
-  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
+  const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true, permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true);
   const session = await createSessionStore(rootDir, options.sessionId);
 
   const toolResultContent = JSON.stringify({
@@ -1090,6 +1505,8 @@ export async function resolveUserQuestion(options: {
     signal: options.signal,
     onEvent: options.onEvent,
     agentManager: options.agentManager,
+    permission,
+    permissionBroker: options.permissionBroker,
   });
 }
 
@@ -1185,11 +1602,15 @@ type ToolSurface = {
   mcp: McpRegistry;
 };
 
-async function resolveToolSurface(profile: EngineProfile, visionEnabled: boolean): Promise<ToolSurface> {
+async function resolveToolSurface(profile: EngineProfile, visionEnabled: boolean, shellExecEnabled = false): Promise<ToolSurface> {
   const mcp = await createMcpRegistryForEngine(profile.id);
+  const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled);
   return {
     definitions: [
-      ...resolveBuiltInTools(profile, visionEnabled),
+      ...builtIns,
+      ...(shellExecEnabled && !builtIns.some((tool) => tool.function.name === "shell_exec")
+        ? [hostToolDefinitions.find((tool) => tool.function.name === "shell_exec")!]
+        : []),
       ...mcp.definitions,
       ...agentToolDefinitions,
     ],
@@ -1197,13 +1618,14 @@ async function resolveToolSurface(profile: EngineProfile, visionEnabled: boolean
   };
 }
 
-function resolveBuiltInTools(profile: EngineProfile, visionEnabled: boolean): ToolDefinition[] {
+function resolveBuiltInTools(profile: EngineProfile, visionEnabled: boolean, shellExecEnabled = false): ToolDefinition[] {
   const byName = new Map(hostToolDefinitions.map((definition) => [definition.function.name, definition]));
   const resolved: ToolDefinition[] = [];
 
   for (const name of profile.defaultTools) {
     if (hostContractNames.has(name)) continue;
     if (name === "view_image" && !visionEnabled) continue;
+    if (name === "shell_exec" && !shellExecEnabled) continue;
     const definition = byName.get(name);
     if (!definition) {
       throw new Error(

@@ -1,0 +1,8 @@
+# Vesicle host tool approval settings. This file contains no secrets.
+version: 1
+
+# MANUAL asks for every model-visible tool. INERTIA auto-allows observation tools. MOMENTUM auto-allows every tool except shell_exec. YOLO cannot be persisted here.
+defaultMode: MOMENTUM
+
+# shell_exec has arbitrary host-user filesystem and network authority. Keep it disabled until you intentionally opt in.
+shellExec: false

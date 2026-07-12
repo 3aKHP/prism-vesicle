@@ -9,6 +9,8 @@ import { executeHostTool, hostToolDefinitions } from "../tools";
 import type { ToolCall, ToolDefinition } from "../tools";
 import { loadAgentProfile, loadAgentSystemPrompt } from "./profile";
 import type { AgentRunner } from "./manager";
+import { createPermissionRequest, defaultPermissionRuntime, evaluatePermissionPolicy, permissionClassForTool } from "../permissions";
+import type { ToolResult } from "../tools";
 
 const unsupportedChildTools = new Set([
   "request_confirmation",
@@ -19,6 +21,7 @@ const unsupportedChildTools = new Set([
   "send_message",
   "interrupt_agent",
   "wait_agent",
+  "shell_exec",
 ]);
 
 export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, invocation, onProgress, takeMessages, claimMutation, registerChildSession }) => {
@@ -114,15 +117,50 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
 
     for (const call of calls) {
       onProgress(agentToolProgress(call));
-      const result = mcp.hasTool(call.name)
-        ? await mcp.execute(call)
-        : await executeHostTool(invocation.rootDir, call, {
-          beforeMutation: async (paths) => {
-            await claimMutation(paths);
-            await invocation.beforeMutation?.(paths);
-            await checkpoint.trackBeforeMutation(paths);
+      const permission = invocation.permission ?? defaultPermissionRuntime;
+      let result: ToolResult;
+      if (evaluatePermissionPolicy(permission.mode, permissionClassForTool(call.name)) === "ask") {
+        const request = {
+          ...createPermissionRequest(session.sessionId, call, permission.mode),
+          agent: { runId, handle, parentSessionId: spec.parentSessionId },
+        };
+        await session.append({
+          role: "system",
+          content: `Permission required for ${call.name}.`,
+          metadata: { kind: "permission-request", request },
+        });
+        const resolution = invocation.permissionBroker
+          ? await invocation.permissionBroker.request(request, signal)
+          : { decision: "reject" as const, resolvedAt: new Date().toISOString(), feedback: "No interactive parent permission broker is available." };
+        await session.append({
+          role: "system",
+          content: `Permission ${resolution.decision} for ${call.name}.`,
+          metadata: {
+            kind: "permission-resolution",
+            requestId: request.id,
+            toolCallId: call.id,
+            decision: resolution.decision,
+            resolvedAt: resolution.resolvedAt,
+            permissionMode: request.mode,
+            decisionSource: "user",
+            ...(resolution.decision === "reject" && resolution.feedback ? { feedback: resolution.feedback } : {}),
           },
         });
+        if (resolution.decision === "reject") {
+          result = {
+            callId: call.id,
+            name: call.name,
+            ok: false,
+            content: resolution.feedback
+              ? `Permission denied by the user. Feedback: ${resolution.feedback}`
+              : "Permission denied by the user.",
+          };
+        } else {
+          result = await executeChildHostTool(call);
+        }
+      } else {
+        result = await executeChildHostTool(call);
+      }
       const content = JSON.stringify({ ok: result.ok, result: result.content });
       messages.push({ role: "tool", toolCallId: call.id, content, ...(result.images ? { images: result.images } : {}) });
       await session.append({
@@ -135,11 +173,26 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
           name: call.name,
           ok: result.ok,
           toolCallId: call.id,
+          permissionMode: permission.mode,
+          decisionSource: evaluatePermissionPolicy(permission.mode, permissionClassForTool(call.name)) === "ask" ? "user" : "policy",
           ...(result.fileEvent ? { fileEvent: result.fileEvent } : {}),
           ...(result.webEvent ? { webEvent: result.webEvent } : {}),
           ...(result.mcpEvent ? { mcpEvent: result.mcpEvent } : {}),
         },
       });
+
+      async function executeChildHostTool(call: ToolCall): Promise<ToolResult> {
+        return mcp.hasTool(call.name)
+          ? mcp.execute(call)
+          : executeHostTool(invocation!.rootDir, call, {
+            signal,
+            beforeMutation: async (paths) => {
+              await claimMutation(paths);
+              await invocation!.beforeMutation?.(paths);
+              await checkpoint.trackBeforeMutation(paths);
+            },
+          });
+      }
     }
   }
   throw new Error(`SubAgent "${profile.id}" reached its maxTurns limit (${profile.maxTurns}).`);
