@@ -8,6 +8,7 @@ import type { EngineId } from "../../core/engine/profile";
 import { createManualEngineTransition } from "../../core/engine/transition";
 import type { ProviderSelection } from "../../config/providers";
 import type { Command } from "./types";
+import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
   parseEngineId,
   parseReasoningDisplayMode,
@@ -30,6 +31,7 @@ const HELP_TEXT = [
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
+  "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
   "  /artifact [n|path] list or preview generated artifacts",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
@@ -49,6 +51,28 @@ export const builtinCommands: Command[] = [
         { role: "user", content: raw },
         { role: "system", content: HELP_TEXT },
       ]);
+    },
+  },
+
+  {
+    name: "permissions",
+    description: "Show or change the tool approval mode",
+    usage: "/permissions [MANUAL|INERTIA|MOMENTUM|YOLO]",
+    async run(ctx, args, raw) {
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      if (!args) {
+        ctx.setMessages((prev) => [...prev, {
+          role: "system",
+          content: `Permission mode: ${ctx.permissionMode()}. Available: ${permissionModes.join(", ")}.`,
+        }]);
+        return;
+      }
+      const requested = args.trim().toUpperCase() as PermissionMode;
+      if (!permissionModes.includes(requested)) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: `Unknown permission mode "${args}". Available: ${permissionModes.join(", ")}.` }]);
+        return;
+      }
+      await ctx.changePermissionMode(requested);
     },
   },
 

@@ -4,6 +4,7 @@ import type { ProviderSelection } from "../../config/providers";
 import type { EngineId } from "../engine/profile";
 import type { ToolDefinition } from "../tools";
 import type { AgentExecutionMode } from "./profile";
+import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
 
 export type AgentStatus = "created" | "running" | "completed" | "failed" | "cancelled";
 
@@ -93,6 +94,8 @@ export type AgentInvocationContext = {
   parentMessages: VesicleMessage[];
   parentSignal?: AbortSignal;
   beforeMutation?(paths: string[]): Promise<void>;
+  permission?: PermissionRuntimeOptions;
+  permissionBroker?: ToolPermissionBroker;
 };
 
 export type AgentRunOutput = {

@@ -4,6 +4,8 @@ import { engineIds } from "../../core/engine/profile";
 import type { PromptBundle } from "../../core/prompt/loader";
 import { composeSystemPrompt, loadPromptBundle } from "../../core/prompt/loader";
 import { createMcpRegistryForEngine, type McpRegistryOptions } from "../../mcp/registry";
+import { loadPermissionSettings } from "../../config/permissions";
+import { agentToolDefinitions } from "../../core/agents/tools";
 
 /**
  * `vesicle prompt dump` — print the fully composed system prompt the model
@@ -29,13 +31,14 @@ export async function runPromptDump(args: string[]): Promise<void> {
   const profile = await loadEngineProfile(engine);
   const bundle = await loadPromptBundle(profile);
   const systemPrompt = composeSystemPrompt(bundle);
+  const permissions = await loadPermissionSettings();
 
   if (shapeOnly) {
-    await printShape(profile, bundle, systemPrompt);
+    await printShape(profile, bundle, systemPrompt, permissions.shellExec);
     return;
   }
 
-  await printFullDump(profile, bundle, systemPrompt);
+  await printFullDump(profile, bundle, systemPrompt, permissions.shellExec);
 }
 
 type ParsedArgs = { ok: true; value: { engine: EngineId; shapeOnly: boolean } } | { ok: false; error: string };
@@ -51,6 +54,7 @@ export type EffectivePromptToolNames = {
 export async function getEffectivePromptToolNames(
   profile: EngineProfile,
   options: McpRegistryOptions = {},
+  shellExecEnabled = false,
 ): Promise<EffectivePromptToolNames> {
   const modelVisible: string[] = [];
   const hostContracts: string[] = [];
@@ -60,6 +64,7 @@ export async function getEffectivePromptToolNames(
       pushUnique(hostContracts, name);
       continue;
     }
+    if (name === "shell_exec" && !shellExecEnabled) continue;
     pushUnique(modelVisible, name);
   }
 
@@ -68,6 +73,10 @@ export async function getEffectivePromptToolNames(
   }
   for (const name of alwaysVisibleToolNames) {
     pushUnique(modelVisible, name);
+  }
+  if (shellExecEnabled) pushUnique(modelVisible, "shell_exec");
+  for (const definition of agentToolDefinitions) {
+    pushUnique(modelVisible, definition.function.name);
   }
   const mcp = await createMcpRegistryForEngine(profile.id, options);
   for (const definition of mcp.definitions) {
@@ -120,8 +129,8 @@ function printUsage(): void {
   console.error(`Engines: ${engineIds.join(", ")}`);
 }
 
-async function printShape(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string): Promise<void> {
-  const effectiveTools = await getEffectivePromptToolNames(profile);
+async function printShape(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string, shellExecEnabled: boolean): Promise<void> {
+  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled);
 
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
@@ -137,8 +146,8 @@ async function printShape(profile: EngineProfile, bundle: PromptBundle, systemPr
   console.log(`State roots: ${profile.stateRoots.join(", ")}`);
 }
 
-async function printFullDump(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string): Promise<void> {
-  const effectiveTools = await getEffectivePromptToolNames(profile);
+async function printFullDump(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string, shellExecEnabled: boolean): Promise<void> {
+  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled);
 
   console.log("=== Prism Vesicle Prompt Dump ===");
   console.log(`Engine: ${profile.id} (${profile.displayName})`);

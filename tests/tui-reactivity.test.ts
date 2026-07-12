@@ -124,4 +124,19 @@ describe("TUI reactivity static guard", () => {
     expect(manager).toBeGreaterThan(scheduler);
     expect(source).not.toContain("let continuationScheduler: AgentContinuationScheduler");
   });
+
+  test("permission submission resolves the same parent-first request that the panel displays", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    expect(source).toContain("pendingPermission()?.request ?? pendingChildPermission()");
+    expect(source.match(/if \(pendingPermission\(\)\) \{[\s\S]*?submitPermissionResolution/g)).toHaveLength(2);
+  });
+
+  test("permission errors consult durable session state before restoring the modal", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const handler = source.match(/const submitPermissionResolution[\s\S]*?function submitChildPermissionResolution/)?.[0] ?? "";
+    expect(handler.match(/reconcilePermissionAfterContinuationFailure\(pending\)/g)).toHaveLength(2);
+    expect(handler).toContain("loadSessionSnapshot(process.cwd(), pending.sessionId");
+    expect(handler).toContain("snapshot.pendingPermission?.id === pending.request.id");
+    expect(handler).toContain("setPendingPermission(null)");
+  });
 });

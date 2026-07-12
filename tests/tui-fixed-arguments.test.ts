@@ -9,13 +9,18 @@ import {
 } from "../src/tui/commands/argument-completion";
 
 describe("fixed slash-command argument completion", () => {
-  test("recognizes engine, effort, and reasoning argument positions", () => {
+  test("recognizes engine, effort, reasoning, and permission argument positions", () => {
     expect(parseFixedArgumentDraft("/engine ")).toEqual({ command: "engine", query: "" });
     expect(parseFixedArgumentDraft("/effort hi")).toEqual({ command: "effort", query: "hi" });
     expect(parseFixedArgumentDraft("/reasoning pre")).toEqual({ command: "reasoning", query: "pre" });
     expect(parseFixedArgumentDraft("/workflow run")).toBeNull();
     expect(parseFixedArgumentDraft("/think hi")).toBeNull();
     expect(parseFixedArgumentDraft("/resume ")).toBeNull();
+    expect(parseFixedArgumentDraft("/permissions ")).toEqual({ command: "permissions", query: "" });
+  });
+
+  test("offers all four permission modes", () => {
+    expect(fixedArgumentOptions("permissions").map((item) => item.id)).toEqual(["MANUAL", "INERTIA", "MOMENTUM", "YOLO"]);
   });
 
   test("offers every engine id from the engine registry", () => {

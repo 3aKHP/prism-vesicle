@@ -136,9 +136,8 @@ These are non-negotiable boundaries; see `docs/dev/STYLE.md` for detail.
 - Provider adapters convert normalized Vesicle requests to provider wire
   format and back. They must not read/write project files, mutate sessions,
   know Prism phases, or execute host tools.
-- Model-visible tools must stay behind `core/tools` path guards.
-- Tool paths are project-relative only; absolute paths and `..` escapes are
-  rejected.
+- Model-visible filesystem tools must stay behind `core/tools` path guards.
+- Filesystem tool paths are project-relative only; absolute paths and `..` escapes are rejected. The opt-in `shell_exec` process tool is the explicit exception: it has host-user authority, is controlled by Tool Permission Runtime, and must never be described as path-guarded or rewind-safe.
 - Write tools are limited to approved roots: `source_materials/`, `workspace/`,
   `test_runs/`, `novels/`, and `reports/`. `source_materials/` holds imported,
   researched, or model-generated source material; deployed artifacts belong in
@@ -149,6 +148,7 @@ These are non-negotiable boundaries; see `docs/dev/STYLE.md` for detail.
   not leak into Prism engine prompts except as explicit negative examples.
 - `request_confirmation` is a workflow gate declared by engine profile
   `stopGates`, not a generic permission prompt.
+- Permission modes change approval friction but never widen tool capabilities or disable path guards, MCP/Agent scope, timeout, environment filtering, output limits, or process cleanup. YOLO cannot be persisted as a default; `--dangerously-skip-permissions` is process-scoped.
 - If model behavior claims a file was written, verify the corresponding
   `write_file` result or inspect the artifact on disk.
 - Validators are advisory product signals. They should surface findings without

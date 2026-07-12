@@ -22,7 +22,8 @@ export type BuiltInToolName =
   | "copy_file"
   | "move_file"
   | "move_directory"
-  | "delete_directory";
+  | "delete_directory"
+  | "shell_exec";
 import { executeFileTool, fileToolDefinitions } from "./fs";
 import {
   executeWebCrawlTool,
@@ -37,8 +38,10 @@ import {
   webSearchToolDefinition,
 } from "./web";
 import type { FileToolExecutionOptions, ToolCall, ToolDefinition, ToolResult } from "./types";
+import { executeShellExecTool, shellExecToolDefinition } from "./shell";
 
 export { executeFileTool, fileToolDefinitions } from "./fs";
+export { executeShellExecTool, executionPlanHash, parseShellExecPlan, shellExecToolDefinition } from "./shell";
 export {
   executeWebCrawlTool,
   executeWebFetchTool,
@@ -51,7 +54,7 @@ export {
   webResearchToolDefinition,
   webSearchToolDefinition,
 } from "./web";
-export type { AgentToolEvent, FileToolEvent, FileToolExecutionOptions, McpToolEvent, ToolCall, ToolDefinition, ToolResult, WebToolEvent } from "./types";
+export type { AgentToolEvent, FileToolEvent, FileToolExecutionOptions, McpToolEvent, ProcessToolEvent, ToolCall, ToolDefinition, ToolResult, WebToolEvent } from "./types";
 
 export type ToolContract = {
   name: BuiltInToolName;
@@ -155,6 +158,10 @@ export const m0Tools: ToolContract[] = [
     name: "delete_directory",
     description: "Delete an empty directory below a writable project root.",
   },
+  {
+    name: "shell_exec",
+    description: "Execute one non-interactive host shell command under the active permission mode.",
+  },
 ];
 
 export const hostToolDefinitions: ToolDefinition[] = [
@@ -164,13 +171,15 @@ export const hostToolDefinitions: ToolDefinition[] = [
   webMapToolDefinition,
   webCrawlToolDefinition,
   webResearchToolDefinition,
+  shellExecToolDefinition,
 ];
 
 export async function executeHostTool(
   rootDir: string,
   call: ToolCall,
-  options: FileToolExecutionOptions = {},
+  options: FileToolExecutionOptions & { signal?: AbortSignal } = {},
 ): Promise<ToolResult> {
+  if (call.name === "shell_exec") return executeShellExecTool(rootDir, call, { signal: options.signal });
   if (call.name === "web_search") return executeWebSearchTool(call);
   if (call.name === "web_fetch") return executeWebFetchTool(call);
   if (call.name === "web_map") return executeWebMapTool(call);

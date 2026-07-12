@@ -1,10 +1,11 @@
 import { createEffect, createMemo, createSignal, Show, onMount } from "solid-js";
 import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { inspectProviderConfig } from "../config/providers";
+import { loadPermissionSettings } from "../config/permissions";
 import type { ProviderRegistry, ProviderSelection } from "../config/providers";
 import type { ModelCapabilities, ModelLimits } from "../config/env";
 import { inspectMcpConfig } from "../mcp/registry";
-import { resolveEngineSwitch, resolveGate, resolveUserQuestion, runPrompt } from "../core/agent-loop/run";
+import { resolveEngineSwitch, resolveGate, resolvePermission, resolveUserQuestion, runPrompt } from "../core/agent-loop/run";
 import type { RunPromptResult } from "../core/agent-loop/run";
 import type { AgentLoopEvent } from "../core/agent-loop/run";
 import type { EngineId } from "../core/engine/profile";
@@ -77,6 +78,10 @@ import { AgentContinuationScheduler, AgentDeliveryDeferred } from "../core/agent
 import type { AgentInboxEntry } from "../core/agents/types";
 import { listAgentProfiles } from "../core/agents/profile";
 import { agentActivitySummary, agentCardFromMetadata, applyAgentEvent, mergeRestoredAgentCards, renderAgentDetail, retryAgentDelivery, setAgentDeliveryState } from "./agent-view";
+import { ToolPermissionBroker, type PermissionMode } from "../core/permissions";
+import type { PermissionResolution } from "../core/permissions";
+import { PermissionPrompt } from "./PermissionPrompt";
+import { YoloPrompt } from "./YoloPrompt";
 
 type PendingGate = Extract<RunPromptResult, { kind: "needs_user" }>;
 
@@ -96,6 +101,13 @@ type PendingUserQuestion = Extract<RunPromptResult, { kind: "needs_user_question
 type PendingUserQuestionState = Omit<PendingUserQuestion, "profile"> & {
   engine: EngineId;
   profile?: PendingUserQuestion["profile"];
+};
+
+type PendingPermission = Extract<RunPromptResult, { kind: "needs_permission" }>;
+
+type PendingPermissionState = Omit<PendingPermission, "profile"> & {
+  engine: EngineId;
+  profile?: PendingPermission["profile"];
 };
 
 type TuiKeyEvent = {
@@ -123,6 +135,10 @@ type PromptHistoryEntry = {
   images: VesicleImageAttachment[];
 };
 
+export type AppProps = {
+  dangerouslySkipPermissions?: boolean;
+};
+
 export type TokenUsageSummary = {
   inputTokens: number;
   outputTokens: number;
@@ -130,7 +146,7 @@ export type TokenUsageSummary = {
   contextInputTokens: number;
 };
 
-export function App() {
+export function App(props: AppProps = {}) {
   initDebugLogging();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
@@ -142,6 +158,11 @@ export function App() {
   const [activeEngine, setActiveEngine] = createSignal<EngineId>("etl");
   const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
   const [reasoningDisplayMode, setReasoningDisplayMode] = createSignal<ReasoningDisplayMode>("collapsed");
+  const [permissionMode, setPermissionMode] = createSignal<PermissionMode>(
+    props.dangerouslySkipPermissions ? "YOLO" : "MOMENTUM",
+  );
+  const [shellExecEnabled, setShellExecEnabled] = createSignal(props.dangerouslySkipPermissions === true);
+  const [permissionSettingsReady, setPermissionSettingsReady] = createSignal(props.dangerouslySkipPermissions === true);
   const [providerHasApiKey, setProviderHasApiKey] = createSignal(false);
   const [providerConfigReady, setProviderConfigReady] = createSignal(false);
   const [mcpStatus, setMcpStatus] = createSignal<SidebarMcpState>({
@@ -155,6 +176,10 @@ export function App() {
       role: "system",
       content: "Ready. Enter one Prism prompt and press Enter.",
     },
+    ...(props.dangerouslySkipPermissions ? [{
+      role: "system" as const,
+      content: "DANGER: --dangerously-skip-permissions enabled YOLO for this process. Tool approvals are bypassed; runtime hard guards remain active.",
+    }] : []),
   ]);
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
@@ -209,6 +234,9 @@ export function App() {
   const [pendingGate, setPendingGate] = createSignal<PendingGateState | null>(null);
   const [pendingEngineSwitch, setPendingEngineSwitch] = createSignal<PendingEngineSwitchState | null>(null);
   const [pendingUserQuestion, setPendingUserQuestion] = createSignal<PendingUserQuestionState | null>(null);
+  const [pendingPermission, setPendingPermission] = createSignal<PendingPermissionState | null>(null);
+  const [pendingChildPermission, setPendingChildPermission] = createSignal<import("../core/permissions").PermissionRequest | null>(null);
+  const [yoloConfirmStage, setYoloConfirmStage] = createSignal<1 | 2 | null>(null);
   const [questionSelected, setQuestionSelected] = createSignal(0);
   const [questionFreeformText, setQuestionFreeformText] = createSignal("");
   const [questionFreeformCursor, setQuestionFreeformCursor] = createSignal(0);
@@ -219,6 +247,8 @@ export function App() {
   const [gateFeedbackCursor, setGateFeedbackCursor] = createSignal(0);
   const [gateFeedbackKillBuffer, setGateFeedbackKillBuffer] = createSignal<string | undefined>();
   const agentStore = new AgentStore(process.cwd());
+  const permissionBroker = new ToolPermissionBroker();
+  permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
   const pausedAgentDeliveries = new Set<string>();
   const continuationScheduler = new AgentContinuationScheduler(agentStore, deliverAgentResults, {
     isParentIdle: (parentSessionId) => sessionId() === parentSessionId
@@ -227,7 +257,9 @@ export function App() {
       && !busy()
       && !pendingGate()
       && !pendingEngineSwitch()
-      && !pendingUserQuestion(),
+      && !pendingUserQuestion()
+      && !pendingPermission()
+      && !pendingChildPermission(),
   });
   const agentManager = new AgentManager(agentStore, runChildAgent, {
     onEvent: (event) => {
@@ -241,7 +273,7 @@ export function App() {
   });
   createEffect(() => {
     const id = sessionId();
-    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion();
+    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingChildPermission();
     if (id && ready) void continuationScheduler.notify(id).catch(reportError);
   });
 
@@ -350,7 +382,7 @@ export function App() {
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()),
+    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || inputNeedsExpandedBottom(),
     decisionPanelMinHeight(),
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
@@ -364,6 +396,7 @@ export function App() {
     if (engineSwitch) return engineSwitchGateRequest(activeEngine(), engineSwitch.request);
     return null;
   });
+  const activePermissionRequest = createMemo(() => pendingPermission()?.request ?? pendingChildPermission() ?? undefined);
 
   let lastCtrlCAt = 0;
   const promptEscape = new PromptEscapeController();
@@ -373,6 +406,7 @@ export function App() {
   let activeTurnUsagePublished = false;
   let lastReportedAssetDriftKey: string | undefined;
   let providerConfigLoad: Promise<void> | null = null;
+  let permissionSettingsLoad: Promise<void> | null = null;
 
   // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
@@ -388,6 +422,7 @@ export function App() {
       }
     }).catch(reportError);
     void refreshMcpStatus().catch(reportError);
+    if (!props.dangerouslySkipPermissions) void loadPermissionSettingsOnce().catch(reportError);
     void loadProviderConfigOnce().catch((error) => {
       setProviderConfigReady(true);
       reportError(error);
@@ -453,12 +488,17 @@ export function App() {
       return;
     }
 
+    if (yoloConfirmStage()) {
+      if (handleYoloKey(key)) consumeKey(key);
+      return;
+    }
+
     if (pendingUserQuestion()) {
       if (handleQuestionKey(key)) consumeKey(key);
       return;
     }
 
-    if (pendingGate() || pendingEngineSwitch()) {
+    if (pendingGate() || pendingEngineSwitch() || pendingPermission() || pendingChildPermission()) {
       if (handleGateKey(key)) consumeKey(key);
       return;
     }
@@ -482,7 +522,7 @@ export function App() {
 
   usePaste((event) => {
     const text = new TextDecoder().decode(event.bytes);
-    if ((pendingGate() || pendingEngineSwitch()) && gateComposerIsActive(gateFocus(), gateFeedbackMode())) {
+    if ((pendingGate() || pendingEngineSwitch() || pendingPermission() || pendingChildPermission()) && gateComposerIsActive(gateFocus(), gateFeedbackMode())) {
       applyGateFeedbackState(insertComposerText(currentGateFeedbackState(), text));
       event.preventDefault();
       return;
@@ -492,7 +532,7 @@ export function App() {
       event.preventDefault();
       return;
     }
-    if (pendingGate() || pendingEngineSwitch() || pendingUserQuestion() || sessionPicker() || rewindPicker()) return;
+    if (pendingGate() || pendingEngineSwitch() || pendingUserQuestion() || pendingPermission() || pendingChildPermission() || yoloConfirmStage() || sessionPicker() || rewindPicker()) return;
     applyComposerState(insertComposerText(currentComposerState(), text));
     event.preventDefault();
   });
@@ -522,7 +562,7 @@ export function App() {
   }
 
   function handleGateKey(key: TuiKeyEvent): boolean {
-    if (busy()) return false;
+    if (busy() && !pendingChildPermission()) return false;
     const focusOrder = currentGateFocusOrder();
     if (gateComposerIsActive(gateFocus(), gateFeedbackMode()) && key.name !== "tab" && key.name !== "escape") {
       const result = applyComposerKey(currentGateFeedbackState(), key);
@@ -530,7 +570,11 @@ export function App() {
         applyGateFeedbackState(result.state);
         if (result.action?.type === "submit") {
           const resolution = gateResolutionFromState(gateFocus(), result.action.value);
-          if (pendingEngineSwitch()) {
+          if (pendingPermission()) {
+            void submitPermissionResolution(permissionResolutionFromGate(resolution));
+          } else if (pendingChildPermission()) {
+            submitChildPermissionResolution(permissionResolutionFromGate(resolution));
+          } else if (pendingEngineSwitch()) {
             void submitEngineSwitchResolution(resolution, { summarizeContext: gateFocus() === "confirm-summary" });
           } else {
             void submitGateResolution(resolution);
@@ -562,7 +606,11 @@ export function App() {
     }
     if (key.name === "return" || key.name === "enter") {
       const resolution = gateResolutionFromState(gateFocus(), gateFeedback());
-      if (pendingEngineSwitch()) {
+      if (pendingPermission()) {
+        void submitPermissionResolution(permissionResolutionFromGate(resolution));
+      } else if (pendingChildPermission()) {
+        submitChildPermissionResolution(permissionResolutionFromGate(resolution));
+      } else if (pendingEngineSwitch()) {
         void submitEngineSwitchResolution(resolution, { summarizeContext: gateFocus() === "confirm-summary" });
       } else {
         void submitGateResolution(resolution);
@@ -576,6 +624,32 @@ export function App() {
       setGateFeedbackCursor(0);
       setGateFeedbackKillBuffer(undefined);
       setGateFocus("reject");
+      return true;
+    }
+    return false;
+  }
+
+  function handleYoloKey(key: TuiKeyEvent): boolean {
+    if (key.name === "up" || key.name === "down" || (key.ctrl && (key.name === "p" || key.name === "n"))) {
+      setGateFocus((current) => current === "confirm" ? "reject" : "confirm");
+      return true;
+    }
+    if (key.name === "escape") {
+      setGateFocus("reject");
+      setYoloConfirmStage(null);
+      setStatus(`permission mode ${permissionMode()}`);
+      return true;
+    }
+    if (key.name === "return" || key.name === "enter") {
+      if (gateFocus() === "reject") {
+        setYoloConfirmStage(null);
+        setStatus(`permission mode ${permissionMode()}`);
+      } else if (yoloConfirmStage() === 1) {
+        setYoloConfirmStage(2);
+      } else {
+        void applyPermissionMode("YOLO");
+        setYoloConfirmStage(null);
+      }
       return true;
     }
     return false;
@@ -875,6 +949,7 @@ export function App() {
     setPendingGate(null);
     setPendingEngineSwitch(null);
     setPendingUserQuestion(null);
+    setPendingPermission(null);
     setOutput("");
     setNextSessionParent({ uuid: result.parentUuid });
     const images = result.images ?? [];
@@ -892,8 +967,8 @@ export function App() {
   async function compactSession(instructions?: string): Promise<{ summary: string; messagesSummarized: number }> {
     const id = sessionId();
     if (!id) throw new Error("No active session to compact.");
-    if (pendingGate() || pendingEngineSwitch() || pendingUserQuestion()) {
-      throw new Error("Resolve the pending gate, engine switch, or question before compacting.");
+    if (pendingGate() || pendingEngineSwitch() || pendingUserQuestion() || pendingPermission() || pendingChildPermission()) {
+      throw new Error("Resolve the pending gate, engine switch, question, or permission before compacting.");
     }
     if (!providerConfigReady()) await loadProviderConfigOnce();
 
@@ -922,6 +997,7 @@ export function App() {
       setPendingGate(null);
       setPendingEngineSwitch(null);
       setPendingUserQuestion(null);
+      setPendingPermission(null);
       setSessionPicker(null);
       rewindController.reset();
       clearComposer();
@@ -1119,6 +1195,15 @@ export function App() {
         return;
       }
     }
+    if (!permissionSettingsReady()) {
+      setStatus("loading permission settings");
+      try {
+        await loadPermissionSettingsOnce();
+      } catch (error) {
+        reportError(error);
+        return;
+      }
+    }
 
     if (images.length > 0 && activeModelCapabilities()?.vision !== true) {
       applyComposerState({ value, cursor: value.length, elements: elements.map((element) => ({ ...element })) });
@@ -1155,9 +1240,15 @@ export function App() {
         ...(images.length ? { images } : {}),
         providerSelection: activeProviderSelection(),
         generation: activeGeneration(),
+        permission: {
+          mode: permissionMode(),
+          ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}),
+          shellExecEnabled: shellExecEnabled(),
+        },
         signal,
         onEvent: handleAgentEvent,
         agentManager,
+        permissionBroker,
       }));
       if (outcome.kind === "interrupted") {
         if (!activeTurnSawResponse) await restoreInterruptedPrompt(value, images, elements);
@@ -1176,7 +1267,7 @@ export function App() {
   };
 
   async function deliverAgentResults(parentSessionId: string, entries: AgentInboxEntry[], packet: string): Promise<void> {
-    if (sessionId() !== parentSessionId || busy() || pendingGate() || pendingEngineSwitch() || pendingUserQuestion()) {
+    if (sessionId() !== parentSessionId || busy() || pendingGate() || pendingEngineSwitch() || pendingUserQuestion() || pendingPermission() || pendingChildPermission()) {
       throw new AgentDeliveryDeferred();
     }
     setBusy(true);
@@ -1214,9 +1305,15 @@ export function App() {
         ...(persistedDelivery ? { prePersistedInputUuid: persistedDelivery.uuid } : {}),
         providerSelection: activeProviderSelection(),
         generation: activeGeneration(),
+        permission: {
+          mode: permissionMode(),
+          ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}),
+          shellExecEnabled: shellExecEnabled(),
+        },
         signal,
         onEvent: handleAgentEvent,
         agentManager,
+        permissionBroker,
       }));
       if (outcome.kind === "interrupted") {
         handleInterruptedTurn();
@@ -1231,6 +1328,86 @@ export function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  const submitPermissionResolution = async (resolution: PermissionResolution) => {
+    const pending = pendingPermission();
+    if (!pending || busy()) return;
+    setBusy(true);
+    setStatus(`resolving permission: ${resolution.decision}`);
+    recordActivity({ kind: "tool", text: `${resolution.decision} ${pending.request.toolName}` });
+    setPendingPermission(null);
+    setGateFeedbackMode(null);
+    setGateFeedback("");
+    setGateFeedbackCursor(0);
+    setGateFeedbackKillBuffer(undefined);
+    beginUsageTurn();
+    try {
+      const outcome = await turnCancellation.run((signal) => resolvePermission({
+        engine: pending.engine,
+        sessionId: pending.sessionId,
+        messages: pending.messages,
+        request: pending.request,
+        remainingToolCalls: pending.remainingToolCalls,
+        deferredAgentPermissions: pending.deferredAgentPermissions,
+        resolution,
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        permission: {
+          mode: permissionMode(),
+          ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}),
+          shellExecEnabled: shellExecEnabled(),
+        },
+        signal,
+        onEvent: handleAgentEvent,
+        agentManager,
+        permissionBroker,
+      }));
+      if (outcome.kind === "interrupted") {
+        await reconcilePermissionAfterContinuationFailure(pending);
+        handleInterruptedTurn();
+      } else {
+        handleResult(outcome.value, pending.messages);
+      }
+    } catch (error) {
+      await reconcilePermissionAfterContinuationFailure(pending);
+      reportError(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  async function reconcilePermissionAfterContinuationFailure(pending: PendingPermissionState): Promise<void> {
+    try {
+      const snapshot = await loadSessionSnapshot(process.cwd(), pending.sessionId, {
+        synthesizeDanglingToolResults: false,
+      });
+      if (snapshot.pendingPermission?.id === pending.request.id) {
+        setPendingPermission(pending);
+        return;
+      }
+      setPendingPermission(null);
+      setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      setMessages(displayTranscriptFromSnapshot(snapshot.messages, agentCards()));
+      setStatus("permission resolved; provider continuation stopped");
+    } catch {
+      setPendingPermission(pending);
+    }
+  }
+
+  function submitChildPermissionResolution(resolution: PermissionResolution): void {
+    const request = pendingChildPermission();
+    if (!request) return;
+    if (!permissionBroker.resolve(request.id, resolution)) return;
+    setGateFeedbackMode(null);
+    setGateFeedback("");
+    setGateFeedbackCursor(0);
+    setGateFeedbackKillBuffer(undefined);
+    setStatus(`${resolution.decision} ${request.agent?.handle ?? "SubAgent"} ${request.toolName}`);
+    recordActivity({
+      kind: "agent",
+      text: `${resolution.decision} ${request.agent?.handle ?? "SubAgent"} ${request.toolName}`,
+    });
   }
 
   const submitGateResolution = async (resolution: GateResolution) => {
@@ -1261,9 +1438,11 @@ export function App() {
         resolution,
         providerSelection: activeProviderSelection(),
         generation: activeGeneration(),
+        permission: { mode: permissionMode(), shellExecEnabled: shellExecEnabled(), ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}) },
         signal,
         onEvent: handleAgentEvent,
         agentManager,
+        permissionBroker,
       }));
       if (outcome.kind === "interrupted") {
         setPendingGate(gate);
@@ -1318,9 +1497,11 @@ export function App() {
         ...(summarizeContext ? { contextPolicy: "summary" as const } : {}),
         providerSelection: activeProviderSelection(),
         generation: activeGeneration(),
+        permission: { mode: permissionMode(), shellExecEnabled: shellExecEnabled(), ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}) },
         signal,
         onEvent: handleAgentEvent,
         agentManager,
+        permissionBroker,
       }));
       if (outcome.kind === "interrupted") {
         setPendingEngineSwitch(pending);
@@ -1430,9 +1611,11 @@ export function App() {
         answer,
         providerSelection: activeProviderSelection(),
         generation: activeGeneration(),
+        permission: { mode: permissionMode(), shellExecEnabled: shellExecEnabled(), ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}) },
         signal,
         onEvent: handleAgentEvent,
         agentManager,
+        permissionBroker,
       }));
       if (outcome.kind === "interrupted") {
         setPendingUserQuestion(pending);
@@ -1490,6 +1673,7 @@ export function App() {
       setPendingGate({ ...result, engine: result.profile.id });
       setPendingEngineSwitch(null);
       setPendingUserQuestion(null);
+      setPendingPermission(null);
       setQuestionFreeformText("");
       setQuestionFreeformCursor(0);
       setQuestionFreeformKillBuffer(undefined);
@@ -1544,6 +1728,7 @@ export function App() {
       setPendingGate(null);
       setPendingEngineSwitch(null);
       setPendingUserQuestion({ ...result, engine: result.profile.id });
+      setPendingPermission(null);
       setQuestionSelected(0);
       setQuestionFreeformText("");
       setQuestionFreeformCursor(0);
@@ -1560,9 +1745,30 @@ export function App() {
       return;
     }
 
+    if (result.kind === "needs_permission") {
+      setConversation([...result.messages]);
+      setSessionId(result.sessionId);
+      setSessionPath(result.sessionPath);
+      setPendingGate(null);
+      setPendingEngineSwitch(null);
+      setPendingUserQuestion(null);
+      setPendingPermission({ ...result, engine: result.profile.id });
+      setOutput(result.assistantContent);
+      setMessages((prev) => [
+        ...prev,
+        ...(result.assistantContent && lastDisplayedToolAssistantContent() !== result.assistantContent
+          ? [{ role: "assistant" as const, content: result.assistantContent }]
+          : []),
+        { role: "system", content: `Permission pending: ${result.request.toolName}.` },
+      ]);
+      setStatus(`permission pending: ${result.request.toolName}`);
+      return;
+    }
+
     setPendingGate(null);
     setPendingEngineSwitch(null);
     setPendingUserQuestion(null);
+    setPendingPermission(null);
     setQuestionFreeformText("");
     setQuestionFreeformCursor(0);
     setQuestionFreeformKillBuffer(undefined);
@@ -1777,7 +1983,7 @@ export function App() {
           // then add the `⎿` footer beneath it.
           const next = prev.map((m) =>
             m.toolCallId === event.callId && m.toolStage === "call"
-              ? { ...m, toolFileEvent: event.fileEvent, toolWebEvent: event.webEvent, toolMcpEvent: event.mcpEvent, toolOk: event.ok, images: event.images }
+              ? { ...m, toolFileEvent: event.fileEvent, toolWebEvent: event.webEvent, toolMcpEvent: event.mcpEvent, toolProcessEvent: event.processEvent, toolOk: event.ok, images: event.images }
               : m,
           );
           next.push({
@@ -1788,6 +1994,7 @@ export function App() {
             toolFileEvent: event.fileEvent,
             toolWebEvent: event.webEvent,
             toolMcpEvent: event.mcpEvent,
+            toolProcessEvent: event.processEvent,
             images: event.images,
             // Content is only needed for failure messages; on success the
             // structured fileEvent/webEvent/mcpEvent carries the footer detail.
@@ -1868,6 +2075,17 @@ export function App() {
       providerConfigLoad = null;
     });
     return providerConfigLoad;
+  }
+
+  function loadPermissionSettingsOnce(): Promise<void> {
+    permissionSettingsLoad ??= loadPermissionSettings().then((settings) => {
+      setShellExecEnabled(props.dangerouslySkipPermissions === true || settings.shellExec);
+      if (!props.dangerouslySkipPermissions) setPermissionMode(settings.defaultMode);
+      setPermissionSettingsReady(true);
+    }).finally(() => {
+      permissionSettingsLoad = null;
+    });
+    return permissionSettingsLoad;
   }
 
   async function applyProviderSelection(selection: Partial<ProviderSelection>): Promise<ProviderSelection> {
@@ -1955,6 +2173,32 @@ export function App() {
     });
   }
 
+  async function changePermissionMode(mode: PermissionMode): Promise<void> {
+    if (mode === "YOLO" && permissionMode() !== "YOLO" && !props.dangerouslySkipPermissions) {
+      setGateFocus("confirm");
+      setYoloConfirmStage(1);
+      setStatus("confirm YOLO permission mode");
+      return;
+    }
+    await applyPermissionMode(mode);
+  }
+
+  async function applyPermissionMode(mode: PermissionMode): Promise<void> {
+    setPermissionMode(mode);
+    setStatus(`permission mode ${mode}`);
+    await appendHostSessionRecord({
+      role: "system",
+      content: `Permission mode switched to ${mode}.`,
+      metadata: { kind: "permission-mode-switch", permissionMode: mode },
+    });
+    setMessages((prev) => [...prev, {
+      role: "system",
+      content: mode === "YOLO"
+        ? "DANGER: YOLO enabled for this process. All tool approvals are bypassed; runtime hard guards remain active."
+        : `Permission mode switched to ${mode}.`,
+    }]);
+  }
+
   async function appendHostSessionRecord(record: { role: "system" | "user"; content: string; metadata: Record<string, unknown> }) {
     const id = sessionId();
     if (!id) return undefined;
@@ -2007,6 +2251,8 @@ export function App() {
     reasoningDisplayMode,
     setReasoningDisplayMode,
     persistReasoningSwitch,
+    permissionMode,
+    changePermissionMode,
     artifacts,
     refreshArtifacts,
     loadArtifactPreview: (artifact, options) => loadArtifactPreview(process.cwd(), artifact, options),
@@ -2080,6 +2326,7 @@ export function App() {
   async function resumeSession(target: SessionSummary, commandEcho?: string) {
     setRestoringSession(true);
     try {
+      if (!permissionSettingsReady()) await loadPermissionSettingsOnce();
       const snapshot = await loadSessionSnapshot(process.cwd(), target.sessionId, {
         synthesizeDanglingToolResults: false,
       });
@@ -2115,6 +2362,15 @@ export function App() {
       const hostMessages: Message[] = [];
       if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
       hostMessages.push({ role: "system", content: `Restored engine ${restoredEngine} from session.` });
+      const restoredPermissionMode = props.dangerouslySkipPermissions
+        ? "YOLO"
+        : snapshot.permissionMode === "YOLO"
+          ? "MOMENTUM"
+          : snapshot.permissionMode ?? permissionMode();
+      setPermissionMode(restoredPermissionMode);
+      hostMessages.push({ role: "system", content: snapshot.permissionMode === "YOLO" && !props.dangerouslySkipPermissions
+        ? "Previous YOLO permission mode was downgraded to MOMENTUM on resume. Re-enable YOLO explicitly if needed."
+        : `Restored permission mode ${restoredPermissionMode}.` });
       const assetDrift = await inspectEngineAssetDrift(snapshot.assets, restoredEngine, process.cwd());
       if (assetDrift) {
         lastReportedAssetDriftKey = `${target.sessionId}:${assetDrift.current.sha256}`;
@@ -2144,7 +2400,29 @@ export function App() {
         hostMessages.push({ role: "system", content: `Restored reasoning display ${snapshot.reasoningDisplayMode} from session.` });
       }
 
-      if (snapshot.pendingGate) {
+      if (snapshot.pendingPermission) {
+        setPendingGate(null);
+        setPendingEngineSwitch(null);
+        setPendingUserQuestion(null);
+        setPendingPermission({
+          kind: "needs_permission",
+          sessionId: target.sessionId,
+          sessionPath: joinSessionPath(target.sessionId),
+          engine: restoredEngine,
+          request: snapshot.pendingPermission,
+          remainingToolCalls: unresolvedToolCalls(snapshot.messages, snapshot.pendingPermission.toolCallId),
+          assistantContent: "",
+          messages: resumedMessages,
+        });
+        setGateFocus("confirm");
+        setGateFeedbackMode(null);
+        setGateFeedback("");
+        setGateFeedbackCursor(0);
+        setGateFeedbackKillBuffer(undefined);
+        setStatus(`permission pending: ${snapshot.pendingPermission.toolName}`);
+        hostMessages.push({ role: "system", content: `Resumed pending permission for ${snapshot.pendingPermission.toolName}.` });
+      } else if (snapshot.pendingGate) {
+        setPendingPermission(null);
         setPendingUserQuestion(null);
         setPendingGate({
           kind: "needs_user",
@@ -2167,6 +2445,7 @@ export function App() {
           content: `Resumed pending gate ${snapshot.pendingGate.gate.gate}. Use the gate controls below to continue.`,
         });
       } else if (snapshot.pendingEngineSwitch) {
+        setPendingPermission(null);
         setPendingGate(null);
         setPendingUserQuestion(null);
         setPendingEngineSwitch({
@@ -2189,6 +2468,7 @@ export function App() {
           content: `Resumed pending engine switch to ${snapshot.pendingEngineSwitch.request.targetEngine}. Use the gate controls below to continue.`,
         });
       } else if (snapshot.pendingUserQuestion) {
+        setPendingPermission(null);
         setPendingGate(null);
         setPendingEngineSwitch(null);
         setPendingUserQuestion({
@@ -2214,6 +2494,7 @@ export function App() {
         setPendingGate(null);
         setPendingEngineSwitch(null);
         setPendingUserQuestion(null);
+        setPendingPermission(null);
         setQuestionFreeformText("");
         setQuestionFreeformCursor(0);
         setQuestionFreeformKillBuffer(undefined);
@@ -2252,6 +2533,9 @@ export function App() {
           fg={engineAccent(activeEngine())}
           attributes={1}
         />
+        <Show when={permissionMode() === "YOLO"} fallback={<box width={0} />}>
+          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} />
+        </Show>
       </box>
 
       <box flexDirection="row" flexGrow={1}>
@@ -2286,8 +2570,14 @@ export function App() {
       </box>
 
       <Show
-        when={pendingUserQuestion()}
+        when={yoloConfirmStage()}
         fallback={
+          <Show
+            when={activePermissionRequest()}
+            fallback={
+          <Show
+            when={pendingUserQuestion()}
+            fallback={
           <Show
             when={activeGateRequest()}
             fallback={
@@ -2381,17 +2671,40 @@ export function App() {
               </box>
             )}
           </Show>
+            }
+          >
+            {(question) => (
+              <box height={layout().bottomHeight}>
+                <QuestionPrompt
+                  question={question().question}
+                  selected={questionSelected()}
+                  width={layout().width}
+                  freeformValue={questionFreeformText()}
+                  freeformCursor={questionFreeformCursor()}
+                />
+              </box>
+            )}
+          </Show>
+            }
+          >
+            {(permission) => (
+              <box height={layout().bottomHeight}>
+                <PermissionPrompt
+                  request={permission()}
+                  focused={gateFocus()}
+                  feedbackMode={gateFeedbackMode()}
+                  feedback={gateFeedback()}
+                  feedbackCursor={gateFeedbackCursor()}
+                  width={layout().width}
+                />
+              </box>
+            )}
+          </Show>
         }
       >
-        {(question) => (
+        {(stage) => (
           <box height={layout().bottomHeight}>
-            <QuestionPrompt
-              question={question().question}
-              selected={questionSelected()}
-              width={layout().width}
-              freeformValue={questionFreeformText()}
-              freeformCursor={questionFreeformCursor()}
-            />
+            <YoloPrompt stage={stage()} focused={gateFocus()} width={layout().width} />
           </box>
         )}
       </Show>
@@ -2420,6 +2733,16 @@ function composerElementsForImages(value: string, images: VesicleImageAttachment
   });
 }
 
+function unresolvedToolCalls(messages: ResumedMessage[], activeToolCallId: string) {
+  const answered = new Set(messages.flatMap((message) => message.toolCallId ? [message.toolCallId] : []));
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const calls = messages[index].toolCalls;
+    if (!calls?.some((call) => call.id === activeToolCallId)) continue;
+    return calls.filter((call) => call.id !== activeToolCallId && !answered.has(call.id));
+  }
+  return [];
+}
+
 function engineSwitchGateRequest(currentEngine: EngineId, request: EngineSwitchRequest): GateRequest {
   const lines = [
     `Current Engine: ${currentEngine}`,
@@ -2440,6 +2763,17 @@ function engineSwitchGateRequest(currentEngine: EngineId, request: EngineSwitchR
       { label: `Reject - stay on ${currentEngine} and discuss`, decision: "reject" },
     ],
   };
+}
+
+function permissionResolutionFromGate(resolution: GateResolution): PermissionResolution {
+  const resolvedAt = new Date().toISOString();
+  return resolution.decision === "confirm"
+    ? { decision: "allow_once", resolvedAt }
+    : {
+        decision: "reject",
+        resolvedAt,
+        ...(resolution.feedback ? { feedback: resolution.feedback } : {}),
+      };
 }
 
 function displayUserQuestionAnswer(header: string, answer: UserQuestionAnswer): string {
@@ -2769,6 +3103,7 @@ function displayMessagesFromResumed(
           toolFileEvent: message.toolFileEvent,
           toolWebEvent: message.toolWebEvent,
           toolMcpEvent: message.toolMcpEvent,
+          toolProcessEvent: message.toolProcessEvent,
           toolOk: ok,
           images: message.images,
           content: "",
@@ -2781,6 +3116,7 @@ function displayMessagesFromResumed(
           toolFileEvent: message.toolFileEvent,
           toolWebEvent: message.toolWebEvent,
           toolMcpEvent: message.toolMcpEvent,
+          toolProcessEvent: message.toolProcessEvent,
           images: message.images,
           content: ok ? "" : extractResultContent(message.content),
         },

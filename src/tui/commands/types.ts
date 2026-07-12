@@ -11,6 +11,7 @@ import type { EngineId } from "../../core/engine/profile";
 import type { EngineTransition } from "../../core/engine/transition";
 import type { ReasoningTier, VesicleMessage } from "../../providers/shared/types";
 import type { ReasoningDisplayMode, SessionSummary } from "../../core/session/store";
+import type { PermissionMode } from "../../core/permissions";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
 import type {
   ActivityEntry,
@@ -55,6 +56,10 @@ export type CommandContext = {
   reasoningDisplayMode: () => ReasoningDisplayMode;
   setReasoningDisplayMode: (mode: ReasoningDisplayMode) => void;
   persistReasoningSwitch: (mode: ReasoningDisplayMode) => Promise<void>;
+
+  // —— tool permissions ——
+  permissionMode: () => PermissionMode;
+  changePermissionMode: (mode: PermissionMode) => Promise<void>;
 
   // —— artifacts ——
   artifacts: () => ArtifactEntry[];

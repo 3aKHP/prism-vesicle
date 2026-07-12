@@ -2,15 +2,16 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { resolveEngineSwitch, resolveGate, resolveUserQuestion, runPrompt } from "../src/core/agent-loop/run";
+import { resolveEngineSwitch, resolveGate, resolvePermission, resolveUserQuestion, runPrompt } from "../src/core/agent-loop/run";
 import type { AgentLoopEvent } from "../src/core/agent-loop/run";
 import { ingestImageBytes } from "../src/core/attachments/store";
 import { AgentManager } from "../src/core/agents/manager";
 import { AgentStore } from "../src/core/agents/store";
 import { runChildAgent } from "../src/core/agents/child-runner";
 import { AgentContinuationScheduler } from "../src/core/agents/scheduler";
-import { createSessionStore, loadSessionRecords } from "../src/core/session/store";
+import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../src/core/session/store";
 import { fileCheckpointDiffStats } from "../src/core/checkpoints/file-history";
+import { listRewindPoints } from "../src/core/rewind/service";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -179,6 +180,235 @@ describe("agent loop sessions", () => {
       thinking: { type: "enabled" },
       reasoning_effort: "max",
     });
+  });
+
+  test("pauses shell_exec for MOMENTUM and continues after exact allow-once approval", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await createPromptRoot();
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return Response.json({
+          id: "chat-permission-1",
+          choices: [{ message: {
+            content: "",
+            tool_calls: [{
+              id: "call-shell",
+              type: "function",
+              function: { name: "shell_exec", arguments: JSON.stringify({ command: "printf approved" }) },
+            }],
+          } }],
+        });
+      }
+      return Response.json({ id: "chat-permission-2", choices: [{ message: { content: "done" } }] });
+    }) as unknown as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "run it",
+      rootDir,
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    });
+    expect(paused.kind).toBe("needs_permission");
+    if (paused.kind !== "needs_permission") throw new Error("expected permission pause");
+    expect(paused.request.executionPlan?.command).toBe("printf approved");
+    expect(requests).toBe(1);
+
+    const resumed = await resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: paused.request,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    });
+    expect(resumed.kind).toBe("complete");
+    expect(requests).toBe(2);
+    const records = await loadSessionRecords(rootDir, paused.sessionId);
+    expect(records.some((record) => record.metadata?.kind === "permission-request")).toBe(true);
+    expect(records.some((record) => record.metadata?.kind === "permission-resolution")).toBe(true);
+    expect(records.some((record) => record.metadata?.kind === "process-started")).toBe(true);
+    expect(records.some((record) => (record.metadata?.processEvent as { kind?: string } | undefined)?.kind === "process_exec")).toBe(true);
+  });
+
+  test("does not execute a resumed shell permission after the capability is disabled", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await createPromptRoot();
+    globalThis.fetch = (async () => Response.json({
+      id: "chat-permission-disabled",
+      choices: [{ message: { content: "", tool_calls: [{
+        id: "call-shell-disabled",
+        type: "function",
+        function: { name: "shell_exec", arguments: JSON.stringify({ command: "touch workspace/should-not-exist" }) },
+      }] } }],
+    })) as unknown as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "run it",
+      rootDir,
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    });
+    expect(paused.kind).toBe("needs_permission");
+    if (paused.kind !== "needs_permission") throw new Error("expected permission pause");
+
+    let followUpRequests = 0;
+    globalThis.fetch = (async () => {
+      followUpRequests += 1;
+      return Response.json({ id: "chat-permission-disabled-result", choices: [{ message: { content: "not run" } }] });
+    }) as unknown as typeof fetch;
+    const resumed = await resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: paused.request,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MOMENTUM", shellExecEnabled: false },
+    });
+    expect(resumed.kind).toBe("complete");
+    expect(followUpRequests).toBe(1);
+    expect(await Bun.file(join(rootDir, "workspace", "should-not-exist")).exists()).toBe(false);
+    const records = await loadSessionRecords(rootDir, paused.sessionId);
+    expect(records.find((record) => record.metadata?.toolCallId === "call-shell-disabled" && record.role === "tool")?.content)
+      .toContain("no longer in the current Engine's effective tool surface");
+  });
+
+  test("keeps a durable tool result resolved when the provider continuation fails", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await createPromptRoot();
+    globalThis.fetch = (async () => Response.json({
+      id: "chat-permission-provider-failure",
+      choices: [{ message: { content: "", tool_calls: [{
+        id: "call-provider-failure",
+        type: "function",
+        function: { name: "shell_exec", arguments: JSON.stringify({ command: "printf completed" }) },
+      }] } }],
+    })) as unknown as typeof fetch;
+    const paused = await runPrompt({ input: "run", rootDir, permission: { mode: "MOMENTUM", shellExecEnabled: true } });
+    if (paused.kind !== "needs_permission") throw new Error("expected permission pause");
+    globalThis.fetch = (async () => new Response("bad request", { status: 400 })) as unknown as typeof fetch;
+
+    await expect(resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: paused.request,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    })).rejects.toThrow();
+    const recovered = await loadSessionSnapshot(rootDir, paused.sessionId, { synthesizeDanglingToolResults: false });
+    expect(recovered.pendingPermission).toBeUndefined();
+    expect(recovered.messages.find((message) => message.toolCallId === paused.request.toolCallId)?.toolOk).toBe(true);
+  });
+
+  test("keeps a durable tool result resolved when cancellation reaches the provider continuation", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await createPromptRoot();
+    globalThis.fetch = (async () => Response.json({
+      id: "chat-permission-provider-abort",
+      choices: [{ message: { content: "", tool_calls: [{
+        id: "call-provider-abort",
+        type: "function",
+        function: { name: "shell_exec", arguments: JSON.stringify({ command: "printf completed" }) },
+      }] } }],
+    })) as unknown as typeof fetch;
+    const paused = await runPrompt({ input: "run", rootDir, permission: { mode: "MOMENTUM", shellExecEnabled: true } });
+    if (paused.kind !== "needs_permission") throw new Error("expected permission pause");
+    const controller = new AbortController();
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      if (init?.signal?.aborted) reject(init.signal.reason);
+      else init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    })) as unknown as typeof fetch;
+
+    await expect(resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: paused.request,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+      signal: controller.signal,
+      onEvent: (event) => {
+        if (event.type === "tool_result" && event.callId === paused.request.toolCallId) controller.abort(new Error("cancel continuation"));
+      },
+    })).rejects.toThrow("aborted");
+    const recovered = await loadSessionSnapshot(rootDir, paused.sessionId, { synthesizeDanglingToolResults: false });
+    expect(recovered.pendingPermission).toBeUndefined();
+    expect(recovered.messages.find((message) => message.toolCallId === paused.request.toolCallId)?.toolOk).toBe(true);
+  });
+
+  test("YOLO auto-runs shell_exec while MANUAL pauses read tools", async () => {
+    if (process.platform === "win32") return;
+    const yoloRoot = await createPromptRoot();
+    let yoloRequests = 0;
+    globalThis.fetch = (async () => {
+      yoloRequests += 1;
+      if (yoloRequests === 1) return Response.json({
+        id: "chat-yolo-1",
+        choices: [{ message: { content: "", tool_calls: [{
+          id: "call-yolo",
+          type: "function",
+          function: { name: "shell_exec", arguments: JSON.stringify({ command: "printf yolo" }) },
+        }] } }],
+      });
+      return Response.json({ id: "chat-yolo-2", choices: [{ message: { content: "done" } }] });
+    }) as unknown as typeof fetch;
+    const yolo = await runPrompt({
+      input: "run",
+      rootDir: yoloRoot,
+      permission: { mode: "YOLO", shellExecEnabled: true },
+    });
+    expect(yolo.kind).toBe("complete");
+    expect((await listRewindPoints(yoloRoot, yolo.sessionId))[0]?.checkpointTainted).toBe(true);
+
+    const manualRoot = await createPromptRoot();
+    await writeFile(join(manualRoot, "source_materials", "note.txt"), "note", "utf8");
+    globalThis.fetch = (async () => Response.json({
+      id: "chat-manual",
+      choices: [{ message: { content: "", tool_calls: [{
+        id: "call-read",
+        type: "function",
+        function: { name: "read_file", arguments: JSON.stringify({ path: "source_materials/note.txt" }) },
+      }] } }],
+    })) as unknown as typeof fetch;
+    const manual = await runPrompt({ input: "read", rootDir: manualRoot, permission: { mode: "MANUAL" } });
+    expect(manual.kind).toBe("needs_permission");
+    if (manual.kind === "needs_permission") expect(manual.request.permissionClass).toBe("observe");
+  });
+
+  test("returns malformed shell arguments as a tool failure without pausing or aborting the turn", async () => {
+    const rootDir = await createPromptRoot();
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return Response.json({
+        id: "chat-shell-malformed",
+        choices: [{ message: { content: "", tool_calls: [{
+          id: "call-shell-malformed",
+          type: "function",
+          function: { name: "shell_exec", arguments: "{not-json" },
+        }] } }],
+      });
+      return Response.json({ id: "chat-shell-corrected", choices: [{ message: { content: "corrected" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "run it",
+      rootDir,
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    });
+    expect(result.kind).toBe("complete");
+    expect(requests).toBe(2);
+    const records = await loadSessionRecords(rootDir, result.sessionId);
+    expect(records.find((record) => record.metadata?.toolCallId === "call-shell-malformed" && record.role === "tool")?.content)
+      .toContain("arguments must be valid JSON");
   });
 
   test("propagates host cancellation to the provider request", async () => {
@@ -459,6 +689,82 @@ describe("agent loop sessions", () => {
     expect(result.response.content).toBe("Combined child results.");
     expect(parentRequests).toBe(2);
     expect(childSystems).toHaveLength(2);
+  });
+
+  test("keeps approved foreground SubAgents concurrent under MANUAL permissions", async () => {
+    const rootDir = await createPromptRoot();
+    const childResolvers: Array<(result: { content: string }) => void> = [];
+    const manager = new AgentManager(new AgentStore(rootDir), async () => new Promise((resolve) => childResolvers.push(resolve)));
+    let parentRequests = 0;
+    globalThis.fetch = (async () => {
+      parentRequests += 1;
+      if (parentRequests === 1) return Response.json({
+        id: "parent-manual-spawn",
+        choices: [{ message: { content: "", tool_calls: [
+          {
+            id: "call-manual-a",
+            type: "function",
+            function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "general", description: "Check A", prompt: "Check A", mode: "foreground" }) },
+          },
+          {
+            id: "call-manual-b",
+            type: "function",
+            function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "general", description: "Check B", prompt: "Check B", mode: "foreground" }) },
+          },
+        ] } }],
+      });
+      return Response.json({ id: "parent-manual-complete", choices: [{ message: { content: "combined" } }] });
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({ input: "delegate", rootDir, agentManager: manager, permission: { mode: "MANUAL" } });
+    expect(first.kind).toBe("needs_permission");
+    if (first.kind !== "needs_permission") throw new Error("expected first permission");
+    const second = await resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: first.sessionId,
+      messages: first.messages,
+      request: first.request,
+      remainingToolCalls: first.remainingToolCalls,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MANUAL" },
+      agentManager: manager,
+    });
+    expect(second.kind).toBe("needs_permission");
+    expect(childResolvers).toHaveLength(0);
+    if (second.kind !== "needs_permission") throw new Error("expected second permission");
+    await expect(resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: second.sessionId,
+      messages: second.messages,
+      request: second.request,
+      remainingToolCalls: second.remainingToolCalls,
+      deferredAgentPermissions: second.deferredAgentPermissions?.map((entry) => ({
+        ...entry,
+        request: { ...entry.request, arguments: "{}" },
+      })),
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MANUAL" },
+      agentManager: manager,
+    })).rejects.toThrow("Deferred Agent permission batch");
+    const completion = resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: second.sessionId,
+      messages: second.messages,
+      request: second.request,
+      remainingToolCalls: second.remainingToolCalls,
+      deferredAgentPermissions: second.deferredAgentPermissions,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MANUAL" },
+      agentManager: manager,
+    });
+    await eventually(() => expect(childResolvers).toHaveLength(2));
+    childResolvers[0]!({ content: "A" });
+    childResolvers[1]!({ content: "B" });
+    expect((await completion).kind).toBe("complete");
+    expect(parentRequests).toBe(2);
   });
 
   test("persists started SubAgent results before propagating a sibling host-tool error", async () => {

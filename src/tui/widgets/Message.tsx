@@ -1,4 +1,4 @@
-import type { FileToolEvent, McpToolEvent, WebToolEvent } from "../../core/tools";
+import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../../core/tools";
 import { engineAccent, engineDisplayName, palette } from "../theme";
 import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningBlock } from "./ReasoningBlock";
@@ -21,6 +21,7 @@ type MessageLike = {
   toolFileEvent?: FileToolEvent;
   toolWebEvent?: WebToolEvent;
   toolMcpEvent?: McpToolEvent;
+  toolProcessEvent?: ProcessToolEvent;
   engine?: string;
   model?: string;
   images?: VesicleImageAttachment[];
@@ -101,6 +102,7 @@ export function Message(props: { message: MessageLike; reasoningMode: string; wi
         toolFileEvent={m.toolFileEvent}
         toolWebEvent={m.toolWebEvent}
         toolMcpEvent={m.toolMcpEvent}
+        toolProcessEvent={m.toolProcessEvent}
         images={m.images}
         content={m.content}
         width={props.width}

@@ -46,8 +46,9 @@ export function sessionPickerLine(session: SessionSummary, index: number, select
   const pending = session.pendingGate ? ` [gate:${session.pendingGate.gate}]` : "";
   const pendingEngine = session.pendingEngineSwitch ? ` [engine:${session.pendingEngineSwitch.targetEngine}]` : "";
   const pendingQuestion = session.pendingUserQuestion ? ` [question:${session.pendingUserQuestion.header}]` : "";
+  const pendingPermission = session.pendingPermission ? ` [permission:${session.pendingPermission.tool}]` : "";
   const id = session.sessionId.slice(0, 24);
-  const head = `${marker}${index + 1}. ${id}${pending}${pendingEngine}${pendingQuestion}`;
+  const head = `${marker}${index + 1}. ${id}${pending}${pendingEngine}${pendingQuestion}${pendingPermission}`;
   const detail = `${session.preview} (${session.recordCount} records)`;
   return truncateLine(`${head}  ${detail}`, width);
 }

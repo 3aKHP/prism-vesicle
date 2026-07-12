@@ -58,6 +58,12 @@ cp docs/examples/provider.env.example ~/.config/prism-vesicle/.env
 cp docs/examples/mcp.yaml ~/.config/prism-vesicle/mcp.yaml
 ```
 
+如需显式启用受控宿主 shell，或选择更谨慎的默认批准模式，请复制权限设置示例：
+
+```bash
+cp docs/examples/permissions.yaml ~/.config/prism-vesicle/permissions.yaml
+```
+
 ## 配置模型供应商
 
 Vesicle 从用户级配置中读取供应商和模型配置档，而不是从项目仓库中读取。
@@ -76,6 +82,8 @@ Vesicle 从用户级配置中读取供应商和模型配置档，而不是从项
 当前支持的供应商协议包括 OpenAI-compatible Chat Completions、Anthropic Messages 和 Gemini `generateContent`。模型条目可以声明生成默认值、视觉能力等能力元数据以及上下文限制。规范格式请参阅带注释的示例注册表。
 
 可选的 Streamable HTTP MCP 服务器通过同目录的 `mcp.yaml` 配置；[`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) 说明了请求头变量展开、工具前缀、过滤器、引擎作用域和超时设置。在用户级 `.env` 中设置 `TAVILY_API_KEY`，即可为 ETL 和 Evaluate 引擎启用 Vesicle 的 Web 研究工具。
+
+宿主工具批准设置位于同目录的 `permissions.yaml`；[`docs/examples/permissions.yaml`](./docs/examples/permissions.yaml) 说明了 MANUAL、INERTIA、MOMENTUM 默认模式和显式 `shellExec` 开关。YOLO 不能被持久化为默认值。`/permissions YOLO` 需要经过两次红色确认；`vesicle --dangerously-skip-permissions` 只为当前进程启用 YOLO，并持续显示危险状态。
 
 ## 首次运行
 
@@ -103,6 +111,7 @@ bun run dev
 | `/engine [id]` | 查看或切换当前 Prism 引擎 |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | 控制供应商思考强度 |
 | `/reasoning hidden\|collapsed\|expanded` | 控制推理内容的显示方式 |
+| `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | 查看或修改工具批准模式 |
 | `/artifact [n\|path]` | 列出或预览生成的制品 |
 | `/validate <n\|path>` | 按序号或路径验证制品 |
 | `/resume` | 恢复持久化会话 |
@@ -120,6 +129,7 @@ bun run dev
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
 - 可选的 Tavily Web 研究、Streamable HTTP MCP 工具，以及面向声明视觉能力模型的多模态图像输入。
+- 四档粗粒度工具批准模式，以及显式启用的非交互式 `shell_exec` 进程运行时；它具备精确计划批准、环境过滤、输出上限、超时、进程树清理和持久审计元数据。
 - 支持前台与后台 SubAgent、并行执行、独立的内置或自定义 Agent Profile、专用实时 Agent 卡片、面向模型和用户的短句柄、持久化结果投递，以及无需轮询的主 Engine 自动续接。
 - npm 分发，以及带有不可变外部默认资产包和稀疏可编辑全局/项目覆盖的 Windows 与 Linux 独立构建。
 

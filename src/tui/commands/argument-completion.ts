@@ -2,12 +2,13 @@ import type { OptionItem } from "../types";
 import { engineIds } from "../../core/engine/profile";
 import { reasoningTiers } from "../../providers/shared/types";
 import { engineDisplayName } from "../theme";
+import { permissionModes } from "../../core/permissions";
 
 export type ModelArgumentDraft =
   | { stage: "provider"; query: string }
   | { stage: "model"; providerId: string; query: string };
 
-export type FixedArgumentCommand = "engine" | "effort" | "reasoning";
+export type FixedArgumentCommand = "engine" | "effort" | "reasoning" | "permissions";
 
 export type FixedArgumentDraft = {
   command: FixedArgumentCommand;
@@ -68,6 +69,15 @@ export function fixedArgumentOptions(command: FixedArgumentCommand): OptionItem[
       { id: "auto", label: "auto", detail: "Provider default · aliases: unset, default" },
     ];
   }
+  if (command === "permissions") {
+    const details = {
+      MANUAL: "Ask before every model-visible tool",
+      INERTIA: "Auto-allow observation tools",
+      MOMENTUM: "Auto-allow every tool except shell_exec",
+      YOLO: "Auto-allow all effective tools · requires two confirmations",
+    } as const;
+    return permissionModes.map((mode) => ({ id: mode, label: mode, detail: details[mode] }));
+  }
   return [
     { id: "hidden", label: "hidden", detail: "Hide reasoning · aliases: hide, off" },
     { id: "collapsed", label: "collapsed", detail: "Bounded preview · aliases: fold, preview" },
@@ -102,7 +112,7 @@ export function completeAgentArgument(draft: AgentArgumentDraft, item: OptionIte
 }
 
 function isFixedArgumentCommand(value: string): value is FixedArgumentCommand {
-  return value === "engine" || value === "effort" || value === "reasoning";
+  return value === "engine" || value === "effort" || value === "reasoning" || value === "permissions";
 }
 
 function optionScore(query: string, item: OptionItem): number {

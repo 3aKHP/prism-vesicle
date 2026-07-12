@@ -9,6 +9,9 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
+- Shell process deadlines now remain active until inherited stdout/stderr pipes close, and successful shell exit also cleans up surviving descendants instead of allowing background work to escape the Process Runtime.
+- Permission recovery now fails closed across capability/config drift and interrupted multi-tool windows: resumed approvals cannot re-enable a disabled tool, incomplete calls are never replayed, and shell-tainted checkpoints surface a targeted rewind warning.
+- MANUAL and INERTIA approvals preserve the existing parallel foreground SubAgent contract by collecting exact per-call decisions before starting the approved Agent batch concurrently; simultaneous parent/child permission prompts resolve the request actually shown.
 - Mixed host-tool and SubAgent rounds now persist every already-started SubAgent result before propagating a sibling host-tool failure, preserving the durable tool-call/result pairing for recovery.
 - Cancelling a background SubAgent no longer enqueues a synthetic result or wakes the parent Engine for another provider turn. Cancellation remains a durable terminal Agent state, and legacy queued cancellation notices are acknowledged without delivery.
 - SubAgent lifecycle and progress events no longer overwrite the parent Engine's Workspace STATUS line. Agent activity remains visible through its dedicated cards, header summary, Agents sidebar, and activity records without causing concurrent parent/child status flicker.
@@ -43,6 +46,10 @@ project follows Semantic Versioning once releases begin.
   after the same release gates.
 
 ### Added
+
+- Four coarse Tool Permission Runtime modes: MANUAL asks for every tool, INERTIA auto-allows observation tools, MOMENTUM auto-allows all tools except `shell_exec`, and YOLO auto-allows the effective tool surface after two red confirmations. MCP tools are always treated as side-effecting, and SubAgent requests route through the parent TUI.
+- Opt-in non-interactive `shell_exec` backed by a bounded cross-platform Process Runtime: fixed project cwd, filtered child environment, separate stdout/stderr limits, wall-clock timeout, process-tree termination, exact-plan approval hashes, durable request/resolution/process metadata, and no replay after indeterminate crash recovery.
+- User-level `permissions.yaml`, `/permissions`, and the process-scoped `--dangerously-skip-permissions` override. Persistent YOLO defaults are refused and resumed YOLO sessions downgrade to MOMENTUM unless the dangerous CLI override is active.
 
 - Guarded directory tools let models inspect files and empty directories with `list_directory`, create nested directories with `create_directory`, move or rename directory trees with `move_directory`, and delete empty non-root directories with `delete_directory`. File checkpoints now preserve directory topology, parallel Agent write ownership detects ancestor/descendant conflicts, and model-visible project paths reject symbolic-link traversal.
 

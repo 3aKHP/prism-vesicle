@@ -25,6 +25,8 @@ _Last updated: 2026-07-12_
 | Multimodal input | Clipboard attachments + guarded project image inspection | Implemented on development branch |
 | Runtime assets | Bundled defaults + user-global + sparse project overlays | Implemented on development branch |
 | SubAgents | Profile-driven foreground/background parallel child runtime + durable completion delivery | Implemented on development branch |
+| Tool permissions | MANUAL / INERTIA / MOMENTUM / YOLO + parent-owned child requests | Implemented on development branch |
+| Host shell | Opt-in non-interactive shell_exec + bounded Process Runtime | Implemented on development branch |
 
 ## Current Scope
 
@@ -272,6 +274,7 @@ prism-vesicle/
 | `send_message` | Implemented (child request boundaries) | No filesystem access |
 | `interrupt_agent` | Implemented | No filesystem access |
 | `wait_agent` | Implemented (explicit terminal wait and background inbox consumption) | No filesystem access |
+| `shell_exec` | Implemented behind user-level opt-in and active permission mode | Host-user filesystem/process/network authority; not path-guarded |
 | `config.load` | Internal contract | N/A |
 | `prompt.load` | Internal contract | N/A |
 | `session.write` | Internal contract | `.vesicle/sessions/` |
@@ -352,6 +355,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - Long-form engines (Weaver / Weaver-Orch / Dyad) have profiles and prompts
   but no dedicated validators or gate wiring.
 - Prompt-cache engineering (PrefixShape hashing, CacheDiagnostics) is deferred.
+- `shell_exec` is a user-authorized host command, not an OS sandbox. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind.
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
 
 ## Verification

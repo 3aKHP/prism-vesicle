@@ -1,8 +1,12 @@
 import { render } from "@opentui/solid";
 import { App } from "./app";
 
-export async function runTui(): Promise<void> {
-  await render(() => <App />, {
+export type RunTuiOptions = {
+  dangerouslySkipPermissions?: boolean;
+};
+
+export async function runTui(options: RunTuiOptions = {}): Promise<void> {
+  await render(() => <App dangerouslySkipPermissions={options.dangerouslySkipPermissions === true} />, {
     exitOnCtrlC: false,
     useKittyKeyboard: { events: true },
   });

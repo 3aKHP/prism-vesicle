@@ -11,6 +11,8 @@ import { markdownRendererMode } from "../src/tui/widgets/MarkdownContent";
 import { Sidebar, artifactSidebarLine, mcpSidebarLines } from "../src/tui/views/Sidebar";
 import { RewindPicker, rewindPickerPanelHeight } from "../src/tui/RewindPicker";
 import { sharedSyntaxStyle } from "../src/tui/theme";
+import { PermissionPrompt } from "../src/tui/PermissionPrompt";
+import { YoloPrompt } from "../src/tui/YoloPrompt";
 
 describe("TUI", () => {
   test("registers shared markdown and code syntax styles", () => {
@@ -381,6 +383,72 @@ describe("TUI", () => {
     expect(frame).toContain("Stop Gate: blueprint-confirmation");
     expect(frame).toContain("Target Concept: 测试角色");
     expect(frame).toContain(">1. Confirm");
+  });
+
+  test("renders the full shell permission command and host-authority warning", async () => {
+    const command = "printf 'one' && printf 'two'";
+    const setup = await testRender(() => (
+      <PermissionPrompt
+        request={{
+          id: "permission-1",
+          sessionId: "session",
+          toolCallId: "call",
+          toolName: "shell_exec",
+          arguments: JSON.stringify({ command }),
+          permissionClass: "arbitrary_exec",
+          mode: "MOMENTUM",
+          createdAt: new Date().toISOString(),
+          executionPlan: { command, cwd: ".", shell: "posix-sh", timeoutMs: 120000, envPolicyVersion: 1 },
+          planHash: "hash",
+        }}
+        focused="confirm"
+        feedbackMode={null}
+        feedback=""
+        feedbackCursor={0}
+        width={100}
+      />
+    ), { width: 100, height: 10 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("HOST COMMAND");
+    expect(frame).toContain(command);
+    expect(frame).toContain("host-user authority");
+  });
+
+  test("renders the second YOLO danger confirmation", async () => {
+    const setup = await testRender(() => <YoloPrompt stage={2} focused="confirm" width={100} />, { width: 100, height: 8 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("DANGER · Enable YOLO (2/2)");
+    expect(frame).toContain("Enable YOLO for this process");
+    expect(frame).toContain("Rewind cannot guarantee recovery");
+  });
+
+  test("warns when a rewind checkpoint was tainted by shell_exec", async () => {
+    const point = {
+      uuid: "user-1",
+      parentUuid: null,
+      content: "run shell",
+      timestamp: new Date().toISOString(),
+      branchHeadUuid: "head",
+      checkpointTainted: true as const,
+    };
+    const setup = await testRender(() => <RewindPicker state={{
+      points: [point],
+      selected: 0,
+      target: point,
+      restoreSelected: 0,
+      summaryFeedback: "",
+      summaryCursor: 0,
+      busy: false,
+    }} width={80} />, { width: 80, height: 12 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("ran shell_exec");
+    expect(frame).toContain("may not be restored");
   });
 
   test("renders request_confirmation reject input without overlapping summary and confirm rows", async () => {
