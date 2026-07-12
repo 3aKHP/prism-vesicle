@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -104,6 +104,27 @@ describe("file checkpoints", () => {
     expect((await stat(join(rootDir, "workspace", "remove_me"))).isDirectory()).toBe(true);
     await expect(stat(join(rootDir, "workspace", "part_02"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(join(rootDir, "workspace", "generated"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("detects and restores directory permission changes", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-directory-mode-"));
+    const directory = join(rootDir, "workspace", "part_01");
+    await mkdir(directory, { recursive: true, mode: 0o755 });
+    await chmod(directory, 0o755);
+    const store = await createSessionStore(rootDir, "checkpoint-directory-mode");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "change directory mode" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    await checkpoint.trackBeforeMutation(["workspace/part_01"]);
+
+    await chmod(directory, 0o700);
+    expect((await fileCheckpointDiffStats(rootDir, store.sessionId, user.uuid))?.filesChanged)
+      .toContain("workspace/part_01");
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid))
+      .toContain("workspace/part_01");
+    expect((await stat(directory)).mode & 0o777).toBe(0o755);
   });
 
   test("does not mix file snapshots from orphaned conversation branches", async () => {

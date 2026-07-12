@@ -348,7 +348,13 @@ async function pathMatchesEntry(
   });
   const kind = entryKind(entry);
   if (kind === "absent") return !info;
-  if (kind === "directory") return Boolean(info?.isDirectory() && !info.isSymbolicLink());
+  if (kind === "directory") {
+    return Boolean(
+      info?.isDirectory()
+      && !info.isSymbolicLink()
+      && (entry.mode === undefined || info.mode === entry.mode),
+    );
+  }
   if (!info?.isFile() || info.isSymbolicLink()) return false;
   return buffersEqual(await readFile(path), await readBackup(rootDir, sessionId, entry));
 }

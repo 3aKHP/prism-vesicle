@@ -643,8 +643,10 @@ export async function executeFileTool(
       case "append_file": {
         const args = parseArgs<{ path: string; content: string; createIfMissing?: boolean }>(call.arguments);
         const filePath = await resolveAllowed(rootDir, args.path, writableRoots);
-        const mutationPaths = await mutationPathsForTarget(rootDir, filePath);
         if (!args.createIfMissing) await assertFile(filePath);
+        const mutationPaths = args.createIfMissing
+          ? await mutationPathsForTarget(rootDir, filePath)
+          : [toProjectPath(rootDir, filePath)];
         await options.beforeMutation?.(mutationPaths);
         await mkdir(dirname(filePath), { recursive: true });
         await appendFile(filePath, args.content, { encoding: "utf8", flag: "a" });
