@@ -39,10 +39,16 @@ Model: deepseek-v4-flash
 Provider config: file (...\prism-vesicle\providers.yaml)
 Provider env: file (...\prism-vesicle\.env)
 API key: available
+Assets project: missing (...\MyFirstProject\assets)
+Assets user: missing (...\prism-vesicle\assets)
+Assets bundled: ... files (...\node_modules\prism-vesicle\assets)
+Assets manifest: bundled (assets/manifest.json)
 Missing: none
 ```
 
 Your Bun version and model id may differ. Optional Tavily or MCP lines may say unavailable or disabled; that does not block the first conversation.
+
+Asset paths and counts may also differ. `project` and `user` may be missing because they are optional override layers; the required condition is that an effective asset manifest is available from at least one layer.
 
 ## Read Common Doctor Problems
 

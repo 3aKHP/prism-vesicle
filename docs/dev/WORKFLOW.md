@@ -129,10 +129,7 @@ Use the smallest verification set that proves the change:
 
 ## CI And Release Verification
 
-The GitHub Actions CI workflow runs for pull requests into `develop`/`main`
-and pushes to `develop`. It runs deterministic typecheck/test gates, builds the
-Linux ELF and native Windows PE, then smoke-tests each binary beside extracted
-`assets/` with `debug markdown-runtime` and `prompt shape --engine etl`.
+The GitHub Actions CI workflow runs for pull requests into `develop`/`main` and pushes to `develop`. It runs deterministic typecheck/test gates, builds the Linux ELF and native Windows PE, then keeps each binary and extracted default `assets/` in a release directory while invoking it from a separate empty project directory. The smoke runs `debug markdown-runtime`, `assets status`, and `prompt shape --engine etl`, proving that standalone runtime/default lookup does not steal the project cwd.
 
 `Release verification` is manual and does not publish. Supply the current
 `package.json` semver as its candidate label; after the same gates it uploads

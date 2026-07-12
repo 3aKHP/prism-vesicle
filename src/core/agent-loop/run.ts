@@ -5,15 +5,13 @@ import { createProvider } from "../../providers";
 import type { ProviderAdapter, ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { executeHostTool, hostToolDefinitions } from "../tools";
 import type { FileToolEvent, McpToolEvent, ToolCall, ToolDefinition, WebToolEvent } from "../tools";
-import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import type { EngineId } from "../engine/profile";
-import { loadEngineProfile } from "../engine/profile";
 import type { EngineProfile } from "../engine/profile";
 import { engineSwitchToolDefinition, parseEngineSwitchRequest } from "../engine/switch";
 import type { EngineSwitchRequest } from "../engine/switch";
 import { ENGINE_HANDOFF_KIND, createModelEngineTransition, renderEngineHandoffPacket } from "../engine/transition";
 import type { EngineContextPolicy } from "../engine/transition";
-import { createSessionStore } from "../session/store";
+import { createSessionStore, loadSessionSnapshot } from "../session/store";
 import type { SessionStore } from "../session/store";
 import { gateToolDefinition } from "../gate/types";
 import { parseGateRequest } from "../gate/types";
@@ -25,6 +23,8 @@ import type { ValidationResult } from "../validators/registry";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { createMcpRegistryForEngine, type McpRegistry } from "../../mcp/registry";
 import { materializeMessageImages, persistedImageAttachments } from "../attachments/store";
+import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
+import type { AssetFingerprint } from "../runtime/assets";
 
 export type { EngineId } from "../engine/profile";
 export type { GateRequest, GateResolution } from "../gate/types";
@@ -45,6 +45,7 @@ export type RunPromptOptions = {
 };
 
 export type AgentLoopEvent =
+  | { type: "asset_drift"; fingerprint: string; changedPaths: string[] }
   | { type: "provider_request"; iteration: number }
   | { type: "assistant_delta"; delta: string }
   | { type: "assistant_reasoning_delta"; delta: string }
@@ -178,11 +179,13 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
-  const profile = await loadEngineProfile(engine, rootDir);
-  const promptBundle = await loadPromptBundle(profile, rootDir);
-  const systemPrompt = composeSystemPrompt(promptBundle);
+  const engineAssets = await loadEngineAssetRuntime(engine, rootDir);
+  const { profile, systemPrompt } = engineAssets;
   const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
   const isNewSession = !options.sessionId;
+  if (options.sessionId) {
+    await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
+  }
   const session = await createSessionStore(
     rootDir,
     options.sessionId,
@@ -207,6 +210,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
           validators: profile.validators,
           stopGates: profile.stopGates,
         },
+        assets: engineAssets.assets,
       },
     });
   }
@@ -248,6 +252,24 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     checkpoint,
     signal: options.signal,
     onEvent: options.onEvent,
+  });
+}
+
+async function emitAssetDriftIfNeeded(
+  rootDir: string,
+  sessionId: string,
+  current: AssetFingerprint,
+  onEvent?: (event: AgentLoopEvent) => void,
+): Promise<void> {
+  if (!onEvent) return;
+  const snapshot = await loadSessionSnapshot(rootDir, sessionId, {
+    synthesizeDanglingToolResults: false,
+  });
+  if (!snapshot.assets || snapshot.assets.sha256 === current.sha256) return;
+  onEvent({
+    type: "asset_drift",
+    fingerprint: current.sha256,
+    changedPaths: changedAssetPaths(snapshot.assets, current),
   });
 }
 
@@ -646,9 +668,9 @@ export async function resolveGate(options: {
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
-  const profile = await loadEngineProfile(options.engine, rootDir);
-  const promptBundle = await loadPromptBundle(profile, rootDir);
-  const systemPrompt = composeSystemPrompt(promptBundle);
+  const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
+  const { profile, systemPrompt } = engineAssets;
+  await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
   const session = await createSessionStore(rootDir, options.sessionId);
 
@@ -750,9 +772,9 @@ export async function resolveEngineSwitch(options: {
     const config = await loadConfigForSelection(options.providerSelection);
     const generation = mergeGeneration(config.generation, options.generation);
     const provider = createProvider(config);
-    const profile = await loadEngineProfile(options.engine, rootDir);
-    const promptBundle = await loadPromptBundle(profile, rootDir);
-    const systemPrompt = composeSystemPrompt(promptBundle);
+    const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
+    const { profile, systemPrompt } = engineAssets;
+    await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
     const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
     return { config, generation, provider, profile, systemPrompt, toolSurface };
   })();
@@ -867,9 +889,9 @@ export async function resolveUserQuestion(options: {
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
-  const profile = await loadEngineProfile(options.engine, rootDir);
-  const promptBundle = await loadPromptBundle(profile, rootDir);
-  const systemPrompt = composeSystemPrompt(promptBundle);
+  const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
+  const { profile, systemPrompt } = engineAssets;
+  await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
   const session = await createSessionStore(rootDir, options.sessionId);
 

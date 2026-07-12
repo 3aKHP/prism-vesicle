@@ -21,13 +21,27 @@ npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 ```
 
-软件包包含默认运行时资产。如需在当前项目中创建可编辑的 `assets/` 覆盖目录，请运行：
+软件包包含只读的默认运行时资产。Vesicle 会逐文件解析每个逻辑 `assets/...` 路径，优先级依次为：当前项目中的稀疏 `assets/` 覆盖、Vesicle 用户配置目录中的全局覆盖、当前软件包或独立发行版附带的默认资产。
+
+查看当前资产层和生效 manifest 的来源：
+
+```bash
+bunx vesicle assets status
+```
+
+只把一个文件或目录复制到当前项目中进行编辑：
+
+```bash
+bunx vesicle assets materialize assets/prompts/engines/etl.md
+```
+
+添加 `--global` 后，该覆盖会对当前用户的所有项目生效。下面的原有命令仍可创建完整项目快照，但更推荐使用稀疏覆盖，这样未修改的文件仍能接收软件包更新：
 
 ```bash
 bunx vesicle assets init
 ```
 
-如果 `assets/` 目录已经存在，该命令会拒绝覆盖。
+资产初始化和 materialize 命令都不会覆盖已经存在的文件。
 
 ### 从源码运行
 
@@ -52,6 +66,8 @@ Vesicle 从用户级配置中读取供应商和模型配置档，而不是从项
 |---|---|---|
 | Windows | `%APPDATA%\prism-vesicle\providers.yaml` | `%APPDATA%\prism-vesicle\.env` |
 | Linux 与 macOS | `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` 或 `~/.config/prism-vesicle/providers.yaml` | 与 `providers.yaml` 同目录的 `.env` |
+
+用户级全局资产覆盖使用同目录下的 `assets/`：Windows 为 `%APPDATA%\prism-vesicle\assets\`，其他平台为 `$XDG_CONFIG_HOME/prism-vesicle/assets/` 或 `~/.config/prism-vesicle/assets/`。这些资产文件不包含密钥。
 
 请从 [`docs/examples/providers.yaml`](./docs/examples/providers.yaml) 和 [`docs/examples/provider.env.example`](./docs/examples/provider.env.example) 开始配置。注册表保存供应商 id、协议、端点、模型元数据、默认值和 `apiKeyEnv` 名称；实际 API 密钥只能存放在同目录的 `.env` 中。进程环境变量仅作为后备值。
 
@@ -98,12 +114,12 @@ bun run dev
 
 ## Vesicle 当前支持的能力
 
-- 由配置档驱动的 Prism 引擎；其提示、工具、验证器和确认门均位于 `assets/` 下。
+- 由配置档驱动的 Prism 引擎；其提示、工具、验证器和确认门通过内置、用户全局与项目 `assets/` 层解析。
 - 支持流式输出的 OpenAI-compatible、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
 - 可选的 Tavily Web 研究、Streamable HTTP MCP 工具，以及面向声明视觉能力模型的多模态图像输入。
-- npm 分发，以及带有可编辑外部资产包的 Windows 和 Linux 独立构建。
+- npm 分发，以及带有不可变外部默认资产包和稀疏可编辑全局/项目覆盖的 Windows 与 Linux 独立构建。
 
 权威的实现清单、工具接口、验证器和已知限制请参阅 [`STATUS.md`](./STATUS.md)。
 

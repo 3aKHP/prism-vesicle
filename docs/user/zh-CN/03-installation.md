@@ -83,6 +83,14 @@ System prompt length: ...
 
 准确的提示长度和工具清单可能随版本变化。只要命令能够识别 ETL 引擎并且没有报错退出，就表示成功。
 
+接下来查看这些资产来自哪里：
+
+```powershell
+bunx vesicle assets status
+```
+
+按照本章的普通安装方式，`Bundled` 应当显示文件数量，并且 effective manifest 应当可用。Vesicle 还可以从 `%APPDATA%\prism-vesicle\assets\` 读取用户级全局覆盖，并从当前项目内的 `assets\` 读取稀疏覆盖；现在不需要创建任何覆盖。
+
 ## 安装失败时
 
 - 确认同一个终端中的 `bun --version` 可以运行。

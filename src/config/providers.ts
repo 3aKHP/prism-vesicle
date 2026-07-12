@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { VesicleConfig, VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
+import { userConfigDirectory } from "./paths";
 
 export type ProviderProtocol = VesicleProvider;
 
@@ -151,14 +151,7 @@ export function providerConfigPath(): string {
 
 export function providerConfigPathFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   if (env.VESICLE_PROVIDERS_FILE) return env.VESICLE_PROVIDERS_FILE;
-  return join(providerConfigDir(env), "providers.yaml");
-}
-
-function providerConfigDir(env: NodeJS.ProcessEnv): string {
-  if (env.VESICLE_CONFIG_DIR) return env.VESICLE_CONFIG_DIR;
-  if (env.APPDATA) return join(env.APPDATA, "prism-vesicle");
-  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, "prism-vesicle");
-  return join(homedir(), ".config", "prism-vesicle");
+  return join(userConfigDirectory(env), "providers.yaml");
 }
 
 async function loadProviderEnvironment(

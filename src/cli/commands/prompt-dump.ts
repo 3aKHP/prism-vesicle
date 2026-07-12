@@ -31,7 +31,7 @@ export async function runPromptDump(args: string[]): Promise<void> {
   const systemPrompt = composeSystemPrompt(bundle);
 
   if (shapeOnly) {
-    await printShape(profile, systemPrompt);
+    await printShape(profile, bundle, systemPrompt);
     return;
   }
 
@@ -120,15 +120,15 @@ function printUsage(): void {
   console.error(`Engines: ${engineIds.join(", ")}`);
 }
 
-async function printShape(profile: EngineProfile, systemPrompt: string): Promise<void> {
+async function printShape(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string): Promise<void> {
   const effectiveTools = await getEffectivePromptToolNames(profile);
 
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
   console.log(`System prompt length: ${systemPrompt.length} chars`);
   console.log(`Sections: ${profile.systemPrompt.length}`);
-  for (const path of profile.systemPrompt) {
-    console.log(`  - ${path}`);
+  for (const section of bundle.sections) {
+    console.log(`  - ${section.path} [${section.source}]`);
   }
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
   console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
@@ -150,7 +150,7 @@ async function printFullDump(profile: EngineProfile, bundle: PromptBundle, syste
   console.log("");
   console.log("=== Sections ===");
   for (const section of bundle.sections) {
-    console.log(`--- ${section.path} (${section.text.length} chars) ---`);
+    console.log(`--- ${section.path} [${section.source}] (${section.text.length} chars) ---`);
   }
   console.log("");
   console.log("=== Composed System Prompt ===");

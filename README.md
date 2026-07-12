@@ -21,13 +21,27 @@ npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 ```
 
-The package includes default runtime assets. To create an editable `assets/` override in the current project, run:
+The package includes read-only default runtime assets. Vesicle resolves each logical `assets/...` file through three layers: the current project's sparse `assets/` overrides, user-global overrides under the Vesicle configuration directory, then the defaults shipped with the active package or standalone release.
+
+Inspect the active layers and the source of the effective manifest:
+
+```bash
+bunx vesicle assets status
+```
+
+Copy only one file or directory into the current project for editing:
+
+```bash
+bunx vesicle assets materialize assets/prompts/engines/etl.md
+```
+
+Add `--global` to make that override apply to every project for the current user. The existing command below still creates a full project snapshot, but sparse overrides are preferred because untouched files continue to receive packaged updates:
 
 ```bash
 bunx vesicle assets init
 ```
 
-The command refuses to overwrite an existing `assets/` directory.
+Asset initialization and materialization refuse to overwrite existing files.
 
 ### Source checkout
 
@@ -52,6 +66,8 @@ Vesicle reads provider and model profiles from user-level configuration rather t
 |---|---|---|
 | Windows | `%APPDATA%\prism-vesicle\providers.yaml` | `%APPDATA%\prism-vesicle\.env` |
 | Linux and macOS | `$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or `~/.config/prism-vesicle/providers.yaml` | `.env` beside `providers.yaml` |
+
+User-global asset overrides use the sibling `assets/` directory: `%APPDATA%\prism-vesicle\assets\` on Windows or `$XDG_CONFIG_HOME/prism-vesicle/assets/` / `~/.config/prism-vesicle/assets/` elsewhere. These files contain no secrets.
 
 Start from [`docs/examples/providers.yaml`](./docs/examples/providers.yaml) and [`docs/examples/provider.env.example`](./docs/examples/provider.env.example). The registry contains provider ids, protocols, endpoints, model metadata, defaults, and `apiKeyEnv` names; actual API keys belong only in the sibling `.env`. Process environment variables are fallback values.
 
@@ -98,12 +114,12 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 
 ## What Vesicle Supports
 
-- Profile-driven Prism engines whose prompts, tools, validators, and stop gates live under `assets/`.
+- Profile-driven Prism engines whose prompts, tools, validators, and stop gates resolve through bundled, user-global, and project `assets/` layers.
 - Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
-- npm distribution plus standalone Windows and Linux builds with an editable external asset pack.
+- npm distribution plus standalone Windows and Linux builds with an immutable external default asset pack and sparse editable global/project overrides.
 
 See [`STATUS.md`](./STATUS.md) for the authoritative implementation inventory, tool surface, validators, and known limits.
 

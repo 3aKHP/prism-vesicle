@@ -52,6 +52,8 @@ The TUI reads provider settings from:
 - an optional provider-level `userAgent`; Vesicle otherwise builds its branded value from the package version and active Bun runtime version
 - optional Streamable HTTP MCP server settings from sibling `mcp.yaml`, or `VESICLE_MCP_FILE`; MCP header secrets still belong in the same user-level `.env`, not in `mcp.yaml`
 
+Runtime assets form a separate read-only overlay namespace: `<project>/assets/` overrides the user-global `assets/` beside `providers.yaml`, which overrides the defaults shipped with the package or standalone release. Use `vesicle assets status` when debugging resolution and prefer sparse `assets materialize` overrides over full snapshots.
+
 Old project-root `.env` files should be migrated to the user-level config directory and removed or renamed locally.
 
 ## Documentation Style

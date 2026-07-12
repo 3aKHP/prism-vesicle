@@ -104,6 +104,8 @@ export type ToolResult = {
 export type FileToolExecutionOptions = {
   /** Called after path guards pass and immediately before a mutation. */
   beforeMutation?: (paths: string[]) => Promise<void>;
+  /** Override the effective asset namespace, primarily for isolated runtimes/tests. */
+  assets?: import("../runtime/assets").AssetResolver;
 };
 
 export type ToolDefinition = {

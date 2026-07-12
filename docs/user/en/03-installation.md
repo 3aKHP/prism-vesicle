@@ -83,6 +83,14 @@ System prompt length: ...
 
 The exact prompt length and tool list can change between releases. Success means the command identifies the ETL engine and exits without an error.
 
+Now inspect where those assets came from:
+
+```powershell
+bunx vesicle assets status
+```
+
+For the normal installation in this chapter, `Bundled` should report files and the effective manifest should be available. Vesicle can also read user-global overrides from `%APPDATA%\prism-vesicle\assets\` and sparse overrides from `assets\` inside the current project. You do not need to create either override yet.
+
 ## If Installation Fails
 
 - Confirm that `bun --version` works in the same terminal.

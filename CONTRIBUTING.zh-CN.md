@@ -52,6 +52,8 @@ TUI 从以下位置读取供应商设置：
 - 可选的供应商级 `userAgent`；未设置时，Vesicle 会根据软件包版本和当前 Bun 运行时版本生成品牌标识
 - 同目录 `mcp.yaml` 或 `VESICLE_MCP_FILE` 指定的可选 Streamable HTTP MCP 服务器设置；MCP 请求头密钥仍应存放在用户级 `.env` 中，而不是 `mcp.yaml` 中
 
+运行时资产使用独立的只读覆盖命名空间：`<project>/assets/` 覆盖 `providers.yaml` 同目录下的用户全局 `assets/`，后者再覆盖软件包或独立发行版附带的默认资产。排查解析问题时使用 `vesicle assets status`，并优先使用稀疏的 `assets materialize` 覆盖，而不是完整快照。
+
 旧的项目根目录 `.env` 应迁移到用户级配置目录，并在本地删除或重命名。
 
 ## 文档风格

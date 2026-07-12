@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { executeFileTool } from "../src/core/tools";
 import type { ToolResult } from "../src/core/tools";
+import { AssetResolver } from "../src/core/runtime/assets";
 
 let rootDir = "";
 
@@ -213,6 +214,81 @@ describe("file tools v2", () => {
     await expectToolFailure("delete_file", {
       path: "workspace/nope.md",
     }, "ENOENT");
+  });
+
+  test("reads the merged asset namespace without exposing physical global paths", async () => {
+    const assetRoot = await mkdtemp(join(tmpdir(), "vesicle-file-tool-assets-"));
+    try {
+      const config = join(assetRoot, "config");
+      const bundled = join(assetRoot, "bundled-assets");
+      await mkdir(join(rootDir, "assets", "specs"), { recursive: true });
+      await mkdir(join(config, "assets", "specs"), { recursive: true });
+      await mkdir(join(bundled, "specs"), { recursive: true });
+      await writeFile(join(rootDir, "assets", "specs", "project.md"), "project marker", "utf8");
+      await writeFile(join(config, "assets", "specs", "global.md"), "global marker", "utf8");
+      await writeFile(join(config, "assets", "specs", "global.png"), Uint8Array.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+      ]));
+      await writeFile(join(bundled, "manifest.json"), "{}", "utf8");
+      await writeFile(join(bundled, "specs", "default.md"), "default marker", "utf8");
+      const assets = new AssetResolver(rootDir, {
+        env: { VESICLE_CONFIG_DIR: config },
+        bundledDirectory: bundled,
+        executablePath: join(assetRoot, "missing", "vesicle"),
+      });
+
+      const list = await executeFileTool(rootDir, call("list_files", {
+        path: "assets/specs",
+        recursive: true,
+      }), { assets });
+      expect(list.ok).toBe(true);
+      expect(list.content.split("\n")).toEqual([
+        "assets/specs/default.md",
+        "assets/specs/global.md",
+        "assets/specs/global.png",
+        "assets/specs/project.md",
+      ]);
+      expect(list.content).not.toContain(assetRoot);
+
+      const read = await executeFileTool(rootDir, call("read_file", {
+        path: "assets/specs/global.md",
+      }), { assets });
+      expect(read.ok).toBe(true);
+      expect(read.content).toBe("global marker");
+      expect(read.fileEvent?.path).toBe("assets/specs/global.md");
+
+      const grep = await executeFileTool(rootDir, call("grep_files", {
+        path: "assets/specs",
+        pattern: "marker",
+      }), { assets });
+      expect(grep.ok).toBe(true);
+      expect(JSON.parse(grep.content).matches).toHaveLength(3);
+
+      const stat = await executeFileTool(rootDir, call("stat_path", {
+        path: "assets/specs/global.md",
+      }), { assets });
+      expect(stat.ok).toBe(true);
+      expect(JSON.parse(stat.content)).toMatchObject({ path: "assets/specs/global.md", type: "file" });
+      expect(stat.content).not.toContain(assetRoot);
+
+      const view = await executeFileTool(rootDir, call("view_image", {
+        path: "assets/specs/global.png",
+      }), { assets });
+      expect(view.ok).toBe(true);
+      expect(view.fileEvent?.path).toBe("assets/specs/global.png");
+      expect(view.images?.[0]?.sourcePath).toBe("assets/specs/global.png");
+      expect(JSON.stringify(view)).not.toContain(assetRoot);
+
+      const copy = await executeFileTool(rootDir, call("copy_file", {
+        sourcePath: "assets/specs/global.md",
+        targetPath: "workspace/copied-global.md",
+      }), { assets });
+      expect(copy.ok).toBe(true);
+      expect(copy.fileEvent?.sourcePath).toBe("assets/specs/global.md");
+      expect(await readFile(join(rootDir, "workspace", "copied-global.md"), "utf8")).toBe("global marker");
+    } finally {
+      await rm(assetRoot, { recursive: true, force: true });
+    }
   });
 
   test("replace_in_file records the affected line range for a single match", async () => {

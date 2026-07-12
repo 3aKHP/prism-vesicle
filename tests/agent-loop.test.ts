@@ -82,6 +82,14 @@ describe("agent loop sessions", () => {
       "system",
       "assistant",
     ]);
+    expect(records[0].metadata.assets).toMatchObject({
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      files: expect.arrayContaining([
+        expect.objectContaining({ path: "assets/engines/etl.profile.yaml" }),
+        expect.objectContaining({ path: "assets/prompts/shared/vesicle-base.md" }),
+        expect.objectContaining({ path: "assets/prompts/engines/etl.md" }),
+      ]),
+    });
     expect(records.filter((record) => record.metadata?.kind === "file-history-snapshot")).toHaveLength(2);
   });
 
@@ -506,6 +514,8 @@ describe("agent loop gates", () => {
     });
     if (paused.kind !== "needs_user") throw new Error("expected needs_user");
     const originalPausedLength = paused.messages.length;
+    await writeFile(join(rootDir, "assets", "prompts", "engines", "etl.md"), "etl changed\n", "utf8");
+    const continuationEvents: AgentLoopEvent[] = [];
 
     const resumed = await resolveGate({
       engine: "etl",
@@ -515,6 +525,7 @@ describe("agent loop gates", () => {
       toolCallId: paused.toolCallId,
       gate: paused.gate,
       resolution: { decision: "confirm" },
+      onEvent: (event) => continuationEvents.push(event),
     });
 
     expect(resumed.kind).toBe("complete");
@@ -536,6 +547,11 @@ describe("agent loop gates", () => {
     // The threaded list must pair the gate tool call with its result.
     const resumedToolMessages = resumed.messages.filter((m) => m.role === "tool");
     expect(resumedToolMessages.some((m) => m.toolCallId === paused.toolCallId)).toBe(true);
+    expect(continuationEvents).toContainEqual(expect.objectContaining({
+      type: "asset_drift",
+      fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+      changedPaths: ["assets/prompts/engines/etl.md"],
+    }));
   });
 
   test("resolveGate reject threads feedback into the follow-up turn", async () => {
