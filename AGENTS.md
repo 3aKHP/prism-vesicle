@@ -17,9 +17,9 @@ workflow, or documentation change, also read:
   tool-runtime security, prompt/session semantics, validation, and TUI rules.
 - `docs/dev/WORKFLOW.md`: branch model, iteration loop, hotfix flow, PR shape,
   independent CR expectations, and documentation sweep.
-- `CONTRIBUTING.md`: Conventional Commits, public repo boundary, local runtime,
-  provider config location, and PR checklist.
-- `README.md`: user-facing setup, commands, current capabilities, and scope.
+- `CONTRIBUTING.md`: Conventional Commits, public repo boundary, local runtime, provider config location, documentation style, and PR checklist.
+- `README.md`: project entry point, installation, first run, concise capability overview, and documentation navigation.
+- `docs/user/en/README.md`: canonical ordered user-manual curriculum; pair user-facing chapter changes with the matching `docs/user/zh-CN/` file.
 
 Read `CHANGELOG.md` before any user-visible behavior, config, runtime contract,
 tool surface, TUI, prompt, or documentation-status change.
@@ -47,16 +47,21 @@ Use the docs by responsibility:
 
 | File | Authority |
 |------|-----------|
-| `README.md` | User setup, scripts, capabilities, and product scope |
+| `README.md` | Project entry point, installation, first run, feature overview, and doc navigation |
+| `docs/user/` | Ordered beginner-to-advanced user manuals; English canonical, Simplified Chinese mirrored |
 | `STATUS.md` | Current implemented state, limits, tool surface, verification |
 | `CHANGELOG.md` | User-visible and notable unreleased changes |
-| `CONTRIBUTING.md` | Contributor workflow, commits, repo boundary, provider setup |
+| `CONTRIBUTING.md` | Contributor workflow, repo boundary, provider setup, and documentation style |
 | `docs/dev/STYLE.md` | Code architecture and runtime boundaries |
 | `docs/dev/WORKFLOW.md` | Branching, PRs, hotfixes, independent CR |
 | `AGENTS.md` / `CLAUDE.md` | AI collaborator startup and coordination |
 
 When one of these files becomes stale because of your change, update it in the
 same branch. Do not leave documentation drift for a later pass.
+
+Follow the Markdown conventions in `CONTRIBUTING.md`: prose uses natural line wrapping rather than fixed-column hard wraps.
+
+`README.md` and `CONTRIBUTING.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, mirror every changed `docs/user/en/` chapter to the same relative path under `docs/user/zh-CN/`.
 
 ## Branch And PR Rules
 
@@ -178,8 +183,8 @@ Before finishing behavior/config/docs changes, run a targeted stale-term pass.
 Examples:
 
 ```bash
-rg "VESICLE_|providers.yaml|apiKeyEnv|session|write_file|tool_calls|OpenTUI" README.md STATUS.md CHANGELOG.md CONTRIBUTING.md docs assets
-rg "provider|engine|artifact|gate|validator|workspace" README.md STATUS.md CHANGELOG.md CONTRIBUTING.md docs assets
+rg "VESICLE_|providers.yaml|apiKeyEnv|session|write_file|tool_calls|OpenTUI" README*.md STATUS.md CHANGELOG.md CONTRIBUTING*.md docs assets
+rg "provider|engine|artifact|gate|validator|workspace" README*.md STATUS.md CHANGELOG.md CONTRIBUTING*.md docs assets
 ```
 
 Mention any verification gap explicitly in the final handoff.

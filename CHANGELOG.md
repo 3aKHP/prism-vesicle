@@ -18,6 +18,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Reorganized the root README into a concise installation and onboarding entry point, moved detailed implementation inventory behind `STATUS.md`, established natural line wrapping as the Markdown prose convention, added synchronized Simplified Chinese editions of the README and contribution guide, and introduced a bilingual Windows-first user manual covering computer basics through a complete gated Module A and choice-driven Module B ETL workflow.
 - Renamed the npm/Bun package from the unowned scoped candidate
   `@prism/vesicle` to the available public package name `prism-vesicle`.
 - Declared the public alpha documentation boundary: setup, diagnostics, prompt

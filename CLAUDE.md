@@ -20,13 +20,13 @@ For non-trivial work, read these before editing:
   sessions, validation, and TUI behavior.
 - `docs/dev/WORKFLOW.md`: branching, hotfixes, PR body shape, independent CR,
   and documentation sweep.
-- `CONTRIBUTING.md`: Conventional Commits, public repo boundary, provider
-  config location, and local development flow.
+- `CONTRIBUTING.md`: Conventional Commits, public repo boundary, provider config location, documentation style, and local development flow.
 
 Also read:
 
 - `README.md` when setup, user-facing commands, provider configuration, or
   capabilities are affected.
+- `docs/user/en/README.md` and the affected English/Chinese chapter pair when beginner onboarding or user-manual behavior is affected.
 - `CHANGELOG.md` before user-visible behavior, config, runtime, prompt, TUI,
   docs-status, or tool-surface changes.
 - `assets/README.md` before editing copied Prism assets.

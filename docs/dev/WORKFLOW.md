@@ -234,7 +234,7 @@ Return:
 Before finishing behavior changes, run a targeted stale-term pass. Examples:
 
 ```bash
-rg "write_file|tool_calls|session|VESICLE_|workspace|provider|OpenTUI" README.md STATUS.md CHANGELOG.md CONTRIBUTING.md docs assets
+rg "write_file|tool_calls|session|VESICLE_|workspace|provider|OpenTUI" README*.md STATUS.md CHANGELOG.md CONTRIBUTING*.md docs assets
 ```
 
 If the grep finds old behavior claims, update the docs in the same change.

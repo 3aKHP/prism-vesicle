@@ -29,10 +29,7 @@ _Last updated: 2026-07-11_
 The 1.0 alpha makes Vesicle a credible direct API host for Prism Engine, not just a
 Chat wrapper:
 
-User-facing documentation is intentionally limited during this alpha. Treat
-the README quick start, `vesicle doctor`, `vesicle prompt shape --engine <id>`,
-and `docs/examples/` as the supported onboarding references; other behavior is
-subject to alpha-level change while feature/fix work remains the priority.
+User-facing documentation is intentionally limited during this alpha. Treat the Windows-first `docs/user/` manual, README installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and `docs/examples/` as the supported onboarding references; other behavior is subject to alpha-level change while feature/fix work remains the priority.
 
 - Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
   tool surface, validators, and stop gates from them at runtime.
