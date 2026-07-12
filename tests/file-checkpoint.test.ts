@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -66,6 +66,67 @@ describe("file checkpoints", () => {
     expect(snapshot.records.some((record) => record.metadata?.kind === "file-history-snapshot")).toBe(true);
   });
 
+  test("restores created, moved, and deleted directory topology", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-directories-"));
+    await mkdir(join(rootDir, "workspace", "part_01", "empty"), { recursive: true });
+    await mkdir(join(rootDir, "workspace", "remove_me"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "part_01", "chapter.md"), "before\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-directories");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "change directories" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
+
+    expect((await executeFileTool(rootDir, {
+      id: "move-directory",
+      name: "move_directory",
+      arguments: JSON.stringify({ sourcePath: "workspace/part_01", targetPath: "workspace/part_02" }),
+    }, { beforeMutation })).ok).toBe(true);
+    expect((await executeFileTool(rootDir, {
+      id: "create-nested-file",
+      name: "create_file",
+      arguments: JSON.stringify({ path: "workspace/generated/nested/new.md", content: "new\n" }),
+    }, { beforeMutation })).ok).toBe(true);
+    expect((await executeFileTool(rootDir, {
+      id: "delete-directory",
+      name: "delete_directory",
+      arguments: JSON.stringify({ path: "workspace/remove_me" }),
+    }, { beforeMutation })).ok).toBe(true);
+
+    const changed = await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid);
+    expect(changed).toContain("workspace/part_01");
+    expect(changed).toContain("workspace/part_02");
+    expect(changed).toContain("workspace/remove_me");
+    expect(await readFile(join(rootDir, "workspace", "part_01", "chapter.md"), "utf8")).toBe("before\n");
+    expect((await stat(join(rootDir, "workspace", "part_01", "empty"))).isDirectory()).toBe(true);
+    expect((await stat(join(rootDir, "workspace", "remove_me"))).isDirectory()).toBe(true);
+    await expect(stat(join(rootDir, "workspace", "part_02"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(rootDir, "workspace", "generated"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("detects and restores directory permission changes", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-directory-mode-"));
+    const directory = join(rootDir, "workspace", "part_01");
+    await mkdir(directory, { recursive: true, mode: 0o755 });
+    await chmod(directory, 0o755);
+    const store = await createSessionStore(rootDir, "checkpoint-directory-mode");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "change directory mode" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    await checkpoint.trackBeforeMutation(["workspace/part_01"]);
+
+    await chmod(directory, 0o700);
+    expect((await fileCheckpointDiffStats(rootDir, store.sessionId, user.uuid))?.filesChanged)
+      .toContain("workspace/part_01");
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid))
+      .toContain("workspace/part_01");
+    expect((await stat(directory)).mode & 0o777).toBe(0o755);
+  });
+
   test("does not mix file snapshots from orphaned conversation branches", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-branch-"));
     const sessionId = "checkpoint-branches";
@@ -100,6 +161,34 @@ describe("file checkpoints", () => {
     expect(await restoreFileCheckpoint(rootDir, sessionId, activeTurn.uuid)).toEqual(["workspace/active.md"]);
     expect(await readFile(join(rootDir, "workspace", "dead.md"), "utf8")).toBe("dead");
     await expect(stat(join(rootDir, "workspace", "active.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("refuses to restore through an externally introduced symbolic-link ancestor", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-link-"));
+    const outside = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-link-outside-"));
+    try {
+      const store = await createSessionStore(rootDir, "checkpoint-link");
+      await store.append({ role: "system", content: "prompt" });
+      const user = await store.append({ role: "user", content: "create nested file" });
+      const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+      await checkpoint.createSnapshot();
+      expect((await executeFileTool(rootDir, {
+        id: "create-linked-target",
+        name: "create_file",
+        arguments: JSON.stringify({ path: "workspace/safe/new.md", content: "new" }),
+      }, { beforeMutation: (paths) => checkpoint.trackBeforeMutation(paths) })).ok).toBe(true);
+
+      await rm(join(rootDir, "workspace", "safe"), { recursive: true, force: true });
+      await writeFile(join(outside, "new.md"), "outside", "utf8");
+      await symlink(outside, join(rootDir, "workspace", "safe"), "dir");
+
+      await expect(restoreFileCheckpoint(rootDir, store.sessionId, user.uuid))
+        .rejects.toThrow("contains a symbolic link");
+      expect(await readFile(join(outside, "new.md"), "utf8")).toBe("outside");
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   test("keeps at most 100 checkpoints active for code restoration", async () => {

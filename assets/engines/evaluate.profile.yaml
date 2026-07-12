@@ -15,16 +15,20 @@ defaultTools:
   - web_research
   - stat_path
   - list_files
+  - list_directory
   - grep_files
   - read_file
   - view_image
   - create_file
+  - create_directory
   - write_file
   - replace_in_file
   - append_file
   - delete_file
   - copy_file
   - move_file
+  - move_directory
+  - delete_directory
 validators:
   - evaluate-report
 stopGates: []

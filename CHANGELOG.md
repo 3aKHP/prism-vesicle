@@ -44,6 +44,8 @@ project follows Semantic Versioning once releases begin.
 
 ### Added
 
+- Guarded directory tools let models inspect files and empty directories with `list_directory`, create nested directories with `create_directory`, move or rename directory trees with `move_directory`, and delete empty non-root directories with `delete_directory`. File checkpoints now preserve directory topology, parallel Agent write ownership detects ancestor/descendant conflicts, and model-visible project paths reject symbolic-link traversal.
+
 - Profile-driven SubAgent runtime with bundled Explore, Plan, Research, Reviewer, and General agents plus sparse project/user Agent Profile overrides under `assets/agents/`. Foreground children pause only the parent model loop while streaming progress; background children return immediately, run concurrently, persist completion in a durable parent inbox, and trigger an automatic parent continuation when the session is idle. The model can spawn, list, message, interrupt, and explicitly wait for children, while the TUI exposes `/agents` status and cancellation.
 - Parent/child SubAgent metadata, concurrency management, crash recovery, foreground cancellation propagation, background-result coalescing, child usage capture, explicit-wait inbox consumption, and child/parent parallel-write ownership checks.
 - First-class SubAgent observability in the TUI: dedicated lifecycle cards, live progress and bounded result previews, persistent active/ready summaries in the header and Workspace sidebar, background delivery states, restored cards on session resume, and `/agents <handle>` detail with argument completion.

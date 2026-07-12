@@ -40,15 +40,19 @@ export function toolKind(name: string): ToolKind {
   switch (name) {
     case "replace_in_file": return "replace";
     case "create_file": return "create";
+    case "create_directory": return "create";
     case "append_file": return "append";
     case "write_file": return "write";
     case "delete_file": return "delete";
+    case "delete_directory": return "delete";
     case "copy_file": return "copy";
     case "move_file": return "move";
+    case "move_directory": return "move";
     case "read_file": return "read";
     case "view_image": return "view";
     case "grep_files": return "grep";
     case "list_files": return "list";
+    case "list_directory": return "list";
     case "stat_path": return "stat";
     case "web_search": return "web";
     case "web_fetch": return "web";
@@ -327,9 +331,13 @@ function fileEventDetail(e: FileToolEvent): string {
         e.truncated ? "truncated" : null,
       );
     case "list": return joinDetail(e.entryCount != null ? `${e.entryCount} entries` : "listed");
+    case "list_directory": return joinDetail(e.entryCount != null ? `${e.entryCount} entries` : "listed directory", e.truncated ? "truncated" : null);
     case "stat": return joinDetail("stat", bytes);
     case "copy": return joinDetail("copied", bytes);
     case "move": return joinDetail("moved", bytes);
+    case "create_directory": return joinDetail("created directory");
+    case "move_directory": return joinDetail("moved directory");
+    case "delete_directory": return joinDetail("deleted directory");
     default: return joinDetail(e.operation);
   }
 }

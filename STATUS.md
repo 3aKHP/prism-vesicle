@@ -178,9 +178,9 @@ User-facing documentation is intentionally limited during this alpha. Treat the 
   metadata, `vesicle doctor` reports server status without printing secret
   headers, and the Workspace sidebar shows configured MCP server ids plus tool
   counts.
-- Execute a guarded filesystem tool loop (`stat_path`, `list_files`,
-  `grep_files`, `read_file`, vision-gated `view_image`, `create_file`, `write_file`, `replace_in_file`,
-  `append_file`, `delete_file`, `copy_file`, `move_file`) with a high ceiling
+- Execute a guarded filesystem tool loop (`stat_path`, `list_files`, `list_directory`,
+  `grep_files`, `read_file`, vision-gated `view_image`, `create_file`, `create_directory`, `write_file`, `replace_in_file`,
+  `append_file`, `delete_file`, `copy_file`, `move_file`, `move_directory`, `delete_directory`) with a high ceiling
   and a no-progress circuit breaker instead of a coding-agent hard cap.
 - Pause the workflow on `request_confirmation` gates; the user confirms or
   rejects, then the loop continues. Empty rejection is valid and tells the
@@ -244,16 +244,20 @@ prism-vesicle/
 |------|--------|-------------|
 | `stat_path` | Implemented | Read-only |
 | `list_files` | Implemented | Read-only |
+| `list_directory` | Implemented, structured entries with bounded recursion | Read-only |
 | `grep_files` | Implemented | Read-only |
 | `read_file` | Implemented, with optional line ranges | Read-only |
 | `view_image` | Implemented for vision-capable models | Read-only, guarded image attachment |
 | `create_file` | Implemented, no overwrite | Writable roots, including `source_materials/` |
+| `create_directory` | Implemented, optional recursive parent creation | Below writable roots; fixed roots protected |
 | `write_file` | Implemented, full overwrite | Writable roots, including `source_materials/` |
 | `replace_in_file` | Implemented, exact text replacement | Writable roots, including `source_materials/` |
 | `append_file` | Implemented | Writable roots, including `source_materials/` |
 | `delete_file` | Implemented, files only | Writable roots, including `source_materials/` |
 | `copy_file` | Implemented | Source: read roots; target: writable roots |
 | `move_file` | Implemented | Writable roots, including `source_materials/` |
+| `move_directory` | Implemented, no target overwrite | Below writable roots; fixed roots protected |
+| `delete_directory` | Implemented, empty directories only | Below writable roots; fixed roots protected |
 | `web_search` | Implemented for ETL/Evaluate via Tavily | No filesystem access |
 | `web_fetch` | Implemented for ETL/Evaluate via Tavily Extract | No filesystem access |
 | `web_map` | Implemented for ETL/Evaluate via Tavily Map | No filesystem access |
@@ -273,7 +277,7 @@ prism-vesicle/
 | `session.write` | Internal contract | `.vesicle/sessions/` |
 
 All model-visible filesystem paths are project-relative. Absolute paths and
-`..` escapes are rejected. The `request_confirmation` tool is only attached to
+`..` escapes and symbolic-link traversal are rejected. The `request_confirmation` tool is only attached to
 a turn when the active engine profile declares at least one stop gate.
 Writable project roots are `source_materials/`, `workspace/`, `novels/`,
 `reports/`, and `test_runs/`; the Artifact workbench intentionally indexes only
@@ -308,6 +312,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 
 ## Known Limits
 
+- Directory tools intentionally omit recursive deletion and directory-tree copying in the first guarded surface. Models must delete contents explicitly before `delete_directory`; `move_directory` never overwrites an existing target.
 - SubAgent recursion is disabled in the first runtime. Top-level children run concurrently (default maximum four), but child profiles do not receive the agent-control tools. A process restart marks previously running children as failed and delivers that terminal result; it does not replay an in-flight provider request.
 - SubAgent handles are unique within one parent session rather than globally; host-only run ids preserve global storage and recovery identity. Legacy UUID-style Agent references remain accepted but are no longer emitted.
 - Concrete Weaver-Orch scene allocation, Evaluate reviewer composition, and artifact merge policy remain Harness responsibilities. Vesicle supplies the generic Agent Profile, scheduling, persistence, and delivery substrate.
@@ -338,7 +343,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
   dedicated bottom confirmation panel. Workflow B hook selection may still need
   a more specialized selector later.
 - Rewind file checkpoints track mutations performed through Vesicle's guarded
-  filesystem tools. Files changed only by the user or an external process are
+  filesystem tools, including nested directory topology. Files or directories changed only by the user or an external process are
   outside that ledger and are not independently discovered as rewind targets.
 - MCP currently supports Streamable HTTP tools only. Local stdio servers,
   classic HTTP+SSE, prompts/resources, and background tool-list-change handling

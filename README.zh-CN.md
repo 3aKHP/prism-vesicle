@@ -93,7 +93,7 @@ bun run doctor
 bun run dev
 ```
 
-生成文件只能写入受保护的项目目录。研究材料应放在 `source_materials/` 中；最终制品应放在 `workspace/`、`novels/`、`reports/` 或 `test_runs/` 中。通过 Vesicle 工具完成的文件变更会纳入 `.vesicle/file-history/` 下的回退检查点。
+生成文件只能写入受保护的项目目录。研究材料应放在 `source_materials/` 中；最终制品应放在 `workspace/`、`novels/`、`reports/` 或 `test_runs/` 中。模型可以在这些根目录下组织嵌套目录、查看目录条目、移动或重命名目录树，并删除空目录；固定根目录与符号链接穿越仍受保护。通过 Vesicle 工具完成的文件和目录变更会纳入 `.vesicle/file-history/` 下的回退检查点。
 
 常用命令：
 

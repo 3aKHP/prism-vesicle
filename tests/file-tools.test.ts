@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { executeFileTool } from "../src/core/tools";
@@ -214,6 +214,76 @@ describe("file tools v2", () => {
     await expectToolFailure("delete_file", {
       path: "workspace/nope.md",
     }, "ENOENT");
+  });
+
+  test("creates, lists, moves, and deletes guarded directories", async () => {
+    const created = await expectTool("create_directory", {
+      path: "workspace/part_01/empty",
+    }, "Created directory workspace/part_01/empty");
+    expect(created.fileEvent).toMatchObject({
+      operation: "create_directory",
+      path: "workspace/part_01/empty",
+      changed: true,
+    });
+
+    await expectTool("create_file", {
+      path: "workspace/part_01/chapter.md",
+      content: "chapter one",
+    }, "Created workspace/part_01/chapter.md");
+
+    const listed = await executeFileTool(rootDir, call("list_directory", {
+      path: "workspace",
+      recursive: true,
+    }));
+    expect(listed.ok).toBe(true);
+    expect(listed.fileEvent).toMatchObject({ operation: "list_directory", entryCount: 3 });
+    expect(JSON.parse(listed.content)).toMatchObject({
+      entries: [
+        { path: "workspace/part_01", type: "directory" },
+        { path: "workspace/part_01/chapter.md", type: "file", size: 11 },
+        { path: "workspace/part_01/empty", type: "directory" },
+      ],
+      truncated: false,
+    });
+
+    const moved = await expectTool("move_directory", {
+      sourcePath: "workspace/part_01",
+      targetPath: "workspace/part_02",
+    }, "Moved directory workspace/part_01 to workspace/part_02");
+    expect(moved.fileEvent).toMatchObject({
+      operation: "move_directory",
+      sourcePath: "workspace/part_01",
+      targetPath: "workspace/part_02",
+    });
+    expect(await readFile(join(rootDir, "workspace", "part_02", "chapter.md"), "utf8")).toBe("chapter one");
+
+    await expectToolFailure("delete_directory", {
+      path: "workspace/part_02",
+    }, "Directory is not empty");
+    await expectTool("delete_directory", {
+      path: "workspace/part_02/empty",
+    }, "Deleted directory workspace/part_02/empty");
+    await expectToolFailure("delete_directory", {
+      path: "workspace",
+    }, "Fixed writable roots");
+  });
+
+  test("rejects symbolic links in model-visible paths", async () => {
+    const outside = await mkdtemp(join(tmpdir(), "vesicle-file-tools-outside-"));
+    try {
+      await writeFile(join(outside, "secret.md"), "outside", "utf8");
+      await symlink(outside, join(rootDir, "workspace", "linked"), "dir");
+      await expectToolFailure("read_file", {
+        path: "workspace/linked/secret.md",
+      }, "Symbolic links are not allowed");
+      await expectToolFailure("create_file", {
+        path: "workspace/linked/new.md",
+        content: "escape",
+      }, "Symbolic links are not allowed");
+      expect((await stat(join(outside, "secret.md"))).isFile()).toBe(true);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   test("reads the merged asset namespace without exposing physical global paths", async () => {

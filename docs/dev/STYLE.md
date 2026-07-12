@@ -146,9 +146,10 @@ Model-visible tools are a security boundary.
 
 - Only project-relative paths are allowed.
 - Absolute paths and traversal outside the project root are rejected.
+- Existing path components must not be symbolic links or linked directory junctions. For missing targets, validate the nearest existing ancestor before mutation.
 - Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`,
   `test_runs/`, `novels/`, `reports/`.
-- Create/write/replace/append/delete/copy-target/move roots:
+- Create/write/replace/append/delete/copy-target/move and directory-mutation roots:
   `source_materials/`, `workspace/`, `test_runs/`, `novels/`, `reports/`.
 - The canonical generated-artifact root set and display order live in
   `core/artifacts/roots.ts`. Filesystem write guards and artifact workbench
@@ -161,6 +162,9 @@ Model-visible tools are a security boundary.
   magic bytes and size, and emits a structured attachment instead of base64
   tool text.
 - `delete_file` must delete only files, never directories or directory trees.
+- `list_directory` exposes files, directories, and symbolic-link entries without following links. Recursive listings are bounded.
+- `create_directory`, `move_directory`, and `delete_directory` operate only below writable roots; the fixed roots themselves cannot be created, moved, or deleted.
+- `delete_directory` deletes empty directories only. Recursive directory deletion is intentionally not model-visible.
 - `grep_files` regex mode is for trusted single-user model input. If Vesicle
   ever exposes untrusted model/plugin input, regex matching needs a timeout
   boundary such as RE2 or a worker-thread sandbox.
@@ -224,7 +228,7 @@ and the boundary check that prevents overreach.
 - Keep host identity and interaction identity separate. Persist an opaque `runId` for storage/recovery and a parent-scoped `<profile>-<ordinal>` handle for model tools and user commands. Never expose new run UUIDs merely because an internal map or error message uses them; legacy ids remain input-only compatibility references.
 - Render `spawn_agent` as a first-class Agent card rather than a generic tool card. The stream card owns lifecycle/progress, while the header and sidebar retain a compact active/ready summary after the spawn position scrolls away. Background `ready`, `integrating`, and `integrated` are delivery states and must not be conflated with provider execution.
 - Agent `*` inherits the parent's effective tools. An explicit installed profile allowlist may select guarded host tools outside the parent Engine's ordinary surface; MCP tools remain subject to their configured server and Engine scope. Task arguments cannot widen the installed profile.
-- Parallel writers are supported. Claim mutated paths for the lifetime of a child and coordinate parent file-tool mutations through the same ownership table. Reject conflicting ownership instead of globally forcing children to be read-only.
+- Parallel writers are supported. Claim mutated paths for the lifetime of a child and coordinate parent file-tool mutations through the same ownership table. Ownership conflicts include the same path and ancestor/descendant paths, so a directory-tree mutation cannot overlap a child file mutation. Reject conflicting ownership instead of globally forcing children to be read-only.
 - Parent completion delivery is serialized with user turns, gates, questions, and engine handoffs. Never mutate an in-flight provider request.
 
 See `docs/dev/SUBAGENTS.md` for the complete lifecycle and delivery contract.
@@ -294,6 +298,7 @@ Prompts are runtime assets, not hardcoded source literals.
 - A real user prompt owns the file checkpoint for the work it initiates.
   Mutation tools must capture every affected writable path before changing it;
   checkpoint metadata remains host-only and must not enter provider messages.
+- Checkpoints preserve absent paths, files, and directory topology. Directory-tree moves must capture the source tree and target path so rewind can restore empty directories as well as file content.
 - Provider requests must include prior user/assistant turns when continuing a
   session.
 - Response usage metadata is host-only. It may be persisted on assistant
@@ -305,7 +310,7 @@ Prompts are runtime assets, not hardcoded source literals.
   audit/ledger views without parsing natural-language tool result text.
   In `fileEvent`, `bytes` means the resulting or observed file size, and for
   `delete_file` it means the deleted file size. `append_file` may also report
-  `deltaBytes`; `list_files` reports `entryCount`; `grep_files` reports
+  `deltaBytes`; `list_files` and `list_directory` report `entryCount`; `grep_files` reports
   `matches`.
 - User-selected reasoning tiers should be persisted as session metadata so
   interactive resume restores runtime generation behavior. Provider

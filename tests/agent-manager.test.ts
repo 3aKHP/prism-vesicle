@@ -422,25 +422,27 @@ describe("SubAgent manager", () => {
     }
   });
 
-  test("rejects a parent mutation while a background child owns the path", async () => {
+  test("rejects ancestor and descendant mutations while a background child owns a directory", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-agent-parent-write-conflict-"));
     let releaseChild: () => void = () => undefined;
     let childClaimed: () => void = () => undefined;
     const claimed = new Promise<void>((resolve) => { childClaimed = resolve; });
     try {
       const manager = new AgentManager(new AgentStore(rootDir), async (context) => {
-        await context.claimMutation(["novels/chapter-01.md"]);
+        await context.claimMutation(["novels/volume-01"]);
         childClaimed();
         await new Promise<void>((resolve) => { releaseChild = resolve; });
         return { content: "written" };
       });
       const child = await manager.spawn(spec("background-writer", "background"));
       await claimed;
-      await expect(manager.claimHostMutation("parent-call", ["novels/chapter-01.md"]))
+      await expect(manager.claimHostMutation("parent-call", ["novels/volume-01/chapter-01.md"]))
+        .rejects.toThrow("write conflict");
+      await expect(manager.claimHostMutation("parent-call", ["novels"]))
         .rejects.toThrow("write conflict");
       releaseChild();
       expect(await child.completion).toMatchObject({ status: "completed" });
-      await expect(manager.claimHostMutation("parent-call", ["novels/chapter-01.md"]))
+      await expect(manager.claimHostMutation("parent-call", ["novels/volume-01/chapter-01.md"]))
         .resolves.toBeUndefined();
       manager.releaseHostMutations("parent-call");
     } finally {
