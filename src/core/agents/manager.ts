@@ -212,16 +212,16 @@ export class AgentManager {
 
   private claimPaths(ownerId: string, paths: string[]): void {
     const unique = [...new Set(paths)].sort();
-    const conflict = unique.find((path) => {
-      const owner = this.writeOwners.get(path);
-      return owner && owner !== ownerId;
-    });
+    const conflict = unique.flatMap((requestedPath) =>
+      [...this.writeOwners.entries()]
+        .filter(([ownedPath, owner]) => owner !== ownerId && pathsOverlap(requestedPath, ownedPath))
+        .map(([ownedPath, owner]) => ({ requestedPath, ownedPath, owner })),
+    )[0];
     if (conflict) {
-      const owner = this.writeOwners.get(conflict)!;
-      const ownerLabel = owner.startsWith("host:")
+      const ownerLabel = conflict.owner.startsWith("host:")
         ? "the parent Engine"
-        : this.active.get(owner)?.metadata.handle ?? "another SubAgent";
-      throw new Error(`Concurrent Agent write conflict on "${conflict}"; the path is owned by ${ownerLabel}.`);
+        : this.active.get(conflict.owner)?.metadata.handle ?? "another SubAgent";
+      throw new Error(`Concurrent Agent write conflict on "${conflict.requestedPath}"; overlapping path "${conflict.ownedPath}" is owned by ${ownerLabel}.`);
     }
     for (const path of unique) {
       this.writeOwners.set(path, ownerId);
@@ -329,4 +329,8 @@ function errorMessage(error: unknown): string {
 
 function isControllable(metadata: AgentMetadata): boolean {
   return metadata.status === "created" || metadata.status === "running";
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
 }

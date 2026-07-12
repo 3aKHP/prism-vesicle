@@ -50,6 +50,8 @@ Most API providers charge according to model usage. Read the provider's current 
 
 AI output can contain factual errors, unwanted content, or structural mistakes. Preview and validate important artifacts before sharing or publishing them.
 
+Vesicle may organize generated work into nested directories under its guarded project roots. It can create and inspect directories, move or rename directory trees, and delete empty directories, but it cannot delete the fixed roots or traverse symbolic links.
+
 ### Do not run as Administrator
 
 The beginner instructions use your normal Windows account. If Windows Terminal says `Administrator` in its title, close it and open a normal terminal instead.

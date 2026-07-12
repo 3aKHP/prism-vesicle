@@ -9,6 +9,7 @@ export type FileToolEvent = {
   operation:
     | "stat"
     | "list"
+    | "list_directory"
     | "grep"
     | "read"
     | "view"
@@ -18,7 +19,10 @@ export type FileToolEvent = {
     | "append"
     | "delete"
     | "copy"
-    | "move";
+    | "move"
+    | "create_directory"
+    | "move_directory"
+    | "delete_directory";
   path?: string;
   sourcePath?: string;
   targetPath?: string;

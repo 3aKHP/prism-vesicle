@@ -9,16 +9,20 @@ export type BuiltInToolName =
   | "web_research"
   | "stat_path"
   | "list_files"
+  | "list_directory"
   | "grep_files"
   | "read_file"
   | "view_image"
+  | "create_directory"
   | "create_file"
   | "write_file"
   | "replace_in_file"
   | "append_file"
   | "delete_file"
   | "copy_file"
-  | "move_file";
+  | "move_file"
+  | "move_directory"
+  | "delete_directory";
 import { executeFileTool, fileToolDefinitions } from "./fs";
 import {
   executeWebCrawlTool,
@@ -96,6 +100,10 @@ export const m0Tools: ToolContract[] = [
     description: "List allowed project files.",
   },
   {
+    name: "list_directory",
+    description: "List files and directories under an allowed project directory.",
+  },
+  {
     name: "grep_files",
     description: "Search text in allowed project files.",
   },
@@ -110,6 +118,10 @@ export const m0Tools: ToolContract[] = [
   {
     name: "create_file",
     description: "Create a new UTF-8 file under a writable project root without overwriting it.",
+  },
+  {
+    name: "create_directory",
+    description: "Create a directory below a writable project root.",
   },
   {
     name: "write_file",
@@ -134,6 +146,14 @@ export const m0Tools: ToolContract[] = [
   {
     name: "move_file",
     description: "Move or rename a file inside writable project roots.",
+  },
+  {
+    name: "move_directory",
+    description: "Move or rename a directory tree inside writable project roots.",
+  },
+  {
+    name: "delete_directory",
+    description: "Delete an empty directory below a writable project root.",
   },
 ];
 

@@ -1,5 +1,5 @@
 import type { Stats } from "node:fs";
-import { appendFile, copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { writableProjectRoots } from "../artifacts/roots";
 import type { FileToolEvent, FileToolExecutionOptions, ToolCall, ToolDefinition, ToolResult } from "./types";
@@ -43,6 +43,28 @@ export const fileToolDefinitions: ToolDefinition[] = [
           recursive: {
             type: "boolean",
             description: "Whether to list files recursively. Defaults to false.",
+          },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_directory",
+      description: "List files, directories, and symbolic links under an allowed Vesicle project directory.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Project-relative directory path, such as workspace or workspace/part_01.",
+          },
+          recursive: {
+            type: "boolean",
+            description: "Whether to list descendants recursively. Defaults to false.",
           },
         },
         required: ["path"],
@@ -155,6 +177,28 @@ export const fileToolDefinitions: ToolDefinition[] = [
           },
         },
         required: ["path", "content"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_directory",
+      description: "Create a directory under a writable project root. Fails if the target already exists.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Project-relative directory path below source_materials, workspace, novels, reports, or test_runs.",
+          },
+          recursive: {
+            type: "boolean",
+            description: "Create missing parent directories. Defaults to true.",
+          },
+        },
+        required: ["path"],
         additionalProperties: false,
       },
     },
@@ -307,6 +351,46 @@ export const fileToolDefinitions: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "move_directory",
+      description: "Move or rename a directory tree inside writable project roots. The target must not exist.",
+      parameters: {
+        type: "object",
+        properties: {
+          sourcePath: {
+            type: "string",
+            description: "Existing project-relative directory path below a writable root.",
+          },
+          targetPath: {
+            type: "string",
+            description: "New project-relative directory path below a writable root.",
+          },
+        },
+        required: ["sourcePath", "targetPath"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_directory",
+      description: "Delete one empty directory below a writable project root. Fixed writable roots and non-empty directories are refused.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Project-relative empty directory path below source_materials, workspace, novels, reports, or test_runs.",
+          },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 export async function executeFileTool(
@@ -334,7 +418,7 @@ export async function executeFileTool(
             bytes: info.size,
           });
         }
-        const resolved = resolveAllowed(rootDir, args.path, readableRoots);
+        const resolved = await resolveAllowed(rootDir, args.path, readableRoots);
         const info = await stat(resolved);
         return ok(call, JSON.stringify({
           path: toProjectPath(rootDir, resolved),
@@ -363,7 +447,7 @@ export async function executeFileTool(
             entryCount: entries.length,
           });
         }
-        const dir = resolveAllowed(rootDir, args.path, readableRoots);
+        const dir = await resolveAllowed(rootDir, args.path, readableRoots);
         const entries = await listFiles(dir, Boolean(args.recursive));
         return ok(call, entries.map((entry) => toProjectPath(rootDir, entry)).join("\n") || "(empty)", {
           kind: "file_operation",
@@ -371,6 +455,24 @@ export async function executeFileTool(
           path: toProjectPath(rootDir, dir),
           changed: false,
           entryCount: entries.length,
+        });
+      }
+
+      case "list_directory": {
+        const args = parseArgs<{ path: string; recursive?: boolean }>(call.arguments);
+        if (isAssetRequest(args.path)) {
+          throw new Error("list_directory does not support the layered assets namespace; use list_files for assets.");
+        }
+        const dir = await resolveAllowed(rootDir, args.path, readableRoots);
+        await assertDirectory(dir);
+        const result = await listDirectoryEntries(rootDir, dir, Boolean(args.recursive));
+        return ok(call, JSON.stringify(result), {
+          kind: "file_operation",
+          operation: "list_directory",
+          path: toProjectPath(rootDir, dir),
+          changed: false,
+          entryCount: result.entries.length,
+          truncated: result.truncated,
         });
       }
 
@@ -384,7 +486,7 @@ export async function executeFileTool(
           maxMatches?: number;
         }>(call.arguments);
         const assetRequest = isAssetRequest(args.path);
-        const resolved = assetRequest ? undefined : resolveAllowed(rootDir, args.path, readableRoots);
+        const resolved = assetRequest ? undefined : await resolveAllowed(rootDir, args.path, readableRoots);
         const result = assetRequest
           ? await grepAssetFiles(assets, args.path, args)
           : await grepFiles(rootDir, resolved!, args);
@@ -415,7 +517,7 @@ export async function executeFileTool(
             lines: content ? content.split(/\r?\n/).length : 0,
           });
         }
-        const filePath = resolveAllowed(rootDir, args.path, readableRoots);
+        const filePath = await resolveAllowed(rootDir, args.path, readableRoots);
         const content = sliceLines(await readFile(filePath, "utf8"), args.startLine, args.endLine);
         return ok(call, content, {
           kind: "file_operation",
@@ -433,7 +535,7 @@ export async function executeFileTool(
           throw new Error("view_image.detail must be auto, high, or original.");
         }
         const asset = isAssetRequest(args.path) ? await assets.resolveFile(args.path) : undefined;
-        const filePath = asset?.absolutePath ?? resolveAllowed(rootDir, args.path, readableRoots);
+        const filePath = asset?.absolutePath ?? await resolveAllowed(rootDir, args.path, readableRoots);
         const projectPath = asset?.logicalPath ?? toProjectPath(rootDir, filePath);
         const image = asset
           ? await ingestImageBytes(rootDir, await assets.readBytes(asset.logicalPath), {
@@ -461,8 +563,8 @@ export async function executeFileTool(
 
       case "create_file": {
         const args = parseArgs<{ path: string; content: string }>(call.arguments);
-        const filePath = resolveAllowed(rootDir, args.path, writableRoots);
-        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
+        const filePath = await resolveAllowed(rootDir, args.path, writableRoots);
+        await options.beforeMutation?.(await mutationPathsForTarget(rootDir, filePath));
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, { encoding: "utf8", flag: "wx" });
         return ok(call, `Created ${toProjectPath(rootDir, filePath)}`, {
@@ -474,10 +576,29 @@ export async function executeFileTool(
         });
       }
 
+      case "create_directory": {
+        const args = parseArgs<{ path: string; recursive?: boolean }>(call.arguments);
+        const directoryPath = await resolveAllowed(rootDir, args.path, writableRoots);
+        assertMutableDirectoryPath(rootDir, directoryPath);
+        await assertMissing(directoryPath, "Directory already exists.");
+        const recursive = args.recursive ?? true;
+        const mutationPaths = recursive
+          ? await mutationPathsForTarget(rootDir, directoryPath)
+          : [toProjectPath(rootDir, directoryPath)];
+        await options.beforeMutation?.(mutationPaths);
+        await mkdir(directoryPath, { recursive });
+        return ok(call, `Created directory ${toProjectPath(rootDir, directoryPath)}`, {
+          kind: "file_operation",
+          operation: "create_directory",
+          path: toProjectPath(rootDir, directoryPath),
+          changed: true,
+        });
+      }
+
       case "write_file": {
         const args = parseArgs<{ path: string; content: string }>(call.arguments);
-        const filePath = resolveAllowed(rootDir, args.path, writableRoots);
-        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
+        const filePath = await resolveAllowed(rootDir, args.path, writableRoots);
+        await options.beforeMutation?.(await mutationPathsForTarget(rootDir, filePath));
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, args.content, "utf8");
         return ok(call, `Wrote ${toProjectPath(rootDir, filePath)}`, {
@@ -491,7 +612,7 @@ export async function executeFileTool(
 
       case "replace_in_file": {
         const args = parseArgs<{ path: string; oldText: string; newText: string; replaceAll?: boolean }>(call.arguments);
-        const filePath = resolveAllowed(rootDir, args.path, writableRoots);
+        const filePath = await resolveAllowed(rootDir, args.path, writableRoots);
         const original = await readFile(filePath, "utf8");
         if (!args.oldText) throw new Error("oldText must not be empty.");
         const count = countOccurrences(original, args.oldText);
@@ -521,10 +642,11 @@ export async function executeFileTool(
 
       case "append_file": {
         const args = parseArgs<{ path: string; content: string; createIfMissing?: boolean }>(call.arguments);
-        const filePath = resolveAllowed(rootDir, args.path, writableRoots);
-        await mkdir(dirname(filePath), { recursive: true });
+        const filePath = await resolveAllowed(rootDir, args.path, writableRoots);
+        const mutationPaths = await mutationPathsForTarget(rootDir, filePath);
         if (!args.createIfMissing) await assertFile(filePath);
-        await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
+        await options.beforeMutation?.(mutationPaths);
+        await mkdir(dirname(filePath), { recursive: true });
         await appendFile(filePath, args.content, { encoding: "utf8", flag: "a" });
         const appended = await stat(filePath);
         return ok(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`, {
@@ -539,7 +661,7 @@ export async function executeFileTool(
 
       case "delete_file": {
         const args = parseArgs<{ path: string }>(call.arguments);
-        const filePath = resolveAllowed(rootDir, args.path, writableRoots);
+        const filePath = await resolveAllowed(rootDir, args.path, writableRoots);
         const deleted = await assertFile(filePath);
         await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
         // Single-user TUI contract: the path is expected not to change between
@@ -557,12 +679,12 @@ export async function executeFileTool(
       case "copy_file": {
         const args = parseArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
         const sourceAsset = isAssetRequest(args.sourcePath) ? await assets.resolveFile(args.sourcePath) : undefined;
-        const sourcePath = sourceAsset?.absolutePath ?? resolveAllowed(rootDir, args.sourcePath, readableRoots);
+        const sourcePath = sourceAsset?.absolutePath ?? await resolveAllowed(rootDir, args.sourcePath, readableRoots);
         const logicalSourcePath = sourceAsset?.logicalPath ?? toProjectPath(rootDir, sourcePath);
-        const targetPath = resolveAllowed(rootDir, args.targetPath, writableRoots);
+        const targetPath = await resolveAllowed(rootDir, args.targetPath, writableRoots);
         const assetBytes = sourceAsset ? await assets.readBytes(sourceAsset.logicalPath) : undefined;
         const source = sourceAsset ? undefined : await assertFile(sourcePath);
-        await options.beforeMutation?.([toProjectPath(rootDir, targetPath)]);
+        await options.beforeMutation?.(await mutationPathsForTarget(rootDir, targetPath));
         await prepareTarget(targetPath, Boolean(args.overwrite));
         if (assetBytes) await writeFile(targetPath, assetBytes);
         else await copyFile(sourcePath, targetPath);
@@ -578,12 +700,12 @@ export async function executeFileTool(
 
       case "move_file": {
         const args = parseArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
-        const sourcePath = resolveAllowed(rootDir, args.sourcePath, writableRoots);
-        const targetPath = resolveAllowed(rootDir, args.targetPath, writableRoots);
+        const sourcePath = await resolveAllowed(rootDir, args.sourcePath, writableRoots);
+        const targetPath = await resolveAllowed(rootDir, args.targetPath, writableRoots);
         const source = await assertFile(sourcePath);
         await options.beforeMutation?.([
           toProjectPath(rootDir, sourcePath),
-          toProjectPath(rootDir, targetPath),
+          ...await mutationPathsForTarget(rootDir, targetPath),
         ]);
         await prepareTarget(targetPath, Boolean(args.overwrite));
         await rename(sourcePath, targetPath);
@@ -594,6 +716,47 @@ export async function executeFileTool(
           targetPath: toProjectPath(rootDir, targetPath),
           changed: true,
           bytes: source.size,
+        });
+      }
+
+      case "move_directory": {
+        const args = parseArgs<{ sourcePath: string; targetPath: string }>(call.arguments);
+        const sourcePath = await resolveAllowed(rootDir, args.sourcePath, writableRoots);
+        const targetPath = await resolveAllowed(rootDir, args.targetPath, writableRoots);
+        assertMutableDirectoryPath(rootDir, sourcePath);
+        assertMutableDirectoryPath(rootDir, targetPath);
+        await assertDirectory(sourcePath);
+        await assertMissing(targetPath, "Target path already exists.");
+        const targetParent = dirname(targetPath);
+        await assertDirectory(targetParent);
+        await options.beforeMutation?.([
+          toProjectPath(rootDir, sourcePath),
+          toProjectPath(rootDir, targetPath),
+        ]);
+        await rename(sourcePath, targetPath);
+        return ok(call, `Moved directory ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
+          kind: "file_operation",
+          operation: "move_directory",
+          sourcePath: toProjectPath(rootDir, sourcePath),
+          targetPath: toProjectPath(rootDir, targetPath),
+          changed: true,
+        });
+      }
+
+      case "delete_directory": {
+        const args = parseArgs<{ path: string }>(call.arguments);
+        const directoryPath = await resolveAllowed(rootDir, args.path, writableRoots);
+        assertMutableDirectoryPath(rootDir, directoryPath);
+        await assertDirectory(directoryPath);
+        const entries = await readdir(directoryPath);
+        if (entries.length > 0) throw new Error("Directory is not empty. Delete its contents first.");
+        await options.beforeMutation?.([toProjectPath(rootDir, directoryPath)]);
+        await rmdir(directoryPath);
+        return ok(call, `Deleted directory ${toProjectPath(rootDir, directoryPath)}`, {
+          kind: "file_operation",
+          operation: "delete_directory",
+          path: toProjectPath(rootDir, directoryPath),
+          changed: true,
         });
       }
 
@@ -614,7 +777,7 @@ function isAssetRequest(requestedPath: string): boolean {
   return normalized === "assets" || normalized.startsWith("assets/");
 }
 
-function resolveAllowed(rootDir: string, requestedPath: string, roots: string[]): string {
+async function resolveAllowed(rootDir: string, requestedPath: string, roots: string[]): Promise<string> {
   if (!requestedPath || requestedPath.includes("\0")) {
     throw new Error("Path is required.");
   }
@@ -635,6 +798,25 @@ function resolveAllowed(rootDir: string, requestedPath: string, roots: string[])
   const rootName = normalized.split("/")[0];
   if (!roots.includes(rootName)) {
     throw new Error(`Path must be under one of: ${roots.join(", ")}`);
+  }
+
+  const realRoot = await realpath(root);
+  const parts = normalized.split("/");
+  let current = root;
+  for (const part of parts) {
+    current = resolve(current, part);
+    const info = await lstat(current).catch((error: unknown) => {
+      if (isEnoent(error)) return undefined;
+      throw error;
+    });
+    if (!info) break;
+    if (info.isSymbolicLink()) {
+      throw new Error(`Symbolic links are not allowed in model-visible paths: ${requestedPath}`);
+    }
+    const actual = await realpath(current);
+    if (!isWithin(realRoot, actual)) {
+      throw new Error(`Path escapes project root through a linked path: ${requestedPath}`);
+    }
   }
 
   return resolved;
@@ -747,9 +929,46 @@ function collectMatchLines(content: string, needle: string): number[] {
 }
 
 async function assertFile(filePath: string): Promise<Stats> {
-  const info = await stat(filePath);
+  const info = await lstat(filePath);
   if (!info.isFile()) throw new Error("Path must be a file.");
   return info;
+}
+
+async function assertDirectory(directoryPath: string): Promise<Stats> {
+  const info = await lstat(directoryPath);
+  if (!info.isDirectory()) throw new Error("Path must be a directory.");
+  return info;
+}
+
+async function assertMissing(targetPath: string, message: string): Promise<void> {
+  const existing = await lstat(targetPath).catch((error: unknown) => {
+    if (isEnoent(error)) return undefined;
+    throw error;
+  });
+  if (existing) throw new Error(message);
+}
+
+function assertMutableDirectoryPath(rootDir: string, directoryPath: string): void {
+  const projectPath = toProjectPath(rootDir, directoryPath);
+  if (!projectPath.includes("/")) {
+    throw new Error("Fixed writable roots cannot be created, moved, or deleted.");
+  }
+}
+
+async function mutationPathsForTarget(rootDir: string, targetPath: string): Promise<string[]> {
+  const root = resolve(rootDir);
+  const paths = [toProjectPath(rootDir, targetPath)];
+  let current = dirname(targetPath);
+  while (current !== root) {
+    const exists = await lstat(current).then(() => true).catch((error: unknown) => {
+      if (isEnoent(error)) return false;
+      throw error;
+    });
+    if (exists) break;
+    paths.push(toProjectPath(rootDir, current));
+    current = dirname(current);
+  }
+  return [...new Set(paths)].sort((left, right) => left.split("/").length - right.split("/").length);
 }
 
 async function prepareTarget(targetPath: string, overwrite: boolean): Promise<void> {
@@ -787,13 +1006,66 @@ async function listFiles(dir: string, recursive: boolean): Promise<string[]> {
       continue;
     }
 
-    const info = await stat(fullPath).catch(() => undefined);
-    if (info?.isFile()) {
-      result.push(fullPath);
-    }
+    // Symbolic links and other special entries are deliberately not followed.
   }
 
   return result.sort();
+}
+
+type DirectoryEntry = {
+  path: string;
+  type: "file" | "directory" | "symlink" | "other";
+  size?: number;
+  modifiedAt: string;
+};
+
+async function listDirectoryEntries(
+  rootDir: string,
+  directoryPath: string,
+  recursive: boolean,
+): Promise<{ entries: DirectoryEntry[]; truncated: boolean }> {
+  const limit = 500;
+  const entries: DirectoryEntry[] = [];
+  let truncated = false;
+
+  const visit = async (dir: string): Promise<void> => {
+    for (const child of await readdir(dir, { withFileTypes: true })) {
+      if (entries.length >= limit) {
+        truncated = true;
+        return;
+      }
+      const fullPath = resolve(dir, child.name);
+      const info = await lstat(fullPath);
+      const type = info.isSymbolicLink()
+        ? "symlink"
+        : info.isDirectory()
+          ? "directory"
+          : info.isFile()
+            ? "file"
+            : "other";
+      entries.push({
+        path: toProjectPath(rootDir, fullPath),
+        type,
+        ...(type === "file" ? { size: info.size } : {}),
+        modifiedAt: info.mtime.toISOString(),
+      });
+      if (recursive && type === "directory") await visit(fullPath);
+      if (truncated) return;
+    }
+  };
+
+  await visit(directoryPath);
+  entries.sort((left, right) => left.path.localeCompare(right.path));
+  return { entries, truncated };
+}
+
+function isWithin(rootPath: string, candidatePath: string): boolean {
+  const rel = relative(rootPath, candidatePath);
+  return rel === "" || (!rel.startsWith("..") && rel !== ".." && resolve(rel) !== rel);
+}
+
+function isEnoent(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }
 
 function toProjectPath(rootDir: string, filePath: string): string {

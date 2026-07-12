@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { diffLines } from "diff";
 import { writableProjectRoots } from "../artifacts/roots";
@@ -15,6 +15,8 @@ export const MAX_FILE_HISTORY_SNAPSHOTS = 100;
 export type FileCheckpointEntry = {
   /** Content-addressed file in .vesicle/file-history/<session>/backups. Null means absent. */
   backup: string | null;
+  /** Omitted on legacy snapshots, where backup null meant absent and a hash meant file. */
+  kind?: "absent" | "file" | "directory";
   mode?: number;
 };
 
@@ -85,8 +87,12 @@ export class FileCheckpointManager {
     for (const path of paths) {
       const normalized = normalizeWritablePath(this.rootDir, path);
       if (Object.hasOwn(this.current.files, normalized)) continue;
-      this.current.files[normalized] = await capturePath(this.rootDir, this.session.sessionId, normalized);
-      changed = true;
+      const captured = await capturePaths(this.rootDir, this.session.sessionId, normalized);
+      for (const [capturedPath, entry] of Object.entries(captured)) {
+        if (Object.hasOwn(this.current.files, capturedPath)) continue;
+        this.current.files[capturedPath] = entry;
+        changed = true;
+      }
     }
     if (changed) await this.persist(true);
   }
@@ -137,9 +143,11 @@ export async function fileCheckpointTurnDiffStats(
   const result: FileCheckpointDiffStats = { filesChanged: [], insertions: 0, deletions: 0 };
   const paths = new Set([...Object.keys(before), ...Object.keys(after)]);
   for (const path of paths) {
-    const oldContent = before[path] ? await readBackup(rootDir, sessionId, before[path]) : null;
-    const newContent = after[path] ? await readBackup(rootDir, sessionId, after[path]) : null;
-    if (buffersEqual(oldContent, newContent)) continue;
+    const oldEntry = before[path] ?? { backup: null, kind: "absent" };
+    const newEntry = after[path] ?? { backup: null, kind: "absent" };
+    const oldContent = await entryFileContent(rootDir, sessionId, oldEntry);
+    const newContent = await entryFileContent(rootDir, sessionId, newEntry);
+    if (entryKind(oldEntry) === entryKind(newEntry) && buffersEqual(oldContent, newContent)) continue;
     result.filesChanged.push(path);
     const counts = lineChangeCounts(oldContent?.toString("utf8") ?? "", newContent?.toString("utf8") ?? "");
     result.insertions += counts.insertions;
@@ -158,20 +166,36 @@ export async function restoreFileCheckpoint(
   const state = await checkpointRestoreState(rootDir, sessionId, messageId, options);
   if (!state) throw new Error("The selected file checkpoint was not found.");
   const changed: string[] = [];
-  for (const [path, entry] of Object.entries(state)) {
+  const entries = Object.entries(state);
+
+  for (const [path, entry] of [...entries].sort(deepestFirst)) {
+    if (entryKind(entry) !== "absent") continue;
     const filePath = resolve(rootDir, path);
-    const current = await readOptional(filePath);
-    const target = await readBackup(rootDir, sessionId, entry);
-    if (buffersEqual(current, target)) continue;
-    if (target === null) {
-      await unlink(filePath).catch((error: unknown) => {
-        if (!isEnoent(error)) throw error;
-      });
-    } else {
-      await mkdir(dirname(filePath), { recursive: true });
-      await writeFile(filePath, target);
-      if (entry.mode !== undefined) await chmod(filePath, entry.mode);
+    if (!await pathMatchesEntry(filePath, entry, rootDir, sessionId)) {
+      await rm(filePath, { recursive: true, force: true });
+      changed.push(path);
     }
+  }
+
+  for (const [path, entry] of [...entries].sort(shallowestFirst)) {
+    if (entryKind(entry) !== "directory") continue;
+    const directoryPath = resolve(rootDir, path);
+    if (await pathMatchesEntry(directoryPath, entry, rootDir, sessionId)) continue;
+    await rm(directoryPath, { recursive: true, force: true });
+    await mkdir(directoryPath, { recursive: true });
+    if (entry.mode !== undefined) await chmod(directoryPath, entry.mode);
+    changed.push(path);
+  }
+
+  for (const [path, entry] of entries) {
+    if (entryKind(entry) !== "file") continue;
+    const filePath = resolve(rootDir, path);
+    if (await pathMatchesEntry(filePath, entry, rootDir, sessionId)) continue;
+    const target = await readBackup(rootDir, sessionId, entry);
+    await rm(filePath, { recursive: true, force: true });
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, target!);
+    if (entry.mode !== undefined) await chmod(filePath, entry.mode);
     changed.push(path);
   }
   return changed;
@@ -224,10 +248,11 @@ async function diffCheckpointState(
 ): Promise<FileCheckpointDiffStats> {
   const result: FileCheckpointDiffStats = { filesChanged: [], insertions: 0, deletions: 0 };
   for (const [path, entry] of Object.entries(state)) {
-    const current = await readOptional(resolve(rootDir, path));
-    const target = await readBackup(rootDir, sessionId, entry);
-    if (buffersEqual(current, target)) continue;
+    const filePath = resolve(rootDir, path);
+    if (await pathMatchesEntry(filePath, entry, rootDir, sessionId)) continue;
     result.filesChanged.push(path);
+    const current = await currentFileContent(filePath);
+    const target = await entryFileContent(rootDir, sessionId, entry);
     const counts = lineChangeCounts(current?.toString("utf8") ?? "", target?.toString("utf8") ?? "");
     result.insertions += counts.insertions;
     result.deletions += counts.deletions;
@@ -250,12 +275,14 @@ function parseEnvelope(metadata: Record<string, unknown> | undefined): SnapshotE
 
 async function capturePath(rootDir: string, sessionId: string, projectPath: string): Promise<FileCheckpointEntry> {
   const filePath = resolve(rootDir, projectPath);
-  const info = await stat(filePath).catch((error: unknown) => {
+  const info = await lstat(filePath).catch((error: unknown) => {
     if (isEnoent(error)) return undefined;
     throw error;
   });
-  if (!info) return { backup: null };
-  if (!info.isFile()) throw new Error(`File checkpoint path is not a file: ${projectPath}`);
+  if (!info) return { backup: null, kind: "absent" };
+  if (info.isSymbolicLink()) throw new Error(`File checkpoint path is a symbolic link: ${projectPath}`);
+  if (info.isDirectory()) return { backup: null, kind: "directory", mode: info.mode };
+  if (!info.isFile()) throw new Error(`File checkpoint path is not a file or directory: ${projectPath}`);
   const content = await readFile(filePath);
   const backup = createHash("sha256").update(content).digest("hex");
   const backupDir = join(rootDir, ".vesicle", "file-history", sessionId, "backups");
@@ -263,7 +290,24 @@ async function capturePath(rootDir: string, sessionId: string, projectPath: stri
   await writeFile(join(backupDir, backup), content, { flag: "wx" }).catch((error: unknown) => {
     if (!error || typeof error !== "object" || !("code" in error) || error.code !== "EEXIST") throw error;
   });
-  return { backup, mode: info.mode };
+  return { backup, kind: "file", mode: info.mode };
+}
+
+async function capturePaths(
+  rootDir: string,
+  sessionId: string,
+  projectPath: string,
+): Promise<Record<string, FileCheckpointEntry>> {
+  const result: Record<string, FileCheckpointEntry> = {};
+  const entry = await capturePath(rootDir, sessionId, projectPath);
+  result[projectPath] = entry;
+  if (entryKind(entry) !== "directory") return result;
+  const directoryPath = resolve(rootDir, projectPath);
+  for (const child of await readdir(directoryPath, { withFileTypes: true })) {
+    const childPath = `${projectPath}/${child.name}`;
+    Object.assign(result, await capturePaths(rootDir, sessionId, childPath));
+  }
+  return result;
 }
 
 async function readBackup(rootDir: string, sessionId: string, entry: FileCheckpointEntry): Promise<Buffer | null> {
@@ -271,11 +315,67 @@ async function readBackup(rootDir: string, sessionId: string, entry: FileCheckpo
   return readFile(join(rootDir, ".vesicle", "file-history", sessionId, "backups", entry.backup));
 }
 
-async function readOptional(path: string): Promise<Buffer | null> {
-  return readFile(path).catch((error: unknown) => {
-    if (isEnoent(error)) return null;
+function entryKind(entry: FileCheckpointEntry): "absent" | "file" | "directory" {
+  return entry.kind ?? (entry.backup === null ? "absent" : "file");
+}
+
+async function entryFileContent(
+  rootDir: string,
+  sessionId: string,
+  entry: FileCheckpointEntry,
+): Promise<Buffer | null> {
+  return entryKind(entry) === "file" ? readBackup(rootDir, sessionId, entry) : null;
+}
+
+async function currentFileContent(path: string): Promise<Buffer | null> {
+  const info = await lstat(path).catch((error: unknown) => {
+    if (isEnoent(error)) return undefined;
     throw error;
   });
+  return info?.isFile() ? readFile(path) : null;
+}
+
+async function pathMatchesEntry(
+  path: string,
+  entry: FileCheckpointEntry,
+  rootDir: string,
+  sessionId: string,
+): Promise<boolean> {
+  await assertNoLinkedAncestors(rootDir, path);
+  const info = await lstat(path).catch((error: unknown) => {
+    if (isEnoent(error)) return undefined;
+    throw error;
+  });
+  const kind = entryKind(entry);
+  if (kind === "absent") return !info;
+  if (kind === "directory") return Boolean(info?.isDirectory() && !info.isSymbolicLink());
+  if (!info?.isFile() || info.isSymbolicLink()) return false;
+  return buffersEqual(await readFile(path), await readBackup(rootDir, sessionId, entry));
+}
+
+async function assertNoLinkedAncestors(rootDir: string, targetPath: string): Promise<void> {
+  const root = resolve(rootDir);
+  const rel = relative(root, targetPath);
+  let current = root;
+  for (const part of rel.split(sep).slice(0, -1)) {
+    current = resolve(current, part);
+    const info = await lstat(current).catch((error: unknown) => {
+      if (isEnoent(error)) return undefined;
+      throw error;
+    });
+    if (!info) break;
+    if (info.isSymbolicLink()) {
+      throw new Error(`Checkpoint restore path contains a symbolic link: ${relative(root, current).split(sep).join("/")}`);
+    }
+  }
+}
+
+function shallowestFirst(left: [string, FileCheckpointEntry], right: [string, FileCheckpointEntry]): number {
+  return left[0].split("/").length - right[0].split("/").length;
+}
+
+function deepestFirst(left: [string, FileCheckpointEntry], right: [string, FileCheckpointEntry]): number {
+  return right[0].split("/").length - left[0].split("/").length;
 }
 
 function normalizeWritablePath(rootDir: string, requestedPath: string): string {

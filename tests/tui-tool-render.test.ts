@@ -17,8 +17,11 @@ describe("toolKind", () => {
   test("maps known tool names", () => {
     expect(toolKind("replace_in_file")).toBe("replace");
     expect(toolKind("create_file")).toBe("create");
+    expect(toolKind("create_directory")).toBe("create");
     expect(toolKind("read_file")).toBe("read");
     expect(toolKind("copy_file")).toBe("copy");
+    expect(toolKind("move_directory")).toBe("move");
+    expect(toolKind("list_directory")).toBe("list");
   });
 
   test("unknown tools fall back", () => {
@@ -200,6 +203,21 @@ describe("toolResultFooter", () => {
   test("create reports bytes", () => {
     const event: FileToolEvent = { kind: "file_operation", operation: "create", changed: true, bytes: 1234 };
     expect(toolResultFooter("create_file", true, "Created x", event)).toBe("created · 1.2KB");
+  });
+
+  test("directory operations report structural outcomes", () => {
+    expect(toolResultFooter("create_directory", true, "Created", {
+      kind: "file_operation",
+      operation: "create_directory",
+      changed: true,
+    })).toBe("created directory");
+    expect(toolResultFooter("list_directory", true, "Listed", {
+      kind: "file_operation",
+      operation: "list_directory",
+      changed: false,
+      entryCount: 500,
+      truncated: true,
+    })).toBe("500 entries · truncated");
   });
 
   test("replace reports occurrence count", () => {
