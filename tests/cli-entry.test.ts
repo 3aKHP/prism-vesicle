@@ -12,4 +12,9 @@ describe("CLI entrypoint", () => {
     expect(preloadIndex).toBeGreaterThanOrEqual(0);
     expect(tuiIndex).toBeGreaterThan(preloadIndex);
   });
+
+  test("keeps the invocation cwd as the project root in standalone builds", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "cli", "main.ts"), "utf8");
+    expect(source).not.toContain("process.chdir(");
+  });
 });

@@ -1,10 +1,12 @@
 import { inspectProviderConfig, loadUserConfigEnvironment } from "../config/providers";
 import { inspectMcpConfig } from "../mcp/registry";
+import { inspectAssets } from "./assets";
 
 export async function runDoctor(): Promise<void> {
   const config = await inspectProviderConfig();
   const userEnv = await loadUserConfigEnvironment();
   const mcp = await inspectMcpConfig();
+  const assets = await inspectAssets();
   const bunVersion = Bun.version;
 
   console.log("Prism Vesicle Doctor");
@@ -21,6 +23,10 @@ export async function runDoctor(): Promise<void> {
   console.log(`Tavily web tools: ${userEnv.effectiveEnv.TAVILY_API_KEY ? "available" : "missing"} (${userEnv.path})`);
   console.log(`MCP config: ${mcp.configured ? (mcp.enabled ? "enabled" : "disabled") : "not configured"} (${mcp.path})`);
   console.log(`MCP env: ${mcp.hasEnvFile ? "file" : "missing"} (${mcp.envPath})`);
+  for (const layer of assets.layers) {
+    console.log(`Assets ${layer.source}: ${layer.present ? `${layer.fileCount} files` : "missing"} (${layer.directory})`);
+  }
+  console.log(`Assets manifest: ${assets.manifest ? `${assets.manifest.source} (${assets.manifest.path})` : "missing"}`);
   if (mcp.statuses.length > 0) {
     for (const status of mcp.statuses) {
       const state = status.connected ? `connected, ${status.toolCount} tools` : status.enabled ? "error" : "disabled";

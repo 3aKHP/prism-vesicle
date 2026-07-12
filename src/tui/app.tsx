@@ -67,6 +67,7 @@ import { initDebugLogging } from "./debug-log";
 import { TurnCancellation } from "./turn-cancellation";
 import { PromptEscapeController } from "./prompt-escape";
 import { ingestImageBytes } from "../core/attachments/store";
+import { inspectEngineAssetDrift } from "../core/runtime/engine-assets";
 
 type PendingGate = Extract<RunPromptResult, { kind: "needs_user" }>;
 
@@ -308,6 +309,7 @@ export function App() {
   let activeTurnSawResponse = false;
   let activeTurnUsage = emptyUsageSummary();
   let activeTurnUsagePublished = false;
+  let lastReportedAssetDriftKey: string | undefined;
   let providerConfigLoad: Promise<void> | null = null;
 
   // On mount, detect existing sessions so the welcome line can offer resume.
@@ -1496,6 +1498,18 @@ export function App() {
 
   function handleAgentEvent(event: AgentLoopEvent) {
     switch (event.type) {
+      case "asset_drift": {
+        const key = `${sessionId() ?? "unknown"}:${event.fingerprint}`;
+        if (lastReportedAssetDriftKey === key) return;
+        lastReportedAssetDriftKey = key;
+        const changed = event.changedPaths.length > 0 ? event.changedPaths.join(", ") : "effective assets";
+        setMessages((current) => [...current, {
+          role: "system",
+          content: `Asset drift detected since this session began: ${changed}. This continuation uses the current effective assets.`,
+        }]);
+        recordActivity({ kind: "system", text: `asset drift: ${changed}` });
+        return;
+      }
       case "provider_request":
         setStreamingAssistant("");
         setStreamingReasoning("");
@@ -1850,6 +1864,17 @@ export function App() {
       const hostMessages: Message[] = [];
       if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
       hostMessages.push({ role: "system", content: `Restored engine ${restoredEngine} from session.` });
+      const assetDrift = await inspectEngineAssetDrift(snapshot.assets, restoredEngine, process.cwd());
+      if (assetDrift) {
+        lastReportedAssetDriftKey = `${target.sessionId}:${assetDrift.current.sha256}`;
+        const changed = assetDrift.changedPaths.length > 0
+          ? assetDrift.changedPaths.join(", ")
+          : "effective profile/prompt assets";
+        hostMessages.push({
+          role: "system",
+          content: `Asset drift detected since this session began: ${changed}. Continued turns use the current effective assets.`,
+        });
+      }
       if (snapshot.providerSelection) {
         try {
           const selection = await applyProviderSelection(snapshot.providerSelection);

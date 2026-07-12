@@ -15,9 +15,14 @@ project follows Semantic Versioning once releases begin.
   build directory's `node_modules/` remains reachable, preventing that
   development-only path from overriding the single-file runtime in Linux ELF
   release smoke checks.
+- Standalone binaries preserve the directory from which the user launched them as the project root instead of changing into the executable directory. Sessions, workspaces, and project asset overrides therefore stay with the active project while runtime/default files resolve explicitly beside the executable.
 
 ### Changed
 
+- Runtime assets now resolve file by file through sparse project overrides, user-global overrides under the Vesicle configuration directory, and packaged/standalone defaults. Directory listings merge the layers, while model-visible file tools retain logical `assets/...` paths and never expose physical global or package locations.
+- New sessions persist a content-only fingerprint of the effective merged asset tree. TUI resume and continued turns warn when the active profile, prompt, spec, template, or protocol assets drift without persisting prompt contents or absolute paths.
+
+- Reorganized the root README into a concise installation and onboarding entry point, moved detailed implementation inventory behind `STATUS.md`, established natural line wrapping as the Markdown prose convention, added synchronized Simplified Chinese editions of the README and contribution guide, and introduced a bilingual Windows-first user manual covering computer basics through a complete gated Module A and choice-driven Module B ETL workflow.
 - Renamed the npm/Bun package from the unowned scoped candidate
   `@prism/vesicle` to the available public package name `prism-vesicle`.
 - Declared the public alpha documentation boundary: setup, diagnostics, prompt
@@ -34,6 +39,8 @@ project follows Semantic Versioning once releases begin.
   after the same release gates.
 
 ### Added
+
+- `vesicle assets status`, `vesicle assets materialize <assets/path> [--global]`, and global `vesicle assets init --global` support inspecting and creating user-wide or project-specific editable asset layers. Existing full project initialization remains compatible, while sparse materialization is the recommended upgrade-safe path.
 
 - Standalone builds now embed OpenTUI's tree-sitter worker through a flat Bun
   worker entrypoint, avoiding an external `node_modules/` runtime bundle. The
@@ -184,8 +191,9 @@ project follows Semantic Versioning once releases begin.
   distribution) and a host ELF (`prism-vesicle`) in one run, fetching the
   os-gated `@opentui/core-win32-x64` native on demand (Bun's installer skips it
   on Linux). Pass `windows` or `linux` to build a single target. The compiled
-  binary loads `assets/` from its working directory, so distribute it next to
-  the `assets/` folder.
+  binary loads its immutable default `assets/` beside `process.execPath`, so
+  distribute it next to the `assets/` folder while launching from the project
+  working directory.
 - Runtime engine now declares a `runtime-packet` validator: a thin MVP that
   checks the three-part turn packet (Hidden Neural Chain, five-line Dynamic HUD)
   the current runtime prompt emits, plus L-System leakage.
@@ -429,7 +437,7 @@ project follows Semantic Versioning once releases begin.
 - Source TUI startup and compiled-executable startup now use separate OpenTUI
   setup paths: `bun run dev` preloads OpenTUI before importing the TUI, while
   `build:exe` applies the OpenTUI Bun build plugin explicitly, avoids external
-  `bunfig.toml` preload lookup, and changes cwd before loading project modules.
+  `bunfig.toml` preload lookup, and resolves compiled runtime files without changing the project cwd.
 - `bun run build:exe` now succeeds on Linux/macOS. The compile step emits the
   entry basename with a platform-appropriate extension, so the post-build rename
   no longer fails looking for a nonexistent `main.exe` and produces a host-native

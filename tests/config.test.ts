@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfigForSelection, loadProviderRegistry } from "../src/config/providers";
+import { userConfigDirectory } from "../src/config/paths";
 
 const tempDirs: string[] = [];
 
@@ -12,6 +13,13 @@ afterEach(async () => {
 });
 
 describe("config loading", () => {
+  test("keeps sibling user configuration beside an explicit providers file", () => {
+    expect(userConfigDirectory({
+      VESICLE_PROVIDERS_FILE: "/tmp/vesicle-custom/providers.yaml",
+      VESICLE_CONFIG_DIR: "/tmp/ignored-default",
+    })).toBe("/tmp/vesicle-custom");
+  });
+
   test("requires a provider registry file instead of legacy single-key env fallback", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-missing-provider-config-"));
     tempDirs.push(rootDir);

@@ -255,6 +255,11 @@ Prompts are runtime assets, not hardcoded source literals.
 - Host-specific references such as Codex, Claude Code, RooCode, `AGENTS.md`,
   `CLAUDE.md`, `ask_followup_question`, and `new_task` should not leak into
   Vesicle engine prompts except as negative host-boundary examples.
+- Treat `assets/...` as a logical read-only namespace, not as one physical project directory. Resolution order is sparse project override, user-global override, then packaged/standalone default, and directories merge across those layers.
+- Profile/prompt loaders and model-visible read tools must consume the same asset resolver. Never let the model receive APPDATA, home-directory, `node_modules`, executable, or Bun virtual filesystem paths.
+- Standalone executables must preserve the invocation cwd as the project root. Resolve executable-owned runtime/default files explicitly through `process.execPath`; do not call `process.chdir()` to make asset lookup work.
+- Session roots record a content-only fingerprint of the effective merged asset tree. Resume and active continuation warn when that fingerprint changes, while keeping prompt text, user content, absolute paths, and secrets out of drift metadata.
+- Sparse overrides are the recommended editing contract. Full snapshots remain available for compatibility but can mask future packaged updates. Version 1 intentionally has no deletion tombstones.
 
 ## Session Semantics
 

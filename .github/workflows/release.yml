@@ -64,13 +64,17 @@ jobs:
       - run: bun run build:assets
       - name: Smoke the release shape
         run: |
-          mkdir smoke
-          cp prism-vesicle smoke/prism-vesicle
-          unzip -q dist/prism-vesicle-assets.zip -d smoke
+          mkdir -p smoke/release smoke/project
+          cp prism-vesicle smoke/release/prism-vesicle
+          unzip -q dist/prism-vesicle-assets.zip -d smoke/release
           (
-            cd smoke
-            ./prism-vesicle debug markdown-runtime
-            ./prism-vesicle prompt shape --engine etl
+            cd smoke/project
+            ../release/prism-vesicle debug markdown-runtime
+            ../release/prism-vesicle assets status
+            ../release/prism-vesicle assets materialize assets/prompts/shared/vesicle-base.md
+            test -f assets/prompts/shared/vesicle-base.md
+            VESICLE_CONFIG_DIR="$PWD/config" ../release/prism-vesicle assets materialize assets/prompts/engines/etl.md --global
+            VESICLE_CONFIG_DIR="$PWD/config" ../release/prism-vesicle prompt shape --engine etl
           )
       - name: Name release artifacts
         env:
@@ -100,14 +104,22 @@ jobs:
       - name: Smoke the release shape
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force smoke | Out-Null
-          Copy-Item prism-vesicle.exe smoke/prism-vesicle.exe
-          Expand-Archive -LiteralPath dist/prism-vesicle-assets.zip -DestinationPath smoke
-          Push-Location smoke
+          New-Item -ItemType Directory -Force smoke/release, smoke/project | Out-Null
+          Copy-Item prism-vesicle.exe smoke/release/prism-vesicle.exe
+          Expand-Archive -LiteralPath dist/prism-vesicle-assets.zip -DestinationPath smoke/release
+          Push-Location smoke/project
           try {
-            & .\prism-vesicle.exe debug markdown-runtime
+            $env:VESICLE_CONFIG_DIR = Join-Path (Get-Location) 'config'
+            & ..\release\prism-vesicle.exe debug markdown-runtime
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & .\prism-vesicle.exe prompt shape --engine etl
+            & ..\release\prism-vesicle.exe assets status
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & ..\release\prism-vesicle.exe assets materialize assets/prompts/shared/vesicle-base.md
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (-not (Test-Path assets/prompts/shared/vesicle-base.md)) { throw 'Project override was not written beneath the invocation cwd.' }
+            & ..\release\prism-vesicle.exe assets materialize assets/prompts/engines/etl.md --global
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & ..\release\prism-vesicle.exe prompt shape --engine etl
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally {
             Pop-Location

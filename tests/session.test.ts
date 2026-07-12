@@ -5,6 +5,20 @@ import { describe, expect, test } from "bun:test";
 import { createSessionStore, listSessions, loadSessionMessages, loadSessionSnapshot } from "../src/core/session/store";
 
 describe("session resume", () => {
+  test("restores the safe asset fingerprint from the initial system record", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-assets-"));
+    const store = await createSessionStore(rootDir);
+    const assets = {
+      sha256: "a".repeat(64),
+      files: [{ path: "assets/prompts/engines/etl.md", sha256: "b".repeat(64), source: "user" as const }],
+    };
+    await store.append({ role: "system", content: "prompt", metadata: { assets } });
+    await store.append({ role: "user", content: "hello" });
+
+    const snapshot = await loadSessionSnapshot(rootDir, store.sessionId);
+    expect(snapshot.assets).toEqual(assets);
+  });
+
   test("restores durable image attachment references without base64", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-images-"));
     const store = await createSessionStore(rootDir);

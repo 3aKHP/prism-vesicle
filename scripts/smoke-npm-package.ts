@@ -17,6 +17,8 @@ try {
   const executable = join(installDir, "node_modules", ".bin", "vesicle");
   await run([process.execPath, executable, "prompt", "shape", "--engine", "etl"], installDir, configDir);
   await run([process.execPath, executable, "debug", "markdown-runtime"], installDir, configDir);
+  await run([process.execPath, executable, "assets", "materialize", "assets/prompts/engines/etl.md", "--global"], installDir, configDir);
+  await run([process.execPath, executable, "assets", "status"], installDir, configDir);
   await run([process.execPath, executable, "assets", "init"], installDir, configDir);
   await run([process.execPath, executable, "prompt", "shape", "--engine", "etl"], installDir, configDir);
   console.log("npm package install smoke passed.");

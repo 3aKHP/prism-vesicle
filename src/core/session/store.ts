@@ -14,6 +14,7 @@ import type { ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import type { FileToolEvent, McpToolEvent, WebToolEvent } from "../tools";
 import { parseImageAttachments } from "../attachments/store";
+import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -220,6 +221,8 @@ export type SessionSnapshot = {
   providerSelection?: ProviderSelection;
   reasoningTier?: ReasoningTier;
   reasoningDisplayMode?: ReasoningDisplayMode;
+  /** Asset profile/prompt fingerprint recorded when the session began. */
+  assets?: AssetFingerprint;
   pendingGate?: {
     gate: GateRequest;
     toolCallId: string;
@@ -299,6 +302,7 @@ export async function loadSessionSnapshot(
   let providerSelection: ProviderSelection | undefined;
   let reasoningTier: ReasoningTier | undefined;
   let reasoningDisplayMode: ReasoningDisplayMode | undefined;
+  let assets: AssetFingerprint | undefined;
 
   for (const record of records) {
     if (record.metadata && Object.hasOwn(record.metadata, "engine")) {
@@ -321,6 +325,7 @@ export async function loadSessionSnapshot(
       // Skip the initial composed prompt; resume recomposes it. Also skip
       // trailing diagnostic system notices (validation, breaker notes).
       if (!skippedFirstSystem) {
+        assets = parseAssetFingerprint(record.metadata?.assets);
         skippedFirstSystem = true;
         continue;
       }
@@ -404,6 +409,7 @@ export async function loadSessionSnapshot(
     ...(providerSelection ? { providerSelection } : {}),
     ...(reasoningTier ? { reasoningTier } : {}),
     ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}),
+    ...(assets ? { assets } : {}),
     ...(pendingGate
       ? {
           pendingGate: {

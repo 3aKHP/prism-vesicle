@@ -1,6 +1,6 @@
 # Prism Vesicle Project Status
 
-_Last updated: 2026-07-11_
+_Last updated: 2026-07-12_
 
 ## Current Version
 
@@ -23,18 +23,16 @@ _Last updated: 2026-07-11_
 | Web research | Tavily web host tools for ETL/Evaluate | Implemented on development branch |
 | MCP tools | Streamable HTTP tools-only client | Implemented on development branch |
 | Multimodal input | Clipboard attachments + guarded project image inspection | Implemented on development branch |
+| Runtime assets | Bundled defaults + user-global + sparse project overlays | Implemented on development branch |
 
 ## Current Scope
 
 The 1.0 alpha makes Vesicle a credible direct API host for Prism Engine, not just a
 Chat wrapper:
 
-User-facing documentation is intentionally limited during this alpha. Treat
-the README quick start, `vesicle doctor`, `vesicle prompt shape --engine <id>`,
-and `docs/examples/` as the supported onboarding references; other behavior is
-subject to alpha-level change while feature/fix work remains the priority.
+User-facing documentation is intentionally limited during this alpha. Treat the Windows-first `docs/user/` manual, README installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and `docs/examples/` as the supported onboarding references; other behavior is subject to alpha-level change while feature/fix work remains the priority.
 
-- Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
+- Resolve each logical `assets/...` file through sparse project overrides, user-global overrides, then packaged/standalone defaults; merge directories without exposing physical global paths to the model. Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
   tool surface, validators, and stop gates from them at runtime.
 - Run a terminal UI with provider status, markdown-rendered conversation with
   terminal-readable LaTeX math cleanup and readable fallbacks for common
@@ -45,13 +43,10 @@ subject to alpha-level change while feature/fix work remains the priority.
   completion, and Escape cancellation.
 - Compile standalone Windows PE and Linux ELF binaries with the OpenTUI
   tree-sitter worker embedded as a flat Bun worker entrypoint. Prompt and
-  profile `assets/` remain an editable external release pack; `vesicle debug
+  profile `assets/` remain an external default release pack; executables preserve the invocation directory as the project root and locate defaults beside the executable. `vesicle debug
   markdown-runtime` is the non-interactive runtime smoke check and `bun run
   build:assets` creates the release ZIP.
-- Publish an npm/Bun package with pinned runtime dependencies and bundled
-  default assets. Package invocations resolve their installed OpenTUI worker
-  and assets independently of the active project directory; `vesicle assets
-  init` materializes an editable local override.
+- Publish an npm/Bun package with pinned runtime dependencies and bundled default assets. Package invocations resolve their installed OpenTUI worker and assets independently of the active project directory. `vesicle assets status` reports the effective layers, `assets materialize <assets/path> [--global]` creates sparse project or user overrides, and `assets init [--global]` retains full-snapshot compatibility.
 - GitHub Actions CI validates pull requests and `develop` pushes on Linux and
   Windows. The manual Release verification workflow builds and labels PE, ELF,
   and assets-ZIP candidate artifacts without publishing them.
@@ -341,6 +336,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - Long-form engines (Weaver / Weaver-Orch / Dyad) have profiles and prompts
   but no dedicated validators or gate wiring.
 - Prompt-cache engineering (PrefixShape hashing, CacheDiagnostics) is deferred.
+- Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
 
 ## Verification
 

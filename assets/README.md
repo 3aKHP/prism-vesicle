@@ -4,17 +4,15 @@ This directory contains the Prism v9 assets needed by M0.
 
 ## Release Distribution
 
-Standalone PE and ELF releases intentionally keep this directory external so
-users can inspect, edit, and replace prompt/profile assets without rebuilding
-the executable. Run `bun run build:assets` to create the release attachment
-`dist/prism-vesicle-assets.zip`, then extract its top-level `assets/` directory
-beside the selected binary.
+Standalone PE and ELF releases intentionally keep this directory external as the immutable release baseline. Run `bun run build:assets` to create `dist/prism-vesicle-assets.zip`, then extract its top-level `assets/` directory beside the selected binary. The executable may be launched from a separate project directory; it locates the release baseline beside `process.execPath` without changing the project working directory.
 
-The npm/Bun package also ships this directory as package data, so `npm install
-prism-vesicle` is independent of the standalone binary layout. Package-owned
-assets are the default only when the current project has no `assets/` directory.
-Run `bunx vesicle assets init` to copy an editable project-local override;
-never edit the copy under `node_modules/`.
+The npm/Bun package ships the same baseline as package data. Never edit package-owned files under `node_modules/` or the extracted release baseline. Vesicle resolves each logical path file by file in this order:
+
+1. `<project>/assets/` sparse overrides.
+2. User-global sparse overrides under `%APPDATA%\prism-vesicle\assets\` on Windows or `$XDG_CONFIG_HOME/prism-vesicle/assets/` / `~/.config/prism-vesicle/assets/` elsewhere.
+3. Package-owned or standalone release defaults.
+
+Directories merge across layers; a higher-layer file wins at the same logical path. Version 1 has no deletion tombstones. Use `vesicle assets status` to inspect layers, `vesicle assets materialize <assets/path> [--global]` to copy one editable file/directory, or `vesicle assets init [--global]` when a complete snapshot is intentionally required. Sparse overrides are preferred because untouched defaults continue to update with Vesicle releases.
 
 ## Source Paths
 

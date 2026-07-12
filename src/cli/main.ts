@@ -1,20 +1,16 @@
 #!/usr/bin/env bun
-import { dirname } from "node:path";
 import { isCompiledBinaryRuntime } from "./runtime";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 
 // Bun's compiled single-file executable reports Bun.main from the bundled
-// virtual root while process.execPath points at the real compiled binary. Switch cwd
-// before loading project modules so asset/session/workspace roots resolve next
-// to the moved binary instead of the build-time directory.
+// virtual root. Keep the invocation cwd unchanged: it is the project root for
+// sessions, workspaces, and sparse project asset overrides. Runtime files use
+// explicit executable/bunfs paths instead of mutating global process state.
 const compiledMarker = typeof VESICLE_COMPILED_BINARY === "boolean"
   ? VESICLE_COMPILED_BINARY
   : undefined;
 const isCompiledBinary = isCompiledBinaryRuntime(compiledMarker, Bun.main);
-if (isCompiledBinary) {
-  process.chdir(dirname(process.execPath));
-}
 
 const command = process.argv[2];
 
@@ -91,12 +87,8 @@ switch (command) {
     break;
   }
   case "assets": {
-    if (process.argv[3] !== "init" || process.argv[4] !== undefined) {
-      console.error("Usage: vesicle assets init");
-      process.exit(1);
-    }
-    const { initializeEditableAssets } = await import("./assets");
-    await initializeEditableAssets();
+    const { runAssetsCommand } = await import("./assets");
+    await runAssetsCommand(process.argv.slice(3));
     break;
   }
   case undefined:
