@@ -85,6 +85,7 @@ export type CommandContext = {
   compactSession: (instructions?: string) => Promise<{ summary: string; messagesSummarized: number }>;
   openRewindPicker: () => Promise<void>;
   resetRewindState: () => void;
+  agentCommand: (args: string) => Promise<string>;
 
   // —— model picker (used by /model with no args) ——
   openModelPicker: () => Promise<void>;

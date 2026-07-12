@@ -3,6 +3,8 @@ import { palette } from "../theme";
 import { PanelLine } from "../widgets/PanelLine";
 import { truncateLine, truncateMiddle } from "../format";
 import { artifactRoots } from "../../core/artifacts/workbench";
+import type { AgentCardState } from "../types";
+import { visibleAgentCards } from "../agent-view";
 
 /**
  * Semantic colour for the status line. `status` is a catch-all string (config
@@ -32,6 +34,8 @@ export function Sidebar(props: {
   mcp?: SidebarMcpState;
   artifacts: { path: string }[];
   selectedArtifactPath?: string;
+  agents?: AgentCardState[];
+  currentSessionId?: string;
   width: number;
 }) {
   const reasoningLabel = () => (props.reasoningMode === "collapsed" ? "preview" : props.reasoningMode);
@@ -40,6 +44,11 @@ export function Sidebar(props: {
     <box title="Workspace" border borderColor={palette.sectionBorder} width={props.width} padding={1} flexDirection="column">
       <PanelLine content="Status" fg={palette.brandDim} attributes={1} />
       <PanelLine content={truncateLine(props.status, props.width - 4)} fg={statusColor(props.status)} attributes={1} />
+      <PanelLine content=" " fg={palette.textDim} />
+      <PanelLine content="Agents" fg={palette.brandDim} attributes={1} />
+      <For each={agentSidebarLines(props.agents ?? [], props.width - 4, props.currentSessionId)}>
+        {(line) => <PanelLine content={line.text} fg={line.color} attributes={line.active ? 1 : 0} />}
+      </For>
       <PanelLine content=" " fg={palette.textDim} />
       <PanelLine content="Effort" fg={palette.brandDim} attributes={1} />
       <PanelLine content={truncateLine(`tier: ${props.thinkingTier ?? "auto"}`, props.width - 4)} fg={palette.textPrimary} />
@@ -83,6 +92,36 @@ export function Sidebar(props: {
       </scrollbox>
     </box>
   );
+}
+
+export function agentSidebarLines(cards: AgentCardState[], width: number, currentSessionId?: string): Array<{ text: string; color: string; active: boolean }> {
+  const allVisible = cards.filter((card) => card.status === "queued"
+    || card.status === "running"
+    || card.status === "ready"
+    || card.status === "integrating"
+    || card.delivery === "pending"
+    || card.delivery === "integrating");
+  const visible = visibleAgentCards(cards);
+  if (visible.length === 0) return [{ text: "none active", color: palette.textDim, active: false }];
+  const lines: Array<{ text: string; color: string; active: boolean }> = visible.map((card) => {
+    const symbol = card.status === "failed" ? "×" : card.status === "cancelled" ? "■" : card.status === "running" ? "●" : card.status === "queued" ? "○" : card.status === "integrating" ? "◈" : "◆";
+    const color = card.status === "failed" ? palette.error : card.status === "running" ? palette.warn : card.status === "integrating" ? palette.gateAccent : palette.brand;
+    const delivery = card.delivery === "pending" && card.status !== "ready" ? " · ready" : card.delivery === "integrating" && card.status !== "integrating" ? " · integrating" : "";
+    const parked = currentSessionId && card.parentSessionId !== currentSessionId ? " · parked" : "";
+    return {
+      text: truncateLine(`${symbol} ${card.handle} · ${card.status}${delivery}${parked}`, width),
+      color,
+      active: true,
+    };
+  });
+  if (allVisible.length > visible.length) {
+    lines.push({
+      text: truncateLine(`+${allVisible.length - visible.length} more · /agents`, width),
+      color: palette.textMuted,
+      active: false,
+    });
+  }
+  return lines;
 }
 
 export type SidebarMcpState = {

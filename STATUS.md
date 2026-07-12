@@ -24,6 +24,7 @@ _Last updated: 2026-07-12_
 | MCP tools | Streamable HTTP tools-only client | Implemented on development branch |
 | Multimodal input | Clipboard attachments + guarded project image inspection | Implemented on development branch |
 | Runtime assets | Bundled defaults + user-global + sparse project overlays | Implemented on development branch |
+| SubAgents | Profile-driven foreground/background parallel child runtime + durable completion delivery | Implemented on development branch |
 
 ## Current Scope
 
@@ -162,6 +163,7 @@ User-facing documentation is intentionally limited during this alpha. Treat the 
 - Persist successful filesystem tool operations as structured `fileEvent`
   metadata on session tool records, so generated file changes can be replayed
   or audited without scraping prose.
+- Load independent Agent Profiles from `assets/agents/` through the same bundled, user-global, and sparse project overlay layers as engine assets. `spawn_agent` supports foreground joins and non-blocking background work; multiple calls in one response launch concurrently. Background results are coalesced in a durable parent inbox and automatically resume an idle parent session. Each child keeps a host-only UUID run id and exposes a short handle such as `explore-1` to models and users. Dedicated Agent cards update in place; active/ready background work remains visible in the header and Workspace sidebar. `/agents [handle]` lists or inspects child state, `/agents stop <handle>` interrupts queued or running work, and `/agents retry` retries delivery after an exhausted provider error.
 - Search the live web through Tavily-backed `web_search`, extract readable page
   content through `web_fetch`, discover site URLs through `web_map`, run bounded
   multi-page extraction through `web_crawl`, and request cited synthesis through
@@ -210,6 +212,7 @@ prism-vesicle/
 │   ├── core/
 │   │   ├── artifacts/    # Artifact scanning, preview bounds, validation selection
 │   │   ├── agent-loop/   # Provider calls, tool loop, gate pause/resume
+│   │   ├── agents/       # Agent profiles, child runtime, scheduling, inbox
 │   │   ├── checkpoints/  # Per-turn file snapshots, diff stats, restore
 │   │   ├── engine/       # Engine profile YAML loader
 │   │   ├── gate/         # request_confirmation tool + GateRequest types
@@ -260,6 +263,11 @@ prism-vesicle/
 | `ask_user_question` | Implemented (single-select question + host fallback options) | No filesystem access |
 | `request_confirmation` | Implemented (gate) | No filesystem access |
 | `request_engine_switch` | Implemented (handoff gate) | No filesystem access |
+| `spawn_agent` | Implemented (foreground/background, concurrent) | Delegated Agent Profile scope |
+| `list_agents` | Implemented | No filesystem access |
+| `send_message` | Implemented (child request boundaries) | No filesystem access |
+| `interrupt_agent` | Implemented | No filesystem access |
+| `wait_agent` | Implemented (explicit terminal wait and background inbox consumption) | No filesystem access |
 | `config.load` | Internal contract | N/A |
 | `prompt.load` | Internal contract | N/A |
 | `session.write` | Internal contract | `.vesicle/sessions/` |
@@ -300,6 +308,9 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 
 ## Known Limits
 
+- SubAgent recursion is disabled in the first runtime. Top-level children run concurrently (default maximum four), but child profiles do not receive the agent-control tools. A process restart marks previously running children as failed and delivers that terminal result; it does not replay an in-flight provider request.
+- SubAgent handles are unique within one parent session rather than globally; host-only run ids preserve global storage and recovery identity. Legacy UUID-style Agent references remain accepted but are no longer emitted.
+- Concrete Weaver-Orch scene allocation, Evaluate reviewer composition, and artifact merge policy remain Harness responsibilities. Vesicle supplies the generic Agent Profile, scheduling, persistence, and delivery substrate.
 - OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini
   `generateContent` are implemented. OpenAI Responses is deferred.
 - The provider registry supports multiple configured providers using

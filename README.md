@@ -109,6 +109,7 @@ Useful commands:
 | `/rewind` | Restore a conversation branch, Vesicle-managed files, or both |
 | `/compact [notes]` | Summarize older context into a compact continuation |
 | `/context` | Inspect token totals and configured context limits |
+| `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry paused delivery for SubAgents using short handles such as `explore-1` |
 
 The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escape cancels an active provider request; with an empty composer, double Escape opens rewind. Vision-capable models can receive a clipboard image through Alt+V, with Ctrl+Alt+V accepted when reported by WSL terminals.
 
@@ -119,6 +120,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
+- Foreground and background SubAgents with parallel execution, independent built-in or custom Agent Profiles, dedicated live Agent cards, short model/user-facing handles, durable completion delivery, and parent continuation without polling.
 - npm distribution plus standalone Windows and Linux builds with an immutable external default asset pack and sparse editable global/project overrides.
 
 See [`STATUS.md`](./STATUS.md) for the authoritative implementation inventory, tool surface, validators, and known limits.

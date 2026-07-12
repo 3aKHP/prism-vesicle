@@ -1,0 +1,21 @@
+id: research
+displayName: Research Agent
+description: Investigate a focused question using project and web evidence with source attribution.
+systemPrompt:
+  - assets/prompts/agents/base.md
+  - assets/prompts/agents/research.md
+tools:
+  - stat_path
+  - list_files
+  - grep_files
+  - read_file
+  - view_image
+  - web_search
+  - web_fetch
+  - web_map
+  - web_crawl
+  - web_research
+contextMode: fresh
+modelPolicy: inherit
+defaultMode: background
+maxTurns: 24

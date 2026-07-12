@@ -51,23 +51,32 @@ import { builtinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
 import { matchCommands } from "./commands/match";
 import {
+  completeAgentArgument,
   completeFixedArgument,
   completeModelArgument,
   fixedArgumentOptions,
   matchOptionItems,
+  parseAgentArgumentDraft,
   parseFixedArgumentDraft,
   parseModelArgumentDraft,
 } from "./commands/argument-completion";
-import type { FixedArgumentDraft, ModelArgumentDraft } from "./commands/argument-completion";
+import type { AgentArgumentDraft, FixedArgumentDraft, ModelArgumentDraft } from "./commands/argument-completion";
 import { clampCommandMenuSelection, moveCommandMenuSelection } from "./commands/selection";
 import type { CommandContext } from "./commands/types";
-import type { ActivityEntry, Message, OptionItem, SelectedArtifact, SessionPickerState } from "./types";
+import type { ActivityEntry, AgentCardState, Message, OptionItem, SelectedArtifact, SessionPickerState } from "./types";
 import { createRewindController } from "./rewind/controller";
 import { initDebugLogging } from "./debug-log";
 import { TurnCancellation } from "./turn-cancellation";
 import { PromptEscapeController } from "./prompt-escape";
 import { ingestImageBytes } from "../core/attachments/store";
 import { inspectEngineAssetDrift } from "../core/runtime/engine-assets";
+import { AgentManager } from "../core/agents/manager";
+import { AgentStore } from "../core/agents/store";
+import { runChildAgent } from "../core/agents/child-runner";
+import { AgentContinuationScheduler, AgentDeliveryDeferred } from "../core/agents/scheduler";
+import type { AgentInboxEntry } from "../core/agents/types";
+import { listAgentProfiles } from "../core/agents/profile";
+import { agentActivitySummary, agentCardFromMetadata, applyAgentEvent, mergeRestoredAgentCards, renderAgentDetail, retryAgentDelivery, setAgentDeliveryState } from "./agent-view";
 
 type PendingGate = Extract<RunPromptResult, { kind: "needs_user" }>;
 
@@ -158,6 +167,7 @@ export function App() {
   const [inputElements, setInputElements] = createSignal<ComposerElement[]>([]);
   const [inputImages, setInputImages] = createSignal<VesicleImageAttachment[]>([]);
   const [busy, setBusy] = createSignal(false);
+  const [restoringSession, setRestoringSession] = createSignal(false);
   const [resumableSessions, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
@@ -168,6 +178,7 @@ export function App() {
   const [activity, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
+  const [agentCards, setAgentCards] = createSignal<AgentCardState[]>([]);
   const [streamingAssistant, setStreamingAssistant] = createSignal("");
   const [streamingReasoning, setStreamingReasoning] = createSignal("");
   const [lastTurnUsage, setLastTurnUsage] = createSignal<TokenUsageSummary | undefined>();
@@ -207,6 +218,32 @@ export function App() {
   const [gateFeedback, setGateFeedback] = createSignal("");
   const [gateFeedbackCursor, setGateFeedbackCursor] = createSignal(0);
   const [gateFeedbackKillBuffer, setGateFeedbackKillBuffer] = createSignal<string | undefined>();
+  const agentStore = new AgentStore(process.cwd());
+  const pausedAgentDeliveries = new Set<string>();
+  const continuationScheduler = new AgentContinuationScheduler(agentStore, deliverAgentResults, {
+    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
+      && !pausedAgentDeliveries.has(parentSessionId)
+      && !restoringSession()
+      && !busy()
+      && !pendingGate()
+      && !pendingEngineSwitch()
+      && !pendingUserQuestion(),
+  });
+  const agentManager = new AgentManager(agentStore, runChildAgent, {
+    onEvent: (event) => {
+      handleAgentEvent(event);
+      if (event.type === "agent_completed"
+        && event.result.mode === "background"
+        && event.result.status !== "cancelled") {
+        void continuationScheduler.notify(event.result.parentSessionId).catch(reportError);
+      }
+    },
+  });
+  createEffect(() => {
+    const id = sessionId();
+    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion();
+    if (id && ready) void continuationScheduler.notify(id).catch(reportError);
+  });
 
   const inputShowsCommandHelp = createMemo(() => inputValue().startsWith("/"));
   // Slash-command popup: open while the user is still typing the command
@@ -231,7 +268,8 @@ export function App() {
   });
   const modelArgumentDraft = createMemo(() => parseModelArgumentDraft(inputValue()));
   const fixedArgumentDraft = createMemo(() => parseFixedArgumentDraft(inputValue()));
-  const commandArgumentMenuOpen = createMemo(() => modelArgumentDraft() !== null || fixedArgumentDraft() !== null);
+  const agentArgumentDraft = createMemo(() => parseAgentArgumentDraft(inputValue()));
+  const commandArgumentMenuOpen = createMemo(() => modelArgumentDraft() !== null || fixedArgumentDraft() !== null || agentArgumentDraft() !== null);
   const commandArgumentItems = createMemo<OptionItem[]>(() => {
     const modelDraft = modelArgumentDraft();
     if (modelDraft) {
@@ -243,7 +281,27 @@ export function App() {
       return matchOptionItems(modelDraft.query, options);
     }
     const fixedDraft = fixedArgumentDraft();
-    return fixedDraft ? matchOptionItems(fixedDraft.query, fixedArgumentOptions(fixedDraft.command)) : [];
+    if (fixedDraft) return matchOptionItems(fixedDraft.query, fixedArgumentOptions(fixedDraft.command));
+    const agentDraft = agentArgumentDraft();
+    if (!agentDraft) return [];
+    const handles: OptionItem[] = agentCards()
+      .filter((agent) => agent.parentSessionId === sessionId())
+      .map((agent) => ({
+        id: agent.handle,
+        label: agent.handle,
+        detail: `${agent.status} · ${agent.description}`,
+      }));
+    const options = agentDraft.stage === "command"
+      ? [
+        { id: "stop", label: "stop", detail: "Interrupt a running SubAgent" },
+        { id: "retry", label: "retry", detail: "Retry paused background-result delivery" },
+        ...handles,
+      ]
+      : handles.filter((item) => {
+        const agent = agentCards().find((candidate) => candidate.handle === item.id);
+        return agent?.status === "queued" || agent?.status === "running";
+      });
+    return matchOptionItems(agentDraft.query, options);
   });
   const [commandArgumentSelected, setCommandArgumentSelected] = createSignal(0);
   createEffect(() => {
@@ -253,10 +311,13 @@ export function App() {
   createEffect(() => {
     const modelDraft = modelArgumentDraft();
     const fixedDraft = fixedArgumentDraft();
+    const agentDraft = agentArgumentDraft();
     const key = modelDraft
       ? `model:${modelDraft.stage}:${modelDraft.stage === "model" ? `${modelDraft.providerId}:` : ""}${modelDraft.query}`
       : fixedDraft
         ? `fixed:${fixedDraft.command}:${fixedDraft.query}`
+        : agentDraft
+          ? `agent:${agentDraft.stage}:${agentDraft.query}`
         : null;
     if (key !== previousCommandArgumentKey) setCommandArgumentSelected(0);
     previousCommandArgumentKey = key;
@@ -308,6 +369,7 @@ export function App() {
   const promptEscape = new PromptEscapeController();
   let activeTurnSawResponse = false;
   let activeTurnUsage = emptyUsageSummary();
+  let activeTurnAgentUsage = emptyUsageSummary();
   let activeTurnUsagePublished = false;
   let lastReportedAssetDriftKey: string | undefined;
   let providerConfigLoad: Promise<void> | null = null;
@@ -315,6 +377,16 @@ export function App() {
   // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
     void refreshArtifacts();
+    void agentStore.recoverInterrupted().then((recovered) => {
+      if (recovered.length === 0) return;
+      setMessages((current) => [...current, {
+        role: "system",
+        content: `Recovered ${recovered.length} interrupted SubAgent${recovered.length === 1 ? "" : "s"}; foreground tool calls were closed and background failures will be delivered when their parent sessions resume.`,
+      }]);
+      for (const agent of recovered.filter((entry) => entry.mode === "background")) {
+        void continuationScheduler.notify(agent.parentSessionId).catch(reportError);
+      }
+    }).catch(reportError);
     void refreshMcpStatus().catch(reportError);
     void loadProviderConfigOnce().catch((error) => {
       setProviderConfigReady(true);
@@ -717,7 +789,9 @@ export function App() {
     const modelDraft = modelArgumentDraft();
     if (modelDraft) return completeModelArgument(modelDraft, item);
     const fixedDraft = fixedArgumentDraft();
-    return fixedDraft ? completeFixedArgument(fixedDraft, item) : null;
+    if (fixedDraft) return completeFixedArgument(fixedDraft, item);
+    const agentDraft = agentArgumentDraft();
+    return agentDraft ? completeAgentArgument(agentDraft, item) : null;
   }
 
   function submitCompletedCommandArgument(value: string) {
@@ -784,7 +858,7 @@ export function App() {
   async function applyConversationRewind(result: ConversationRewind): Promise<void> {
     const snapshot = result.snapshot;
     setConversation(vesicleMessagesFromResumed(snapshot.messages));
-    setMessages(displayTranscriptFromSnapshot(snapshot.messages));
+    setMessages(displayTranscriptFromSnapshot(snapshot.messages, agentCards()));
     setActiveEngine(snapshot.engine ?? "etl");
     setThinkingTier(snapshot.reasoningTier);
     setReasoningDisplayMode(snapshot.reasoningDisplayMode ?? "collapsed");
@@ -840,7 +914,7 @@ export function App() {
       const result = outcome.value;
       const snapshot = result.snapshot;
       setConversation(vesicleMessagesFromResumed(snapshot.messages));
-      setMessages(displayTranscriptFromSnapshot(snapshot.messages));
+      setMessages(displayTranscriptFromSnapshot(snapshot.messages, agentCards()));
       setLastTurnUsage(latestTurnUsage(snapshot.messages));
       setSessionUsage(sumSessionUsage(snapshot.messages));
       setOutput("");
@@ -1054,6 +1128,7 @@ export function App() {
     }
 
     recordPromptHistory(value, elements, images);
+    if (sessionId()) pausedAgentDeliveries.delete(sessionId()!);
     setHistoryIndex(null);
     setSessionPicker(null);
     setLastDisplayedToolAssistantContent(null);
@@ -1082,6 +1157,7 @@ export function App() {
         generation: activeGeneration(),
         signal,
         onEvent: handleAgentEvent,
+        agentManager,
       }));
       if (outcome.kind === "interrupted") {
         if (!activeTurnSawResponse) await restoreInterruptedPrompt(value, images, elements);
@@ -1098,6 +1174,64 @@ export function App() {
       setBusy(false);
     }
   };
+
+  async function deliverAgentResults(parentSessionId: string, entries: AgentInboxEntry[], packet: string): Promise<void> {
+    if (sessionId() !== parentSessionId || busy() || pendingGate() || pendingEngineSwitch() || pendingUserQuestion()) {
+      throw new AgentDeliveryDeferred();
+    }
+    setBusy(true);
+    try {
+      setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrating", "integrating result into parent"));
+      setStatus(`integrating ${entries.length} SubAgent result${entries.length === 1 ? "" : "s"}`);
+      recordActivity({ kind: "agent", text: `delivering ${entries.length} background result${entries.length === 1 ? "" : "s"}` });
+      setMessages((current) => [...current, {
+        role: "system",
+        content: `Background SubAgent${entries.length === 1 ? "" : "s"} completed: ${entries.map((entry) => `${entry.description} (${entry.status})`).join(", ")}.`,
+      }]);
+      const requestMessages: VesicleMessage[] = [...conversation(), { role: "user", content: packet }];
+      activeTurnSawResponse = false;
+      beginUsageTurn();
+      for (const entry of entries) {
+        if (entry.usage) recordIndependentAgentUsage(entry.usage);
+      }
+      const childUsage = combineIndependentUsage(entries.map((entry) => entry.usage));
+      const inboxIds = entries.map((entry) => entry.inboxId).sort();
+      const persistedDelivery = (await loadSessionSnapshot(process.cwd(), parentSessionId, {
+        synthesizeDanglingToolResults: false,
+      })).records.find((record) => record.role === "user"
+        && record.metadata?.kind === "subagent-results"
+        && sameStringSet(record.metadata?.inboxIds, inboxIds));
+      const outcome = await turnCancellation.run((signal) => runPrompt({
+        input: packet,
+        engine: activeEngine(),
+        sessionId: parentSessionId,
+        messages: requestMessages,
+        inputMetadata: {
+          kind: "subagent-results",
+          inboxIds,
+          ...(childUsage ? { usage: childUsage } : {}),
+        },
+        ...(persistedDelivery ? { prePersistedInputUuid: persistedDelivery.uuid } : {}),
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        signal,
+        onEvent: handleAgentEvent,
+        agentManager,
+      }));
+      if (outcome.kind === "interrupted") {
+        handleInterruptedTurn();
+        throw new Error("SubAgent result delivery was interrupted.");
+      }
+      handleResult(outcome.value, requestMessages);
+      setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrated", "result integrated"));
+    } catch (error) {
+      setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "pending", "integration paused; use /agents retry or send input"));
+      pausedAgentDeliveries.add(parentSessionId);
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const submitGateResolution = async (resolution: GateResolution) => {
     const gate = pendingGate();
@@ -1129,6 +1263,7 @@ export function App() {
         generation: activeGeneration(),
         signal,
         onEvent: handleAgentEvent,
+        agentManager,
       }));
       if (outcome.kind === "interrupted") {
         setPendingGate(gate);
@@ -1185,6 +1320,7 @@ export function App() {
         generation: activeGeneration(),
         signal,
         onEvent: handleAgentEvent,
+        agentManager,
       }));
       if (outcome.kind === "interrupted") {
         setPendingEngineSwitch(pending);
@@ -1296,6 +1432,7 @@ export function App() {
         generation: activeGeneration(),
         signal,
         onEvent: handleAgentEvent,
+        agentManager,
       }));
       if (outcome.kind === "interrupted") {
         setPendingUserQuestion(pending);
@@ -1319,6 +1456,7 @@ export function App() {
    */
   function beginUsageTurn(): void {
     activeTurnUsage = emptyUsageSummary();
+    activeTurnAgentUsage = emptyUsageSummary();
     activeTurnUsagePublished = false;
     setLastTurnUsage(undefined);
   }
@@ -1328,8 +1466,14 @@ export function App() {
     activeTurnUsagePublished = false;
   }
 
+  function recordIndependentAgentUsage(usage: ResponseUsage): void {
+    activeTurnAgentUsage = addIndependentUsageToTurn(activeTurnAgentUsage, usage);
+    activeTurnUsagePublished = false;
+  }
+
   function publishTurnUsage(): void {
-    const usage = hasUsageSummary(activeTurnUsage) ? activeTurnUsage : undefined;
+    const combined = mergeLogicalTurnUsage(activeTurnUsage, activeTurnAgentUsage);
+    const usage = hasUsageSummary(combined) ? combined : undefined;
     setLastTurnUsage(usage);
     if (usage && !activeTurnUsagePublished) {
       setSessionUsage((current) => addTurnUsageToSession(current, usage));
@@ -1497,7 +1641,47 @@ export function App() {
   let formingToolName: string | undefined;
 
   function handleAgentEvent(event: AgentLoopEvent) {
+    if (event.type === "agent_created"
+      || event.type === "agent_started"
+      || event.type === "agent_progress"
+      || event.type === "agent_completed"
+      || event.type === "agent_integrated") {
+      setAgentCards((cards) => applyAgentEvent(cards, event));
+      if (event.type === "agent_created") {
+        setMessages((current) => current.some((message) => message.kind === "agent" && message.agentRunId === event.agent.runId)
+          ? current
+          : [...current, { role: "system", content: "", kind: "agent", agentRunId: event.agent.runId }]);
+      }
+    }
+    const eventParentSessionId = event.type === "agent_created" || event.type === "agent_started"
+      ? event.agent.parentSessionId
+      : event.type === "agent_progress" || event.type === "agent_integrated"
+        ? event.parentSessionId
+        : event.type === "agent_completed"
+          ? event.result.parentSessionId
+          : undefined;
+    const currentAgentEvent = eventParentSessionId === undefined
+      || eventParentSessionId === sessionId()
+      || (!sessionId() && busy());
     switch (event.type) {
+      case "agent_created":
+        recordActivity({ kind: "agent", text: `queued ${event.agent.profileId}: ${event.agent.description}` });
+        return;
+      case "agent_started":
+        recordActivity({ kind: "agent", text: `started ${event.agent.handle}: ${event.agent.description}` });
+        return;
+      case "agent_progress":
+        recordActivity({ kind: "agent", text: `${event.handle}: ${event.text}` });
+        return;
+      case "agent_completed":
+        if (currentAgentEvent && event.result.mode === "foreground" && event.result.usage) {
+          recordIndependentAgentUsage(event.result.usage);
+        }
+        recordActivity({ kind: "agent", text: `${event.result.status} ${event.result.handle}: ${event.result.description}` });
+        return;
+      case "agent_integrated":
+        recordActivity({ kind: "agent", text: `integrated ${event.handle}` });
+        return;
       case "asset_drift": {
         const key = `${sessionId() ?? "unknown"}:${event.fingerprint}`;
         if (lastReportedAssetDriftKey === key) return;
@@ -1563,6 +1747,11 @@ export function App() {
         });
         return;
       case "tool_call":
+        if (event.name === "spawn_agent") {
+          setStatus("starting SubAgent");
+          recordActivity({ kind: "agent", text: "spawn_agent requested" });
+          return;
+        }
         setMessages((prev) => [
           ...prev,
           { role: "tool", toolStage: "call", toolName: event.name, toolArgs: event.arguments, toolCallId: event.callId, content: "" },
@@ -1571,6 +1760,17 @@ export function App() {
         recordActivity({ kind: "tool", text: `calling ${event.name}` });
         return;
       case "tool_result":
+        if (event.name === "spawn_agent") {
+          if (!event.ok) {
+            setStatus("SubAgent launch failed");
+            setMessages((current) => [...current, {
+              role: "system",
+              content: `SubAgent launch failed: ${event.content}`,
+            }]);
+          }
+          recordActivity({ kind: "agent", text: `${event.ok ? "ok" : "failed"} spawn_agent` });
+          return;
+        }
         setMessages((prev) => {
           // Merge the outcome onto the matching call card so its diff can show
           // the affected line range (matchLines → git-style hunk + gutter),
@@ -1831,10 +2031,54 @@ export function App() {
     compactSession,
     openRewindPicker: rewindController.open,
     resetRewindState,
+    agentCommand,
     openModelPicker,
   };
 
+  async function agentCommand(args: string): Promise<string> {
+    const id = sessionId();
+    const [action, target] = args.trim().split(/\s+/, 2);
+    if (action === "stop") {
+      if (!target) return "Usage: /agents stop <agent-handle>";
+      if (!id) return "No active session.";
+      const interrupted = await agentManager.interrupt(target, id);
+      return interrupted ? `Interrupt requested for ${target}.` : `SubAgent is not running: ${target}.`;
+    }
+    if (action === "retry" && !target) {
+      if (!id) return "No active session.";
+      void retryAgentDelivery(pausedAgentDeliveries, id, (session) => continuationScheduler.notify(session)).catch(reportError);
+      return "SubAgent result delivery retry scheduled.";
+    }
+    if (action && !target) {
+      if (!id) return "No active session.";
+      const agent = await agentStore.resolveReference(id, action);
+      if (!agent) return `Unknown SubAgent: ${action}.`;
+      const inbox = (await agentStore.listInbox(id)).filter((entry) => entry.runId === agent.runId);
+      const card = agentCards().find((candidate) => candidate.runId === agent.runId)
+        ?? agentCardFromMetadata(agent, inbox);
+      return renderAgentDetail(agent, card, inbox);
+    }
+    if (args.trim()) return "Usage: /agents [handle|stop <handle>|retry]";
+    const profiles = await listAgentProfiles(process.cwd());
+    const agents = id ? await agentStore.listByParent(id) : [];
+    const inbox = id ? await agentStore.listInbox(id) : [];
+    const lines = ["Agent Profiles:"];
+    for (const profile of profiles) {
+      lines.push(`  ${profile.id} [${profile.defaultMode}/${profile.contextMode}] - ${profile.description}`);
+    }
+    lines.push("", "Current session SubAgents:");
+    if (agents.length === 0) lines.push("  (none)");
+    for (const agent of agents) {
+      const card = agentCards().find((candidate) => candidate.runId === agent.runId)
+        ?? agentCardFromMetadata(agent, inbox);
+      lines.push(`  ${agent.handle} [${card.status}/${agent.mode}] ${agent.description}`);
+    }
+    lines.push("", "Use /agents <handle> for details, /agents stop <handle> to interrupt, or /agents retry after a delivery error.");
+    return lines.join("\n");
+  }
+
   async function resumeSession(target: SessionSummary, commandEcho?: string) {
+    setRestoringSession(true);
     try {
       const snapshot = await loadSessionSnapshot(process.cwd(), target.sessionId, {
         synthesizeDanglingToolResults: false,
@@ -1849,7 +2093,14 @@ export function App() {
           for (const tc of m.toolCalls) argsByCallId.set(tc.id, { name: tc.name, arguments: tc.arguments });
         }
       }
-      const transcript = snapshot.messages.flatMap((m) => displayMessagesFromResumed(m, argsByCallId));
+      const [storedAgents, storedInbox] = await Promise.all([
+        agentStore.listByParent(target.sessionId),
+        agentStore.listInbox(target.sessionId),
+      ]);
+      const restoredAgentCards = storedAgents.map((agent) => agentCardFromMetadata(agent, storedInbox));
+      setAgentCards((current) => mergeRestoredAgentCards(current, target.sessionId, restoredAgentCards));
+      const agentsByToolCallId = new Map(restoredAgentCards.map((agent) => [agent.parentToolCallId, agent]));
+      const transcript = snapshot.messages.flatMap((m) => displayMessagesFromResumed(m, argsByCallId, agentsByToolCallId));
       const restoredEngine = snapshot.engine ?? "etl";
       setSessionId(target.sessionId);
       setNextSessionParent(null);
@@ -1981,6 +2232,8 @@ export function App() {
       await refreshArtifacts();
     } catch (error) {
       reportError(error);
+    } finally {
+      setRestoringSession(false);
     }
   }
 
@@ -1995,7 +2248,7 @@ export function App() {
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
         <text
-          content={headerLine(activeEngine(), layout().width)}
+          content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()))}
           fg={engineAccent(activeEngine())}
           attributes={1}
         />
@@ -2011,6 +2264,8 @@ export function App() {
             mcp={mcpStatus()}
             artifacts={artifacts()}
             selectedArtifactPath={selectedArtifact()?.path}
+            agents={agentCards()}
+            currentSessionId={sessionId()}
             width={layout().leftPanelWidth}
           />
         </Show>
@@ -2021,6 +2276,7 @@ export function App() {
           streamingAssistant={streamingAssistant()}
           reasoningMode={reasoningDisplayMode()}
           contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
+          agents={agentCards()}
         />
 
         {/* The former right-hand Activity / Artifacts pane was removed in the
@@ -2052,7 +2308,7 @@ export function App() {
                               width={layout().width - 4}
                               maxVisible={composerPopupMaxRows()}
                             />
-                            <text content={commandArgumentHint(modelArgumentDraft(), fixedArgumentDraft())} fg={palette.textDim} />
+                            <text content={commandArgumentHint(modelArgumentDraft(), fixedArgumentDraft(), agentArgumentDraft())} fg={palette.textDim} />
                           </box>
                         </Show>
                       }>
@@ -2192,8 +2448,10 @@ function displayUserQuestionAnswer(header: string, answer: UserQuestionAnswer): 
   return `[question:${header}] ${answer.label}`;
 }
 
-function headerLine(engine: EngineId, width: number): string {
-  return truncateLine(`Prism Vesicle · ${engineDisplayName(engine)}`, Math.max(20, width - 4));
+export function headerLine(engine: EngineId, width: number, agents?: string): string {
+  const left = `Prism Vesicle · ${engineDisplayName(engine)}`;
+  const content = agents ? `${left} · Agents ${agents}` : left;
+  return truncateLine(content, Math.max(20, width - 4));
 }
 
 /**
@@ -2283,6 +2541,44 @@ function addResponseUsageToTurn(current: TokenUsageSummary, usage: ResponseUsage
   };
 }
 
+function addIndependentUsageToTurn(current: TokenUsageSummary, usage: ResponseUsage): TokenUsageSummary {
+  const input = contextInputTokensForDisplay(usage);
+  return {
+    inputTokens: current.inputTokens + input,
+    outputTokens: current.outputTokens + finiteOrZero(usage.outputTokens),
+    cachedInputTokens: current.cachedInputTokens + cachedInputTokens(usage),
+    contextInputTokens: latestNonZero(current.contextInputTokens, input),
+  };
+}
+
+function combineIndependentUsage(usages: Array<ResponseUsage | undefined>): ResponseUsage | undefined {
+  const present = usages.filter((usage): usage is ResponseUsage => Boolean(usage));
+  if (present.length === 0) return undefined;
+  const sum = (read: (usage: ResponseUsage) => number | undefined) => present.reduce((total, usage) => total + finiteOrZero(read(usage)), 0);
+  const inputTokens = sum((usage) => usage.inputTokens ?? usage.contextInputTokens);
+  const outputTokens = sum((usage) => usage.outputTokens);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    cacheReadInputTokens: sum((usage) => usage.cacheReadInputTokens),
+    cacheWriteInputTokens: sum((usage) => usage.cacheWriteInputTokens),
+    cacheHitInputTokens: sum((usage) => usage.cacheHitInputTokens),
+    cacheMissInputTokens: sum((usage) => usage.cacheMissInputTokens),
+    reasoningTokens: sum((usage) => usage.reasoningTokens),
+    effectiveTokens: sum((usage) => usage.effectiveTokens),
+  };
+}
+
+function mergeLogicalTurnUsage(parent: TokenUsageSummary, agents: TokenUsageSummary): TokenUsageSummary {
+  return {
+    inputTokens: parent.inputTokens + agents.inputTokens,
+    outputTokens: parent.outputTokens + agents.outputTokens,
+    cachedInputTokens: parent.cachedInputTokens + agents.cachedInputTokens,
+    contextInputTokens: parent.contextInputTokens || agents.contextInputTokens,
+  };
+}
+
 function addTurnUsageToSession(current: TokenUsageSummary, turn: TokenUsageSummary): TokenUsageSummary {
   return {
     inputTokens: current.inputTokens + turn.inputTokens,
@@ -2295,17 +2591,25 @@ function addTurnUsageToSession(current: TokenUsageSummary, turn: TokenUsageSumma
 export function sumSessionUsage(messages: ResumedMessage[]): TokenUsageSummary {
   let session = emptyUsageSummary();
   let turn = emptyUsageSummary();
+  let agents = emptyUsageSummary();
   for (const message of messages) {
     if (message.role === "user" && isAuthoredUserMessage(message)) {
-      if (hasUsageSummary(turn)) session = addTurnUsageToSession(session, turn);
+      const combined = mergeLogicalTurnUsage(turn, agents);
+      if (hasUsageSummary(combined)) session = addTurnUsageToSession(session, combined);
       turn = emptyUsageSummary();
+      agents = emptyUsageSummary();
       continue;
     }
-    if (message.role === "assistant" && message.usage) {
-      turn = addResponseUsageToTurn(turn, message.usage);
+    if (message.usage) {
+      if (message.kind === "subagent-result" || message.kind === "subagent-results") {
+        agents = addIndependentUsageToTurn(agents, message.usage);
+      } else {
+        turn = addResponseUsageToTurn(turn, message.usage);
+      }
     }
   }
-  if (hasUsageSummary(turn)) session = addTurnUsageToSession(session, turn);
+  const combined = mergeLogicalTurnUsage(turn, agents);
+  if (hasUsageSummary(combined)) session = addTurnUsageToSession(session, combined);
   return session;
 }
 
@@ -2319,18 +2623,25 @@ export function latestTurnUsage(messages: ResumedMessage[]): TokenUsageSummary |
   }
   if (lastUserIndex < 0) return undefined;
   let summary = emptyUsageSummary();
+  let agents = emptyUsageSummary();
   for (const message of messages.slice(lastUserIndex + 1)) {
-    if (message.role === "assistant" && message.usage) {
-      summary = addResponseUsageToTurn(summary, message.usage);
+    if (message.usage) {
+      if (message.kind === "subagent-result" || message.kind === "subagent-results") {
+        agents = addIndependentUsageToTurn(agents, message.usage);
+      } else {
+        summary = addResponseUsageToTurn(summary, message.usage);
+      }
     }
   }
-  return hasUsageSummary(summary) ? summary : undefined;
+  const combined = mergeLogicalTurnUsage(summary, agents);
+  return hasUsageSummary(combined) ? combined : undefined;
 }
 
 function isAuthoredUserMessage(message: ResumedMessage): boolean {
   return message.kind !== "gate-resolution"
     && message.kind !== "user-question-answer"
     && message.kind !== "compact-summary"
+    && message.kind !== "subagent-results"
     && message.kind !== ENGINE_HANDOFF_KIND;
 }
 
@@ -2354,6 +2665,12 @@ function finiteOrZero(value: number | undefined): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function sameStringSet(value: unknown, expected: string[]): boolean {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) return false;
+  const actual = [...new Set(value as string[])].sort();
+  return actual.length === expected.length && actual.every((entry, index) => entry === expected[index]);
+}
+
 function activityLine(entry: ActivityEntry, width: number): string {
   const label = entry.kind.padEnd(10, " ");
   return truncateLine(`${label} ${entry.text}`, width);
@@ -2367,6 +2684,8 @@ function activityColor(kind: ActivityEntry["kind"]): string {
       return palette.assistant;
     case "tool":
       return palette.tool;
+    case "agent":
+      return palette.brand;
     case "gate":
       return palette.gateAccent;
     case "validation":
@@ -2388,19 +2707,21 @@ function vesicleMessagesFromResumed(messages: ResumedMessage[]): VesicleMessage[
   }));
 }
 
-function displayTranscriptFromSnapshot(messages: ResumedMessage[]): Message[] {
+export function displayTranscriptFromSnapshot(messages: ResumedMessage[], agents: AgentCardState[] = []): Message[] {
   const argsByCallId = new Map<string, { name: string; arguments: string }>();
   for (const message of messages) {
     for (const call of message.toolCalls ?? []) {
       argsByCallId.set(call.id, { name: call.name, arguments: call.arguments });
     }
   }
-  return messages.flatMap((message) => displayMessagesFromResumed(message, argsByCallId));
+  const agentsByToolCallId = new Map(agents.map((agent) => [agent.parentToolCallId, agent]));
+  return messages.flatMap((message) => displayMessagesFromResumed(message, argsByCallId, agentsByToolCallId));
 }
 
 function displayMessagesFromResumed(
   message: ResumedMessage,
   argsByCallId: Map<string, { name: string; arguments: string }>,
+  agentsByToolCallId: Map<string, AgentCardState> = new Map(),
 ): Message[] {
   if (message.kind === ENGINE_HANDOFF_KIND) {
     return [{
@@ -2431,6 +2752,10 @@ function displayMessagesFromResumed(
   }
   if (message.role === "tool") {
     const lookup = message.toolCallId ? argsByCallId.get(message.toolCallId) : undefined;
+    if (lookup?.name === "spawn_agent") {
+      const agent = message.toolCallId ? agentsByToolCallId.get(message.toolCallId) : undefined;
+      return agent ? [{ role: "system", content: "", kind: "agent", agentRunId: agent.runId }] : [];
+    }
     if (lookup) {
       // Reconstruct the same call + result pair the live event flow produces.
       const ok = message.toolOk ?? true;
@@ -2463,6 +2788,9 @@ function displayMessagesFromResumed(
     }
     return [{ role: "tool", content: renderResumedToolResultSummary(message.content), images: message.images }];
   }
+  if (message.role === "user" && message.kind === "subagent-results") {
+    return [{ role: "system", content: "Background SubAgent results were delivered to the parent Engine." }];
+  }
   if (message.role === "user") {
     return [{
       role: message.role,
@@ -2494,10 +2822,10 @@ function providerOptionItems(registry: ProviderRegistry): OptionItem[] {
   }));
 }
 
-function commandArgumentHint(modelDraft: ModelArgumentDraft | null, fixedDraft: FixedArgumentDraft | null): string {
+function commandArgumentHint(modelDraft: ModelArgumentDraft | null, fixedDraft: FixedArgumentDraft | null, agentDraft: AgentArgumentDraft | null): string {
   const scope = modelDraft
     ? modelDraft.stage === "provider" ? "providers" : `models · ${modelDraft.providerId}`
-    : fixedDraft?.command ?? "arguments";
+    : fixedDraft?.command ?? (agentDraft ? agentDraft.stage === "stop" ? "running agents" : "agents" : "arguments");
   return `${scope} · ↑/↓ choose · Tab complete · Enter select`;
 }
 

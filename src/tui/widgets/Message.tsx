@@ -4,6 +4,8 @@ import { MarkdownContent } from "./MarkdownContent";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { ToolCard } from "./ToolCard";
 import { ArtifactCard } from "./ArtifactCard";
+import { AgentCard } from "./AgentCard";
+import type { AgentCardState } from "../types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 
 type MessageLike = {
@@ -34,8 +36,12 @@ type MessageLike = {
  * The lane is engine-independent (role-based); engine accent lives on the
  * header and future turn markers.
  */
-export function Message(props: { message: MessageLike; reasoningMode: string; width: number }) {
+export function Message(props: { message: MessageLike; reasoningMode: string; width: number; agent?: AgentCardState }) {
   const m = props.message;
+
+  if (m.kind === "agent" && props.agent) {
+    return <AgentCard agent={props.agent} width={props.width} />;
+  }
 
   if (m.kind === "reasoning") {
     return <ReasoningBlock content={m.content} streaming={false} mode={props.reasoningMode} width={props.width} />;

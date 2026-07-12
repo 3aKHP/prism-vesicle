@@ -109,6 +109,7 @@ bun run dev
 | `/rewind` | 恢复对话分支、Vesicle 管理的文件或二者 |
 | `/compact [notes]` | 将旧上下文总结为精简的续接信息 |
 | `/context` | 查看 token 总量和已配置的上下文限制 |
+| `/agents [handle\|stop <handle>\|retry]` | 使用 `explore-1` 这类短句柄列出、查看、中断 SubAgent，或重试暂停的结果投递 |
 
 主输入框使用 Enter 提交，使用 Ctrl+Enter 插入换行。Escape 会取消正在进行的供应商请求；输入框为空时，双击 Escape 会打开回退选择器。声明视觉能力的模型可以通过 Alt+V 接收剪贴板图像；WSL 终端上报 Ctrl+Alt+V 时同样受支持。
 
@@ -119,6 +120,7 @@ bun run dev
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
 - 可选的 Tavily Web 研究、Streamable HTTP MCP 工具，以及面向声明视觉能力模型的多模态图像输入。
+- 支持前台与后台 SubAgent、并行执行、独立的内置或自定义 Agent Profile、专用实时 Agent 卡片、面向模型和用户的短句柄、持久化结果投递，以及无需轮询的主 Engine 自动续接。
 - npm 分发，以及带有不可变外部默认资产包和稀疏可编辑全局/项目覆盖的 Windows 与 Linux 独立构建。
 
 权威的实现清单、工具接口、验证器和已知限制请参阅 [`STATUS.md`](./STATUS.md)。

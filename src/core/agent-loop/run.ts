@@ -4,7 +4,7 @@ import type { ProviderSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
 import type { ProviderAdapter, ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { executeHostTool, hostToolDefinitions } from "../tools";
-import type { FileToolEvent, McpToolEvent, ToolCall, ToolDefinition, WebToolEvent } from "../tools";
+import type { FileToolEvent, McpToolEvent, ToolCall, ToolDefinition, ToolResult, WebToolEvent } from "../tools";
 import type { EngineId } from "../engine/profile";
 import type { EngineProfile } from "../engine/profile";
 import { engineSwitchToolDefinition, parseEngineSwitchRequest } from "../engine/switch";
@@ -25,6 +25,11 @@ import { createMcpRegistryForEngine, type McpRegistry } from "../../mcp/registry
 import { materializeMessageImages, persistedImageAttachments } from "../attachments/store";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
 import type { AssetFingerprint } from "../runtime/assets";
+import { AgentManager } from "../agents/manager";
+import { AgentStore } from "../agents/store";
+import { runChildAgent } from "../agents/child-runner";
+import { agentToolDefinitions, agentToolNames, executeAgentTool } from "../agents/tools";
+import type { AgentRuntimeEvent } from "../agents/types";
 
 export type { EngineId } from "../engine/profile";
 export type { GateRequest, GateResolution } from "../gate/types";
@@ -38,13 +43,18 @@ export type RunPromptOptions = {
   sessionParentUuid?: string | null;
   messages?: VesicleMessage[];
   images?: VesicleImageAttachment[];
+  inputMetadata?: Record<string, unknown>;
+  /** Reuse an already-appended user record when retrying durable host delivery. */
+  prePersistedInputUuid?: string;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  agentManager?: AgentManager;
 };
 
 export type AgentLoopEvent =
+  | AgentRuntimeEvent
   | { type: "asset_drift"; fingerprint: string; changedPaths: string[] }
   | { type: "provider_request"; iteration: number }
   | { type: "assistant_delta"; delta: string }
@@ -182,6 +192,7 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir);
   const { profile, systemPrompt } = engineAssets;
   const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true);
+  const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   const isNewSession = !options.sessionId;
   if (options.sessionId) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
@@ -215,18 +226,21 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     });
   }
 
-  const userRecord = await session.append({
-    role: "user",
-    content: options.input,
-    metadata: {
-      engine,
-      provider: config.provider,
-      providerId: config.providerId,
-      model: config.model,
-      ...generationMetadata(generation),
-      ...(options.images ? { images: persistedImageAttachments(options.images) } : {}),
-    },
-  });
+  const userRecord = options.prePersistedInputUuid
+    ? { uuid: options.prePersistedInputUuid }
+    : await session.append({
+      role: "user",
+      content: options.input,
+      metadata: {
+        ...(options.inputMetadata ?? {}),
+        engine,
+        provider: config.provider,
+        providerId: config.providerId,
+        model: config.model,
+        ...generationMetadata(generation),
+        ...(options.images ? { images: persistedImageAttachments(options.images) } : {}),
+      },
+    });
   const checkpoint = new FileCheckpointManager(rootDir, session, userRecord.uuid);
   await checkpoint.createSnapshot();
 
@@ -252,7 +266,12 @@ export async function runPrompt(options: RunPromptOptions): Promise<RunPromptRes
     checkpoint,
     signal: options.signal,
     onEvent: options.onEvent,
+    agentManager,
   });
+}
+
+function createTurnAgentManager(rootDir: string, onEvent?: (event: AgentLoopEvent) => void): AgentManager {
+  return new AgentManager(new AgentStore(rootDir), runChildAgent, { onEvent });
 }
 
 async function emitAssetDriftIfNeeded(
@@ -287,6 +306,7 @@ type RunLoopArgs = {
   checkpoint?: FileCheckpointManager;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  agentManager?: AgentManager;
 };
 
 async function prepareProviderMessages(
@@ -309,7 +329,16 @@ async function prepareProviderMessages(
 
 async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   const { rootDir, config, provider, systemPrompt, tools, mcpRegistry, messages, session, profile, generation, checkpoint, signal, onEvent } = args;
+  const agentManager = args.agentManager ?? createTurnAgentManager(rootDir, onEvent);
   const declaredGates = new Set(profile.stopGates);
+  let checkpointMutationTail = Promise.resolve();
+  const trackCheckpointMutation = (paths: string[]): Promise<void> => {
+    const next = checkpointMutationTail.then(async () => {
+      await checkpoint?.trackBeforeMutation(paths);
+    });
+    checkpointMutationTail = next.catch(() => undefined);
+    return next;
+  };
 
   let response: VesicleResponse | undefined;
   let consecutiveFailures = 0;
@@ -361,6 +390,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     // Persist the assistant turn carrying all tool calls (host + gate) as
     // one message, mirroring the provider's tool_call grouping. The
     // individual tool results are appended below.
+    const parentMessagesBeforeToolCall = [...messages];
     messages.push({
       role: "assistant",
       content: response.content,
@@ -385,53 +415,145 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
 
     let anyFailed = false;
 
-    for (const call of hostToolCalls) {
-      onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
-      const toolResult = mcpRegistry.hasTool(call.name)
-        ? await mcpRegistry.execute(call)
-        : await executeHostTool(rootDir, call, {
-          beforeMutation: (paths) => checkpoint?.trackBeforeMutation(paths) ?? Promise.resolve(),
-        });
-      const content = JSON.stringify({
-        ok: toolResult.ok,
-        result: toolResult.content,
-      });
+    const agentExecutions = new Map(hostToolCalls
+      .filter((call) => agentToolNames.has(call.name))
+      .map((call) => [call.id, executeAgentTool({
+        call,
+        manager: agentManager,
+        rootDir,
+        parentSessionId: session.sessionId,
+        invocation: {
+          rootDir,
+          parentEngine: profile.id,
+          providerSelection: { provider: config.providerId, model: config.model },
+          generation,
+          parentToolDefinitions: tools,
+          parentSystemPrompt: systemPrompt,
+          parentMessages: parentMessagesBeforeToolCall,
+          parentSignal: signal,
+          beforeMutation: trackCheckpointMutation,
+        },
+      })]));
 
-      messages.push({
-        role: "tool",
-        toolCallId: toolResult.callId,
-        content,
-        ...(toolResult.images ? { images: toolResult.images } : {}),
-      });
-      await session.append({
-        role: "tool",
-        content,
-        metadata: {
-          name: toolResult.name,
+    let nonAgentError: unknown;
+    try {
+      for (const call of hostToolCalls) {
+        if (agentToolNames.has(call.name)) continue;
+        onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
+        const mutationOwner = `${session.sessionId}:${call.id}`;
+        let toolResult: ToolResult;
+        try {
+          toolResult = mcpRegistry.hasTool(call.name)
+            ? await mcpRegistry.execute(call)
+            : await executeHostTool(rootDir, call, {
+              beforeMutation: async (paths) => {
+                await agentManager.claimHostMutation(mutationOwner, paths);
+                await trackCheckpointMutation(paths);
+              },
+            });
+        } finally {
+          agentManager.releaseHostMutations(mutationOwner);
+        }
+        const content = JSON.stringify({
           ok: toolResult.ok,
+          result: toolResult.content,
+        });
+
+        messages.push({
+          role: "tool",
           toolCallId: toolResult.callId,
+          content,
+          ...(toolResult.images ? { images: toolResult.images } : {}),
+        });
+        await session.append({
+          role: "tool",
+          content,
+          metadata: {
+            name: toolResult.name,
+            ok: toolResult.ok,
+            toolCallId: toolResult.callId,
+            ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
+            ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
+            ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+            ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
+          },
+        });
+
+        if (!toolResult.ok) {
+          anyFailed = true;
+        }
+        onEvent?.({
+          type: "tool_result",
+          name: toolResult.name,
+          callId: toolResult.callId,
+          ok: toolResult.ok,
+          content: toolResult.content,
           ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
           ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
           ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
-          ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
-        },
-      });
-
-      if (!toolResult.ok) {
-        anyFailed = true;
+          ...(toolResult.images ? { images: toolResult.images } : {}),
+        });
       }
-      onEvent?.({
-        type: "tool_result",
-        name: toolResult.name,
-        callId: toolResult.callId,
-        ok: toolResult.ok,
-        content: toolResult.content,
-        ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
-        ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
-        ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
-        ...(toolResult.images ? { images: toolResult.images } : {}),
-      });
+    } catch (error) {
+      nonAgentError = error;
     }
+
+    const agentErrors: unknown[] = [];
+    for (const call of hostToolCalls.filter((candidate) => agentToolNames.has(candidate.name))) {
+      try {
+        onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
+      } catch (error) {
+        agentErrors.push(error);
+      }
+
+      let toolResult: ToolResult;
+      try {
+        toolResult = await agentExecutions.get(call.id)!;
+      } catch (error) {
+        agentErrors.push(error);
+        continue;
+      }
+
+      const content = JSON.stringify({ ok: toolResult.ok, result: toolResult.content });
+      messages.push({ role: "tool", toolCallId: toolResult.callId, content });
+      try {
+        await session.append({
+          role: "tool",
+          content,
+          metadata: {
+            name: toolResult.name,
+            ok: toolResult.ok,
+            toolCallId: toolResult.callId,
+            ...(toolResult.agentEvent ? {
+              kind: "subagent-result",
+              agentEvent: toolResult.agentEvent,
+              ...(toolResult.agentEvent.usage ? { usage: toolResult.agentEvent.usage } : {}),
+            } : {}),
+          },
+        });
+      } catch (error) {
+        agentErrors.push(error);
+      }
+      if (!toolResult.ok) anyFailed = true;
+      try {
+        onEvent?.({
+          type: "tool_result",
+          name: toolResult.name,
+          callId: toolResult.callId,
+          ok: toolResult.ok,
+          content: toolResult.content,
+        });
+      } catch (error) {
+        agentErrors.push(error);
+      }
+    }
+
+    if (nonAgentError && agentErrors.length > 0) {
+      throw new AggregateError([nonAgentError, ...agentErrors], "Host and SubAgent tool processing failed.");
+    }
+    if (nonAgentError) throw nonAgentError;
+    if (agentErrors.length === 1) throw agentErrors[0];
+    if (agentErrors.length > 1) throw new AggregateError(agentErrors, "SubAgent tool processing failed.");
 
     if (interactiveCalls.length > 0) {
       // Use the first interactive request. If the model emitted several, the
@@ -663,6 +785,7 @@ export async function resolveGate(options: {
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  agentManager?: AgentManager;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
   const config = await loadConfigForSelection(options.providerSelection);
@@ -731,6 +854,7 @@ export async function resolveGate(options: {
     checkpoint: await FileCheckpointManager.resumeLatest(rootDir, session),
     signal: options.signal,
     onEvent: options.onEvent,
+    agentManager: options.agentManager,
   });
 }
 
@@ -760,6 +884,7 @@ export async function resolveEngineSwitch(options: {
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  agentManager?: AgentManager;
 }): Promise<ResolveEngineSwitchResult> {
   const rootDir = options.rootDir ?? process.cwd();
   const confirmed = options.resolution.decision === "confirm";
@@ -869,6 +994,7 @@ export async function resolveEngineSwitch(options: {
     checkpoint: await FileCheckpointManager.resumeLatest(rootDir, session),
     signal: options.signal,
     onEvent: options.onEvent,
+    agentManager: options.agentManager,
   });
 }
 
@@ -884,6 +1010,7 @@ export async function resolveUserQuestion(options: {
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  agentManager?: AgentManager;
 }): Promise<RunPromptResult> {
   const rootDir = options.rootDir ?? process.cwd();
   const config = await loadConfigForSelection(options.providerSelection);
@@ -962,6 +1089,7 @@ export async function resolveUserQuestion(options: {
     checkpoint: await FileCheckpointManager.resumeLatest(rootDir, session),
     signal: options.signal,
     onEvent: options.onEvent,
+    agentManager: options.agentManager,
   });
 }
 
@@ -1063,6 +1191,7 @@ async function resolveToolSurface(profile: EngineProfile, visionEnabled: boolean
     definitions: [
       ...resolveBuiltInTools(profile, visionEnabled),
       ...mcp.definitions,
+      ...agentToolDefinitions,
     ],
     mcp,
   };

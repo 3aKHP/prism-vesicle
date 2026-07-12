@@ -42,6 +42,25 @@ describe("session resume", () => {
     expect(messages[0]).toMatchObject({ role: "user", images: [image] });
     expect(messages[0].images?.[0].data).toBeUndefined();
   });
+
+  test("serializes appends from multiple stores for the same session", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-concurrent-"));
+    const sessionId = "2026-01-01T00-00-00-000Z-concurrent";
+    const first = await createSessionStore(rootDir, sessionId);
+    const second = await createSessionStore(rootDir, sessionId);
+    const system = await first.append({ role: "system", content: "prompt" });
+
+    const [user, checkpoint] = await Promise.all([
+      first.append({ role: "user", content: "parent turn" }),
+      second.append({ role: "system", content: "", metadata: { kind: "file-history-snapshot" } }),
+    ]);
+
+    expect(user.parentUuid).toBe(system.uuid);
+    expect(checkpoint.parentUuid).toBe(user.uuid);
+    const snapshot = await loadSessionSnapshot(rootDir, sessionId);
+    expect(snapshot.records.map((record) => record.uuid)).toEqual([system.uuid, user.uuid, checkpoint.uuid]);
+  });
+
   test("append-only session records fork from an explicit parent and resume the newest branch", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-branch-"));
     const sessionId = "2026-01-01T00-00-00-000Z-branching";
@@ -126,6 +145,19 @@ describe("session resume", () => {
     expect(summaries).toEqual([]);
   });
 
+  test("listSessions hides SubAgent transcripts from the primary resume picker", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-subagent-"));
+    const primary = await createSessionStore(rootDir, "primary");
+    await primary.append({ role: "system", content: "primary" });
+    await primary.append({ role: "user", content: "main task" });
+    const child = await createSessionStore(rootDir, "child");
+    await child.append({ role: "system", content: "child", metadata: { kind: "subagent-session", parentSessionId: "primary" } });
+    await child.append({ role: "user", content: "delegated task" });
+
+    expect((await listSessions(rootDir)).map((session) => session.sessionId)).toEqual(["primary"]);
+    expect((await listSessions(rootDir, { includeSubagents: true })).map((session) => session.sessionId).sort()).toEqual(["child", "primary"]);
+  });
+
   test("loadSessionMessages reconstructs user/assistant/tool turns and skips system records", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-reload-"));
     const store = await createSessionStore(rootDir, "2026-03-01T00-00-00-000Z-cccccccc");
@@ -189,6 +221,42 @@ describe("session resume", () => {
   test("loadSessionMessages on a non-existent session throws", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-missing-"));
     await expect(loadSessionMessages(rootDir, "does-not-exist")).rejects.toThrow();
+  });
+
+  test("restores foreground and background SubAgent usage metadata", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-agent-usage-"));
+    const store = await createSessionStore(rootDir, "agent-usage");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "delegate work" });
+    await store.append({
+      role: "tool",
+      content: "foreground result",
+      metadata: {
+        kind: "subagent-result",
+        toolCallId: "call-agent",
+        usage: { inputTokens: 100, outputTokens: 20 },
+      },
+    });
+    await store.append({
+      role: "user",
+      content: "<subagent-results>background</subagent-results>",
+      metadata: {
+        kind: "subagent-results",
+        usage: { inputTokens: 200, outputTokens: 30 },
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, "agent-usage");
+    expect(messages[1]).toMatchObject({
+      role: "tool",
+      kind: "subagent-result",
+      usage: { inputTokens: 100, outputTokens: 20 },
+    });
+    expect(messages[2]).toMatchObject({
+      role: "user",
+      kind: "subagent-results",
+      usage: { inputTokens: 200, outputTokens: 30 },
+    });
   });
 
   test("loadSessionMessages filters malformed thinking blocks", async () => {

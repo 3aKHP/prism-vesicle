@@ -1,0 +1,16 @@
+id: reviewer
+displayName: Reviewer Agent
+description: Independently review supplied artifacts, evidence, or decisions and report actionable findings.
+systemPrompt:
+  - assets/prompts/agents/base.md
+  - assets/prompts/agents/reviewer.md
+tools:
+  - stat_path
+  - list_files
+  - grep_files
+  - read_file
+  - view_image
+contextMode: summary
+modelPolicy: inherit
+defaultMode: background
+maxTurns: 20

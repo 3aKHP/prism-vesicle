@@ -10,17 +10,50 @@ You will understand the difference between a provider, a model, and a Prism engi
 
 **Prerequisites:** Chapters 00–06 and a working Vesicle installation
 
-## Three Different Layers
+## Four Different Layers
 
-Vesicle brings three separate choices together:
+Vesicle brings four separate choices together:
 
 | Layer | What it controls | Example |
 |---|---|---|
 | Provider | The remote service, endpoint, account, and API key | DeepSeek |
 | Model | The specific AI model, capabilities, limits, and usage price | `deepseek-v4-flash` |
 | Prism engine | The workflow instructions, tools, validators, and confirmation gates | `etl` |
+| Agent Profile | A specialized delegated worker with its own prompt, tools, context policy, and execution default | `explore` |
 
 Changing the model changes which AI performs future requests. Changing the Prism engine changes what that AI is instructed to do. An engine is not a model, and switching engines does not move your account to another provider.
+
+An Agent Profile is also not an engine. The active engine remains responsible for the overall workflow and may start several specialized SubAgents—for example, ETL can use Explore for a large source collection, Weaver-Orch can use Plan before dispatching writers, and Evaluate can run several independent reviewers in parallel.
+
+## Inspect Agent Profiles And Child Work
+
+Submit:
+
+```text
+/agents
+```
+
+Vesicle lists the bundled Explore, Plan, Research, Reviewer, and General profiles plus project or user overrides under `assets/agents/`. It also shows children owned by the current session. Each child receives a short handle such as `explore-1`; the longer UUID used for storage and recovery stays internal.
+
+A foreground child pauses only the parent model loop; the TUI stays responsive and its dedicated Agent card shows progress until the result returns in the same turn. A background child lets the parent continue immediately. Its card, the header, and the Workspace sidebar keep the work visible as it moves from running to ready, integrating, and integrated. When one or more background children finish, Vesicle durably records their results and automatically continues the idle parent Engine—no polling is required.
+
+Inspect one child in detail:
+
+```text
+/agents explore-1
+```
+
+To interrupt a running child:
+
+```text
+/agents stop explore-1
+```
+
+Typing `/agents ` opens handle completion, including only queued or running children after `/agents stop `. Existing sessions that contain older UUID-style ids remain compatible, but new tool results and commands use short handles.
+
+Agent Profiles are runtime assets, so advanced users and Harness Packs can add custom roles without adding them to the six-engine list.
+
+If background-result integration exhausts the provider's normal retries, Vesicle keeps the durable result ready instead of starting an unbounded charged retry loop. Submit `/agents retry` to retry that delivery explicitly.
 
 ## Inspect the Active Provider and Model
 
@@ -114,5 +147,7 @@ You are ready when:
 - `/engine` lists six bundled Prism engines and marks the active one
 - you switched to `evaluate` and back to `etl` without making a provider request
 - you understand that switches affect future turns and can be restored with a session
+- `/agents` lists specialized profiles independently of the six Prism engines
+- you understand the difference between foreground waiting and background result delivery
 
 [Next: Sessions and Resume →](./08-sessions-and-resume.md)
