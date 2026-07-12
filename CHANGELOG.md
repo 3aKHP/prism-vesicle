@@ -9,6 +9,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
+- Mixed host-tool and SubAgent rounds now persist every already-started SubAgent result before propagating a sibling host-tool failure, preserving the durable tool-call/result pairing for recovery.
 - Cancelling a background SubAgent no longer enqueues a synthetic result or wakes the parent Engine for another provider turn. Cancellation remains a durable terminal Agent state, and legacy queued cancellation notices are acknowledged without delivery.
 - SubAgent lifecycle and progress events no longer overwrite the parent Engine's Workspace STATUS line. Agent activity remains visible through its dedicated cards, header summary, Agents sidebar, and activity records without causing concurrent parent/child status flicker.
 - Interrupted foreground Agents now close their original `spawn_agent` tool call during crash recovery, session restoration blocks background delivery until provider/gate state is coherent, terminal children reject late control requests, and `/agents retry` explicitly resumes a delivery paused after exhausted provider retries.

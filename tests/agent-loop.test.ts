@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -459,6 +459,59 @@ describe("agent loop sessions", () => {
     expect(result.response.content).toBe("Combined child results.");
     expect(parentRequests).toBe(2);
     expect(childSystems).toHaveLength(2);
+  });
+
+  test("persists started SubAgent results before propagating a sibling host-tool error", async () => {
+    const rootDir = await createPromptRoot();
+    const childResolvers: Array<(result: { content: string }) => void> = [];
+    const manager = new AgentManager(new AgentStore(rootDir), async () => new Promise((resolve) => childResolvers.push(resolve)));
+    globalThis.fetch = (async () => Response.json({
+      id: "parent-mixed-tools",
+      choices: [{ message: {
+        content: "Delegating while reading.",
+        tool_calls: [
+          {
+            id: "call-child-a",
+            type: "function",
+            function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "general", description: "Check evidence A", prompt: "Check the first evidence set.", mode: "foreground" }) },
+          },
+          {
+            id: "call-child-b",
+            type: "function",
+            function: { name: "spawn_agent", arguments: JSON.stringify({ profile: "general", description: "Check evidence B", prompt: "Check the second evidence set.", mode: "foreground" }) },
+          },
+          {
+            id: "call-read",
+            type: "function",
+            function: { name: "read_file", arguments: JSON.stringify({ path: "source_materials/missing.md" }) },
+          },
+        ],
+      } }],
+    })) as unknown as typeof fetch;
+
+    const turn = runPrompt({
+      input: "delegate and read",
+      rootDir,
+      agentManager: manager,
+      onEvent: (event) => {
+        if (event.type === "tool_result" && event.name === "read_file") throw new Error("host tool event failed");
+      },
+    });
+
+    let turnSettled = false;
+    const observedTurn = turn.finally(() => { turnSettled = true; });
+    await eventually(() => expect(childResolvers).toHaveLength(2));
+    childResolvers[0]!({ content: "child result A" });
+    await Bun.sleep(0);
+    expect(turnSettled).toBe(false);
+    childResolvers[1]!({ content: "child result B" });
+    await expect(observedTurn).rejects.toThrow("host tool event failed");
+    const sessions = await readdir(join(rootDir, ".vesicle", "sessions"));
+    const sessionId = sessions[0]!.replace(/\.jsonl$/, "");
+    const records = await loadSessionRecords(rootDir, sessionId);
+    const toolResults = records.filter((record) => record.role === "tool");
+    expect(toolResults.map((record) => record.metadata?.toolCallId)).toEqual(["call-read", "call-child-a", "call-child-b"]);
+    expect(toolResults.filter((record) => record.metadata?.kind === "subagent-result")).toHaveLength(2);
   });
 
   test("attributes child file mutations to the parent user-turn checkpoint", async () => {

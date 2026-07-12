@@ -435,92 +435,125 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
         },
       })]));
 
-    for (const call of hostToolCalls) {
-      if (agentToolNames.has(call.name)) continue;
-      onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
-      const mutationOwner = `${session.sessionId}:${call.id}`;
-      let toolResult: ToolResult;
-      try {
-        toolResult = mcpRegistry.hasTool(call.name)
-          ? await mcpRegistry.execute(call)
-          : await executeHostTool(rootDir, call, {
-            beforeMutation: async (paths) => {
-              await agentManager.claimHostMutation(mutationOwner, paths);
-              await trackCheckpointMutation(paths);
-            },
-          });
-      } finally {
-        agentManager.releaseHostMutations(mutationOwner);
-      }
-      const content = JSON.stringify({
-        ok: toolResult.ok,
-        result: toolResult.content,
-      });
-
-      messages.push({
-        role: "tool",
-        toolCallId: toolResult.callId,
-        content,
-        ...(toolResult.images ? { images: toolResult.images } : {}),
-      });
-      await session.append({
-        role: "tool",
-        content,
-        metadata: {
-          name: toolResult.name,
+    let nonAgentError: unknown;
+    try {
+      for (const call of hostToolCalls) {
+        if (agentToolNames.has(call.name)) continue;
+        onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
+        const mutationOwner = `${session.sessionId}:${call.id}`;
+        let toolResult: ToolResult;
+        try {
+          toolResult = mcpRegistry.hasTool(call.name)
+            ? await mcpRegistry.execute(call)
+            : await executeHostTool(rootDir, call, {
+              beforeMutation: async (paths) => {
+                await agentManager.claimHostMutation(mutationOwner, paths);
+                await trackCheckpointMutation(paths);
+              },
+            });
+        } finally {
+          agentManager.releaseHostMutations(mutationOwner);
+        }
+        const content = JSON.stringify({
           ok: toolResult.ok,
+          result: toolResult.content,
+        });
+
+        messages.push({
+          role: "tool",
           toolCallId: toolResult.callId,
+          content,
+          ...(toolResult.images ? { images: toolResult.images } : {}),
+        });
+        await session.append({
+          role: "tool",
+          content,
+          metadata: {
+            name: toolResult.name,
+            ok: toolResult.ok,
+            toolCallId: toolResult.callId,
+            ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
+            ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
+            ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
+            ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
+          },
+        });
+
+        if (!toolResult.ok) {
+          anyFailed = true;
+        }
+        onEvent?.({
+          type: "tool_result",
+          name: toolResult.name,
+          callId: toolResult.callId,
+          ok: toolResult.ok,
+          content: toolResult.content,
           ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
           ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
           ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
-          ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
-        },
-      });
-
-      if (!toolResult.ok) {
-        anyFailed = true;
+          ...(toolResult.images ? { images: toolResult.images } : {}),
+        });
       }
-      onEvent?.({
-        type: "tool_result",
-        name: toolResult.name,
-        callId: toolResult.callId,
-        ok: toolResult.ok,
-        content: toolResult.content,
-        ...(toolResult.fileEvent ? { fileEvent: toolResult.fileEvent } : {}),
-        ...(toolResult.webEvent ? { webEvent: toolResult.webEvent } : {}),
-        ...(toolResult.mcpEvent ? { mcpEvent: toolResult.mcpEvent } : {}),
-        ...(toolResult.images ? { images: toolResult.images } : {}),
-      });
+    } catch (error) {
+      nonAgentError = error;
     }
 
+    const agentErrors: unknown[] = [];
     for (const call of hostToolCalls.filter((candidate) => agentToolNames.has(candidate.name))) {
-      onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
-      const toolResult = await agentExecutions.get(call.id)!;
+      try {
+        onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
+      } catch (error) {
+        agentErrors.push(error);
+      }
+
+      let toolResult: ToolResult;
+      try {
+        toolResult = await agentExecutions.get(call.id)!;
+      } catch (error) {
+        agentErrors.push(error);
+        continue;
+      }
+
       const content = JSON.stringify({ ok: toolResult.ok, result: toolResult.content });
       messages.push({ role: "tool", toolCallId: toolResult.callId, content });
-      await session.append({
-        role: "tool",
-        content,
-        metadata: {
-          name: toolResult.name,
-          ok: toolResult.ok,
-          toolCallId: toolResult.callId,
-          ...(toolResult.agentEvent ? {
-            kind: "subagent-result",
-            agentEvent: toolResult.agentEvent,
-            ...(toolResult.agentEvent.usage ? { usage: toolResult.agentEvent.usage } : {}),
-          } : {}),
-        },
-      });
+      try {
+        await session.append({
+          role: "tool",
+          content,
+          metadata: {
+            name: toolResult.name,
+            ok: toolResult.ok,
+            toolCallId: toolResult.callId,
+            ...(toolResult.agentEvent ? {
+              kind: "subagent-result",
+              agentEvent: toolResult.agentEvent,
+              ...(toolResult.agentEvent.usage ? { usage: toolResult.agentEvent.usage } : {}),
+            } : {}),
+          },
+        });
+      } catch (error) {
+        agentErrors.push(error);
+      }
       if (!toolResult.ok) anyFailed = true;
-      onEvent?.({
-        type: "tool_result",
-        name: toolResult.name,
-        callId: toolResult.callId,
-        ok: toolResult.ok,
-        content: toolResult.content,
-      });
+      try {
+        onEvent?.({
+          type: "tool_result",
+          name: toolResult.name,
+          callId: toolResult.callId,
+          ok: toolResult.ok,
+          content: toolResult.content,
+        });
+      } catch (error) {
+        agentErrors.push(error);
+      }
     }
+
+    if (nonAgentError && agentErrors.length > 0) {
+      throw new AggregateError([nonAgentError, ...agentErrors], "Host and SubAgent tool processing failed.");
+    }
+    if (nonAgentError) throw nonAgentError;
+    if (agentErrors.length === 1) throw agentErrors[0];
+    if (agentErrors.length > 1) throw new AggregateError(agentErrors, "SubAgent tool processing failed.");
 
     if (interactiveCalls.length > 0) {
       // Use the first interactive request. If the model emitted several, the

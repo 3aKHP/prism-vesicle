@@ -220,7 +220,15 @@ export function App() {
   const [gateFeedbackKillBuffer, setGateFeedbackKillBuffer] = createSignal<string | undefined>();
   const agentStore = new AgentStore(process.cwd());
   const pausedAgentDeliveries = new Set<string>();
-  let continuationScheduler: AgentContinuationScheduler;
+  const continuationScheduler = new AgentContinuationScheduler(agentStore, deliverAgentResults, {
+    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
+      && !pausedAgentDeliveries.has(parentSessionId)
+      && !restoringSession()
+      && !busy()
+      && !pendingGate()
+      && !pendingEngineSwitch()
+      && !pendingUserQuestion(),
+  });
   const agentManager = new AgentManager(agentStore, runChildAgent, {
     onEvent: (event) => {
       handleAgentEvent(event);
@@ -230,15 +238,6 @@ export function App() {
         void continuationScheduler.notify(event.result.parentSessionId).catch(reportError);
       }
     },
-  });
-  continuationScheduler = new AgentContinuationScheduler(agentStore, deliverAgentResults, {
-    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
-      && !pausedAgentDeliveries.has(parentSessionId)
-      && !restoringSession()
-      && !busy()
-      && !pendingGate()
-      && !pendingEngineSwitch()
-      && !pendingUserQuestion(),
   });
   createEffect(() => {
     const id = sessionId();

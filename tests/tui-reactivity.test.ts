@@ -114,4 +114,14 @@ describe("TUI reactivity static guard", () => {
     expect(source).toContain("const ready = !restoringSession()");
     expect(source).toMatch(/async function resumeSession[\s\S]*?setRestoringSession\(true\);[\s\S]*?finally \{\n\s+setRestoringSession\(false\);/);
   });
+
+  test("background continuation scheduler is initialized before AgentManager callbacks can use it", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const scheduler = source.indexOf("const continuationScheduler = new AgentContinuationScheduler");
+    const manager = source.indexOf("const agentManager = new AgentManager");
+
+    expect(scheduler).toBeGreaterThan(-1);
+    expect(manager).toBeGreaterThan(scheduler);
+    expect(source).not.toContain("let continuationScheduler: AgentContinuationScheduler");
+  });
 });
