@@ -70,6 +70,8 @@ export function createTurnController(options: TurnControllerOptions) {
       return;
     }
     if (!await ensureRuntimeReady()) return;
+    // Keep the turn boundary safe for non-composer callers and capabilities
+    // that become available only after provider configuration loads.
     if (images.length > 0 && options.activeModelCapabilities()?.vision !== true) {
       options.applyComposerState({ value, cursor: value.length, elements: elements.map((element) => ({ ...element })) });
       options.setInputImages(images.map((image) => ({ ...image })));

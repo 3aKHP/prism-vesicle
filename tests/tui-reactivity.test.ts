@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { resolveBottomSurfaceMode } from "../src/tui/views/BottomSurface";
+import type { PermissionRequest } from "../src/core/permissions";
+import { resolveBottomSurfaceMode, type BottomSurfaceState } from "../src/tui/views/BottomSurface";
 
 /**
  * Static regression guard for the gate-box rendering bug.
@@ -38,9 +39,12 @@ describe("TUI reactivity static guard", () => {
   });
 
   test("bottom surface priority is explicit and modal-first", () => {
-    const empty = { yoloStage: null, permissionRequest: undefined, question: null, gate: null, rewind: null, session: null, model: null };
+    const empty: BottomSurfaceState = { yoloStage: null, permissionRequest: undefined, question: null, gate: null, rewind: null, session: null, model: null };
+    const rewind = { points: [], selected: 0, restoreSelected: 0, summaryFeedback: "", summaryCursor: 0, busy: false };
+    const permission = { toolName: "read_file" } as PermissionRequest;
     expect(resolveBottomSurfaceMode(empty).kind).toBe("composer");
-    expect(resolveBottomSurfaceMode({ ...empty, gate: { gate: "phase", summary: "summary", options: [] }, rewind: { points: [], selected: 0, restoreSelected: 0, summaryFeedback: "", summaryCursor: 0, busy: false } }).kind).toBe("gate");
+    expect(resolveBottomSurfaceMode({ ...empty, gate: { gate: "phase", summary: "summary", options: [] }, rewind }).kind).toBe("gate");
+    expect(resolveBottomSurfaceMode({ ...empty, permissionRequest: permission, rewind }).kind).toBe("permission");
     expect(resolveBottomSurfaceMode({ ...empty, yoloStage: 1, gate: { gate: "phase", summary: "summary", options: [] } }).kind).toBe("yolo");
   });
 
@@ -76,19 +80,21 @@ describe("TUI reactivity static guard", () => {
   test("Ctrl+Q exits before modal keyboard routing", async () => {
     const source = await readFile(join(import.meta.dir, "..", "src", "tui", "input-routing.ts"), "utf8");
     const ctrlQ = source.indexOf('if (key.ctrl && key.name === "q")');
-    const modelPickerRouting = source.indexOf("if (options.modelPicker())");
+    const modalRouting = source.indexOf("const mode = bottomSurfaceMode()");
 
     expect(ctrlQ).toBeGreaterThan(-1);
-    expect(modelPickerRouting).toBeGreaterThan(ctrlQ);
+    expect(modalRouting).toBeGreaterThan(ctrlQ);
   });
 
-  test("image paste is owned by the main composer after modal routing", async () => {
+  test("input routing shares bottom-surface priority and blocks hidden-composer paste", async () => {
     const source = await readFile(join(import.meta.dir, "..", "src", "tui", "input-routing.ts"), "utf8");
-    const gateRouting = source.indexOf("if (options.pendingGate() || options.pendingEngineSwitch()");
+    const modeResolution = source.indexOf("resolveBottomSurfaceMode({");
     const imagePaste = source.indexOf('key.name?.toLowerCase() === "v" && (key.meta || key.option)');
     const composerRouting = source.indexOf("if (options.handleComposerKey(key))");
 
-    expect(imagePaste).toBeGreaterThan(gateRouting);
+    expect(modeResolution).toBeGreaterThan(-1);
+    expect(source).toContain('if (bottomSurfaceMode().kind !== "composer")');
+    expect(imagePaste).toBeGreaterThan(modeResolution);
     expect(composerRouting).toBeGreaterThan(imagePaste);
   });
 

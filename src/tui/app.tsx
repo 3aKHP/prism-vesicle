@@ -49,7 +49,7 @@ import { createProviderConfigController, createProviderState } from "./provider-
 import { createSessionActionsController } from "./session-actions-controller";
 import { createSessionPreferencesController } from "./session-preferences-controller";
 import { createAgentCommand } from "./agent-command";
-import { registerInputRouting } from "./input-routing";
+import { useInputRouting } from "./input-routing";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -598,7 +598,7 @@ export function App(props: AppProps = {}) {
     });
   });
 
-  registerInputRouting({
+  useInputRouting({
     renderer,
     setStatus,
     rewindPicker,
@@ -609,12 +609,10 @@ export function App(props: AppProps = {}) {
     handleSessionPickerKey,
     yoloConfirmStage,
     handleYoloKey,
+    activePermissionRequest,
     pendingUserQuestion,
     handleQuestionKey,
-    pendingGate,
-    pendingEngineSwitch,
-    pendingPermission,
-    pendingChildPermission,
+    activeGateRequest,
     handleGateKey,
     pasteClipboardImage,
     handleComposerKey,

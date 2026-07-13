@@ -99,11 +99,11 @@ export function createTurnResultController(options: ResultOptions) {
     options.setOutput(result.assistantContent);
   }
 
-  function appendPendingAssistant(content: string, notice: string, requireContent = false): void {
+  function appendPendingAssistant(content: string, notice: string, showAssistant = true): void {
     const alreadyDisplayed = options.lastDisplayedToolAssistantContent() === content;
     options.setMessages((previous) => [
       ...previous,
-      ...(!alreadyDisplayed && (!requireContent || content) ? [{ role: "assistant" as const, content }] : []),
+      ...(!alreadyDisplayed && showAssistant ? [{ role: "assistant" as const, content }] : []),
       { role: "system", content: notice },
     ]);
   }
