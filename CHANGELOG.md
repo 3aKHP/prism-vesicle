@@ -9,6 +9,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
+- Permission pauses no longer render empty assistant bubbles, and the active TUI bottom surface now owns keyboard and paste input through the same modal priority used for rendering.
 - The Workspace sidebar now keeps a fixed two-row Shell summary, preventing multiple background tasks from overwriting the Effort, session, and MCP rows in OpenTUI.
 - Provider-returned tool calls are now checked against the current effective tool surface before permission evaluation or execution, so YOLO cannot execute a hallucinated `shell_exec` when the host-shell capability is disabled.
 - Shell process deadlines now remain active until inherited stdout/stderr pipes close, and successful shell exit also cleans up surviving in-group descendants instead of leaving ordinary child work behind.

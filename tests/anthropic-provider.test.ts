@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { AnthropicMessagesAdapter, toAnthropicMessagesBody } from "../src/providers/anthropic-messages/adapter";
+import { AnthropicMessagesAdapter } from "../src/providers/anthropic-messages/adapter";
+import { toAnthropicMessagesBody } from "../src/providers/anthropic-messages/request";
 import type { VesicleRequest } from "../src/providers/shared/types";
 
 const originalFetch = globalThis.fetch;
@@ -306,6 +307,45 @@ describe("Anthropic Messages adapter", () => {
       name: "ProviderError",
       kind: "stream_error",
       providerId: "anthropic",
+    });
+  });
+
+  test("reconstructs indexed thinking and tool blocks in block order", async () => {
+    globalThis.fetch = (async () => new Response(rawSse([
+      'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_indexed","model":"claude-test"}}',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":3,"content_block":{"type":"tool_use","id":"toolu_second","name":"second_tool","input":{}}}',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\\"order\\":2}"}}',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":4,"content_block":{"type":"redacted_thinking","data":"opaque"}}',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"first","signature":"sig"}}',
+      'event: content_block_start\ndata: {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"toolu_first","name":"first_tool","input":{}}}',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\\"order\\":1}"}}',
+      'event: message_stop\ndata: {"type":"message_stop"}',
+    ]))) as unknown as typeof fetch;
+
+    const adapter = new AnthropicMessagesAdapter({
+      provider: "anthropic-messages",
+      providerId: "anthropic",
+      baseUrl: "https://api.anthropic.com/v1",
+      model: "claude-test",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+
+    expect(events).toContainEqual({ type: "tool_call_delta", index: 3, id: "toolu_second", name: "second_tool" });
+    expect(events).toContainEqual({ type: "tool_call_delta", index: 2, id: "toolu_first", name: "first_tool" });
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        thinkingBlocks: [
+          { type: "thinking", thinking: "first", signature: "sig" },
+          { type: "redacted_thinking", data: "opaque" },
+        ],
+        toolCalls: [
+          { id: "toolu_first", name: "first_tool", arguments: "{\"order\":1}" },
+          { id: "toolu_second", name: "second_tool", arguments: "{\"order\":2}" },
+        ],
+      },
     });
   });
 
