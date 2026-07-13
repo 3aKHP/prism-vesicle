@@ -29,6 +29,8 @@ describe("permission modes", () => {
     expect(permissionClassForTool("write_file")).toBe("mutate");
     expect(permissionClassForTool("request_confirmation")).toBe("interaction");
     expect(permissionClassForTool("shell_exec")).toBe("arbitrary_exec");
+    expect(permissionClassForTool("shell_output")).toBe("observe");
+    expect(permissionClassForTool("shell_stop")).toBe("mutate");
     expect(permissionClassForTool("mcp_remote_claimed_readonly")).toBe("mutate");
   });
 });

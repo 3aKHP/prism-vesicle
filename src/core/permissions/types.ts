@@ -25,6 +25,7 @@ export type ProcessExecutionPlan = {
   shell: "posix-sh" | "powershell";
   timeoutMs: number;
   envPolicyVersion: number;
+  runInBackground: boolean;
 };
 
 export type PermissionRequest = {

@@ -7,6 +7,7 @@ import {
   foldDiffLines,
   hunkHeader,
   parseToolArgs,
+  processPreviewLines,
   resolveStartLine,
   toolKind,
   toolResultFooter,
@@ -22,6 +23,8 @@ describe("toolKind", () => {
     expect(toolKind("copy_file")).toBe("copy");
     expect(toolKind("move_directory")).toBe("move");
     expect(toolKind("list_directory")).toBe("list");
+    expect(toolKind("shell_exec")).toBe("process");
+    expect(toolKind("shell_output")).toBe("process");
   });
 
   test("unknown tools fall back", () => {
@@ -151,6 +154,34 @@ describe("toolResultFooter", () => {
   test("success reads structured detail from fileEvent, not the content", () => {
     const big = "x".repeat(500);
     expect(toolResultFooter("read_file", true, big, readEvent)).toBe("read · 42 lines");
+  });
+
+  test("process progress and background status remain user-visible", () => {
+    const event = {
+      kind: "process_exec" as const,
+      taskId: "shell-1",
+      executionMode: "background" as const,
+      status: "running" as const,
+      command: "bun test",
+      cwd: "." as const,
+      shell: "posix-sh" as const,
+      durationMs: 1_250,
+      timedOut: false,
+      aborted: false,
+      stdoutBytes: 12,
+      stderrBytes: 4,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      stdoutTail: "first\nsecond",
+      stderrTail: "warn",
+    };
+    expect(toolResultFooter("shell_exec", true, "", undefined, undefined, undefined, event))
+      .toBe("background shell-1 · 1.3s · 16 bytes");
+    expect(processPreviewLines(event)).toEqual([
+      { text: "first", stderr: false },
+      { text: "second", stderr: false },
+      { text: "warn", stderr: true },
+    ]);
   });
 
   test("success reads structured detail from webEvent", () => {

@@ -9,7 +9,9 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
-- Shell process deadlines now remain active until inherited stdout/stderr pipes close, and successful shell exit also cleans up surviving descendants instead of allowing background work to escape the Process Runtime.
+- The Workspace sidebar now keeps a fixed two-row Shell summary, preventing multiple background tasks from overwriting the Effort, session, and MCP rows in OpenTUI.
+- Provider-returned tool calls are now checked against the current effective tool surface before permission evaluation or execution, so YOLO cannot execute a hallucinated `shell_exec` when the host-shell capability is disabled.
+- Shell process deadlines now remain active until inherited stdout/stderr pipes close, and successful shell exit also cleans up surviving in-group descendants instead of leaving ordinary child work behind.
 - Permission recovery now fails closed across capability/config drift and interrupted multi-tool windows: resumed approvals cannot re-enable a disabled tool, incomplete calls are never replayed, and shell-tainted checkpoints surface a targeted rewind warning.
 - MANUAL and INERTIA approvals preserve the existing parallel foreground SubAgent contract by collecting exact per-call decisions before starting the approved Agent batch concurrently; simultaneous parent/child permission prompts resolve the request actually shown.
 - Mixed host-tool and SubAgent rounds now persist every already-started SubAgent result before propagating a sibling host-tool failure, preserving the durable tool-call/result pairing for recovery.
@@ -47,6 +49,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Added
 
+- Claude Code-aligned background shell execution through `shell_exec.runInBackground`: commands return a managed `shell-N` task immediately, persist bounded status/output under `.vesicle/processes/`, notify the next provider turn on completion, and expose `shell_output` and `shell_stop` controls. Foreground and background shell cards now show live tail output, elapsed time, task ids, terminal status, and active header/sidebar summaries.
 - Four coarse Tool Permission Runtime modes: MANUAL asks for every tool, INERTIA auto-allows observation tools, MOMENTUM auto-allows all tools except `shell_exec`, and YOLO auto-allows the effective tool surface after two red confirmations. MCP tools are always treated as side-effecting, and SubAgent requests route through the parent TUI.
 - Opt-in non-interactive `shell_exec` backed by a bounded cross-platform Process Runtime: fixed project cwd, filtered child environment, separate stdout/stderr limits, wall-clock timeout, process-tree termination, exact-plan approval hashes, durable request/resolution/process metadata, and no replay after indeterminate crash recovery.
 - User-level `permissions.yaml`, `/permissions`, and the process-scoped `--dangerously-skip-permissions` override. Persistent YOLO defaults are refused and resumed YOLO sessions downgrade to MOMENTUM unless the dangerous CLI override is active.

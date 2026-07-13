@@ -222,12 +222,14 @@ and the boundary check that prevents overreach.
 
 - Permission modes control approval friction and never widen the effective tool surface or bypass runtime guards. MANUAL asks for every model-visible execution, INERTIA auto-allows observation tools, MOMENTUM auto-allows every tool except `shell_exec`, and YOLO auto-allows all effective tools.
 - `request_confirmation`, `request_engine_switch`, and `ask_user_question` are interaction requests and remain outside Tool Permission Runtime. Gates continue to represent workflow discipline rather than security approval.
-- Unknown tools fail closed into the mutate class. Every MCP tool is mutate regardless of its remote name, description, or schema.
+- Unknown tools fail closed into the mutate class. Every provider-returned call is also checked against the current effective tool surface before permission evaluation or execution; a permission mode must never make an unavailable tool executable. Every MCP tool is mutate regardless of its remote name, description, or schema.
 - Permission requests bind to the originating session and tool call. Shell approval additionally binds to the exact normalized execution plan hash. Rejection returns a failed tool result; it does not add a synthetic user turn.
-- Child requests are routed through the parent-owned permission broker. A foreground or background child pauses at its call boundary until the parent TUI resolves the request. Child `shell_exec` remains disabled in the first runtime.
+- Child requests are routed through the parent-owned permission broker. A foreground or background child pauses at its call boundary until the parent TUI resolves the request. Child `shell_exec`, `shell_output`, and `shell_stop` remain disabled in the first runtime.
 - YOLO cannot be persisted as a user default. Interactive activation requires two red confirmations, resume downgrades a prior YOLO session to MOMENTUM, and `--dangerously-skip-permissions` applies only to the current process while keeping a visible red indicator.
 - Permission bypass never disables path guards, MCP/Agent capability scopes, argument validation, output bounds, timeout, environment filtering, process-tree cleanup, or concurrency controls.
 - `shell_exec` is opt-in through user-level `permissions.yaml`. It is a non-interactive host command with host-user filesystem and network authority, not an OS sandbox. Shell mutations must mark checkpoint completeness as tainted and must never be described as rewind-safe.
+- `shell_exec` may set `runInBackground: true` to return a managed short task id immediately. Background output/status is bounded and persisted under ignored `.vesicle/processes/` state, completion is delivered as host-owned provider context at the next available turn, and `shell_output` / `shell_stop` provide explicit observation and cancellation. Background work does not survive a Vesicle host restart as a managed live process; stale running records recover as interrupted and are never replayed.
+- Foreground shell cards show bounded live tail output and elapsed time. Background shell cards retain their task id and terminal state, while active background work remains visible in the TUI header and Workspace sidebar. Observability callbacks must not alter process lifetime or tool results.
 
 ## SubAgent Runtime
 

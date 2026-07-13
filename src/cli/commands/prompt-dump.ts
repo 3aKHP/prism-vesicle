@@ -64,7 +64,7 @@ export async function getEffectivePromptToolNames(
       pushUnique(hostContracts, name);
       continue;
     }
-    if (name === "shell_exec" && !shellExecEnabled) continue;
+    if ((name === "shell_exec" || name === "shell_output" || name === "shell_stop") && !shellExecEnabled) continue;
     pushUnique(modelVisible, name);
   }
 
@@ -74,7 +74,11 @@ export async function getEffectivePromptToolNames(
   for (const name of alwaysVisibleToolNames) {
     pushUnique(modelVisible, name);
   }
-  if (shellExecEnabled) pushUnique(modelVisible, "shell_exec");
+  if (shellExecEnabled) {
+    pushUnique(modelVisible, "shell_exec");
+    pushUnique(modelVisible, "shell_output");
+    pushUnique(modelVisible, "shell_stop");
+  }
   for (const definition of agentToolDefinitions) {
     pushUnique(modelVisible, definition.function.name);
   }

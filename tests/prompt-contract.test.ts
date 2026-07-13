@@ -19,6 +19,9 @@ describe("prompt interaction contracts", () => {
     expect(base).toContain("`web_research` when the user needs a cited synthesis");
     expect(base).toContain("`mcp_<prefix>_<tool>`");
     expect(base).toContain("short handle such as `explore-1`");
+    expect(base).toContain("`runInBackground: true`");
+    expect(base).toContain("`shell_output`");
+    expect(base).toContain("`shell_stop`");
     expect(base).not.toContain("M0 Interaction");
     expect(base).not.toContain("after M0");
   });

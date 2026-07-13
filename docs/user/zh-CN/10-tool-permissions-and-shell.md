@@ -36,7 +36,9 @@ Copy-Item "docs\examples\permissions.yaml" (Join-Path $configDir "permissions.ya
 notepad (Join-Path $configDir "permissions.yaml")
 ```
 
-该 shell 不可交互，从项目根目录启动，只接收经过过滤的环境变量，分别捕获并限制 stdout/stderr，而且具有墙钟超时。Windows 使用不加载 Profile 的 PowerShell 7；Linux/WSL 使用 `/bin/sh`。
+该 shell 不可交互，从项目根目录启动，只接收经过过滤的环境变量，分别捕获并限制 stdout/stderr，而且具有墙钟超时。Windows 使用不加载 Profile 的 PowerShell 7；Linux/WSL 使用 `/bin/sh`。前台命令会在 TUI 卡片中显示受限的实时尾部输出和已运行时间。
+
+对于不需要立即取得结果的长命令，模型可以设置 `runInBackground: true`。Vesicle 会立即返回 `shell-1` 形式的短任务 id，在命令卡片、顶部状态和 Workspace 侧栏中持续显示进度，把受限输出与状态保存在 `.vesicle/processes/`，并在下一次 provider 轮次自动交付完成结果，无需例行轮询。`shell_output` 用于读取当前或最终输出，`shell_stop` 用于取消仍在运行的任务。Vesicle 重启后，未完成的托管后台进程会被标记为 interrupted，而不会被重放。
 
 权限代表用户同意，并不代表隔离。获准的 shell 命令可以用当前宿主用户的权限访问项目外文件和网络。由 shell 创建的文件变化不保证能够通过 rewind 恢复。
 
