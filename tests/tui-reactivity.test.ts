@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
+import { resolveBottomSurfaceMode } from "../src/tui/views/BottomSurface";
 
 /**
  * Static regression guard for the gate-box rendering bug.
@@ -19,19 +20,28 @@ import { describe, expect, test } from "bun:test";
  * directly in JSX, preventing the snapshot pattern from sneaking back in.
  */
 describe("TUI reactivity static guard", () => {
-  test("Show reads activeGateRequest() directly in JSX (not via a frozen local)", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+  test("bottom surface receives the reactive active gate accessor directly", async () => {
+    const appSource = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const surfaceSource = await readFile(join(import.meta.dir, "..", "src", "tui", "views", "BottomSurface.tsx"), "utf8");
 
     // The fix reads a reactive memo directly in the JSX when= prop so Solid
     // tracks the dependency and re-renders the Show branch when a gate or
     // engine switch request is set. Assert the positive pattern is present.
-    expect(source).toMatch(/when=\{activeGateRequest\(\)\}/);
+    expect(appSource).toContain("gate={activeGateRequest()}");
+    expect(surfaceSource).toContain("resolveBottomSurfaceMode(props)");
 
     // And the buggy pattern — Show reading a bare `gate` local captured at
     // render-body scope — must be absent. The status header used to read
     // `gate ?` off the same snapshot; assert both now reference the signal.
-    expect(source).not.toMatch(/when=\{gate\}/);
-    expect(source).not.toMatch(/pendingGate\(\) \? palette\.gateAccent : gate \?/);
+    expect(appSource).not.toMatch(/when=\{gate\}/);
+    expect(appSource).not.toMatch(/pendingGate\(\) \? palette\.gateAccent : gate \?/);
+  });
+
+  test("bottom surface priority is explicit and modal-first", () => {
+    const empty = { yoloStage: null, permissionRequest: undefined, question: null, gate: null, rewind: null, session: null, model: null };
+    expect(resolveBottomSurfaceMode(empty).kind).toBe("composer");
+    expect(resolveBottomSurfaceMode({ ...empty, gate: { gate: "phase", summary: "summary", options: [] }, rewind: { points: [], selected: 0, restoreSelected: 0, summaryFeedback: "", summaryCursor: 0, busy: false } }).kind).toBe("gate");
+    expect(resolveBottomSurfaceMode({ ...empty, yoloStage: 1, gate: { gate: "phase", summary: "summary", options: [] } }).kind).toBe("yolo");
   });
 
   test("main layout does not depend on every prompt character", async () => {
@@ -57,68 +67,70 @@ describe("TUI reactivity static guard", () => {
   });
 
   test("slash-command query changes reset the selected row", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "command-completion-controller.ts"), "utf8");
 
     expect(source).toContain("const query = commandMenuOpen() ? commandMenuQuery() : null");
     expect(source).toContain("if (query !== previousCommandMenuQuery) setCommandMenuSelected(0)");
   });
 
   test("Ctrl+Q exits before modal keyboard routing", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "input-routing.ts"), "utf8");
     const ctrlQ = source.indexOf('if (key.ctrl && key.name === "q")');
-    const modelPickerRouting = source.indexOf("if (modelPicker())");
+    const modelPickerRouting = source.indexOf("if (options.modelPicker())");
 
     expect(ctrlQ).toBeGreaterThan(-1);
     expect(modelPickerRouting).toBeGreaterThan(ctrlQ);
   });
 
   test("image paste is owned by the main composer after modal routing", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
-    const gateRouting = source.indexOf("if (pendingGate() || pendingEngineSwitch())");
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "input-routing.ts"), "utf8");
+    const gateRouting = source.indexOf("if (options.pendingGate() || options.pendingEngineSwitch()");
     const imagePaste = source.indexOf('key.name?.toLowerCase() === "v" && (key.meta || key.option)');
-    const composerRouting = source.indexOf("if (handleComposerKey(key))");
+    const composerRouting = source.indexOf("if (options.handleComposerKey(key))");
 
     expect(imagePaste).toBeGreaterThan(gateRouting);
     expect(composerRouting).toBeGreaterThan(imagePaste);
   });
 
   test("gate Reject composer owns both keyboard and paste routing", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
-    const activeChecks = source.match(/gateComposerIsActive\(gateFocus\(\), gateFeedbackMode\(\)\)/g) ?? [];
+    const controller = await readFile(join(import.meta.dir, "..", "src", "tui", "decision-controller.ts"), "utf8");
+    const surface = await readFile(join(import.meta.dir, "..", "src", "tui", "views", "BottomSurface.tsx"), "utf8");
+    const activeChecks = `${controller}\n${surface}`.match(/gateComposerIsActive\((?:gateFocus\(\), gateFeedbackMode\(\)|props\.gateFocus, props\.gateFeedbackMode)\)/g) ?? [];
 
     // Keyboard, paste, and gate summary-height budgeting share the predicate.
     expect(activeChecks).toHaveLength(3);
   });
 
   test("question freeform composer owns both keyboard and paste routing", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "decision-controller.ts"), "utf8");
     const activeChecks = source.match(/questionComposerIsActive\(/g) ?? [];
 
     expect(activeChecks).toHaveLength(2);
   });
 
   test("SubAgent lifecycle events do not overwrite the parent STATUS line", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
-    const handler = source.match(/function handleAgentEvent\(event: AgentLoopEvent\) \{[\s\S]*?\n  \}\n\n  function recordActivity/)?.[0] ?? "";
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "agent-process-controller.ts"), "utf8");
+    const handler = source.match(/function handleAgentLifecycle\(event: AgentLoopEvent\): boolean \{[\s\S]*?\n  \}/)?.[0] ?? "";
     const lifecycleCases = handler.match(/case "agent_created":[\s\S]*?case "agent_completed":/)?.[0] ?? "";
 
     expect(lifecycleCases).not.toContain("setStatus(");
-    expect(handler).toContain("setAgentCards((cards) => applyAgentEvent(cards, event))");
+    expect(source).toContain("setAgentCards((cards) => applyAgentEvent(cards, event))");
     expect(handler).toContain("recordActivity({ kind: \"agent\"");
   });
 
   test("session restoration blocks background delivery until restored state is coherent", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const appSource = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+    const resumeSource = await readFile(join(import.meta.dir, "..", "src", "tui", "session-resume-controller.ts"), "utf8");
 
-    expect(source).toContain("&& !restoringSession()");
-    expect(source).toContain("const ready = !restoringSession()");
-    expect(source).toMatch(/async function resumeSession[\s\S]*?setRestoringSession\(true\);[\s\S]*?finally \{\n\s+setRestoringSession\(false\);/);
+    expect(appSource).toContain("&& !restoringSession()");
+    expect(appSource).toContain("const ready = !restoringSession()");
+    expect(resumeSource).toMatch(/async function resumeSession[\s\S]*?options\.setRestoringSession\(true\);[\s\S]*?finally \{\n\s+options\.setRestoringSession\(false\);/);
   });
 
   test("background continuation scheduler is initialized before AgentManager callbacks can use it", async () => {
     const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
     const scheduler = source.indexOf("const continuationScheduler = new AgentContinuationScheduler");
-    const manager = source.indexOf("const agentManager = new AgentManager");
+    const manager = source.indexOf("agentManager = new AgentManager");
 
     expect(scheduler).toBeGreaterThan(-1);
     expect(manager).toBeGreaterThan(scheduler);
@@ -126,16 +138,17 @@ describe("TUI reactivity static guard", () => {
   });
 
   test("permission submission resolves the same parent-first request that the panel displays", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
-    expect(source).toContain("pendingPermission()?.request ?? pendingChildPermission()");
-    expect(source.match(/if \(pendingPermission\(\)\) \{[\s\S]*?submitPermissionResolution/g)).toHaveLength(2);
+    const decisionSource = await readFile(join(import.meta.dir, "..", "src", "tui", "decision-controller.ts"), "utf8");
+    expect(decisionSource).toContain("pendingPermission()?.request ?? pendingChildPermission()");
+    expect(decisionSource).toContain("if (pendingPermission()) options.submitPermission");
+    expect(decisionSource).toContain("else if (pendingChildPermission()) options.submitChildPermission");
   });
 
   test("permission errors consult durable session state before restoring the modal", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
-    const handler = source.match(/const submitPermissionResolution[\s\S]*?function submitChildPermissionResolution/)?.[0] ?? "";
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "decision-continuations.ts"), "utf8");
+    const handler = source.match(/async function submitPermissionResolution[\s\S]*?function submitChildPermissionResolution/)?.[0] ?? "";
     expect(handler.match(/reconcilePermissionAfterContinuationFailure\(pending\)/g)).toHaveLength(2);
-    expect(handler).toContain("loadSessionSnapshot(process.cwd(), pending.sessionId");
+    expect(handler).toContain("loadSessionSnapshot(options.rootDir, pending.sessionId");
     expect(handler).toContain("snapshot.pendingPermission?.id === pending.request.id");
     expect(handler).toContain("setPendingPermission(null)");
   });
