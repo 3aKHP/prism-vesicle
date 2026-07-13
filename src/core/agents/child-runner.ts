@@ -22,6 +22,8 @@ const unsupportedChildTools = new Set([
   "interrupt_agent",
   "wait_agent",
   "shell_exec",
+  "shell_output",
+  "shell_stop",
 ]);
 
 export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, invocation, onProgress, takeMessages, claimMutation, registerChildSession }) => {

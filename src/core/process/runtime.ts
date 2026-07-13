@@ -28,16 +28,35 @@ export type ProcessExecutionResult = {
   aborted: boolean;
   stdout: string;
   stderr: string;
+  stdoutTail: string;
+  stderrTail: string;
   stdoutBytes: number;
   stderrBytes: number;
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
 };
 
+export type ProcessExecutionProgress = {
+  durationMs: number;
+  stdoutTail: string;
+  stderrTail: string;
+  stdoutBytes: number;
+  stderrBytes: number;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+};
+
+export type ProcessExecutionHandle = {
+  pid: number;
+  result: Promise<ProcessExecutionResult>;
+  cancel(): void;
+};
+
 export function createProcessExecutionPlan(
   command: string,
   timeoutMs = DEFAULT_PROCESS_TIMEOUT_MS,
   platform: NodeJS.Platform = process.platform,
+  runInBackground = false,
 ): ProcessExecutionPlan {
   const normalizedCommand = command.trim();
   if (!normalizedCommand) throw new Error("shell_exec requires a non-empty command.");
@@ -50,6 +69,7 @@ export function createProcessExecutionPlan(
     shell: platform === "win32" ? "powershell" : "posix-sh",
     timeoutMs,
     envPolicyVersion: PROCESS_ENV_POLICY_VERSION,
+    runInBackground,
   };
 }
 
@@ -69,8 +89,22 @@ export async function executeProcessPlan(
     signal?: AbortSignal;
     env?: NodeJS.ProcessEnv;
     platform?: NodeJS.Platform;
+    onProgress?: (progress: ProcessExecutionProgress) => void;
   } = {},
 ): Promise<ProcessExecutionResult> {
+  return startProcessPlan(rootDir, plan, options).result;
+}
+
+export function startProcessPlan(
+  rootDir: string,
+  plan: ProcessExecutionPlan,
+  options: {
+    signal?: AbortSignal;
+    env?: NodeJS.ProcessEnv;
+    platform?: NodeJS.Platform;
+    onProgress?: (progress: ProcessExecutionProgress) => void;
+  } = {},
+): ProcessExecutionHandle {
   const platform = options.platform ?? process.platform;
   const command = platform === "win32"
     ? ["pwsh.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", plan.command]
@@ -85,8 +119,32 @@ export async function executeProcessPlan(
     ...(platform === "win32" ? {} : { detached: true }),
   });
 
-  const stdoutPromise = captureStream(child.stdout);
-  const stderrPromise = captureStream(child.stderr);
+  const stdoutState = createCaptureState();
+  const stderrState = createCaptureState();
+  let lastProgressAt = 0;
+  const emitProgress = (force = false) => {
+    if (!options.onProgress) return;
+    const now = performance.now();
+    if (!force && now - lastProgressAt < 100) return;
+    lastProgressAt = now;
+    try {
+      options.onProgress({
+        durationMs: Math.max(0, Math.round(now - started)),
+        stdoutTail: stdoutState.tail,
+        stderrTail: stderrState.tail,
+        stdoutBytes: stdoutState.bytes,
+        stderrBytes: stderrState.bytes,
+        stdoutTruncated: stdoutState.bytes > stdoutState.keptBytes,
+        stderrTruncated: stderrState.bytes > stderrState.keptBytes,
+      });
+    } catch {
+      // Host display callbacks must never change process lifetime semantics.
+    }
+  };
+  const stdoutPromise = captureStream(child.stdout, stdoutState, emitProgress);
+  const stderrPromise = captureStream(child.stderr, stderrState, emitProgress);
+  const progressTimer = options.onProgress ? setInterval(() => emitProgress(true), 1_000) : undefined;
+  progressTimer?.unref?.();
   let timedOut = false;
   let aborted = false;
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -102,68 +160,96 @@ export async function executeProcessPlan(
   else options.signal?.addEventListener("abort", abortListener, { once: true });
 
   timeout = setTimeout(() => stop("timeout"), plan.timeoutMs);
-  let exitCode: number | undefined;
-  let stdout: Awaited<ReturnType<typeof captureStream>>;
-  let stderr: Awaited<ReturnType<typeof captureStream>>;
-  try {
-    [exitCode, stdout, stderr] = await Promise.all([
-      child.exited,
-      stdoutPromise,
-      stderrPromise,
-    ]);
-  } finally {
-    clearTimeout(timeout);
-    options.signal?.removeEventListener("abort", abortListener);
-  }
-  // A shell can exit after launching a background descendant. Always clean
-  // the original process tree before returning, even when its inherited pipes
-  // closed quickly and the command otherwise appeared successful.
-  termination ??= terminateProcessTree(child.pid, platform);
-  await termination;
+  const result = (async (): Promise<ProcessExecutionResult> => {
+    let exitCode: number | undefined;
+    let stdout: Awaited<ReturnType<typeof captureStream>>;
+    let stderr: Awaited<ReturnType<typeof captureStream>>;
+    try {
+      [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        stdoutPromise,
+        stderrPromise,
+      ]);
+    } finally {
+      clearTimeout(timeout);
+      if (progressTimer) clearInterval(progressTimer);
+      options.signal?.removeEventListener("abort", abortListener);
+    }
+    // A shell can exit after launching a background descendant. Always clean
+    // the original process tree before returning, even when its inherited pipes
+    // closed quickly and the command otherwise appeared successful.
+    termination ??= terminateProcessTree(child.pid, platform);
+    await termination;
+    emitProgress(true);
+    return {
+      exitCode,
+      durationMs: Math.max(0, Math.round(performance.now() - started)),
+      timedOut,
+      aborted,
+      stdout: stdout.text,
+      stderr: stderr.text,
+      stdoutTail: stdoutState.tail,
+      stderrTail: stderrState.tail,
+      stdoutBytes: stdout.bytes,
+      stderrBytes: stderr.bytes,
+      stdoutTruncated: stdout.truncated,
+      stderrTruncated: stderr.truncated,
+    };
+  })();
   return {
-    exitCode,
-    durationMs: Math.max(0, Math.round(performance.now() - started)),
-    timedOut,
-    aborted,
-    stdout: stdout!.text,
-    stderr: stderr!.text,
-    stdoutBytes: stdout!.bytes,
-    stderrBytes: stderr!.bytes,
-    stdoutTruncated: stdout!.truncated,
-    stderrTruncated: stderr!.truncated,
+    pid: child.pid,
+    result,
+    cancel: () => stop("abort"),
   };
 }
 
-async function captureStream(stream: ReadableStream<Uint8Array> | null): Promise<{
+type CaptureState = {
+  kept: Uint8Array[];
+  keptBytes: number;
+  bytes: number;
+  tail: string;
+  decoder: TextDecoder;
+};
+
+function createCaptureState(): CaptureState {
+  return { kept: [], keptBytes: 0, bytes: 0, tail: "", decoder: new TextDecoder("utf-8", { fatal: false }) };
+}
+
+async function captureStream(
+  stream: ReadableStream<Uint8Array> | null,
+  state: CaptureState,
+  onChunk: () => void,
+): Promise<{
   text: string;
   bytes: number;
   truncated: boolean;
 }> {
   if (!stream) return { text: "", bytes: 0, truncated: false };
   const reader = stream.getReader();
-  const kept: Uint8Array[] = [];
-  let keptBytes = 0;
-  let bytes = 0;
   while (true) {
     const next = await reader.read();
     if (next.done) break;
-    bytes += next.value.byteLength;
-    if (keptBytes >= MAX_PROCESS_STREAM_BYTES) continue;
-    const remaining = MAX_PROCESS_STREAM_BYTES - keptBytes;
-    const chunk = next.value.byteLength <= remaining ? next.value : next.value.slice(0, remaining);
-    kept.push(chunk);
-    keptBytes += chunk.byteLength;
+    state.bytes += next.value.byteLength;
+    state.tail = `${state.tail}${state.decoder.decode(next.value, { stream: true })}`.slice(-8_192);
+    if (state.keptBytes < MAX_PROCESS_STREAM_BYTES) {
+      const remaining = MAX_PROCESS_STREAM_BYTES - state.keptBytes;
+      const chunk = next.value.byteLength <= remaining ? next.value : next.value.slice(0, remaining);
+      state.kept.push(chunk);
+      state.keptBytes += chunk.byteLength;
+    }
+    onChunk();
   }
-  const combined = new Uint8Array(keptBytes);
+  state.tail = `${state.tail}${state.decoder.decode()}`.slice(-8_192);
+  const combined = new Uint8Array(state.keptBytes);
   let offset = 0;
-  for (const chunk of kept) {
+  for (const chunk of state.kept) {
     combined.set(chunk, offset);
     offset += chunk.byteLength;
   }
   return {
     text: new TextDecoder("utf-8", { fatal: false }).decode(combined),
-    bytes,
-    truncated: bytes > keptBytes,
+    bytes: state.bytes,
+    truncated: state.bytes > state.keptBytes,
   };
 }
 

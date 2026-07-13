@@ -5,6 +5,7 @@ import { truncateLine, truncateMiddle } from "../format";
 import { artifactRoots } from "../../core/artifacts/workbench";
 import type { AgentCardState } from "../types";
 import { visibleAgentCards } from "../agent-view";
+import type { BackgroundProcessState } from "../../core/process/manager";
 
 /**
  * Semantic colour for the status line. `status` is a catch-all string (config
@@ -35,11 +36,13 @@ export function Sidebar(props: {
   artifacts: { path: string }[];
   selectedArtifactPath?: string;
   agents?: AgentCardState[];
+  processes?: BackgroundProcessState[];
   currentSessionId?: string;
   width: number;
 }) {
   const reasoningLabel = () => (props.reasoningMode === "collapsed" ? "preview" : props.reasoningMode);
   const mcpLines = () => mcpSidebarLines(props.mcp ?? { loading: false, configured: false, enabled: false, servers: [] }, props.width - 4);
+  const processLine = () => processSidebarLines(props.processes ?? [], props.width - 4, props.currentSessionId)[0]!;
   return (
     <box title="Workspace" border borderColor={palette.sectionBorder} width={props.width} padding={1} flexDirection="column">
       <PanelLine content="Status" fg={palette.brandDim} attributes={1} />
@@ -49,6 +52,8 @@ export function Sidebar(props: {
       <For each={agentSidebarLines(props.agents ?? [], props.width - 4, props.currentSessionId)}>
         {(line) => <PanelLine content={line.text} fg={line.color} attributes={line.active ? 1 : 0} />}
       </For>
+      <PanelLine content="Shell" fg={palette.brandDim} attributes={1} />
+      <PanelLine content={processLine().text} fg={processLine().color} attributes={processLine().active ? 1 : 0} />
       <PanelLine content=" " fg={palette.textDim} />
       <PanelLine content="Effort" fg={palette.brandDim} attributes={1} />
       <PanelLine content={truncateLine(`tier: ${props.thinkingTier ?? "auto"}`, props.width - 4)} fg={palette.textPrimary} />
@@ -92,6 +97,19 @@ export function Sidebar(props: {
       </scrollbox>
     </box>
   );
+}
+
+export function processSidebarLines(processes: BackgroundProcessState[], width: number, currentSessionId?: string): Array<{ text: string; color: string; active: boolean }> {
+  const running = processes.filter((process) => process.status === "running");
+  const process = running.at(-1);
+  if (!process) return [{ text: "none active", color: palette.textDim, active: false }];
+  const parked = currentSessionId && process.parentSessionId !== currentSessionId ? " · parked" : "";
+  const more = running.length > 1 ? ` · +${running.length - 1} more` : "";
+  return [{
+    text: truncateMiddle(`● ${process.taskId} · running${parked}${more}`, width),
+    color: palette.warn,
+    active: true,
+  }];
 }
 
 export function agentSidebarLines(cards: AgentCardState[], width: number, currentSessionId?: string): Array<{ text: string; color: string; active: boolean }> {

@@ -36,7 +36,9 @@ Copy-Item "docs\examples\permissions.yaml" (Join-Path $configDir "permissions.ya
 notepad (Join-Path $configDir "permissions.yaml")
 ```
 
-The shell is non-interactive, starts in the project root, receives a filtered environment, separates and bounds stdout/stderr, and has a wall-clock timeout. On Windows it uses PowerShell 7 without loading a profile; on Linux/WSL it uses `/bin/sh`.
+The shell is non-interactive, starts in the project root, receives a filtered environment, separates and bounds stdout/stderr, and has a wall-clock timeout. On Windows it uses PowerShell 7 without loading a profile; on Linux/WSL it uses `/bin/sh`. Foreground commands show bounded live tail output and elapsed time in their TUI card.
+
+For a long command whose result is not needed immediately, the model can set `runInBackground: true`. Vesicle returns a short id such as `shell-1`, keeps its progress visible in the command card, header, and Workspace sidebar, persists bounded output/status under `.vesicle/processes/`, and delivers completion to the next provider turn without routine polling. `shell_output` reads current or completed output and `shell_stop` cancels a running task. Managed background processes are marked interrupted rather than replayed after a Vesicle restart.
 
 Permission is consent, not containment. An approved shell command can access project-external files and the network with your host-user authority. Shell-created file changes are not guaranteed to rewind.
 

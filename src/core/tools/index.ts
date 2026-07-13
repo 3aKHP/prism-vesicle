@@ -23,7 +23,9 @@ export type BuiltInToolName =
   | "move_file"
   | "move_directory"
   | "delete_directory"
-  | "shell_exec";
+  | "shell_exec"
+  | "shell_output"
+  | "shell_stop";
 import { executeFileTool, fileToolDefinitions } from "./fs";
 import {
   executeWebCrawlTool,
@@ -37,11 +39,28 @@ import {
   webResearchToolDefinition,
   webSearchToolDefinition,
 } from "./web";
-import type { FileToolExecutionOptions, ToolCall, ToolDefinition, ToolResult } from "./types";
-import { executeShellExecTool, shellExecToolDefinition } from "./shell";
+import type { FileToolExecutionOptions, ProcessToolEvent, ToolCall, ToolDefinition, ToolResult } from "./types";
+import type { ProcessManager } from "../process/manager";
+import {
+  executeShellExecTool,
+  executeShellOutputTool,
+  executeShellStopTool,
+  shellExecToolDefinition,
+  shellOutputToolDefinition,
+  shellStopToolDefinition,
+} from "./shell";
 
 export { executeFileTool, fileToolDefinitions } from "./fs";
-export { executeShellExecTool, executionPlanHash, parseShellExecPlan, shellExecToolDefinition } from "./shell";
+export {
+  executeShellExecTool,
+  executeShellOutputTool,
+  executeShellStopTool,
+  executionPlanHash,
+  parseShellExecPlan,
+  shellExecToolDefinition,
+  shellOutputToolDefinition,
+  shellStopToolDefinition,
+} from "./shell";
 export {
   executeWebCrawlTool,
   executeWebFetchTool,
@@ -162,6 +181,14 @@ export const m0Tools: ToolContract[] = [
     name: "shell_exec",
     description: "Execute one non-interactive host shell command under the active permission mode.",
   },
+  {
+    name: "shell_output",
+    description: "Read output and status for a background shell task.",
+  },
+  {
+    name: "shell_stop",
+    description: "Stop a running background shell task.",
+  },
 ];
 
 export const hostToolDefinitions: ToolDefinition[] = [
@@ -172,14 +199,28 @@ export const hostToolDefinitions: ToolDefinition[] = [
   webCrawlToolDefinition,
   webResearchToolDefinition,
   shellExecToolDefinition,
+  shellOutputToolDefinition,
+  shellStopToolDefinition,
 ];
 
 export async function executeHostTool(
   rootDir: string,
   call: ToolCall,
-  options: FileToolExecutionOptions & { signal?: AbortSignal } = {},
+  options: FileToolExecutionOptions & {
+    signal?: AbortSignal;
+    processManager?: ProcessManager;
+    parentSessionId?: string;
+    onProcessProgress?: (event: ProcessToolEvent) => void;
+  } = {},
 ): Promise<ToolResult> {
-  if (call.name === "shell_exec") return executeShellExecTool(rootDir, call, { signal: options.signal });
+  if (call.name === "shell_exec") return executeShellExecTool(rootDir, call, {
+    signal: options.signal,
+    processManager: options.processManager,
+    parentSessionId: options.parentSessionId,
+    onProgress: options.onProcessProgress,
+  });
+  if (call.name === "shell_output") return executeShellOutputTool(rootDir, call, { signal: options.signal, processManager: options.processManager, parentSessionId: options.parentSessionId });
+  if (call.name === "shell_stop") return executeShellStopTool(rootDir, call, { processManager: options.processManager, parentSessionId: options.parentSessionId });
   if (call.name === "web_search") return executeWebSearchTool(call);
   if (call.name === "web_fetch") return executeWebFetchTool(call);
   if (call.name === "web_map") return executeWebMapTool(call);

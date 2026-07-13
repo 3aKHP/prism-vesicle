@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Show, onMount } from "solid-js";
+import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
 import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@opentui/solid";
 import { inspectProviderConfig } from "../config/providers";
 import { loadPermissionSettings } from "../config/permissions";
@@ -82,6 +82,8 @@ import { ToolPermissionBroker, type PermissionMode } from "../core/permissions";
 import type { PermissionResolution } from "../core/permissions";
 import { PermissionPrompt } from "./PermissionPrompt";
 import { YoloPrompt } from "./YoloPrompt";
+import { getProcessManager, type BackgroundProcessEvent, type BackgroundProcessState } from "../core/process/manager";
+import { processEventFromTask } from "../core/tools/shell";
 
 type PendingGate = Extract<RunPromptResult, { kind: "needs_user" }>;
 
@@ -204,6 +206,7 @@ export function App(props: AppProps = {}) {
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
   const [agentCards, setAgentCards] = createSignal<AgentCardState[]>([]);
+  const [backgroundProcesses, setBackgroundProcesses] = createSignal<BackgroundProcessState[]>([]);
   const [streamingAssistant, setStreamingAssistant] = createSignal("");
   const [streamingReasoning, setStreamingReasoning] = createSignal("");
   const [lastTurnUsage, setLastTurnUsage] = createSignal<TokenUsageSummary | undefined>();
@@ -247,6 +250,12 @@ export function App(props: AppProps = {}) {
   const [gateFeedbackCursor, setGateFeedbackCursor] = createSignal(0);
   const [gateFeedbackKillBuffer, setGateFeedbackKillBuffer] = createSignal<string | undefined>();
   const agentStore = new AgentStore(process.cwd());
+  const processManager = getProcessManager(process.cwd());
+  const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
+  onCleanup(() => {
+    unsubscribeProcesses();
+    void processManager.shutdown();
+  });
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
   const pausedAgentDeliveries = new Set<string>();
@@ -1888,6 +1897,14 @@ export function App(props: AppProps = {}) {
       case "agent_integrated":
         recordActivity({ kind: "agent", text: `integrated ${event.handle}` });
         return;
+      case "process_update":
+        applyProcessUpdate(event.callId, event.processEvent);
+        if (event.processEvent.executionMode === "foreground") {
+          setStatus(event.processEvent.status === "running"
+            ? `running shell · ${Math.max(0, Math.round(event.processEvent.durationMs / 1000))}s`
+            : `shell ${event.processEvent.status}`);
+        }
+        return;
       case "asset_drift": {
         const key = `${sessionId() ?? "unknown"}:${event.fingerprint}`;
         if (lastReportedAssetDriftKey === key) return;
@@ -1977,24 +1994,29 @@ export function App(props: AppProps = {}) {
           recordActivity({ kind: "agent", text: `${event.ok ? "ok" : "failed"} spawn_agent` });
           return;
         }
+        const latestBackgroundProcess = event.processEvent?.taskId
+          ? backgroundProcesses().find((process) => process.taskId === event.processEvent?.taskId)
+          : undefined;
+        const displayedProcessEvent = latestBackgroundProcess ? processEventFromTask(latestBackgroundProcess) : event.processEvent;
         setMessages((prev) => {
           // Merge the outcome onto the matching call card so its diff can show
           // the affected line range (matchLines → git-style hunk + gutter),
           // then add the `⎿` footer beneath it.
           const next = prev.map((m) =>
             m.toolCallId === event.callId && m.toolStage === "call"
-              ? { ...m, toolFileEvent: event.fileEvent, toolWebEvent: event.webEvent, toolMcpEvent: event.mcpEvent, toolProcessEvent: event.processEvent, toolOk: event.ok, images: event.images }
+              ? { ...m, toolFileEvent: event.fileEvent, toolWebEvent: event.webEvent, toolMcpEvent: event.mcpEvent, toolProcessEvent: displayedProcessEvent, toolOk: event.ok, images: event.images }
               : m,
           );
           next.push({
             role: "tool",
             toolStage: "result",
             toolName: event.name,
+            toolCallId: event.callId,
             toolOk: event.ok,
             toolFileEvent: event.fileEvent,
             toolWebEvent: event.webEvent,
             toolMcpEvent: event.mcpEvent,
-            toolProcessEvent: event.processEvent,
+            toolProcessEvent: displayedProcessEvent,
             images: event.images,
             // Content is only needed for failure messages; on success the
             // structured fileEvent/webEvent/mcpEvent carries the footer detail.
@@ -2017,6 +2039,25 @@ export function App(props: AppProps = {}) {
         recordActivity({ kind: "validation", text: event.ok ? "validation passed" : "validation found issues" });
         return;
     }
+  }
+
+  function handleBackgroundProcessEvent(event: BackgroundProcessEvent): void {
+    const process = event.process;
+    setBackgroundProcesses((current) => {
+      const index = current.findIndex((candidate) => candidate.taskId === process.taskId);
+      if (index < 0) return [...current, process];
+      return current.map((candidate, candidateIndex) => candidateIndex === index ? process : candidate);
+    });
+    applyProcessUpdate(process.parentToolCallId, processEventFromTask(process));
+    if (process.status !== "running") {
+      recordActivity({ kind: "tool", text: `${process.taskId} ${process.status}${process.exitCode !== undefined ? ` · exit ${process.exitCode}` : ""}` });
+    }
+  }
+
+  function applyProcessUpdate(callId: string, processEvent: import("../core/tools").ProcessToolEvent): void {
+    setMessages((current) => current.map((message) =>
+      message.toolCallId === callId ? { ...message, toolProcessEvent: processEvent } : message
+    ));
   }
 
   function recordActivity(entry: ActivityEntry) {
@@ -2330,6 +2371,13 @@ export function App(props: AppProps = {}) {
       const snapshot = await loadSessionSnapshot(process.cwd(), target.sessionId, {
         synthesizeDanglingToolResults: false,
       });
+      const liveProcesses = await processManager.list(target.sessionId);
+      const liveProcessesByTaskId = new Map(liveProcesses.map((process) => [process.taskId, process]));
+      for (const message of snapshot.messages) {
+        const taskId = message.toolProcessEvent?.taskId;
+        const live = taskId ? liveProcessesByTaskId.get(taskId) : undefined;
+        if (live) message.toolProcessEvent = processEventFromTask(live);
+      }
       const resumedMessages = vesicleMessagesFromResumed(snapshot.messages);
       // Tool-call arguments live on the assistant record's toolCalls; build a
       // callId → {name, arguments} lookup so resumed tool results can render
@@ -2529,7 +2577,7 @@ export function App(props: AppProps = {}) {
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
         <text
-          content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()))}
+          content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
           fg={engineAccent(activeEngine())}
           attributes={1}
         />
@@ -2549,6 +2597,7 @@ export function App(props: AppProps = {}) {
             artifacts={artifacts()}
             selectedArtifactPath={selectedArtifact()?.path}
             agents={agentCards()}
+            processes={backgroundProcesses()}
             currentSessionId={sessionId()}
             width={layout().leftPanelWidth}
           />
@@ -2782,10 +2831,15 @@ function displayUserQuestionAnswer(header: string, answer: UserQuestionAnswer): 
   return `[question:${header}] ${answer.label}`;
 }
 
-export function headerLine(engine: EngineId, width: number, agents?: string): string {
+export function headerLine(engine: EngineId, width: number, agents?: string, processes?: string): string {
   const left = `Prism Vesicle · ${engineDisplayName(engine)}`;
-  const content = agents ? `${left} · Agents ${agents}` : left;
+  const content = [left, ...(agents ? [`Agents ${agents}`] : []), ...(processes ? [`Shell ${processes}`] : [])].join(" · ");
   return truncateLine(content, Math.max(20, width - 4));
+}
+
+export function backgroundProcessActivitySummary(processes: BackgroundProcessState[]): string | undefined {
+  const running = processes.filter((process) => process.status === "running").length;
+  return running > 0 ? `${running} running` : undefined;
 }
 
 /**
@@ -2976,6 +3030,7 @@ function isAuthoredUserMessage(message: ResumedMessage): boolean {
     && message.kind !== "user-question-answer"
     && message.kind !== "compact-summary"
     && message.kind !== "subagent-results"
+    && message.kind !== "background-process-results"
     && message.kind !== ENGINE_HANDOFF_KIND;
 }
 
@@ -3112,6 +3167,7 @@ function displayMessagesFromResumed(
           role: "tool",
           toolStage: "result",
           toolName: lookup.name,
+          toolCallId: message.toolCallId,
           toolOk: ok,
           toolFileEvent: message.toolFileEvent,
           toolWebEvent: message.toolWebEvent,
@@ -3126,6 +3182,9 @@ function displayMessagesFromResumed(
   }
   if (message.role === "user" && message.kind === "subagent-results") {
     return [{ role: "system", content: "Background SubAgent results were delivered to the parent Engine." }];
+  }
+  if (message.role === "user" && message.kind === "background-process-results") {
+    return [{ role: "system", content: "Background shell completion was delivered to the active Engine." }];
   }
   if (message.role === "user") {
     return [{

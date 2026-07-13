@@ -102,6 +102,6 @@ export async function rewindCodeAndConversation(
 export function isSelectableUserRecord(record: SessionRecord): boolean {
   if (record.role !== "user") return false;
   const kind = record.metadata?.kind;
-  if (kind === "gate-resolution" || kind === "user-question-answer" || kind === "compact-summary" || kind === ENGINE_HANDOFF_KIND) return false;
+  if (kind === "gate-resolution" || kind === "user-question-answer" || kind === "compact-summary" || kind === "background-process-results" || kind === ENGINE_HANDOFF_KIND) return false;
   return record.content.trim().length > 0;
 }

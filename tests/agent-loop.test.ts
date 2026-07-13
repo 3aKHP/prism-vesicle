@@ -12,6 +12,7 @@ import { AgentContinuationScheduler } from "../src/core/agents/scheduler";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../src/core/session/store";
 import { fileCheckpointDiffStats } from "../src/core/checkpoints/file-history";
 import { listRewindPoints } from "../src/core/rewind/service";
+import { getProcessManager } from "../src/core/process/manager";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -381,6 +382,95 @@ describe("agent loop sessions", () => {
     const manual = await runPrompt({ input: "read", rootDir: manualRoot, permission: { mode: "MANUAL" } });
     expect(manual.kind).toBe("needs_permission");
     if (manual.kind === "needs_permission") expect(manual.request.permissionClass).toBe("observe");
+  });
+
+  test("YOLO cannot execute shell_exec when the capability is disabled", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await createPromptRoot();
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return Response.json({
+        id: "chat-yolo-disabled-1",
+        choices: [{ message: { content: "", tool_calls: [{
+          id: "call-yolo-disabled",
+          type: "function",
+          function: {
+            name: "shell_exec",
+            arguments: JSON.stringify({ command: "touch workspace/should-not-exist" }),
+          },
+        }] } }],
+      });
+      return Response.json({ id: "chat-yolo-disabled-2", choices: [{ message: { content: "not run" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "run",
+      rootDir,
+      permission: { mode: "YOLO", shellExecEnabled: false },
+    });
+
+    expect(result.kind).toBe("complete");
+    expect(requests).toBe(2);
+    expect(await Bun.file(join(rootDir, "workspace", "should-not-exist")).exists()).toBe(false);
+    const records = await loadSessionRecords(rootDir, result.sessionId);
+    expect(records.find((record) => record.metadata?.toolCallId === "call-yolo-disabled" && record.role === "tool")?.content)
+      .toContain("not in the current Engine's effective tool surface");
+    expect(records.some((record) => record.metadata?.kind === "process-started")).toBe(false);
+  });
+
+  test("background shell returns immediately and notifies the next provider turn", async () => {
+    const rootDir = await createPromptRoot();
+    const manager = getProcessManager(rootDir);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return Response.json({
+        id: "chat-background-1",
+        choices: [{ message: { content: "", tool_calls: [{
+          id: "call-background",
+          type: "function",
+          function: {
+            name: "shell_exec",
+            arguments: JSON.stringify({
+              command: process.platform === "win32"
+                ? "Start-Sleep -Milliseconds 100; [Console]::Out.Write('ready')"
+                : "sleep 0.1; printf ready",
+              runInBackground: true,
+            }),
+          },
+        }] } }],
+      });
+      return Response.json({ id: "chat-background-2", choices: [{ message: { content: "background started" } }] });
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({
+      input: "start it",
+      rootDir,
+      permission: { mode: "YOLO", shellExecEnabled: true },
+    });
+    if (first.kind !== "complete") throw new Error("expected complete");
+    const task = (await manager.list(first.sessionId))[0];
+    if (!task) throw new Error("expected background process");
+    const completed = await manager.wait(task.taskId, { timeoutMs: 5_000 });
+    expect(completed.status).toBe("completed");
+
+    let continuationBody: any;
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      continuationBody = JSON.parse(String(init.body));
+      return Response.json({ id: "chat-background-3", choices: [{ message: { content: "saw completion" } }] });
+    }) as unknown as typeof fetch;
+    const second = await runPrompt({
+      input: "continue",
+      rootDir,
+      sessionId: first.sessionId,
+      messages: [...first.messages, { role: "user", content: "continue" }],
+      permission: { mode: "YOLO", shellExecEnabled: true },
+    });
+    expect(second.kind).toBe("complete");
+    expect(continuationBody.messages.some((message: any) => String(message.content).includes("Background shell update"))).toBe(true);
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    expect(records.some((record) => record.metadata?.kind === "background-process-results")).toBe(true);
   });
 
   test("returns malformed shell arguments as a tool failure without pausing or aborting the turn", async () => {

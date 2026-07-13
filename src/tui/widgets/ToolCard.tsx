@@ -7,8 +7,10 @@ import {
   annotateLineNumbers,
   buildToolBody,
   foldDiffLines,
+  formatDuration,
   hunkHeader,
   parseToolArgs,
+  processPreviewLines,
   resolveStartLine,
   toolKind,
   toolResultFooter,
@@ -87,10 +89,29 @@ export function ToolCard(props: Props) {
   return (
     <box flexDirection="column">
       <text content={header} fg={palette.tool} attributes={1} />
-      <Show when={hunk}>
+      <Show when={hunk} fallback={<box height={0} />}>
         <text content={`  ${hunk}`} fg={palette.textDim} />
       </Show>
       <For each={rows()}>{(row) => <text content={row.text} fg={row.fg} />}</For>
+      <Show when={kind === "process" ? props.toolProcessEvent : undefined} keyed fallback={<box height={0} />}>
+        {(event) => <ProcessOutput event={event} width={props.width} />}
+      </Show>
+    </box>
+  );
+}
+
+function ProcessOutput(props: { event: ProcessToolEvent; width: number }) {
+  const rows = () => processPreviewLines(props.event);
+  const status = () => props.event.status === "running" ? "Running…" : props.event.status;
+  return (
+    <box flexDirection="column">
+      <For each={rows()}>
+        {(row) => <text content={`  ${truncateLine(row.text, Math.max(20, props.width - 4))}`} fg={row.stderr ? palette.warn : palette.textMuted} />}
+      </For>
+      <text
+        content={`  ${status()}${props.event.taskId ? ` · ${props.event.taskId}` : ""} · ${formatDuration(props.event.durationMs)}`}
+        fg={props.event.status === "running" ? palette.warn : props.event.status === "completed" ? palette.success : palette.error}
+      />
     </box>
   );
 }

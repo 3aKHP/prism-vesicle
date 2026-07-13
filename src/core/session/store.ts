@@ -438,6 +438,7 @@ export async function loadSessionSnapshot(
   const pendingEngineSwitch = findPendingEngineSwitch(records);
   const pendingUserQuestion = findPendingUserQuestion(records);
   const pendingPermission = findPendingPermission(records);
+  applyBackgroundProcessCompletions(messages, records);
   appendIndeterminateProcessResults(messages, records);
   const preservedPendingCallIds = options.synthesizeDanglingToolResults
     ? new Set<string>()
@@ -492,6 +493,21 @@ export async function loadSessionSnapshot(
       : {}),
     ...(pendingPermission ? { pendingPermission } : {}),
   };
+}
+
+function applyBackgroundProcessCompletions(messages: ResumedMessage[], records: SessionRecord[]): void {
+  const completed = new Map<string, ProcessToolEvent>();
+  for (const record of records) {
+    if (record.metadata?.kind !== "background-process-completed") continue;
+    const toolCallId = record.metadata.parentToolCallId;
+    const processEvent = record.metadata.processEvent as ProcessToolEvent | undefined;
+    if (typeof toolCallId === "string" && processEvent?.kind === "process_exec") completed.set(toolCallId, processEvent);
+  }
+  for (const message of messages) {
+    if (message.role !== "tool" || !message.toolCallId) continue;
+    const processEvent = completed.get(message.toolCallId);
+    if (processEvent) message.toolProcessEvent = processEvent;
+  }
 }
 
 function appendIndeterminateProcessResults(messages: ResumedMessage[], records: SessionRecord[]): void {

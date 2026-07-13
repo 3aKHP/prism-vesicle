@@ -26,7 +26,7 @@ _Last updated: 2026-07-12_
 | Runtime assets | Bundled defaults + user-global + sparse project overlays | Implemented on development branch |
 | SubAgents | Profile-driven foreground/background parallel child runtime + durable completion delivery | Implemented on development branch |
 | Tool permissions | MANUAL / INERTIA / MOMENTUM / YOLO + parent-owned child requests | Implemented on development branch |
-| Host shell | Opt-in non-interactive shell_exec + bounded Process Runtime | Implemented on development branch |
+| Host shell | Opt-in foreground/background shell_exec + bounded Process Runtime | Implemented on development branch |
 
 ## Current Scope
 
@@ -274,7 +274,9 @@ prism-vesicle/
 | `send_message` | Implemented (child request boundaries) | No filesystem access |
 | `interrupt_agent` | Implemented | No filesystem access |
 | `wait_agent` | Implemented (explicit terminal wait and background inbox consumption) | No filesystem access |
-| `shell_exec` | Implemented behind user-level opt-in and active permission mode | Host-user filesystem/process/network authority; not path-guarded |
+| `shell_exec` | Implemented foreground/background behind user-level opt-in and active permission mode | Host-user filesystem/process/network authority; not path-guarded |
+| `shell_output` | Implemented for persisted background-shell status/output | Reads bounded `.vesicle/processes/` runtime state |
+| `shell_stop` | Implemented for active background-shell cancellation | Terminates the managed process group/tree |
 | `config.load` | Internal contract | N/A |
 | `prompt.load` | Internal contract | N/A |
 | `session.write` | Internal contract | `.vesicle/sessions/` |
@@ -355,7 +357,8 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - Long-form engines (Weaver / Weaver-Orch / Dyad) have profiles and prompts
   but no dedicated validators or gate wiring.
 - Prompt-cache engineering (PrefixShape hashing, CacheDiagnostics) is deferred.
-- `shell_exec` is a user-authorized host command, not an OS sandbox. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind.
+- `shell_exec` is a user-authorized host command, not an OS sandbox. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind. `runInBackground` returns a managed `shell-N` task immediately; progress and completion remain visible in the TUI, terminal output/status are persisted under `.vesicle/processes/`, and completion is delivered to the next provider turn without polling. A process still running when the Vesicle host restarts is recovered as interrupted rather than replayed.
+- Process cleanup terminates the managed shell and ordinary descendants in its process group/tree. Because `shell_exec` is intentionally not an OS sandbox, an explicitly approved command can still use platform facilities such as a new session or external service manager to create work outside that managed tree.
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
 
 ## Verification

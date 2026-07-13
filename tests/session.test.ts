@@ -478,6 +478,70 @@ describe("session resume", () => {
     expect(recovered.messages.at(-1)?.content).toContain("not replayed");
   });
 
+  test("restores the terminal state of a completed background shell", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-background-process-"));
+    const store = await createSessionStore(rootDir, "background-process-resume");
+    await store.append({ role: "system", content: "system" });
+    await store.append({ role: "user", content: "run in background" });
+    const call = { id: "call-background", name: "shell_exec", arguments: JSON.stringify({ command: "printf done", runInBackground: true }) };
+    await store.append({ role: "assistant", content: "", metadata: { toolCalls: [call] } });
+    await store.append({
+      role: "tool",
+      content: JSON.stringify({ ok: true, result: "started" }),
+      metadata: {
+        toolCallId: call.id,
+        ok: true,
+        processEvent: {
+          kind: "process_exec",
+          taskId: "shell-1",
+          executionMode: "background",
+          status: "running",
+          command: "printf done",
+          cwd: ".",
+          shell: "posix-sh",
+          durationMs: 0,
+          timedOut: false,
+          aborted: false,
+          stdoutBytes: 0,
+          stderrBytes: 0,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+        },
+      },
+    });
+    await store.append({
+      role: "system",
+      content: "completed",
+      metadata: {
+        kind: "background-process-completed",
+        parentToolCallId: call.id,
+        processEvent: {
+          kind: "process_exec",
+          taskId: "shell-1",
+          executionMode: "background",
+          status: "completed",
+          command: "printf done",
+          cwd: ".",
+          shell: "posix-sh",
+          exitCode: 0,
+          durationMs: 10,
+          timedOut: false,
+          aborted: false,
+          stdoutBytes: 4,
+          stderrBytes: 0,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          stdoutTail: "done",
+          stderrTail: "",
+        },
+      },
+    });
+
+    const snapshot = await loadSessionSnapshot(rootDir, store.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.messages.find((message) => message.toolCallId === call.id)?.toolProcessEvent)
+      .toMatchObject({ taskId: "shell-1", status: "completed", stdoutTail: "done" });
+  });
+
   test("does not replay a permission-approved tool when Vesicle stopped before its durable result", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-permission-resolution-"));
     const store = await createSessionStore(rootDir, "permission-resolution-resume");

@@ -18,6 +18,7 @@ const observeTools = new Set([
   "web_research",
   "list_agents",
   "wait_agent",
+  "shell_output",
 ]);
 
 const interactionTools = new Set([

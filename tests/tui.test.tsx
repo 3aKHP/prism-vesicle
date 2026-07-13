@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/solid";
-import { App, contextUsageTelemetryLine, footerLine, latestTurnUsage, sessionUsageTelemetryLine, sumSessionUsage, turnUsageTelemetryLine } from "../src/tui/app";
+import { App, backgroundProcessActivitySummary, contextUsageTelemetryLine, footerLine, headerLine, latestTurnUsage, sessionUsageTelemetryLine, sumSessionUsage, turnUsageTelemetryLine } from "../src/tui/app";
 import { GatePrompt, gateComposerIsActive, gateOptionLine, gateSummaryLineBudget, sanitizeGateLabel, wrapGateSummary } from "../src/tui/GatePrompt";
 import { QuestionPrompt, optionLine, questionComposerIsActive, questionPanelMinHeight } from "../src/tui/QuestionPrompt";
 import { resolveTuiLayout } from "../src/tui/layout";
@@ -8,11 +8,35 @@ import { prepareMarkdownForDisplay, renderMarkdownPlainText } from "../src/tui/m
 import { renderComposerLines } from "../src/tui/PromptComposer";
 import { ArtifactCard, renderArtifactMarkdownPreview } from "../src/tui/widgets/ArtifactCard";
 import { markdownRendererMode } from "../src/tui/widgets/MarkdownContent";
-import { Sidebar, artifactSidebarLine, mcpSidebarLines } from "../src/tui/views/Sidebar";
+import { Sidebar, artifactSidebarLine, mcpSidebarLines, processSidebarLines } from "../src/tui/views/Sidebar";
 import { RewindPicker, rewindPickerPanelHeight } from "../src/tui/RewindPicker";
 import { sharedSyntaxStyle } from "../src/tui/theme";
 import { PermissionPrompt } from "../src/tui/PermissionPrompt";
 import { YoloPrompt } from "../src/tui/YoloPrompt";
+import { ToolCard } from "../src/tui/widgets/ToolCard";
+import type { BackgroundProcessState } from "../src/core/process/manager";
+
+function backgroundProcess(taskId: string, parentSessionId = "session-1"): BackgroundProcessState {
+  return {
+    taskId,
+    parentSessionId,
+    parentToolCallId: `call-${taskId}`,
+    plan: { command: "bun test", cwd: ".", shell: "posix-sh", timeoutMs: 120_000, envPolicyVersion: 1, runInBackground: true },
+    status: "running",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    durationMs: 2_000,
+    stdout: "",
+    stderr: "",
+    stdoutTail: "",
+    stderrTail: "",
+    stdoutBytes: 0,
+    stderrBytes: 0,
+    stdoutTruncated: false,
+    stderrTruncated: false,
+    notified: false,
+  };
+}
 
 describe("TUI", () => {
   test("registers shared markdown and code syntax styles", () => {
@@ -398,7 +422,7 @@ describe("TUI", () => {
           permissionClass: "arbitrary_exec",
           mode: "MOMENTUM",
           createdAt: new Date().toISOString(),
-          executionPlan: { command, cwd: ".", shell: "posix-sh", timeoutMs: 120000, envPolicyVersion: 1 },
+          executionPlan: { command, cwd: ".", shell: "posix-sh", timeoutMs: 120000, envPolicyVersion: 1, runInBackground: false },
           planHash: "hash",
         }}
         focused="confirm"
@@ -414,6 +438,88 @@ describe("TUI", () => {
     expect(frame).toContain("HOST COMMAND");
     expect(frame).toContain(command);
     expect(frame).toContain("host-user authority");
+  });
+
+  test("renders live shell output, elapsed time, and background task id", async () => {
+    const setup = await testRender(() => (
+      <ToolCard
+        toolStage="call"
+        toolName="shell_exec"
+        toolArgs={JSON.stringify({ command: "bun test", runInBackground: true })}
+        toolProcessEvent={{
+          kind: "process_exec",
+          taskId: "shell-1",
+          executionMode: "background",
+          status: "running",
+          command: "bun test",
+          cwd: ".",
+          shell: "posix-sh",
+          durationMs: 2_500,
+          timedOut: false,
+          aborted: false,
+          stdoutBytes: 18,
+          stderrBytes: 0,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          stdoutTail: "running test suite",
+          stderrTail: "",
+        }}
+        width={100}
+      />
+    ), { width: 100, height: 8 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("● shell_exec  bun test");
+    expect(frame).toContain("running test suite");
+    expect(frame).toContain("Running… · shell-1 · 2.5s");
+  });
+
+  test("keeps active background shells visible in the header and sidebar", () => {
+    const process = backgroundProcess("shell-1");
+    expect(backgroundProcessActivitySummary([process])).toBe("1 running");
+    expect(headerLine("etl", 100, undefined, "1 running")).toContain("Shell 1 running");
+    expect(processSidebarLines([process], 30, "session-1")[0]?.text).toContain("shell-1 · running");
+  });
+
+  test("keeps the Shell and Effort sidebar rows separate with several background tasks", async () => {
+    const processes = [
+      backgroundProcess("shell-1"),
+      backgroundProcess("shell-2"),
+      backgroundProcess("shell-3"),
+    ];
+    expect(processSidebarLines(processes, 40, "session-1"))
+      .toEqual([{ text: "● shell-3 · running · +2 more", color: expect.any(String), active: true }]);
+
+    for (const terminalWidth of [80, 100]) {
+      const setup = await testRender(() => (
+        <Sidebar
+          status="ready"
+          thinkingTier="auto"
+          reasoningMode="collapsed"
+          sessionPath=".vesicle/sessions/example.jsonl"
+          processes={processes}
+          width={terminalWidth === 80 ? 24 : 30}
+          artifacts={[]}
+        />
+      ), { width: terminalWidth, height: 28 });
+      await setup.flush();
+      const frame = setup.captureCharFrame();
+      setup.renderer.destroy();
+      const lines = frame.split("\n");
+      const shellSummaryLine = lines.findIndex((line) => line.includes("shell-3"));
+      const effortLine = lines.findIndex((line) => line.includes("Effort"));
+      const tierLine = lines.findIndex((line) => line.includes("tier: auto"));
+      const reasoningLine = lines.findIndex((line) => line.includes("reasoning: preview"));
+
+      expect(shellSummaryLine).toBeGreaterThan(-1);
+      expect(frame).toContain("+2 more");
+      expect(frame).not.toContain("shell-1");
+      expect(frame).not.toContain("shell-2");
+      expect(effortLine).toBe(shellSummaryLine + 2);
+      expect(tierLine).toBe(effortLine + 1);
+      expect(reasoningLine).toBe(tierLine + 1);
+    }
   });
 
   test("renders the second YOLO danger confirmation", async () => {

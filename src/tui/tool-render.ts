@@ -61,6 +61,8 @@ export function toolKind(name: string): ToolKind {
     case "web_crawl": return "web";
     case "web_research": return "web";
     case "shell_exec": return "process";
+    case "shell_output": return "process";
+    case "shell_stop": return "process";
     default:
       if (name.startsWith("mcp_")) return "mcp";
       return "unknown";
@@ -113,7 +115,7 @@ export function toolTarget(name: string, args: Record<string, unknown> | null): 
     return [path, pattern ? `"${pattern}"` : null].filter(Boolean).join("  ");
   }
   if (kind === "web") return str(args?.query) ?? str(args?.input) ?? str(args?.url) ?? "";
-  if (kind === "process") return str(args?.command) ?? "";
+  if (kind === "process") return str(args?.command) ?? str(args?.taskId) ?? "";
   return str(args?.path) ?? "";
 }
 
@@ -280,11 +282,34 @@ export function toolResultFooter(
 }
 
 function processEventDetail(e: ProcessToolEvent): string {
+  if (e.status === "running") {
+    return joinDetail(
+      e.executionMode === "background" && e.taskId ? `background ${e.taskId}` : "running",
+      `${formatDuration(e.durationMs)}`,
+      e.stdoutBytes + e.stderrBytes > 0 ? `${e.stdoutBytes + e.stderrBytes} bytes` : null,
+    );
+  }
   return joinDetail(
-    e.timedOut ? "timed out" : e.aborted ? "cancelled" : `exit ${e.exitCode ?? "unknown"}`,
-    `${e.durationMs}ms`,
+    e.status === "interrupted" ? "interrupted" : e.timedOut ? "timed out" : e.aborted ? "cancelled" : `exit ${e.exitCode ?? "unknown"}`,
+    formatDuration(e.durationMs),
+    e.executionMode === "background" && e.taskId ? e.taskId : null,
     e.stdoutTruncated || e.stderrTruncated ? "truncated" : null,
   );
+}
+
+export function processPreviewLines(event: ProcessToolEvent, maxLines = 5): Array<{ text: string; stderr: boolean }> {
+  const stdout = cleanProcessText(event.stdoutTail ?? "").split("\n").filter(Boolean).map((text) => ({ text, stderr: false }));
+  const stderr = cleanProcessText(event.stderrTail ?? "").split("\n").filter(Boolean).map((text) => ({ text, stderr: true }));
+  return [...stdout, ...stderr].slice(-maxLines);
+}
+
+function cleanProcessText(value: string): string {
+  return value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").trim();
+}
+
+export function formatDuration(durationMs: number): string {
+  if (durationMs < 1_000) return `${durationMs}ms`;
+  return `${(durationMs / 1_000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
 }
 
 function mcpEventDetail(e: McpToolEvent): string {

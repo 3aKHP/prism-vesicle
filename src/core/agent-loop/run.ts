@@ -32,7 +32,8 @@ import { agentToolDefinitions, agentToolNames, executeAgentTool } from "../agent
 import type { AgentRuntimeEvent } from "../agents/types";
 import { createPermissionRequest, defaultPermissionRuntime, evaluatePermissionPolicy, permissionClassForTool } from "../permissions";
 import type { PermissionRequest, PermissionResolution, PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
-import { executionPlanHash, parseShellExecPlan } from "../tools/shell";
+import { executionPlanHash, parseShellExecPlan, processEventFromTask } from "../tools/shell";
+import { getProcessManager, type BackgroundProcessState, type ProcessManager } from "../process/manager";
 
 export type { EngineId } from "../engine/profile";
 export type { GateRequest, GateResolution } from "../gate/types";
@@ -75,6 +76,7 @@ export type AgentLoopEvent =
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
   | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; images?: VesicleImageAttachment[] }
+  | { type: "process_update"; callId: string; processEvent: ProcessToolEvent }
   | { type: "permission_pending"; request: PermissionRequest }
   | { type: "gate_pending"; gate: string }
   | { type: "engine_switch_pending"; targetEngine: EngineId }
@@ -302,6 +304,43 @@ function createTurnAgentManager(rootDir: string, onEvent?: (event: AgentLoopEven
   return new AgentManager(new AgentStore(rootDir), runChildAgent, { onEvent });
 }
 
+function trackBackgroundProcessCompletion(
+  manager: ProcessManager,
+  session: SessionStore,
+  result: ToolResult,
+): void {
+  const event = result.processEvent;
+  if (result.name !== "shell_exec" || !event?.taskId || event.executionMode !== "background" || event.status !== "running") return;
+  void manager.wait(event.taskId).then(async (task) => {
+    await session.append({
+      role: "system",
+      content: `Background shell task ${task.taskId} ${task.status}.`,
+      metadata: {
+        kind: "background-process-completed",
+        taskId: task.taskId,
+        parentToolCallId: task.parentToolCallId,
+        processEvent: processEventFromTask(task),
+      },
+    });
+  }).catch(() => undefined);
+}
+
+function renderBackgroundProcessNotifications(tasks: BackgroundProcessState[]): string {
+  const blocks = tasks.map((task) => {
+    const output = [task.stdoutTail, task.stderrTail].filter(Boolean).join("\n").trim();
+    return [
+      "[background_shell]",
+      `taskId: ${task.taskId}`,
+      `status: ${task.status}`,
+      ...(task.exitCode !== undefined ? [`exitCode: ${task.exitCode}`] : []),
+      `command: ${task.plan.command}`,
+      ...(output ? ["outputTail:", output] : []),
+      "[/background_shell]",
+    ].join("\n");
+  });
+  return `Background shell update${tasks.length === 1 ? "" : "s"}:\n\n${blocks.join("\n\n")}`;
+}
+
 async function emitAssetDriftIfNeeded(
   rootDir: string,
   sessionId: string,
@@ -360,6 +399,7 @@ async function prepareProviderMessages(
 async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   const { rootDir, config, provider, systemPrompt, tools, mcpRegistry, messages, session, profile, generation, checkpoint, signal, onEvent } = args;
   const agentManager = args.agentManager ?? createTurnAgentManager(rootDir, onEvent);
+  const processManager = getProcessManager(rootDir);
   const declaredGates = new Set(profile.stopGates);
   let checkpointMutationTail = Promise.resolve();
   const trackCheckpointMutation = (paths: string[]): Promise<void> => {
@@ -374,6 +414,16 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   let consecutiveFailures = 0;
 
   for (let iteration = 0; iteration < maxToolIterations; iteration++) {
+    const backgroundNotifications = await processManager.drainNotifications(session.sessionId);
+    if (backgroundNotifications.length > 0) {
+      const content = renderBackgroundProcessNotifications(backgroundNotifications);
+      messages.push({ role: "user", content });
+      await session.append({
+        role: "user",
+        content,
+        metadata: { kind: "background-process-results", taskIds: backgroundNotifications.map((task) => task.taskId) },
+      });
+    }
     onEvent?.({ type: "provider_request", iteration });
     const providerMessages = await prepareProviderMessages(rootDir, messages, config.capabilities?.vision === true);
     response = await completeWithStreaming(provider, {
@@ -417,6 +467,10 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       }
     }
     const permissionRuntime = args.permission ?? defaultPermissionRuntime;
+    const effectiveToolNames = new Set(tools.map((definition) => definition.function.name));
+    const unavailableHostCallIds = new Set(hostToolCalls.flatMap((call) =>
+      effectiveToolNames.has(call.name) ? [] : [call.id]
+    ));
     const invalidShellCallIds = new Set(hostToolCalls.flatMap((call) => {
       if (call.name !== "shell_exec") return [];
       try {
@@ -427,7 +481,8 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
       }
     }));
     const permissionRequiredCalls = hostToolCalls.filter((call) =>
-      !invalidShellCallIds.has(call.id)
+      !unavailableHostCallIds.has(call.id)
+      && !invalidShellCallIds.has(call.id)
       && evaluatePermissionPolicy(permissionRuntime.mode, permissionClassForTool(call.name)) === "ask"
     );
     const permissionRequiredIds = new Set(permissionRequiredCalls.map((call) => call.id));
@@ -462,7 +517,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     let anyFailed = false;
 
     const agentExecutions = new Map(executableHostToolCalls
-      .filter((call) => agentToolNames.has(call.name))
+      .filter((call) => agentToolNames.has(call.name) && !unavailableHostCallIds.has(call.id))
       .map((call) => [call.id, executeAgentTool({
         call,
         manager: agentManager,
@@ -486,6 +541,38 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     let nonAgentError: unknown;
     try {
       for (const call of executableHostToolCalls) {
+        if (unavailableHostCallIds.has(call.id)) {
+          onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
+          const toolResult: ToolResult = {
+            callId: call.id,
+            name: call.name,
+            ok: false,
+            content: `${call.name} is not in the current Engine's effective tool surface. The tool was not executed.`,
+          };
+          const content = JSON.stringify({ ok: false, result: toolResult.content });
+          messages.push({ role: "tool", toolCallId: call.id, content });
+          await session.append({
+            role: "tool",
+            content,
+            metadata: {
+              name: call.name,
+              ok: false,
+              toolCallId: call.id,
+              reason: "tool-not-in-effective-surface",
+              permissionMode: permissionRuntime.mode,
+              decisionSource: permissionRuntime.dangerouslySkipPermissions ? "cli_override" : "policy",
+            },
+          });
+          anyFailed = true;
+          onEvent?.({
+            type: "tool_result",
+            name: call.name,
+            callId: call.id,
+            ok: false,
+            content: toolResult.content,
+          });
+          continue;
+        }
         if (agentToolNames.has(call.name)) continue;
         onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
         if (call.name === "shell_exec") {
@@ -517,6 +604,9 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
             ? await mcpRegistry.execute(call)
             : await executeHostTool(rootDir, call, {
               signal,
+              processManager,
+              parentSessionId: session.sessionId,
+              onProcessProgress: (processEvent) => onEvent?.({ type: "process_update", callId: call.id, processEvent }),
               beforeMutation: async (paths) => {
                 await agentManager.claimHostMutation(mutationOwner, paths);
                 await trackCheckpointMutation(paths);
@@ -552,6 +642,7 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
             ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
           },
         });
+        trackBackgroundProcessCompletion(processManager, session, toolResult);
 
         if (!toolResult.ok) {
           anyFailed = true;
@@ -574,7 +665,9 @@ async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     }
 
     const agentErrors: unknown[] = [];
-    for (const call of executableHostToolCalls.filter((candidate) => agentToolNames.has(candidate.name))) {
+    for (const call of executableHostToolCalls.filter((candidate) =>
+      agentToolNames.has(candidate.name) && !unavailableHostCallIds.has(candidate.id)
+    )) {
       try {
         onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
       } catch (error) {
@@ -897,6 +990,7 @@ export async function resolvePermission(options: {
   const toolSurface = await resolveToolSurface(profile, config.capabilities?.vision === true, permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true);
   const session = await createSessionStore(rootDir, options.sessionId);
   const checkpoint = await FileCheckpointManager.resumeLatest(rootDir, session);
+  const processManager = getProcessManager(rootDir);
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   const messages = [...options.messages];
   if (options.request.sessionId !== options.sessionId) {
@@ -1079,6 +1173,9 @@ export async function resolvePermission(options: {
         ? await toolSurface.mcp.execute(entryCall)
         : await executeHostTool(rootDir, entryCall, {
           signal: options.signal,
+          processManager,
+          parentSessionId: session.sessionId,
+          onProcessProgress: (processEvent) => options.onEvent?.({ type: "process_update", callId: entryCall.id, processEvent }),
           beforeMutation: async (paths) => {
             await agentManager.claimHostMutation(mutationOwner, paths);
             await checkpoint?.trackBeforeMutation(paths);
@@ -1111,6 +1208,7 @@ export async function resolvePermission(options: {
         ...(toolResult.images ? { images: persistedImageAttachments(toolResult.images) } : {}),
       },
     });
+    trackBackgroundProcessCompletion(processManager, session, toolResult);
     options.onEvent?.({
       type: "tool_result",
       name: toolResult.name,
@@ -1605,12 +1703,13 @@ type ToolSurface = {
 async function resolveToolSurface(profile: EngineProfile, visionEnabled: boolean, shellExecEnabled = false): Promise<ToolSurface> {
   const mcp = await createMcpRegistryForEngine(profile.id);
   const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled);
+  const shellTools = shellExecEnabled
+    ? hostToolDefinitions.filter((tool) => tool.function.name === "shell_exec" || tool.function.name === "shell_output" || tool.function.name === "shell_stop")
+    : [];
   return {
     definitions: [
       ...builtIns,
-      ...(shellExecEnabled && !builtIns.some((tool) => tool.function.name === "shell_exec")
-        ? [hostToolDefinitions.find((tool) => tool.function.name === "shell_exec")!]
-        : []),
+      ...shellTools.filter((tool) => !builtIns.some((candidate) => candidate.function.name === tool.function.name)),
       ...mcp.definitions,
       ...agentToolDefinitions,
     ],
@@ -1625,7 +1724,7 @@ function resolveBuiltInTools(profile: EngineProfile, visionEnabled: boolean, she
   for (const name of profile.defaultTools) {
     if (hostContractNames.has(name)) continue;
     if (name === "view_image" && !visionEnabled) continue;
-    if (name === "shell_exec" && !shellExecEnabled) continue;
+    if ((name === "shell_exec" || name === "shell_output" || name === "shell_stop") && !shellExecEnabled) continue;
     const definition = byName.get(name);
     if (!definition) {
       throw new Error(

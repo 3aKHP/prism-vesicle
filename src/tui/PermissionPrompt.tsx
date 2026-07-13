@@ -34,7 +34,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
         content={dangerous() ? "Permission required · HOST COMMAND" : "Permission required"}
         fg={dangerous() ? palette.error : palette.gateAccent}
       />
-      <text content={`${props.request.toolName} · mode ${props.request.mode} · cwd .`} fg={palette.textDim} />
+      <text content={`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}`} fg={palette.textDim} />
       {dangerous() ? (
         <text content="This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind." fg={palette.error} />
       ) : null}

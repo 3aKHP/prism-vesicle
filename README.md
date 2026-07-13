@@ -129,7 +129,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
-- Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with exact-plan approval, filtered environment, bounded output, timeout, process-tree cleanup, and durable audit metadata.
+- Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with exact-plan approval, filtered environment, bounded live output, timeout, process-tree cleanup, foreground/background execution, durable `shell-N` task state, completion notification, and explicit output/stop controls.
 - Foreground and background SubAgents with parallel execution, independent built-in or custom Agent Profiles, dedicated live Agent cards, short model/user-facing handles, durable completion delivery, and parent continuation without polling.
 - npm distribution plus standalone Windows and Linux builds with an immutable external default asset pack and sparse editable global/project overrides.
 

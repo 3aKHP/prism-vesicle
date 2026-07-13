@@ -96,6 +96,9 @@ export type McpToolEvent = {
 
 export type ProcessToolEvent = {
   kind: "process_exec";
+  taskId?: string;
+  executionMode: "foreground" | "background";
+  status: "running" | "completed" | "failed" | "timed_out" | "cancelled" | "interrupted";
   command: string;
   cwd: ".";
   shell: "posix-sh" | "powershell";
@@ -107,6 +110,8 @@ export type ProcessToolEvent = {
   stderrBytes: number;
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
+  stdoutTail?: string;
+  stderrTail?: string;
 };
 
 export type AgentToolEvent = {
