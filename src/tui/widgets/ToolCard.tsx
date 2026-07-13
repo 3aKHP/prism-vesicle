@@ -7,6 +7,7 @@ import {
   annotateLineNumbers,
   buildToolBody,
   foldDiffLines,
+  formatDuration,
   hunkHeader,
   parseToolArgs,
   processPreviewLines,
@@ -108,7 +109,7 @@ function ProcessOutput(props: { event: ProcessToolEvent; width: number }) {
         {(row) => <text content={`  ${truncateLine(row.text, Math.max(20, props.width - 4))}`} fg={row.stderr ? palette.warn : palette.textMuted} />}
       </For>
       <text
-        content={`  ${status()}${props.event.taskId ? ` · ${props.event.taskId}` : ""} · ${Math.max(0, Math.round(props.event.durationMs / 100) / 10)}s`}
+        content={`  ${status()}${props.event.taskId ? ` · ${props.event.taskId}` : ""} · ${formatDuration(props.event.durationMs)}`}
         fg={props.event.status === "running" ? palette.warn : props.event.status === "completed" ? palette.success : palette.error}
       />
     </box>

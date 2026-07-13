@@ -171,6 +171,14 @@ describe("process runtime", () => {
       expect(output.content).toContain("background");
       expect(output.processEvent?.status).toBe("completed");
 
+      const missingSession = await executeShellOutputTool(root, {
+        id: "call-output-missing-session",
+        name: "shell_output",
+        arguments: JSON.stringify({ taskId }),
+      }, { processManager: manager });
+      expect(missingSession.ok).toBe(false);
+      expect(missingSession.content).toContain("requires an active parent session");
+
       const crossSession = await executeShellOutputTool(root, {
         id: "call-output-other-session",
         name: "shell_output",
@@ -202,6 +210,14 @@ describe("process runtime", () => {
       }, { processManager: manager, parentSessionId: "session-background" });
       const taskId = started.processEvent?.taskId;
       if (!taskId) throw new Error("expected background task id");
+      const missingSession = await executeShellStopTool(root, {
+        id: "call-stop-missing-session",
+        name: "shell_stop",
+        arguments: JSON.stringify({ taskId }),
+      }, { processManager: manager });
+      expect(missingSession.ok).toBe(false);
+      expect(missingSession.content).toContain("requires an active parent session");
+
       const stopped = await executeShellStopTool(root, {
         id: "call-stop",
         name: "shell_stop",

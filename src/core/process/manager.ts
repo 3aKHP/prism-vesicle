@@ -146,19 +146,29 @@ export class ProcessManager {
     if (!task) throw new Error(`Unknown background shell task: ${taskId}.`);
     if (task.state.status !== "running") return cloneState(task.state);
     const waits: Array<Promise<BackgroundProcessState>> = [task.settled.then(cloneState)];
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let abortListener: (() => void) | undefined;
     if (options.timeoutMs !== undefined) {
       waits.push(new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(cloneState(task.state)), options.timeoutMs);
-        timer.unref?.();
+        timeout = setTimeout(() => resolve(cloneState(task.state)), options.timeoutMs);
+        timeout.unref?.();
       }));
     }
     if (options.signal) {
       waits.push(new Promise((_, reject) => {
         if (options.signal!.aborted) reject(options.signal!.reason ?? new Error("Background shell wait was cancelled."));
-        else options.signal!.addEventListener("abort", () => reject(options.signal!.reason ?? new Error("Background shell wait was cancelled.")), { once: true });
+        else {
+          abortListener = () => reject(options.signal!.reason ?? new Error("Background shell wait was cancelled."));
+          options.signal!.addEventListener("abort", abortListener, { once: true });
+        }
       }));
     }
-    return Promise.race(waits);
+    try {
+      return await Promise.race(waits);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      if (abortListener) options.signal?.removeEventListener("abort", abortListener);
+    }
   }
 
   async stop(taskId: string): Promise<BackgroundProcessState> {

@@ -180,7 +180,8 @@ export async function executeShellOutputTool(
     const manager = options.processManager ?? getProcessManager(rootDir);
     const current = await manager.get(args.taskId);
     if (!current) return fail(call, `Unknown background shell task: ${args.taskId}.`);
-    if (!options.parentSessionId || current.parentSessionId !== options.parentSessionId) {
+    if (!options.parentSessionId) return fail(call, "Background shell output requires an active parent session.");
+    if (current.parentSessionId !== options.parentSessionId) {
       return fail(call, `Background shell task ${args.taskId} does not belong to the active session.`);
     }
     const task = args.wait
@@ -209,7 +210,8 @@ export async function executeShellStopTool(
     const manager = options.processManager ?? getProcessManager(rootDir);
     const current = await manager.get(args.taskId);
     if (!current) return fail(call, `Unknown background shell task: ${args.taskId}.`);
-    if (!options.parentSessionId || current.parentSessionId !== options.parentSessionId) {
+    if (!options.parentSessionId) return fail(call, "Stopping a background shell requires an active parent session.");
+    if (current.parentSessionId !== options.parentSessionId) {
       return fail(call, `Background shell task ${args.taskId} does not belong to the active session.`);
     }
     const task = await manager.stop(args.taskId);

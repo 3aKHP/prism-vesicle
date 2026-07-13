@@ -307,7 +307,7 @@ function cleanProcessText(value: string): string {
   return value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").trim();
 }
 
-function formatDuration(durationMs: number): string {
+export function formatDuration(durationMs: number): string {
   if (durationMs < 1_000) return `${durationMs}ms`;
   return `${(durationMs / 1_000).toFixed(durationMs < 10_000 ? 1 : 0)}s`;
 }
