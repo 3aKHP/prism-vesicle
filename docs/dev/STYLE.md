@@ -37,13 +37,19 @@ Allowed dependency direction:
   and engine ids for tool definitions and engine scoping
 - `core/gate` depends only on `core/tools` types
 
-## File Size And Responsibility
+## Responsibility And Maintainability
 
-- A file should do one job. If a file crosses roughly 300 lines, ask whether a
-  subsystem should be split.
-- A function over roughly 50 lines or with nesting deeper than three levels
-  should usually become smaller units.
-- Do not create generic `helpers.ts` piles. Name modules by domain.
+Do not use line counts, function length, nesting depth, or similar numeric thresholds as hard pass/fail rules. They may help locate code worth reviewing, but they do not prove that code is well or poorly structured.
+
+Evaluate structure from several signals together:
+
+- Semantic cohesion: a module or function should express one recognizable domain responsibility, even when that responsibility needs substantial code.
+- Reasons to change: unrelated policy, persistence, I/O, state-machine, protocol, and presentation concerns should not accumulate under one owner.
+- Coupling and knowledge: watch dependency fan-out, cross-layer imports, duplicated invariants, and code that must understand several subsystems to make a local change.
+- Local reasoning and testing: behavior should be understandable and testable through a narrow interface without constructing unrelated runtime state.
+- Change safety: prefer boundaries that let one concern evolve without broad edits, synchronized changes across files, or fragile ordering assumptions.
+
+Split code when these signals reveal a stable domain boundary or a recurring maintenance cost. Keep a large composition root, registry, parser, state machine, or data table intact when it remains cohesive and splitting it would scatter invariants or introduce indirect coupling. Do not create generic `helpers.ts`, `utils.ts`, or `common.ts` piles; name extracted modules by the domain responsibility they own.
 
 ## Provider Adapters
 
