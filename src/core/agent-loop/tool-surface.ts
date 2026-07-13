@@ -35,7 +35,7 @@ export async function resolveToolSurface(
   };
 }
 
-function resolveBuiltInTools(
+export function resolveBuiltInTools(
   profile: EngineProfile,
   visionEnabled: boolean,
   shellExecEnabled = false,

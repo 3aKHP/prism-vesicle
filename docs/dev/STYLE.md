@@ -19,6 +19,7 @@ mcp/            # external MCP tool discovery and execution
 core/gate/      # request_confirmation tool + GateRequest types
 core/agent-loop/# provider requests, tool loop, gate pause/resume
 core/agents/    # Agent profiles, child lifecycle, concurrency, inbox delivery
+core/harness/   # Harness manifest verification, compatibility, immutable install
 core/validators/# Module A/B v9 schema checks + registry
 providers/      # protocol adapters only
 assets/         # runtime prompt/spec/template/profile assets
@@ -30,6 +31,7 @@ Allowed dependency direction:
 - `tui -> core, config, providers/types`
 - `core/agent-loop -> providers, prompt, session, tools, gate, engine, validators, mcp`
 - `core/agents -> providers, session, tools, runtime assets, mcp`
+- `core/harness -> engine, agents, tools, validators, runtime assets, config paths`
 - `core/artifacts -> tools, validators`
 - `providers -> providers/shared` and config only
 - `core/tools` must not depend on providers or TUI
@@ -300,6 +302,15 @@ Prompts are runtime assets, not hardcoded source literals.
 - Standalone executables must preserve the invocation cwd as the project root. Resolve executable-owned runtime/default files explicitly through `process.execPath`; do not call `process.chdir()` to make asset lookup work.
 - Session roots record a content-only fingerprint of the effective merged asset tree. Resume and active continuation warn when that fingerprint changes, while keeping prompt text, user content, absolute paths, and secrets out of drift metadata.
 - Sparse overrides are the recommended editing contract. Full snapshots remain available for compatibility but can mask future packaged updates. Version 1 intentionally has no deletion tombstones.
+
+## Managed Harness Packs
+
+- Neural Narratology Harness Packs are independently versioned runtime products. Vesicle must consume a released pack or explicit local pack directory; runtime code and tests must not read a sibling checkout, follow cross-repository symlinks, or embed local source paths.
+- `core/harness` owns strict `prism-harness-pack/v1` parsing, file inventory and hash verification, Adapter/capability compatibility, Profile/Prompt binding checks, external host asset checks, and immutable installation under the user configuration directory.
+- Compatibility is fail-closed. Do not advertise a capability until Vesicle enforces its full host contract; in particular, generic SubAgent availability is not sufficient for scoped `prism-agent/delegation@1`, and prompt guidance is not a substitute for `quality-guard/anti-ai-flavor@1`.
+- Installation and activation are separate. The foundation installer accepts an already-extracted directory, verifies it before and after staging, and atomically renames it into `asset-packs/<id>/<version>/`; it does not select the pack for a project or mutate editable user assets.
+- A selected managed Harness is one complete baseline, not another sparse fallback layer. Project and user overrides may remain above it, but a missing pack file must not fall through to bundled V9 unless the manifest declares that exact logical path in `externalHostAssets`. Bundled assets become the whole recovery baseline only when the managed pack is not active.
+- Future activation must persist pack identity and manifest hash in project/session host metadata. Resume must prefer an installed pinned version or surface an explicit recovery decision instead of silently switching Harness content.
 
 ## Session Semantics
 
