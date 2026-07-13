@@ -218,8 +218,9 @@ export class ProcessManager {
     for (const name of names.filter((candidate) => candidate.endsWith(".json"))) {
       try {
         const state = JSON.parse(await readFile(join(this.storeDir(), name), "utf8")) as BackgroundProcessState;
-        if (!state?.taskId || !state.plan?.command) continue;
-        const ordinal = Number(/^shell-(\d+)$/.exec(state.taskId)?.[1]);
+        const taskIdMatch = typeof state?.taskId === "string" ? /^shell-(\d+)$/.exec(state.taskId) : null;
+        if (!taskIdMatch || name !== `${state.taskId}.json` || !state.plan?.command) continue;
+        const ordinal = Number(taskIdMatch[1]);
         if (Number.isInteger(ordinal)) this.nextOrdinal = Math.max(this.nextOrdinal, ordinal + 1);
         if (state.status === "running") {
           state.status = "interrupted";

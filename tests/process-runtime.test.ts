@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -225,6 +225,39 @@ describe("process runtime", () => {
       }, { processManager: manager, parentSessionId: "session-background" });
       expect(stopped.ok).toBe(true);
       expect(stopped.processEvent?.status).toBe("cancelled");
+    } finally {
+      await manager.shutdown();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("ignores persisted process state whose task id does not match its file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
+    const storeDir = join(root, ".vesicle", "processes");
+    await mkdir(storeDir, { recursive: true });
+    await writeFile(join(storeDir, "shell-1.json"), JSON.stringify({
+      taskId: "../../escape",
+      parentSessionId: "session-background",
+      parentToolCallId: "call-background",
+      plan: createProcessExecutionPlan("printf ignored", 1_000, process.platform, true),
+      status: "running",
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      durationMs: 0,
+      stdout: "",
+      stderr: "",
+      stdoutTail: "",
+      stderrTail: "",
+      stdoutBytes: 0,
+      stderrBytes: 0,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      notified: false,
+    }), "utf8");
+    const manager = new ProcessManager(root);
+    try {
+      expect(await manager.list()).toEqual([]);
+      expect(await Bun.file(join(root, ".vesicle", "escape.json")).exists()).toBe(false);
     } finally {
       await manager.shutdown();
       await rm(root, { recursive: true, force: true });
