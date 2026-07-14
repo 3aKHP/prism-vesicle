@@ -17,3 +17,8 @@ The command builds `prism-vesicle.exe`, stages the exact runtime payload under
 Use `INNO_SETUP_COMPILER` to point at a non-default `ISCC.exe`. Linux/WSL can
 run `bun run build:installer:stage` to verify the staged payload; compilation
 and install/uninstall smoke run on a native Windows CI runner.
+
+The Simplified Chinese Inno messages are vendored from Inno Setup 7.0.2 so
+builds do not depend on optional compiler language files. The file declares
+compatibility with Inno Setup 6.5.0 and later. See
+`languages/LICENSE-Inno-Setup.txt` for its upstream source and license.

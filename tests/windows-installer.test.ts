@@ -16,12 +16,24 @@ describe("Windows guided installer", () => {
     expect(source).not.toContain("PrivilegesRequiredOverridesAllowed");
     expect(source).toContain("DefaultDirName={localappdata}\\Programs\\Prism Vesicle");
     expect(source).toContain("VersionInfoProductVersion={#FileVersion}");
+    expect(source).toContain('MessagesFile: "languages\\ChineseSimplified.isl"');
+    expect(source).not.toContain('MessagesFile: "compiler:Languages\\ChineseSimplified.isl"');
     expect(source).toContain('Source: "{#SourceRoot}\\harness-manifest.json"');
     expect(source).toContain('Source: "{#SourceRoot}\\host-assets\\*"');
     expect(source).toContain('Parameters: "setup"');
     expect(source).toContain('Parameters: "launch"');
     expect(source).toContain("RemoveFromUserPath");
     expect(source).not.toContain("{userappdata}\\prism-vesicle");
+  });
+
+  test("vendors the Simplified Chinese installer messages", async () => {
+    const source = await readFile(
+      join(import.meta.dir, "..", "installer", "languages", "ChineseSimplified.isl"),
+      "utf8",
+    );
+    expect(source).toContain("Inno Setup version 6.5.0+ Chinese Simplified messages");
+    expect(source).toContain("LanguageID=$0804");
+    expect(source).toContain("LanguageName=简体中文");
   });
 
   test("stages only the declared distributable payload", async () => {
