@@ -206,6 +206,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
       label: option.label,
       description: option.description,
       ...(option.kind ? { kind: option.kind } : {}),
+      ...(option.id ? { optionId: option.id } : {}),
     }, selectedIndex);
   }
 
@@ -235,6 +236,8 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
     answer: UserQuestionAnswer,
     selectedIndex: number,
   ): Promise<void> {
+    let recoveryState: "restored" | "resolved" | "blocked" = "resolved";
+    let recoveryStatus: string | undefined;
     options.setBusy(true);
     options.setStatus(`answering question: ${pending.question.header}`);
     options.recordActivity({ kind: "gate", text: `answering question ${pending.question.header}: ${answer.kind === "freeform" ? "Other" : answer.label}` });
@@ -250,6 +253,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         messages: pending.messages,
         toolCallId: pending.toolCallId,
         question: pending.question,
+        delegationDecision: pending.delegationDecision,
         answer,
         providerSelection: options.activeProviderSelection(),
         generation: options.activeGeneration(),
@@ -260,16 +264,55 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         permissionBroker: options.permissionBroker,
       }));
       if (outcome.kind === "interrupted") {
-        options.setPendingUserQuestion(pending);
-        options.setQuestionSelected(selectedIndex);
+        ({ state: recoveryState, status: recoveryStatus } = await reconcileUserQuestionAfterContinuationFailure(pending, selectedIndex));
         options.handleInterruptedTurn();
+        if (recoveryStatus) options.setStatus(recoveryStatus);
       } else options.handleResult(outcome.value);
     } catch (error) {
-      options.setPendingUserQuestion(pending);
-      options.setQuestionSelected(selectedIndex);
+      ({ state: recoveryState, status: recoveryStatus } = await reconcileUserQuestionAfterContinuationFailure(pending, selectedIndex));
       options.reportError(error);
+      if (recoveryStatus) options.setStatus(recoveryStatus);
     } finally {
-      options.setBusy(false);
+      options.setBusy(recoveryState === "blocked");
+    }
+  }
+
+  async function reconcileUserQuestionAfterContinuationFailure(
+    pending: PendingUserQuestionState,
+    selectedIndex: number,
+  ): Promise<{
+    state: "restored" | "resolved" | "blocked";
+    status?: string;
+  }> {
+    try {
+      const snapshot = await loadSessionSnapshot(options.rootDir, pending.sessionId, {
+        synthesizeDanglingToolResults: false,
+      });
+      if (snapshot.pendingDelegationRetry || snapshot.pendingDelegationDecisionRecovery) {
+        options.setPendingUserQuestion(null);
+        return {
+          state: "blocked",
+          status: "Harness delegation recovery pending; restart Vesicle and resume this session",
+        };
+      }
+      if (snapshot.pendingUserQuestion?.toolCallId === pending.toolCallId) {
+        options.setPendingUserQuestion(pending);
+        options.setQuestionSelected(selectedIndex);
+        return { state: "restored" };
+      }
+      options.setPendingUserQuestion(null);
+      options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
+      return {
+        state: "resolved",
+        status: "question resolved; provider continuation stopped",
+      };
+    } catch {
+      options.setPendingUserQuestion(null);
+      return {
+        state: "blocked",
+        status: "Unable to verify Harness delegation recovery; restart Vesicle and resume this session",
+      };
     }
   }
 

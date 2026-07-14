@@ -8,6 +8,8 @@ import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
 import type { AssetFingerprint } from "../runtime/assets";
+import type { AssetResolver } from "../runtime/assets";
+import type { HarnessRuntimeContext } from "../harness/driver";
 import { mergeGeneration } from "./generation";
 import type { AgentLoopEvent } from "./types";
 import { resolveToolSurface } from "./tool-surface";
@@ -20,6 +22,8 @@ export type ContinuationContextOptions = {
   generation?: VesicleRequest["generation"];
   permission?: PermissionRuntimeOptions;
   onEvent?: (event: AgentLoopEvent) => void;
+  harness?: HarnessRuntimeContext;
+  assets?: AssetResolver;
 };
 
 export async function loadContinuationContext(
@@ -52,6 +56,8 @@ export async function loadContinuationContext(
     systemPrompt,
     toolSurface,
     session,
+    harness: options.harness,
+    assets: options.assets,
   };
 }
 

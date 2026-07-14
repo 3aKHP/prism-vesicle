@@ -1,3 +1,5 @@
+import type { HarnessDriverContract, HarnessHostAdapter } from "./driver";
+
 export const harnessQualityModes = ["off", "observe", "rewrite", "strict", "analyze"] as const;
 
 export type HarnessQualityMode = typeof harnessQualityModes[number];
@@ -55,4 +57,6 @@ export type VerifiedHarnessPack = {
   manifest: HarnessManifest;
   assetCount: number;
   compatibility: HarnessCompatibility;
+  driverContract: HarnessDriverContract;
+  hostAdapter: HarnessHostAdapter;
 };

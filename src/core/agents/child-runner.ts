@@ -17,8 +17,8 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
   if (!invocation) throw new Error("SubAgent invocation context is missing.");
   const config = await loadConfigForSelection(invocation.providerSelection);
   const provider = createProvider(config);
-  const profile = await loadAgentProfile(spec.profileId, invocation.rootDir);
-  const agentSystemPrompt = await loadAgentSystemPrompt(profile, invocation.rootDir);
+  const profile = await loadAgentProfile(spec.profileId, invocation.rootDir, invocation.assets);
+  const agentSystemPrompt = await loadAgentSystemPrompt(profile, invocation.rootDir, invocation.assets);
   const systemPrompts = composeChildSystemPrompts(profile.contextMode, invocation.parentSystemPrompt, agentSystemPrompt);
   const persistedSystemPrompt = systemPrompts.join("\n\n");
   const mcp = await createMcpRegistryForEngine(invocation.parentEngine);
@@ -41,12 +41,19 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
       providerId: config.providerId,
       model: config.model,
       tools: tools.map((tool) => tool.function.name),
+      ...(spec.delegation ? { delegation: spec.delegation } : {}),
     },
   });
   await session.append({
     role: "user",
     content: spec.prompt,
-    metadata: { kind: "subagent-task", runId, handle, description: spec.description },
+    metadata: {
+      kind: "subagent-task",
+      runId,
+      handle,
+      description: spec.description,
+      ...(spec.delegation ? { delegation: spec.delegation } : {}),
+    },
   });
   const checkpoint = new FileCheckpointManager(invocation.rootDir, session, session.headUuid()!);
   await checkpoint.createSnapshot();

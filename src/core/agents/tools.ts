@@ -3,6 +3,12 @@ import { listAgentProfiles, loadAgentProfile } from "./profile";
 import type { AgentManager } from "./manager";
 import type { AgentInvocationContext, AgentSpec, AgentTerminalResult } from "./types";
 import { AgentStore } from "./store";
+import {
+  bindHarnessDelegation,
+  harnessDelegationFailureDecision,
+  harnessDelegationFailureInteraction,
+  normalizeHarnessAdapterError,
+} from "../harness/driver";
 
 export const agentToolNames = new Set(["spawn_agent", "list_agents", "send_message", "interrupt_agent", "wait_agent"]);
 
@@ -88,7 +94,7 @@ export async function executeAgentTool(options: {
   try {
     const args = parseArgs(call.arguments);
     if (call.name === "list_agents") {
-      const profiles = await listAgentProfiles(rootDir);
+      const profiles = await listAgentProfiles(rootDir, invocation.assets);
       const agents = await new AgentStore(rootDir).listByParent(parentSessionId);
       return ok(call, JSON.stringify({
         profiles: profiles.map((profile) => ({
@@ -109,7 +115,6 @@ export async function executeAgentTool(options: {
     }
     if (call.name === "spawn_agent") {
       const profileId = requiredString(args, "profile");
-      const profile = await loadAgentProfile(profileId, rootDir);
       const requestedModeValue = optionalString(args, "mode");
       if (requestedModeValue && requestedModeValue !== "foreground" && requestedModeValue !== "background") {
         throw new Error("mode must be foreground or background.");
@@ -117,33 +122,51 @@ export async function executeAgentTool(options: {
       const requestedMode: AgentSpec["mode"] | undefined = requestedModeValue === "foreground" || requestedModeValue === "background"
         ? requestedModeValue
         : undefined;
+      const delegation = invocation.harness
+        ? bindHarnessDelegation(invocation.harness, invocation.parentEngine, profileId, requestedMode)
+        : undefined;
+      const profile = await loadAgentProfile(profileId, rootDir, invocation.assets);
       const spec: AgentSpec = {
         profileId,
         description: agentDescription(requiredString(args, "description")),
         prompt: requiredString(args, "prompt"),
-        mode: requestedMode ?? profile.defaultMode,
+        mode: delegation?.mode ?? requestedMode ?? profile.defaultMode,
         parentSessionId,
         parentToolCallId: call.id,
+        ...(delegation ? { delegation: { ...delegation, attempt: 1 } } : {}),
+        ...(delegation ? { delegationFailure: harnessDelegationFailureInteraction(invocation.harness!, invocation.parentEngine) } : {}),
       };
       const child = await manager.spawn(spec, invocation);
       if (spec.mode === "background") {
         return {
-          ...ok(call, JSON.stringify({ status: "accepted", agent_id: child.handle, profile: profileId, mode: spec.mode })),
-          agentEvent: { kind: "subagent", handle: child.handle, profileId, mode: spec.mode, status: "accepted" },
+          ...ok(call, JSON.stringify({
+            status: "accepted",
+            agent_id: child.handle,
+            profile: profileId,
+            mode: spec.mode,
+            ...(spec.delegation ? { delegation: publicDelegation(spec.delegation) } : {}),
+          })),
+          agentEvent: {
+            kind: "subagent",
+            handle: child.handle,
+            profileId,
+            mode: spec.mode,
+            status: "accepted",
+            ...(spec.delegation ? { delegation: spec.delegation } : {}),
+          },
         };
       }
       const result = await child.completion;
-      return {
-        ...(result.status === "completed" ? ok(call, JSON.stringify(publicAgentResult(result))) : fail(call, JSON.stringify(publicAgentResult(result)))),
-        agentEvent: {
-          kind: "subagent",
+      const toolResult = agentTerminalToolResult(call, result);
+      if (result.status === "failed" && invocation.harness && result.delegation) {
+        toolResult.delegationDecision = harnessDelegationFailureDecision(invocation.harness, invocation.parentEngine, {
+          runId: result.runId,
           handle: result.handle,
-          profileId: result.profileId,
-          mode: result.mode,
-          status: result.status,
-          ...(result.usage ? { usage: result.usage } : {}),
-        },
-      };
+          delegation: result.delegation,
+          errorCategory: result.errorCategory ?? "failed",
+        });
+      }
+      return toolResult;
     }
     const agentReference = requiredString(args, "agent_id");
     if (call.name === "send_message") {
@@ -166,25 +189,49 @@ export async function executeAgentTool(options: {
         await new AgentStore(rootDir).acknowledgeAgentResult(parentSessionId, result.runId);
         manager.reportIntegrated(result);
       }
-      return {
-        ...(result.status === "completed" ? ok(call, JSON.stringify(publicAgentResult(result))) : fail(call, JSON.stringify(publicAgentResult(result)))),
-        agentEvent: {
-          kind: "subagent",
-          handle: result.handle,
-          profileId: result.profileId,
-          mode: result.mode,
-          status: result.status,
-          ...(result.usage ? { usage: result.usage } : {}),
-        },
-      };
+      return agentTerminalToolResult(call, result);
     }
     return fail(call, `Unknown SubAgent tool: ${call.name}.`);
   } catch (error) {
+    if (invocation.harness) {
+      const normalized = normalizeHarnessAdapterError(error);
+      const result = fail(call, JSON.stringify({ error: { category: normalized.category, message: normalized.message } }));
+      if (call.name === "spawn_agent") {
+        const failed = (await new AgentStore(rootDir).listByParent(parentSessionId))
+          .find((agent) => agent.parentToolCallId === call.id && agent.delegation);
+        if (failed?.delegation) {
+          result.delegationDecision = harnessDelegationFailureDecision(invocation.harness, invocation.parentEngine, {
+            runId: failed.runId,
+            handle: failed.handle,
+            delegation: failed.delegation,
+            errorCategory: normalized.category,
+          });
+        }
+      }
+      return result;
+    }
     return fail(call, error instanceof Error ? error.message : String(error));
   }
 }
 
-function publicAgentResult(terminal: AgentTerminalResult): Record<string, unknown> {
+export function agentTerminalToolResult(call: ToolCall, result: AgentTerminalResult): ToolResult {
+  return {
+    ...(result.status === "completed" ? ok(call, JSON.stringify(publicAgentResult(result))) : fail(call, JSON.stringify(publicAgentResult(result)))),
+    agentEvent: {
+      kind: "subagent",
+      handle: result.handle,
+      profileId: result.profileId,
+      mode: result.mode,
+      status: result.status,
+      ...(result.usage ? { usage: result.usage } : {}),
+      ...(result.delegation ? { delegation: result.delegation } : {}),
+      ...(result.attempts ? { attempts: result.attempts } : {}),
+      ...(result.errorCategory ? { errorCategory: result.errorCategory } : {}),
+    },
+  };
+}
+
+export function publicAgentResult(terminal: AgentTerminalResult): Record<string, unknown> {
   return {
     agent_id: terminal.handle,
     profileId: terminal.profileId,
@@ -194,6 +241,21 @@ function publicAgentResult(terminal: AgentTerminalResult): Record<string, unknow
     content: terminal.content,
     ...(terminal.usage ? { usage: terminal.usage } : {}),
     ...(terminal.toolUses ? { toolUses: terminal.toolUses } : {}),
+    ...(terminal.delegation ? { delegation: publicDelegation(terminal.delegation) } : {}),
+    ...(terminal.attempts ? { attempts: terminal.attempts } : {}),
+    ...(terminal.errorCategory ? { errorCategory: terminal.errorCategory } : {}),
+  };
+}
+
+function publicDelegation(delegation: NonNullable<AgentSpec["delegation"]>): Record<string, unknown> {
+  return {
+    id: delegation.id,
+    agent: delegation.agent,
+    parentEngine: delegation.parentEngine,
+    mode: delegation.mode,
+    purpose: delegation.purpose,
+    retryLimit: delegation.retryLimit,
+    attempt: delegation.attempt,
   };
 }
 

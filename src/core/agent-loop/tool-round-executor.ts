@@ -13,6 +13,9 @@ import type { McpRegistry } from "../../mcp/registry";
 import type { AgentLoopEvent } from "./types";
 import type { ToolRoundPlan } from "./tool-round-planner";
 import { emitToolResultEvent, failedToolResult, recordToolResult } from "./tool-result-recorder";
+import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
+import type { AssetResolver } from "../runtime/assets";
+import { appendHarnessDelegationDecision, type DelegationPause } from "./delegation-decision";
 
 type ExecuteToolRoundOptions = {
   plan: ToolRoundPlan;
@@ -34,18 +37,47 @@ type ExecuteToolRoundOptions = {
   permissionBroker?: ToolPermissionBroker;
   trackCheckpointMutation: (paths: string[]) => Promise<void>;
   markCheckpointTainted: () => Promise<void>;
+  harness?: HarnessRuntimeContext;
+  assets?: AssetResolver;
 };
 
-export async function executeToolRound(options: ExecuteToolRoundOptions): Promise<{ anyFailed: boolean }> {
+export async function executeToolRound(options: ExecuteToolRoundOptions): Promise<{
+  anyFailed: boolean;
+  delegationPause?: DelegationPause;
+}> {
   const { plan } = options;
   const agentCalls = plan.executableHostToolCalls.filter((call) =>
     agentToolNames.has(call.name) && !plan.unavailableHostCallIds.has(call.id)
   );
-  const agentExecutions = new Map(agentCalls.map((call) => [call.id, executeAgentCall(options, call)]));
+  let contractSpawnSeen = false;
+  const agentExecutions = new Map(agentCalls.map((call) => {
+    if (options.harness && call.name === "spawn_agent" && contractSpawnSeen) {
+      return [call.id, Promise.resolve(failedToolResult(
+        call.id,
+        call.name,
+        JSON.stringify({ error: { category: "invalid_request", message: "Contract-bound delegations must be issued sequentially." } }),
+      ))];
+    }
+    if (options.harness && call.name === "spawn_agent") contractSpawnSeen = true;
+    return [call.id, executeAgentCall(options, call)];
+  }));
   const nonAgent = await executeNonAgentCalls(options);
   const agents = await recordAgentCalls(options, agentCalls, agentExecutions);
   throwToolErrors(nonAgent.error, agents.errors);
-  return { anyFailed: nonAgent.anyFailed || agents.anyFailed };
+  const delegationPause = agents.delegationDecision
+    ? await appendHarnessDelegationDecision({
+      decision: agents.delegationDecision,
+      messages: options.messages,
+      session: options.session,
+      engine: options.profile.id,
+      redirectCalls: options.plan.interactiveCalls,
+      onEvent: options.onEvent,
+    })
+    : undefined;
+  return {
+    anyFailed: nonAgent.anyFailed || agents.anyFailed,
+    ...(delegationPause ? { delegationPause } : {}),
+  };
 }
 
 async function executeNonAgentCalls(
@@ -88,9 +120,10 @@ async function recordAgentCalls(
   options: ExecuteToolRoundOptions,
   agentCalls: ToolCall[],
   executions: Map<string, Promise<ToolResult>>,
-): Promise<{ anyFailed: boolean; errors: unknown[] }> {
+): Promise<{ anyFailed: boolean; errors: unknown[]; delegationDecision?: HarnessDelegationDecision }> {
   const errors: unknown[] = [];
   let anyFailed = false;
+  let delegationDecision: HarnessDelegationDecision | undefined;
   for (const call of agentCalls) {
     try {
       options.onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
@@ -117,6 +150,7 @@ async function recordAgentCalls(
             agentEvent: result.agentEvent,
             ...(result.agentEvent.usage ? { usage: result.agentEvent.usage } : {}),
           } : {}),
+          ...(result.delegationDecision ? { delegationDecision: result.delegationDecision } : {}),
         },
         emitEvent: false,
       });
@@ -124,13 +158,14 @@ async function recordAgentCalls(
       errors.push(error);
     }
     if (!result.ok) anyFailed = true;
+    if (result.delegationDecision && !delegationDecision) delegationDecision = result.delegationDecision;
     try {
       emitToolResultEvent(result, options.onEvent);
     } catch (error) {
       errors.push(error);
     }
   }
-  return { anyFailed, errors };
+  return { anyFailed, errors, ...(delegationDecision ? { delegationDecision } : {}) };
 }
 
 async function recordUnavailableTool(options: ExecuteToolRoundOptions, call: ToolCall): Promise<void> {
@@ -169,6 +204,8 @@ function executeAgentCall(options: ExecuteToolRoundOptions, call: ToolCall): Pro
       beforeMutation: options.trackCheckpointMutation,
       permission: options.permission,
       permissionBroker: options.permissionBroker,
+      harness: options.harness,
+      assets: options.assets,
     },
   });
 }

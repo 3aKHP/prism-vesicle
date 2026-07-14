@@ -2,6 +2,26 @@ export { supportedHarnessCapabilities, unsupportedHarnessCapabilities } from "./
 export { harnessPacksDirectory, installHarnessPack } from "./install";
 export { loadHarnessManifest, parseHarnessManifest } from "./manifest";
 export { assertHarnessPackCompatible, verifyHarnessPack } from "./verify";
+export {
+  bindHarnessDelegation,
+  harnessDelegationFailureDecision,
+  harnessDelegationFailureInteraction,
+  normalizeHarnessAdapterError,
+  parseHarnessDriverContract,
+  parseHarnessHostAdapter,
+  parseHarnessDelegationDecision,
+  validateHarnessDelegationContract,
+  HarnessAdapterError,
+} from "./driver";
 export type { HarnessInstallOptions } from "./install";
 export type { HarnessVerificationOptions } from "./verify";
 export type { HarnessCompatibility, HarnessManifest, VerifiedHarnessPack } from "./types";
+export type {
+  BoundHarnessDelegation,
+  HarnessAdapterErrorCategory,
+  HarnessDelegationDecision,
+  HarnessDelegationFailureInteraction,
+  HarnessDriverContract,
+  HarnessHostAdapter,
+  HarnessRuntimeContext,
+} from "./driver";

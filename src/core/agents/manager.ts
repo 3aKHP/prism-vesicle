@@ -1,4 +1,5 @@
 import { AgentStore } from "./store";
+import { normalizeHarnessAdapterError } from "../harness/driver";
 import type {
   AgentMetadata,
   AgentInvocationContext,
@@ -32,6 +33,8 @@ export class AgentManager {
   private readonly handleInitializers = new Map<string, Promise<number>>();
   private readonly nextHandleOrdinals = new Map<string, number>();
   private runningCount = 0;
+  private readonly delegationRunning = new Set<string>();
+  private readonly delegationWaiters = new Map<string, Array<() => void>>();
 
   constructor(
     private readonly store: AgentStore,
@@ -129,55 +132,147 @@ export class AgentManager {
   ): Promise<AgentTerminalResult> {
     let metadata = initial;
     let acquired = false;
+    let delegationAcquired = false;
+    let executionStarted = false;
     try {
+      if (metadata.delegation) {
+        await this.acquireDelegation(metadata.parentSessionId, controller.signal);
+        delegationAcquired = true;
+      }
       await this.acquire(controller.signal);
       acquired = true;
       metadata = { ...metadata, status: "running", updatedAt: new Date().toISOString() };
       await this.store.save(metadata);
       this.updateActive(metadata);
       this.options.onEvent?.({ type: "agent_started", agent: metadata });
-      const output = await this.runner({
-        runId: metadata.runId,
-        handle: metadata.handle,
-        spec: metadata,
-        signal: controller.signal,
-        invocation,
-        onProgress: (text) => this.options.onEvent?.({ type: "agent_progress", runId: metadata.runId, handle: metadata.handle, parentSessionId: metadata.parentSessionId, text }),
-        takeMessages: () => this.active.get(metadata.runId)?.messages.splice(0) ?? [],
-        claimMutation: (paths) => this.claimMutation(metadata.runId, metadata.handle, paths),
-        registerChildSession: async (childSessionId) => {
-          metadata = { ...metadata, childSessionId, updatedAt: new Date().toISOString() };
-          await this.store.save(metadata);
-          this.updateActive(metadata);
-        },
-      });
-      const result: AgentTerminalResult = {
-        runId: metadata.runId,
-        handle: metadata.handle,
-        parentSessionId: metadata.parentSessionId,
-        profileId: metadata.profileId,
-        description: metadata.description,
-        mode: metadata.mode,
-        status: "completed",
-        content: output.content,
-        ...(output.childSessionId ? { childSessionId: output.childSessionId } : {}),
-        ...(output.usage ? { usage: output.usage } : {}),
-        ...(output.toolUses ? { toolUses: output.toolUses } : {}),
-      };
-      metadata = {
-        ...metadata,
-        status: "completed",
-        result: output.content,
-        ...(output.childSessionId ? { childSessionId: output.childSessionId } : {}),
-        ...(output.usage ? { usage: output.usage } : {}),
-        ...(output.toolUses ? { toolUses: output.toolUses } : {}),
-        updatedAt: new Date().toISOString(),
-      };
-      await this.finish(metadata, result);
-      return result;
+      executionStarted = true;
+      while (true) {
+        let output: AgentRunOutput;
+        try {
+          output = await this.runner({
+            runId: metadata.runId,
+            handle: metadata.handle,
+            spec: metadata,
+            signal: controller.signal,
+            invocation,
+            onProgress: (text) => this.options.onEvent?.({ type: "agent_progress", runId: metadata.runId, handle: metadata.handle, parentSessionId: metadata.parentSessionId, text }),
+            takeMessages: () => this.active.get(metadata.runId)?.messages.splice(0) ?? [],
+            claimMutation: (paths) => this.claimMutation(metadata.runId, metadata.handle, paths),
+            registerChildSession: async (childSessionId) => {
+              metadata = { ...metadata, childSessionId, updatedAt: new Date().toISOString() };
+              await this.store.save(metadata);
+              this.updateActive(metadata);
+            },
+          });
+        } catch (error) {
+          const cancelled = controller.signal.aborted || isAbortError(error);
+          const normalized = normalizeHarnessAdapterError(error);
+          const content = cancelled ? "SubAgent was cancelled." : normalized.message;
+          const attempt = metadata.delegation?.attempt;
+          const attempts = attempt ? [...(metadata.attempts ?? []), {
+            attempt,
+            status: cancelled ? "cancelled" as const : "failed" as const,
+            finishedAt: new Date().toISOString(),
+            ...(metadata.childSessionId ? { childSessionId: metadata.childSessionId } : {}),
+            ...(!cancelled ? { errorCategory: normalized.category, error: content } : {}),
+          }] : metadata.attempts;
+          const retry = !cancelled
+            && normalized.category === "transient"
+            && metadata.delegation
+            && metadata.delegation.attempt <= metadata.delegation.retryLimit;
+          if (retry) {
+            const { childSessionId: _previousChildSession, ...withoutChildSession } = metadata;
+            const nextDelegation = {
+              ...metadata.delegation!,
+              attempt: metadata.delegation!.attempt + 1,
+            };
+            metadata = {
+              ...withoutChildSession,
+              delegation: nextDelegation,
+              attempts,
+              updatedAt: new Date().toISOString(),
+            };
+            await this.store.save(metadata);
+            this.updateActive(metadata);
+            this.options.onEvent?.({
+              type: "agent_progress",
+              runId: metadata.runId,
+              handle: metadata.handle,
+              parentSessionId: metadata.parentSessionId,
+              text: `retry ${nextDelegation.attempt}/${nextDelegation.retryLimit + 1}`,
+            });
+            continue;
+          }
+          const result: AgentTerminalResult = {
+            runId: metadata.runId,
+            handle: metadata.handle,
+            parentSessionId: metadata.parentSessionId,
+            profileId: metadata.profileId,
+            description: metadata.description,
+            mode: metadata.mode,
+            status: cancelled ? "cancelled" : "failed",
+            content,
+            ...(metadata.childSessionId ? { childSessionId: metadata.childSessionId } : {}),
+            ...(metadata.delegation ? { delegation: metadata.delegation } : {}),
+            ...(attempts ? { attempts } : {}),
+            ...(!cancelled ? { errorCategory: normalized.category } : {}),
+          };
+          metadata = {
+            ...metadata,
+            status: result.status,
+            error: content,
+            ...(attempts ? { attempts } : {}),
+            ...(!cancelled ? { errorCategory: normalized.category } : {}),
+            updatedAt: new Date().toISOString(),
+          };
+          await this.finish(metadata, result);
+          return result;
+        }
+        const attempts = metadata.delegation ? [...(metadata.attempts ?? []), {
+          attempt: metadata.delegation.attempt,
+          status: "completed" as const,
+          finishedAt: new Date().toISOString(),
+          ...(output.childSessionId ? { childSessionId: output.childSessionId } : {}),
+        }] : metadata.attempts;
+        const result: AgentTerminalResult = {
+          runId: metadata.runId,
+          handle: metadata.handle,
+          parentSessionId: metadata.parentSessionId,
+          profileId: metadata.profileId,
+          description: metadata.description,
+          mode: metadata.mode,
+          status: "completed",
+          content: output.content,
+          ...(output.childSessionId ? { childSessionId: output.childSessionId } : {}),
+          ...(output.usage ? { usage: output.usage } : {}),
+          ...(output.toolUses ? { toolUses: output.toolUses } : {}),
+          ...(metadata.delegation ? { delegation: metadata.delegation } : {}),
+          ...(attempts ? { attempts } : {}),
+        };
+        metadata = {
+          ...metadata,
+          status: "completed",
+          result: output.content,
+          ...(output.childSessionId ? { childSessionId: output.childSessionId } : {}),
+          ...(output.usage ? { usage: output.usage } : {}),
+          ...(output.toolUses ? { toolUses: output.toolUses } : {}),
+          ...(attempts ? { attempts } : {}),
+          updatedAt: new Date().toISOString(),
+        };
+        await this.finish(metadata, result);
+        return result;
+      }
     } catch (error) {
+      if (executionStarted) throw error;
       const cancelled = controller.signal.aborted || isAbortError(error);
-      const content = cancelled ? "SubAgent was cancelled." : errorMessage(error);
+      const normalized = normalizeHarnessAdapterError(error);
+      const content = cancelled ? "SubAgent was cancelled." : normalized.message;
+      const attempts = metadata.delegation ? [...(metadata.attempts ?? []), {
+        attempt: metadata.delegation.attempt,
+        status: cancelled ? "cancelled" as const : "failed" as const,
+        finishedAt: new Date().toISOString(),
+        ...(!cancelled ? { errorCategory: normalized.category, error: content } : {}),
+      }] : metadata.attempts;
       const result: AgentTerminalResult = {
         runId: metadata.runId,
         handle: metadata.handle,
@@ -187,12 +282,16 @@ export class AgentManager {
         mode: metadata.mode,
         status: cancelled ? "cancelled" : "failed",
         content,
-        ...(metadata.childSessionId ? { childSessionId: metadata.childSessionId } : {}),
+        ...(metadata.delegation ? { delegation: metadata.delegation } : {}),
+        ...(attempts ? { attempts } : {}),
+        ...(!cancelled ? { errorCategory: normalized.category } : {}),
       };
       metadata = {
         ...metadata,
         status: result.status,
         error: content,
+        ...(attempts ? { attempts } : {}),
+        ...(!cancelled ? { errorCategory: normalized.category } : {}),
         updatedAt: new Date().toISOString(),
       };
       await this.finish(metadata, result);
@@ -200,6 +299,7 @@ export class AgentManager {
     } finally {
       this.releaseMutations(metadata.runId);
       if (acquired) this.release();
+      if (delegationAcquired) this.releaseDelegation(metadata.parentSessionId);
     }
   }
 
@@ -300,6 +400,38 @@ export class AgentManager {
     this.runningCount = Math.max(0, this.runningCount - 1);
     this.waiters.shift()?.();
   }
+
+  private async acquireDelegation(parentSessionId: string, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw signal.reason;
+    if (!this.delegationRunning.has(parentSessionId)) {
+      this.delegationRunning.add(parentSessionId);
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const resume = () => {
+        signal.removeEventListener("abort", abort);
+        resolve();
+      };
+      const abort = () => {
+        const queue = this.delegationWaiters.get(parentSessionId) ?? [];
+        const index = queue.indexOf(resume);
+        if (index >= 0) queue.splice(index, 1);
+        reject(signal.reason);
+      };
+      const queue = this.delegationWaiters.get(parentSessionId) ?? [];
+      queue.push(resume);
+      this.delegationWaiters.set(parentSessionId, queue);
+      signal.addEventListener("abort", abort, { once: true });
+    });
+  }
+
+  private releaseDelegation(parentSessionId: string): void {
+    const queue = this.delegationWaiters.get(parentSessionId);
+    const next = queue?.shift();
+    if (queue?.length === 0) this.delegationWaiters.delete(parentSessionId);
+    if (next) next();
+    else this.delegationRunning.delete(parentSessionId);
+  }
 }
 
 function terminalFromMetadata(metadata: AgentMetadata | undefined): AgentTerminalResult | undefined {
@@ -316,15 +448,14 @@ function terminalFromMetadata(metadata: AgentMetadata | undefined): AgentTermina
     ...(metadata.childSessionId ? { childSessionId: metadata.childSessionId } : {}),
     ...(metadata.usage ? { usage: metadata.usage } : {}),
     ...(metadata.toolUses ? { toolUses: metadata.toolUses } : {}),
+    ...(metadata.delegation ? { delegation: metadata.delegation } : {}),
+    ...(metadata.attempts ? { attempts: metadata.attempts } : {}),
+    ...(metadata.errorCategory ? { errorCategory: metadata.errorCategory } : {}),
   };
 }
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function isControllable(metadata: AgentMetadata): boolean {
