@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { assertChildToolDeclaration } from "../agents/tool-scope";
 import { loadAgentProfile } from "../agents/profile";
 import { agentToolDefinitions } from "../agents/tools";
@@ -9,7 +8,12 @@ import { resolveBuiltInTools } from "../agent-loop/tool-surface";
 import { engineSwitchToolDefinition } from "../engine/switch";
 import { engineIds, loadEngineProfile } from "../engine/profile";
 import { gateToolDefinition } from "../gate/types";
-import { AssetResolver, bundledAssetsDirectory, userAssetsDirectory } from "../runtime/assets";
+import {
+  AssetResolver,
+  bundledHostAssetsDirectory,
+  type BundledHarnessLayout,
+  userAssetsDirectory,
+} from "../runtime/assets";
 import { hostToolDefinitions } from "../tools";
 import { askUserQuestionToolDefinition } from "../user-question/types";
 import { resolveValidators } from "../validators/registry";
@@ -27,6 +31,7 @@ import type { HarnessManifest, VerifiedHarnessPack } from "./types";
 export type HarnessVerificationOptions = {
   env?: NodeJS.ProcessEnv;
   bundledDirectory?: string;
+  hostAssetsDirectory?: string;
   executablePath?: string;
 };
 
@@ -34,10 +39,31 @@ export async function verifyHarnessPack(
   directory: string,
   options: HarnessVerificationOptions = {},
 ): Promise<VerifiedHarnessPack> {
+  return verifyHarnessPackLayout(directory, options, "manifest.json", "pack");
+}
+
+export async function verifyBundledHarnessPack(
+  layout: BundledHarnessLayout,
+  options: HarnessVerificationOptions = {},
+): Promise<VerifiedHarnessPack> {
+  return verifyHarnessPackLayout(
+    layout.rootDirectory,
+    { ...options, hostAssetsDirectory: layout.hostAssetsDirectory },
+    "harness-manifest.json",
+    "assets",
+  );
+}
+
+async function verifyHarnessPackLayout(
+  directory: string,
+  options: HarnessVerificationOptions,
+  manifestFileName: "manifest.json" | "harness-manifest.json",
+  inventoryScope: "pack" | "assets",
+): Promise<VerifiedHarnessPack> {
   const root = await resolvePackRoot(directory);
-  const { manifest, source } = await loadHarnessManifest(root);
-  const files = await listPackFiles(root);
-  await verifyInventory(root, files, manifest);
+  const { manifest, source, path: manifestPath } = await loadHarnessManifest(root, manifestFileName);
+  const files = inventoryScope === "pack" ? await listPackFiles(root) : await listAssetFiles(root);
+  await verifyInventory(root, files, manifest, inventoryScope === "pack");
   verifyManifestReferences(manifest);
   const { driverContract, hostAdapter } = await verifyEmbeddedManifests(root, manifest);
 
@@ -65,7 +91,7 @@ export async function verifyHarnessPack(
 
   return {
     directory: root,
-    manifestPath: join(root, "manifest.json"),
+    manifestPath,
     manifestSha256: sha256(source),
     manifest,
     assetCount: Object.keys(manifest.assets).length,
@@ -140,8 +166,24 @@ async function listPackFiles(root: string): Promise<string[]> {
   return files.sort();
 }
 
-async function verifyInventory(root: string, files: string[], manifest: HarnessManifest): Promise<void> {
-  const expected = new Set(["manifest.json", ...Object.keys(manifest.assets)]);
+async function listAssetFiles(root: string): Promise<string[]> {
+  const assets = join(root, "assets");
+  const info = await lstat(assets).catch((error: unknown) => {
+    throw new Error(`Cannot access bundled Harness assets: ${errorMessage(error)}`);
+  });
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error("Bundled Harness assets must be a real directory.");
+  }
+  return (await listPackFiles(assets)).map((path) => `assets/${path}`);
+}
+
+async function verifyInventory(
+  root: string,
+  files: string[],
+  manifest: HarnessManifest,
+  includeManifest: boolean,
+): Promise<void> {
+  const expected = new Set([...(includeManifest ? ["manifest.json"] : []), ...Object.keys(manifest.assets)]);
   const actual = new Set(files);
   const missing = [...expected].filter((path) => !actual.has(path)).sort();
   const extra = [...actual].filter((path) => !expected.has(path)).sort();
@@ -347,8 +389,14 @@ async function verifyProfiles(
   assertExactKeys("Harness engine bindings", manifest.profileBindings, engineIds);
   const resolver = new AssetResolver(root, {
     env: options.env,
+    includeOverrides: false,
     bundledDirectory: options.bundledDirectory,
+    hostAssetsDirectory: options.hostAssetsDirectory,
     executablePath: options.executablePath,
+    managedBaseline: {
+      assetsDirectory: join(root, "assets"),
+      externalHostAssets: manifest.externalHostAssets,
+    },
   });
 
   for (const engine of engineIds) {
@@ -384,11 +432,11 @@ async function verifyProfiles(
 }
 
 function defaultHostAssetDirectories(options: HarnessVerificationOptions): string[] {
-  const directories = [userAssetsDirectory(options.env)];
-  const bundled = options.bundledDirectory ?? bundledAssetsDirectory();
-  if (bundled) directories.push(bundled);
-  const executableAssets = join(dirname(options.executablePath ?? process.execPath), "assets");
-  if (existsSync(join(executableAssets, "manifest.json"))) directories.push(executableAssets);
+  const directories = options.hostAssetsDirectory ? [] : [userAssetsDirectory(options.env)];
+  const host = options.hostAssetsDirectory
+    ?? options.bundledDirectory
+    ?? bundledHostAssetsDirectory(options.executablePath);
+  if (host) directories.push(host);
   return [...new Set(directories.map((directory) => resolve(directory)))];
 }
 

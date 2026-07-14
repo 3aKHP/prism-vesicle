@@ -22,7 +22,9 @@ core/agents/    # Agent profiles, child lifecycle, concurrency, inbox delivery
 core/harness/   # Harness manifest verification, compatibility, immutable install
 core/validators/# Module A/B v9 schema checks + registry
 providers/      # protocol adapters only
-assets/         # runtime prompt/spec/template/profile assets
+assets/         # exact bundled V10 Harness manifest inventory
+host-assets/    # restricted Vesicle prompts and generic Agent extensions
+harness-manifest.json # bundled V10 Harness identity and hashes
 ```
 
 Allowed dependency direction:
@@ -241,7 +243,7 @@ and the boundary check that prevents overreach.
 
 ## SubAgent Runtime
 
-- Agent Profiles are runtime assets under `assets/agents/`, independent of the six Prism Engine profiles. Bundled, user-global, Harness-provided, and sparse project profiles use one loader; do not hardcode the available profile ids in TypeScript.
+- Agent Profiles are logical runtime assets under `assets/agents/`, independent of the six Prism Engine profiles. User-global, Harness-provided, host-provided, and sparse project profiles use one loader. The only hardcoded profile ids are the exact five generic host Agents (`explore`, `general`, `plan`, `research`, and `reviewer`) because they form a security-relevant exemption from Driver delegation; do not expand that whitelist implicitly.
 - Foreground/background controls whether the parent provider loop joins the child. Sequential/parallel is separate: multiple spawn calls from one assistant response must begin before any foreground join is awaited.
 - A foreground child shares parent-turn cancellation but keeps the Bun event loop and TUI responsive. A background child owns an independent controller, returns an accepted handle immediately, and delivers its terminal result through the durable parent inbox.
 - Never append a late result to the original `spawn_agent` tool call. The accepted background handle completes that call; later completion is a host-owned user-role packet delivered by the continuation scheduler when the parent session is idle.
@@ -291,13 +293,13 @@ coding agent's "should I let this tool run?" prompt.
 
 Prompts are runtime assets, not hardcoded source literals.
 
-- Vesicle host rules live in `assets/prompts/shared/vesicle-base.md`.
+- Vesicle host rules resolve logically as `assets/prompts/shared/vesicle-base.md` but are physically owned by the restricted `host-assets/` layer.
 - Prism engine prompts live in `assets/prompts/engines/`.
 - Specs and templates under `assets/` are read-only references for the model.
 - Host-specific references such as Codex, Claude Code, RooCode, `AGENTS.md`,
   `CLAUDE.md`, `ask_followup_question`, and `new_task` should not leak into
   Vesicle engine prompts except as negative host-boundary examples.
-- Treat `assets/...` as a logical read-only namespace, not as one physical project directory. Resolution order is sparse project override, user-global override, then one complete baseline. That baseline is either a verified project-pinned managed Harness or the packaged/standalone bundled recovery assets; directories merge only within the selected resolution stack.
+- Treat `assets/...` as a logical read-only namespace, not as one physical project directory. Resolution order is sparse project override, user-global override, then one complete verified baseline: either a project-pinned managed Harness or the packaged/standalone bundled V10 Harness. The restricted host layer may supply only declared external host assets and the fixed generic Agent whitelist; directories merge only within the selected resolution stack.
 - Profile/prompt loaders and model-visible read tools must consume the same asset resolver. Never let the model receive APPDATA, home-directory, `node_modules`, executable, or Bun virtual filesystem paths.
 - Standalone executables must preserve the invocation cwd as the project root. Resolve executable-owned runtime/default files explicitly through `process.execPath`; do not call `process.chdir()` to make asset lookup work.
 - Session roots record a content-only fingerprint of the effective merged asset tree. Resume and active continuation warn when that fingerprint changes, while keeping prompt text, user content, absolute paths, and secrets out of drift metadata.
@@ -316,8 +318,10 @@ Prompts are runtime assets, not hardcoded source literals.
 - Explicit tool allowlists in released Harness Agent Profiles may reference only Vesicle built-in host tools, so packs remain portable across projects. Runtime-local MCP or parent-provided tools are not valid explicit pack dependencies; wildcard inheritance remains subject to the runtime child-tool scope.
 - `/permissions` is the only ask/allow/deny layer for model-visible tool calls. Harness and HAL declare capabilities and map operations; they must not duplicate permission prompts or require a second per-delegation path-authorization system. Agent Profiles narrow the effective tool surface, while Tool Runtime continues to enforce path, symlink, concurrency, timeout, environment, and process invariants independently of permission mode.
 - Installation and activation are separate. The installer accepts an already-extracted directory, verifies it before and after staging, and atomically renames it into `asset-packs/<id>/<version>/`; explicit activation reverifies that immutable directory and atomically writes `.vesicle/assets.lock.json` without mutating editable user assets.
-- A selected managed Harness is one complete baseline, not another sparse fallback layer. Project and user overrides may remain above it, but a missing pack file must not fall through to bundled V9 unless the manifest declares that exact logical path in `externalHostAssets`. Bundled assets become the whole recovery baseline only when the managed pack is not active.
-- Project locks and initial session host metadata persist pack id/version, source commit, manifest hash, and Adapter identity. Every start and resume reverifies the installed pinned pack and requires exact session/project identity; missing, malformed, tampered, rolled-back, or switched identities block continuation instead of silently changing Harness content.
+- The bundled V10 Harness is a first-class verified Pack selected automatically when no project lock exists. Its root `harness-manifest.json` and exact `assets/` inventory must be verified before runtime construction; project/user overrides are excluded from that integrity check.
+- A selected managed Harness is one complete baseline, not another sparse fallback layer. Project and user overrides may remain above it, but a missing pack file must not fall through to the bundled Pack unless the manifest declares that exact logical path in `externalHostAssets`. Removing a project lock returns to the whole bundled V10 baseline.
+- The three Harness workflow Agents remain Driver-contract Agents. Only the exact five generic host Agent ids may use the ordinary concurrent SubAgent path while a Harness is active. Arbitrary project/user Agent Profiles must not use the host exemption and must fail closed when the Driver Contract does not declare a matching delegation.
+- Project locks and initial session host metadata persist pack id/version, source commit, manifest hash, and Adapter identity. Every start and resume reverifies the active bundled or managed Pack and requires exact session/project identity; missing, malformed, tampered, rolled-back, or switched identities block continuation instead of silently changing Harness content. Sessions created before bundled V10 activation intentionally fail this identity check and require a new session.
 
 ## Session Semantics
 

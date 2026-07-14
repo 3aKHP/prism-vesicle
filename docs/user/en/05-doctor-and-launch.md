@@ -41,14 +41,15 @@ Provider env: file (...\prism-vesicle\.env)
 API key: available
 Assets project: missing (...\MyFirstProject\assets)
 Assets user: missing (...\prism-vesicle\assets)
-Assets bundled: ... files (...\node_modules\prism-vesicle\assets)
-Assets manifest: bundled (assets/manifest.json)
+Assets bundled: 47 files (...\node_modules\prism-vesicle\assets)
+Assets host: 12 files (...\node_modules\prism-vesicle\host-assets)
+Harness: bundled prism-engine-v10@10.0.1-alpha.1
 Missing: none
 ```
 
 Your Bun version and model id may differ. Optional Tavily or MCP lines may say unavailable or disabled; that does not block the first conversation.
 
-Asset paths and counts may also differ. `project` and `user` may be missing because they are optional override layers; the required condition is that an effective asset manifest is available from at least one layer.
+Asset paths may differ. `project` and `user` may be missing because they are optional override layers; the required condition is that Doctor verifies the bundled or managed Harness baseline. A normal installation uses the bundled V10 Harness without a project lock.
 
 ## Read Common Doctor Problems
 

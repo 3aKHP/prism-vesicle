@@ -1,0 +1,23 @@
+id: scene-writer
+displayName: Prism Scene Writer
+description: Write one bounded scene shard from an orchestrator-supplied task packet without changing outline or story state.
+systemPrompt:
+  - assets/prompts/agents/base.md
+  - assets/prompts/agents/quality/anti-ai-flavor.guidance.md
+  - assets/prompts/agents/scene-writer.md
+tools:
+  - stat_path
+  - list_files
+  - list_directory
+  - grep_files
+  - read_file
+  - view_image
+  - create_file
+  - create_directory
+  - write_file
+  - replace_in_file
+  - append_file
+contextMode: fresh
+modelPolicy: inherit
+defaultMode: foreground
+maxTurns: 20

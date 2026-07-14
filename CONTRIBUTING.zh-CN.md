@@ -53,7 +53,7 @@ TUI 从以下位置读取供应商设置：
 - 同目录 `mcp.yaml` 或 `VESICLE_MCP_FILE` 指定的可选 Streamable HTTP MCP 服务器设置；MCP 请求头密钥仍应存放在用户级 `.env` 中，而不是 `mcp.yaml` 中
 - 同目录 `permissions.yaml` 或 `VESICLE_PERMISSIONS_FILE` 指定的可选宿主工具批准设置；该文件不包含密钥，也不得把 YOLO 持久化为默认模式
 
-运行时资产使用独立的只读命名空间：`<project>/assets/` 覆盖 `providers.yaml` 同目录下的用户全局 `assets/`，之后只使用一个完整基线。该基线要么是项目固定并经过验证的托管 Harness Pack，要么是软件包或独立发行版附带的默认资产。排查解析问题时使用 `vesicle assets status`，并优先使用稀疏的 `assets materialize` 覆盖，而不是完整快照。
+运行时资产使用独立的只读命名空间：`<project>/assets/` 覆盖 `providers.yaml` 同目录下的用户全局 `assets/`，之后只使用一个经过验证的完整基线。该基线要么是项目固定的托管 Harness Pack，要么是软件包或独立发行版附带的内置 V10 Pack。仓库中的 `assets/` 必须保持为 Harness manifest 的精确清单；Vesicle 自有基础提示和五个通用 Agent Profile 位于受限的 `host-assets/` 层。排查解析问题时使用 `vesicle assets status`，刷新基线时遵循 [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md)，并优先使用稀疏的 `assets materialize` 覆盖，而不是完整快照。
 
 旧的项目根目录 `.env` 应迁移到用户级配置目录，并在本地删除或重命名。
 

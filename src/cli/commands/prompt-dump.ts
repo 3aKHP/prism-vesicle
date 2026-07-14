@@ -6,6 +6,7 @@ import { composeSystemPrompt, loadPromptBundle } from "../../core/prompt/loader"
 import { createMcpRegistryForEngine, type McpRegistryOptions } from "../../mcp/registry";
 import { loadPermissionSettings } from "../../config/permissions";
 import { agentToolDefinitions } from "../../core/agents/tools";
+import { resolveProjectHarnessRuntime } from "../../core/harness";
 
 /**
  * `vesicle prompt dump` — print the fully composed system prompt the model
@@ -28,8 +29,10 @@ export async function runPromptDump(args: string[]): Promise<void> {
   }
 
   const { engine, shapeOnly } = parsed.value;
-  const profile = await loadEngineProfile(engine);
-  const bundle = await loadPromptBundle(profile);
+  const rootDir = process.cwd();
+  const harness = await resolveProjectHarnessRuntime(rootDir);
+  const profile = await loadEngineProfile(engine, rootDir, harness?.assets);
+  const bundle = await loadPromptBundle(profile, rootDir, harness?.assets);
   const systemPrompt = composeSystemPrompt(bundle);
   const permissions = await loadPermissionSettings();
 

@@ -47,6 +47,7 @@ type InteractionState = {
 
 export type SessionResumeControllerOptions = InteractionState & {
   rootDir: string;
+  resolveHarnessRuntime?: typeof resolveProjectHarnessRuntime;
   dangerouslySkipPermissions: boolean;
   permissionSettingsReady: Accessor<boolean>;
   loadPermissionSettings: () => Promise<void>;
@@ -84,7 +85,9 @@ export function createSessionResumeController(options: SessionResumeControllerOp
       let snapshot = await loadSessionSnapshot(options.rootDir, target.sessionId, {
         synthesizeDanglingToolResults: false,
       });
-      const projectHarness = await resolveProjectHarnessRuntime(options.rootDir);
+      const projectHarness = await (
+        options.resolveHarnessRuntime ?? resolveProjectHarnessRuntime
+      )(options.rootDir);
       assertSessionHarnessIdentity(snapshot.harness, projectHarness?.harness.identity);
       if (snapshot.pendingDelegationDecisionRecovery) {
         await appendHarnessDelegationDecision({

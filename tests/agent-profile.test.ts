@@ -7,7 +7,16 @@ import { listAgentProfiles, loadAgentProfile, loadAgentSystemPrompt } from "../s
 describe("agent profile registry", () => {
   test("loads every bundled profile independently of engine ids", async () => {
     const profiles = await listAgentProfiles();
-    expect(profiles.map((profile) => profile.id)).toEqual(["explore", "general", "plan", "research", "reviewer"]);
+    expect(profiles.map((profile) => profile.id)).toEqual([
+      "chapter-reviewer",
+      "continuity-editor",
+      "explore",
+      "general",
+      "plan",
+      "research",
+      "reviewer",
+      "scene-writer",
+    ]);
     expect(profiles.find((profile) => profile.id === "explore")).toMatchObject({
       contextMode: "fresh",
       defaultMode: "background",

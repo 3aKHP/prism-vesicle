@@ -13,6 +13,7 @@ import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../
 import { fileCheckpointDiffStats } from "../src/core/checkpoints/file-history";
 import { listRewindPoints } from "../src/core/rewind/service";
 import { getProcessManager } from "../src/core/process/manager";
+import { resolveProjectHarnessRuntime } from "../src/core/harness";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -1052,7 +1053,12 @@ describe("agent loop sessions", () => {
   test("reuses a pre-persisted durable delivery input without appending it twice", async () => {
     const rootDir = await createPromptRoot();
     const session = await createSessionStore(rootDir);
-    await session.append({ role: "system", content: "parent" });
+    const harness = await resolveProjectHarnessRuntime(rootDir);
+    await session.append({
+      role: "system",
+      content: "parent",
+      metadata: { harness: harness?.harness.identity },
+    });
     const delivery = await session.append({
       role: "user",
       content: "<subagent-results>done</subagent-results>",

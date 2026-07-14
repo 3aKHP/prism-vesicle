@@ -19,8 +19,11 @@ const driverFields = [
   "adapterSourceHash", "adapterId", "adapterVersion", "targetHost",
 ] as const;
 
-export async function loadHarnessManifest(directory: string): Promise<{ manifest: HarnessManifest; source: string }> {
-  const path = join(directory, "manifest.json");
+export async function loadHarnessManifest(
+  directory: string,
+  manifestFileName: "manifest.json" | "harness-manifest.json" = "manifest.json",
+): Promise<{ manifest: HarnessManifest; source: string; path: string }> {
+  const path = join(directory, manifestFileName);
   const source = await readFile(path, "utf8").catch((error: unknown) => {
     throw new Error(`Cannot read Harness manifest at ${path}: ${errorMessage(error)}`);
   });
@@ -30,7 +33,7 @@ export async function loadHarnessManifest(directory: string): Promise<{ manifest
   } catch (error) {
     throw new Error(`Harness manifest is not valid JSON: ${errorMessage(error)}`);
   }
-  return { manifest: parseHarnessManifest(value), source };
+  return { manifest: parseHarnessManifest(value), source, path };
 }
 
 export function parseHarnessManifest(value: unknown): HarnessManifest {

@@ -30,6 +30,8 @@
   },
   "files": [
     "assets/",
+    "host-assets/",
+    "harness-manifest.json",
     "bin/",
     "src/"
   ],

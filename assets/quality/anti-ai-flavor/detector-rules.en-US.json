@@ -1,0 +1,24 @@
+{
+  "schema": "detector-rules/v1",
+  "module": "anti-ai-flavor",
+  "language": "en-US",
+  "rules": [
+    {
+      "id": "en-f0-took-a-deep-breath",
+      "tier": "F0",
+      "lang": "en-US",
+      "title": "\"took a deep breath\" 高频套话",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "literal",
+        "value": "took a deep breath",
+        "unit": "candidate"
+      },
+      "source": "antislop-sampler"
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import {
   harnessDelegationFailureInteraction,
   normalizeHarnessAdapterError,
 } from "../harness/driver";
+import { isBundledHostAgentId } from "../runtime/assets";
 
 export const agentToolNames = new Set(["spawn_agent", "list_agents", "send_message", "interrupt_agent", "wait_agent"]);
 
@@ -122,7 +123,7 @@ export async function executeAgentTool(options: {
       const requestedMode: AgentSpec["mode"] | undefined = requestedModeValue === "foreground" || requestedModeValue === "background"
         ? requestedModeValue
         : undefined;
-      const delegation = invocation.harness
+      const delegation = invocation.harness && !isBundledHostAgentId(profileId)
         ? bindHarnessDelegation(invocation.harness, invocation.parentEngine, profileId, requestedMode)
         : undefined;
       const profile = await loadAgentProfile(profileId, rootDir, invocation.assets);

@@ -1,4 +1,4 @@
-# Schema: Compact Character Card (Module A v9.0)
+# Schema: Compact Character Card (Module A v10.0)
 
 ## 1. File Standard
 - **Format:** Markdown (`.md`) with YAML Frontmatter
@@ -39,7 +39,7 @@ Personality core: decision logic, emotional processing style, primary defense me
 #### D. Instinct Protocol `## Instinct Protocol`
 Deepest desires, stress responses, comfort zone, romance mechanics. Describe baseline instinct behavior and note the *direction* of change as tension increases. Do not specify high-intensity behavior explicitly here — that belongs to Persona Topology.
 
-#### E. Persona Topology `## Persona Topology` *(v9.0)*
+#### E. Persona Topology `## Persona Topology` *(v10.0)*
 Explicit state-space map. Three mandatory subsections:
 
 **`### Invariant Axes`**

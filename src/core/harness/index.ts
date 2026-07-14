@@ -1,7 +1,7 @@
 export { supportedHarnessCapabilities, unsupportedHarnessCapabilities } from "./capability";
 export { harnessPacksDirectory, installHarnessPack } from "./install";
 export { loadHarnessManifest, parseHarnessManifest } from "./manifest";
-export { assertHarnessPackCompatible, verifyHarnessPack } from "./verify";
+export { assertHarnessPackCompatible, verifyBundledHarnessPack, verifyHarnessPack } from "./verify";
 export { createHarnessRuntimeContext } from "./runtime";
 export {
   activateInstalledHarness,
@@ -11,6 +11,7 @@ export {
   parseHarnessProjectLock,
   parseHarnessRuntimeIdentity,
   projectHarnessLockPath,
+  resolveBundledHarnessRuntime,
   resolveProjectHarnessRuntime,
   rollbackProjectHarness,
 } from "./activation";

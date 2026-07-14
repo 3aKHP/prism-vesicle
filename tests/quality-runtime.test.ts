@@ -210,6 +210,7 @@ describe("Output Quality Guard runtime", () => {
     const noop = (value: unknown) => value;
     const resumeController = createSessionResumeController({
       rootDir: root,
+      resolveHarnessRuntime: async () => ({ harness } as any),
       dangerouslySkipPermissions: false,
       permissionSettingsReady: () => true,
       loadPermissionSettings: async () => undefined,
@@ -513,8 +514,10 @@ describe("Output Quality Guard runtime", () => {
     expect(interrupted.pendingQualityRewrite).toMatchObject({ producer: "runtime", attempts: 1 });
 
     const resumeErrors: unknown[] = [];
+    const harness = harnessRuntime();
     const controllerForResume = createSessionResumeController({
       rootDir: root,
+      resolveHarnessRuntime: async () => ({ harness } as any),
       permissionSettingsReady: () => true,
       setRestoringSession: () => undefined,
       reportError: (error: unknown) => resumeErrors.push(error),

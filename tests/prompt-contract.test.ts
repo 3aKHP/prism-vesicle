@@ -1,10 +1,11 @@
-import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { loadEngineProfile } from "../src/core/engine/profile";
 import { getEffectivePromptToolNames } from "../src/cli/commands/prompt-dump";
+import { createAssetResolver } from "../src/core/runtime/assets";
 
 const rootDir = process.cwd();
+const assets = createAssetResolver(rootDir);
 
 describe("prompt interaction contracts", () => {
   test("base prompt describes the current Vesicle interaction contract", async () => {
@@ -73,16 +74,9 @@ describe("prompt audit tool surface", () => {
 });
 
 async function readAsset(path: string): Promise<string> {
-  return readFile(join(rootDir, path), "utf8");
+  return assets.readText(path);
 }
 
 async function listTextAssets(path: string): Promise<string[]> {
-  const entries = await readdir(join(rootDir, path), { withFileTypes: true });
-  const paths = await Promise.all(entries.map(async (entry) => {
-    const child = `${path}/${entry.name}`;
-    if (entry.isDirectory()) return listTextAssets(child);
-    if (/\.(md|yaml|yml|txt)$/.test(entry.name)) return [child];
-    return [];
-  }));
-  return paths.flat();
+  return (await assets.listFiles(path, true)).filter((file) => /\.(md|yaml|yml|txt)$/.test(file));
 }

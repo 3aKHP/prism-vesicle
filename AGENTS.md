@@ -26,7 +26,7 @@ tool surface, TUI, prompt, or documentation-status change.
 
 Read asset-specific docs when touching assets:
 
-- `assets/README.md`: Prism asset source and adaptation notes.
+- `docs/dev/ASSETS.md`: bundled V10 inventory, host extension layer, lineage, and update rules.
 - `docs/examples/providers.yaml`: canonical provider registry shape.
 - `docs/examples/provider.env.example`: user-level provider secret file shape.
 - `dev/docs/working/PLAN-Prism-Vesicle-architecture.md`: older architecture
