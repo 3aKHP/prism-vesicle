@@ -25,6 +25,11 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const projectHarness = !options.assets && !options.harness
     ? await resolveProjectHarnessRuntime(rootDir)
     : undefined;
+  if (!options.assets && !options.harness && !projectHarness) {
+    throw new Error(
+      "Verified bundled Harness baseline is unavailable. Ensure harness-manifest.json, assets/, and host-assets/ are installed beside Vesicle.",
+    );
+  }
   const assets = options.assets ?? projectHarness?.assets;
   const harness = options.harness ?? projectHarness?.harness;
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir, assets ? { resolver: assets } : {});
