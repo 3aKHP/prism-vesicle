@@ -19,6 +19,7 @@ type ProviderRoundOptions = {
   session: SessionStore;
   processManager: ProcessManager;
   iteration: number;
+  bufferAssistant?: boolean;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
 };
@@ -45,10 +46,14 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
     tools: options.tools,
     generation: options.generation,
     signal: options.signal,
-  }, options.onEvent);
+  }, options.onEvent, options.bufferAssistant === true);
 
+  return response;
+}
+
+export function emitAssistantResponse(response: VesicleResponse, onEvent?: (event: AgentLoopEvent) => void): void {
   const toolCalls = response.toolCalls ?? [];
-  options.onEvent?.({
+  onEvent?.({
     type: "assistant_response",
     content: response.content,
     ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
@@ -56,7 +61,6 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
     ...(response.usage ? { usage: response.usage } : {}),
     toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name, arguments: call.arguments })),
   });
-  return response;
 }
 
 async function prepareProviderMessages(
@@ -78,6 +82,7 @@ async function completeWithStreaming(
   provider: ProviderAdapter,
   request: VesicleRequest,
   onEvent?: (event: AgentLoopEvent) => void,
+  bufferAssistant = false,
 ): Promise<VesicleResponse> {
   if (!provider.stream) return provider.complete(request);
 
@@ -85,7 +90,7 @@ async function completeWithStreaming(
   for await (const event of provider.stream(request)) {
     switch (event.type) {
       case "content_delta":
-        onEvent?.({ type: "assistant_delta", delta: event.delta });
+        if (!bufferAssistant) onEvent?.({ type: "assistant_delta", delta: event.delta });
         break;
       case "reasoning_delta":
         onEvent?.({ type: "assistant_reasoning_delta", delta: event.delta });

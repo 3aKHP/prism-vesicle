@@ -100,6 +100,12 @@ export function createSessionResumeController(options: SessionResumeControllerOp
           + "Resume is blocked until the verified managed Harness context can restore that retry.",
         );
       }
+      if (snapshot.pendingQualityRewrite && !snapshot.pendingPermission) {
+        throw new Error(
+          `Session has an Output Quality Guard continuation pending for ${snapshot.pendingQualityRewrite.producer}. `
+          + "Resume is blocked until the same verified managed Harness context continues that rewrite.",
+        );
+      }
       await hydrateLiveProcessEvents(snapshot, target.sessionId);
       const resumedMessages = vesicleMessagesFromResumed(snapshot.messages);
       const restoredCards = await restoreAgentCards(target.sessionId);

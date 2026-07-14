@@ -2,6 +2,7 @@ export { supportedHarnessCapabilities, unsupportedHarnessCapabilities } from "./
 export { harnessPacksDirectory, installHarnessPack } from "./install";
 export { loadHarnessManifest, parseHarnessManifest } from "./manifest";
 export { assertHarnessPackCompatible, verifyHarnessPack } from "./verify";
+export { createHarnessRuntimeContext } from "./runtime";
 export {
   bindHarnessDelegation,
   harnessDelegationFailureDecision,

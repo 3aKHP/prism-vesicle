@@ -53,5 +53,25 @@ export function parsePermissionRequest(value: unknown): PermissionRequest | unde
     || (request.mode !== "MANUAL" && request.mode !== "INERTIA" && request.mode !== "MOMENTUM" && request.mode !== "YOLO")
   ) return undefined;
   if (permissionClassForTool(request.toolName) !== request.permissionClass) return undefined;
+  if (request.qualityState && !validQualityState(request.qualityState)) return undefined;
   return request as PermissionRequest;
+}
+
+function validQualityState(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const state = value as Record<string, unknown>;
+  return typeof state.producer === "string"
+    && typeof state.packId === "string"
+    && typeof state.packVersion === "string"
+    && typeof state.manifestSha256 === "string"
+    && /^[a-f0-9]{64}$/.test(state.manifestSha256)
+    && typeof state.ruleVersion === "string"
+    && typeof state.ruleSourceHash === "string"
+    && /^[a-f0-9]{64}$/.test(state.ruleSourceHash)
+    && Number.isInteger(state.attempts)
+    && Number(state.attempts) >= 0
+    && Array.isArray(state.rejectedHashes)
+    && state.rejectedHashes.every((hash) => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash))
+    && Array.isArray(state.candidateParts)
+    && state.candidateParts.every((part) => typeof part === "string");
 }

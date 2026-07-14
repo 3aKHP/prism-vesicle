@@ -10,6 +10,7 @@ export async function recordAssistantToolCalls(options: {
   session: SessionStore;
   profile: EngineProfile;
   model: string;
+  metadata?: Record<string, unknown>;
 }): Promise<VesicleMessage[]> {
   const { response, toolCalls } = options;
   const parentMessages = [...options.messages];
@@ -31,6 +32,7 @@ export async function recordAssistantToolCalls(options: {
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
       ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
       ...(response.usage ? { usage: response.usage } : {}),
+      ...(options.metadata ?? {}),
       toolCalls,
     },
   });

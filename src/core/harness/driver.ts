@@ -3,6 +3,7 @@ import type { AgentExecutionMode } from "../agents/profile";
 import type { UserQuestionRequest } from "../user-question/types";
 import { ProviderError } from "../../providers/shared/errors";
 import { isRetryableStatus } from "../../providers/shared/fetch";
+import type { QualityRuntimeContext } from "../quality/types";
 
 export const harnessAdapterErrorCategories = [
   "unsupported",
@@ -66,6 +67,7 @@ export type HarnessRuntimeContext = {
   manifestSha256: string;
   driver: HarnessDriverContract;
   adapter: HarnessHostAdapter;
+  quality?: QualityRuntimeContext;
 };
 
 export type BoundHarnessDelegation = HarnessDelegation & {

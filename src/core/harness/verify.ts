@@ -52,6 +52,10 @@ export async function verifyHarnessPack(
   if (manifest.sourceState !== "clean") issues.push("Harness sourceState is dirty.");
   const adapterIssue = harnessAdapterCompatibilityIssue(manifest);
   if (adapterIssue) issues.push(adapterIssue);
+  const unsupportedQualityBindings = unsupportedQualityPolicyBindings(manifest);
+  if (unsupportedQualityBindings.length > 0) {
+    issues.push(`Unsupported Harness quality bindings: ${unsupportedQualityBindings.join(", ")}.`);
+  }
   if (unsupportedCapabilities.length > 0) {
     issues.push(`Unsupported Harness capabilities: ${unsupportedCapabilities.join(", ")}.`);
   }
@@ -74,6 +78,36 @@ export async function verifyHarnessPack(
     driverContract,
     hostAdapter,
   };
+}
+
+function unsupportedQualityPolicyBindings(manifest: HarnessManifest): string[] {
+  const engineModes: Record<string, Set<string>> = {
+    etl: new Set(["off"]),
+    runtime: new Set(["off", "observe", "rewrite"]),
+    evaluate: new Set(["off", "analyze"]),
+    weaver: new Set(["off", "observe"]),
+    "weaver-orch": new Set(["off", "observe"]),
+    dyad: new Set(["off", "observe"]),
+  };
+  const agentModes: Record<string, Set<string>> = {
+    "scene-writer": new Set(["off", "observe"]),
+    "continuity-editor": new Set(["off"]),
+    "chapter-reviewer": new Set(["off", "analyze"]),
+  };
+  return [
+    ...unsupportedBindings(manifest.qualityBindings, engineModes),
+    ...unsupportedBindings(manifest.agentQualityBindings, agentModes),
+  ];
+}
+
+function unsupportedBindings(
+  bindingsByOwner: HarnessManifest["qualityBindings"],
+  supportedByOwner: Record<string, Set<string>>,
+): string[] {
+  return Object.entries(bindingsByOwner).flatMap(([owner, bindings]) => Object.entries(bindings)
+    .filter(([module, mode]) => (module !== "anti-ai-flavor" && mode !== "off")
+      || !(supportedByOwner[owner] ?? new Set(["off"])).has(mode))
+    .map(([module, mode]) => `${owner}/${module}:${mode}`));
 }
 
 export function assertHarnessPackCompatible(pack: VerifiedHarnessPack): void {

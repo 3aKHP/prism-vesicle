@@ -43,6 +43,7 @@ type ExecuteToolRoundOptions = {
 
 export async function executeToolRound(options: ExecuteToolRoundOptions): Promise<{
   anyFailed: boolean;
+  failedToolCallIds: Set<string>;
   delegationPause?: DelegationPause;
 }> {
   const { plan } = options;
@@ -76,14 +77,16 @@ export async function executeToolRound(options: ExecuteToolRoundOptions): Promis
     : undefined;
   return {
     anyFailed: nonAgent.anyFailed || agents.anyFailed,
+    failedToolCallIds: new Set([...nonAgent.failedToolCallIds, ...agents.failedToolCallIds]),
     ...(delegationPause ? { delegationPause } : {}),
   };
 }
 
 async function executeNonAgentCalls(
   options: ExecuteToolRoundOptions,
-): Promise<{ anyFailed: boolean; error?: unknown }> {
+): Promise<{ anyFailed: boolean; failedToolCallIds: Set<string>; error?: unknown }> {
   let anyFailed = false;
+  const failedToolCallIds = new Set<string>();
 
   try {
     for (const call of options.plan.executableHostToolCalls) {
@@ -91,6 +94,7 @@ async function executeNonAgentCalls(
         options.onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
         await recordUnavailableTool(options, call);
         anyFailed = true;
+        failedToolCallIds.add(call.id);
         continue;
       }
       if (agentToolNames.has(call.name)) continue;
@@ -108,21 +112,25 @@ async function executeNonAgentCalls(
         },
         onEvent: options.onEvent,
       });
-      if (!result.ok) anyFailed = true;
+      if (!result.ok) {
+        anyFailed = true;
+        failedToolCallIds.add(call.id);
+      }
     }
   } catch (error) {
-    return { anyFailed, error };
+    return { anyFailed, failedToolCallIds, error };
   }
-  return { anyFailed };
+  return { anyFailed, failedToolCallIds };
 }
 
 async function recordAgentCalls(
   options: ExecuteToolRoundOptions,
   agentCalls: ToolCall[],
   executions: Map<string, Promise<ToolResult>>,
-): Promise<{ anyFailed: boolean; errors: unknown[]; delegationDecision?: HarnessDelegationDecision }> {
+): Promise<{ anyFailed: boolean; failedToolCallIds: Set<string>; errors: unknown[]; delegationDecision?: HarnessDelegationDecision }> {
   const errors: unknown[] = [];
   let anyFailed = false;
+  const failedToolCallIds = new Set<string>();
   let delegationDecision: HarnessDelegationDecision | undefined;
   for (const call of agentCalls) {
     try {
@@ -157,7 +165,10 @@ async function recordAgentCalls(
     } catch (error) {
       errors.push(error);
     }
-    if (!result.ok) anyFailed = true;
+    if (!result.ok) {
+      anyFailed = true;
+      failedToolCallIds.add(call.id);
+    }
     if (result.delegationDecision && !delegationDecision) delegationDecision = result.delegationDecision;
     try {
       emitToolResultEvent(result, options.onEvent);
@@ -165,7 +176,7 @@ async function recordAgentCalls(
       errors.push(error);
     }
   }
-  return { anyFailed, errors, ...(delegationDecision ? { delegationDecision } : {}) };
+  return { anyFailed, failedToolCallIds, errors, ...(delegationDecision ? { delegationDecision } : {}) };
 }
 
 async function recordUnavailableTool(options: ExecuteToolRoundOptions, call: ToolCall): Promise<void> {

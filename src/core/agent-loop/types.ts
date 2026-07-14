@@ -55,6 +55,12 @@ export type AgentLoopEvent =
   | { type: "gate_pending"; gate: string }
   | { type: "engine_switch_pending"; targetEngine: EngineId }
   | { type: "user_question_pending"; header: string }
+  | {
+      type: "quality_status";
+      phase: "checking" | "rewriting" | "accepted" | "observed" | "exhausted";
+      attempt: number;
+      findingCount: number;
+    }
   | { type: "validation"; ok: boolean };
 
 export type ValidatorOutcome = {

@@ -18,6 +18,7 @@ import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets"
 import { parsePermissionRequest } from "../permissions";
 import type { PermissionMode, PermissionRequest } from "../permissions";
 import { parseHarnessDelegationDecision, type HarnessDelegationDecision } from "../harness/driver";
+import { qualityCandidateParts, qualityMutationParts, type QualityEvent } from "../quality";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -43,6 +44,7 @@ export type SessionStore = {
   sessionId: string;
   sessionPath: string;
   append(record: Omit<SessionRecord, "uuid" | "parentUuid" | "ts" | "sessionId">): Promise<SessionRecord>;
+  appendMany(records: Array<Omit<SessionRecord, "uuid" | "parentUuid" | "ts" | "sessionId">>): Promise<SessionRecord[]>;
   headUuid(): string | null;
 };
 
@@ -61,15 +63,14 @@ export async function createSessionStore(
     ? options.parentUuid ?? null
     : await readLatestRecordUuid(sessionPath);
 
-  return {
-    sessionId,
-    sessionPath,
-    async append(record) {
-      return serializeSessionAppend(sessionPath, async () => {
-        const parentUuid = useExplicitParent
-          ? headUuid
-          : await readLatestRecordUuid(sessionPath);
-        useExplicitParent = false;
+  const appendMany: SessionStore["appendMany"] = async (records) => {
+    if (records.length === 0) return [];
+    return serializeSessionAppend(sessionPath, async () => {
+      let parentUuid = useExplicitParent
+        ? headUuid
+        : await readLatestRecordUuid(sessionPath);
+      useExplicitParent = false;
+      const lines = records.map((record) => {
         const line: SessionRecord = {
           uuid: crypto.randomUUID(),
           parentUuid,
@@ -77,11 +78,22 @@ export async function createSessionStore(
           sessionId,
           ...record,
         };
-        await appendFile(sessionPath, `${JSON.stringify(line)}\n`, "utf8");
-        headUuid = line.uuid;
+        parentUuid = line.uuid;
         return line;
       });
+      await appendFile(sessionPath, lines.map((line) => `${JSON.stringify(line)}\n`).join(""), "utf8");
+      headUuid = lines.at(-1)!.uuid;
+      return lines;
+    });
+  };
+
+  return {
+    sessionId,
+    sessionPath,
+    async append(record) {
+      return (await appendMany([record]))[0]!;
     },
+    appendMany,
     headUuid: () => headUuid,
   };
 }
@@ -149,6 +161,18 @@ export type PendingDelegationRetry = {
   delegationId: string;
   attempt: number;
   retryCallId: string;
+};
+
+export type PendingQualityRewrite = {
+  producer: EngineId;
+  packId: string;
+  packVersion: string;
+  manifestSha256: string;
+  ruleVersion: string;
+  ruleSourceHash: string;
+  attempts: number;
+  rejectedHashes: string[];
+  candidateParts: string[];
 };
 
 /**
@@ -297,6 +321,8 @@ export type SessionSnapshot = {
   pendingPermission?: PermissionRequest;
   pendingDelegationRetry?: PendingDelegationRetry;
   pendingDelegationDecisionRecovery?: HarnessDelegationDecision;
+  pendingQualityRewrite?: PendingQualityRewrite;
+  qualityEvents: QualityEvent[];
 };
 
 export async function loadSessionMessages(rootDir: string, sessionId: string): Promise<ResumedMessage[]> {
@@ -403,6 +429,7 @@ export async function loadSessionSnapshot(
       const engine = readEngineId(record.metadata?.engine);
       const model = typeof record.metadata?.model === "string" ? record.metadata.model : undefined;
       const usage = readResponseUsage(record.metadata?.usage);
+      const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
       messages.push({
         role: "assistant",
         content: record.content,
@@ -412,6 +439,7 @@ export async function loadSessionSnapshot(
         ...(thinkingBlocks ? { thinkingBlocks } : {}),
         ...(toolCalls ? { toolCalls } : {}),
         ...(usage ? { usage } : {}),
+        ...(kind ? { kind } : {}),
       });
       continue;
     }
@@ -462,6 +490,8 @@ export async function loadSessionSnapshot(
   const pendingPermission = findPendingPermission(records);
   const pendingDelegationRetry = findPendingDelegationRetry(records);
   const pendingDelegationDecisionRecovery = findPendingDelegationDecisionRecovery(records);
+  const qualityEvents = findQualityEvents(records);
+  const pendingQualityRewrite = findPendingQualityRewrite(records);
   applyBackgroundProcessCompletions(messages, records);
   appendIndeterminateProcessResults(messages, records);
   const preservedPendingCallIds = options.synthesizeDanglingToolResults
@@ -482,6 +512,7 @@ export async function loadSessionSnapshot(
     records,
     headUuid: records.at(-1)?.uuid ?? null,
     messages,
+    qualityEvents,
     ...(engine ? { engine } : {}),
     ...(providerSelection ? { providerSelection } : {}),
     ...(reasoningTier ? { reasoningTier } : {}),
@@ -519,7 +550,146 @@ export async function loadSessionSnapshot(
     ...(pendingPermission ? { pendingPermission } : {}),
     ...(pendingDelegationRetry ? { pendingDelegationRetry } : {}),
     ...(pendingDelegationDecisionRecovery ? { pendingDelegationDecisionRecovery } : {}),
+    ...(pendingQualityRewrite ? { pendingQualityRewrite } : {}),
   };
+}
+
+function findPendingQualityRewrite(records: SessionRecord[]): PendingQualityRewrite | undefined {
+  let pending: PendingQualityRewrite | undefined;
+  let proseParts: string[] = [];
+  let mutationParts: string[] = [];
+  const mutationPartsByCallId = new Map<string, string[]>();
+  for (const record of records) {
+    if (record.role === "assistant") {
+      const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
+      if ((toolCalls?.length ?? 0) === 0) {
+        proseParts.push(...qualityCandidateParts({ id: record.uuid, content: record.content }));
+      }
+      for (const call of toolCalls ?? []) {
+        const parts = qualityMutationParts({ id: record.uuid, content: "", toolCalls: [call] });
+        if (parts.length === 0) continue;
+        mutationPartsByCallId.set(call.id, parts);
+        mutationParts.push(...parts);
+      }
+    }
+    if (record.role === "tool" && record.metadata?.ok === false && record.metadata?.kind !== "quality-rewrite-feedback") {
+      const callId = typeof record.metadata.toolCallId === "string" ? record.metadata.toolCallId : undefined;
+      const parts = callId ? mutationPartsByCallId.get(callId) : undefined;
+      if (parts) {
+        removeCandidateParts(mutationParts, parts);
+        if (pending) removeCandidateParts(pending.candidateParts, parts);
+      }
+      if (pending?.attempts === 0 && pending.candidateParts.length === 0) pending = undefined;
+      continue;
+    }
+    if (record.metadata?.kind === "quality-event") {
+      const [event] = findQualityEvents([record]);
+      if (!event) continue;
+      if (event.decision === "pass" || event.decision === "exhausted") {
+        pending = undefined;
+        proseParts = [];
+        mutationParts = [];
+        mutationPartsByCallId.clear();
+      }
+      continue;
+    }
+    if (record.metadata?.kind === "quality-check-pending") {
+      const parsed = parsePendingQualityRewrite(record.metadata.qualityRewrite, 0);
+      if (parsed) pending = {
+        ...parsed,
+        candidateParts: readPersistedCandidateParts(record.metadata.qualityRewrite)
+          ?? [...qualityDeliveryParts(proseParts, mutationParts)],
+      };
+      continue;
+    }
+    if (record.metadata?.kind === "quality-check-cleared") {
+      pending = undefined;
+      proseParts = [];
+      mutationParts = [];
+      mutationPartsByCallId.clear();
+      continue;
+    }
+    if (record.metadata?.kind !== "quality-rewrite-feedback") continue;
+    const parsed = parsePendingQualityRewrite(record.metadata.qualityRewrite, 1);
+    proseParts = [];
+    mutationParts = [];
+    mutationPartsByCallId.clear();
+    if (parsed) pending = { ...parsed, candidateParts: [] };
+  }
+  return pending;
+}
+
+function readPersistedCandidateParts(value: unknown): string[] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const parts = (value as { candidateParts?: unknown }).candidateParts;
+  if (!Array.isArray(parts) || parts.some((part) => typeof part !== "string")) return undefined;
+  return [...parts];
+}
+
+function qualityDeliveryParts(proseParts: string[], mutationParts: string[]): string[] {
+  return mutationParts.length > 0 ? mutationParts : proseParts;
+}
+
+function removeCandidateParts(candidateParts: string[], rejectedParts: string[]): void {
+  for (const part of rejectedParts) {
+    const index = candidateParts.lastIndexOf(part);
+    if (index >= 0) candidateParts.splice(index, 1);
+  }
+}
+
+function parsePendingQualityRewrite(value: unknown, minimumAttempts: number): Omit<PendingQualityRewrite, "candidateParts"> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Partial<PendingQualityRewrite>;
+  const producer = readEngineId(raw.producer);
+  if (!producer
+    || typeof raw.packId !== "string"
+    || typeof raw.packVersion !== "string"
+    || typeof raw.manifestSha256 !== "string"
+    || !/^[a-f0-9]{64}$/.test(raw.manifestSha256)
+    || typeof raw.ruleVersion !== "string"
+    || typeof raw.ruleSourceHash !== "string"
+    || !/^[a-f0-9]{64}$/.test(raw.ruleSourceHash)
+    || !Number.isInteger(raw.attempts)
+    || Number(raw.attempts) < minimumAttempts
+    || !Array.isArray(raw.rejectedHashes)
+    || raw.rejectedHashes.some((hash) => typeof hash !== "string" || !/^[a-f0-9]{64}$/.test(hash))) return undefined;
+  return {
+    producer,
+    packId: raw.packId,
+    packVersion: raw.packVersion,
+    manifestSha256: raw.manifestSha256,
+    ruleVersion: raw.ruleVersion,
+    ruleSourceHash: raw.ruleSourceHash,
+    attempts: Number(raw.attempts),
+    rejectedHashes: [...raw.rejectedHashes],
+  };
+}
+
+function findQualityEvents(records: SessionRecord[]): QualityEvent[] {
+  const events: QualityEvent[] = [];
+  for (const record of records) {
+    if (record.metadata?.kind !== "quality-event") continue;
+    const value = record.metadata.qualityEvent;
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const event = value as Partial<QualityEvent>;
+    if (event.guard !== "anti-ai-flavor"
+      || typeof event.packId !== "string"
+      || typeof event.packVersion !== "string"
+      || typeof event.manifestSha256 !== "string"
+      || typeof event.ruleVersion !== "string"
+      || typeof event.ruleSourceHash !== "string"
+      || typeof event.producer !== "string"
+      || typeof event.candidateType !== "string"
+      || typeof event.candidateHash !== "string"
+      || typeof event.mode !== "string"
+      || !Number.isInteger(event.attempt)
+      || typeof event.decision !== "string"
+      || !Array.isArray(event.findingIds)
+      || event.findingIds.some((id) => typeof id !== "string")
+      || typeof event.detectorMs !== "number") continue;
+    events.push(event as QualityEvent);
+  }
+  return events;
 }
 
 function findPendingDelegationDecisionRecovery(records: SessionRecord[]): HarnessDelegationDecision | undefined {
