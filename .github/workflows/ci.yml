@@ -101,7 +101,7 @@ jobs:
           }
       - name: Install pinned Inno Setup
         shell: pwsh
-        run: choco install innosetup --version=6.4.3 --no-progress -y
+        run: choco install innosetup --version=6.7.1 --no-progress -y
       - name: Build guided installer
         run: bun run build:installer
       - name: Smoke install and uninstall
