@@ -5,9 +5,7 @@ import { userConfigDirectory } from "../../config/paths";
 import { assertHarnessPackCompatible, verifyHarnessPack, type HarnessVerificationOptions } from "./verify";
 import type { VerifiedHarnessPack } from "./types";
 
-export type HarnessInstallOptions = HarnessVerificationOptions & {
-  env?: NodeJS.ProcessEnv;
-};
+export type HarnessInstallOptions = HarnessVerificationOptions;
 
 export function harnessPacksDirectory(env: NodeJS.ProcessEnv = process.env): string {
   return join(userConfigDirectory(env), "asset-packs");
@@ -34,7 +32,15 @@ export async function installHarnessPack(
     await cp(verified.directory, staging, { recursive: true, errorOnExist: true, force: false });
     const staged = await verifyHarnessPack(staging, options);
     assertHarnessPackCompatible(staged);
-    await rename(staging, destination);
+    try {
+      await rename(staging, destination);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "EEXIST" || code === "ENOTEMPTY") {
+        throw new Error(`Harness ${verified.manifest.id}@${verified.manifest.version} is already installed.`);
+      }
+      throw error;
+    }
     return { ...staged, directory: destination, manifestPath: join(destination, "manifest.json") };
   } catch (error) {
     await rm(staging, { recursive: true, force: true });

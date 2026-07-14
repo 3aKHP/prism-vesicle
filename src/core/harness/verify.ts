@@ -4,10 +4,14 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { assertChildToolDeclaration } from "../agents/tool-scope";
 import { loadAgentProfile } from "../agents/profile";
+import { agentToolDefinitions } from "../agents/tools";
 import { resolveBuiltInTools } from "../agent-loop/tool-surface";
+import { engineSwitchToolDefinition } from "../engine/switch";
 import { engineIds, loadEngineProfile } from "../engine/profile";
+import { gateToolDefinition } from "../gate/types";
 import { AssetResolver, bundledAssetsDirectory, userAssetsDirectory } from "../runtime/assets";
 import { hostToolDefinitions } from "../tools";
+import { askUserQuestionToolDefinition } from "../user-question/types";
 import { resolveValidators } from "../validators/registry";
 import { harnessAdapterCompatibilityIssue, unsupportedHarnessCapabilities } from "./capability";
 import { loadHarnessManifest } from "./manifest";
@@ -154,12 +158,28 @@ async function verifyEmbeddedManifests(root: string, manifest: HarnessManifest):
   const operationBindings = readEmbeddedObject(adapter.operationBindings, "Harness Host Adapter operationBindings");
   const runtimeCapabilities = new Set<string>();
   const bindingKinds = new Set(["tool-group", "interaction-tool", "runtime-capability", "optional-tool"]);
+  const knownToolNames = new Set([
+    ...hostToolDefinitions,
+    ...agentToolDefinitions,
+    gateToolDefinition,
+    askUserQuestionToolDefinition,
+    engineSwitchToolDefinition,
+  ].map((tool) => tool.function.name));
   for (const [operation, value] of Object.entries(operationBindings)) {
     const binding = readEmbeddedObject(value, `Harness Host Adapter operation binding ${operation}`);
     if (typeof binding.kind !== "string" || !bindingKinds.has(binding.kind)) {
       throw new Error(`Harness Host Adapter operation binding ${operation} has an invalid kind.`);
     }
-    if (binding.kind === "runtime-capability") {
+    if (binding.kind === "tool-group") {
+      const tools = readEmbeddedStringList(binding.tools, `Harness Host Adapter tool-group ${operation}`);
+      if (tools.length === 0) throw new Error(`Harness Host Adapter tool-group ${operation} must not be empty.`);
+      assertKnownAdapterTools(tools, knownToolNames, operation);
+    } else if (binding.kind === "interaction-tool") {
+      const tool = readEmbeddedString(binding.tool, `Harness Host Adapter interaction-tool ${operation}`);
+      assertKnownAdapterTools([tool], knownToolNames, operation);
+    } else if (binding.kind === "optional-tool") {
+      readEmbeddedString(binding.tool, `Harness Host Adapter optional-tool ${operation}`);
+    } else {
       if (typeof binding.capability !== "string" || binding.capability.length === 0) {
         throw new Error(`Harness Host Adapter operation binding ${operation} must declare a capability.`);
       }
@@ -211,6 +231,11 @@ function readEmbeddedObject(value: unknown, label: string): Record<string, unkno
   return value as Record<string, unknown>;
 }
 
+function readEmbeddedString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) throw new Error(`${label} must be a non-empty string.`);
+  return value;
+}
+
 function assertEmbeddedValue(
   manifest: Record<string, unknown>,
   field: string,
@@ -239,6 +264,13 @@ function assertDeclaredCapabilities(
   const missing = capabilities.filter((capability) => !declared.has(capability)).sort();
   if (missing.length > 0) {
     throw new Error(`${label} capabilities are missing from requiredCapabilities: ${missing.join(", ")}.`);
+  }
+}
+
+function assertKnownAdapterTools(tools: string[], known: Set<string>, operation: string): void {
+  const unknown = tools.filter((tool) => !known.has(tool)).sort();
+  if (unknown.length > 0) {
+    throw new Error(`Harness Host Adapter operation ${operation} references unknown host tool(s): ${unknown.join(", ")}.`);
   }
 }
 
@@ -277,6 +309,8 @@ async function verifyProfiles(
     if (!sameList(profile.systemPrompt, manifest.agentPromptBindings[agentId])) {
       throw new Error(`Harness prompt binding drift for Agent ${agentId}.`);
     }
+    // Explicit released-pack allowlists must be portable across projects, so
+    // runtime-local MCP and parent-only tool names are not valid dependencies.
     assertChildToolDeclaration(profile.tools, hostToolNames);
   }
 }
@@ -305,9 +339,10 @@ async function hostAssetExists(logicalPath: string, directories: string[]): Prom
     if (!info?.isDirectory() || info.isSymbolicLink()) continue;
     const root = await realpath(directory);
     const candidate = join(root, ...suffix);
-    const file = await lstat(candidate).catch(() => undefined);
-    if (!file?.isFile() || file.isSymbolicLink()) continue;
-    if (await realpath(candidate) === resolve(root, ...suffix)) return true;
+    const resolvedCandidate = await realpath(candidate).catch(() => undefined);
+    if (resolvedCandidate !== resolve(root, ...suffix)) continue;
+    const file = await lstat(resolvedCandidate).catch(() => undefined);
+    if (file?.isFile() && !file.isSymbolicLink()) return true;
   }
   return false;
 }

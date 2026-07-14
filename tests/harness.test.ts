@@ -91,6 +91,21 @@ describe("Harness Pack foundation", () => {
     }
   });
 
+  test("rejects unknown tools in Adapter operation bindings", async () => {
+    const fixture = await createHarnessFixture({
+      adapterOperationBindings: {
+        "artifact.inspect": { kind: "tool-group", tools: ["missing_host_tool"] },
+      },
+    });
+    try {
+      await expect(verifyHarnessPack(fixture.pack, fixture.options)).rejects.toThrow(
+        "references unknown host tool(s): missing_host_tool",
+      );
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
   test("rejects tampered, unlisted, and unsafe pack files", async () => {
     const tampered = await createHarnessFixture();
     const extra = await createHarnessFixture();
@@ -149,6 +164,7 @@ describe("Harness Pack foundation", () => {
 
 type FixtureOptions = {
   adapterCapabilities?: string[];
+  adapterOperationBindings?: Record<string, unknown>;
   requiredCapabilities?: string[];
   ruleRequiredCapabilities?: string[];
   runtimeCapabilities?: string[];
@@ -224,7 +240,7 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
     targetHost: "Prism Vesicle",
     capabilities: options.adapterCapabilities
       ?? supportedHarnessCapabilities.filter((capability) => capability !== "prism-harness/v1"),
-    operationBindings: {
+    operationBindings: options.adapterOperationBindings ?? {
       "artifact.inspect": { kind: "tool-group", tools: ["read_file"] },
       ...Object.fromEntries((options.runtimeCapabilities ?? []).map((capability, index) => [
         `fixture.runtime-${index + 1}`,
