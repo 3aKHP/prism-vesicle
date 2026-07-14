@@ -50,7 +50,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Added
 
-- Added a fail-closed Prism Harness Pack foundation with strict `prism-harness-pack/v1` parsing, exact file/hash and Profile/Prompt binding verification, Adapter/capability compatibility checks, external host asset validation, and staging-based immutable directory installation. Runtime activation remains deferred until scoped delegation and Output Quality Guard capabilities are implemented.
+- Added a fail-closed Prism Harness Pack foundation with strict `prism-harness-pack/v1` parsing, exact file/hash and Profile/Prompt binding verification, Adapter/capability compatibility checks, external host asset validation, and staging-based immutable directory installation. Runtime activation remains deferred until contract-bound delegation and Output Quality Guard capabilities are implemented; `/permissions` remains the sole tool-call authorization layer rather than being duplicated in Harness or HAL.
 
 - Claude Code-aligned background shell execution through `shell_exec.runInBackground`: commands return a managed `shell-N` task immediately, persist bounded status/output under `.vesicle/processes/`, notify the next provider turn on completion, and expose `shell_output` and `shell_stop` controls. Foreground and background shell cards now show live tail output, elapsed time, task ids, terminal status, and active header/sidebar summaries.
 - Four coarse Tool Permission Runtime modes: MANUAL asks for every tool, INERTIA auto-allows observation tools, MOMENTUM auto-allows all tools except `shell_exec`, and YOLO auto-allows the effective tool surface after two red confirmations. MCP tools are always treated as side-effecting, and SubAgent requests route through the parent TUI.
