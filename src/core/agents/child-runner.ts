@@ -11,20 +11,7 @@ import { loadAgentProfile, loadAgentSystemPrompt } from "./profile";
 import type { AgentRunner } from "./manager";
 import { createPermissionRequest, defaultPermissionRuntime, evaluatePermissionPolicy, permissionClassForTool } from "../permissions";
 import type { ToolResult } from "../tools";
-
-const unsupportedChildTools = new Set([
-  "request_confirmation",
-  "request_engine_switch",
-  "ask_user_question",
-  "spawn_agent",
-  "list_agents",
-  "send_message",
-  "interrupt_agent",
-  "wait_agent",
-  "shell_exec",
-  "shell_output",
-  "shell_stop",
-]);
+import { assertChildToolDeclaration, unsupportedChildToolNames } from "./tool-scope";
 
 export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, invocation, onProgress, takeMessages, claimMutation, registerChildSession }) => {
   if (!invocation) throw new Error("SubAgent invocation context is missing.");
@@ -252,23 +239,23 @@ export function resolveChildTools(
 ): ToolDefinition[] {
   const available = new Map(
     [...hostToolDefinitions, ...mcp.definitions, ...parentDefinitions]
-      .filter((tool) => !unsupportedChildTools.has(tool.function.name))
+      .filter((tool) => !unsupportedChildToolNames.has(tool.function.name))
       .map((tool) => [tool.function.name, tool]),
   );
+  assertChildToolDeclaration(declared, new Set(available.keys()));
   const parentNames = new Set(parentDefinitions.map((tool) => tool.function.name));
   // `*` inherits the parent's effective work surface, not Vesicle's
   // child-management controls. Recursive SubAgents are intentionally disabled
   // in this runtime, so omit those controls from wildcard inheritance; an
   // explicit declaration remains an error below.
   const names = declared[0] === "*"
-    ? [...parentNames].filter((name) => !unsupportedChildTools.has(name))
+    ? [...parentNames].filter((name) => !unsupportedChildToolNames.has(name))
     : declared;
   const resolved: ToolDefinition[] = [];
   for (const name of names) {
-    if (unsupportedChildTools.has(name)) throw new Error(`Agent profile cannot use interactive or recursive tool "${name}".`);
     if (name === "view_image" && !visionEnabled) continue;
     const tool = available.get(name);
-    if (!tool) throw new Error(`Agent profile declares unknown tool "${name}".`);
+    if (!tool) continue;
     resolved.push(tool);
   }
   return resolved;
