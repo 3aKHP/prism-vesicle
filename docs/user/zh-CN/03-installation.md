@@ -77,7 +77,7 @@ bunx vesicle prompt shape --engine etl
 
 ```text
 Engine: etl (Prism ETL Engine)
-Protocol: v9.0-state-space
+Protocol: v10.0-tempered-voice
 System prompt length: ...
 ```
 
@@ -89,11 +89,11 @@ System prompt length: ...
 bunx vesicle assets status
 ```
 
-按照本章的普通安装方式，`Bundled` 应当显示文件数量，并且 effective manifest 应当可用。Vesicle 还可以从 `%APPDATA%\prism-vesicle\assets\` 读取用户级全局覆盖，并从当前项目内的 `assets\` 读取稀疏覆盖；现在不需要创建任何覆盖。
+按照本章的普通安装方式，`Bundled` 应当显示 47 个文件，`Host` 应当显示 12 个文件，`Active baseline` 应当标识内置的 `prism-engine-v10@10.0.1-alpha.1`。Vesicle 还可以从 `%APPDATA%\prism-vesicle\assets\` 读取用户级全局覆盖，并从当前项目内的 `assets\` 读取稀疏覆盖；现在不需要创建任何覆盖或 Harness 锁。
 
 ## 可选：选择离线 Harness Pack
 
-高级用户可以先把独立发布的 Harness Pack 解压到本地目录，再为项目选择它。验证与安装本身不会激活该 Pack：
+普通安装已经运行完整 V10。高级用户可以先把另一个独立发布的 Harness Pack 解压到本地目录，再为项目选择它。验证与安装本身不会激活该 Pack：
 
 ```powershell
 bunx vesicle assets verify "C:\Downloads\prism-vesicle-harness-v10"
@@ -104,13 +104,15 @@ bunx vesicle assets status
 
 `use` 会在当前项目写入 `.vesicle\assets.lock.json`。Vesicle 每次启动项目或恢复会话时，都会重新验证这一固定版本。若会话记录的 Harness 身份不同，Vesicle 会阻止恢复，而不会静默切换。
 
-如需让项目恢复使用完整的内置恢复基线，请运行：
+如需让项目恢复使用内置 V10 基线，请运行：
 
 ```powershell
 bunx vesicle assets rollback
 ```
 
 第一版离线流程要求输入已经解压的 Release 目录；它不会下载、发现、解压或自动更新 Harness Pack。
+
+旧版 V9-only Vesicle 创建的会话没有 Harness 身份，无法在内置 V10 下恢复。升级后请新建会话。
 
 ## 安装失败时
 

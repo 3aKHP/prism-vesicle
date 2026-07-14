@@ -184,6 +184,70 @@ describe("contract-bound Harness delegation", () => {
     }
   });
 
+  test("keeps generic host Agents outside Driver delegation while rejecting arbitrary profiles", async () => {
+    const fixture = await delegationFixture();
+    let runs = 0;
+    try {
+      const manager = new AgentManager(fixture.store, async ({ spec }) => {
+        runs += 1;
+        return { content: `done:${spec.profileId}` };
+      });
+      const generic = await executeAgentTool({
+        call: {
+          id: "call-explore",
+          name: "spawn_agent",
+          arguments: JSON.stringify({
+            profile: "explore",
+            description: "Explore repository",
+            prompt: "Map the repository.",
+            mode: "foreground",
+          }),
+        },
+        manager,
+        rootDir: fixture.root,
+        parentSessionId: "parent",
+        invocation: fixture.invocation,
+      });
+      expect(generic.ok).toBe(true);
+      expect(JSON.parse(generic.content)).toMatchObject({
+        profileId: "explore",
+        status: "completed",
+      });
+      expect(JSON.parse(generic.content).delegation).toBeUndefined();
+
+      await writeFile(join(fixture.root, "assets", "agents", "custom.agent.yaml"), [
+        "id: custom",
+        "displayName: Custom",
+        "description: Undeclared project Agent.",
+        "systemPrompt:",
+        "  - assets/prompts/agents/custom.md",
+        "tools:",
+        "  - read_file",
+        "contextMode: fresh",
+        "modelPolicy: inherit",
+        "defaultMode: foreground",
+        "maxTurns: 4",
+        "",
+      ].join("\n"), "utf8");
+      await writeFile(join(fixture.root, "assets", "prompts", "agents", "custom.md"), "Custom prompt.\n", "utf8");
+      const arbitrary = await executeAgentTool({
+        call: spawnCall("call-custom", "custom"),
+        manager,
+        rootDir: fixture.root,
+        parentSessionId: "parent",
+        invocation: fixture.invocation,
+      });
+      expect(arbitrary.ok).toBe(false);
+      expect(JSON.parse(arbitrary.content)).toMatchObject({
+        error: { category: "invalid_request" },
+      });
+      expect(arbitrary.content).toContain("does not declare delegation");
+      expect(runs).toBe(1);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
   test("lists profiles from the same managed asset resolver used for delegation", async () => {
     const fixture = await delegationFixture();
     try {

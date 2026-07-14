@@ -30,7 +30,9 @@ export async function runDoctor(): Promise<void> {
   for (const layer of assets.layers) {
     console.log(`Assets ${layer.source}: ${layer.present ? `${layer.fileCount} files` : "missing"} (${layer.directory})`);
   }
-  console.log(`Assets manifest: ${assets.manifest ? `${assets.manifest.source} (${assets.manifest.path})` : "missing"}`);
+  console.log(assets.harness
+    ? `Harness: ${assets.harness.selection} ${assets.harness.identity.packId}@${assets.harness.identity.packVersion}`
+    : `Assets manifest: ${assets.manifest ? `${assets.manifest.source} (${assets.manifest.path})` : "missing"}`);
   if (mcp.statuses.length > 0) {
     for (const status of mcp.statuses) {
       const state = status.connected ? `connected, ${status.toolCount} tools` : status.enabled ? "error" : "disabled";

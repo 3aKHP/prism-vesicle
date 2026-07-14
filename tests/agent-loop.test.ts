@@ -13,6 +13,7 @@ import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../
 import { fileCheckpointDiffStats } from "../src/core/checkpoints/file-history";
 import { listRewindPoints } from "../src/core/rewind/service";
 import { getProcessManager } from "../src/core/process/manager";
+import { resolveProjectHarnessRuntime } from "../src/core/harness";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -731,6 +732,71 @@ describe("agent loop sessions", () => {
     expect(result.validation).toBeUndefined();
   });
 
+  test("reserves the contract delegation slot only for a valid non-host Agent profile", async () => {
+    const rootDir = await createPromptRoot();
+    let childRuns = 0;
+    const manager = new AgentManager(new AgentStore(rootDir), async ({ spec }) => {
+      childRuns += 1;
+      return { content: `completed:${spec.profileId}` };
+    });
+    let parentRequests = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      parentRequests += 1;
+      if (parentRequests === 1) {
+        return Response.json({
+          id: "parent-contract-parse",
+          choices: [{ message: {
+            content: "Delegating.",
+            tool_calls: [
+              {
+                id: "call-malformed-agent",
+                type: "function",
+                function: { name: "spawn_agent", arguments: "{not-json" },
+              },
+              {
+                id: "call-host-agent",
+                type: "function",
+                function: { name: "spawn_agent", arguments: JSON.stringify({
+                  profile: " explore ",
+                  description: "Explore sources",
+                  prompt: "Map the sources.",
+                  mode: "foreground",
+                }) },
+              },
+              {
+                id: "call-scene-writer",
+                type: "function",
+                function: { name: "spawn_agent", arguments: JSON.stringify({
+                  profile: "scene-writer",
+                  description: "Draft scene",
+                  prompt: "Draft the next scene.",
+                  mode: "foreground",
+                }) },
+              },
+            ],
+          } }],
+        });
+      }
+      const toolMessages = body.messages.filter((message: any) => message.role === "tool");
+      expect(toolMessages).toHaveLength(3);
+      expect(toolMessages[0].content).toContain("Tool arguments must be valid JSON");
+      expect(toolMessages[1].content).toContain("completed:explore");
+      expect(toolMessages[2].content).toContain("completed:scene-writer");
+      return Response.json({ id: "parent-contract-complete", choices: [{ message: { content: "Delegation complete." } }] });
+    }) as typeof fetch;
+
+    const result = await runPrompt({
+      input: "delegate",
+      engine: "weaver-orch",
+      rootDir,
+      agentManager: manager,
+    });
+    expect(result.kind).toBe("complete");
+    expect(parentRequests).toBe(2);
+    expect(childRuns).toBe(2);
+  });
+
   test("launches multiple foreground SubAgents in parallel and resumes the same parent turn", async () => {
     const rootDir = await createPromptRoot();
     const childResolvers: Array<(response: Response) => void> = [];
@@ -1052,7 +1118,12 @@ describe("agent loop sessions", () => {
   test("reuses a pre-persisted durable delivery input without appending it twice", async () => {
     const rootDir = await createPromptRoot();
     const session = await createSessionStore(rootDir);
-    await session.append({ role: "system", content: "parent" });
+    const harness = await resolveProjectHarnessRuntime(rootDir);
+    await session.append({
+      role: "system",
+      content: "parent",
+      metadata: { harness: harness?.harness.identity },
+    });
     const delivery = await session.append({
       role: "user",
       content: "<subagent-results>done</subagent-results>",

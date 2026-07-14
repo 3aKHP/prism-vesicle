@@ -61,6 +61,7 @@ export async function inspectAssets(
   layers: Array<AssetLayer & { present: boolean; fileCount: number }>;
   manifest?: { source: string; path: string };
   managed?: HarnessProjectLock;
+  harness?: { selection: "managed" | "bundled"; identity: HarnessProjectLock };
 }> {
   const projectHarness = await resolveProjectHarnessRuntime(projectRoot, options);
   const resolver = projectHarness?.assets ?? createAssetResolver(projectRoot, options);
@@ -69,14 +70,17 @@ export async function inspectAssets(
     present: await pathExists(layer.directory),
     fileCount: await countFiles(layer.directory, "assets", layer.allowedPaths),
   })));
-  const manifest = await resolver.resolveFile("assets/manifest.json").catch((error: unknown) => {
-    if (error instanceof Error && error.message.startsWith("Prism asset not found:")) return undefined;
-    throw error;
-  });
+  const manifest = projectHarness
+    ? undefined
+    : await resolver.resolveFile("assets/manifest.json").catch((error: unknown) => {
+        if (error instanceof Error && error.message.startsWith("Prism asset not found:")) return undefined;
+        throw error;
+      });
   return {
     layers,
     ...(manifest ? { manifest: { source: manifest.source, path: manifest.logicalPath } } : {}),
-    ...(projectHarness ? { managed: projectHarness.lock } : {}),
+    ...(projectHarness?.selection === "managed" ? { managed: projectHarness.lock } : {}),
+    ...(projectHarness ? { harness: { selection: projectHarness.selection, identity: projectHarness.lock } } : {}),
   };
 }
 
@@ -88,11 +92,11 @@ export async function runAssetsCommand(args: string[]): Promise<void> {
     for (const layer of status.layers) {
       console.log(`${capitalize(layer.source)}: ${layer.present ? `${layer.fileCount} files` : "missing"} (${layer.directory})`);
     }
-    console.log(status.managed
-      ? `Active baseline: managed ${status.managed.packId}@${status.managed.packVersion}`
-      : "Active baseline: bundled recovery");
-    console.log(status.managed
-      ? `Harness manifest SHA-256: ${status.managed.manifestSha256}`
+    console.log(status.harness
+      ? `Active baseline: ${status.harness.selection} ${status.harness.identity.packId}@${status.harness.identity.packVersion}`
+      : "Active baseline: unavailable");
+    console.log(status.harness
+      ? `Harness manifest SHA-256: ${status.harness.identity.manifestSha256}`
       : `Effective manifest: ${status.manifest ? `${status.manifest.source} (${status.manifest.path})` : "missing"}`);
     return;
   }
@@ -125,7 +129,7 @@ export async function runAssetsCommand(args: string[]): Promise<void> {
 
   if (command === "rollback" && args.length === 1) {
     const previous = await rollbackProjectHarness(process.cwd());
-    console.log(`Rolled back ${previous.packId}@${previous.packVersion}; bundled recovery baseline is active.`);
+    console.log(`Rolled back ${previous.packId}@${previous.packVersion}; bundled V10 baseline is active.`);
     return;
   }
 

@@ -21,7 +21,13 @@ if (forbidden.length > 0) {
   throw new Error(`npm package contains development-only files: ${forbidden.join(", ")}`);
 }
 
-for (const required of ["bin/vesicle.mjs", "src/cli/main.ts", "assets/manifest.json"]) {
+for (const required of [
+  "bin/vesicle.mjs",
+  "src/cli/main.ts",
+  "harness-manifest.json",
+  "assets/engines/etl.profile.yaml",
+  "host-assets/prompts/shared/vesicle-base.md",
+]) {
   if (!paths.includes(required)) throw new Error(`npm package is missing required runtime file: ${required}`);
 }
 

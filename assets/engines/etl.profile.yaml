@@ -1,6 +1,6 @@
 id: etl
 displayName: Prism ETL Engine
-protocolVersion: v9.0-state-space
+protocolVersion: v10.0-tempered-voice
 systemPrompt:
   - assets/prompts/shared/vesicle-base.md
   - assets/prompts/engines/etl.md
@@ -8,11 +8,6 @@ defaultTools:
   - config.load
   - prompt.load
   - session.write
-  - web_search
-  - web_fetch
-  - web_map
-  - web_crawl
-  - web_research
   - stat_path
   - list_files
   - list_directory
@@ -24,11 +19,12 @@ defaultTools:
   - write_file
   - replace_in_file
   - append_file
-  - delete_file
   - copy_file
-  - move_file
-  - move_directory
-  - delete_directory
+  - web_search
+  - web_fetch
+  - web_map
+  - web_crawl
+  - web_research
 validators:
   - character-card
   - scenario-card

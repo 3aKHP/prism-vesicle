@@ -15,14 +15,66 @@ import {
   resolveProjectHarnessRuntime,
   rollbackProjectHarness,
   supportedHarnessCapabilities,
+  verifyBundledHarnessPack,
   verifyHarnessPack,
 } from "../src/core/harness";
 import type { HarnessManifest } from "../src/core/harness";
 import { runPrompt } from "../src/core/agent-loop/run";
+import { listAgentProfiles } from "../src/core/agents/profile";
 import { createSessionStore, loadSessionSnapshot } from "../src/core/session/store";
 import { inspectAssets, materializeEditableAssets, parseHarnessReference } from "../src/cli/assets";
 
 describe("Harness Pack foundation", () => {
+  test("selects the verified bundled V10 baseline when a project has no lock", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-bundled-harness-"));
+    const project = join(root, "project");
+    try {
+      const runtime = await resolveProjectHarnessRuntime(project, {
+        env: { VESICLE_CONFIG_DIR: join(root, "config") },
+      });
+      expect(runtime).toBeDefined();
+      expect(runtime?.selection).toBe("bundled");
+      expect(runtime?.lock).toMatchObject({
+        packId: "prism-engine-v10",
+        packVersion: "10.0.1-alpha.1",
+        manifestSha256: "15624186f8e55d2f107432c417a21a5a57d8116ff35c2dffe716f58e3e9eedc2",
+      });
+      expect(runtime?.pack.assetCount).toBe(47);
+      expect((await runtime!.assets.resolveFile("assets/engines/etl.profile.yaml")).source).toBe("bundled");
+      expect((await runtime!.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("host");
+      expect((await listAgentProfiles(project, runtime!.assets)).map((profile) => profile.id)).toEqual([
+        "chapter-reviewer",
+        "continuity-editor",
+        "explore",
+        "general",
+        "plan",
+        "research",
+        "reviewer",
+        "scene-writer",
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("fails closed when the bundled V10 inventory is tampered", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-bundled-tamper-"));
+    const assetsDirectory = join(root, "assets");
+    const hostAssetsDirectory = join(root, "host-assets");
+    const manifestPath = join(root, "harness-manifest.json");
+    try {
+      await cp(join(import.meta.dir, "..", "assets"), assetsDirectory, { recursive: true });
+      await cp(join(import.meta.dir, "..", "host-assets"), hostAssetsDirectory, { recursive: true });
+      await cp(join(import.meta.dir, "..", "harness-manifest.json"), manifestPath);
+      const layout = { rootDirectory: root, manifestPath, assetsDirectory, hostAssetsDirectory };
+      expect((await verifyBundledHarnessPack(layout)).assetCount).toBe(47);
+      await writeFile(join(assetsDirectory, "prompts", "engines", "etl.md"), "tampered", "utf8");
+      await expect(verifyBundledHarnessPack(layout)).rejects.toThrow("hash mismatch");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("verifies a complete compatible pack and its runtime bindings", async () => {
     const fixture = await createHarnessFixture();
     try {
@@ -225,7 +277,7 @@ describe("Harness Pack foundation", () => {
         adapterId: "vesicle-v1",
       }));
       expect((await active.assets.resolveFile("assets/engines/runtime.profile.yaml")).source).toBe("managed");
-      expect((await active.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("bundled");
+      expect((await active.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("host");
       await expect(active.assets.resolveFile("assets/legacy-v9-only.md")).rejects.toThrow("not found");
       expect(parseHarnessReference("fixture-harness@10.0.0-test.1")).toEqual({
         packId: "fixture-harness",
@@ -233,7 +285,7 @@ describe("Harness Pack foundation", () => {
       });
       const status = await inspectAssets(project, fixture.options);
       expect(status.managed).toEqual(active.lock);
-      expect(status.layers.find((layer) => layer.source === "bundled")?.fileCount).toBe(2);
+      expect(status.layers.find((layer) => layer.source === "host")?.fileCount).toBe(2);
       await materializeEditableAssets("assets/prompts/engines/runtime.md", project, {
         env: fixture.options.env,
       });
@@ -248,6 +300,12 @@ describe("Harness Pack foundation", () => {
       await rollbackProjectHarness(project);
       expect(await loadProjectHarnessLock(project)).toBeUndefined();
       expect(await resolveProjectHarnessRuntime(project, fixture.options)).toBeUndefined();
+      const bundled = await resolveProjectHarnessRuntime(project, { env: fixture.options.env });
+      expect(bundled?.selection).toBe("bundled");
+      expect(bundled?.lock).toMatchObject({
+        packId: "prism-engine-v10",
+        packVersion: "10.0.1-alpha.1",
+      });
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
     }
@@ -347,6 +405,94 @@ describe("Harness Pack foundation", () => {
       );
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("persists bundled V10 identity for new sessions and rejects legacy unpinned sessions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-bundled-session-"));
+    const project = join(root, "project");
+    const config = join(root, "config");
+    const providers = join(config, "providers.yaml");
+    const originalProvidersFile = process.env.VESICLE_PROVIDERS_FILE;
+    const originalConfigDirectory = process.env.VESICLE_CONFIG_DIR;
+    const originalFetch = globalThis.fetch;
+    try {
+      await write(providers, [
+        "default:",
+        "  provider: test",
+        "  model: test-model",
+        "providers:",
+        "  test:",
+        "    protocol: openai-chat-compatible",
+        "    baseUrl: https://provider.test/v1",
+        "    apiKeyEnv: TEST_KEY",
+        "    models:",
+        "      - test-model",
+        "",
+      ].join("\n"));
+      await write(join(config, ".env"), "TEST_KEY=test-secret\n");
+      process.env.VESICLE_PROVIDERS_FILE = providers;
+      process.env.VESICLE_CONFIG_DIR = config;
+      globalThis.fetch = (async () => Response.json({
+        id: "bundled-session",
+        choices: [{ message: { content: "bundled response" } }],
+      })) as unknown as typeof fetch;
+
+      const first = await runPrompt({ input: "start", engine: "etl", rootDir: project });
+      expect(first.kind).toBe("complete");
+      expect(first.profile.protocolVersion).toBe("v10.0-tempered-voice");
+      const snapshot = await loadSessionSnapshot(project, first.sessionId);
+      expect(snapshot.harness).toMatchObject({
+        packId: "prism-engine-v10",
+        packVersion: "10.0.1-alpha.1",
+      });
+      expect(snapshot.assets?.files.some((file) => file.source === "bundled")).toBe(true);
+      expect(snapshot.assets?.files.some((file) => file.source === "host")).toBe(true);
+
+      const resumed = await runPrompt({
+        input: "continue",
+        engine: "etl",
+        rootDir: project,
+        sessionId: first.sessionId,
+        messages: [...first.messages, { role: "user", content: "continue" }],
+      });
+      expect(resumed.kind).toBe("complete");
+
+      let runtimeRequests = 0;
+      globalThis.fetch = (async () => {
+        runtimeRequests += 1;
+        return Response.json({
+          id: `bundled-runtime-${runtimeRequests}`,
+          choices: [{ message: {
+            content: runtimeRequests === 1
+              ? "空气中弥漫着雨味。"
+              : "雨水顺着门轴滴到她的袖口。",
+          } }],
+        });
+      }) as unknown as typeof fetch;
+      const guarded = await runPrompt({ input: "write", engine: "runtime", rootDir: project });
+      expect(guarded.kind).toBe("complete");
+      expect(runtimeRequests).toBe(2);
+      const guardedSnapshot = await loadSessionSnapshot(project, guarded.sessionId);
+      expect(guardedSnapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
+
+      const legacy = await createSessionStore(project, "legacy-v9-session");
+      await legacy.append({ role: "system", content: "legacy V9 prompt" });
+      await legacy.append({ role: "user", content: "legacy turn" });
+      await expect(runPrompt({
+        input: "continue legacy",
+        engine: "etl",
+        rootDir: project,
+        sessionId: legacy.sessionId,
+        messages: [{ role: "user", content: "continue legacy" }],
+      })).rejects.toThrow("Session Harness identity does not match");
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalProvidersFile === undefined) delete process.env.VESICLE_PROVIDERS_FILE;
+      else process.env.VESICLE_PROVIDERS_FILE = originalProvidersFile;
+      if (originalConfigDirectory === undefined) delete process.env.VESICLE_CONFIG_DIR;
+      else process.env.VESICLE_CONFIG_DIR = originalConfigDirectory;
+      await rm(root, { recursive: true, force: true });
     }
   });
 

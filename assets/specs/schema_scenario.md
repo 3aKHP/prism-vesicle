@@ -1,4 +1,4 @@
-# Schema: Compact Scenario Card (Module B v9.0)
+# Schema: Compact Scenario Card (Module B v10.0)
 
 ## 1. File Standard
 - **Format:** Markdown (`.md`) with YAML Frontmatter
@@ -109,7 +109,7 @@ The L-System is the **production-layer intensity classification** used by the ET
 | **L3-A** | Soft Intimacy | 40–65 | Sensual but not explicit. Atmosphere, tension, physical proximity, foreplay. Intimacy Barrier under pressure but not broken. R-15 territory. **Optional sublevel — a scene may skip L3-A and enter L3-B directly.** |
 | **L3-B** | Pure Passion | 60–85 | Consensual, passionate, emotionally fulfilling physical union. Pure Love (純愛). Intimacy Barrier fully lowered. R-18 territory. |
 | **L4-A** | Fetish & Psychology | 70–90 | Raw expression of Core Desire. Desire as compensation, ritual, fixation, or release. Power dynamics, suppressed drives. R-18 territory. |
-| **L4-B** | Fetish Specialization | 75–92 | Specialized fetish territory. **Default protocol: weight worship** — boots/feet as the medium of connection, motivation is love and possession, not malice ("以重量崇拜"，靴/足作为连接媒介，动机为爱与占有而非恶意). This default applies unless the character's topology or user instruction specifies otherwise. R-18 territory. |
+| **L4-B** | Fetish Specialization | 75–92 | Specialized fetish territory. **Default protocol: weight worship** — boots/feet are the medium of connection; motivation is affection and possession rather than malice. Character topology or explicit user direction may select another coherent domain. R-18 territory. |
 | **L5** | Extreme | 85–100 | **Locked by default.** Requires explicit user request AND structural compatibility with the character's Boundary Conditions. Escalation must remain internally coherent with character topology. |
 
 **Design note:** Layers overlap intentionally. A scene can occupy the boundary between two layers. The `tension_target` in the beat map encodes position within this space numerically; the `variant_config` encodes the character's behavioral configuration at that position.

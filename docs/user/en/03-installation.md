@@ -77,7 +77,7 @@ The first lines should resemble:
 
 ```text
 Engine: etl (Prism ETL Engine)
-Protocol: v9.0-state-space
+Protocol: v10.0-tempered-voice
 System prompt length: ...
 ```
 
@@ -89,11 +89,11 @@ Now inspect where those assets came from:
 bunx vesicle assets status
 ```
 
-For the normal installation in this chapter, `Bundled` should report files and the effective manifest should be available. Vesicle can also read user-global overrides from `%APPDATA%\prism-vesicle\assets\` and sparse overrides from `assets\` inside the current project. You do not need to create either override yet.
+For the normal installation in this chapter, `Bundled` should report 47 files, `Host` should report 12 files, and `Active baseline` should identify bundled `prism-engine-v10@10.0.1-alpha.1`. Vesicle can also read user-global overrides from `%APPDATA%\prism-vesicle\assets\` and sparse overrides from `assets\` inside the current project. You do not need to create either override or a Harness lock.
 
 ## Optional: Select an Offline Harness Pack
 
-Advanced users can select an independently released Harness Pack after extracting it to a local directory. Verification and installation do not activate the pack:
+The normal installation already runs complete V10. Advanced users can select a different independently released Harness Pack after extracting it to a local directory. Verification and installation do not activate the pack:
 
 ```powershell
 bunx vesicle assets verify "C:\Downloads\prism-vesicle-harness-v10"
@@ -104,13 +104,15 @@ bunx vesicle assets status
 
 `use` writes `.vesicle\assets.lock.json` in the current project. Vesicle reverifies that exact installed pack whenever the project starts or a session resumes. A session recorded under a different Harness identity is blocked instead of being switched silently.
 
-To return the project to the complete bundled recovery baseline, run:
+To return the project to the bundled V10 baseline, run:
 
 ```powershell
 bunx vesicle assets rollback
 ```
 
 This first offline flow requires an already-extracted Release directory. It does not download, discover, extract, or automatically update Harness Packs.
+
+Sessions created by an older V9-only Vesicle build do not contain a Harness identity and cannot resume under bundled V10. Start a new session after upgrading.
 
 ## If Installation Fails
 

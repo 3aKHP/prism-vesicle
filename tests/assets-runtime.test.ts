@@ -7,15 +7,15 @@ import { AssetResolver } from "../src/core/runtime/assets";
 import { inspectEngineAssetDrift, loadEngineAssetRuntime } from "../src/core/runtime/engine-assets";
 
 describe("runtime assets", () => {
-  test("falls back to package assets and can materialize a legacy full project override", async () => {
+  test("falls back to bundled V10 assets and can materialize a full project override", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-assets-"));
     try {
       const options = { env: { VESICLE_CONFIG_DIR: join(rootDir, "config") } };
-      expect((await new AssetResolver(rootDir, options).resolveFile("assets/manifest.json")).source).toBe("bundled");
+      expect((await new AssetResolver(rootDir, options).resolveFile("assets/engines/etl.profile.yaml")).source).toBe("bundled");
 
       await initializeEditableAssets(rootDir);
-      expect((await new AssetResolver(rootDir, options).resolveFile("assets/manifest.json")).source).toBe("project");
-      expect(await Bun.file(join(rootDir, "assets", "manifest.json")).exists()).toBe(true);
+      expect((await new AssetResolver(rootDir, options).resolveFile("assets/engines/etl.profile.yaml")).source).toBe("project");
+      expect(await Bun.file(join(rootDir, "assets", "engines", "etl.profile.yaml")).exists()).toBe(true);
       await expect(initializeEditableAssets(rootDir)).rejects.toThrow("Refusing to overwrite existing project asset override");
     } finally {
       await rm(rootDir, { recursive: true, force: true });
@@ -31,14 +31,18 @@ describe("runtime assets", () => {
         scope: "user",
         env: { VESICLE_CONFIG_DIR: config },
       });
-      expect(await Bun.file(join(config, "assets", "manifest.json")).exists()).toBe(true);
+      expect(await Bun.file(join(config, "assets", "engines", "etl.profile.yaml")).exists()).toBe(true);
       expect(await Bun.file(join(project, "assets", "manifest.json")).exists()).toBe(false);
       const status = await inspectAssets(project, {
         env: { VESICLE_CONFIG_DIR: config },
         executablePath: join(rootDir, "missing", "vesicle"),
       });
       expect(status.layers.find((layer) => layer.source === "user")).toMatchObject({ present: true });
-      expect(status.manifest?.source).toBe("user");
+      expect(status.harness?.selection).toBe("bundled");
+      expect((await new AssetResolver(project, {
+        env: { VESICLE_CONFIG_DIR: config },
+        executablePath: join(rootDir, "missing", "vesicle"),
+      }).resolveFile("assets/engines/etl.profile.yaml")).source).toBe("user");
     } finally {
       await rm(rootDir, { recursive: true, force: true });
     }
@@ -83,6 +87,7 @@ describe("runtime assets", () => {
     const options = {
       env: { VESICLE_CONFIG_DIR: join(rootDir, "config") },
       bundledDirectory: join(import.meta.dir, "..", "assets"),
+      hostAssetsDirectory: join(import.meta.dir, "..", "host-assets"),
       executablePath: join(rootDir, "missing", "vesicle"),
     };
     try {
@@ -173,7 +178,7 @@ describe("runtime assets", () => {
       });
 
       expect((await resolver.resolveFile("assets/engines/runtime.profile.yaml")).source).toBe("managed");
-      expect((await resolver.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("bundled");
+      expect((await resolver.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("host");
       expect((await resolver.resolveFile("assets/prompts/engines/runtime.md")).source).toBe("project");
       await expect(resolver.resolveFile("assets/prompts/engines/legacy-v9.md")).rejects.toThrow("not found");
       expect(await resolver.listFiles("assets", true)).toEqual([
@@ -182,7 +187,7 @@ describe("runtime assets", () => {
         "assets/prompts/shared/vesicle-base.md",
       ]);
       const fingerprint = await resolver.fingerprint(await resolver.listFiles("assets", true));
-      expect(fingerprint.files.map((file) => file.source)).toEqual(["managed", "project", "bundled"]);
+      expect(fingerprint.files.map((file) => file.source)).toEqual(["managed", "project", "host"]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

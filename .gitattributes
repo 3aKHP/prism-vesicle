@@ -1,0 +1,7 @@
+assets/**/*.json text eol=lf
+assets/**/*.jsonl text eol=lf
+assets/**/*.md text eol=lf
+assets/**/*.yaml text eol=lf
+host-assets/**/*.md text eol=lf
+host-assets/**/*.yaml text eol=lf
+harness-manifest.json text eol=lf

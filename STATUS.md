@@ -7,7 +7,7 @@ _Last updated: 2026-07-14_
 | Area | Version | Status |
 |------|---------|--------|
 | Prism Vesicle | 1.0.0-alpha.1 | Public alpha candidate: profile-driven engine host with gate runtime |
-| Prism assets | Bundled v9.0 recovery + project-pinned V10 Harness | Implemented on development branch |
+| Prism assets | Verified bundled V10 Harness + optional project-pinned managed Harness | Implemented on development branch |
 | Provider protocols | OpenAI-compatible Chat + Anthropic Messages + Gemini generateContent | Implemented |
 | TUI | OpenTUI + Solid | Responsive shell + gate/session panels |
 | Gate runtime | request_confirmation + needs_user loop | ETL blueprint + phase gates wired |
@@ -23,7 +23,7 @@ _Last updated: 2026-07-14_
 | Web research | Tavily web host tools for ETL/Evaluate | Implemented on development branch |
 | MCP tools | Streamable HTTP tools-only client | Implemented on development branch |
 | Multimodal input | Clipboard attachments + guarded project image inspection | Implemented on development branch |
-| Runtime assets | Project/user sparse overrides + managed or bundled complete baseline | Implemented on development branch |
+| Runtime assets | Project/user sparse overrides + managed or bundled V10 complete baseline + restricted host layer | Implemented on development branch |
 | Managed Harness Packs | Offline verify/install/use/status/rollback + project/session pinning | Implemented on development branch |
 | Harness delegation | Contract-bound Driver delegation over the generic SubAgent runtime | Implemented on development branch |
 | Output Quality Guard | Deterministic Anti-AI-Flavor detection + Runtime rewrite + declared observe paths | Implemented on development branch |
@@ -38,7 +38,7 @@ Chat wrapper:
 
 User-facing documentation is intentionally limited during this alpha. Treat the Windows-first `docs/user/` manual, README installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and `docs/examples/` as the supported onboarding references; other behavior is subject to alpha-level change while feature/fix work remains the priority.
 
-- Resolve each logical `assets/...` file through sparse project overrides, user-global overrides, then one complete baseline without exposing physical paths to the model. The baseline is either a verified project-pinned managed Harness Pack or the packaged/standalone bundled recovery assets; only a managed pack's exact `externalHostAssets` may resolve from the bundled host layer. Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
+- Resolve each logical `assets/...` file through sparse project overrides, user-global overrides, then one complete verified V10 baseline without exposing physical paths to the model. The baseline is either a project-pinned managed Harness Pack or the packaged/standalone bundled `prism-engine-v10@10.0.1-alpha.1` Pack. A restricted host layer supplies only the two external base prompts and five generic Vesicle Agent Profiles. Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
   tool surface, validators, and stop gates from them at runtime.
 - Run a terminal UI with provider status, markdown-rendered conversation with
   terminal-readable LaTeX math cleanup and readable fallbacks for common
@@ -49,10 +49,10 @@ User-facing documentation is intentionally limited during this alpha. Treat the 
   completion, and Escape cancellation.
 - Compile standalone Windows PE and Linux ELF binaries with the OpenTUI
   tree-sitter worker embedded as a flat Bun worker entrypoint. Prompt and
-  profile `assets/` remain an external default release pack; executables preserve the invocation directory as the project root and locate defaults beside the executable. `vesicle debug
+  profile runtime files remain an external V10 release pack containing `harness-manifest.json`, `assets/`, and `host-assets/`; executables preserve the invocation directory as the project root and locate defaults beside the executable. `vesicle debug
   markdown-runtime` is the non-interactive runtime smoke check and `bun run
   build:assets` creates the release ZIP.
-- Publish an npm/Bun package with pinned runtime dependencies and bundled default assets. Package invocations resolve their installed OpenTUI worker and assets independently of the active project directory. `vesicle assets verify/install/use/status/rollback` manages already-extracted offline Harness Packs and the project lock; `assets materialize <assets/path> [--global]` creates sparse project or user overrides, and `assets init [--global]` retains full-snapshot compatibility.
+- Publish an npm/Bun package with pinned runtime dependencies, the exact bundled V10 Harness inventory, its root manifest, and the restricted host extension layer. Package invocations resolve their installed OpenTUI worker and runtime assets independently of the active project directory. `vesicle assets verify/install/use/status/rollback` manages already-extracted offline Harness Packs and the project lock; `assets materialize <assets/path> [--global]` creates sparse project or user overrides, and `assets init [--global]` retains full-snapshot compatibility.
 - GitHub Actions CI validates pull requests and `develop` pushes on Linux and
   Windows. The manual Release verification workflow builds and labels PE, ELF,
   and assets-ZIP candidate artifacts without publishing them.
@@ -168,7 +168,7 @@ User-facing documentation is intentionally limited during this alpha. Treat the 
 - Persist successful filesystem tool operations as structured `fileEvent`
   metadata on session tool records, so generated file changes can be replayed
   or audited without scraping prose.
-- Load independent Agent Profiles from `assets/agents/` through the same bundled, user-global, and sparse project overlay layers as engine assets. `spawn_agent` supports foreground joins and non-blocking background work; multiple calls in one response launch concurrently. Background results are coalesced in a durable parent inbox and automatically resume an idle parent session. Each child keeps a host-only UUID run id and exposes a short handle such as `explore-1` to models and users. Dedicated Agent cards update in place; active/ready background work remains visible in the header and Workspace sidebar. `/agents [handle]` lists or inspects child state, `/agents stop <handle>` interrupts queued or running work, and `/agents retry` retries delivery after an exhausted provider error.
+- Load independent Agent Profiles from the active Harness and restricted host layer through the same user-global and sparse project overlay rules as engine assets. V10 supplies `scene-writer`, `continuity-editor`, and `chapter-reviewer`; Vesicle retains `explore`, `general`, `plan`, `research`, and `reviewer` as a fixed generic host whitelist. Generic host Agents remain ordinary concurrent SubAgents, while arbitrary non-whitelisted project/user Agents must satisfy the active Driver Contract. `spawn_agent` supports foreground joins and non-blocking background work; multiple generic calls in one response launch concurrently. Background results are coalesced in a durable parent inbox and automatically resume an idle parent session. Each child keeps a host-only UUID run id and exposes a short handle such as `explore-1` to models and users. Dedicated Agent cards update in place; active/ready background work remains visible in the header and Workspace sidebar. `/agents [handle]` lists or inspects child state, `/agents stop <handle>` interrupts queued or running work, and `/agents retry` retries delivery after an exhausted provider error.
 - Search the live web through Tavily-backed `web_search`, extract readable page
   content through `web_fetch`, discover site URLs through `web_map`, run bounded
   multi-page extraction through `web_crawl`, and request cited synthesis through
@@ -231,11 +231,11 @@ prism-vesicle/
 │   ├── mcp/              # Streamable HTTP MCP tool discovery and execution
 │   └── skills/           # Future controlled skill bundle surface
 ├── assets/
-│   ├── engines/          # Engine profile YAML
-│   ├── prompts/          # Vesicle base + Prism engine prompts
-│   ├── specs/            # Prism v9 schemas
-│   ├── templates/        # Prism v9 templates
-│   └── protocol/         # Protocol references
+│   └── ...               # Exact 47-file V10 Harness manifest inventory
+├── host-assets/
+│   ├── agents/           # Five generic Vesicle Agent Profiles
+│   └── prompts/          # Host base prompts + generic Agent prompts
+├── harness-manifest.json # Bundled prism-harness-pack/v1 identity and hashes
 ├── docs/
 │   └── dev/              # Developer docs and architecture rules
 ├── dev/
@@ -323,7 +323,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - Directory tools intentionally omit recursive deletion and directory-tree copying in the first guarded surface. Models must delete contents explicitly before `delete_directory`; `move_directory` never overwrites an existing target.
 - SubAgent recursion is disabled in the first runtime. Top-level children run concurrently (default maximum four), but child profiles do not receive the agent-control tools. A process restart marks previously running children as failed and delivers that terminal result; it does not replay an in-flight provider request.
 - SubAgent handles are unique within one parent session rather than globally; host-only run ids preserve global storage and recovery identity. Legacy UUID-style Agent references remain accepted but are no longer emitted.
-- Concrete Weaver-Orch scene allocation, Evaluate reviewer composition, and artifact merge policy remain Harness responsibilities. Vesicle supplies the generic Agent Profile, scheduling, persistence, and delivery substrate. When an active managed Harness provides a verified Driver Contract, `spawn_agent` binds the requested Agent to the parent Engine's unique delegation, fixed foreground/background mode, purpose, retry limit, and ABI error model. Contract-bound delegations run sequentially, persist attempts and terminal state, and enter the declared resumable user decision point after transient retries are exhausted.
+- Concrete Weaver-Orch scene allocation, Evaluate reviewer composition, and artifact merge policy remain Harness responsibilities. Vesicle supplies the generic Agent scheduling, persistence, and delivery substrate. Every active bundled or managed Harness provides a verified Driver Contract. The exact five generic host Agent ids bypass delegation binding and preserve ordinary concurrent SubAgent behavior; every other Agent request must bind to the parent Engine's unique declared delegation, fixed foreground/background mode, purpose, retry limit, and ABI error model. Contract-bound delegations run sequentially, persist attempts and terminal state, and enter the declared resumable user decision point after transient retries are exhausted.
 - OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini
   `generateContent` are implemented. OpenAI Responses is deferred.
 - The provider registry supports multiple configured providers using
@@ -363,7 +363,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - `shell_exec` is a user-authorized host command, not an OS sandbox. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind. `runInBackground` returns a managed `shell-N` task immediately; progress and completion remain visible in the TUI, terminal output/status are persisted under `.vesicle/processes/`, and completion is delivered to the next provider turn without polling. A process still running when the Vesicle host restarts is recovered as interrupted rather than replayed.
 - Process cleanup terminates the managed shell and ordinary descendants in its process group/tree. Because `shell_exec` is intentionally not an OS sandbox, an explicitly approved command can still use platform facilities such as a new session or external service manager to create work outside that managed tree.
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
-- Managed Harness Pack verification, immutable installation, project selection, exact session identity, and whole-baseline rollback are implemented. Both `prism-agent/delegation@1` and deterministic `quality-guard/anti-ai-flavor@1` are enforced: the Guard validates the released Rule Pack, matches normalized protected prose with UTF-16 evidence offsets, withholds failing Runtime candidates for at most two original-Engine rewrites, stops on repeated hashes, persists bounded events, and observes the declared Dyad, Weaver, Weaver-Orch, and Scene Writer completion paths. Evaluate and Chapter Reviewer reports remain excluded from recursive enforcement. Archive extraction, online Release discovery, channels, downloads, and automatic updates remain deferred; the offline CLI accepts an already-extracted pack directory.
+- Bundled and managed Harness verification, immutable managed installation, project selection, exact session identity, and whole-baseline rollback are implemented. With no project lock, Vesicle automatically verifies and activates bundled `prism-engine-v10@10.0.1-alpha.1`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume. Both `prism-agent/delegation@1` and deterministic `quality-guard/anti-ai-flavor@1` are enforced: the Guard validates the released Rule Pack, matches normalized protected prose with UTF-16 evidence offsets, withholds failing Runtime candidates for at most two original-Engine rewrites, stops on repeated hashes, persists bounded events, and observes the declared Dyad, Weaver, Weaver-Orch, and Scene Writer completion paths. Evaluate and Chapter Reviewer reports remain excluded from recursive enforcement. Archive extraction, online Release discovery, channels, downloads, and automatic updates remain deferred; the offline CLI accepts an already-extracted pack directory.
 
 ## Verification
 

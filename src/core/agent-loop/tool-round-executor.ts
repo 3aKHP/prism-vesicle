@@ -14,7 +14,7 @@ import type { AgentLoopEvent } from "./types";
 import type { ToolRoundPlan } from "./tool-round-planner";
 import { emitToolResultEvent, failedToolResult, recordToolResult } from "./tool-result-recorder";
 import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
-import type { AssetResolver } from "../runtime/assets";
+import { isBundledHostAgentId, type AssetResolver } from "../runtime/assets";
 import { appendHarnessDelegationDecision, type DelegationPause } from "./delegation-decision";
 
 type ExecuteToolRoundOptions = {
@@ -52,14 +52,15 @@ export async function executeToolRound(options: ExecuteToolRoundOptions): Promis
   );
   let contractSpawnSeen = false;
   const agentExecutions = new Map(agentCalls.map((call) => {
-    if (options.harness && call.name === "spawn_agent" && contractSpawnSeen) {
+    const contractSpawn = isContractSpawn(call, options.harness);
+    if (contractSpawn && contractSpawnSeen) {
       return [call.id, Promise.resolve(failedToolResult(
         call.id,
         call.name,
         JSON.stringify({ error: { category: "invalid_request", message: "Contract-bound delegations must be issued sequentially." } }),
       ))];
     }
-    if (options.harness && call.name === "spawn_agent") contractSpawnSeen = true;
+    if (contractSpawn) contractSpawnSeen = true;
     return [call.id, executeAgentCall(options, call)];
   }));
   const nonAgent = await executeNonAgentCalls(options);
@@ -275,4 +276,15 @@ function throwToolErrors(nonAgentError: unknown, agentErrors: unknown[]): void {
   if (nonAgentError) throw nonAgentError;
   if (agentErrors.length === 1) throw agentErrors[0];
   if (agentErrors.length > 1) throw new AggregateError(agentErrors, "SubAgent tool processing failed.");
+}
+
+function isContractSpawn(call: ToolCall, harness: HarnessRuntimeContext | undefined): boolean {
+  if (!harness || call.name !== "spawn_agent") return false;
+  try {
+    const args = JSON.parse(call.arguments) as { profile?: unknown };
+    if (typeof args.profile !== "string" || !args.profile.trim()) return false;
+    return !isBundledHostAgentId(args.profile.trim());
+  } catch {
+    return false;
+  }
 }

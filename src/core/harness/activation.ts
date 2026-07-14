@@ -2,18 +2,24 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { AssetResolverOptions } from "../runtime/assets";
-import { AssetResolver } from "../runtime/assets";
+import { AssetResolver, bundledHarnessLayout } from "../runtime/assets";
 import type { HarnessRuntimeContext, HarnessRuntimeIdentity } from "./driver";
 import { harnessPacksDirectory } from "./install";
 import { createHarnessRuntimeContext } from "./runtime";
 import type { VerifiedHarnessPack } from "./types";
-import { assertHarnessPackCompatible, verifyHarnessPack, type HarnessVerificationOptions } from "./verify";
+import {
+  assertHarnessPackCompatible,
+  verifyBundledHarnessPack,
+  verifyHarnessPack,
+  type HarnessVerificationOptions,
+} from "./verify";
 
 export type HarnessProjectLock = HarnessRuntimeIdentity & {
   schema: "prism-vesicle-assets-lock/v1";
 };
 
 export type ProjectHarnessRuntime = {
+  selection: "managed" | "bundled";
   lock: HarnessProjectLock;
   pack: VerifiedHarnessPack;
   assets: AssetResolver;
@@ -106,7 +112,7 @@ export async function activateInstalledHarness(
   const pack = await verifyHarnessPack(directory, options);
   assertHarnessPackCompatible(pack);
   const lock = lockFromPack(pack);
-  const runtime = await projectRuntime(projectRoot, lock, pack, options);
+  const runtime = await projectRuntime(projectRoot, lock, pack, options, "managed");
   await writeProjectHarnessLock(projectRoot, lock);
   return runtime;
 }
@@ -116,12 +122,37 @@ export async function resolveProjectHarnessRuntime(
   options: HarnessActivationOptions = {},
 ): Promise<ProjectHarnessRuntime | undefined> {
   const lock = await loadProjectHarnessLock(projectRoot);
-  if (!lock) return undefined;
+  if (!lock) return resolveBundledHarnessRuntime(projectRoot, options);
   const directory = installedHarnessDirectory(lock.packId, lock.packVersion, options.env);
   const pack = await verifyHarnessPack(directory, options);
   assertHarnessPackCompatible(pack);
   assertLockMatchesPack(lock, pack);
-  return projectRuntime(projectRoot, lock, pack, options);
+  return projectRuntime(projectRoot, lock, pack, options, "managed");
+}
+
+export async function resolveBundledHarnessRuntime(
+  projectRoot = process.cwd(),
+  options: HarnessActivationOptions = {},
+): Promise<ProjectHarnessRuntime | undefined> {
+  if (options.bundledDirectory && !options.hostAssetsDirectory) return undefined;
+  const layout = bundledHarnessLayout(options.executablePath);
+  if (!layout) return undefined;
+  const resolvedOptions = { ...options, hostAssetsDirectory: layout.hostAssetsDirectory };
+  const pack = await verifyBundledHarnessPack(layout, resolvedOptions);
+  assertHarnessPackCompatible(pack);
+  const lock = lockFromPack(pack);
+  return projectRuntime(projectRoot, lock, pack, resolvedOptions, "bundled");
+}
+
+export function requireProjectHarnessRuntime(
+  runtime: ProjectHarnessRuntime | undefined,
+): ProjectHarnessRuntime {
+  if (!runtime) {
+    throw new Error(
+      "Verified bundled Harness baseline is unavailable. Ensure harness-manifest.json, assets/, and host-assets/ are installed beside Vesicle.",
+    );
+  }
+  return runtime;
 }
 
 export async function rollbackProjectHarness(projectRoot = process.cwd()): Promise<HarnessProjectLock> {
@@ -149,15 +180,17 @@ function projectRuntime(
   lock: HarnessProjectLock,
   pack: VerifiedHarnessPack,
   options: HarnessActivationOptions,
+  selection: "managed" | "bundled",
 ): Promise<ProjectHarnessRuntime> {
   const assets = new AssetResolver(projectRoot, {
     ...options,
     managedBaseline: {
       assetsDirectory: join(pack.directory, "assets"),
       externalHostAssets: pack.manifest.externalHostAssets,
+      source: selection,
     },
   });
-  return createHarnessRuntimeContext(pack).then((harness) => ({ lock, pack, assets, harness }));
+  return createHarnessRuntimeContext(pack).then((harness) => ({ selection, lock, pack, assets, harness }));
 }
 
 function lockFromPack(pack: VerifiedHarnessPack): HarnessProjectLock {

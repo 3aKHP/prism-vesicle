@@ -5,7 +5,7 @@ import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { userConfigDirectory } from "../../config/paths";
 
-export type AssetSource = "project" | "user" | "managed" | "bundled";
+export type AssetSource = "project" | "user" | "managed" | "bundled" | "host";
 
 export type AssetLayer = {
   source: AssetSource;
@@ -39,13 +39,44 @@ export type AssetFingerprint = {
 
 export type AssetResolverOptions = {
   env?: NodeJS.ProcessEnv;
+  includeOverrides?: boolean;
   bundledDirectory?: string;
+  hostAssetsDirectory?: string;
   executablePath?: string;
   managedBaseline?: {
     assetsDirectory: string;
     externalHostAssets: readonly string[];
+    source?: "managed" | "bundled";
   };
 };
+
+export type BundledHarnessLayout = {
+  rootDirectory: string;
+  manifestPath: string;
+  assetsDirectory: string;
+  hostAssetsDirectory: string;
+};
+
+export const bundledHostAssetPaths = [
+  "assets/agents/explore.agent.yaml",
+  "assets/agents/general.agent.yaml",
+  "assets/agents/plan.agent.yaml",
+  "assets/agents/research.agent.yaml",
+  "assets/agents/reviewer.agent.yaml",
+  "assets/prompts/agents/base.md",
+  "assets/prompts/agents/explore.md",
+  "assets/prompts/agents/general.md",
+  "assets/prompts/agents/plan.md",
+  "assets/prompts/agents/research.md",
+  "assets/prompts/agents/reviewer.md",
+  "assets/prompts/shared/vesicle-base.md",
+] as const;
+
+export const bundledHostAgentIds = ["explore", "general", "plan", "research", "reviewer"] as const;
+
+export function isBundledHostAgentId(value: string): value is typeof bundledHostAgentIds[number] {
+  return (bundledHostAgentIds as readonly string[]).includes(value);
+}
 
 /**
  * Resolve the effective read-only `assets/` namespace as a sparse overlay:
@@ -174,10 +205,28 @@ export function userAssetsDirectory(env: NodeJS.ProcessEnv = process.env): strin
   return join(userConfigDirectory(env), "assets");
 }
 
-/** Return the package-owned asset directory, independent of the active project. */
-export function bundledAssetsDirectory(): string | undefined {
-  const candidate = dirname(fileURLToPath(new URL("../../../assets/manifest.json", import.meta.url)));
-  return existsSync(join(candidate, "manifest.json")) ? candidate : undefined;
+/** Locate the complete V10 pack and host extensions shipped with this runtime. */
+export function bundledHarnessLayout(executablePath = process.execPath): BundledHarnessLayout | undefined {
+  const moduleRoot = dirname(fileURLToPath(new URL("../../../harness-manifest.json", import.meta.url)));
+  const roots = [...new Set([moduleRoot, dirname(executablePath)].map((root) => resolve(root)))];
+  for (const rootDirectory of roots) {
+    const manifestPath = join(rootDirectory, "harness-manifest.json");
+    const assetsDirectory = join(rootDirectory, "assets");
+    const hostAssetsDirectory = join(rootDirectory, "host-assets");
+    if (existsSync(manifestPath)) {
+      return { rootDirectory, manifestPath, assetsDirectory, hostAssetsDirectory };
+    }
+  }
+  return undefined;
+}
+
+/** Return the package-owned V10 asset directory, independent of the active project. */
+export function bundledAssetsDirectory(executablePath = process.execPath): string | undefined {
+  return bundledHarnessLayout(executablePath)?.assetsDirectory;
+}
+
+export function bundledHostAssetsDirectory(executablePath = process.execPath): string | undefined {
+  return bundledHarnessLayout(executablePath)?.hostAssetsDirectory;
 }
 
 export function normalizeAssetPath(
@@ -212,31 +261,44 @@ export function parseAssetFingerprint(value: unknown): AssetFingerprint | undefi
     if (!file || typeof file !== "object" || Array.isArray(file)) return undefined;
     const entry = file as Partial<AssetFingerprint["files"][number]>;
     if (typeof entry.path !== "string" || typeof entry.sha256 !== "string") return undefined;
-    if (entry.source !== "project" && entry.source !== "user" && entry.source !== "managed" && entry.source !== "bundled") return undefined;
+    if (entry.source !== "project" && entry.source !== "user" && entry.source !== "managed"
+      && entry.source !== "bundled" && entry.source !== "host") return undefined;
     files.push({ path: entry.path, sha256: entry.sha256, source: entry.source });
   }
   return { sha256: candidate.sha256, files };
 }
 
 function assetLayers(projectRoot: string, options: AssetResolverOptions): AssetLayer[] {
-  const layers: AssetLayer[] = [
-    { source: "project", directory: join(projectRoot, "assets"), boundaryDirectory: projectRoot },
-    {
+  const layers: AssetLayer[] = [];
+  const projectDirectory = join(projectRoot, "assets");
+  if (options.includeOverrides !== false) {
+    if (!options.managedBaseline || resolve(projectDirectory) !== resolve(options.managedBaseline.assetsDirectory)) {
+      layers.push({ source: "project", directory: projectDirectory, boundaryDirectory: projectRoot });
+    }
+    layers.push({
       source: "user",
       directory: userAssetsDirectory(options.env),
       boundaryDirectory: userConfigDirectory(options.env),
-    },
-  ];
-  if (options.managedBaseline) {
-    layers.push({ source: "managed", directory: options.managedBaseline.assetsDirectory });
+    });
   }
-  const bundled = options.bundledDirectory ?? bundledAssetsDirectory();
-  const allowedPaths = options.managedBaseline?.externalHostAssets;
-  if (bundled) layers.push({ source: "bundled", directory: bundled, ...(allowedPaths ? { allowedPaths } : {}) });
-
-  const executable = join(dirname(options.executablePath ?? process.execPath), "assets");
-  if (existsSync(join(executable, "manifest.json"))) {
-    layers.push({ source: "bundled", directory: executable, ...(allowedPaths ? { allowedPaths } : {}) });
+  if (options.managedBaseline) {
+    layers.push({
+      source: options.managedBaseline.source ?? "managed",
+      directory: options.managedBaseline.assetsDirectory,
+    });
+  } else {
+    const bundled = options.bundledDirectory ?? bundledAssetsDirectory(options.executablePath);
+    if (bundled) layers.push({ source: "bundled", directory: bundled });
+  }
+  const hostAssets = options.hostAssetsDirectory
+    ?? (options.managedBaseline ? options.bundledDirectory : undefined)
+    ?? (options.bundledDirectory ? undefined : bundledHostAssetsDirectory(options.executablePath));
+  if (hostAssets) {
+    const allowedPaths = [...new Set([
+      ...bundledHostAssetPaths,
+      ...(options.managedBaseline?.externalHostAssets ?? []),
+    ])];
+    layers.push({ source: "host", directory: hostAssets, allowedPaths });
   }
 
   const seen = new Set<string>();

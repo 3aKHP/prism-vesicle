@@ -41,14 +41,15 @@ Provider env: file (...\prism-vesicle\.env)
 API key: available
 Assets project: missing (...\MyFirstProject\assets)
 Assets user: missing (...\prism-vesicle\assets)
-Assets bundled: ... files (...\node_modules\prism-vesicle\assets)
-Assets manifest: bundled (assets/manifest.json)
+Assets bundled: 47 files (...\node_modules\prism-vesicle\assets)
+Assets host: 12 files (...\node_modules\prism-vesicle\host-assets)
+Harness: bundled prism-engine-v10@10.0.1-alpha.1
 Missing: none
 ```
 
 你的 Bun 版本和模型 id 可能不同。可选的 Tavily 或 MCP 行可能显示 unavailable 或 disabled；这不会阻止第一次对话。
 
-资产路径和文件数量也可能不同。`project` 与 `user` 是可选覆盖层，因此显示 missing 并不代表失败；必要条件是至少有一层能够提供生效的 asset manifest。
+资产路径可能不同。`project` 与 `user` 是可选覆盖层，因此显示 missing 并不代表失败；必要条件是 Doctor 能够验证内置或托管 Harness 基线。普通安装无需项目锁，默认使用内置 V10 Harness。
 
 ## 处理常见 Doctor 问题
 

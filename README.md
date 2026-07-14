@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It loads bundled Prism v9 recovery assets or a project-pinned V10 Harness Pack, connects them to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
+Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It starts from a verified bundled V10 Harness, can select a project-pinned managed Harness Pack, connects the active runtime to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
 
 > **Alpha status:** `1.0.0-alpha.1` is a public dogfood release, not a finished end-user product. The supported onboarding path is the [Windows-first user manual](./docs/user/en/README.md), this README, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and the examples under [`docs/examples/`](./docs/examples/). Command UX and runtime contracts may still change between alpha releases.
 
@@ -21,7 +21,7 @@ npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 ```
 
-The package includes read-only default runtime assets. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete baseline: either a verified project-pinned managed Harness Pack or the defaults shipped with the active package or standalone release.
+The package includes the complete read-only `prism-engine-v10@10.0.1-alpha.1` runtime baseline. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. A restricted host layer supplies the Vesicle base prompts and five generic SubAgents.
 
 Inspect the active layers and the source of the effective manifest:
 
@@ -52,7 +52,7 @@ bunx vesicle assets use <pack-id>@<version>
 bunx vesicle assets status
 ```
 
-The project lock is `.vesicle/assets.lock.json`. Vesicle reverifies the installed pack on start and resume, and blocks sessions whose recorded Harness identity differs. `bunx vesicle assets rollback` removes the project selection and restores the whole bundled recovery baseline. Archive extraction, online discovery, and automatic updates are not part of this offline flow.
+The project lock is `.vesicle/assets.lock.json`. Vesicle reverifies the installed pack on start and resume, and blocks sessions whose recorded Harness identity differs. `bunx vesicle assets rollback` removes the project selection and restores the bundled V10 baseline. Sessions created before the V10 baseline migration have no Harness identity and must be replaced with a new session. Archive extraction, online discovery, and automatic updates are not part of this offline flow.
 
 ### Source checkout
 
@@ -100,6 +100,8 @@ Host tool approval settings live in sibling `permissions.yaml`; [`docs/examples/
 
 Vesicle starts with the ETL engine. Type a prompt and press Enter to begin; provider turns, tool activity, gates, usage metadata, and engine transitions are appended to `.vesicle/sessions/`.
 
+From a source checkout, `bun run dev` directly starts the complete bundled V10 runtime; no asset initialization or project Harness lock is needed.
+
 After editing the provider registry and sibling `.env`, verify the effective setup without exposing secret values, then start Vesicle:
 
 ```bash
@@ -141,8 +143,8 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
 - Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with exact-plan approval, filtered environment, bounded live output, timeout, process-tree cleanup, foreground/background execution, durable `shell-N` task state, completion notification, and explicit output/stop controls.
-- Foreground and background SubAgents with parallel execution, independent built-in or custom Agent Profiles, dedicated live Agent cards, short model/user-facing handles, durable completion delivery, and parent continuation without polling.
-- npm distribution plus standalone Windows and Linux builds with an immutable external recovery asset pack, offline managed-Harness selection, and sparse editable global/project overrides.
+- Foreground and background SubAgents with parallel execution, three V10 Driver-contract workflow Agents, five generic host Agents (`explore`, `general`, `plan`, `research`, and `reviewer`), custom Agent Profiles subject to the active Harness contract, dedicated live Agent cards, durable completion delivery, and parent continuation without polling.
+- npm distribution plus standalone Windows and Linux builds with an immutable bundled V10 runtime pack, offline managed-Harness selection, and sparse editable global/project overrides.
 
 See [`STATUS.md`](./STATUS.md) for the authoritative implementation inventory, tool surface, validators, and known limits.
 
@@ -179,7 +181,7 @@ Pull requests and `develop` pushes run the release-shape checks on Linux and Win
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Contributor setup, repository boundaries, and documentation style |
 | [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Architecture and runtime boundaries |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, review, release, and documentation sweep |
-| [`assets/README.md`](./assets/README.md) | Prism asset source and adaptation notes |
+| [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled V10 inventory, host extension layer, lineage, and update rules |
 
 Repository-local AI collaborator instructions live in [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md).
 
@@ -187,7 +189,7 @@ Repository-local AI collaborator instructions live in [`AGENTS.md`](./AGENTS.md)
 
 The 1.0 alpha focuses on making Vesicle a practical direct API host for Prism workflows rather than a generic coding agent. OpenAI Responses, broader MCP transports and surfaces, Skills integration, dedicated long-form engine scaffolding, and prompt-cache engineering remain deferred; consult [`STATUS.md`](./STATUS.md) before relying on an unlisted capability.
 
-Prism Vesicle is a sibling of [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology), the public source for the Prism Engine and State-Space protocol assets adapted here.
+Prism Vesicle is a sibling of [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology), the public source for the V10 Harness Release bundled here.
 
 ## License
 
