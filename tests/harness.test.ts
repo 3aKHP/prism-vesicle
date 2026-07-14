@@ -36,19 +36,19 @@ describe("Harness Pack foundation", () => {
 
   test("reports unsupported capabilities without weakening integrity checks", async () => {
     expect(Object.isFrozen(supportedHarnessCapabilities)).toBe(true);
-    expect(() => (supportedHarnessCapabilities as string[]).push("prism-agent/delegation@1")).toThrow();
+    expect(() => (supportedHarnessCapabilities as string[]).push("future-capability@1")).toThrow();
 
     const fixture = await createHarnessFixture({
       requiredCapabilities: [
         ...supportedHarnessCapabilities.filter((capability) => capability !== "prism-agent/delegation@1"),
-        "quality-guard/anti-ai-flavor@1",
+        "quality-analysis/anti-ai-flavor@1",
       ],
     });
     try {
       const verified = await verifyHarnessPack(fixture.pack, fixture.options);
       expect(verified.compatibility.compatible).toBe(false);
       expect(verified.compatibility.unsupportedCapabilities).toEqual([
-        "quality-guard/anti-ai-flavor@1",
+        "quality-analysis/anti-ai-flavor@1",
       ]);
       expect(() => assertHarnessPackCompatible(verified)).toThrow("is not compatible");
       await expect(installHarnessPack(fixture.pack, fixture.options)).rejects.toThrow("is not compatible");
@@ -65,10 +65,10 @@ describe("Harness Pack foundation", () => {
       ],
     });
     const rule = await createHarnessFixture({
-      ruleRequiredCapabilities: ["quality-guard/anti-ai-flavor@1"],
+      ruleRequiredCapabilities: ["quality-analysis/anti-ai-flavor@1"],
     });
     const runtime = await createHarnessFixture({
-      runtimeCapabilities: ["quality-guard/anti-ai-flavor@1"],
+      runtimeCapabilities: ["quality-analysis/anti-ai-flavor@1"],
     });
     try {
       await expect(verifyHarnessPack(adapter.pack, adapter.options)).rejects.toThrow(
@@ -141,6 +141,38 @@ describe("Harness Pack foundation", () => {
         "assets/prompts/shared/vesicle-base.md",
       ]);
       expect(verified.compatibility.issues).toContain("Harness sourceState is dirty.");
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps unsupported strict quality policy fail-closed", async () => {
+    const fixture = await createHarnessFixture({ ruleRequiredCapabilities: ["quality-guard/anti-ai-flavor@1"] });
+    try {
+      const manifestPath = join(fixture.pack, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as HarnessManifest;
+      manifest.qualityBindings.runtime = { "fixture-rule": "strict" };
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      const verified = await verifyHarnessPack(fixture.pack, fixture.options);
+      expect(verified.compatibility.compatible).toBe(false);
+      expect(verified.compatibility.issues).toContain("Unsupported Harness quality bindings: runtime/fixture-rule:strict.");
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects quality modes outside the implemented producer matrix", async () => {
+    const fixture = await createHarnessFixture({ ruleRequiredCapabilities: ["quality-guard/anti-ai-flavor@1"] });
+    try {
+      const manifestPath = join(fixture.pack, "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as HarnessManifest;
+      manifest.qualityBindings.etl = { "fixture-rule": "rewrite" };
+      manifest.agentQualityBindings["scene-writer"] = { "fixture-rule": "rewrite" };
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      const verified = await verifyHarnessPack(fixture.pack, fixture.options);
+      expect(verified.compatibility.compatible).toBe(false);
+      expect(verified.compatibility.issues[0]).toContain("etl/fixture-rule:rewrite");
+      expect(verified.compatibility.issues[0]).toContain("scene-writer/fixture-rule:rewrite");
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
     }

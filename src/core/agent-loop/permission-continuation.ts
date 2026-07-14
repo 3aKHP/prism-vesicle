@@ -16,6 +16,7 @@ import { validateDurablePermissionRequest } from "./permission-validation";
 import { runLoop } from "./turn-loop";
 import type { AgentLoopEvent, DeferredAgentPermission, RunPromptResult } from "./types";
 import { createTurnAgentManager } from "./agent-manager";
+import { qualityMutationPartsForProducer, type DurableQualityState } from "../quality";
 
 type ResolvePermissionOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];
@@ -59,6 +60,7 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
     deferredAgentPermissions: options.deferredAgentPermissions,
     records,
   });
+  const qualityState = validatePermissionQualityState(options.request.qualityState, context);
 
   const call = permissionCall(options.request);
   const capabilityAvailable = context.toolSurface.definitions.some((definition) => definition.function.name === call.name);
@@ -69,6 +71,19 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
     throw new Error("The approved shell execution plan changed before execution; permission was not applied.");
   }
 
+  if (options.resolution.decision === "allow_once" && qualityState
+    && mutationPartsForCall(call, qualityState.producer).length > 0) {
+    const pendingState = {
+      ...qualityState,
+      candidateParts: [...qualityState.candidateParts],
+    };
+    for (const deferredCall of options.remainingToolCalls) removeMutationParts(pendingState, deferredCall);
+    await context.session.append({
+      role: "system",
+      content: "",
+      metadata: { kind: "quality-check-pending", qualityRewrite: pendingState },
+    });
+  }
   await context.session.append({
     role: "system",
     content: `Permission ${options.resolution.decision} for ${call.name}.`,
@@ -85,7 +100,7 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
       ...(options.resolution.decision === "reject" && options.resolution.feedback ? { feedback: options.resolution.feedback } : {}),
     },
   });
-  return { context, messages, call, approvedShellPlanHash };
+  return { context, messages, call, approvedShellPlanHash, qualityState };
 }
 
 async function collectPermissionBatch(
@@ -100,7 +115,7 @@ async function collectPermissionBatch(
     if (nextAgentIndex >= 0) {
       const next = options.remainingToolCalls[nextAgentIndex]!;
       const remaining = options.remainingToolCalls.filter((_, index) => index !== nextAgentIndex);
-      return { entries: [], pause: await createPermissionPause(context, messages, next, remaining, deferred, options.onEvent) };
+      return { entries: [], pause: await createPermissionPause(context, messages, next, remaining, deferred, state.qualityState, options.onEvent) };
     }
   }
   return { entries: agentToolNames.has(call.name) ? deferred : [current] };
@@ -117,6 +132,7 @@ async function executeAndRecordEntries(
     result: await executeApprovedEntry(context, messages, entry, approvedShellPlanHash, options),
   })));
   for (const { entry, result } of results) {
+    if (!result.ok && state.qualityState) removeMutationParts(state.qualityState, permissionCall(entry.request));
     await recordToolResult({
       result,
       messages,
@@ -140,7 +156,7 @@ async function continuePermissionSequence(
   const { context, messages } = state;
   if (options.remainingToolCalls.length > 0) {
     const [next, ...remaining] = options.remainingToolCalls;
-    return createPermissionPause(context, messages, next, remaining, undefined, options.onEvent);
+    return createPermissionPause(context, messages, next, remaining, undefined, state.qualityState, options.onEvent);
   }
   return runLoop({
     rootDir: context.rootDir,
@@ -161,6 +177,11 @@ async function continuePermissionSequence(
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
+    qualityState: state.qualityState ? {
+      attempts: state.qualityState.attempts,
+      rejectedHashes: new Set(state.qualityState.rejectedHashes),
+      candidateParts: state.qualityState.candidateParts,
+    } : undefined,
   });
 }
 
@@ -256,9 +277,13 @@ async function createPermissionPause(
   call: ToolCall,
   remainingToolCalls: ToolCall[],
   deferredAgentPermissions: DeferredAgentPermission[] | undefined,
+  qualityState: DurableQualityState | undefined,
   onEvent?: (event: AgentLoopEvent) => void,
 ): Promise<RunPromptResult> {
-  const request = createPermissionRequest(context.session.sessionId, call, context.permission.mode);
+  const request = {
+    ...createPermissionRequest(context.session.sessionId, call, context.permission.mode),
+    ...(qualityState ? { qualityState } : {}),
+  };
   await context.session.append({ role: "system", content: `Permission required for ${call.name}.`, metadata: { kind: "permission-request", request } });
   onEvent?.({ type: "permission_pending", request });
   return {
@@ -272,6 +297,39 @@ async function createPermissionPause(
     assistantContent: "",
     messages,
   };
+}
+
+function validatePermissionQualityState(
+  state: DurableQualityState | undefined,
+  context: PermissionContext,
+): DurableQualityState | undefined {
+  if (!state) return undefined;
+  const quality = context.harness?.quality;
+  if (!quality
+    || state.producer !== context.profile.id
+    || state.packId !== quality.packId
+    || state.packVersion !== quality.packVersion
+    || state.manifestSha256 !== quality.manifestSha256
+    || state.ruleVersion !== quality.ruleManifest.version
+    || state.ruleSourceHash !== quality.ruleManifest.sourceHash) {
+    throw new Error("Pending permission quality state does not match the same verified Harness and Rule Pack identity.");
+  }
+  return {
+    ...state,
+    rejectedHashes: [...state.rejectedHashes],
+    candidateParts: [...state.candidateParts],
+  };
+}
+
+function mutationPartsForCall(call: ToolCall, producer: string = "runtime"): string[] {
+  return qualityMutationPartsForProducer({ id: call.id, content: "", toolCalls: [call] }, producer);
+}
+
+function removeMutationParts(state: DurableQualityState, call: ToolCall): void {
+  for (const part of mutationPartsForCall(call, state.producer)) {
+    const index = state.candidateParts.lastIndexOf(part);
+    if (index >= 0) state.candidateParts.splice(index, 1);
+  }
 }
 
 function permissionCall(request: PermissionRequest): ToolCall {

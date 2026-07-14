@@ -44,6 +44,7 @@ export type PermissionRequest = {
     handle: string;
     parentSessionId: string;
   };
+  qualityState?: import("../quality/types").DurableQualityState;
 };
 
 export type PermissionRuntimeOptions = {

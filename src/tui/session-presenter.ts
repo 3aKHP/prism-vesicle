@@ -19,6 +19,7 @@ export function vesicleMessagesFromResumed(messages: ResumedMessage[]): VesicleM
   return messages.map((message) => ({
     role: message.role,
     content: message.content,
+    ...(message.kind ? { kind: message.kind } : {}),
     ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
     ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks.map((block) => ({ ...block })) } : {}),
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
@@ -55,6 +56,7 @@ export function displayMessagesFromResumed(
     return [{ role: "system", content: message.content.replace(/^\[conversation summary\]\s*/i, "Conversation summary\n") }];
   }
   if (message.role === "assistant") {
+    if (message.kind === "quality-rejected-candidate") return [];
     const reasoningText = displayTextFromThinkingBlocks(message.thinkingBlocks) ?? message.reasoningContent;
     const out: Message[] = [];
     if (reasoningText?.trim()) out.push({ role: "system", content: reasoningText, kind: "reasoning" });
@@ -113,6 +115,9 @@ export function displayMessagesFromResumed(
   }
   if (message.role === "user" && message.kind === "background-process-results") {
     return [{ role: "system", content: "Background shell completion was delivered to the active Engine." }];
+  }
+  if (message.role === "user" && message.kind === "quality-rewrite-feedback") {
+    return [{ role: "system", content: "Output Quality Guard requested a rewrite before delivery." }];
   }
   if (message.role === "user") {
     return [{

@@ -36,6 +36,8 @@ export type VesicleImageAttachment = {
 export type VesicleMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** Host-only lifecycle classification; provider adapters ignore it. */
+  kind?: string;
   reasoningContent?: string;
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;

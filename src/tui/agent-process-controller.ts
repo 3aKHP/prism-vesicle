@@ -232,6 +232,17 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
 
   function handleInteractionEvent(event: AgentLoopEvent): void {
     switch (event.type) {
+      case "quality_status": {
+        const status = event.phase === "checking" ? "checking prose quality"
+          : event.phase === "rewriting" ? `rewriting prose ${event.attempt} of 2`
+            : event.phase === "exhausted" ? "quality rewrite exhausted"
+              : event.phase === "observed" ? `quality observed · ${event.findingCount} finding${event.findingCount === 1 ? "" : "s"}`
+                : "prose quality accepted";
+        options.setStatus(status);
+        if (event.phase === "rewriting") options.markTurnSawResponse();
+        recordActivity({ kind: "validation", text: status });
+        return;
+      }
       case "gate_pending":
         recordActivity({ kind: "gate", text: `gate pending: ${event.gate}` });
         return;

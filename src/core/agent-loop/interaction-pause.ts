@@ -8,6 +8,7 @@ import type { SessionStore } from "../session/store";
 import type { ToolCall } from "../tools";
 import { parseUserQuestionRequest } from "../user-question/types";
 import type { AgentLoopEvent, RunPromptResult } from "./types";
+import type { DurableQualityState } from "../quality";
 import type { ToolRoundPlan } from "./tool-round-planner";
 import { failedToolResult, recordToolResult } from "./tool-result-recorder";
 
@@ -19,6 +20,7 @@ type ResolveInteractionPauseOptions = {
   assistantContent: string;
   permission: PermissionRuntimeOptions;
   onEvent?: (event: AgentLoopEvent) => void;
+  qualityState?: DurableQualityState;
 };
 
 type PauseResolution = { result?: RunPromptResult; anyFailed: boolean };
@@ -47,7 +49,10 @@ async function pauseForPermission(options: ResolveInteractionPauseOptions): Prom
     "permission-pending-redirect",
   );
   const [primary, ...remainingToolCalls] = options.plan.permissionRequiredCalls;
-  const request = createPermissionRequest(options.session.sessionId, primary, options.permission.mode);
+  const request = {
+    ...createPermissionRequest(options.session.sessionId, primary, options.permission.mode),
+    ...(options.qualityState ? { qualityState: options.qualityState } : {}),
+  };
   await options.session.append({
     role: "system",
     content: `Permission required for ${primary.name}.`,
