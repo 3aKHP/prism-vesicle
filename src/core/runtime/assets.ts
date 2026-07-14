@@ -5,13 +5,15 @@ import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { userConfigDirectory } from "../../config/paths";
 
-export type AssetSource = "project" | "user" | "bundled";
+export type AssetSource = "project" | "user" | "managed" | "bundled";
 
 export type AssetLayer = {
   source: AssetSource;
   directory: string;
   /** Trusted host boundary for editable layers; bundled roots are trusted directly. */
   boundaryDirectory?: string;
+  /** Restrict a recovery layer to exact files and their ancestor directories. */
+  allowedPaths?: readonly string[];
 };
 
 export type ResolvedAsset = {
@@ -39,6 +41,10 @@ export type AssetResolverOptions = {
   env?: NodeJS.ProcessEnv;
   bundledDirectory?: string;
   executablePath?: string;
+  managedBaseline?: {
+    assetsDirectory: string;
+    externalHostAssets: readonly string[];
+  };
 };
 
 /**
@@ -110,7 +116,10 @@ export class AssetResolver {
         throw assetAccessError(logicalDirectory, error);
       });
       for (const child of entries) {
-        if (!merged.has(child.name) && (child.isFile() || child.isDirectory() || child.isSymbolicLink())) {
+        const childPath = `${logicalDirectory}/${child.name}`;
+        if (layerAllowsPath(layer, childPath)
+          && !merged.has(child.name)
+          && (child.isFile() || child.isDirectory() || child.isSymbolicLink())) {
           merged.set(child.name, child.isSymbolicLink() ? "symlink" : child.isDirectory() ? "directory" : "file");
         }
       }
@@ -203,7 +212,7 @@ export function parseAssetFingerprint(value: unknown): AssetFingerprint | undefi
     if (!file || typeof file !== "object" || Array.isArray(file)) return undefined;
     const entry = file as Partial<AssetFingerprint["files"][number]>;
     if (typeof entry.path !== "string" || typeof entry.sha256 !== "string") return undefined;
-    if (entry.source !== "project" && entry.source !== "user" && entry.source !== "bundled") return undefined;
+    if (entry.source !== "project" && entry.source !== "user" && entry.source !== "managed" && entry.source !== "bundled") return undefined;
     files.push({ path: entry.path, sha256: entry.sha256, source: entry.source });
   }
   return { sha256: candidate.sha256, files };
@@ -218,12 +227,16 @@ function assetLayers(projectRoot: string, options: AssetResolverOptions): AssetL
       boundaryDirectory: userConfigDirectory(options.env),
     },
   ];
+  if (options.managedBaseline) {
+    layers.push({ source: "managed", directory: options.managedBaseline.assetsDirectory });
+  }
   const bundled = options.bundledDirectory ?? bundledAssetsDirectory();
-  if (bundled) layers.push({ source: "bundled", directory: bundled });
+  const allowedPaths = options.managedBaseline?.externalHostAssets;
+  if (bundled) layers.push({ source: "bundled", directory: bundled, ...(allowedPaths ? { allowedPaths } : {}) });
 
   const executable = join(dirname(options.executablePath ?? process.execPath), "assets");
   if (existsSync(join(executable, "manifest.json"))) {
-    layers.push({ source: "bundled", directory: executable });
+    layers.push({ source: "bundled", directory: executable, ...(allowedPaths ? { allowedPaths } : {}) });
   }
 
   const seen = new Set<string>();
@@ -239,6 +252,7 @@ async function resolveLayerEntry(
   layer: AssetLayer,
   logicalPath: string,
 ): Promise<{ absolutePath: string; info: Stats } | undefined> {
+  if (!layerAllowsPath(layer, logicalPath)) return undefined;
   const suffix = logicalPath === "assets" ? "" : logicalPath.slice("assets/".length);
   const candidate = join(layer.directory, ...suffix.split("/").filter(Boolean));
   const entry = await lstat(candidate).catch((error: unknown) => {
@@ -271,6 +285,11 @@ async function resolveLayerEntry(
     throw assetAccessError(logicalPath, error);
   });
   return { absolutePath, info };
+}
+
+function layerAllowsPath(layer: AssetLayer, logicalPath: string): boolean {
+  if (!layer.allowedPaths) return true;
+  return layer.allowedPaths.some((allowed) => allowed === logicalPath || allowed.startsWith(`${logicalPath}/`));
 }
 
 function isMissing(error: unknown): boolean {

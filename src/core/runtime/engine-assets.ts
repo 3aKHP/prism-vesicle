@@ -2,7 +2,7 @@ import type { EngineId, EngineProfile } from "../engine/profile";
 import { loadEngineProfile } from "../engine/profile";
 import type { PromptBundle } from "../prompt/loader";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
-import { createAssetResolver, type AssetFingerprint, type AssetResolverOptions } from "./assets";
+import { createAssetResolver, type AssetFingerprint, type AssetResolver, type AssetResolverOptions } from "./assets";
 
 export type EngineAssetRuntime = {
   profile: EngineProfile;
@@ -15,9 +15,9 @@ export type EngineAssetRuntime = {
 export async function loadEngineAssetRuntime(
   engine: EngineId,
   rootDir = process.cwd(),
-  options: AssetResolverOptions = {},
+  options: AssetResolverOptions & { resolver?: AssetResolver } = {},
 ): Promise<EngineAssetRuntime> {
-  const resolver = createAssetResolver(rootDir, options);
+  const resolver = options.resolver ?? createAssetResolver(rootDir, options);
   const profile = await loadEngineProfile(engine, rootDir, resolver);
   const promptBundle = await loadPromptBundle(profile, rootDir, resolver);
   // Sessions may let the model read any effective spec/template through the

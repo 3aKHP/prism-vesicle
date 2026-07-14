@@ -7,7 +7,7 @@ _Last updated: 2026-07-14_
 | Area | Version | Status |
 |------|---------|--------|
 | Prism Vesicle | 1.0.0-alpha.1 | Public alpha candidate: profile-driven engine host with gate runtime |
-| Prism assets | v9.0 State-Space | Copied and host-adapted |
+| Prism assets | Bundled v9.0 recovery + project-pinned V10 Harness | Implemented on development branch |
 | Provider protocols | OpenAI-compatible Chat + Anthropic Messages + Gemini generateContent | Implemented |
 | TUI | OpenTUI + Solid | Responsive shell + gate/session panels |
 | Gate runtime | request_confirmation + needs_user loop | ETL blueprint + phase gates wired |
@@ -23,10 +23,10 @@ _Last updated: 2026-07-14_
 | Web research | Tavily web host tools for ETL/Evaluate | Implemented on development branch |
 | MCP tools | Streamable HTTP tools-only client | Implemented on development branch |
 | Multimodal input | Clipboard attachments + guarded project image inspection | Implemented on development branch |
-| Runtime assets | Bundled defaults + user-global + sparse project overlays | Implemented on development branch |
-| Harness Pack foundation | Manifest/hash/binding/capability verification + immutable directory install | Implemented on development branch; activation deferred |
+| Runtime assets | Project/user sparse overrides + managed or bundled complete baseline | Implemented on development branch |
+| Managed Harness Packs | Offline verify/install/use/status/rollback + project/session pinning | Implemented on development branch |
 | Harness delegation | Contract-bound Driver delegation over the generic SubAgent runtime | Implemented on development branch |
-| Output Quality Guard | Deterministic Anti-AI-Flavor detection + Runtime rewrite + declared observe paths | Implemented on development branch; managed V10 activation deferred |
+| Output Quality Guard | Deterministic Anti-AI-Flavor detection + Runtime rewrite + declared observe paths | Implemented on development branch |
 | SubAgents | Profile-driven foreground/background child runtime + contract-bound sequential Harness delivery | Implemented on development branch |
 | Tool permissions | MANUAL / INERTIA / MOMENTUM / YOLO + parent-owned child requests | Implemented on development branch |
 | Host shell | Opt-in foreground/background shell_exec + bounded Process Runtime | Implemented on development branch |
@@ -38,7 +38,7 @@ Chat wrapper:
 
 User-facing documentation is intentionally limited during this alpha. Treat the Windows-first `docs/user/` manual, README installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and `docs/examples/` as the supported onboarding references; other behavior is subject to alpha-level change while feature/fix work remains the priority.
 
-- Resolve each logical `assets/...` file through sparse project overrides, user-global overrides, then packaged/standalone defaults; merge directories without exposing physical global paths to the model. Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
+- Resolve each logical `assets/...` file through sparse project overrides, user-global overrides, then one complete baseline without exposing physical paths to the model. The baseline is either a verified project-pinned managed Harness Pack or the packaged/standalone bundled recovery assets; only a managed pack's exact `externalHostAssets` may resolve from the bundled host layer. Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
   tool surface, validators, and stop gates from them at runtime.
 - Run a terminal UI with provider status, markdown-rendered conversation with
   terminal-readable LaTeX math cleanup and readable fallbacks for common
@@ -52,7 +52,7 @@ User-facing documentation is intentionally limited during this alpha. Treat the 
   profile `assets/` remain an external default release pack; executables preserve the invocation directory as the project root and locate defaults beside the executable. `vesicle debug
   markdown-runtime` is the non-interactive runtime smoke check and `bun run
   build:assets` creates the release ZIP.
-- Publish an npm/Bun package with pinned runtime dependencies and bundled default assets. Package invocations resolve their installed OpenTUI worker and assets independently of the active project directory. `vesicle assets status` reports the effective layers, `assets materialize <assets/path> [--global]` creates sparse project or user overrides, and `assets init [--global]` retains full-snapshot compatibility.
+- Publish an npm/Bun package with pinned runtime dependencies and bundled default assets. Package invocations resolve their installed OpenTUI worker and assets independently of the active project directory. `vesicle assets verify/install/use/status/rollback` manages already-extracted offline Harness Packs and the project lock; `assets materialize <assets/path> [--global]` creates sparse project or user overrides, and `assets init [--global]` retains full-snapshot compatibility.
 - GitHub Actions CI validates pull requests and `develop` pushes on Linux and
   Windows. The manual Release verification workflow builds and labels PE, ELF,
   and assets-ZIP candidate artifacts without publishing them.
@@ -363,7 +363,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - `shell_exec` is a user-authorized host command, not an OS sandbox. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind. `runInBackground` returns a managed `shell-N` task immediately; progress and completion remain visible in the TUI, terminal output/status are persisted under `.vesicle/processes/`, and completion is delivered to the next provider turn without polling. A process still running when the Vesicle host restarts is recovered as interrupted rather than replayed.
 - Process cleanup terminates the managed shell and ordinary descendants in its process group/tree. Because `shell_exec` is intentionally not an OS sandbox, an explicitly approved command can still use platform facilities such as a new session or external service manager to create work outside that managed tree.
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
-- Managed Harness Pack verification and immutable directory installation exist as a host foundation. Both `prism-agent/delegation@1` and deterministic `quality-guard/anti-ai-flavor@1` are enforced: the Guard validates the released Rule Pack, matches normalized protected prose with UTF-16 evidence offsets, withholds failing Runtime candidates for at most two original-Engine rewrites, stops on repeated hashes, persists bounded events, and observes the declared Dyad, Weaver, Weaver-Orch, and Scene Writer completion paths. Evaluate and Chapter Reviewer reports remain excluded from recursive enforcement. No CLI, archive extraction, project lock, runtime baseline selection, rollback command, or online release discovery is wired yet, so managed V10 activation remains deferred.
+- Managed Harness Pack verification, immutable installation, project selection, exact session identity, and whole-baseline rollback are implemented. Both `prism-agent/delegation@1` and deterministic `quality-guard/anti-ai-flavor@1` are enforced: the Guard validates the released Rule Pack, matches normalized protected prose with UTF-16 evidence offsets, withholds failing Runtime candidates for at most two original-Engine rewrites, stops on repeated hashes, persists bounded events, and observes the declared Dyad, Weaver, Weaver-Orch, and Scene Writer completion paths. Evaluate and Chapter Reviewer reports remain excluded from recursive enforcement. Archive extraction, online Release discovery, channels, downloads, and automatic updates remain deferred; the offline CLI accepts an already-extracted pack directory.
 
 ## Verification
 

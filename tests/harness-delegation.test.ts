@@ -272,7 +272,11 @@ describe("contract-bound Harness delegation", () => {
     const fixture = await delegationFixture();
     const call = spawnCall("call-persistence-recovery", "scene-writer");
     const session = await createSessionStore(fixture.root, "parent");
-    await session.append({ role: "system", content: "parent" });
+    await session.append({
+      role: "system",
+      content: "parent",
+      metadata: { harness: fixture.invocation.harness?.identity },
+    });
     await session.append({ role: "assistant", content: "delegating", metadata: { toolCalls: [call] } });
     const save = fixture.store.save.bind(fixture.store);
     fixture.store.save = async (metadata) => {
@@ -371,7 +375,11 @@ describe("contract-bound Harness delegation", () => {
       });
       const call = spawnCall("call-persisted-exhaustion", "scene-writer");
       const session = await createSessionStore(fixture.root, "parent");
-      await session.append({ role: "system", content: "parent" });
+      await session.append({
+        role: "system",
+        content: "parent",
+        metadata: { harness: fixture.invocation.harness?.identity },
+      });
       await session.append({ role: "assistant", content: "delegating", metadata: { toolCalls: [call] } });
       const messages: VesicleMessage[] = [{ role: "assistant", content: "delegating", toolCalls: [call] }];
       const result = await executeToolRound({
@@ -459,7 +467,11 @@ describe("contract-bound Harness delegation", () => {
       });
       if (!failed.delegationDecision) throw new Error("expected delegation decision");
       const session = await createSessionStore(fixture.root, "parent");
-      await session.append({ role: "system", content: "parent", metadata: { engine: "weaver-orch" } });
+      await session.append({
+        role: "system",
+        content: "parent",
+        metadata: { engine: "weaver-orch", harness: fixture.invocation.harness?.identity },
+      });
       await session.append({ role: "assistant", content: "delegating", metadata: { toolCalls: [call] } });
       await session.append({
         role: "tool",
@@ -508,7 +520,11 @@ describe("contract-bound Harness delegation", () => {
       });
       const call = spawnCall("call-resumable-retry", "scene-writer");
       const session = await createSessionStore(fixture.root, "parent");
-      await session.append({ role: "system", content: "parent", metadata: { engine: "weaver-orch" } });
+      await session.append({
+        role: "system",
+        content: "parent",
+        metadata: { engine: "weaver-orch", harness: fixture.invocation.harness?.identity },
+      });
       const user = await session.append({ role: "user", content: "delegate" });
       await new FileCheckpointManager(fixture.root, session, user.uuid).createSnapshot();
       await session.append({ role: "assistant", content: "delegating", metadata: { toolCalls: [call] } });
@@ -640,7 +656,11 @@ describe("contract-bound Harness delegation", () => {
       });
       if (!failed.delegationDecision) throw new Error("expected delegation decision");
       const session = await createSessionStore(fixture.root, "parent");
-      await session.append({ role: "system", content: "parent", metadata: { engine: "weaver-orch" } });
+      await session.append({
+        role: "system",
+        content: "parent",
+        metadata: { engine: "weaver-orch", harness: fixture.invocation.harness?.identity },
+      });
       const messages: VesicleMessage[] = [];
       const pause = await appendHarnessDelegationDecision({
         decision: failed.delegationDecision,
@@ -769,6 +789,8 @@ describe("contract-bound Harness delegation", () => {
         const publicResult = JSON.parse(result.content) as { agent_id: string };
         const stored = await fixture.store.resolveReference("parent", publicResult.agent_id);
         const records = await loadSessionRecords(fixture.root, stored!.childSessionId!);
+        expect((await loadSessionSnapshot(fixture.root, stored!.childSessionId!)).harness)
+          .toEqual(fixture.invocation.harness?.identity);
         expect(records.some((record) => record.metadata?.kind === "permission-request")).toBe(true);
         expect(records).toContainEqual(expect.objectContaining({
           metadata: expect.objectContaining({
@@ -880,7 +902,11 @@ describe("contract-bound Harness delegation", () => {
     try {
       const session = await createSessionStore(fixture.root, "parent");
       const call = spawnCall("call-recovered-delegation", "scene-writer");
-      await session.append({ role: "system", content: "parent" });
+      await session.append({
+        role: "system",
+        content: "parent",
+        metadata: { harness: fixture.invocation.harness?.identity },
+      });
       await session.append({ role: "assistant", content: "delegating", metadata: { toolCalls: [call] } });
       const now = new Date().toISOString();
       const bound = bindHarnessDelegation(harnessRuntime(), "weaver-orch", "scene-writer");
@@ -1125,6 +1151,15 @@ function harnessRuntime(): HarnessRuntimeContext {
     packVersion: "10.0.1-alpha.1",
     sourceCommit: "fixture-source",
     manifestSha256: "a".repeat(64),
+    identity: {
+      packId: "prism-engine-v10",
+      packVersion: "10.0.1-alpha.1",
+      sourceCommit: "fixture-source",
+      manifestSha256: "a".repeat(64),
+      adapterId: "vesicle-v1",
+      adapterVersion: "1.0.0",
+      adapterHash: "b".repeat(64),
+    },
     driver: parseHarnessDriverContract({
       schema: "prism-driver-contract/v1",
       id: "prism-engine-v10",

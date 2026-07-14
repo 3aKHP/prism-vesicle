@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It loads editable Prism v9 engine assets, connects them to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
+Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It loads bundled Prism v9 recovery assets or a project-pinned V10 Harness Pack, connects them to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
 
 > **Alpha status:** `1.0.0-alpha.1` is a public dogfood release, not a finished end-user product. The supported onboarding path is the [Windows-first user manual](./docs/user/en/README.md), this README, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and the examples under [`docs/examples/`](./docs/examples/). Command UX and runtime contracts may still change between alpha releases.
 
@@ -21,7 +21,7 @@ npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 ```
 
-The package includes read-only default runtime assets. Vesicle resolves each logical `assets/...` file through three layers: the current project's sparse `assets/` overrides, user-global overrides under the Vesicle configuration directory, then the defaults shipped with the active package or standalone release.
+The package includes read-only default runtime assets. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete baseline: either a verified project-pinned managed Harness Pack or the defaults shipped with the active package or standalone release.
 
 Inspect the active layers and the source of the effective manifest:
 
@@ -42,6 +42,17 @@ bunx vesicle assets init
 ```
 
 Asset initialization and materialization refuse to overwrite existing files.
+
+An advanced project can verify and install an already-extracted Harness Release, then pin it explicitly:
+
+```bash
+bunx vesicle assets verify /path/to/extracted-pack
+bunx vesicle assets install /path/to/extracted-pack
+bunx vesicle assets use <pack-id>@<version>
+bunx vesicle assets status
+```
+
+The project lock is `.vesicle/assets.lock.json`. Vesicle reverifies the installed pack on start and resume, and blocks sessions whose recorded Harness identity differs. `bunx vesicle assets rollback` removes the project selection and restores the whole bundled recovery baseline. Archive extraction, online discovery, and automatic updates are not part of this offline flow.
 
 ### Source checkout
 
@@ -124,14 +135,14 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 
 ## What Vesicle Supports
 
-- Profile-driven Prism engines whose prompts, tools, validators, and stop gates resolve through bundled, user-global, and project `assets/` layers.
+- Profile-driven Prism engines whose prompts, tools, validators, and stop gates resolve through project/user overrides over a managed Harness or bundled recovery baseline.
 - Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
 - Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with exact-plan approval, filtered environment, bounded live output, timeout, process-tree cleanup, foreground/background execution, durable `shell-N` task state, completion notification, and explicit output/stop controls.
 - Foreground and background SubAgents with parallel execution, independent built-in or custom Agent Profiles, dedicated live Agent cards, short model/user-facing handles, durable completion delivery, and parent continuation without polling.
-- npm distribution plus standalone Windows and Linux builds with an immutable external default asset pack and sparse editable global/project overrides.
+- npm distribution plus standalone Windows and Linux builds with an immutable external recovery asset pack, offline managed-Harness selection, and sparse editable global/project overrides.
 
 See [`STATUS.md`](./STATUS.md) for the authoritative implementation inventory, tool surface, validators, and known limits.
 

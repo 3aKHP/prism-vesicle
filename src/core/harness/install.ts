@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { userConfigDirectory } from "../../config/paths";
 import { assertHarnessPackCompatible, verifyHarnessPack, type HarnessVerificationOptions } from "./verify";
 import type { VerifiedHarnessPack } from "./types";
+import { createHarnessRuntimeContext } from "./runtime";
 
 export type HarnessInstallOptions = HarnessVerificationOptions;
 
@@ -18,6 +19,7 @@ export async function installHarnessPack(
 ): Promise<VerifiedHarnessPack> {
   const verified = await verifyHarnessPack(sourceDirectory, options);
   assertHarnessPackCompatible(verified);
+  await createHarnessRuntimeContext(verified);
 
   const packsRoot = harnessPacksDirectory(options.env);
   const familyRoot = join(packsRoot, verified.manifest.id);
@@ -32,6 +34,7 @@ export async function installHarnessPack(
     await cp(verified.directory, staging, { recursive: true, errorOnExist: true, force: false });
     const staged = await verifyHarnessPack(staging, options);
     assertHarnessPackCompatible(staged);
+    await createHarnessRuntimeContext(staged);
     try {
       await rename(staging, destination);
     } catch (error) {
