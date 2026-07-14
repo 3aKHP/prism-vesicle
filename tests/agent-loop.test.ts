@@ -732,7 +732,7 @@ describe("agent loop sessions", () => {
     expect(result.validation).toBeUndefined();
   });
 
-  test("does not let malformed Agent arguments consume the contract delegation slot", async () => {
+  test("reserves the contract delegation slot only for a valid non-host Agent profile", async () => {
     const rootDir = await createPromptRoot();
     let childRuns = 0;
     const manager = new AgentManager(new AgentStore(rootDir), async ({ spec }) => {
@@ -755,6 +755,16 @@ describe("agent loop sessions", () => {
                 function: { name: "spawn_agent", arguments: "{not-json" },
               },
               {
+                id: "call-host-agent",
+                type: "function",
+                function: { name: "spawn_agent", arguments: JSON.stringify({
+                  profile: " explore ",
+                  description: "Explore sources",
+                  prompt: "Map the sources.",
+                  mode: "foreground",
+                }) },
+              },
+              {
                 id: "call-scene-writer",
                 type: "function",
                 function: { name: "spawn_agent", arguments: JSON.stringify({
@@ -769,9 +779,10 @@ describe("agent loop sessions", () => {
         });
       }
       const toolMessages = body.messages.filter((message: any) => message.role === "tool");
-      expect(toolMessages).toHaveLength(2);
+      expect(toolMessages).toHaveLength(3);
       expect(toolMessages[0].content).toContain("Tool arguments must be valid JSON");
-      expect(toolMessages[1].content).toContain("completed:scene-writer");
+      expect(toolMessages[1].content).toContain("completed:explore");
+      expect(toolMessages[2].content).toContain("completed:scene-writer");
       return Response.json({ id: "parent-contract-complete", choices: [{ message: { content: "Delegation complete." } }] });
     }) as typeof fetch;
 
@@ -783,7 +794,7 @@ describe("agent loop sessions", () => {
     });
     expect(result.kind).toBe("complete");
     expect(parentRequests).toBe(2);
-    expect(childRuns).toBe(1);
+    expect(childRuns).toBe(2);
   });
 
   test("launches multiple foreground SubAgents in parallel and resumes the same parent turn", async () => {

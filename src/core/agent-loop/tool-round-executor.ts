@@ -282,7 +282,8 @@ function isContractSpawn(call: ToolCall, harness: HarnessRuntimeContext | undefi
   if (!harness || call.name !== "spawn_agent") return false;
   try {
     const args = JSON.parse(call.arguments) as { profile?: unknown };
-    return typeof args.profile !== "string" || !isBundledHostAgentId(args.profile);
+    if (typeof args.profile !== "string" || !args.profile.trim()) return false;
+    return !isBundledHostAgentId(args.profile.trim());
   } catch {
     return false;
   }

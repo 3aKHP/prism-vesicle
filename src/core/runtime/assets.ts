@@ -213,9 +213,7 @@ export function bundledHarnessLayout(executablePath = process.execPath): Bundled
     const manifestPath = join(rootDirectory, "harness-manifest.json");
     const assetsDirectory = join(rootDirectory, "assets");
     const hostAssetsDirectory = join(rootDirectory, "host-assets");
-    if (existsSync(manifestPath)
-      && existsSync(assetsDirectory)
-      && existsSync(hostAssetsDirectory)) {
+    if (existsSync(manifestPath)) {
       return { rootDirectory, manifestPath, assetsDirectory, hostAssetsDirectory };
     }
   }
