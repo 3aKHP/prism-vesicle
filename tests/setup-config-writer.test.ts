@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadPermissionSettings } from "../src/config/permissions";
@@ -119,6 +119,46 @@ describe("guided Setup configuration writer", () => {
     }, env);
     const loaded = await loadMcpConfig(env);
     expect(loaded.configured && loaded.config.enabled).toBe(true);
+  });
+
+  test("rolls back only snapshotted files and removes backups after a failed save", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    const providerPath = join(configDir, "providers.yaml");
+    const envPath = join(configDir, ".env");
+    const statePath = join(configDir, "setup-state.json");
+    await mkdir(join(configDir, "permissions.yaml"), { recursive: true });
+    const providerSource = [
+      "default:",
+      "  provider: old",
+      "  model: old-model",
+      "",
+      "providers:",
+      "  old:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://old.example/v1",
+      "    apiKeyEnv: OLD_API_KEY",
+      "    models:",
+      "      - old-model",
+      "",
+    ].join("\n");
+    await writeFile(providerPath, providerSource, "utf8");
+    await writeFile(envPath, "OLD_API_KEY=old-secret\n", "utf8");
+    await writeFile(statePath, '{"version":1,"projectDirectory":"keep-me"}\n', "utf8");
+
+    await expect(writeSetupConfiguration({
+      baseUrl: "https://new.example/v1",
+      apiKey: "new-secret",
+      modelIds: ["new-model"],
+      defaultModel: "new-model",
+      permissionMode: "MOMENTUM",
+      projectDirectory: join(root, "project"),
+    }, { VESICLE_CONFIG_DIR: configDir })).rejects.toThrow();
+
+    expect(await readFile(providerPath, "utf8")).toBe(providerSource);
+    expect(await readFile(envPath, "utf8")).toBe("OLD_API_KEY=old-secret\n");
+    expect(await readFile(statePath, "utf8")).toBe('{"version":1,"projectDirectory":"keep-me"}\n');
+    expect((await readdir(configDir)).filter((name) => name.includes(".backup-"))).toEqual([]);
   });
 });
 

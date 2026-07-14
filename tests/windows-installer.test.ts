@@ -23,6 +23,9 @@ describe("Windows guided installer", () => {
     expect(source).toContain('Parameters: "setup"');
     expect(source).toContain('Parameters: "launch"');
     expect(source).toContain("RemoveFromUserPath");
+    expect(source).toContain("PathManagedValue = 'PathManaged'");
+    expect(source).toContain("RegWriteDWordValue(HKCU, InstallerStateKey, PathManagedValue, 1)");
+    expect(source).toContain("RegQueryDWordValue(HKCU, InstallerStateKey, PathManagedValue, PathManaged)");
     expect(source).not.toContain("{userappdata}\\prism-vesicle");
   });
 

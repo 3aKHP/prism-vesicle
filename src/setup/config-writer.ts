@@ -300,10 +300,13 @@ async function replaceFilesTransaction(
     return backups;
   } catch (error) {
     await Promise.all(temps.map((path) => rm(path, { force: true }).catch(() => undefined)));
-    for (const write of writes) {
-      const original = snapshots.get(write.path);
-      if (original === undefined) await rm(write.path, { force: true }).catch(() => undefined);
-      else await writeFile(write.path, original, "utf8").catch(() => undefined);
+    const restored = await Promise.allSettled([...snapshots].map(([path, original]) => (
+      original === undefined
+        ? rm(path, { force: true })
+        : writeFile(path, original, "utf8")
+    )));
+    if (restored.every((result) => result.status === "fulfilled")) {
+      await Promise.all(backups.map((path) => rm(path, { force: true }).catch(() => undefined)));
     }
     throw error;
   }

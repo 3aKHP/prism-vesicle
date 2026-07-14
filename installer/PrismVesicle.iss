@@ -73,6 +73,8 @@ Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"; 
 [Code]
 const
   UserEnvironmentKey = 'Environment';
+  InstallerStateKey = 'Software\3aKHP\Prism Vesicle\Installer';
+  PathManagedValue = 'PathManaged';
 
 function NormalizePathEntry(Value: String): String;
 begin
@@ -123,7 +125,8 @@ begin
     Exit;
   if (CurrentPath <> '') and (CurrentPath[Length(CurrentPath)] <> ';') then
     CurrentPath := CurrentPath + ';';
-  RegWriteExpandStringValue(HKCU, UserEnvironmentKey, 'Path', CurrentPath + AppPath);
+  if RegWriteExpandStringValue(HKCU, UserEnvironmentKey, 'Path', CurrentPath + AppPath) then
+    RegWriteDWordValue(HKCU, InstallerStateKey, PathManagedValue, 1);
 end;
 
 procedure RemoveFromUserPath;
@@ -134,9 +137,17 @@ var
   Part: String;
   NewPath: String;
   Separator: Integer;
+  PathManaged: Cardinal;
 begin
-  if not RegQueryStringValue(HKCU, UserEnvironmentKey, 'Path', CurrentPath) then
+  PathManaged := 0;
+  if not RegQueryDWordValue(HKCU, InstallerStateKey, PathManagedValue, PathManaged) or (PathManaged <> 1) then
     Exit;
+  if not RegQueryStringValue(HKCU, UserEnvironmentKey, 'Path', CurrentPath) then
+  begin
+    RegDeleteValue(HKCU, InstallerStateKey, PathManagedValue);
+    RegDeleteKeyIfEmpty(HKCU, InstallerStateKey);
+    Exit;
+  end;
   AppPath := ExpandConstant('{app}');
   Remaining := CurrentPath;
   NewPath := '';
@@ -160,7 +171,11 @@ begin
       NewPath := NewPath + Part;
     end;
   end;
-  RegWriteExpandStringValue(HKCU, UserEnvironmentKey, 'Path', NewPath);
+  if RegWriteExpandStringValue(HKCU, UserEnvironmentKey, 'Path', NewPath) then
+  begin
+    RegDeleteValue(HKCU, InstallerStateKey, PathManagedValue);
+    RegDeleteKeyIfEmpty(HKCU, InstallerStateKey);
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
