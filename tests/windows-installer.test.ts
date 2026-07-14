@@ -34,7 +34,10 @@ describe("Windows guided installer", () => {
     await writeFile(join(root, "assets", "engine.txt"), "engine");
     await writeFile(join(root, "host-assets", "host.txt"), "host");
     const stage = await stageWindowsInstaller(root);
-    expect((await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: stage, onlyFiles: true }))).sort()).toEqual([
+    const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: stage, onlyFiles: true })))
+      .map((path) => path.replaceAll("\\", "/"))
+      .sort();
+    expect(files).toEqual([
       "LICENSE",
       "assets/engine.txt",
       "harness-manifest.json",

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/solid";
+import { join } from "node:path";
 import { SetupApp, defaultProjectDirectory, maskValue, resolveProjectPath } from "../src/setup/app";
 
 describe("guided Setup UI", () => {
@@ -26,7 +27,7 @@ describe("guided Setup UI", () => {
 
   test("uses a Documents project default and expands a home shorthand", () => {
     const env = { USERPROFILE: "C:\\Users\\Tester" };
-    expect(defaultProjectDirectory(env)).toBe("C:\\Users\\Tester/Documents/PrismVesicle/MyFirstProject");
+    expect(defaultProjectDirectory(env)).toBe(join(env.USERPROFILE, "Documents", "PrismVesicle", "MyFirstProject"));
     expect(resolveProjectPath("~/Story", { HOME: "/home/tester" })).toBe("/home/tester/Story");
     expect(maskValue("secret-key")).toBe("••••••••••");
     expect(maskValue("secret-key")).not.toContain("secret");
