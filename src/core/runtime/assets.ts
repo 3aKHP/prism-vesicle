@@ -214,8 +214,8 @@ export function bundledHarnessLayout(executablePath = process.execPath): Bundled
     const assetsDirectory = join(rootDirectory, "assets");
     const hostAssetsDirectory = join(rootDirectory, "host-assets");
     if (existsSync(manifestPath)
-      && existsSync(join(assetsDirectory, "engines", "etl.profile.yaml"))
-      && existsSync(join(hostAssetsDirectory, "prompts", "shared", "vesicle-base.md"))) {
+      && existsSync(assetsDirectory)
+      && existsSync(hostAssetsDirectory)) {
       return { rootDirectory, manifestPath, assetsDirectory, hostAssetsDirectory };
     }
   }

@@ -261,7 +261,12 @@ function publicDelegation(delegation: NonNullable<AgentSpec["delegation"]>): Rec
 }
 
 function parseArgs(source: string): Record<string, unknown> {
-  const value = JSON.parse(source || "{}") as unknown;
+  let value: unknown;
+  try {
+    value = JSON.parse(source || "{}") as unknown;
+  } catch {
+    throw new Error("Tool arguments must be valid JSON.");
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Tool arguments must be an object.");
   return value as Record<string, unknown>;
 }

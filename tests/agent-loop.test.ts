@@ -732,6 +732,60 @@ describe("agent loop sessions", () => {
     expect(result.validation).toBeUndefined();
   });
 
+  test("does not let malformed Agent arguments consume the contract delegation slot", async () => {
+    const rootDir = await createPromptRoot();
+    let childRuns = 0;
+    const manager = new AgentManager(new AgentStore(rootDir), async ({ spec }) => {
+      childRuns += 1;
+      return { content: `completed:${spec.profileId}` };
+    });
+    let parentRequests = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      parentRequests += 1;
+      if (parentRequests === 1) {
+        return Response.json({
+          id: "parent-contract-parse",
+          choices: [{ message: {
+            content: "Delegating.",
+            tool_calls: [
+              {
+                id: "call-malformed-agent",
+                type: "function",
+                function: { name: "spawn_agent", arguments: "{not-json" },
+              },
+              {
+                id: "call-scene-writer",
+                type: "function",
+                function: { name: "spawn_agent", arguments: JSON.stringify({
+                  profile: "scene-writer",
+                  description: "Draft scene",
+                  prompt: "Draft the next scene.",
+                  mode: "foreground",
+                }) },
+              },
+            ],
+          } }],
+        });
+      }
+      const toolMessages = body.messages.filter((message: any) => message.role === "tool");
+      expect(toolMessages).toHaveLength(2);
+      expect(toolMessages[0].content).toContain("Tool arguments must be valid JSON");
+      expect(toolMessages[1].content).toContain("completed:scene-writer");
+      return Response.json({ id: "parent-contract-complete", choices: [{ message: { content: "Delegation complete." } }] });
+    }) as typeof fetch;
+
+    const result = await runPrompt({
+      input: "delegate",
+      engine: "weaver-orch",
+      rootDir,
+      agentManager: manager,
+    });
+    expect(result.kind).toBe("complete");
+    expect(parentRequests).toBe(2);
+    expect(childRuns).toBe(1);
+  });
+
   test("launches multiple foreground SubAgents in parallel and resumes the same parent turn", async () => {
     const rootDir = await createPromptRoot();
     const childResolvers: Array<(response: Response) => void> = [];
