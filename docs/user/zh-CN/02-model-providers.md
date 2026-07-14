@@ -72,7 +72,7 @@ Vesicle 会让仅供宿主使用的会话元数据和密钥配置避开正常供
 - 你拥有供应商账户
 - 你理解该账户如何计费
 - 你已经创建 API 密钥，或知道在哪里创建
-- 你知道准备配置的准确 API 模型 id
+- 你知道供应商 Base URL；供应商支持 `/v1/models` 时，Setup 会自动发现模型 id
 - 你没有把 API 密钥放进项目文件夹
 
-[下一章：安装 Bun 与 Prism Vesicle →](./03-installation.md)
+[下一章：安装 Prism Vesicle →](./03-installation.md)

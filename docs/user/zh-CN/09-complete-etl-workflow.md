@@ -74,11 +74,7 @@ Mira Vale 是为本教程创建的原创全年龄角色。
 
 ## 第 2 步 — 创建干净的 ETL 会话
 
-启动 Vesicle：
-
-```powershell
-bunx vesicle
-```
+从开始菜单启动 **Prism Vesicle**。
 
 分别提交下面两个本地命令：
 

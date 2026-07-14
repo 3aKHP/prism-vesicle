@@ -1,136 +1,56 @@
-# 03 — Install Bun and Prism Vesicle
+# 03 — Install Prism Vesicle
 
-[← Previous: Model providers](./02-model-providers.md) | [Manual index](./README.md) | [简体中文](../zh-CN/03-installation.md) | [Next: Provider configuration →](./04-first-provider.md)
+[← Previous: Model providers](./02-model-providers.md) | [Manual index](./README.md) | [简体中文](../zh-CN/03-installation.md) | [Next: Guided provider setup →](./04-first-provider.md)
 
 ## What You Will Accomplish
 
-You will install Bun, initialize the tutorial project, install Prism Vesicle locally, and verify that its bundled ETL engine assets can be read.
+You will install Prism Vesicle for your Windows account and open its guided Setup. This path does not require Bun, PowerShell commands, or configuration-file editing.
 
-**Estimated time:** 15 minutes
+**Estimated time:** 5 minutes
 
-**Prerequisites:** Chapters 00–02, an internet connection, and a normal PowerShell window
+**Prerequisites:** Chapters 00–02, Windows 10/11 x64, and an internet connection for the download
 
-## Return to the Project Folder
+## Download the Installer
 
-Open Windows Terminal with PowerShell and run:
-
-```powershell
-Set-Location "$HOME\Documents\PrismVesicle\MyFirstProject"
-```
-
-## Check Whether Bun Is Installed
-
-Run:
-
-```powershell
-bun --version
-```
-
-If PowerShell prints version `1.3.14` or newer, continue to “Initialize the Project.”
-
-If PowerShell says that `bun` is not recognized, install Bun with the current official Windows installer command from [bun.sh](https://bun.sh/docs/installation):
-
-```powershell
-powershell -c "irm bun.sh/install.ps1|iex"
-```
-
-The command downloads and runs Bun's official installation script. After it finishes, close Windows Terminal completely, open it again, return to the project folder, and check the version:
-
-```powershell
-Set-Location "$HOME\Documents\PrismVesicle\MyFirstProject"
-bun --version
-```
-
-If the command is still not recognized, restart Windows once and try again. Do not continue until `bun --version` succeeds.
-
-## Initialize the Project
-
-Run:
-
-```powershell
-bun init -y
-```
-
-This creates small project-management files such as `package.json`. You do not need to edit them during the beginner path.
-
-## Install Prism Vesicle
-
-Run:
-
-```powershell
-bun add prism-vesicle
-```
-
-Bun downloads Prism Vesicle and its runtime dependencies into the project. The first installation can take a few minutes.
-
-Expected signs of success include a completed install summary and no final error message. The folder now contains `node_modules`, `package.json`, and `bun.lock`; these are normal program files.
-
-## Verify the Bundled Engine Assets
-
-Run:
-
-```powershell
-bunx vesicle prompt shape --engine etl
-```
-
-The first lines should resemble:
+Open the official [Prism Vesicle releases page](https://github.com/3aKHP/prism-vesicle/releases) and open the matching prerelease. Download the file named like:
 
 ```text
-Engine: etl (Prism ETL Engine)
-Protocol: v10.0-tempered-voice
-System prompt length: ...
+PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 ```
 
-The exact prompt length and tool list can change between releases. Success means the command identifies the ETL engine and exits without an error.
+Do not download an installer forwarded through chat, email, or an unrelated mirror. The release also provides `SHA256SUMS.txt` for users who need to verify the download checksum.
 
-Now inspect where those assets came from:
+## Run the Installer
 
-```powershell
-bunx vesicle assets status
-```
+Open the downloaded installer. Prism Vesicle installs only for your Windows account under `%LOCALAPPDATA%\Programs\Prism Vesicle`, so it does not normally request administrator access.
 
-For the normal installation in this chapter, `Bundled` should report 47 files, `Host` should report 12 files, and `Active baseline` should identify bundled `prism-engine-v10@10.0.1-alpha.1`. Vesicle can also read user-global overrides from `%APPDATA%\prism-vesicle\assets\` and sparse overrides from `assets\` inside the current project. You do not need to create either override or a Harness lock.
+Keep the default installation folder unless you have a specific reason to change it. Continue through the installation pages, then leave **Configure and launch Prism Vesicle** selected on the final page.
 
-## Optional: Select an Offline Harness Pack
+The installer adds these Start Menu entries:
 
-The normal installation already runs complete V10. Advanced users can select a different independently released Harness Pack after extracting it to a local directory. Verification and installation do not activate the pack:
+- **Configure Prism Vesicle** reopens the guided Setup at any time.
+- **Prism Vesicle Doctor** checks an existing configuration.
+- **Uninstall Prism Vesicle** removes program files while preserving user configuration and projects.
 
-```powershell
-bunx vesicle assets verify "C:\Downloads\prism-vesicle-harness-v10"
-bunx vesicle assets install "C:\Downloads\prism-vesicle-harness-v10"
-bunx vesicle assets use "<pack-id>@<version>"
-bunx vesicle assets status
-```
+## Open Guided Setup
 
-`use` writes `.vesicle\assets.lock.json` in the current project. Vesicle reverifies that exact installed pack whenever the project starts or a session resumes. A session recorded under a different Harness identity is blocked instead of being switched silently.
+Select **Finish**. A terminal window opens with the title `Prism Vesicle Setup` and a highlighted **Begin guided setup** choice. You do not need to type a command.
 
-To return the project to the bundled V10 baseline, run:
-
-```powershell
-bunx vesicle assets rollback
-```
-
-This first offline flow requires an already-extracted Release directory. It does not download, discover, extract, or automatically update Harness Packs.
-
-Sessions created by an older V9-only Vesicle build do not contain a Harness identity and cannot resume under bundled V10. Start a new session after upgrading.
+Use the arrow keys to move, Space to select checkboxes, Enter to continue, and Escape to return to the previous page. Secret fields display dots instead of the API key text.
 
 ## If Installation Fails
 
-- Confirm that `bun --version` works in the same terminal.
-- Confirm that `Get-Location` ends in `Documents\PrismVesicle\MyFirstProject`.
-- Check your internet connection, VPN, proxy, or security software if the download cannot start.
-- Run `bun add prism-vesicle` again after a temporary network failure.
-- Copy the complete error text before closing the terminal if you need help.
+- Confirm that the installer came from the official GitHub prerelease.
+- If Windows reports that the download is incomplete, download it again.
+- If security software quarantines the file, record the exact product name, installer version, and warning before reporting it. Do not disable security software globally.
+- If Setup was closed, open **Configure Prism Vesicle** from the Start Menu.
+
+## Advanced Alternatives
+
+The GitHub prerelease retains the portable Windows executable and runtime-assets ZIP. npm and source-checkout installation remain available for developers and advanced users; see the root [README](../../../README.md). They are not the beginner path.
 
 ## Completion Check
 
-Run:
-
-```powershell
-bun --version
-bunx vesicle prompt shape --engine etl
-```
-
-You are ready when Bun reports at least `1.3.14` and Vesicle reports `Engine: etl`.
+You are ready when the `Prism Vesicle Setup` welcome screen is visible.
 
 [Next: Configure Your First Provider →](./04-first-provider.md)

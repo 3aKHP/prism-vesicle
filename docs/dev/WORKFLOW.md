@@ -82,7 +82,7 @@ The exception does not relax these rules:
 - Conventional Commits still apply
 - verification must match the risk of the change
 
-For the `1.0.0-alpha.1` public-release path, this exception is retired:
+For public-release paths, this exception is retired:
 release-readiness changes use a release branch and PR, require independent CR,
 and must not be tagged from an unreviewed dogfood worktree. Keep `develop` as
 the integration trunk for subsequent internal iteration.
@@ -129,14 +129,14 @@ Use the smallest verification set that proves the change:
 
 ## CI And Release Verification
 
-The GitHub Actions CI workflow runs for pull requests into `develop`/`main` and pushes to `develop`. It runs deterministic typecheck/test gates, builds the Linux ELF and native Windows PE, then keeps each binary and extracted default `assets/` in a release directory while invoking it from a separate empty project directory. The smoke runs `debug markdown-runtime`, `assets status`, and `prompt shape --engine etl`, proving that standalone runtime/default lookup does not steal the project cwd.
+The GitHub Actions CI workflow runs for pull requests into `develop`/`main` and pushes to `develop`. It runs deterministic typecheck/test gates, builds the Linux ELF and native Windows PE, then keeps each binary and extracted complete V10 payload in a release directory while invoking it from a separate empty project directory. The smoke runs `debug markdown-runtime`, `assets status`, and `prompt shape --engine etl`, proving that standalone runtime/default lookup does not steal the project cwd. The Windows job also builds the pinned Inno Setup installer, silently installs it per-user, repeats the runtime smoke against installed files, silently uninstalls it, and proves that user/project data survive while the PATH entry is removed.
 
 `Release verification` is manual and does not publish. Supply the current
 `package.json` semver as its candidate label; after the same gates it uploads
-labelled PE, ELF, and assets-ZIP workflow artifacts. It is the required
+labelled PE, ELF, assets-ZIP, and Windows-installer workflow artifacts. It is the required
 preflight before the protected tag workflow runs. A tag must exactly match
 `v<package.json version>`; the publish workflow rebuilds the PE, ELF, assets
-ZIP, and checksums, creates the GitHub prerelease, then runs npm trusted
+ZIP, Windows installer, and checksums, creates the GitHub prerelease, then runs npm trusted
 publishing with provenance. Configure GitHub tag protection and the npm trusted
 publisher before creating the tag.
 

@@ -1,6 +1,6 @@
 {
   "name": "prism-vesicle",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Bun terminal host for Prism Engine prompt workflows.",
   "license": "MIT",
   "repository": {
@@ -46,7 +46,9 @@
     "pack:check": "bun run scripts/check-npm-pack.ts",
     "pack:smoke": "bun run scripts/smoke-npm-package.ts",
     "build:exe": "bun run scripts/build-exe.ts",
-    "build:assets": "bun run scripts/build-assets.ts"
+    "build:assets": "bun run scripts/build-assets.ts",
+    "build:installer:stage": "bun run scripts/stage-windows-installer.ts",
+    "build:installer": "bun run scripts/build-installer.ts"
   },
   "dependencies": {
     "@opentui/core": "0.4.3",

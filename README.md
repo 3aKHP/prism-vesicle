@@ -4,15 +4,21 @@
 
 Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It starts from a verified bundled V10 Harness, can select a project-pinned managed Harness Pack, connects the active runtime to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
 
-> **Alpha status:** `1.0.0-alpha.1` is a public dogfood release, not a finished end-user product. The supported onboarding path is the [Windows-first user manual](./docs/user/en/README.md), this README, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and the examples under [`docs/examples/`](./docs/examples/). Command UX and runtime contracts may still change between alpha releases.
+> **Alpha status:** `1.0.0-alpha.2` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [Windows-first user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 
 New to terminals, API keys, or model providers? Start with the [step-by-step user manual](./docs/user/en/README.md) before following the condensed setup below.
 
 ## Install
 
-Vesicle requires [Bun](https://bun.sh/) 1.3.14 or newer.
+### Guided Windows installer
 
-### npm
+Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub prerelease and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, choose a safe permission preset, and create the first project without manual configuration-file editing.
+
+The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall.
+
+The npm and source-development paths below require [Bun](https://bun.sh/) 1.3.14 or newer.
+
+### npm or source development
 
 Install the package and verify that its bundled ETL profile is available:
 
@@ -166,10 +172,12 @@ bun run doctor
 | `bun run pack:smoke` | Smoke-test the packed npm distribution |
 | `bun run build:exe` | Build standalone Windows and Linux executables |
 | `bun run build:assets` | Build the editable assets ZIP |
+| `bun run build:installer:stage` | Stage the complete Windows installer payload |
+| `bun run build:installer` | Build the Inno Setup installer on Windows |
 
 `vesicle debug markdown-runtime` verifies the standalone OpenTUI worker and syntax runtime without opening the TUI. `vesicle prompt dump --engine <id>` prints the complete model-visible system prompt; `vesicle prompt shape --engine <id>` prints only its composed structure.
 
-Pull requests and `develop` pushes run the release-shape checks on Linux and Windows. Protected version tags publish a GitHub prerelease, checksums, standalone executables, the editable assets ZIP, and the provenance-enabled npm package. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the branch and release workflow.
+Pull requests and `develop` pushes run the release-shape checks on Linux and Windows, including a silent guided-installer install/uninstall smoke. Protected version tags publish a GitHub prerelease, checksums, the Windows installer, standalone executables, the editable assets ZIP, and the provenance-enabled npm package. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the branch and release workflow.
 
 ## Documentation
 

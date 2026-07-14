@@ -72,7 +72,7 @@ Before continuing, confirm that:
 - you have a provider account
 - you understand how the account is billed
 - you have created an API key or know where to create it
-- you know the exact API model id you will configure
+- you know the provider Base URL; Setup will discover model ids when the provider supports `/v1/models`
 - you have not placed the API key in the project folder
 
-[Next: Install Bun and Prism Vesicle →](./03-installation.md)
+[Next: Install Prism Vesicle →](./03-installation.md)

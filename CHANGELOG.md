@@ -30,6 +30,8 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Advanced the dogfood candidate to `1.0.0-alpha.2` and made the single-download per-user Windows installer the primary non-technical onboarding path while retaining npm, PE/ELF, and assets-ZIP artifacts for development and expert use.
+
 - Replaced the working-tree V9 recovery assets with the complete verified `prism-engine-v10@10.0.1-alpha.1` baseline from Neural Narratology Release `harness-20260714-1`. A no-lock project now automatically activates bundled V10; the runtime distribution contains the exact 47-file Harness inventory, root `harness-manifest.json`, and a restricted 12-file host extension layer. V9 remains available only through Git history.
 - Runtime assets now resolve file by file through sparse project overrides, user-global overrides under the Vesicle configuration directory, one verified managed or bundled V10 baseline, and the restricted host extension layer. Directory listings merge the active resolution stack, while model-visible file tools retain logical `assets/...` paths and never expose physical global or package locations.
 - New sessions persist the bundled or managed Harness identity. Sessions created before the bundled V10 migration have no compatible identity and are blocked on resume instead of silently continuing under different prompt, Driver, or Quality Guard contracts.
@@ -52,6 +54,9 @@ project follows Semantic Versioning once releases begin.
   after the same release gates.
 
 ### Added
+
+- Added `vesicle setup`, a full-screen guided onboarding flow that accepts an OpenAI-compatible Base URL and masked API key, discovers `GET /v1/models`, offers checkbox model selection plus exact manual model ids, chooses a default model, and saves validated user-level configuration with timestamped backups. Optional Tavily, Streamable HTTP MCP authentication/testing/Engine scoping, safe permission presets, and first-project creation are integrated without requiring YAML editing.
+- Added an Inno Setup 6 per-user Windows installer with a stable upgrade identity, complete standalone V10 payload, Start Menu Setup/Doctor entries, exact user-PATH add/remove behavior, preserved user/project state, and Windows CI install/runtime/uninstall smoke coverage. Release verification and tag publishing now carry the versioned installer alongside the portable artifacts.
 
 - Deterministic `quality-guard/anti-ai-flavor@1` enforcement for verified Harness Packs. Vesicle now validates the released Rule Pack and detector contracts, preserves normalized UTF-16 evidence offsets across protected Markdown/HUD regions, buffers Runtime prose until Guard policy resolves, requests at most two rewrites from the original Runtime Engine, stops on repeated candidate hashes, and persists resumable bounded QualityEvents. Dyad, Weaver, Weaver-Orch, and Scene Writer use the released observe paths; Evaluate and Chapter Reviewer reports are not recursively guarded.
 - Contract-bound `prism-agent/delegation@1` over the existing SubAgent runtime. Verified Driver Contracts now uniquely bind parent Engine, Agent Profile, execution mode, purpose, and retry limit; reject undeclared, ambiguous, or mode-escalating requests; serialize Harness delegations; normalize Driver ABI errors; persist attempt and terminal metadata; and open the declared resumable user decision point when transient retries are exhausted. Child tool calls continue through the parent `/permissions` broker and existing Tool Runtime guards.

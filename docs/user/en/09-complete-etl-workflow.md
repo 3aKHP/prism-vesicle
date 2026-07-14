@@ -74,11 +74,7 @@ If you repeat this chapter later, move or rename earlier `mira_vale` practice ou
 
 ## Step 2 — Start a Clean ETL Session
 
-Launch Vesicle:
-
-```powershell
-bunx vesicle
-```
+Launch **Prism Vesicle** from the Start Menu.
 
 Submit these local commands separately:
 
