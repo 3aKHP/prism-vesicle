@@ -34,6 +34,7 @@ type SetupStep =
   | "mcp-result"
   | "mcp-more"
   | "permissions"
+  | "project-choice"
   | "project"
   | "review"
   | "saving"
@@ -85,6 +86,7 @@ export function SetupApp(props: SetupAppProps) {
   const [mcpTestError, setMcpTestError] = createSignal("");
   const [permissionMode, setPermissionMode] = createSignal<Exclude<PermissionMode, "YOLO">>("MOMENTUM");
   const [projectDirectory, setProjectDirectory] = createSignal(defaultProjectDirectory(env));
+  const [projectInputReturnStep, setProjectInputReturnStep] = createSignal<"project-choice" | "review">("project-choice");
   const [writeResult, setWriteResult] = createSignal<SetupWriteResult>();
   const busy = createMemo(() => step() === "discovering" || step() === "mcp-testing" || step() === "saving");
 
@@ -281,7 +283,7 @@ export function SetupApp(props: SetupAppProps) {
         return;
       case "project": {
         if (!value) {
-          setStatus("Project directory is required.");
+          setStatus("Enter a folder for the one-time launch, or press Esc to skip it.");
           return;
         }
         const resolved = resolveProjectPath(value, env);
@@ -363,17 +365,44 @@ export function SetupApp(props: SetupAppProps) {
       case "permissions": {
         const option = permissionOptions[index] ?? permissionOptions[0];
         setPermissionMode(option.mode);
-        enterInput("project", projectDirectory());
-        setStatus("Use the suggested project or enter another folder.");
+        setStep("project-choice");
+        setSelectedIndex(0);
+        setStatus("Project selection is optional and is never saved as a global default.");
         return;
       }
+      case "project-choice":
+        if (index === 0) {
+          setProjectDirectory("");
+          setStep("review");
+          setSelectedIndex(0);
+          setStatus("No project will be pinned. Launch Vesicle from any folder with vesicle .");
+        } else {
+          setProjectInputReturnStep("project-choice");
+          enterInput("project", projectDirectory() || defaultProjectDirectory(env));
+          setStatus("This folder is used for the first launch only and is not saved globally.");
+        }
+        return;
       case "review":
         if (index === 0) void saveConfiguration();
-        else enterInput("project", projectDirectory());
+        else if (index === 1) {
+          setProjectInputReturnStep("review");
+          enterInput("project", projectDirectory() || defaultProjectDirectory(env));
+        }
+        else {
+          setProjectDirectory("");
+          setSelectedIndex(0);
+          setStatus("The one-time first launch was removed; no project will be pinned.");
+        }
         return;
-      case "complete":
-        complete({ launch: index === 0, projectDirectory: projectDirectory(), writeResult: writeResult() });
+      case "complete": {
+        const launch = Boolean(projectDirectory()) && index === 0;
+        complete({
+          launch,
+          ...(launch ? { projectDirectory: projectDirectory() } : {}),
+          writeResult: writeResult(),
+        });
         return;
+      }
       case "save-error":
         if (index === 0) void saveConfiguration();
         else if (index === 1) {
@@ -432,7 +461,7 @@ export function SetupApp(props: SetupAppProps) {
         ...(tavilyApiKey() ? { tavilyApiKey: tavilyApiKey() } : {}),
         ...(mcpServers().length ? { mcpServers: mcpServers() } : {}),
         permissionMode: permissionMode(),
-        projectDirectory: projectDirectory(),
+        ...(projectDirectory() ? { projectDirectory: projectDirectory() } : {}),
       }, env);
       setWriteResult(result);
       setStep("complete");
@@ -457,7 +486,7 @@ export function SetupApp(props: SetupAppProps) {
       case "mcp-url": enterInput("mcp-name", mcpDraft().name); return;
       case "mcp-header": setStep("mcp-auth"); return;
       case "mcp-secret": setStep("mcp-auth"); return;
-      case "project": setStep("permissions"); return;
+      case "project": setStep(projectInputReturnStep()); return;
     }
   }
 
@@ -472,7 +501,8 @@ export function SetupApp(props: SetupAppProps) {
       case "mcp-result": enterInput("mcp-url", mcpDraft().url); return;
       case "mcp-more": setStep("mcp-choice"); return;
       case "permissions": setStep("mcp-choice"); return;
-      case "review": enterInput("project", projectDirectory()); return;
+      case "project-choice": setStep("permissions"); return;
+      case "review": setStep("project-choice"); return;
       case "save-error": setStep("review"); return;
     }
   }
@@ -551,14 +581,21 @@ export function SetupApp(props: SetupAppProps) {
         { label: "Add another MCP server" },
       ];
       case "permissions": return permissionOptions.map((option) => ({ label: option.label, detail: option.detail }));
+      case "project-choice": return [
+        { label: "Skip project selection", detail: "Launch projects later with vesicle ." },
+        { label: "Choose a folder for the first launch", detail: "Used once; never pinned" },
+      ];
       case "review": return [
         { label: "Save configuration", detail: "Existing files receive timestamped backups" },
-        { label: "Change project folder" },
+        { label: projectDirectory() ? "Change one-time launch folder" : "Choose a one-time launch folder" },
+        ...(projectDirectory() ? [{ label: "Skip the one-time launch", detail: "No project is saved globally" }] : []),
       ];
-      case "complete": return [
-        { label: "Launch Prism Vesicle", detail: projectDirectory() },
-        { label: "Exit Setup" },
-      ];
+      case "complete": return projectDirectory()
+        ? [
+            { label: "Launch this folder once", detail: projectDirectory() },
+            { label: "Exit Setup", detail: "Later, run vesicle . in a project" },
+          ]
+        : [{ label: "Exit Setup", detail: "Run vesicle . from any project folder" }];
       case "save-error": return [
         { label: "Retry save" },
         { label: "Back to review" },
@@ -634,7 +671,7 @@ export function SetupApp(props: SetupAppProps) {
           <text content={`Tavily    ${tavilyApiKey() ? "configured" : "skipped"}`} fg={palette.textSecondary} />
           <text content={`MCP       ${mcpServers().length} server(s)`} fg={palette.textSecondary} />
           <text content={`Permission ${permissionMode()} · shell disabled`} fg={palette.textSecondary} />
-          <text content={`Project   ${projectDirectory()}`} fg={palette.textSecondary} />
+          <text content={`First run ${projectDirectory() || "skipped; no project is pinned"}`} fg={palette.textSecondary} />
           <box marginTop={1} flexDirection="column">{renderOptions(choiceItems())}</box>
         </box>
       );
@@ -699,7 +736,7 @@ function inputLabel(step: SetupStep): string {
     "mcp-url": "MCP Streamable HTTP URL",
     "mcp-header": "Authentication header name",
     "mcp-secret": "MCP authentication secret",
-    "project": "Project directory",
+    "project": "One-time first-launch folder",
   };
   return isInputPage(step) ? labels[step] : "";
 }
@@ -722,7 +759,7 @@ function inputPlaceholder(step: SetupStep): string {
 function inputHint(step: InputPage): string {
   if (isSecretPage(step)) return "Input is masked. Enter continues; Esc goes back without saving.";
   if (step === "base-url") return "Enter the API base. A missing /v1 suffix is added automatically.";
-  if (step === "project") return "The folder is created when Setup saves successfully.";
+  if (step === "project") return "The folder is created when Setup saves; it is never saved as a global project.";
   return "Enter continues; Esc goes back.";
 }
 
@@ -749,7 +786,8 @@ function pageTitle(step: SetupStep): string {
     "mcp-result": "MCP connection result",
     "mcp-more": "MCP configuration",
     permissions: "Tool approval preference",
-    project: "Choose a project folder",
+    "project-choice": "Optional first launch",
+    project: "Choose a one-time launch folder",
     review: "Review and save",
     saving: "Saving configuration",
     complete: "Setup complete",
@@ -764,12 +802,13 @@ function pageDescription(step: SetupStep): string {
   if (step === "tavily-choice") return "Tavily enables web_search and related research tools. It is not required for the first conversation.";
   if (step === "mcp-choice") return "MCP servers add external tools. Each server can be limited to selected Prism Engines.";
   if (step === "permissions") return "Permission presets change approval friction; they never weaken path, process, or tool guards.";
-  if (step === "complete") return "Configuration validated successfully. Launching starts Vesicle inside the selected project folder.";
+  if (step === "project-choice") return "Vesicle never stores one global project. Optionally choose a folder for this first launch only.";
+  if (step === "complete") return "Configuration validated successfully. Project selection remains local to each launch.";
   return "Follow the prompt below. Nothing is written until the final review step.";
 }
 
 function progressLabel(step: SetupStep): string {
-  const order: SetupStep[] = ["welcome", "base-url", "api-key", "models", "default-model", "tavily-choice", "mcp-choice", "permissions", "project", "review", "complete"];
+  const order: SetupStep[] = ["welcome", "base-url", "api-key", "models", "default-model", "tavily-choice", "mcp-choice", "permissions", "project-choice", "review", "complete"];
   const aliases: Partial<Record<SetupStep, SetupStep>> = {
     discovering: "api-key",
     "discovery-error": "api-key",
@@ -784,6 +823,7 @@ function progressLabel(step: SetupStep): string {
     "mcp-testing": "mcp-choice",
     "mcp-result": "mcp-choice",
     "mcp-more": "mcp-choice",
+    project: "project-choice",
     saving: "review",
     "save-error": "review",
   };

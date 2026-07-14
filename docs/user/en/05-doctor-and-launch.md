@@ -4,7 +4,7 @@
 
 ## What You Will Accomplish
 
-You will inspect the saved configuration with Vesicle Doctor, launch the selected project from the Start Menu, and exit the terminal interface safely.
+You will inspect the saved configuration with Vesicle Doctor, launch any project from its own directory, and exit the terminal interface safely.
 
 **Estimated time:** 5 minutes
 
@@ -41,9 +41,16 @@ For an MCP connection error, reopen Setup and edit or retry that server. For an 
 
 Do not continue until the required provider lines report `API key: available` and `Missing: none`.
 
-## Launch Vesicle
+## Launch A Project
 
-Open **Prism Vesicle** from the Start Menu. It launches in the project directory saved by Setup. If no project has been configured yet, it opens the guided Setup instead.
+Vesicle does not store one global project. Open PowerShell 7, enter the intended project directory, and launch that directory:
+
+```powershell
+Set-Location "$HOME\Documents\PrismVesicle\MyFirstProject"
+vesicle .
+```
+
+Alternatively, right-click the project folder or its empty background in File Explorer and choose **Open in Prism Vesicle**. On Windows 11 this action may appear under **Show more options**.
 
 The terminal changes into Vesicle's full-screen interface. You should see a conversation area, status information, and an input composer near the bottom.
 
@@ -51,7 +58,7 @@ The terminal changes into Vesicle's full-screen interface. You should see a conv
 
 Press Ctrl+Q. Vesicle closes and returns to the terminal or closes the application window. If a modal panel owns the keyboard, press Escape to close the panel and then press Ctrl+Q again.
 
-Open **Prism Vesicle** from the Start Menu again. It should return to the same configured project. Leave it open for the next chapter.
+Run `vesicle .` from the same folder again, or use its Explorer action. Leave it open for the next chapter.
 
 ## Completion Check
 
@@ -59,7 +66,7 @@ You are ready when:
 
 - Doctor reports the intended provider and model;
 - `API key: available` and `Missing: none` appear for the required setup;
-- the TUI opens from the Start Menu in the selected project;
+- `vesicle .` opens the TUI in the current project directory;
 - Ctrl+Q exits safely.
 
 [Next: Complete Your First Conversation →](./06-first-conversation.md)

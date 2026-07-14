@@ -74,7 +74,7 @@ If you repeat this chapter later, move or rename earlier `mira_vale` practice ou
 
 ## Step 2 — Start a Clean ETL Session
 
-Launch **Prism Vesicle** from the Start Menu.
+Run `vesicle .` from this project directory, or use its Explorer **Open in Prism Vesicle** action.
 
 Submit these local commands separately:
 

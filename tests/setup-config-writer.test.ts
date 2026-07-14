@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { loadPermissionSettings } from "../src/config/permissions";
 import { loadProviderRegistry, loadUserConfigEnvironment } from "../src/config/providers";
 import { loadMcpConfig } from "../src/mcp/config";
-import { providerIdFromBaseUrl, readSetupState, setEnvValues, writeSetupConfiguration } from "../src/setup/config-writer";
+import { providerIdFromBaseUrl, setEnvValues, writeSetupConfiguration } from "../src/setup/config-writer";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -20,7 +20,7 @@ describe("guided Setup configuration writer", () => {
       .toBe('KEEP=one\nTOKEN="new#secret"\nADDED=two\n');
   });
 
-  test("writes a complete fresh provider, optional Tavily/MCP, permissions, and project", async () => {
+  test("writes a complete fresh provider, optional Tavily/MCP, permissions, and one-time project", async () => {
     const root = await tempRoot();
     const configDir = join(root, "config");
     const projectDirectory = join(root, "Documents", "Prism Vesicle Projects", "My First Project");
@@ -59,9 +59,28 @@ describe("guided Setup configuration writer", () => {
       });
     }
     expect(await loadPermissionSettings(env)).toMatchObject({ defaultMode: "MOMENTUM", shellExec: false });
-    expect(await readSetupState(env)).toEqual({ version: 1, projectDirectory });
+    expect(await Bun.file(join(configDir, "setup-state.json")).exists()).toBe(false);
     expect((await stat(projectDirectory)).isDirectory()).toBe(true);
+    expect(result.projectDirectory).toBe(projectDirectory);
     expect(result.backups).toEqual([]);
+  });
+
+  test("saves configuration without requiring or pinning a project", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    const legacyState = '{"version":1,"projectDirectory":"legacy-project"}\n';
+    await mkdir(configDir, { recursive: true });
+    await writeFile(join(configDir, "setup-state.json"), legacyState, "utf8");
+    const result = await writeSetupConfiguration({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "secret",
+      modelIds: ["model"],
+      defaultModel: "model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    expect(result.projectDirectory).toBeUndefined();
+    expect(await readFile(join(configDir, "setup-state.json"), "utf8")).toBe(legacyState);
   });
 
   test("merges with existing providers and creates backups without losing unrelated secrets", async () => {

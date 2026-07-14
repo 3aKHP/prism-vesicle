@@ -57,15 +57,23 @@ Name: "chinesesimplified"; MessagesFile: "languages\ChineseSimplified.isl"
 
 [Files]
 Source: "{#SourceRoot}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceRoot}\vesicle.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\harness-manifest.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceRoot}\host-assets\*"; DestDir: "{app}\host-assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "launch"; WorkingDir: "{userdocs}"
 Name: "{group}\Configure Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"
 Name: "{group}\Prism Vesicle Doctor"; Filename: "{cmd}"; Parameters: "/k &quot;&quot;{app}\{#AppExeName}&quot; doctor&quot;"; WorkingDir: "{userdocs}"
 Name: "{group}\Uninstall Prism Vesicle"; Filename: "{uninstallexe}"
+
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueData: "Open in Prism Vesicle"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppExeName}"
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle"; ValueType: string; ValueData: "Open in Prism Vesicle"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppExeName}"
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%V"""
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"; Description: "Configure and launch Prism Vesicle"; Flags: postinstall nowait skipifsilent

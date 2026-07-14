@@ -25,7 +25,7 @@ describe("guided Setup UI", () => {
     expect(frame).toContain("Secrets stay in .env");
   });
 
-  test("uses a Documents project default and expands a home shorthand", () => {
+  test("uses a Documents one-time launch default and expands a home shorthand", () => {
     const env = { USERPROFILE: "C:\\Users\\Tester" };
     expect(defaultProjectDirectory(env)).toBe(join(env.USERPROFILE, "Documents", "PrismVesicle", "MyFirstProject"));
     expect(resolveProjectPath("~/Story", { HOME: env.USERPROFILE })).toBe(resolve(join(env.USERPROFILE, "Story")));

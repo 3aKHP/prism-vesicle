@@ -158,7 +158,7 @@ protocol adapters require more fields.
 - `src/setup` owns interactive onboarding. Network discovery, masked input, configuration merge/backup, validation, optional MCP/Tavily setup, permission defaults, and project selection stay in the application so they reuse runtime contracts.
 - OpenAI-compatible model discovery may use the user-supplied Base URL and API key only for a bounded `GET /v1/models` request. Do not follow credential-bearing redirects, log the key, infer capabilities from model names, or make discovery success mandatory when exact manual ids are available.
 - Setup configuration writes are host actions, not model-visible tools. Validate the complete staged provider/MCP/environment shape, preserve unrelated secrets and profiles, create timestamped backups for existing files, and keep YOLO and `shell_exec` out of first-run persistent defaults.
-- Setup persists only a non-secret last-project pointer for the Start Menu launcher. The launcher starts a new Vesicle process with that project as cwd; it must not change the Setup process cwd or use the installation directory as a project.
+- Setup must not persist a global project pointer. An optional onboarding folder is only a one-time post-Setup launch target. Every later project launch derives its root from the invocation directory or an explicit `vesicle <directory>` argument; path-based launch starts a new process with that directory as cwd rather than changing the parent process cwd.
 
 ## Tool Runtime
 

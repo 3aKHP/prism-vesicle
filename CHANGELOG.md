@@ -9,6 +9,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
+- Guided Setup no longer persists one first-project directory and routes every Start Menu launch back to it. Project choice is optional and one-time, legacy `setup-state.json` pointers are ignored without deletion, and installed Windows users can launch any current directory with `vesicle .` or the per-user Explorer directory action.
 - Generic `explore`, `general`, `plan`, `research`, and `reviewer` SubAgents remain ordinary concurrent host Agents while a V10 Harness is active, while undeclared non-host Agent Profiles still fail closed through the Driver Contract.
 - Permission pauses no longer render empty assistant bubbles, and the active TUI bottom surface now owns keyboard and paste input through the same modal priority used for rendering.
 - The Workspace sidebar now keeps a fixed two-row Shell summary, preventing multiple background tasks from overwriting the Effort, session, and MCP rows in OpenTUI.

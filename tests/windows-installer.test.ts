@@ -20,13 +20,21 @@ describe("Windows guided installer", () => {
     expect(source).not.toContain('MessagesFile: "compiler:Languages\\ChineseSimplified.isl"');
     expect(source).toContain('Source: "{#SourceRoot}\\harness-manifest.json"');
     expect(source).toContain('Source: "{#SourceRoot}\\host-assets\\*"');
+    expect(source).toContain('Source: "{#SourceRoot}\\vesicle.cmd"');
     expect(source).toContain('Parameters: "setup"');
-    expect(source).toContain('Parameters: "launch"');
+    expect(source).not.toContain('Parameters: "launch"');
+    expect(source).toContain("Software\\Classes\\Directory\\shell\\PrismVesicle");
+    expect(source).toContain('""%1""');
+    expect(source).toContain('""%V""');
     expect(source).toContain("RemoveFromUserPath");
     expect(source).toContain("PathManagedValue = 'PathManaged'");
     expect(source).toContain("RegWriteDWordValue(HKCU, InstallerStateKey, PathManagedValue, 1)");
     expect(source).toContain("RegQueryDWordValue(HKCU, InstallerStateKey, PathManagedValue, PathManaged)");
     expect(source).not.toContain("{userappdata}\\prism-vesicle");
+    const smoke = await readFile(join(import.meta.dir, "..", "scripts", "smoke-windows-installer.ps1"), "utf8");
+    expect(smoke).toContain("$DirectoryCommand");
+    expect(smoke).toContain("$BackgroundCommand");
+    expect(smoke).toContain("Get-Command vesicle -CommandType Application");
   });
 
   test("vendors the Simplified Chinese installer messages", async () => {
@@ -45,6 +53,8 @@ describe("Windows guided installer", () => {
     await writeFile(join(root, "prism-vesicle.exe"), "pe");
     await writeFile(join(root, "harness-manifest.json"), "{}");
     await writeFile(join(root, "LICENSE"), "license");
+    await mkdir(join(root, "installer"));
+    await writeFile(join(root, "installer", "vesicle.cmd"), "@echo off\n", "utf8");
     await mkdir(join(root, "assets"));
     await mkdir(join(root, "host-assets"));
     await writeFile(join(root, "assets", "engine.txt"), "engine");
@@ -59,8 +69,14 @@ describe("Windows guided installer", () => {
       "harness-manifest.json",
       "host-assets/host.txt",
       "prism-vesicle.exe",
+      "vesicle.cmd",
     ]);
-    expect(INSTALLER_PAYLOAD).toEqual(["prism-vesicle.exe", "harness-manifest.json", "assets", "host-assets", "LICENSE"]);
+    expect(INSTALLER_PAYLOAD).toEqual(["prism-vesicle.exe", "vesicle.cmd", "harness-manifest.json", "assets", "host-assets", "LICENSE"]);
+  });
+
+  test("installs a vesicle command alias that forwards all arguments", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "installer", "vesicle.cmd"), "utf8");
+    expect(source).toContain('"%~dp0prism-vesicle.exe" %*');
   });
 
   test("uses a versioned installer filename and supports an explicit compiler", () => {

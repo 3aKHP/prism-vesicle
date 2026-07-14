@@ -33,7 +33,7 @@
 
 Vesicle 会相对于启动位置查找 `.vesicle\sessions`。如果从另一个项目文件夹启动 Vesicle，你会看到那个项目的会话。
 
-从开始菜单打开 **Prism Vesicle**。启动入口会使用引导式 Setup 保存的项目目录，因此该项目的会话与其他项目保持隔离。
+在目标项目目录中运行 `vesicle .`。会话隔离以本次启动目录为准，而不是以引导式 Setup 保存的项目为准。
 
 这种项目级行为可以隔离无关工作。用户级供应商配置仍可由多个项目共享。
 
@@ -115,7 +115,7 @@ Started a fresh session. Type a prompt to begin.
 Get-ChildItem ".vesicle\sessions"
 ```
 
-每个 `.jsonl` 文件都是一份持久会话记录。之后从开始菜单重新打开 Vesicle。
+每个 `.jsonl` 文件都是一份持久会话记录。之后回到同一项目目录并再次运行 `vesicle .`。
 
 ## 完成检查
 

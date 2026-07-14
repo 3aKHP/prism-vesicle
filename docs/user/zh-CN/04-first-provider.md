@@ -4,7 +4,7 @@
 
 ## 本章目标
 
-你将连接一个 OpenAI 兼容供应商，勾选 Vesicle 中可用的模型，可选配置 Tavily 与 MCP，选择安全的权限偏好，并创建第一个项目，全程无需编辑 YAML。
+你将连接一个 OpenAI 兼容供应商，勾选 Vesicle 中可用的模型，可选配置 Tavily 与 MCP，并选择安全的权限偏好，全程无需编辑 YAML。你也可以为第一次启动选择文件夹，但它不会被保存成全局项目。
 
 **预计耗时：** 5–10 分钟
 
@@ -63,18 +63,20 @@ MCP 密钥保存在用户级 `.env` 中；`mcp.yaml` 只保存环境变量引用
 
 首次使用建议保留 **Recommended**。它对应 Vesicle 的 MOMENTUM 模式：普通工作区操作可以继续，而 `shell_exec` 保持关闭。其他选项会增加确认次数。Setup 永远不会保存 YOLO。
 
-## 选择第一个项目
+## 可选的第一次启动
 
-保留 Documents 下的建议目录，或输入其他文件夹。保存配置时 Setup 会创建该目录。Prism Vesicle 会从项目目录启动，而不是把安装目录当作项目。
+已有项目文件夹时，选择 **Skip project selection** 即可完成配置。
+
+只有希望 Setup 保存后立即创建或打开一个文件夹时，才选择 **Choose a folder for the first launch**。该目录仅用于这一次启动，不会成为默认项目。以后 Vesicle 始终使用每次启动时指定的目录。
 
 ## 检查并保存
 
-确认页会显示供应商地址、已选/默认模型、Tavily 状态、MCP 服务器数量、权限模式和项目目录，但不会显示任何密钥。
+确认页会显示供应商地址、已选/默认模型、Tavily 状态、MCP 服务器数量、权限模式和可选的一次性首次启动目录，但不会显示任何密钥。
 
-选择 **Save configuration**。Setup 会合并受支持的已有配置，并为每个发生变化的旧文件创建带时间戳的备份。验证通过后选择 **Launch Prism Vesicle**。
+选择 **Save configuration**。Setup 会合并受支持的已有配置，并为每个发生变化的旧文件创建带时间戳的备份。如果选择了首次启动目录，验证通过后 Setup 会提供一次性启动入口。
 
 ## 完成检查
 
-Setup 显示 **Setup complete** 并提供 **Launch Prism Vesicle** 时，即可继续。
+Setup 显示 **Setup complete** 时即可继续。此时没有任何项目目录被保存成全局默认值。
 
 [下一章：运行 Doctor 并启动 Vesicle →](./05-doctor-and-launch.md)
