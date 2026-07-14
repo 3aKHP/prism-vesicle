@@ -144,6 +144,17 @@ export async function resolveBundledHarnessRuntime(
   return projectRuntime(projectRoot, lock, pack, resolvedOptions, "bundled");
 }
 
+export function requireProjectHarnessRuntime(
+  runtime: ProjectHarnessRuntime | undefined,
+): ProjectHarnessRuntime {
+  if (!runtime) {
+    throw new Error(
+      "Verified bundled Harness baseline is unavailable. Ensure harness-manifest.json, assets/, and host-assets/ are installed beside Vesicle.",
+    );
+  }
+  return runtime;
+}
+
 export async function rollbackProjectHarness(projectRoot = process.cwd()): Promise<HarnessProjectLock> {
   const lock = await loadProjectHarnessLock(projectRoot);
   if (!lock) throw new Error("Project does not have an active managed Harness baseline.");

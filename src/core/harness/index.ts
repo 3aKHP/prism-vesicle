@@ -11,6 +11,7 @@ export {
   parseHarnessProjectLock,
   parseHarnessRuntimeIdentity,
   projectHarnessLockPath,
+  requireProjectHarnessRuntime,
   resolveBundledHarnessRuntime,
   resolveProjectHarnessRuntime,
   rollbackProjectHarness,

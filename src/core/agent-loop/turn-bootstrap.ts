@@ -12,7 +12,11 @@ import { generationMetadata, mergeGeneration } from "./generation";
 import { resolveToolSurface } from "./tool-surface";
 import type { RunLoopArgs } from "./turn-loop";
 import type { RunPromptOptions } from "./types";
-import { assertSessionHarnessIdentity, resolveProjectHarnessRuntime } from "../harness/activation";
+import {
+  assertSessionHarnessIdentity,
+  requireProjectHarnessRuntime,
+  resolveProjectHarnessRuntime,
+} from "../harness/activation";
 import { loadSessionSnapshot } from "../session/store";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
@@ -23,13 +27,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const permission = options.permission ?? defaultPermissionRuntime;
   const provider = createProvider(config);
   const projectHarness = !options.assets && !options.harness
-    ? await resolveProjectHarnessRuntime(rootDir)
+    ? requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir))
     : undefined;
-  if (!options.assets && !options.harness && !projectHarness) {
-    throw new Error(
-      "Verified bundled Harness baseline is unavailable. Ensure harness-manifest.json, assets/, and host-assets/ are installed beside Vesicle.",
-    );
-  }
   const assets = options.assets ?? projectHarness?.assets;
   const harness = options.harness ?? projectHarness?.harness;
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir, assets ? { resolver: assets } : {});
