@@ -167,7 +167,7 @@ async function loadProviderEnvironment(
   return { effectiveEnv: { ...env, ...parseEnvFile(source, envPath) }, path: envPath, exists: true };
 }
 
-function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
+export function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
   const values: NodeJS.ProcessEnv = {};
   const lines = source.split(/\r?\n/);
   for (let index = 0; index < lines.length; index++) {
@@ -188,7 +188,7 @@ function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
   return values;
 }
 
-function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEnv): ProviderRegistry {
+export function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEnv): ProviderRegistry {
   const lines = source.split(/\r?\n/);
   const registry: ProviderRegistry = {
     source: "file",
@@ -558,8 +558,16 @@ function leadingSpaces(line: string): number {
 }
 
 function unquote(value: string): string {
-  if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1);
+  if (value.startsWith("\"") && value.endsWith("\"")) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (typeof parsed === "string") return parsed;
+    } catch {
+      return value.slice(1, -1);
+    }
+  }
+  if (value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replace(/''/g, "'");
   }
   return value;
 }

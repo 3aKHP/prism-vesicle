@@ -111,6 +111,14 @@ jobs:
           } finally {
             Pop-Location
           }
+      - name: Install pinned Inno Setup
+        shell: pwsh
+        run: choco install innosetup --version=6.7.1 --no-progress -y
+      - name: Build and smoke guided installer
+        shell: pwsh
+        run: |
+          bun run build:installer
+          ./scripts/smoke-windows-installer.ps1 -InstallerPath "dist/PrismVesicleSetup-*-windows-x64.exe"
       - name: Name release artifact
         shell: pwsh
         env:
@@ -118,6 +126,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item prism-vesicle.exe "release/prism-vesicle-windows-x64-$env:VERSION.exe"
+          Copy-Item "dist/PrismVesicleSetup-$env:VERSION-windows-x64.exe" release/
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows-${{ inputs.version }}

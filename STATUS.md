@@ -6,7 +6,7 @@ _Last updated: 2026-07-14_
 
 | Area | Version | Status |
 |------|---------|--------|
-| Prism Vesicle | 1.0.0-alpha.1 | Public alpha candidate: profile-driven engine host with gate runtime |
+| Prism Vesicle | 1.0.0-alpha.2 | Guided Windows installer candidate with profile-driven engine host |
 | Prism assets | Verified bundled V10 Harness + optional project-pinned managed Harness | Implemented on development branch |
 | Provider protocols | OpenAI-compatible Chat + Anthropic Messages + Gemini generateContent | Implemented |
 | TUI | OpenTUI + Solid | Responsive shell + gate/session panels |
@@ -30,6 +30,7 @@ _Last updated: 2026-07-14_
 | SubAgents | Profile-driven foreground/background child runtime + contract-bound sequential Harness delivery | Implemented on development branch |
 | Tool permissions | MANUAL / INERTIA / MOMENTUM / YOLO + parent-owned child requests | Implemented on development branch |
 | Host shell | Opt-in foreground/background shell_exec + bounded Process Runtime | Implemented on development branch |
+| Guided Windows onboarding | Inno Setup + Vesicle-owned interactive Setup | Implemented on development branch |
 
 ## Current Scope
 
@@ -52,6 +53,7 @@ User-facing documentation is intentionally limited during this alpha. Treat the 
   profile runtime files remain an external V10 release pack containing `harness-manifest.json`, `assets/`, and `host-assets/`; executables preserve the invocation directory as the project root and locate defaults beside the executable. `vesicle debug
   markdown-runtime` is the non-interactive runtime smoke check and `bun run
   build:assets` creates the release ZIP.
+- Build a single-download per-user Windows installer around the complete standalone V10 payload. Its completion page launches `vesicle setup`, where OpenAI-compatible users enter a Base URL and masked API key, discover `/v1/models`, select and add models, optionally configure Tavily and Streamable HTTP MCP, choose a safe permission preset, and create a project without editing YAML. Existing user configuration is merged with timestamped backups; ordinary upgrade/uninstall leaves user and project state untouched.
 - Publish an npm/Bun package with pinned runtime dependencies, the exact bundled V10 Harness inventory, its root manifest, and the restricted host extension layer. Package invocations resolve their installed OpenTUI worker and runtime assets independently of the active project directory. `vesicle assets verify/install/use/status/rollback` manages already-extracted offline Harness Packs and the project lock; `assets materialize <assets/path> [--global]` creates sparse project or user overrides, and `assets init [--global]` retains full-snapshot compatibility.
 - GitHub Actions CI validates pull requests and `develop` pushes on Linux and
   Windows. The manual Release verification workflow builds and labels PE, ELF,
@@ -227,6 +229,7 @@ prism-vesicle/
 │   │   ├── tools/        # Vesicle tool contracts and implementations
 │   │   └── validators/   # Module A/B v9 validators + registry
 │   ├── providers/        # Provider-neutral types and adapters
+│   ├── setup/            # Guided onboarding UI, discovery, config transactions
 │   ├── tui/              # OpenTUI/Solid interface, theme, GatePrompt
 │   ├── mcp/              # Streamable HTTP MCP tool discovery and execution
 │   └── skills/           # Future controlled skill bundle surface
@@ -326,6 +329,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - Concrete Weaver-Orch scene allocation, Evaluate reviewer composition, and artifact merge policy remain Harness responsibilities. Vesicle supplies the generic Agent scheduling, persistence, and delivery substrate. Every active bundled or managed Harness provides a verified Driver Contract. The exact five generic host Agent ids bypass delegation binding and preserve ordinary concurrent SubAgent behavior; every other Agent request must bind to the parent Engine's unique declared delegation, fixed foreground/background mode, purpose, retry limit, and ABI error model. Contract-bound delegations run sequentially, persist attempts and terminal state, and enter the declared resumable user decision point after transient retries are exhausted.
 - OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini
   `generateContent` are implemented. OpenAI Responses is deferred.
+- Guided model discovery currently targets the OpenAI-compatible `GET /v1/models` response shape. Anthropic and Gemini use their existing provider profiles plus exact manual model ids until their native discovery APIs receive separate adapters. Discovery never infers model capabilities from names.
 - The provider registry supports multiple configured providers using
   `openai-chat-compatible`, `anthropic-messages`, or
   `gemini-generate-content`.
@@ -373,7 +377,10 @@ Current standard checks:
 bun run typecheck
 bun test
 bun run doctor
+bun run build:installer:stage
 ```
+
+Native Windows CI installs pinned Inno Setup, builds the versioned guided installer, performs a silent per-user install, runs the standalone runtime diagnostics from a separate project directory, silently uninstalls, and verifies that user configuration/project sentinels survive while the exact PATH entry is removed.
 
 The `tests/e2e-gate.test.ts` suite runs against a real provider only when
 `BUN_E2E_REAL_PROVIDER=1` is explicitly set. This keeps `bun test`

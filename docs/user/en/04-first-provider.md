@@ -4,114 +4,77 @@
 
 ## What You Will Accomplish
 
-You will create Vesicle's Windows user configuration, connect it to one DeepSeek model, and store the API key outside the project folder.
+You will connect an OpenAI-compatible provider, select the models Vesicle should offer, optionally configure Tavily and MCP, choose a safe permission preference, and create the first project without editing YAML.
 
-**Estimated time:** 15 minutes
+**Estimated time:** 5–10 minutes
 
-**Prerequisites:** Chapters 00–03, a DeepSeek API key, and the exact API model id you intend to use
+**Prerequisites:** Chapter 03, a provider Base URL, and its API key
 
-## Create the User Configuration Folder
+## Begin Setup
 
-In PowerShell, run these commands one line at a time:
+With **Begin guided setup** highlighted, press Enter.
 
-```powershell
-$configDir = Join-Path $env:APPDATA "prism-vesicle"
-New-Item -ItemType Directory -Force $configDir
-```
+## Enter the Provider Base URL
 
-`$env:APPDATA` is Windows' user-level application-data folder. `$configDir` is a temporary PowerShell variable that saves the full Vesicle configuration path for the rest of this terminal session.
-
-## Create `providers.yaml`
-
-Create the file and open it in Notepad:
-
-```powershell
-New-Item -ItemType File -Force (Join-Path $configDir "providers.yaml")
-notepad (Join-Path $configDir "providers.yaml")
-```
-
-Copy this complete configuration into Notepad:
-
-```yaml
-default:
-  provider: deepseek
-  model: deepseek-v4-flash
-
-providers:
-  deepseek:
-    protocol: openai-chat-compatible
-    baseUrl: https://api.deepseek.com/v1
-    apiKeyEnv: DEEPSEEK_API_KEY
-    defaultModel: deepseek-v4-flash
-    models:
-      - id: deepseek-v4-flash
-        capabilities:
-          streaming: true
-          tools: true
-```
-
-If your provider documentation gives a different API model id, replace every occurrence of `deepseek-v4-flash` with that exact id. It appears three times. Keep the indentation, punctuation, and capitalization of all other lines unchanged.
-
-Save the file with Ctrl+S and close Notepad.
-
-`providers.yaml` identifies the provider and model, but it does not contain the API key. YAML indentation uses spaces; do not replace them with Tab characters.
-
-## Create the Secret `.env` File
-
-Back in PowerShell, run:
-
-```powershell
-New-Item -ItemType File -Force (Join-Path $configDir ".env")
-notepad (Join-Path $configDir ".env")
-```
-
-Type this line, replacing `YOUR_API_KEY` with the real key copied from the provider dashboard:
-
-```dotenv
-DEEPSEEK_API_KEY=YOUR_API_KEY
-```
-
-There should be no spaces around `=`. Save with Ctrl+S and close Notepad.
-
-Never display this file while screen sharing, paste it into a support request, or copy it into the project folder. If the key is exposed, revoke it through the provider dashboard.
-
-## Confirm the Files Exist
-
-Run:
-
-```powershell
-Get-ChildItem $configDir -Force
-```
-
-The list should contain both:
+Enter the provider's API Base URL. Examples include:
 
 ```text
-.env
-providers.yaml
+https://api.deepseek.com/v1
+http://127.0.0.1:11434/v1
 ```
 
-`-Force` allows PowerShell to show names that begin with a dot. This command displays file names, not the secret contents.
+Setup adds `/v1` when you enter only an HTTPS origin such as `https://api.example.com`. Remote providers require HTTPS; local loopback services may use HTTP.
 
-## Understand the Connection
+## Enter the API Key
 
-The important fields are:
+Paste the provider API key and press Enter. The field is masked. The key remains in memory during model discovery and is not saved until the final review page.
 
-- `default.provider`: the provider Vesicle selects at startup
-- `default.model`: the model selected at startup
-- `protocol`: the API format used to communicate with the provider
-- `baseUrl`: the provider's API endpoint
-- `apiKeyEnv`: the name of the secret variable Vesicle must read from `.env`
-- `models`: the allowed model ids for this provider
+Setup requests `GET <Base URL>/models` with Bearer authentication. If the provider accepts the address and key, the next page displays the returned model ids.
 
-The name after `apiKeyEnv` must exactly match the name before `=` in `.env`.
+If discovery fails, Setup lets you retry, edit the Base URL, or continue by entering an exact model id manually. A provider that does not implement `/v1/models` therefore does not block configuration.
+
+## Select Models
+
+Use Up and Down to move through the model list and Space to toggle a checkbox. Press `A` to add an exact model id that was not returned by the provider. Press Enter after at least one model is selected.
+
+Choose one selected model as the default on the next page. Model discovery reports ids only; Vesicle does not guess vision, reasoning, or context-limit capabilities from a model name.
+
+## Optional Tavily
+
+Choose **Skip for now** or **Configure Tavily**. Tavily enables Vesicle's web research tools. When enabled, paste the Tavily API key into the masked field. It is stored only in the user-level secret file.
+
+Skipping Tavily does not affect ordinary provider conversations.
+
+## Optional MCP
+
+Choose **Skip for now** or **Add an MCP server**. The MCP flow asks for:
+
+- a short server name;
+- its Streamable HTTP URL;
+- no authentication, a Bearer token, or a custom authentication header;
+- a masked token when authentication is required;
+- the Prism Engines that may receive its tools.
+
+Setup initializes the server and requests its tool list. A successful result shows the discovered tool count. If the test fails, return to edit or retry; saving the failed server requires an explicit **Save server anyway** choice. Additional servers can be added before continuing.
+
+MCP secrets are stored in the user-level `.env`. `mcp.yaml` contains only environment-variable references, not the secret value.
+
+## Choose Permissions
+
+For the first run, keep **Recommended**. It maps to Vesicle's MOMENTUM mode: routine workspace work can proceed, while `shell_exec` stays disabled. The other choices ask for more approvals. Setup never saves YOLO.
+
+## Choose the First Project
+
+Keep the suggested folder under Documents or enter another folder. Setup creates it when configuration is saved. Prism Vesicle starts in this project instead of the installation directory.
+
+## Review and Save
+
+The review page displays the provider address, selected/default models, whether Tavily is configured, MCP server count, permission mode, and project directory. It never displays secrets.
+
+Select **Save configuration**. Existing supported configuration is merged, and every changed existing file receives a timestamped backup. After validation succeeds, select **Launch Prism Vesicle**.
 
 ## Completion Check
 
-Confirm that:
-
-- both files are under `%APPDATA%\prism-vesicle`, not inside `MyFirstProject`
-- `providers.yaml` contains no real API key
-- `.env` contains `DEEPSEEK_API_KEY=` followed by the real key
-- the configured model id matches current provider API documentation
+You are ready when Setup reports **Setup complete** and offers **Launch Prism Vesicle**.
 
 [Next: Run Doctor and Launch Vesicle →](./05-doctor-and-launch.md)

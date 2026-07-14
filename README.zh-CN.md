@@ -4,15 +4,21 @@
 
 Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端工作流宿主。它默认启动经过验证的内置 V10 Harness，也可以选择项目固定的托管 Harness Pack，将当前运行时连接到模型供应商与宿主工具，并通过持久化会话保存对话和制品生产过程。
 
-> **Alpha 状态：**`1.0.0-alpha.1` 是用于实际试用的公开版本，而不是已经完成的终端用户产品。目前受支持的入门路径是[以 Windows 为主线的用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor`、`vesicle prompt shape --engine <id>` 以及 [`docs/examples/`](./docs/examples/) 下的示例。命令交互和运行时契约在后续 alpha 版本中仍可能变化。
+> **Alpha 状态：**`1.0.0-alpha.2` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[以 Windows 为主线的用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
 
 如果你不熟悉终端、API 密钥或模型供应商，请先阅读[循序渐进的用户手册](./docs/user/zh-CN/README.md)，再使用下方的精简配置说明。
 
 ## 安装
 
-Vesicle 需要 [Bun](https://bun.sh/) 1.3.14 或更高版本。
+### Windows 引导式安装器
 
-### npm
+从对应的 GitHub 预发布下载 `PrismVesicleSetup-<version>-windows-x64.exe` 并双击运行。该安装器按用户安装，不需要管理员权限。安装完成后会启动 Prism Vesicle Setup：用户只需填写 OpenAI 兼容服务的 Base URL 与 API Key，即可自动获取并勾选模型；也可选配 Tavily、MCP、权限偏好和第一个项目目录，全程无需手写配置文件。
+
+安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。
+
+下方 npm 与源码开发路径需要 [Bun](https://bun.sh/) 1.3.14 或更高版本。
+
+### npm 或源码开发
 
 安装软件包并确认其中包含的 ETL 引擎配置可用：
 
@@ -166,10 +172,12 @@ bun run doctor
 | `bun run pack:smoke` | 对打包后的 npm 分发执行冒烟测试 |
 | `bun run build:exe` | 构建 Windows 和 Linux 独立可执行文件 |
 | `bun run build:assets` | 构建可编辑资产 ZIP |
+| `bun run build:installer:stage` | 暂存完整 Windows 安装器载荷 |
+| `bun run build:installer` | 在 Windows 上构建 Inno Setup 安装器 |
 
 `vesicle debug markdown-runtime` 可以在不打开 TUI 的情况下验证独立 OpenTUI worker 和语法运行时。`vesicle prompt dump --engine <id>` 会输出模型可见的完整系统提示；`vesicle prompt shape --engine <id>` 只输出其组合结构。
 
-Pull request 和向 `develop` 的推送会在 Linux 与 Windows 上运行发布形态检查。受保护的版本标签会发布 GitHub prerelease、校验和、独立可执行文件、可编辑资产 ZIP 以及带 provenance 的 npm 软件包。分支和发布工作流请参阅 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md)。
+Pull request 和向 `develop` 的推送会在 Linux 与 Windows 上运行发布形态检查，包括引导式安装器的静默安装/卸载 smoke。受保护的版本标签会发布 GitHub prerelease、校验和、Windows 安装器、独立可执行文件、可编辑资产 ZIP 以及带 provenance 的 npm 软件包。分支和发布工作流请参阅 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md)。
 
 ## 文档
 

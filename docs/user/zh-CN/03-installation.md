@@ -1,136 +1,56 @@
-# 03 — 安装 Bun 与 Prism Vesicle
+# 03 — 安装 Prism Vesicle
 
-[← 上一章：模型供应商](./02-model-providers.md) | [手册目录](./README.md) | [English](../en/03-installation.md) | [下一章：供应商配置 →](./04-first-provider.md)
+[← 上一章：模型供应商](./02-model-providers.md) | [手册目录](./README.md) | [English](../en/03-installation.md) | [下一章：引导式供应商配置 →](./04-first-provider.md)
 
 ## 本章目标
 
-你将安装 Bun、初始化教程项目、在项目中安装 Prism Vesicle，并验证软件包内置的 ETL 引擎资产能够正常读取。
+你将为当前 Windows 账户安装 Prism Vesicle，并打开交互式 Setup。该路径不需要安装 Bun、不需要输入 PowerShell 命令，也不需要编辑配置文件。
 
-**预计耗时：** 15 分钟
+**预计耗时：** 5 分钟
 
-**前置条件：** 第 00–02 章、互联网连接和一个普通 PowerShell 窗口
+**前置条件：** 第 00–02 章、Windows 10/11 x64，以及用于下载安装包的互联网连接
 
-## 返回项目文件夹
+## 下载安装器
 
-打开使用 PowerShell 的 Windows Terminal，然后运行：
-
-```powershell
-Set-Location "$HOME\Documents\PrismVesicle\MyFirstProject"
-```
-
-## 检查是否已经安装 Bun
-
-运行：
-
-```powershell
-bun --version
-```
-
-如果 PowerShell 输出 `1.3.14` 或更高版本，请直接继续“初始化项目”。
-
-如果 PowerShell 提示无法识别 `bun`，请使用 [bun.sh](https://bun.sh/docs/installation) 当前提供的 Windows 官方安装命令：
-
-```powershell
-powershell -c "irm bun.sh/install.ps1|iex"
-```
-
-该命令会下载并运行 Bun 官方安装脚本。完成后，彻底关闭 Windows Terminal，重新打开它，返回项目文件夹并检查版本：
-
-```powershell
-Set-Location "$HOME\Documents\PrismVesicle\MyFirstProject"
-bun --version
-```
-
-如果仍然无法识别该命令，请重启一次 Windows 后再试。`bun --version` 成功前不要继续。
-
-## 初始化项目
-
-运行：
-
-```powershell
-bun init -y
-```
-
-该命令会创建 `package.json` 等小型项目管理文件。入门阶段不需要编辑它们。
-
-## 安装 Prism Vesicle
-
-运行：
-
-```powershell
-bun add prism-vesicle
-```
-
-Bun 会把 Prism Vesicle 及其运行时依赖下载到项目中。第一次安装可能需要几分钟。
-
-成功时通常会看到安装完成摘要，并且末尾没有错误信息。文件夹中会出现 `node_modules`、`package.json` 和 `bun.lock`；它们都是正常的程序文件。
-
-## 验证内置引擎资产
-
-运行：
-
-```powershell
-bunx vesicle prompt shape --engine etl
-```
-
-开头几行应类似：
+打开官方 [Prism Vesicle Releases 页面](https://github.com/3aKHP/prism-vesicle/releases)，进入对应的预发布版本，下载名称类似下面的文件：
 
 ```text
-Engine: etl (Prism ETL Engine)
-Protocol: v10.0-tempered-voice
-System prompt length: ...
+PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 ```
 
-准确的提示长度和工具清单可能随版本变化。只要命令能够识别 ETL 引擎并且没有报错退出，就表示成功。
+不要使用聊天、邮件或无关镜像转发的安装器。Release 还会提供 `SHA256SUMS.txt`，需要时可用于核对下载文件的校验值。
 
-接下来查看这些资产来自哪里：
+## 运行安装器
 
-```powershell
-bunx vesicle assets status
-```
+双击下载的安装器。Prism Vesicle 只会安装到当前 Windows 账户的 `%LOCALAPPDATA%\Programs\Prism Vesicle`，正常情况下不会申请管理员权限。
 
-按照本章的普通安装方式，`Bundled` 应当显示 47 个文件，`Host` 应当显示 12 个文件，`Active baseline` 应当标识内置的 `prism-engine-v10@10.0.1-alpha.1`。Vesicle 还可以从 `%APPDATA%\prism-vesicle\assets\` 读取用户级全局覆盖，并从当前项目内的 `assets\` 读取稀疏覆盖；现在不需要创建任何覆盖或 Harness 锁。
+除非有明确需要，否则保留默认安装目录。继续完成安装页面，并在最后一页保留 **Configure and launch Prism Vesicle** 选项。
 
-## 可选：选择离线 Harness Pack
+安装器会增加以下开始菜单入口：
 
-普通安装已经运行完整 V10。高级用户可以先把另一个独立发布的 Harness Pack 解压到本地目录，再为项目选择它。验证与安装本身不会激活该 Pack：
+- **Configure Prism Vesicle**：随时重新打开引导式 Setup。
+- **Prism Vesicle Doctor**：检查已有配置。
+- **Uninstall Prism Vesicle**：删除程序文件，但保留用户配置与项目。
 
-```powershell
-bunx vesicle assets verify "C:\Downloads\prism-vesicle-harness-v10"
-bunx vesicle assets install "C:\Downloads\prism-vesicle-harness-v10"
-bunx vesicle assets use "<pack-id>@<version>"
-bunx vesicle assets status
-```
+## 打开引导式 Setup
 
-`use` 会在当前项目写入 `.vesicle\assets.lock.json`。Vesicle 每次启动项目或恢复会话时，都会重新验证这一固定版本。若会话记录的 Harness 身份不同，Vesicle 会阻止恢复，而不会静默切换。
+点击 **Finish**。随后会打开标题为 `Prism Vesicle Setup` 的终端窗口，并高亮显示 **Begin guided setup**。你不需要输入任何命令。
 
-如需让项目恢复使用内置 V10 基线，请运行：
-
-```powershell
-bunx vesicle assets rollback
-```
-
-第一版离线流程要求输入已经解压的 Release 目录；它不会下载、发现、解压或自动更新 Harness Pack。
-
-旧版 V9-only Vesicle 创建的会话没有 Harness 身份，无法在内置 V10 下恢复。升级后请新建会话。
+使用方向键移动，按 Space 勾选，按 Enter 继续，按 Escape 返回上一页。密钥输入页只显示圆点，不会显示 API Key 原文。
 
 ## 安装失败时
 
-- 确认同一个终端中的 `bun --version` 可以运行。
-- 确认 `Get-Location` 以 `Documents\PrismVesicle\MyFirstProject` 结尾。
-- 如果下载无法开始，检查互联网连接、VPN、代理或安全软件。
-- 临时网络错误后可以再次运行 `bun add prism-vesicle`。
-- 如果需要求助，在关闭终端前复制完整错误文字。
+- 确认安装器来自官方 GitHub 预发布。
+- 如果 Windows 提示下载不完整，请重新下载。
+- 如果安全软件隔离了文件，请记录安全软件名称、安装器版本和完整警告，再提交问题；不要全局关闭安全软件。
+- 如果不小心关闭了 Setup，请从开始菜单打开 **Configure Prism Vesicle**。
+
+## 高级安装方式
+
+GitHub 预发布仍会保留便携 Windows 可执行文件与运行时资产 ZIP。npm 与源码安装也继续面向开发者和高级用户开放，详见根目录 [README](../../../README.zh-CN.md)。它们不是新手主线。
 
 ## 完成检查
 
-运行：
-
-```powershell
-bun --version
-bunx vesicle prompt shape --engine etl
-```
-
-Bun 版本至少为 `1.3.14`，并且 Vesicle 输出 `Engine: etl` 时即可继续。
+看到 `Prism Vesicle Setup` 欢迎页后，即可继续下一章。
 
 [下一章：配置第一个模型供应商 →](./04-first-provider.md)

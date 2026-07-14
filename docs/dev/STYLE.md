@@ -10,6 +10,7 @@ hard to fool.
 cli/            # command dispatch only
 tui/            # OpenTUI rendering and keyboard interaction
 config/         # environment loading and config inspection
+setup/          # guided onboarding, discovery, validated config transactions
 core/engine/    # engine profile YAML loading
 core/artifacts/ # artifact discovery, preview bounds, validation selection
 core/prompt/    # prompt asset loading and composition
@@ -31,6 +32,7 @@ Allowed dependency direction:
 
 - `cli -> tui, core, config`
 - `tui -> core, config, providers/types`
+- `setup -> config, mcp, core engine/permission types, and reusable TUI presentation/input primitives`
 - `core/agent-loop -> providers, prompt, session, tools, gate, engine, validators, mcp`
 - `core/agents -> providers, session, tools, runtime assets, mcp`
 - `core/harness -> engine, agents, tools, validators, runtime assets, config paths`
@@ -149,6 +151,14 @@ the provider request default; `limits.contextWindow` is model capacity metadata
 used by `/context` and footer percentages. A `defaultModel` must name a model
 in the same provider catalog. Keep this schema small and explicit until native
 protocol adapters require more fields.
+
+## Guided Setup And Installer
+
+- The Windows installer owns only the application lifecycle: complete runtime payload, per-user install location, PATH, shortcuts, upgrade identity, and uninstall. It must not parse provider/MCP schemas, accept secrets, or mutate `%APPDATA%\prism-vesicle`.
+- `src/setup` owns interactive onboarding. Network discovery, masked input, configuration merge/backup, validation, optional MCP/Tavily setup, permission defaults, and project selection stay in the application so they reuse runtime contracts.
+- OpenAI-compatible model discovery may use the user-supplied Base URL and API key only for a bounded `GET /v1/models` request. Do not follow credential-bearing redirects, log the key, infer capabilities from model names, or make discovery success mandatory when exact manual ids are available.
+- Setup configuration writes are host actions, not model-visible tools. Validate the complete staged provider/MCP/environment shape, preserve unrelated secrets and profiles, create timestamped backups for existing files, and keep YOLO and `shell_exec` out of first-run persistent defaults.
+- Setup persists only a non-secret last-project pointer for the Start Menu launcher. The launcher starts a new Vesicle process with that project as cwd; it must not change the Setup process cwd or use the installation directory as a project.
 
 ## Tool Runtime
 

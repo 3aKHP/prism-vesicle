@@ -4,114 +4,77 @@
 
 ## 本章目标
 
-你将创建 Vesicle 的 Windows 用户配置，把它连接到一个 DeepSeek 模型，并将 API 密钥保存在项目文件夹之外。
+你将连接一个 OpenAI 兼容供应商，勾选 Vesicle 中可用的模型，可选配置 Tavily 与 MCP，选择安全的权限偏好，并创建第一个项目，全程无需编辑 YAML。
 
-**预计耗时：** 15 分钟
+**预计耗时：** 5–10 分钟
 
-**前置条件：** 第 00–03 章、一个 DeepSeek API 密钥，以及准备使用的准确 API 模型 id
+**前置条件：** 第 03 章、供应商 Base URL 与对应的 API Key
 
-## 创建用户配置文件夹
+## 开始配置
 
-在 PowerShell 中逐行运行这些命令：
+高亮 **Begin guided setup** 后按 Enter。
 
-```powershell
-$configDir = Join-Path $env:APPDATA "prism-vesicle"
-New-Item -ItemType Directory -Force $configDir
-```
+## 输入供应商 Base URL
 
-`$env:APPDATA` 是 Windows 的用户级应用数据文件夹。`$configDir` 是一个临时 PowerShell 变量，用于在当前终端会话中保存 Vesicle 配置文件夹的完整路径。
-
-## 创建 `providers.yaml`
-
-创建文件并用记事本打开：
-
-```powershell
-New-Item -ItemType File -Force (Join-Path $configDir "providers.yaml")
-notepad (Join-Path $configDir "providers.yaml")
-```
-
-把下面的完整配置复制到记事本中：
-
-```yaml
-default:
-  provider: deepseek
-  model: deepseek-v4-flash
-
-providers:
-  deepseek:
-    protocol: openai-chat-compatible
-    baseUrl: https://api.deepseek.com/v1
-    apiKeyEnv: DEEPSEEK_API_KEY
-    defaultModel: deepseek-v4-flash
-    models:
-      - id: deepseek-v4-flash
-        capabilities:
-          streaming: true
-          tools: true
-```
-
-如果供应商文档给出了不同的 API 模型 id，请把所有 `deepseek-v4-flash` 都替换成该准确 id。它一共出现三次。其他行的缩进、标点和大小写应保持不变。
-
-按 Ctrl+S 保存文件，然后关闭记事本。
-
-`providers.yaml` 用于标识供应商和模型，但不包含 API 密钥。YAML 使用空格缩进，不要用 Tab 字符替换这些空格。
-
-## 创建密钥 `.env` 文件
-
-返回 PowerShell，运行：
-
-```powershell
-New-Item -ItemType File -Force (Join-Path $configDir ".env")
-notepad (Join-Path $configDir ".env")
-```
-
-输入下面这一行，并把 `YOUR_API_KEY` 替换成从供应商控制台复制的真实密钥：
-
-```dotenv
-DEEPSEEK_API_KEY=YOUR_API_KEY
-```
-
-`=` 两侧不能有空格。按 Ctrl+S 保存，然后关闭记事本。
-
-屏幕共享时不要显示该文件，不要把它粘贴到求助信息中，也不要复制到项目文件夹。如果密钥暴露，请在供应商控制台中撤销它。
-
-## 确认文件存在
-
-运行：
-
-```powershell
-Get-ChildItem $configDir -Force
-```
-
-列表中应同时包含：
+输入供应商的 API Base URL，例如：
 
 ```text
-.env
-providers.yaml
+https://api.deepseek.com/v1
+http://127.0.0.1:11434/v1
 ```
 
-`-Force` 让 PowerShell 显示以点开头的文件名。该命令只显示文件名，不会显示密钥内容。
+如果只输入 `https://api.example.com` 这样的 HTTPS 域名，Setup 会自动补充 `/v1`。远程供应商必须使用 HTTPS；本机回环服务可以使用 HTTP。
 
-## 理解配置之间的关系
+## 输入 API Key
 
-重要字段包括：
+粘贴供应商 API Key 并按 Enter。输入内容会被遮盖。模型发现期间，密钥只保留在内存中；直到最终确认页之前都不会写入磁盘。
 
-- `default.provider`：Vesicle 启动时选择的供应商
-- `default.model`：启动时选择的模型
-- `protocol`：与供应商通信时使用的 API 格式
-- `baseUrl`：供应商的 API 端点
-- `apiKeyEnv`：Vesicle 必须从 `.env` 中读取的密钥变量名
-- `models`：该供应商允许使用的模型 id
+Setup 会使用 Bearer 认证请求 `GET <Base URL>/models`。地址与密钥可用时，下一页会列出供应商返回的模型 id。
 
-`apiKeyEnv` 后面的名称必须与 `.env` 中 `=` 前面的名称完全一致。
+如果自动发现失败，可以重试、修改 Base URL，或手动输入准确模型 id 后继续。因此，不支持 `/v1/models` 的兼容供应商也不会阻塞配置。
+
+## 勾选模型
+
+使用方向键在模型列表中移动，按 Space 切换勾选状态。按 `A` 可以添加供应商未返回的准确模型 id。至少选择一个模型后按 Enter。
+
+下一页需要从已选模型中指定一个默认模型。模型发现接口只提供 id；Vesicle 不会根据模型名称猜测视觉、推理或上下文长度能力。
+
+## 可选 Tavily
+
+选择 **Skip for now** 或 **Configure Tavily**。Tavily 会启用 Vesicle 的 Web 研究工具。启用时，把 Tavily API Key 粘贴到遮盖输入框；它只会保存到用户级密钥文件。
+
+跳过 Tavily 不影响普通模型对话。
+
+## 可选 MCP
+
+选择 **Skip for now** 或 **Add an MCP server**。MCP 流程会询问：
+
+- 简短的服务器名称；
+- Streamable HTTP URL；
+- 无认证、Bearer Token 或自定义认证 Header；
+- 需要认证时使用的遮盖 Token 输入；
+- 允许获得该服务器工具的 Prism Engine。
+
+Setup 会初始化服务器并请求工具列表。连接成功后会显示发现的工具数量。测试失败时可以返回修改或重试；只有明确选择 **Save server anyway** 才会保存连接失败的服务器。继续下一步前还可以添加更多服务器。
+
+MCP 密钥保存在用户级 `.env` 中；`mcp.yaml` 只保存环境变量引用，不包含密钥原文。
+
+## 选择权限偏好
+
+首次使用建议保留 **Recommended**。它对应 Vesicle 的 MOMENTUM 模式：普通工作区操作可以继续，而 `shell_exec` 保持关闭。其他选项会增加确认次数。Setup 永远不会保存 YOLO。
+
+## 选择第一个项目
+
+保留 Documents 下的建议目录，或输入其他文件夹。保存配置时 Setup 会创建该目录。Prism Vesicle 会从项目目录启动，而不是把安装目录当作项目。
+
+## 检查并保存
+
+确认页会显示供应商地址、已选/默认模型、Tavily 状态、MCP 服务器数量、权限模式和项目目录，但不会显示任何密钥。
+
+选择 **Save configuration**。Setup 会合并受支持的已有配置，并为每个发生变化的旧文件创建带时间戳的备份。验证通过后选择 **Launch Prism Vesicle**。
 
 ## 完成检查
 
-请确认：
-
-- 两个文件都位于 `%APPDATA%\prism-vesicle`，而不是 `MyFirstProject` 中
-- `providers.yaml` 中没有真实 API 密钥
-- `.env` 包含 `DEEPSEEK_API_KEY=`，后面跟随真实密钥
-- 配置的模型 id 与供应商当前 API 文档一致
+Setup 显示 **Setup complete** 并提供 **Launch Prism Vesicle** 时，即可继续。
 
 [下一章：运行 Doctor 并启动 Vesicle →](./05-doctor-and-launch.md)

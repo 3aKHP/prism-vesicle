@@ -8,7 +8,7 @@
 
 ## 如何使用本手册
 
-请按编号顺序阅读。每章只引入完成当前任务所需的概念，给出需要执行的命令，解释正常结果，并以完成检查结束。
+请按编号顺序阅读。每章只引入完成当前任务所需的概念，说明需要完成的交互，解释正常结果，并以完成检查结束。
 
 `00`–`06` 章组成第一条完整学习路径：认识产品、准备 Windows、安装 Vesicle、配置一个模型供应商、通过 Doctor 检查，并完成第一次对话。
 
@@ -17,8 +17,8 @@
 1. [00 — 欢迎与安全须知](./00-welcome.md)
 2. [01 — Windows、文件与 PowerShell](./01-windows-basics.md)
 3. [02 — 模型供应商、API 密钥、费用与隐私](./02-model-providers.md)
-4. [03 — 安装 Bun 与 Prism Vesicle](./03-installation.md)
-5. [04 — 配置第一个模型供应商](./04-first-provider.md)
+4. [03 — 安装 Prism Vesicle](./03-installation.md)
+5. [04 — 在引导式 Setup 中配置第一个模型供应商](./04-first-provider.md)
 6. [05 — 运行 Doctor 并启动 Vesicle](./05-doctor-and-launch.md)
 7. [06 — 完成第一次对话](./06-first-conversation.md)
 

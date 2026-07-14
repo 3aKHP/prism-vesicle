@@ -8,7 +8,7 @@ The main path uses Windows 11, Windows Terminal, and PowerShell. Linux and WSL u
 
 ## How To Use This Manual
 
-Read the numbered chapters in order. Each chapter introduces only the concepts needed for its task, shows the commands to run, explains the expected result, and ends with a completion check.
+Read the numbered chapters in order. Each chapter introduces only the concepts needed for its task, shows the interaction to complete, explains the expected result, and ends with a completion check.
 
 Chapters `00`–`06` form the first complete learning path: understand the product, prepare Windows, install Vesicle, configure one provider, pass Doctor, and complete a first conversation.
 
@@ -17,8 +17,8 @@ Chapters `00`–`06` form the first complete learning path: understand the produ
 1. [00 — Welcome and Safety](./00-welcome.md)
 2. [01 — Windows, Files, and PowerShell](./01-windows-basics.md)
 3. [02 — Model Providers, API Keys, Cost, and Privacy](./02-model-providers.md)
-4. [03 — Install Bun and Prism Vesicle](./03-installation.md)
-5. [04 — Configure Your First Provider](./04-first-provider.md)
+4. [03 — Install Prism Vesicle](./03-installation.md)
+5. [04 — Configure Your First Provider in Guided Setup](./04-first-provider.md)
 6. [05 — Run Doctor and Launch Vesicle](./05-doctor-and-launch.md)
 7. [06 — Complete Your First Conversation](./06-first-conversation.md)
 

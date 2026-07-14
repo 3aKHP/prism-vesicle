@@ -25,6 +25,20 @@ async function configureTreeSitterRuntime(): Promise<void> {
   configureTreeSitterWorkerPath();
 }
 
+async function launchProject(projectDirectory: string): Promise<void> {
+  const { launchVesicleInProject } = await import("./launch");
+  process.exitCode = await launchVesicleInProject(projectDirectory, isCompiledBinary);
+}
+
+async function runSetupFlow(): Promise<void> {
+  if (!isCompiledBinary) {
+    await import("@opentui/solid/preload");
+  }
+  const { runGuidedSetup } = await import("../setup");
+  const result = await runGuidedSetup();
+  if (result.launch && result.projectDirectory) await launchProject(result.projectDirectory);
+}
+
 switch (command) {
   case "doctor": {
     const { runDoctor } = await import("./doctor");
@@ -104,6 +118,17 @@ switch (command) {
     await runAssetsCommand(invocation.args.slice(1));
     break;
   }
+  case "setup": {
+    await runSetupFlow();
+    break;
+  }
+  case "launch": {
+    const { readSetupState } = await import("../setup/config-writer");
+    const state = await readSetupState();
+    if (state) await launchProject(state.projectDirectory);
+    else await runSetupFlow();
+    break;
+  }
   case undefined:
   case "dev": {
     if (!isCompiledBinary) {
@@ -116,6 +141,6 @@ switch (command) {
   }
   default:
     console.error(`Unknown command: ${command}`);
-    console.error("Commands: doctor, once, prompt, debug, assets, dev");
+    console.error("Commands: setup, launch, doctor, once, prompt, debug, assets, dev");
     process.exit(1);
 }
