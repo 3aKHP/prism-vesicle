@@ -15,6 +15,7 @@ describe("Windows guided installer", () => {
     expect(source).toContain("PrivilegesRequired=lowest");
     expect(source).not.toContain("PrivilegesRequiredOverridesAllowed");
     expect(source).toContain("DefaultDirName={localappdata}\\Programs\\Prism Vesicle");
+    expect(source).toContain("VersionInfoProductVersion={#FileVersion}");
     expect(source).toContain('Source: "{#SourceRoot}\\harness-manifest.json"');
     expect(source).toContain('Source: "{#SourceRoot}\\host-assets\\*"');
     expect(source).toContain('Parameters: "setup"');
