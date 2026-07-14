@@ -9,7 +9,7 @@ import { engineIds, loadEngineProfile } from "../engine/profile";
 import { AssetResolver, bundledAssetsDirectory, userAssetsDirectory } from "../runtime/assets";
 import { hostToolDefinitions } from "../tools";
 import { resolveValidators } from "../validators/registry";
-import { harnessAdapterCompatibilityIssue, supportedHarnessCapabilities, unsupportedHarnessCapabilities } from "./capability";
+import { harnessAdapterCompatibilityIssue, unsupportedHarnessCapabilities } from "./capability";
 import { loadHarnessManifest } from "./manifest";
 import type { HarnessManifest, VerifiedHarnessPack } from "./types";
 
@@ -17,7 +17,6 @@ export type HarnessVerificationOptions = {
   env?: NodeJS.ProcessEnv;
   bundledDirectory?: string;
   executablePath?: string;
-  supportedCapabilities?: ReadonlySet<string>;
 };
 
 export async function verifyHarnessPack(
@@ -29,6 +28,7 @@ export async function verifyHarnessPack(
   const files = await listPackFiles(root);
   await verifyInventory(root, files, manifest);
   verifyManifestReferences(manifest);
+  await verifyEmbeddedManifests(root, manifest);
 
   const hostAssetDirectories = defaultHostAssetDirectories(options);
   const missingExternalHostAssets = await missingHostAssets(manifest.externalHostAssets, hostAssetDirectories);
@@ -36,8 +36,7 @@ export async function verifyHarnessPack(
     await verifyProfiles(root, manifest, options);
   }
 
-  const supported = options.supportedCapabilities ?? supportedHarnessCapabilities;
-  const unsupportedCapabilities = unsupportedHarnessCapabilities(manifest, supported);
+  const unsupportedCapabilities = unsupportedHarnessCapabilities(manifest);
   const issues: string[] = [];
   if (manifest.sourceState !== "clean") issues.push("Harness sourceState is dirty.");
   const adapterIssue = harnessAdapterCompatibilityIssue(manifest);
@@ -138,6 +137,109 @@ function verifyManifestReferences(manifest: HarnessManifest): void {
   assertSameKeys("engine profile/quality", manifest.profileBindings, manifest.qualityBindings);
   assertSameKeys("agent profile/prompt", manifest.agentProfileBindings, manifest.agentPromptBindings);
   assertSameKeys("agent profile/quality", manifest.agentProfileBindings, manifest.agentQualityBindings);
+}
+
+async function verifyEmbeddedManifests(root: string, manifest: HarnessManifest): Promise<void> {
+  const requiredCapabilities = new Set(manifest.requiredCapabilities);
+  const adapter = await readEmbeddedManifest(root, manifest.driver.adapter, "Harness Host Adapter");
+  assertEmbeddedValue(adapter, "schema", "prism-host-adapter/v1", "Harness Host Adapter");
+  assertEmbeddedValue(adapter, "id", manifest.driver.adapterId, "Harness Host Adapter");
+  assertEmbeddedValue(adapter, "version", manifest.driver.adapterVersion, "Harness Host Adapter");
+  assertEmbeddedValue(adapter, "targetHost", manifest.driver.targetHost, "Harness Host Adapter");
+  assertDeclaredCapabilities(
+    readEmbeddedStringList(adapter.capabilities, "Harness Host Adapter capabilities"),
+    requiredCapabilities,
+    "Harness Host Adapter",
+  );
+  const operationBindings = readEmbeddedObject(adapter.operationBindings, "Harness Host Adapter operationBindings");
+  const runtimeCapabilities = new Set<string>();
+  const bindingKinds = new Set(["tool-group", "interaction-tool", "runtime-capability", "optional-tool"]);
+  for (const [operation, value] of Object.entries(operationBindings)) {
+    const binding = readEmbeddedObject(value, `Harness Host Adapter operation binding ${operation}`);
+    if (typeof binding.kind !== "string" || !bindingKinds.has(binding.kind)) {
+      throw new Error(`Harness Host Adapter operation binding ${operation} has an invalid kind.`);
+    }
+    if (binding.kind === "runtime-capability") {
+      if (typeof binding.capability !== "string" || binding.capability.length === 0) {
+        throw new Error(`Harness Host Adapter operation binding ${operation} must declare a capability.`);
+      }
+      runtimeCapabilities.add(binding.capability);
+    }
+  }
+  assertDeclaredCapabilities(
+    [...runtimeCapabilities],
+    requiredCapabilities,
+    "Harness Host Adapter runtime",
+  );
+
+  const ruleModuleIds = new Set(manifest.ruleModules.map((module) => module.id));
+  for (const [owner, bindings] of [
+    ...Object.entries(manifest.qualityBindings),
+    ...Object.entries(manifest.agentQualityBindings),
+  ]) {
+    for (const moduleId of Object.keys(bindings)) {
+      if (!ruleModuleIds.has(moduleId)) {
+        throw new Error(`Harness quality binding ${owner} references undeclared rule module ${moduleId}.`);
+      }
+    }
+  }
+
+  for (const module of manifest.ruleModules) {
+    const ruleManifest = await readEmbeddedManifest(root, module.manifest, `Harness rule module ${module.id}`);
+    assertEmbeddedValue(ruleManifest, "schema", "rule-pack/v1", `Harness rule module ${module.id}`);
+    assertEmbeddedValue(ruleManifest, "module", module.id, `Harness rule module ${module.id}`);
+    assertDeclaredCapabilities(
+      readEmbeddedStringList(ruleManifest.requiredCapabilities, `Harness rule module ${module.id} requiredCapabilities`),
+      requiredCapabilities,
+      `Harness rule module ${module.id}`,
+    );
+  }
+}
+
+async function readEmbeddedManifest(root: string, path: string, label: string): Promise<Record<string, unknown>> {
+  let value: unknown;
+  try {
+    value = JSON.parse(await readFile(join(root, ...path.split("/")), "utf8"));
+  } catch (error) {
+    throw new Error(`${label} is not valid JSON: ${errorMessage(error)}`);
+  }
+  return readEmbeddedObject(value, label);
+}
+
+function readEmbeddedObject(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be a JSON object.`);
+  return value as Record<string, unknown>;
+}
+
+function assertEmbeddedValue(
+  manifest: Record<string, unknown>,
+  field: string,
+  expected: string,
+  label: string,
+): void {
+  if (manifest[field] !== expected) {
+    throw new Error(`${label} field ${field} must match ${expected}.`);
+  }
+}
+
+function readEmbeddedStringList(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw new Error(`${label} must be a list of non-empty strings.`);
+  }
+  const capabilities = value as string[];
+  if (new Set(capabilities).size !== capabilities.length) throw new Error(`${label} must contain unique values.`);
+  return capabilities;
+}
+
+function assertDeclaredCapabilities(
+  capabilities: string[],
+  declared: Set<string>,
+  label: string,
+): void {
+  const missing = capabilities.filter((capability) => !declared.has(capability)).sort();
+  if (missing.length > 0) {
+    throw new Error(`${label} capabilities are missing from requiredCapabilities: ${missing.join(", ")}.`);
+  }
 }
 
 async function verifyProfiles(

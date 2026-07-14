@@ -1,7 +1,7 @@
 import type { HarnessManifest } from "./types";
 
 /** Capabilities the current host can honor without weakening their contract. */
-export const supportedHarnessCapabilities = new Set([
+const supportedCapabilities = new Set([
   "prism-harness/v1",
   "prism-driver/v1",
   "prism-host/vesicle@1",
@@ -9,11 +9,12 @@ export const supportedHarnessCapabilities = new Set([
   "prism-interaction/select@1",
 ]);
 
+export const supportedHarnessCapabilities: readonly string[] = Object.freeze([...supportedCapabilities]);
+
 export function unsupportedHarnessCapabilities(
   manifest: HarnessManifest,
-  supported: ReadonlySet<string> = supportedHarnessCapabilities,
 ): string[] {
-  return manifest.requiredCapabilities.filter((capability) => !supported.has(capability)).sort();
+  return manifest.requiredCapabilities.filter((capability) => !supportedCapabilities.has(capability)).sort();
 }
 
 export function harnessAdapterCompatibilityIssue(manifest: HarnessManifest): string | undefined {

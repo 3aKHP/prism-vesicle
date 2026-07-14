@@ -35,6 +35,9 @@ describe("Harness Pack foundation", () => {
   });
 
   test("reports unsupported capabilities without weakening integrity checks", async () => {
+    expect(Object.isFrozen(supportedHarnessCapabilities)).toBe(true);
+    expect(() => (supportedHarnessCapabilities as string[]).push("prism-agent/delegation@1")).toThrow();
+
     const fixture = await createHarnessFixture({
       requiredCapabilities: [
         ...supportedHarnessCapabilities,
@@ -50,8 +53,41 @@ describe("Harness Pack foundation", () => {
         "quality-guard/anti-ai-flavor@1",
       ]);
       expect(() => assertHarnessPackCompatible(verified)).toThrow("is not compatible");
+      await expect(installHarnessPack(fixture.pack, fixture.options)).rejects.toThrow("is not compatible");
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects capabilities hidden in Adapter and Rule manifests", async () => {
+    const adapter = await createHarnessFixture({
+      adapterCapabilities: [
+        ...supportedHarnessCapabilities.filter((capability) => capability !== "prism-harness/v1"),
+        "prism-agent/delegation@1",
+      ],
+    });
+    const rule = await createHarnessFixture({
+      ruleRequiredCapabilities: ["quality-guard/anti-ai-flavor@1"],
+    });
+    const runtime = await createHarnessFixture({
+      runtimeCapabilities: ["quality-guard/anti-ai-flavor@1"],
+    });
+    try {
+      await expect(verifyHarnessPack(adapter.pack, adapter.options)).rejects.toThrow(
+        "Host Adapter capabilities are missing from requiredCapabilities",
+      );
+      await expect(verifyHarnessPack(rule.pack, rule.options)).rejects.toThrow(
+        "rule module fixture-rule capabilities are missing from requiredCapabilities",
+      );
+      await expect(verifyHarnessPack(runtime.pack, runtime.options)).rejects.toThrow(
+        "Host Adapter runtime capabilities are missing from requiredCapabilities",
+      );
+    } finally {
+      await Promise.all([
+        rm(adapter.root, { recursive: true, force: true }),
+        rm(rule.root, { recursive: true, force: true }),
+        rm(runtime.root, { recursive: true, force: true }),
+      ]);
     }
   });
 
@@ -112,7 +148,10 @@ describe("Harness Pack foundation", () => {
 });
 
 type FixtureOptions = {
+  adapterCapabilities?: string[];
   requiredCapabilities?: string[];
+  ruleRequiredCapabilities?: string[];
+  runtimeCapabilities?: string[];
   sourceState?: "clean" | "dirty";
 };
 
@@ -178,8 +217,32 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
   const contractPath = "assets/prism-driver/contract.json";
   const adapterPath = "assets/prism-driver/adapter.json";
   await write(join(pack, ...contractPath.split("/")), "{}\n");
-  await write(join(pack, ...adapterPath.split("/")), "{}\n");
-  const assets = await assetHashes(pack);
+  await write(join(pack, ...adapterPath.split("/")), `${JSON.stringify({
+    schema: "prism-host-adapter/v1",
+    id: "vesicle-v1",
+    version: "1.0.0",
+    targetHost: "Prism Vesicle",
+    capabilities: options.adapterCapabilities
+      ?? supportedHarnessCapabilities.filter((capability) => capability !== "prism-harness/v1"),
+    operationBindings: {
+      "artifact.inspect": { kind: "tool-group", tools: ["read_file"] },
+      ...Object.fromEntries((options.runtimeCapabilities ?? []).map((capability, index) => [
+        `fixture.runtime-${index + 1}`,
+        { kind: "runtime-capability", capability },
+      ])),
+    },
+  }, null, 2)}\n`);
+  const ruleManifestPath = "assets/quality/fixture-rule/manifest.json";
+  const extraAssetPaths: string[] = [];
+  if (options.ruleRequiredCapabilities) {
+    await write(join(pack, ...ruleManifestPath.split("/")), `${JSON.stringify({
+      schema: "rule-pack/v1",
+      module: "fixture-rule",
+      requiredCapabilities: options.ruleRequiredCapabilities,
+    }, null, 2)}\n`);
+    extraAssetPaths.push(ruleManifestPath);
+  }
+  const assets = await assetHashes(pack, extraAssetPaths);
   const manifest: HarnessManifest = {
     schema: "prism-harness-pack/v1",
     id: "fixture-harness",
@@ -205,7 +268,9 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
       adapterVersion: "1.0.0",
       targetHost: "Prism Vesicle",
     },
-    ruleModules: [],
+    ruleModules: options.ruleRequiredCapabilities
+      ? [{ id: "fixture-rule", manifest: ruleManifestPath }]
+      : [],
     profileBindings,
     agentProfileBindings: { "scene-writer": agentProfilePath },
     promptBindings,
@@ -229,7 +294,7 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
   };
 }
 
-async function assetHashes(pack: string): Promise<Record<string, string>> {
+async function assetHashes(pack: string, extraPaths: string[] = []): Promise<Record<string, string>> {
   const paths: string[] = [];
   for (const engine of engineIds) {
     paths.push(`assets/engines/${engine}.profile.yaml`, `assets/prompts/engines/${engine}.md`);
@@ -239,6 +304,7 @@ async function assetHashes(pack: string): Promise<Record<string, string>> {
     "assets/prompts/agents/scene-writer.md",
     "assets/prism-driver/adapter.json",
     "assets/prism-driver/contract.json",
+    ...extraPaths,
   );
   return Object.fromEntries(await Promise.all(paths.sort().map(async (path) => [
     path,
