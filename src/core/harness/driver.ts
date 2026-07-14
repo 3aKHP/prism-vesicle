@@ -68,6 +68,17 @@ export type HarnessRuntimeContext = {
   driver: HarnessDriverContract;
   adapter: HarnessHostAdapter;
   quality?: QualityRuntimeContext;
+  identity?: HarnessRuntimeIdentity;
+};
+
+export type HarnessRuntimeIdentity = {
+  packId: string;
+  packVersion: string;
+  sourceCommit: string;
+  manifestSha256: string;
+  adapterId: string;
+  adapterVersion: string;
+  adapterHash: string;
 };
 
 export type BoundHarnessDelegation = HarnessDelegation & {

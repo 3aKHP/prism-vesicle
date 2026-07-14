@@ -19,6 +19,8 @@ import { parsePermissionRequest } from "../permissions";
 import type { PermissionMode, PermissionRequest } from "../permissions";
 import { parseHarnessDelegationDecision, type HarnessDelegationDecision } from "../harness/driver";
 import { qualityCandidateParts, qualityMutationParts, type QualityEvent } from "../quality";
+import { parseHarnessRuntimeIdentity } from "../harness/activation";
+import type { HarnessRuntimeIdentity } from "../harness/driver";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -302,6 +304,7 @@ export type SessionSnapshot = {
   permissionMode?: PermissionMode;
   /** Asset profile/prompt fingerprint recorded when the session began. */
   assets?: AssetFingerprint;
+  harness?: HarnessRuntimeIdentity;
   pendingGate?: {
     gate: GateRequest;
     toolCallId: string;
@@ -389,6 +392,7 @@ export async function loadSessionSnapshot(
   let reasoningDisplayMode: ReasoningDisplayMode | undefined;
   let permissionMode: PermissionMode | undefined;
   let assets: AssetFingerprint | undefined;
+  let harness: HarnessRuntimeIdentity | undefined;
 
   for (const record of records) {
     if (record.metadata && Object.hasOwn(record.metadata, "engine")) {
@@ -413,6 +417,7 @@ export async function loadSessionSnapshot(
       // trailing diagnostic system notices (validation, breaker notes).
       if (!skippedFirstSystem) {
         assets = parseAssetFingerprint(record.metadata?.assets);
+        harness = readHarnessRuntimeIdentity(record.metadata?.harness);
         skippedFirstSystem = true;
         continue;
       }
@@ -519,6 +524,7 @@ export async function loadSessionSnapshot(
     ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(assets ? { assets } : {}),
+    ...(harness ? { harness } : {}),
     ...(pendingGate
       ? {
           pendingGate: {
@@ -991,6 +997,16 @@ function readResponseUsage(value: unknown): ResponseUsage | undefined {
     usage.providerDetails = { ...(source.providerDetails as Record<string, unknown>) };
   }
   return Object.keys(usage).length > 0 ? usage : undefined;
+}
+
+function readHarnessRuntimeIdentity(value: unknown): HarnessRuntimeIdentity | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return parseHarnessRuntimeIdentity(value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Session Harness identity is invalid: ${message}`);
+  }
 }
 
 function copyFiniteNumber(source: Record<string, unknown>, target: ResponseUsage, key: keyof ResponseUsage): void {

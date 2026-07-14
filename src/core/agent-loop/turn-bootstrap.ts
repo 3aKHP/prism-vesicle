@@ -12,6 +12,8 @@ import { generationMetadata, mergeGeneration } from "./generation";
 import { resolveToolSurface } from "./tool-surface";
 import type { RunLoopArgs } from "./turn-loop";
 import type { RunPromptOptions } from "./types";
+import { assertSessionHarnessIdentity, resolveProjectHarnessRuntime } from "../harness/activation";
+import { loadSessionSnapshot } from "../session/store";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
@@ -20,7 +22,12 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const generation = mergeGeneration(config.generation, options.generation);
   const permission = options.permission ?? defaultPermissionRuntime;
   const provider = createProvider(config);
-  const engineAssets = await loadEngineAssetRuntime(engine, rootDir);
+  const projectHarness = !options.assets && !options.harness
+    ? await resolveProjectHarnessRuntime(rootDir)
+    : undefined;
+  const assets = options.assets ?? projectHarness?.assets;
+  const harness = options.harness ?? projectHarness?.harness;
+  const engineAssets = await loadEngineAssetRuntime(engine, rootDir, assets ? { resolver: assets } : {});
   const { profile, systemPrompt } = engineAssets;
   const toolSurface = await resolveToolSurface(
     profile,
@@ -30,6 +37,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   const isNewSession = !options.sessionId;
   if (options.sessionId) {
+    const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
+    assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   }
   const session = await createSessionStore(
@@ -60,6 +69,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
           stopGates: profile.stopGates,
         },
         assets: engineAssets.assets,
+        ...(harness?.identity ? { harness: harness.identity } : {}),
       },
     });
   }
@@ -104,7 +114,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     agentManager,
     permission,
     permissionBroker: options.permissionBroker,
-    harness: options.harness,
-    assets: options.assets,
+    harness,
+    assets,
   };
 }

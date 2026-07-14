@@ -91,6 +91,27 @@ bunx vesicle assets status
 
 For the normal installation in this chapter, `Bundled` should report files and the effective manifest should be available. Vesicle can also read user-global overrides from `%APPDATA%\prism-vesicle\assets\` and sparse overrides from `assets\` inside the current project. You do not need to create either override yet.
 
+## Optional: Select an Offline Harness Pack
+
+Advanced users can select an independently released Harness Pack after extracting it to a local directory. Verification and installation do not activate the pack:
+
+```powershell
+bunx vesicle assets verify "C:\Downloads\prism-vesicle-harness-v10"
+bunx vesicle assets install "C:\Downloads\prism-vesicle-harness-v10"
+bunx vesicle assets use "<pack-id>@<version>"
+bunx vesicle assets status
+```
+
+`use` writes `.vesicle\assets.lock.json` in the current project. Vesicle reverifies that exact installed pack whenever the project starts or a session resumes. A session recorded under a different Harness identity is blocked instead of being switched silently.
+
+To return the project to the complete bundled recovery baseline, run:
+
+```powershell
+bunx vesicle assets rollback
+```
+
+This first offline flow requires an already-extracted Release directory. It does not download, discover, extract, or automatically update Harness Packs.
+
 ## If Installation Fails
 
 - Confirm that `bun --version` works in the same terminal.

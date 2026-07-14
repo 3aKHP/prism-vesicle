@@ -4,6 +4,17 @@ export { loadHarnessManifest, parseHarnessManifest } from "./manifest";
 export { assertHarnessPackCompatible, verifyHarnessPack } from "./verify";
 export { createHarnessRuntimeContext } from "./runtime";
 export {
+  activateInstalledHarness,
+  assertSessionHarnessIdentity,
+  installedHarnessDirectory,
+  loadProjectHarnessLock,
+  parseHarnessProjectLock,
+  parseHarnessRuntimeIdentity,
+  projectHarnessLockPath,
+  resolveProjectHarnessRuntime,
+  rollbackProjectHarness,
+} from "./activation";
+export {
   bindHarnessDelegation,
   harnessDelegationFailureDecision,
   harnessDelegationFailureInteraction,
@@ -25,4 +36,6 @@ export type {
   HarnessDriverContract,
   HarnessHostAdapter,
   HarnessRuntimeContext,
+  HarnessRuntimeIdentity,
 } from "./driver";
+export type { HarnessActivationOptions, HarnessProjectLock, ProjectHarnessRuntime } from "./activation";

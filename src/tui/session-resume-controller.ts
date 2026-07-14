@@ -27,6 +27,7 @@ import {
 import { latestTurnUsage, sumSessionUsage, type TokenUsageSummary } from "./telemetry";
 import type { AgentCardState, Message, SessionPickerState } from "./types";
 import { appendHarnessDelegationDecision } from "../core/agent-loop/delegation-decision";
+import { assertSessionHarnessIdentity, resolveProjectHarnessRuntime } from "../core/harness";
 
 type InteractionState = {
   setPendingGate: Setter<PendingGateState | null>;
@@ -83,6 +84,8 @@ export function createSessionResumeController(options: SessionResumeControllerOp
       let snapshot = await loadSessionSnapshot(options.rootDir, target.sessionId, {
         synthesizeDanglingToolResults: false,
       });
+      const projectHarness = await resolveProjectHarnessRuntime(options.rootDir);
+      assertSessionHarnessIdentity(snapshot.harness, projectHarness?.harness.identity);
       if (snapshot.pendingDelegationDecisionRecovery) {
         await appendHarnessDelegationDecision({
           decision: snapshot.pendingDelegationDecisionRecovery,

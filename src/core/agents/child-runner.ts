@@ -42,6 +42,7 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
       providerId: config.providerId,
       model: config.model,
       tools: tools.map((tool) => tool.function.name),
+      ...(invocation.harness?.identity ? { harness: invocation.harness.identity } : {}),
       ...(spec.delegation ? { delegation: spec.delegation } : {}),
     },
   });

@@ -148,6 +148,45 @@ describe("runtime assets", () => {
       await rm(fixture.root, { recursive: true, force: true });
     }
   });
+
+  test("uses one managed baseline without falling through to bundled legacy files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-managed-assets-"));
+    const project = join(root, "project");
+    const config = join(root, "config");
+    const managed = join(root, "pack", "assets");
+    const bundled = join(root, "bundled");
+    try {
+      await write(join(managed, "engines", "runtime.profile.yaml"), "managed runtime");
+      await write(join(managed, "prompts", "engines", "runtime.md"), "managed prompt");
+      await write(join(bundled, "prompts", "shared", "vesicle-base.md"), "host base");
+      await write(join(bundled, "prompts", "engines", "legacy-v9.md"), "must not fall through");
+      await write(join(config, "assets", "prompts", "engines", "runtime.md"), "user override");
+      await write(join(project, "assets", "prompts", "engines", "runtime.md"), "project override");
+      const resolver = new AssetResolver(project, {
+        env: { VESICLE_CONFIG_DIR: config },
+        bundledDirectory: bundled,
+        executablePath: join(root, "missing", "vesicle"),
+        managedBaseline: {
+          assetsDirectory: managed,
+          externalHostAssets: ["assets/prompts/shared/vesicle-base.md"],
+        },
+      });
+
+      expect((await resolver.resolveFile("assets/engines/runtime.profile.yaml")).source).toBe("managed");
+      expect((await resolver.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("bundled");
+      expect((await resolver.resolveFile("assets/prompts/engines/runtime.md")).source).toBe("project");
+      await expect(resolver.resolveFile("assets/prompts/engines/legacy-v9.md")).rejects.toThrow("not found");
+      expect(await resolver.listFiles("assets", true)).toEqual([
+        "assets/engines/runtime.profile.yaml",
+        "assets/prompts/engines/runtime.md",
+        "assets/prompts/shared/vesicle-base.md",
+      ]);
+      const fingerprint = await resolver.fingerprint(await resolver.listFiles("assets", true));
+      expect(fingerprint.files.map((file) => file.source)).toEqual(["managed", "project", "bundled"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 async function createLayerFixture(): Promise<{

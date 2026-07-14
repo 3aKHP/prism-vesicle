@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端工作流宿主。它会加载可编辑的 Prism v9 引擎资产，将其连接到模型供应商与宿主工具，并通过持久化会话保存对话和制品生产过程。
+Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端工作流宿主。它会加载内置的 Prism v9 恢复资产或项目固定的 V10 Harness Pack，将其连接到模型供应商与宿主工具，并通过持久化会话保存对话和制品生产过程。
 
 > **Alpha 状态：**`1.0.0-alpha.1` 是用于实际试用的公开版本，而不是已经完成的终端用户产品。目前受支持的入门路径是[以 Windows 为主线的用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor`、`vesicle prompt shape --engine <id>` 以及 [`docs/examples/`](./docs/examples/) 下的示例。命令交互和运行时契约在后续 alpha 版本中仍可能变化。
 
@@ -21,7 +21,7 @@ npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 ```
 
-软件包包含只读的默认运行时资产。Vesicle 会逐文件解析每个逻辑 `assets/...` 路径，优先级依次为：当前项目中的稀疏 `assets/` 覆盖、Vesicle 用户配置目录中的全局覆盖、当前软件包或独立发行版附带的默认资产。
+软件包包含只读的默认运行时资产。Vesicle 会先解析当前项目与用户级全局的稀疏 `assets/` 覆盖，然后只使用一个完整基线：经过验证且由项目固定的托管 Harness Pack，或当前软件包与独立发行版附带的默认资产。
 
 查看当前资产层和生效 manifest 的来源：
 
@@ -42,6 +42,17 @@ bunx vesicle assets init
 ```
 
 资产初始化和 materialize 命令都不会覆盖已经存在的文件。
+
+高级项目可以验证并安装一个已经解压的 Harness Release，然后显式固定它：
+
+```bash
+bunx vesicle assets verify /path/to/extracted-pack
+bunx vesicle assets install /path/to/extracted-pack
+bunx vesicle assets use <pack-id>@<version>
+bunx vesicle assets status
+```
+
+项目锁位于 `.vesicle/assets.lock.json`。Vesicle 会在启动和恢复会话时重新验证已安装的 Pack，并阻止 Harness 身份记录与项目不一致的会话。`bunx vesicle assets rollback` 会移除项目选择，并恢复整个内置恢复基线。压缩包解压、在线发现和自动更新不属于这条离线流程。
 
 ### 从源码运行
 
@@ -124,14 +135,14 @@ bun run dev
 
 ## Vesicle 当前支持的能力
 
-- 由配置档驱动的 Prism 引擎；其提示、工具、验证器和确认门通过内置、用户全局与项目 `assets/` 层解析。
+- 由配置档驱动的 Prism 引擎；其提示、工具、验证器和确认门通过项目/用户覆盖以及托管 Harness 或内置恢复基线解析。
 - 支持流式输出的 OpenAI-compatible、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
 - 可选的 Tavily Web 研究、Streamable HTTP MCP 工具，以及面向声明视觉能力模型的多模态图像输入。
 - 四档粗粒度工具批准模式，以及显式启用的非交互式 `shell_exec` 进程运行时；它具备精确计划批准、环境过滤、受限实时输出、超时、进程树清理、前台/后台执行、持久 `shell-N` 任务状态、完成通知和显式输出/停止控制。
 - 支持前台与后台 SubAgent、并行执行、独立的内置或自定义 Agent Profile、专用实时 Agent 卡片、面向模型和用户的短句柄、持久化结果投递，以及无需轮询的主 Engine 自动续接。
-- npm 分发，以及带有不可变外部默认资产包和稀疏可编辑全局/项目覆盖的 Windows 与 Linux 独立构建。
+- npm 分发，以及带有不可变外部恢复资产包、离线托管 Harness 选择和稀疏可编辑全局/项目覆盖的 Windows 与 Linux 独立构建。
 
 权威的实现清单、工具接口、验证器和已知限制请参阅 [`STATUS.md`](./STATUS.md)。
 

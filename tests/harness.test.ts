@@ -1,18 +1,26 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { engineIds } from "../src/core/engine/profile";
 import {
   assertHarnessPackCompatible,
+  activateInstalledHarness,
+  assertSessionHarnessIdentity,
   harnessPacksDirectory,
   installHarnessPack,
+  loadProjectHarnessLock,
   parseHarnessManifest,
+  resolveProjectHarnessRuntime,
+  rollbackProjectHarness,
   supportedHarnessCapabilities,
   verifyHarnessPack,
 } from "../src/core/harness";
 import type { HarnessManifest } from "../src/core/harness";
+import { runPrompt } from "../src/core/agent-loop/run";
+import { createSessionStore, loadSessionSnapshot } from "../src/core/session/store";
+import { inspectAssets, materializeEditableAssets, parseHarnessReference } from "../src/cli/assets";
 
 describe("Harness Pack foundation", () => {
   test("verifies a complete compatible pack and its runtime bindings", async () => {
@@ -190,6 +198,218 @@ describe("Harness Pack foundation", () => {
       await rm(fixture.root, { recursive: true, force: true });
     }
   });
+
+  test("activates, re-verifies, and rolls back one project-managed baseline", async () => {
+    const fixture = await createHarnessFixture();
+    const project = join(fixture.root, "project");
+    try {
+      await write(join(fixture.host, "legacy-v9-only.md"), "must not fall through");
+      const installed = await installHarnessPack(fixture.pack, fixture.options);
+      const active = await activateInstalledHarness(
+        project,
+        installed.manifest.id,
+        installed.manifest.version,
+        fixture.options,
+      );
+      const reactivated = await activateInstalledHarness(
+        project,
+        installed.manifest.id,
+        installed.manifest.version,
+        fixture.options,
+      );
+      expect(reactivated.lock).toEqual(active.lock);
+      expect(await loadProjectHarnessLock(project)).toEqual(active.lock);
+      expect(active.harness.identity).toEqual(expect.objectContaining({
+        packId: "fixture-harness",
+        packVersion: "10.0.0-test.1",
+        adapterId: "vesicle-v1",
+      }));
+      expect((await active.assets.resolveFile("assets/engines/runtime.profile.yaml")).source).toBe("managed");
+      expect((await active.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("bundled");
+      await expect(active.assets.resolveFile("assets/legacy-v9-only.md")).rejects.toThrow("not found");
+      expect(parseHarnessReference("fixture-harness@10.0.0-test.1")).toEqual({
+        packId: "fixture-harness",
+        packVersion: "10.0.0-test.1",
+      });
+      const status = await inspectAssets(project, fixture.options);
+      expect(status.managed).toEqual(active.lock);
+      expect(status.layers.find((layer) => layer.source === "bundled")?.fileCount).toBe(2);
+      await materializeEditableAssets("assets/prompts/engines/runtime.md", project, {
+        env: fixture.options.env,
+      });
+      expect(await readFile(join(project, "assets", "prompts", "engines", "runtime.md"), "utf8"))
+        .toBe("runtime prompt");
+
+      const resumed = await resolveProjectHarnessRuntime(project, fixture.options);
+      expect(resumed?.lock).toEqual(active.lock);
+      expect(() => assertSessionHarnessIdentity(active.harness.identity, resumed?.harness.identity)).not.toThrow();
+      expect(() => assertSessionHarnessIdentity(undefined, resumed?.harness.identity)).toThrow("does not match");
+
+      await rollbackProjectHarness(project);
+      expect(await loadProjectHarnessLock(project)).toBeUndefined();
+      expect(await resolveProjectHarnessRuntime(project, fixture.options)).toBeUndefined();
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("fails closed when an installed managed pack drifts after activation", async () => {
+    const fixture = await createHarnessFixture();
+    const project = join(fixture.root, "project");
+    try {
+      const installed = await installHarnessPack(fixture.pack, fixture.options);
+      await activateInstalledHarness(project, installed.manifest.id, installed.manifest.version, fixture.options);
+      await writeFile(join(installed.directory, "assets", "prompts", "engines", "runtime.md"), "tampered", "utf8");
+      await expect(resolveProjectHarnessRuntime(project, fixture.options)).rejects.toThrow("hash mismatch");
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("fails closed for malformed locks and missing installed packs", async () => {
+    const fixture = await createHarnessFixture();
+    const project = join(fixture.root, "project");
+    try {
+      const installed = await installHarnessPack(fixture.pack, fixture.options);
+      await activateInstalledHarness(project, installed.manifest.id, installed.manifest.version, fixture.options);
+      await writeFile(join(project, ".vesicle", "assets.lock.json"), "{}\n", "utf8");
+      await expect(resolveProjectHarnessRuntime(project, fixture.options)).rejects.toThrow(
+        "Project Harness lock is invalid",
+      );
+
+      await activateInstalledHarness(project, installed.manifest.id, installed.manifest.version, fixture.options);
+      await rm(installed.directory, { recursive: true, force: true });
+      await expect(resolveProjectHarnessRuntime(project, fixture.options)).rejects.toThrow(
+        "Cannot access Harness pack directory",
+      );
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves the previous project lock when runtime construction fails", async () => {
+    const current = await createHarnessFixture();
+    const invalid = await createHarnessFixture({
+      packVersion: "10.0.0-test.2",
+      ruleModuleId: "anti-ai-flavor",
+      ruleRequiredCapabilities: ["quality-guard/anti-ai-flavor@1"],
+    });
+    const project = join(current.root, "project");
+    try {
+      const installedCurrent = await installHarnessPack(current.pack, current.options);
+      const active = await activateInstalledHarness(
+        project,
+        installedCurrent.manifest.id,
+        installedCurrent.manifest.version,
+        current.options,
+      );
+      const invalidOptions = {
+        ...invalid.options,
+        env: current.options.env,
+        bundledDirectory: current.host,
+      };
+      await expect(installHarnessPack(invalid.pack, invalidOptions)).rejects.toThrow("Rule Pack manifest");
+      const invalidDirectory = join(
+        harnessPacksDirectory(current.options.env),
+        "fixture-harness",
+        "10.0.0-test.2",
+      );
+      await mkdir(join(harnessPacksDirectory(current.options.env), "fixture-harness"), { recursive: true });
+      await cp(invalid.pack, invalidDirectory, { recursive: true });
+
+      await expect(activateInstalledHarness(
+        project,
+        "fixture-harness",
+        "10.0.0-test.2",
+        invalidOptions,
+      )).rejects.toThrow("Rule Pack manifest");
+      expect(await loadProjectHarnessLock(project)).toEqual(active.lock);
+      expect((await resolveProjectHarnessRuntime(project, current.options))?.lock).toEqual(active.lock);
+    } finally {
+      await rm(current.root, { recursive: true, force: true });
+      await rm(invalid.root, { recursive: true, force: true });
+    }
+  });
+
+  test("does not resume an unpinned session after managed activation", async () => {
+    const fixture = await createHarnessFixture();
+    const project = join(fixture.root, "project");
+    try {
+      const session = await createSessionStore(project, "pre-managed-session");
+      await session.append({ role: "system", content: "legacy prompt" });
+      await session.append({ role: "user", content: "legacy turn" });
+      const installed = await installHarnessPack(fixture.pack, fixture.options);
+      const active = await activateInstalledHarness(project, installed.manifest.id, installed.manifest.version, fixture.options);
+      const snapshot = await loadSessionSnapshot(project, session.sessionId);
+
+      expect(() => assertSessionHarnessIdentity(snapshot.harness, active.harness.identity)).toThrow(
+        "Session Harness identity does not match",
+      );
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("starts and resumes a session from the verified project-managed baseline", async () => {
+    const fixture = await createHarnessFixture();
+    const project = join(fixture.root, "project");
+    const providers = join(fixture.config, "providers.yaml");
+    const originalProvidersFile = process.env.VESICLE_PROVIDERS_FILE;
+    const originalFetch = globalThis.fetch;
+    try {
+      await write(providers, [
+        "default:",
+        "  provider: test",
+        "  model: test-model",
+        "providers:",
+        "  test:",
+        "    protocol: openai-chat-compatible",
+        "    baseUrl: https://provider.test/v1",
+        "    apiKeyEnv: TEST_KEY",
+        "    models:",
+        "      - test-model",
+        "",
+      ].join("\n"));
+      await write(join(fixture.config, ".env"), "TEST_KEY=test-secret\n");
+      process.env.VESICLE_PROVIDERS_FILE = providers;
+      globalThis.fetch = (async () => Response.json({
+        id: "managed-session",
+        choices: [{ message: { content: "managed response" } }],
+      })) as unknown as typeof fetch;
+      const installed = await installHarnessPack(fixture.pack, fixture.options);
+      const active = await activateInstalledHarness(project, installed.manifest.id, installed.manifest.version, fixture.options);
+
+      const first = await runPrompt({ input: "start", engine: "runtime", rootDir: project });
+      expect(first.kind).toBe("complete");
+      expect(first.profile.protocolVersion).toBe("v10.0-test");
+      const snapshot = await loadSessionSnapshot(project, first.sessionId);
+      expect(snapshot.harness).toEqual(active.harness.identity);
+      expect(snapshot.assets?.files.some((file) => file.source === "managed")).toBe(true);
+
+      const resumed = await runPrompt({
+        input: "continue",
+        engine: "runtime",
+        rootDir: project,
+        sessionId: first.sessionId,
+        messages: [...first.messages, { role: "user", content: "continue" }],
+      });
+      expect(resumed.kind).toBe("complete");
+
+      await rollbackProjectHarness(project);
+      await expect(runPrompt({
+        input: "continue after rollback",
+        engine: "runtime",
+        rootDir: project,
+        sessionId: first.sessionId,
+        messages: resumed.messages,
+      })).rejects.toThrow("Session Harness identity does not match");
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalProvidersFile === undefined) delete process.env.VESICLE_PROVIDERS_FILE;
+      else process.env.VESICLE_PROVIDERS_FILE = originalProvidersFile;
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
 });
 
 type FixtureOptions = {
@@ -199,12 +419,15 @@ type FixtureOptions = {
   ruleRequiredCapabilities?: string[];
   runtimeCapabilities?: string[];
   sourceState?: "clean" | "dirty";
+  packVersion?: string;
+  ruleModuleId?: string;
 };
 
 async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
   root: string;
   pack: string;
   host: string;
+  config: string;
   options: { env: NodeJS.ProcessEnv; bundledDirectory: string; executablePath: string };
 }> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-harness-"));
@@ -295,12 +518,13 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
       ])),
     },
   }, null, 2)}\n`);
-  const ruleManifestPath = "assets/quality/fixture-rule/manifest.json";
+  const ruleModuleId = options.ruleModuleId ?? "fixture-rule";
+  const ruleManifestPath = `assets/quality/${ruleModuleId}/manifest.json`;
   const extraAssetPaths: string[] = [];
   if (options.ruleRequiredCapabilities) {
     await write(join(pack, ...ruleManifestPath.split("/")), `${JSON.stringify({
       schema: "rule-pack/v1",
-      module: "fixture-rule",
+      module: ruleModuleId,
       requiredCapabilities: options.ruleRequiredCapabilities,
     }, null, 2)}\n`);
     extraAssetPaths.push(ruleManifestPath);
@@ -309,7 +533,7 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
   const manifest: HarnessManifest = {
     schema: "prism-harness-pack/v1",
     id: "fixture-harness",
-    version: "10.0.0-test.1",
+    version: options.packVersion ?? "10.0.0-test.1",
     sourceRepository: "fixture/repository",
     sourceCommit: "fixture-commit",
     sourceState: options.sourceState ?? "clean",
@@ -333,7 +557,7 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
       targetHost: "Prism Vesicle",
     },
     ruleModules: options.ruleRequiredCapabilities
-      ? [{ id: "fixture-rule", manifest: ruleManifestPath }]
+      ? [{ id: ruleModuleId, manifest: ruleManifestPath }]
       : [],
     profileBindings,
     agentProfileBindings: { "scene-writer": agentProfilePath },
@@ -350,6 +574,7 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
     root,
     pack,
     host,
+    config,
     options: {
       env: { VESICLE_CONFIG_DIR: config },
       bundledDirectory: host,

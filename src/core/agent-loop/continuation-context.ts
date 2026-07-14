@@ -13,6 +13,7 @@ import type { HarnessRuntimeContext } from "../harness/driver";
 import { mergeGeneration } from "./generation";
 import type { AgentLoopEvent } from "./types";
 import { resolveToolSurface } from "./tool-surface";
+import { assertSessionHarnessIdentity, resolveProjectHarnessRuntime } from "../harness/activation";
 
 export type ContinuationContextOptions = {
   engine: EngineId;
@@ -35,7 +36,14 @@ export async function loadContinuationContext(
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const provider = createProvider(config);
-  const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir);
+  const projectHarness = !options.assets && !options.harness
+    ? await resolveProjectHarnessRuntime(rootDir)
+    : undefined;
+  const assets = options.assets ?? projectHarness?.assets;
+  const harness = options.harness ?? projectHarness?.harness;
+  const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
+  assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
+  const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir, assets ? { resolver: assets } : {});
   const { profile, systemPrompt } = engineAssets;
   if (behavior.emitAssetDrift !== false) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
@@ -56,8 +64,8 @@ export async function loadContinuationContext(
     systemPrompt,
     toolSurface,
     session,
-    harness: options.harness,
-    assets: options.assets,
+    harness,
+    assets,
   };
 }
 

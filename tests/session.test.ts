@@ -19,6 +19,16 @@ describe("session resume", () => {
     expect(snapshot.assets).toEqual(assets);
   });
 
+  test("fails closed when initial Harness identity metadata is malformed", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-harness-invalid-"));
+    const store = await createSessionStore(rootDir);
+    await store.append({ role: "system", content: "prompt", metadata: { harness: { packId: "partial" } } });
+
+    await expect(loadSessionSnapshot(rootDir, store.sessionId)).rejects.toThrow(
+      "Session Harness identity is invalid",
+    );
+  });
+
   test("restores durable image attachment references without base64", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-images-"));
     const store = await createSessionStore(rootDir);
