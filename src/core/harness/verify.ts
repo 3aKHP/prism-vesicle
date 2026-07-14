@@ -14,6 +14,13 @@ import { hostToolDefinitions } from "../tools";
 import { askUserQuestionToolDefinition } from "../user-question/types";
 import { resolveValidators } from "../validators/registry";
 import { harnessAdapterCompatibilityIssue, unsupportedHarnessCapabilities } from "./capability";
+import {
+  parseHarnessDriverContract,
+  parseHarnessHostAdapter,
+  validateHarnessDelegationContract,
+  type HarnessDriverContract,
+  type HarnessHostAdapter,
+} from "./driver";
 import { loadHarnessManifest } from "./manifest";
 import type { HarnessManifest, VerifiedHarnessPack } from "./types";
 
@@ -32,12 +39,12 @@ export async function verifyHarnessPack(
   const files = await listPackFiles(root);
   await verifyInventory(root, files, manifest);
   verifyManifestReferences(manifest);
-  await verifyEmbeddedManifests(root, manifest);
+  const { driverContract, hostAdapter } = await verifyEmbeddedManifests(root, manifest);
 
   const hostAssetDirectories = defaultHostAssetDirectories(options);
   const missingExternalHostAssets = await missingHostAssets(manifest.externalHostAssets, hostAssetDirectories);
   if (missingExternalHostAssets.length === 0) {
-    await verifyProfiles(root, manifest, options);
+    await verifyProfiles(root, manifest, driverContract, options);
   }
 
   const unsupportedCapabilities = unsupportedHarnessCapabilities(manifest);
@@ -64,6 +71,8 @@ export async function verifyHarnessPack(
       missingExternalHostAssets,
       issues,
     },
+    driverContract,
+    hostAdapter,
   };
 }
 
@@ -143,9 +152,16 @@ function verifyManifestReferences(manifest: HarnessManifest): void {
   assertSameKeys("agent profile/quality", manifest.agentProfileBindings, manifest.agentQualityBindings);
 }
 
-async function verifyEmbeddedManifests(root: string, manifest: HarnessManifest): Promise<void> {
+async function verifyEmbeddedManifests(
+  root: string,
+  manifest: HarnessManifest,
+): Promise<{ driverContract: HarnessDriverContract; hostAdapter: HarnessHostAdapter }> {
   const requiredCapabilities = new Set(manifest.requiredCapabilities);
+  const driverContract = parseHarnessDriverContract(
+    await readEmbeddedManifest(root, manifest.driver.contract, "Harness Driver Contract"),
+  );
   const adapter = await readEmbeddedManifest(root, manifest.driver.adapter, "Harness Host Adapter");
+  const hostAdapter = parseHarnessHostAdapter(adapter);
   assertEmbeddedValue(adapter, "schema", "prism-host-adapter/v1", "Harness Host Adapter");
   assertEmbeddedValue(adapter, "id", manifest.driver.adapterId, "Harness Host Adapter");
   assertEmbeddedValue(adapter, "version", manifest.driver.adapterVersion, "Harness Host Adapter");
@@ -214,6 +230,20 @@ async function verifyEmbeddedManifests(root: string, manifest: HarnessManifest):
       `Harness rule module ${module.id}`,
     );
   }
+  validateHarnessDelegationContract(
+    driverContract,
+    hostAdapter,
+    engineIds,
+    Object.keys(manifest.agentProfileBindings),
+  );
+  const hasDelegations = Object.values(driverContract.engines).some((engine) => engine.delegations.length > 0);
+  const declaresDelegationCapability = requiredCapabilities.has("prism-agent/delegation@1");
+  if (hasDelegations !== declaresDelegationCapability) {
+    throw new Error(hasDelegations
+      ? "Harness Driver Contract delegations require prism-agent/delegation@1."
+      : "Harness requires prism-agent/delegation@1 but the Driver Contract declares no delegations.");
+  }
+  return { driverContract, hostAdapter };
 }
 
 async function readEmbeddedManifest(root: string, path: string, label: string): Promise<Record<string, unknown>> {
@@ -277,6 +307,7 @@ function assertKnownAdapterTools(tools: string[], known: Set<string>, operation:
 async function verifyProfiles(
   root: string,
   manifest: HarnessManifest,
+  driverContract: HarnessDriverContract,
   options: HarnessVerificationOptions,
 ): Promise<void> {
   assertExactKeys("Harness engine bindings", manifest.profileBindings, engineIds);
@@ -308,6 +339,9 @@ async function verifyProfiles(
     const profile = await loadAgentProfile(agentId, root, resolver);
     if (!sameList(profile.systemPrompt, manifest.agentPromptBindings[agentId])) {
       throw new Error(`Harness prompt binding drift for Agent ${agentId}.`);
+    }
+    if (driverContract.agents[agentId]?.defaultMode !== profile.defaultMode) {
+      throw new Error(`Harness Agent ${agentId} defaultMode does not match the Driver Contract.`);
     }
     // Explicit released-pack allowlists must be portable across projects, so
     // runtime-local MCP and parent-only tool names are not valid dependencies.

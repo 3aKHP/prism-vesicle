@@ -17,6 +17,7 @@ import { parseImageAttachments } from "../attachments/store";
 import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets";
 import { parsePermissionRequest } from "../permissions";
 import type { PermissionMode, PermissionRequest } from "../permissions";
+import { parseHarnessDelegationDecision, type HarnessDelegationDecision } from "../harness/driver";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -138,6 +139,16 @@ export type SessionSummary = {
     tool: string;
     command?: string;
   };
+  pendingDelegationRetry?: PendingDelegationRetry;
+};
+
+export type PendingDelegationRetry = {
+  intentId: string;
+  interactionId: string;
+  failedRunId: string;
+  delegationId: string;
+  attempt: number;
+  retryCallId: string;
 };
 
 /**
@@ -187,6 +198,8 @@ export async function listSessions(
     const pendingEngineSwitch = findPendingEngineSwitch(records);
     const pendingUserQuestion = findPendingUserQuestion(records);
     const pendingPermission = findPendingPermission(records);
+    const pendingDelegationRetry = findPendingDelegationRetry(records);
+    const pendingDelegationDecisionRecovery = findPendingDelegationDecisionRecovery(records);
     summaries.push({
       sessionId,
       startedAt: firstRecord.ts,
@@ -197,12 +210,18 @@ export async function listSessions(
       ...(pendingEngineSwitch
         ? { pendingEngineSwitch: { targetEngine: pendingEngineSwitch.request.targetEngine, reason: pendingEngineSwitch.request.reason } }
         : {}),
-      ...(pendingUserQuestion
-        ? { pendingUserQuestion: { header: pendingUserQuestion.question.header, question: pendingUserQuestion.question.question } }
+      ...(pendingUserQuestion || pendingDelegationDecisionRecovery
+        ? {
+          pendingUserQuestion: {
+            header: (pendingUserQuestion?.question ?? pendingDelegationDecisionRecovery!.question).header,
+            question: (pendingUserQuestion?.question ?? pendingDelegationDecisionRecovery!.question).question,
+          },
+        }
         : {}),
       ...(pendingPermission
         ? { pendingPermission: { tool: pendingPermission.toolName, ...(pendingPermission.executionPlan ? { command: pendingPermission.executionPlan.command } : {}) } }
         : {}),
+      ...(pendingDelegationRetry ? { pendingDelegationRetry } : {}),
     });
   }
 
@@ -273,8 +292,11 @@ export type SessionSnapshot = {
     question: UserQuestionRequest;
     toolCallId: string;
     assistantContent: string;
+    delegationDecision?: HarnessDelegationDecision;
   };
   pendingPermission?: PermissionRequest;
+  pendingDelegationRetry?: PendingDelegationRetry;
+  pendingDelegationDecisionRecovery?: HarnessDelegationDecision;
 };
 
 export async function loadSessionMessages(rootDir: string, sessionId: string): Promise<ResumedMessage[]> {
@@ -438,6 +460,8 @@ export async function loadSessionSnapshot(
   const pendingEngineSwitch = findPendingEngineSwitch(records);
   const pendingUserQuestion = findPendingUserQuestion(records);
   const pendingPermission = findPendingPermission(records);
+  const pendingDelegationRetry = findPendingDelegationRetry(records);
+  const pendingDelegationDecisionRecovery = findPendingDelegationDecisionRecovery(records);
   applyBackgroundProcessCompletions(messages, records);
   appendIndeterminateProcessResults(messages, records);
   const preservedPendingCallIds = options.synthesizeDanglingToolResults
@@ -488,10 +512,80 @@ export async function loadSessionSnapshot(
             question: pendingUserQuestion.question,
             toolCallId: pendingUserQuestion.toolCallId,
             assistantContent: pendingUserQuestion.assistantContent,
+            ...(pendingUserQuestion.delegationDecision ? { delegationDecision: pendingUserQuestion.delegationDecision } : {}),
           },
         }
       : {}),
     ...(pendingPermission ? { pendingPermission } : {}),
+    ...(pendingDelegationRetry ? { pendingDelegationRetry } : {}),
+    ...(pendingDelegationDecisionRecovery ? { pendingDelegationDecisionRecovery } : {}),
+  };
+}
+
+function findPendingDelegationDecisionRecovery(records: SessionRecord[]): HarnessDelegationDecision | undefined {
+  const persisted = new Map<string, HarnessDelegationDecision>();
+  const restored = new Set<string>();
+  for (const record of records) {
+    if (record.role === "tool" && record.metadata?.delegationDecision) {
+      try {
+        const decision = parseHarnessDelegationDecision(record.metadata.delegationDecision);
+        persisted.set(decision.failed.runId, decision);
+      } catch {
+        // Invalid host metadata cannot be restored as an executable decision.
+      }
+    }
+    if (record.role === "assistant" && record.metadata?.kind === "delegation-decision-point") {
+      try {
+        restored.add(parseHarnessDelegationDecision(record.metadata.decision).failed.runId);
+      } catch {
+        // The malformed decision point remains unusable and does not mask recovery.
+      }
+    }
+  }
+  return [...persisted.values()].reverse().find((decision) => !restored.has(decision.failed.runId));
+}
+
+function findPendingDelegationRetry(records: SessionRecord[]): PendingDelegationRetry | undefined {
+  const intents = new Map<string, PendingDelegationRetry>();
+  const authorized = new Set<string>();
+  const answeredToolCallIds = new Set(records.flatMap((record) =>
+    record.role === "tool" && typeof record.metadata?.toolCallId === "string"
+      ? [record.metadata.toolCallId]
+      : []
+  ));
+  for (const record of records) {
+    if (record.metadata?.kind === "delegation-retry-intent") {
+      const intent = parsePendingDelegationRetry(record.metadata.retryIntent);
+      if (intent) intents.set(intent.intentId, intent);
+    }
+    const retryIntentId = record.metadata?.retryIntentId;
+    if (typeof retryIntentId !== "string") continue;
+    if (record.metadata?.kind === "delegation-decision-resolution" && record.metadata.optionId === "retry") {
+      authorized.add(retryIntentId);
+    }
+  }
+  return [...intents.values()].reverse().find((intent) =>
+    authorized.has(intent.intentId) && !answeredToolCallIds.has(intent.retryCallId)
+  );
+}
+
+function parsePendingDelegationRetry(value: unknown): PendingDelegationRetry | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  if (typeof source.id !== "string"
+    || typeof source.interactionId !== "string"
+    || typeof source.failedRunId !== "string"
+    || typeof source.delegationId !== "string"
+    || !Number.isInteger(source.attempt)
+    || Number(source.attempt) < 1
+    || typeof source.retryCallId !== "string") return undefined;
+  return {
+    intentId: source.id,
+    interactionId: source.interactionId,
+    failedRunId: source.failedRunId,
+    delegationId: source.delegationId,
+    attempt: Number(source.attempt),
+    retryCallId: source.retryCallId,
   };
 }
 
@@ -649,7 +743,12 @@ function findPendingEngineSwitch(records: SessionRecord[]): { request: EngineSwi
   return undefined;
 }
 
-function findPendingUserQuestion(records: SessionRecord[]): { question: UserQuestionRequest; toolCallId: string; assistantContent: string } | undefined {
+function findPendingUserQuestion(records: SessionRecord[]): {
+  question: UserQuestionRequest;
+  toolCallId: string;
+  assistantContent: string;
+  delegationDecision?: HarnessDelegationDecision;
+} | undefined {
   const answeredToolCallIds = new Set<string>();
   for (const record of records) {
     if (record.role === "tool") {
@@ -665,10 +764,14 @@ function findPendingUserQuestion(records: SessionRecord[]): { question: UserQues
     const questionCall = toolCalls?.find((call) => call.name === "ask_user_question" && !answeredToolCallIds.has(call.id));
     if (!questionCall) return undefined;
     try {
+      const delegationDecision = record.metadata?.kind === "delegation-decision-point"
+        ? parseHarnessDelegationDecision(record.metadata.decision)
+        : undefined;
       return {
-        question: parseUserQuestionRequest(questionCall),
+        question: delegationDecision?.question ?? parseUserQuestionRequest(questionCall),
         toolCallId: questionCall.id,
         assistantContent: record.content,
+        ...(delegationDecision ? { delegationDecision } : {}),
       };
     } catch {
       return undefined;

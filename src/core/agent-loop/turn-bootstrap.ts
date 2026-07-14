@@ -104,5 +104,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     agentManager,
     permission,
     permissionBroker: options.permissionBroker,
+    harness: options.harness,
+    assets: options.assets,
   };
 }

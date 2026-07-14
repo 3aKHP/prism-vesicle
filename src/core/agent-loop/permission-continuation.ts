@@ -159,6 +159,8 @@ async function continuePermissionSequence(
     agentManager: context.agentManager,
     permission: context.permission,
     permissionBroker: options.permissionBroker,
+    harness: context.harness,
+    assets: context.assets,
   });
 }
 
@@ -171,11 +173,23 @@ async function executeApprovedEntry(
 ): Promise<ToolResult> {
   const call = permissionCall(entry.request);
   if (entry.resolution.decision === "reject") {
+    const content = context.harness && agentToolNames.has(call.name)
+      ? JSON.stringify({
+        error: {
+          category: "denied",
+          message: entry.resolution.feedback
+            ? `Permission denied by the user. Feedback: ${entry.resolution.feedback}`
+            : "Permission denied by the user.",
+        },
+      })
+      : entry.resolution.feedback
+        ? `Permission denied by the user. Feedback: ${entry.resolution.feedback}`
+        : "Permission denied by the user.";
     return {
       callId: call.id,
       name: call.name,
       ok: false,
-      content: entry.resolution.feedback ? `Permission denied by the user. Feedback: ${entry.resolution.feedback}` : "Permission denied by the user.",
+      content,
     };
   }
   if (!context.toolSurface.definitions.some((definition) => definition.function.name === call.name)) {
@@ -212,6 +226,8 @@ async function executeApprovedEntry(
         beforeMutation: async (paths) => context.checkpoint?.trackBeforeMutation(paths),
         permission: context.permission,
         permissionBroker: options.permissionBroker,
+        harness: context.harness,
+        assets: context.assets,
       },
     });
   }

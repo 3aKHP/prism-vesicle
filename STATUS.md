@@ -1,6 +1,6 @@
 # Prism Vesicle Project Status
 
-_Last updated: 2026-07-12_
+_Last updated: 2026-07-14_
 
 ## Current Version
 
@@ -25,7 +25,8 @@ _Last updated: 2026-07-12_
 | Multimodal input | Clipboard attachments + guarded project image inspection | Implemented on development branch |
 | Runtime assets | Bundled defaults + user-global + sparse project overlays | Implemented on development branch |
 | Harness Pack foundation | Manifest/hash/binding/capability verification + immutable directory install | Implemented on development branch; activation deferred |
-| SubAgents | Profile-driven foreground/background parallel child runtime + durable completion delivery | Implemented on development branch |
+| Harness delegation | Contract-bound Driver delegation over the generic SubAgent runtime | Implemented on development branch; V10 activation still blocked on Output Quality Guard |
+| SubAgents | Profile-driven foreground/background child runtime + contract-bound sequential Harness delivery | Implemented on development branch |
 | Tool permissions | MANUAL / INERTIA / MOMENTUM / YOLO + parent-owned child requests | Implemented on development branch |
 | Host shell | Opt-in foreground/background shell_exec + bounded Process Runtime | Implemented on development branch |
 
@@ -321,7 +322,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - Directory tools intentionally omit recursive deletion and directory-tree copying in the first guarded surface. Models must delete contents explicitly before `delete_directory`; `move_directory` never overwrites an existing target.
 - SubAgent recursion is disabled in the first runtime. Top-level children run concurrently (default maximum four), but child profiles do not receive the agent-control tools. A process restart marks previously running children as failed and delivers that terminal result; it does not replay an in-flight provider request.
 - SubAgent handles are unique within one parent session rather than globally; host-only run ids preserve global storage and recovery identity. Legacy UUID-style Agent references remain accepted but are no longer emitted.
-- Concrete Weaver-Orch scene allocation, Evaluate reviewer composition, and artifact merge policy remain Harness responsibilities. Vesicle supplies the generic Agent Profile, scheduling, persistence, and delivery substrate.
+- Concrete Weaver-Orch scene allocation, Evaluate reviewer composition, and artifact merge policy remain Harness responsibilities. Vesicle supplies the generic Agent Profile, scheduling, persistence, and delivery substrate. When an active managed Harness provides a verified Driver Contract, `spawn_agent` binds the requested Agent to the parent Engine's unique delegation, fixed foreground/background mode, purpose, retry limit, and ABI error model. Contract-bound delegations run sequentially, persist attempts and terminal state, and enter the declared resumable user decision point after transient retries are exhausted.
 - OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini
   `generateContent` are implemented. OpenAI Responses is deferred.
 - The provider registry supports multiple configured providers using
@@ -361,7 +362,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 - `shell_exec` is a user-authorized host command, not an OS sandbox. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind. `runInBackground` returns a managed `shell-N` task immediately; progress and completion remain visible in the TUI, terminal output/status are persisted under `.vesicle/processes/`, and completion is delivered to the next provider turn without polling. A process still running when the Vesicle host restarts is recovered as interrupted rather than replayed.
 - Process cleanup terminates the managed shell and ordinary descendants in its process group/tree. Because `shell_exec` is intentionally not an OS sandbox, an explicitly approved command can still use platform facilities such as a new session or external service manager to create work outside that managed tree.
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
-- Managed Harness Pack verification and immutable directory installation exist as a host foundation, but no CLI, archive extraction, project lock, runtime baseline selection, rollback command, or online release discovery is wired yet. Current V10 activation also remains blocked on contract-bound delegation and Output Quality Guard capabilities.
+- Managed Harness Pack verification and immutable directory installation exist as a host foundation, and `prism-agent/delegation@1` is now enforced over the existing SubAgent runtime. No CLI, archive extraction, project lock, runtime baseline selection, rollback command, or online release discovery is wired yet. Current V10 activation remains blocked on `quality-guard/anti-ai-flavor@1`.
 
 ## Verification
 

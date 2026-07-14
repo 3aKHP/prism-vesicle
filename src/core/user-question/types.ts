@@ -1,6 +1,7 @@
 import type { ToolCall, ToolDefinition } from "../tools";
 
 export type UserQuestionOption = {
+  id?: string;
   label: string;
   description: string;
   kind?: "model" | "skip" | "freeform";
@@ -17,6 +18,7 @@ export type UserQuestionAnswer = {
   label: string;
   description: string;
   kind?: UserQuestionOption["kind"];
+  optionId?: string;
   freeformText?: string;
 };
 

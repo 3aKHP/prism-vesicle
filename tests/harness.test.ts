@@ -40,8 +40,7 @@ describe("Harness Pack foundation", () => {
 
     const fixture = await createHarnessFixture({
       requiredCapabilities: [
-        ...supportedHarnessCapabilities,
-        "prism-agent/delegation@1",
+        ...supportedHarnessCapabilities.filter((capability) => capability !== "prism-agent/delegation@1"),
         "quality-guard/anti-ai-flavor@1",
       ],
     });
@@ -49,7 +48,6 @@ describe("Harness Pack foundation", () => {
       const verified = await verifyHarnessPack(fixture.pack, fixture.options);
       expect(verified.compatibility.compatible).toBe(false);
       expect(verified.compatibility.unsupportedCapabilities).toEqual([
-        "prism-agent/delegation@1",
         "quality-guard/anti-ai-flavor@1",
       ]);
       expect(() => assertHarnessPackCompatible(verified)).toThrow("is not compatible");
@@ -62,7 +60,7 @@ describe("Harness Pack foundation", () => {
   test("rejects capabilities hidden in Adapter and Rule manifests", async () => {
     const adapter = await createHarnessFixture({
       adapterCapabilities: [
-        ...supportedHarnessCapabilities.filter((capability) => capability !== "prism-harness/v1"),
+        ...supportedHarnessCapabilities.filter((capability) => capability !== "prism-harness/v1" && capability !== "prism-agent/delegation@1"),
         "prism-agent/delegation@1",
       ],
     });
@@ -232,14 +230,31 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
 
   const contractPath = "assets/prism-driver/contract.json";
   const adapterPath = "assets/prism-driver/adapter.json";
-  await write(join(pack, ...contractPath.split("/")), "{}\n");
+  await write(join(pack, ...contractPath.split("/")), `${JSON.stringify({
+    schema: "prism-driver-contract/v1",
+    id: "fixture-driver",
+    version: "10.0.0-test.1",
+    agents: {
+      "scene-writer": {
+        operations: ["artifact.inspect"],
+        defaultMode: "foreground",
+      },
+    },
+    engines: Object.fromEntries(engineIds.map((engine) => [engine, {
+      operations: ["artifact.inspect"],
+      interactions: [],
+      delegations: [],
+    }])),
+  }, null, 2)}\n`);
   await write(join(pack, ...adapterPath.split("/")), `${JSON.stringify({
     schema: "prism-host-adapter/v1",
     id: "vesicle-v1",
     version: "1.0.0",
     targetHost: "Prism Vesicle",
     capabilities: options.adapterCapabilities
-      ?? supportedHarnessCapabilities.filter((capability) => capability !== "prism-harness/v1"),
+      ?? supportedHarnessCapabilities.filter((capability) =>
+        capability !== "prism-harness/v1" && capability !== "prism-agent/delegation@1"
+      ),
     operationBindings: options.adapterOperationBindings ?? {
       "artifact.inspect": { kind: "tool-group", tools: ["read_file"] },
       ...Object.fromEntries((options.runtimeCapabilities ?? []).map((capability, index) => [
@@ -268,7 +283,8 @@ async function createHarnessFixture(options: FixtureOptions = {}): Promise<{
     sourceState: options.sourceState ?? "clean",
     harnessConfigHash: "a".repeat(64),
     compilerHash: "b".repeat(64),
-    requiredCapabilities: options.requiredCapabilities ?? [...supportedHarnessCapabilities],
+    requiredCapabilities: options.requiredCapabilities
+      ?? supportedHarnessCapabilities.filter((capability) => capability !== "prism-agent/delegation@1"),
     externalHostAssets: [
       "assets/prompts/agents/base.md",
       "assets/prompts/shared/vesicle-base.md",

@@ -121,6 +121,9 @@ export type AgentToolEvent = {
   mode: "foreground" | "background";
   status: "accepted" | "completed" | "failed" | "cancelled";
   usage?: import("../../providers/shared/types").ResponseUsage;
+  delegation?: import("../agents/types").AgentDelegationMetadata;
+  attempts?: import("../agents/types").AgentAttemptMetadata[];
+  errorCategory?: import("../harness/driver").HarnessAdapterErrorCategory;
 };
 
 export type ToolResult = {
@@ -133,6 +136,7 @@ export type ToolResult = {
   mcpEvent?: McpToolEvent;
   processEvent?: ProcessToolEvent;
   agentEvent?: AgentToolEvent;
+  delegationDecision?: import("../harness/driver").HarnessDelegationDecision;
   images?: import("../../providers/shared/types").VesicleImageAttachment[];
 };
 

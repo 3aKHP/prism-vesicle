@@ -18,6 +18,8 @@ import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
 import type { AgentLoopEvent, RunPromptResult } from "./types";
+import type { HarnessRuntimeContext } from "../harness/driver";
+import type { AssetResolver } from "../runtime/assets";
 
 const maxToolIterations = 40;
 const maxConsecutiveFailedTools = 4;
@@ -39,6 +41,8 @@ export type RunLoopArgs = {
   agentManager?: AgentManager;
   permission?: PermissionRuntimeOptions;
   permissionBroker?: ToolPermissionBroker;
+  harness?: HarnessRuntimeContext;
+  assets?: AssetResolver;
 };
 
 type LoopRuntime = {
@@ -128,9 +132,29 @@ async function advanceRound(
     processManager: runtime.processManager,
     permission: runtime.permission,
     permissionBroker: args.permissionBroker,
+    harness: args.harness,
+    assets: args.assets,
     trackCheckpointMutation: runtime.trackCheckpointMutation,
     markCheckpointTainted: async () => { await args.checkpoint?.markTaintedByHostProcess(); },
   });
+  if (execution.delegationPause) {
+    return {
+      response,
+      hadToolCalls: true,
+      anyFailed: true,
+      pause: {
+        kind: "needs_user_question",
+        sessionId: args.session.sessionId,
+        sessionPath: args.session.sessionPath,
+        profile: args.profile,
+        question: execution.delegationPause.question,
+        delegationDecision: execution.delegationPause.decision,
+        toolCallId: execution.delegationPause.toolCallId,
+        assistantContent: response.content,
+        messages: args.messages,
+      },
+    };
+  }
   const interaction = await resolveInteractionPause({
     plan,
     messages: args.messages,

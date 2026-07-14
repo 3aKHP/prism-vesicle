@@ -3,6 +3,7 @@ import type { ProviderSelection } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import { inspectEngineAssetDrift } from "../core/runtime/engine-assets";
 import { loadSessionSnapshot } from "../core/session/store";
+import { createSessionStore } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSnapshot, SessionSummary } from "../core/session/store";
 import type { AgentStore } from "../core/agents/store";
 import type { ProcessManager } from "../core/process/manager";
@@ -25,6 +26,7 @@ import {
 } from "./session-presenter";
 import { latestTurnUsage, sumSessionUsage, type TokenUsageSummary } from "./telemetry";
 import type { AgentCardState, Message, SessionPickerState } from "./types";
+import { appendHarnessDelegationDecision } from "../core/agent-loop/delegation-decision";
 
 type InteractionState = {
   setPendingGate: Setter<PendingGateState | null>;
@@ -78,9 +80,26 @@ export function createSessionResumeController(options: SessionResumeControllerOp
     options.setRestoringSession(true);
     try {
       if (!options.permissionSettingsReady()) await options.loadPermissionSettings();
-      const snapshot = await loadSessionSnapshot(options.rootDir, target.sessionId, {
+      let snapshot = await loadSessionSnapshot(options.rootDir, target.sessionId, {
         synthesizeDanglingToolResults: false,
       });
+      if (snapshot.pendingDelegationDecisionRecovery) {
+        await appendHarnessDelegationDecision({
+          decision: snapshot.pendingDelegationDecisionRecovery,
+          messages: [],
+          session: await createSessionStore(options.rootDir, target.sessionId),
+          engine: snapshot.pendingDelegationDecisionRecovery.failed.delegation.parentEngine,
+        });
+        snapshot = await loadSessionSnapshot(options.rootDir, target.sessionId, {
+          synthesizeDanglingToolResults: false,
+        });
+      }
+      if (snapshot.pendingDelegationRetry) {
+        throw new Error(
+          `Session has an authorized Harness retry pending for ${snapshot.pendingDelegationRetry.delegationId}. `
+          + "Resume is blocked until the verified managed Harness context can restore that retry.",
+        );
+      }
       await hydrateLiveProcessEvents(snapshot, target.sessionId);
       const resumedMessages = vesicleMessagesFromResumed(snapshot.messages);
       const restoredCards = await restoreAgentCards(target.sessionId);
@@ -238,6 +257,9 @@ export function createSessionResumeController(options: SessionResumeControllerOp
         sessionPath: joinSessionPath(target.sessionId),
         engine,
         question: snapshot.pendingUserQuestion.question,
+        ...(snapshot.pendingUserQuestion.delegationDecision
+          ? { delegationDecision: snapshot.pendingUserQuestion.delegationDecision }
+          : {}),
         toolCallId: snapshot.pendingUserQuestion.toolCallId,
         assistantContent: snapshot.pendingUserQuestion.assistantContent,
         messages,

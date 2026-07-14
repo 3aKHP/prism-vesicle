@@ -7,6 +7,7 @@ const supportedCapabilities = new Set([
   "prism-host/vesicle@1",
   "prism-interaction/confirmation@1",
   "prism-interaction/select@1",
+  "prism-agent/delegation@1",
 ]);
 
 export const supportedHarnessCapabilities: readonly string[] = Object.freeze([...supportedCapabilities]);

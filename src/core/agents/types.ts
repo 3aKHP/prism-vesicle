@@ -5,6 +5,13 @@ import type { EngineId } from "../engine/profile";
 import type { ToolDefinition } from "../tools";
 import type { AgentExecutionMode } from "./profile";
 import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
+import type { AssetResolver } from "../runtime/assets";
+import type {
+  BoundHarnessDelegation,
+  HarnessAdapterErrorCategory,
+  HarnessDelegationFailureInteraction,
+  HarnessRuntimeContext,
+} from "../harness/driver";
 
 export type AgentStatus = "created" | "running" | "completed" | "failed" | "cancelled";
 
@@ -15,6 +22,21 @@ export type AgentSpec = {
   mode: AgentExecutionMode;
   parentSessionId: string;
   parentToolCallId: string;
+  delegation?: AgentDelegationMetadata;
+  delegationFailure?: HarnessDelegationFailureInteraction;
+};
+
+export type AgentDelegationMetadata = BoundHarnessDelegation & {
+  attempt: number;
+};
+
+export type AgentAttemptMetadata = {
+  attempt: number;
+  status: "completed" | "failed" | "cancelled";
+  finishedAt: string;
+  childSessionId?: string;
+  errorCategory?: HarnessAdapterErrorCategory;
+  error?: string;
 };
 
 export type AgentMetadata = AgentSpec & {
@@ -29,6 +51,8 @@ export type AgentMetadata = AgentSpec & {
   usage?: ResponseUsage;
   toolUses?: number;
   recoveryComplete?: boolean;
+  attempts?: AgentAttemptMetadata[];
+  errorCategory?: HarnessAdapterErrorCategory;
 };
 
 export type AgentTerminalResult = {
@@ -43,6 +67,9 @@ export type AgentTerminalResult = {
   childSessionId?: string;
   usage?: ResponseUsage;
   toolUses?: number;
+  delegation?: AgentDelegationMetadata;
+  attempts?: AgentAttemptMetadata[];
+  errorCategory?: HarnessAdapterErrorCategory;
 };
 
 export type AgentRuntimeEvent =
@@ -66,6 +93,9 @@ export type AgentInboxEntry = {
   childSessionId?: string;
   usage?: ResponseUsage;
   toolUses?: number;
+  delegation?: AgentDelegationMetadata;
+  attempts?: AgentAttemptMetadata[];
+  errorCategory?: HarnessAdapterErrorCategory;
   createdAt: string;
   state: AgentInboxState;
   deliveredAt?: string;
@@ -96,6 +126,8 @@ export type AgentInvocationContext = {
   beforeMutation?(paths: string[]): Promise<void>;
   permission?: PermissionRuntimeOptions;
   permissionBroker?: ToolPermissionBroker;
+  assets?: AssetResolver;
+  harness?: HarnessRuntimeContext;
 };
 
 export type AgentRunOutput = {

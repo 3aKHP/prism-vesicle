@@ -8,6 +8,8 @@ import type { GateRequest, GateResolution } from "../gate/types";
 import type { PermissionRequest, PermissionResolution, PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, ToolCall, WebToolEvent } from "../tools";
 import type { UserQuestionRequest } from "../user-question/types";
+import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
+import type { AssetResolver } from "../runtime/assets";
 import type { ValidationResult } from "../validators/registry";
 
 export type RunPromptOptions = {
@@ -27,6 +29,8 @@ export type RunPromptOptions = {
   agentManager?: AgentManager;
   permission?: PermissionRuntimeOptions;
   permissionBroker?: ToolPermissionBroker;
+  harness?: HarnessRuntimeContext;
+  assets?: AssetResolver;
 };
 
 export type AgentLoopEvent =
@@ -99,6 +103,7 @@ export type RunPromptResult =
       sessionPath: string;
       profile: EngineProfile;
       question: UserQuestionRequest;
+      delegationDecision?: HarnessDelegationDecision;
       toolCallId: string;
       assistantContent: string;
       messages: VesicleMessage[];

@@ -87,6 +87,8 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     agentManager: options.agentManager,
     permission: continuation.permission,
     permissionBroker: options.permissionBroker,
+    harness: continuation.harness,
+    assets: continuation.assets,
   });
 }
 

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { AgentInboxEntry, AgentInboxState, AgentMetadata, AgentTerminalResult } from "./types";
 import { createSessionStore, loadSessionRecords } from "../session/store";
+import type { HarnessDelegationDecision } from "../harness/driver";
 
 type InboxEvent =
   | { type: "enqueued"; ts: string; entry: AgentInboxEntry }
@@ -80,11 +81,24 @@ export class AgentStore {
         && agent.recoveryComplete !== true;
       const alreadyTerminal = agent.status === "completed" || agent.status === "failed" || agent.status === "cancelled";
       if (!interrupted && !incompleteRecovery && !alreadyTerminal) continue;
+      const recoveryAttempts = agent.delegation && (interrupted || incompleteRecovery)
+        && !agent.attempts?.some((attempt) => attempt.attempt === agent.delegation!.attempt)
+        ? [...(agent.attempts ?? []), {
+          attempt: agent.delegation.attempt,
+          status: "failed" as const,
+          finishedAt: new Date().toISOString(),
+          ...(agent.childSessionId ? { childSessionId: agent.childSessionId } : {}),
+          errorCategory: "failed" as const,
+          error: interruption,
+        }]
+        : agent.attempts;
       const next: AgentMetadata = interrupted || incompleteRecovery
         ? {
           ...agent,
           status: "failed",
           error: interruption,
+          ...(agent.delegation ? { errorCategory: "failed" as const } : {}),
+          ...(recoveryAttempts ? { attempts: recoveryAttempts } : {}),
           recoveryComplete: true,
           updatedAt: new Date().toISOString(),
         }
@@ -120,6 +134,9 @@ export class AgentStore {
       description: agent.description,
       status: result.status,
       content: result.content,
+      ...(result.delegation ? { delegation: result.delegation } : {}),
+      ...(result.attempts ? { attempts: result.attempts } : {}),
+      ...(result.errorCategory ? { errorCategory: result.errorCategory } : {}),
       ...(result.childSessionId ? { childSessionId: result.childSessionId } : {}),
       ...(result.usage ? { usage: result.usage } : {}),
       ...(result.toolUses ? { toolUses: result.toolUses } : {}),
@@ -170,7 +187,6 @@ export class AgentStore {
 
   private async appendRecoveredForegroundResult(agent: AgentMetadata, result: AgentTerminalResult): Promise<boolean> {
     const existing = (await loadSessionRecords(this.rootDir, agent.parentSessionId)).some((record) => record.role === "tool"
-      && record.metadata?.kind === "subagent-result"
       && record.metadata?.toolCallId === agent.parentToolCallId);
     if (existing) return false;
     const session = await createSessionStore(this.rootDir, agent.parentSessionId);
@@ -181,8 +197,12 @@ export class AgentStore {
       mode: result.mode,
       status: result.status,
       content: result.content,
+      ...(result.delegation ? { delegation: result.delegation } : {}),
+      ...(result.attempts ? { attempts: result.attempts } : {}),
+      ...(result.errorCategory ? { errorCategory: result.errorCategory } : {}),
     };
     const ok = result.status === "completed";
+    const delegationDecision = recoveredDelegationDecision(agent, result);
     await session.append({
       role: "tool",
       content: JSON.stringify({ ok, result: JSON.stringify(publicResult) }),
@@ -197,7 +217,11 @@ export class AgentStore {
           profileId: result.profileId,
           mode: result.mode,
           status: result.status,
+          ...(result.delegation ? { delegation: result.delegation } : {}),
+          ...(result.attempts ? { attempts: result.attempts } : {}),
+          ...(result.errorCategory ? { errorCategory: result.errorCategory } : {}),
         },
+        ...(delegationDecision ? { delegationDecision } : {}),
       },
     });
     return true;
@@ -216,6 +240,22 @@ export class AgentStore {
     await mkdir(this.inboxDirectory, { recursive: true });
     await appendFile(this.inboxPath(parentSessionId), `${JSON.stringify(event)}\n`, "utf8");
   }
+}
+
+function recoveredDelegationDecision(
+  agent: AgentMetadata,
+  result: AgentTerminalResult,
+): HarnessDelegationDecision | undefined {
+  if (result.status !== "failed" || !result.delegation || !agent.delegationFailure) return undefined;
+  return {
+    ...agent.delegationFailure,
+    failed: {
+      runId: result.runId,
+      handle: result.handle,
+      delegation: result.delegation,
+      errorCategory: result.errorCategory ?? "failed",
+    },
+  };
 }
 
 function normalizeInboxEntry(entry: AgentInboxEntry & { agentId?: string }): AgentInboxEntry {
@@ -283,5 +323,8 @@ function terminalResultFromMetadata(agent: AgentMetadata): AgentTerminalResult {
     ...(agent.childSessionId ? { childSessionId: agent.childSessionId } : {}),
     ...(agent.usage ? { usage: agent.usage } : {}),
     ...(agent.toolUses ? { toolUses: agent.toolUses } : {}),
+    ...(agent.delegation ? { delegation: agent.delegation } : {}),
+    ...(agent.attempts ? { attempts: agent.attempts } : {}),
+    ...(agent.errorCategory ? { errorCategory: agent.errorCategory } : {}),
   };
 }
