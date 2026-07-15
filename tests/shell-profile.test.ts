@@ -73,6 +73,29 @@ describe("shell profiles", () => {
     })).toBeUndefined();
   });
 
+  test("git-bash rejects unrelated bash executables from PATH", () => {
+    const msysBash = "C:\\msys64\\usr\\bin\\bash.exe";
+    expect(resolveShellProfile("git-bash", {
+      platform: "win32",
+      env: { ProgramFiles: "C:\\Missing", PATH: "C:\\msys64\\usr\\bin" },
+      which: (command) => command === "bash.exe" ? msysBash : undefined,
+      exists: (path) => path === msysBash,
+    })).toBeUndefined();
+  });
+
+  test("git-bash accepts a PATH fallback inside Git for Windows", () => {
+    const gitRoot = "C:\\Users\\test\\AppData\\Local\\Programs\\Git";
+    const bash = `${gitRoot}\\bin\\bash.exe`;
+    const git = `${gitRoot}\\cmd\\git.exe`;
+    const existing = new Set([bash, git]);
+    expect(resolveShellProfile("git-bash", {
+      platform: "win32",
+      env: { ProgramFiles: "C:\\Missing", PATH: `${gitRoot}\\bin` },
+      which: (command) => command === "bash.exe" ? bash : undefined,
+      exists: (path) => existing.has(path),
+    })).toMatchObject({ id: "git-bash", executablePath: bash });
+  });
+
   test("non-Windows auto remains portable /bin/sh", () => {
     expect(resolveShellProfile("auto", { platform: "linux" })).toMatchObject({
       id: "posix-sh",

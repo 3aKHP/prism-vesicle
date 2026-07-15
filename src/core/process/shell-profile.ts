@@ -73,7 +73,11 @@ function resolveWindowsShell(
       : id === "cmd"
         ? [win32.join(systemRoot, "System32", "cmd.exe"), env.ComSpec ?? env.COMSPEC, which("cmd.exe", env)]
         : gitBashCandidates(programFiles, env, which);
-  const executablePath = candidates.find((candidate): candidate is string => Boolean(candidate && exists(candidate)));
+  const executablePath = candidates.find((candidate): candidate is string => Boolean(
+    candidate
+    && exists(candidate)
+    && (id !== "git-bash" || isGitForWindowsBash(candidate, exists)),
+  ));
   return executablePath ? profile(id, executablePath) : undefined;
 }
 
@@ -88,6 +92,16 @@ function gitBashCandidates(
     git ? win32.resolve(win32.dirname(git), "..", "bin", "bash.exe") : undefined,
     which("bash.exe", env),
   ];
+}
+
+function isGitForWindowsBash(path: string, exists: (path: string) => boolean): boolean {
+  const binDir = win32.dirname(win32.normalize(path));
+  if (win32.basename(binDir).toLowerCase() !== "bin") return false;
+  const parent = win32.dirname(binDir);
+  const installRoot = win32.basename(parent).toLowerCase() === "usr"
+    ? win32.dirname(parent)
+    : parent;
+  return exists(win32.join(installRoot, "cmd", "git.exe"));
 }
 
 function defaultWhich(command: string, env: NodeJS.ProcessEnv): string | undefined {
