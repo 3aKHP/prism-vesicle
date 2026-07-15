@@ -5,6 +5,7 @@ import type { AgentManager } from "../core/agents/manager";
 import type { AgentInboxEntry } from "../core/agents/types";
 import type { EngineId } from "../core/engine/profile";
 import type { PermissionMode, ToolPermissionBroker } from "../core/permissions";
+import type { ShellInterpreterPreference } from "../core/process/shell-profile";
 import type { ConversationRewind } from "../core/rewind/service";
 import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerElement, ComposerState } from "./composer";
@@ -33,6 +34,7 @@ export type TurnControllerOptions = {
   activeGeneration: () => GenerationSelection;
   permissionMode: Accessor<PermissionMode>;
   shellExecEnabled: Accessor<boolean>;
+  shellInterpreter: Accessor<ShellInterpreterPreference>;
   sessionId: Accessor<string | undefined>;
   setSessionId: Setter<string | undefined>;
   sessionPath: Accessor<string>;
@@ -127,6 +129,11 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
 > & {
   handleResult: (result: RunPromptResult) => void;
   handleInterruptedTurn: () => void;
-  permissionContext: () => { mode: PermissionMode; dangerouslySkipPermissions?: true; shellExecEnabled: boolean };
+  permissionContext: () => {
+    mode: PermissionMode;
+    dangerouslySkipPermissions?: true;
+    shellExecEnabled: boolean;
+    shellInterpreter: ShellInterpreterPreference;
+  };
   reportError: (error: unknown) => void;
 };

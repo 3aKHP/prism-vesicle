@@ -3,6 +3,7 @@ import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from
 import { palette } from "../theme";
 import { truncateLine } from "../format";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
+import { shellDisplayName } from "../../core/process/shell-profile";
 import {
   annotateLineNumbers,
   buildToolBody,
@@ -109,7 +110,7 @@ function ProcessOutput(props: { event: ProcessToolEvent; width: number }) {
         {(row) => <text content={`  ${truncateLine(row.text, Math.max(20, props.width - 4))}`} fg={row.stderr ? palette.warn : palette.textMuted} />}
       </For>
       <text
-        content={`  ${status()}${props.event.taskId ? ` · ${props.event.taskId}` : ""} · ${formatDuration(props.event.durationMs)}`}
+        content={`  ${status()}${props.event.taskId ? ` · ${props.event.taskId}` : ""} · ${shellDisplayName(props.event.shell)} · ${formatDuration(props.event.durationMs)}`}
         fg={props.event.status === "running" ? palette.warn : props.event.status === "completed" ? palette.success : palette.error}
       />
     </box>

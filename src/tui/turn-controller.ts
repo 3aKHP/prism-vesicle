@@ -253,6 +253,7 @@ export function createTurnController(options: TurnControllerOptions) {
       mode: options.permissionMode(),
       ...(options.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true as const } : {}),
       shellExecEnabled: options.shellExecEnabled(),
+      shellInterpreter: options.shellInterpreter(),
     };
   }
 

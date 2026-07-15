@@ -95,7 +95,9 @@ export function App(props: AppProps = {}) {
     setProviderHasApiKey,
     setProviderRegistry,
     setShellExecEnabled,
+    setShellInterpreter,
     shellExecEnabled,
+    shellInterpreter,
   } = providerState;
   const [activeEngine, setActiveEngine] = createSignal<EngineId>("etl");
   const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
@@ -259,6 +261,7 @@ export function App(props: AppProps = {}) {
     setMcpStatus,
     setPermissionMode,
     setShellExecEnabled,
+    setShellInterpreter,
     setPermissionSettingsReady,
     thinkingTier,
     activeProvider,
@@ -372,6 +375,7 @@ export function App(props: AppProps = {}) {
     activeGeneration,
     permissionMode,
     shellExecEnabled,
+    shellInterpreter,
     sessionId,
     setSessionId,
     sessionPath,

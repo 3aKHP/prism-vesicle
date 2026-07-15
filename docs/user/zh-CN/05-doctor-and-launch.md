@@ -27,11 +27,12 @@ Provider config: file (...\prism-vesicle\providers.yaml)
 Provider env: file (...\prism-vesicle\.env)
 API key: available
 Permissions: MOMENTUM (...\permissions.yaml)
+Shell exec: disabled; interpreter PowerShell 7 (...\pwsh.exe)
 Harness: bundled prism-engine-v10@10.0.1-alpha.1
 Missing: none
 ```
 
-可选的 Tavily 或 MCP 行可能显示 unavailable、disabled 或具体服务器连接错误。除非当前工作流确实依赖这些工具，否则它们不会使供应商配置失效。
+可选的 Tavily 或 MCP 行可能显示 unavailable、disabled 或具体服务器连接错误。除非当前工作流确实依赖这些工具，否则它们不会使供应商配置失效。Shell exec 行会同时报告能力状态和解析后的 `shellInterpreter`；显式档案不可用时，shell 工具不会进入模型工具面，直到配置得到修正。
 
 ## 修正问题
 

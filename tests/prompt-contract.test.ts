@@ -71,6 +71,20 @@ describe("prompt audit tool surface", () => {
     expect(dyad.modelVisible).toContain("ask_user_question");
     expect(dyad.modelVisible).toContain("request_engine_switch");
   });
+
+  test("prompt audit omits unavailable launches but keeps background controls", async () => {
+    if (process.platform === "win32") return;
+    const env = { ...process.env, VESICLE_MCP_FILE: join(rootDir, ".missing-test-mcp.yaml") };
+    const tools = await getEffectivePromptToolNames(
+      await loadEngineProfile("runtime"),
+      { env },
+      true,
+      "powershell-7",
+    );
+    expect(tools.modelVisible).not.toContain("shell_exec");
+    expect(tools.modelVisible).toContain("shell_output");
+    expect(tools.modelVisible).toContain("shell_stop");
+  });
 });
 
 async function readAsset(path: string): Promise<string> {

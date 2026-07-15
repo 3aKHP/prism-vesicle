@@ -63,7 +63,7 @@ switch (command) {
   case "once": {
     const { runPrompt } = await import("../core/agent-loop/run");
     const { loadPermissionSettings } = await import("../config/permissions");
-    const permissionSettings = invocation.dangerouslySkipPermissions ? undefined : await loadPermissionSettings();
+    const permissionSettings = await loadPermissionSettings();
     const input = invocation.args.slice(1).join(" ").trim();
     if (!input) {
       console.error("Usage: vesicle once <prompt>");
@@ -72,8 +72,17 @@ switch (command) {
     const result = await runPrompt({
       input,
       permission: invocation.dangerouslySkipPermissions
-        ? { mode: "YOLO", dangerouslySkipPermissions: true, shellExecEnabled: true }
-        : { mode: permissionSettings!.defaultMode, shellExecEnabled: permissionSettings!.shellExec },
+        ? {
+            mode: "YOLO",
+            dangerouslySkipPermissions: true,
+            shellExecEnabled: true,
+            shellInterpreter: permissionSettings.shellInterpreter,
+          }
+        : {
+            mode: permissionSettings.defaultMode,
+            shellExecEnabled: permissionSettings.shellExec,
+            shellInterpreter: permissionSettings.shellInterpreter,
+          },
     });
     if (result.kind === "needs_user") {
       console.log(result.assistantContent);

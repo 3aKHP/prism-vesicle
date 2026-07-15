@@ -1,11 +1,16 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { permissionModes, type PermissionMode } from "../core/permissions";
+import {
+  shellInterpreterPreferences,
+  type ShellInterpreterPreference,
+} from "../core/process/shell-profile";
 import { userConfigDirectory } from "./paths";
 
 export type PermissionSettings = {
   defaultMode: PermissionMode;
   shellExec: boolean;
+  shellInterpreter: ShellInterpreterPreference;
   path: string;
   exists: boolean;
 };
@@ -22,7 +27,7 @@ export async function loadPermissionSettings(env: NodeJS.ProcessEnv = process.en
     source = await readFile(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return { defaultMode: "MOMENTUM", shellExec: false, path, exists: false };
+      return { defaultMode: "MOMENTUM", shellExec: false, shellInterpreter: "auto", path, exists: false };
     }
     throw error;
   }
@@ -35,7 +40,7 @@ export async function loadPermissionSettings(env: NodeJS.ProcessEnv = process.en
     values.set(line.slice(0, colon).trim(), line.slice(colon + 1).trim().replace(/^(['"])(.*)\1$/, "$2"));
   }
   for (const key of values.keys()) {
-    if (key !== "version" && key !== "defaultMode" && key !== "shellExec") {
+    if (key !== "version" && key !== "defaultMode" && key !== "shellExec" && key !== "shellInterpreter") {
       throw new Error(`Unknown permissions.yaml field: ${key}.`);
     }
   }
@@ -45,5 +50,15 @@ export async function loadPermissionSettings(env: NodeJS.ProcessEnv = process.en
   if (mode === "YOLO") throw new Error("YOLO cannot be configured as defaultMode; enable it interactively or use --dangerously-skip-permissions.");
   const shell = values.get("shellExec") ?? "false";
   if (shell !== "true" && shell !== "false") throw new Error("permissions shellExec must be true or false.");
-  return { defaultMode: mode, shellExec: shell === "true", path, exists: true };
+  const shellInterpreter = values.get("shellInterpreter") ?? "auto";
+  if (!shellInterpreterPreferences.includes(shellInterpreter as ShellInterpreterPreference)) {
+    throw new Error(`Invalid permissions shellInterpreter: ${shellInterpreter}. Available: ${shellInterpreterPreferences.join(", ")}.`);
+  }
+  return {
+    defaultMode: mode,
+    shellExec: shell === "true",
+    shellInterpreter: shellInterpreter as ShellInterpreterPreference,
+    path,
+    exists: true,
+  };
 }

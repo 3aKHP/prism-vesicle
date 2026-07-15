@@ -56,6 +56,7 @@ export async function loadContinuationContext(
     profile,
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
+    permission.shellInterpreter,
   );
   const session = await createSessionStore(rootDir, options.sessionId);
   return {

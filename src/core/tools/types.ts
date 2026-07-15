@@ -1,3 +1,5 @@
+import type { ProcessShellId } from "../process/shell-profile";
+
 export type ToolCall = {
   id: string;
   name: string;
@@ -101,7 +103,7 @@ export type ProcessToolEvent = {
   status: "running" | "completed" | "failed" | "timed_out" | "cancelled" | "interrupted";
   command: string;
   cwd: ".";
-  shell: "posix-sh" | "powershell";
+  shell: ProcessShellId;
   exitCode?: number;
   durationMs: number;
   timedOut: boolean;

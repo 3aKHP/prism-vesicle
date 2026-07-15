@@ -743,7 +743,7 @@ export function SetupApp(props: SetupAppProps) {
           }>
             <text content={truncateLine(`Tavily    ${tavilyApiKey() ? "configured" : "skipped"}`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
             <text content={truncateLine(`MCP       ${mcpServers().length} server(s)`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
-            <text content={truncateLine(`Permission ${permissionMode()} · shell disabled`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
+            <text content={truncateLine(`Permission ${permissionMode()} · shell default off / existing setting preserved`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
           </Show>
           <text content={truncateLine(`First run ${projectDirectory() || "skipped; no project is pinned"}`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
           <box marginTop={1} flexDirection="column">{renderOptions(choiceItems())}</box>

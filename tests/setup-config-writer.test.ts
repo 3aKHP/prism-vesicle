@@ -58,7 +58,11 @@ describe("guided Setup configuration writer", () => {
         enabledEngines: ["etl", "evaluate"],
       });
     }
-    expect(await loadPermissionSettings(env)).toMatchObject({ defaultMode: "MOMENTUM", shellExec: false });
+    expect(await loadPermissionSettings(env)).toMatchObject({
+      defaultMode: "MOMENTUM",
+      shellExec: false,
+      shellInterpreter: "auto",
+    });
     expect(await Bun.file(join(configDir, "setup-state.json")).exists()).toBe(false);
     expect((await stat(projectDirectory)).isDirectory()).toBe(true);
     expect(result.projectDirectory).toBe(projectDirectory);
@@ -81,6 +85,30 @@ describe("guided Setup configuration writer", () => {
 
     expect(result.projectDirectory).toBeUndefined();
     expect(await readFile(join(configDir, "setup-state.json"), "utf8")).toBe(legacyState);
+  });
+
+  test("preserves an existing shell capability and interpreter selection", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await mkdir(configDir, { recursive: true });
+    await writeFile(
+      join(configDir, "permissions.yaml"),
+      "version: 1\ndefaultMode: INERTIA\nshellExec: true\nshellInterpreter: git-bash\n",
+      "utf8",
+    );
+    await writeSetupConfiguration({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "secret",
+      modelIds: ["model"],
+      defaultModel: "model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    expect(await loadPermissionSettings({ VESICLE_CONFIG_DIR: configDir })).toMatchObject({
+      defaultMode: "MOMENTUM",
+      shellExec: true,
+      shellInterpreter: "git-bash",
+    });
   });
 
   test("merges with existing providers and creates backups without losing unrelated secrets", async () => {

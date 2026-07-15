@@ -6,6 +6,11 @@ import {
 import type { ProcessExecutionProgress, ProcessExecutionResult } from "../process/runtime";
 import { getProcessManager, type BackgroundProcessState, type ProcessManager } from "../process/manager";
 import type { ProcessExecutionPlan } from "../permissions";
+import {
+  resolveShellProfile,
+  type ResolvedShellProfile,
+  type ShellInterpreterPreference,
+} from "../process/shell-profile";
 import type { ProcessToolEvent, ToolCall, ToolDefinition, ToolResult } from "./types";
 
 export const shellExecToolDefinition: ToolDefinition = {
@@ -33,6 +38,21 @@ export const shellExecToolDefinition: ToolDefinition = {
     },
   },
 };
+
+export function createShellExecToolDefinition(
+  shell: ResolvedShellProfile | undefined = resolveShellProfile(),
+): ToolDefinition {
+  const shellDetail = shell
+    ? ` Commands run with ${shell.displayName}. ${shell.modelGuidance}`
+    : " No configured host shell is currently available.";
+  return {
+    ...shellExecToolDefinition,
+    function: {
+      ...shellExecToolDefinition.function,
+      description: `${shellExecToolDefinition.function.description}${shellDetail}`,
+    },
+  };
+}
 
 export const shellOutputToolDefinition: ToolDefinition = {
   type: "function",
@@ -68,7 +88,10 @@ export const shellStopToolDefinition: ToolDefinition = {
   },
 };
 
-export function parseShellExecPlan(call: ToolCall): ProcessExecutionPlan {
+export function parseShellExecPlan(
+  call: ToolCall,
+  shellInterpreter: ShellInterpreterPreference = "auto",
+): ProcessExecutionPlan {
   if (call.name !== "shell_exec") throw new Error(`Expected shell_exec, received ${call.name}.`);
   let args: { command?: unknown; timeoutMs?: unknown; runInBackground?: unknown };
   try {
@@ -83,7 +106,13 @@ export function parseShellExecPlan(call: ToolCall): ProcessExecutionPlan {
   if (args.runInBackground !== undefined && typeof args.runInBackground !== "boolean") {
     throw new Error("shell_exec runInBackground must be a boolean.");
   }
-  return createProcessExecutionPlan(args.command, args.timeoutMs, process.platform, args.runInBackground === true);
+  return createProcessExecutionPlan(
+    args.command,
+    args.timeoutMs,
+    process.platform,
+    args.runInBackground === true,
+    shellInterpreter,
+  );
 }
 
 export function executionPlanHash(plan: ProcessExecutionPlan): string {
@@ -98,11 +127,17 @@ export async function executeShellExecTool(
     processManager?: ProcessManager;
     parentSessionId?: string;
     onProgress?: (event: ProcessToolEvent) => void;
+    shellInterpreter?: ShellInterpreterPreference;
+    executionPlan?: ProcessExecutionPlan;
   } = {},
 ): Promise<ToolResult> {
   let plan: ProcessExecutionPlan;
   try {
-    plan = parseShellExecPlan(call);
+    const currentPlan = parseShellExecPlan(call, options.shellInterpreter);
+    if (options.executionPlan && executionPlanHash(options.executionPlan) !== executionPlanHash(currentPlan)) {
+      return fail(call, "The approved shell execution plan changed before execution; the command was not run.");
+    }
+    plan = options.executionPlan ?? currentPlan;
   } catch (error) {
     return fail(call, error instanceof Error ? error.message : String(error));
   }

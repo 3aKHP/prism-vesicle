@@ -2,18 +2,20 @@ import type { ToolCall } from "../tools";
 import { executionPlanHash, parseShellExecPlan } from "../tools/shell";
 import { permissionClassForTool } from "./policy";
 import type { PermissionMode, PermissionRequest } from "./types";
+import type { ShellInterpreterPreference } from "../process/shell-profile";
 
 export function createPermissionRequest(
   sessionId: string,
   call: ToolCall,
   mode: PermissionMode,
+  shellInterpreter: ShellInterpreterPreference = "auto",
 ): PermissionRequest {
   const permissionClass = permissionClassForTool(call.name);
   if (permissionClass === "interaction") {
     throw new Error(`Interactive host request ${call.name} does not use Tool Permission Runtime.`);
   }
   if (call.name === "shell_exec") {
-    const executionPlan = parseShellExecPlan(call);
+    const executionPlan = parseShellExecPlan(call, shellInterpreter);
     return {
       id: crypto.randomUUID(),
       sessionId,

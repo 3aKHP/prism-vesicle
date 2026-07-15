@@ -105,7 +105,7 @@ The current provider protocols are OpenAI-compatible Chat Completions, Anthropic
 
 Optional Streamable HTTP MCP servers are configured in a sibling `mcp.yaml`; [`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) documents header expansion, tool prefixes, filters, engine scoping, and timeouts. `TAVILY_API_KEY` in the user-level `.env` enables Vesicle's web research tools for the ETL and Evaluate engines.
 
-Host tool approval settings live in sibling `permissions.yaml`; [`docs/examples/permissions.yaml`](./docs/examples/permissions.yaml) documents the MANUAL, INERTIA, and MOMENTUM defaults plus the explicit `shellExec` opt-in. YOLO cannot be persisted as a default. `/permissions YOLO` requires two red confirmations, while `vesicle --dangerously-skip-permissions` enables YOLO only for that process and keeps the danger indicator visible.
+Host tool approval settings live in sibling `permissions.yaml`; [`docs/examples/permissions.yaml`](./docs/examples/permissions.yaml) documents the MANUAL, INERTIA, and MOMENTUM defaults, the explicit `shellExec` opt-in, and the host-owned shell profiles. Windows `auto` prefers PowerShell 7 and falls back to Windows PowerShell 5.1, while Linux/WSL `auto` remains `/bin/sh`; CMD, Git Bash, and fixed PowerShell/POSIX profiles are explicit choices. YOLO cannot be persisted as a default. `/permissions YOLO` requires two red confirmations, while `vesicle --dangerously-skip-permissions` enables YOLO only for that process and keeps the danger indicator visible.
 
 ## First Run
 
@@ -153,7 +153,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
-- Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with exact-plan approval, filtered environment, bounded live output, timeout, process-tree cleanup, foreground/background execution, durable `shell-N` task state, completion notification, and explicit output/stop controls.
+- Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with host-owned PowerShell, CMD, Git Bash, and POSIX shell profiles, exact interpreter-bound plan approval, filtered environment, bounded UTF-8 live output, timeout, process-tree cleanup, foreground/background execution, durable `shell-N` task state, completion notification, and explicit output/stop controls.
 - Foreground and background SubAgents with parallel execution, three V10 Driver-contract workflow Agents, five generic host Agents (`explore`, `general`, `plan`, `research`, and `reviewer`), custom Agent Profiles subject to the active Harness contract, dedicated live Agent cards, durable completion delivery, and parent continuation without polling.
 - npm distribution plus standalone Windows and Linux builds with an immutable bundled V10 runtime pack, offline managed-Harness selection, and sparse editable global/project overrides.
 

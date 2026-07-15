@@ -5,6 +5,7 @@ import { inspectProviderConfig, type ProviderRegistry, type ProviderSelection } 
 import { inspectMcpConfig } from "../mcp/registry";
 import type { ReasoningTier } from "../providers/shared/types";
 import type { PermissionMode } from "../core/permissions";
+import type { ShellInterpreterPreference } from "../core/process/shell-profile";
 import type { ActivityEntry } from "./types";
 import type { SidebarMcpState } from "./views/Sidebar";
 
@@ -21,6 +22,7 @@ export type ProviderConfigControllerOptions = {
   setMcpStatus: Setter<SidebarMcpState>;
   setPermissionMode: Setter<PermissionMode>;
   setShellExecEnabled: Setter<boolean>;
+  setShellInterpreter: Setter<ShellInterpreterPreference>;
   setPermissionSettingsReady: Setter<boolean>;
   thinkingTier: Accessor<ReasoningTier | undefined>;
   activeProvider: Accessor<string>;
@@ -40,7 +42,8 @@ export function createProviderState(dangerouslySkipPermissions: boolean) {
   const [mcpStatus, setMcpStatus] = createSignal<SidebarMcpState>({ loading: true, configured: false, enabled: false, servers: [] });
   const [permissionMode, setPermissionMode] = createSignal<PermissionMode>(dangerouslySkipPermissions ? "YOLO" : "MOMENTUM");
   const [shellExecEnabled, setShellExecEnabled] = createSignal(dangerouslySkipPermissions);
-  const [permissionSettingsReady, setPermissionSettingsReady] = createSignal(dangerouslySkipPermissions);
+  const [shellInterpreter, setShellInterpreter] = createSignal<ShellInterpreterPreference>("auto");
+  const [permissionSettingsReady, setPermissionSettingsReady] = createSignal(false);
   return {
     activeModel,
     activeModelCapabilities,
@@ -63,6 +66,8 @@ export function createProviderState(dangerouslySkipPermissions: boolean) {
     setProviderHasApiKey,
     setProviderRegistry,
     setShellExecEnabled,
+    setShellInterpreter,
+    shellInterpreter,
     shellExecEnabled,
   };
 }
@@ -129,6 +134,7 @@ export function createProviderConfigController(options: ProviderConfigController
   function loadPermissionSettingsOnce(): Promise<void> {
     permissionSettingsLoad ??= loadPermissionSettings().then((settings) => {
       options.setShellExecEnabled(options.dangerouslySkipPermissions || settings.shellExec);
+      options.setShellInterpreter(settings.shellInterpreter);
       if (!options.dangerouslySkipPermissions) options.setPermissionMode(settings.defaultMode);
       options.setPermissionSettingsReady(true);
     }).finally(() => { permissionSettingsLoad = null; });

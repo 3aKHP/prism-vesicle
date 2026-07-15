@@ -37,6 +37,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     profile,
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
+    permission.shellInterpreter,
   );
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   const isNewSession = !options.sessionId;

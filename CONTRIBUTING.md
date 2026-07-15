@@ -51,7 +51,7 @@ The TUI reads provider settings from:
 - provider-specific environment variables from the `.env` file beside `providers.yaml`, with process environment variables used only as fallback
 - an optional provider-level `userAgent`; Vesicle otherwise builds its branded value from the package version and active Bun runtime version
 - optional Streamable HTTP MCP server settings from sibling `mcp.yaml`, or `VESICLE_MCP_FILE`; MCP header secrets still belong in the same user-level `.env`, not in `mcp.yaml`
-- optional host tool approval settings from sibling `permissions.yaml`, or `VESICLE_PERMISSIONS_FILE`; this file contains no secrets and must not persist YOLO as its default
+- optional host tool approval settings from sibling `permissions.yaml`, or `VESICLE_PERMISSIONS_FILE`; this file contains no secrets, must not persist YOLO as its default, and may select one of the documented host-owned `shellInterpreter` profiles
 
 Runtime assets form a separate read-only namespace: `<project>/assets/` overrides the user-global `assets/` beside `providers.yaml`, followed by one complete verified baseline. That baseline is either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the package or standalone release. The tracked `assets/` directory must remain the exact Harness manifest inventory; Vesicle-owned base prompts and the five generic Agent Profiles live in the restricted `host-assets/` layer. Use `vesicle assets status` when debugging resolution, follow [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) when refreshing the baseline, and prefer sparse `assets materialize` overrides over full snapshots.
 
