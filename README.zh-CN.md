@@ -184,7 +184,7 @@ bun run doctor
 
 `vesicle debug markdown-runtime` 可以在不打开 TUI 的情况下验证独立 OpenTUI worker 和语法运行时。`vesicle prompt dump --engine <id>` 会输出模型可见的完整系统提示；`vesicle prompt shape --engine <id>` 只输出其组合结构。
 
-Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复用发布构建，其中包括 npm 消费者验证和引导式安装器的静默安装/升级/卸载 smoke。正常发版只需在命令行中，为已经验收的 `main` commit 创建并推送受保护的 annotated `v<软件包版本>` tag。Tag 工作流会重新执行同一组门禁、创建 GitHub Release 与校验和，并通过 Trusted Publishing 发布带 provenance 的 npm 软件包；无需在 Actions 网页中手动启动或审批。完整命令、GitHub 设置和故障恢复规则见 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md)。
+Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复用发布构建，其中包括 npm 消费者验证和引导式安装器的静默安装/升级/卸载 smoke。正常发版只需在命令行中，为已经验收的 `main` commit 创建并推送受保护的 annotated `v<软件包版本>` tag。Tag 工作流会重新执行同一组门禁、创建 GitHub Release 与校验和，并通过 Trusted Publishing 发布带 provenance 的 npm 软件包；无需在 Actions 网页中手动启动，也无需 GitHub Environment 审批。未来的 SignPath 签名批准仍是独立的人工信任门禁。完整命令、GitHub 设置和故障恢复规则见 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md)。
 
 ## 文档
 

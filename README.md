@@ -184,7 +184,7 @@ bun run doctor
 
 `vesicle debug markdown-runtime` verifies the standalone OpenTUI worker and syntax runtime without opening the TUI. `vesicle prompt dump --engine <id>` prints the complete model-visible system prompt; `vesicle prompt shape --engine <id>` prints only its composed structure.
 
-Pull requests and `develop` pushes call one reusable Linux/Windows release build, including npm consumer validation and a silent guided-installer install/upgrade/uninstall smoke. A release is authorized from the command line by pushing a protected annotated `v<package version>` tag on the accepted `main` commit. The tag workflow reruns the same gates, creates the GitHub Release and checksums, and publishes npm with provenance; no normal Actions-page dispatch or approval is required. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the exact commands, GitHub settings, and recovery rules.
+Pull requests and `develop` pushes call one reusable Linux/Windows release build, including npm consumer validation and a silent guided-installer install/upgrade/uninstall smoke. A release is authorized from the command line by pushing a protected annotated `v<package version>` tag on the accepted `main` commit. The tag workflow reruns the same gates, creates the GitHub Release and checksums, and publishes npm with provenance; no normal Actions-page dispatch or GitHub Environment approval is required. Future SignPath signing approval remains a separate manual trust gate. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the exact commands, GitHub settings, and recovery rules.
 
 ## Documentation
 

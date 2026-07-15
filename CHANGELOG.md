@@ -32,7 +32,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
-- Consolidated CI and release publication onto one reusable Linux/Windows release build. Pushing a protected annotated version tag on the accepted `main` commit now authorizes the workflow to rerun all gates, create the GitHub Release, and publish npm through Trusted Publishing. The normal path is command-line driven and has no Actions-page dispatch, Candidate workflow, or approval step; bootstrap and CLI retry rules are documented separately.
+- Consolidated CI and release publication onto one reusable Linux/Windows release build. Pushing a protected annotated version tag on the accepted `main` commit now authorizes the workflow to rerun all gates, create the GitHub Release, and publish npm through Trusted Publishing. The normal path is command-line driven and has no Actions-page dispatch, Candidate workflow, or GitHub Environment approval step; future SignPath signing approval remains a separate manual trust gate, and bootstrap plus CLI retry rules are documented separately.
 - Advanced the dogfood candidate to `1.0.0-alpha.2` and made the single-download per-user Windows installer the primary non-technical onboarding path while retaining npm, PE/ELF, and assets-ZIP artifacts for development and expert use.
 
 - Replaced the working-tree V9 recovery assets with the complete verified `prism-engine-v10@10.0.1-alpha.1` baseline from Neural Narratology Release `harness-20260714-1`. A no-lock project now automatically activates bundled V10; the runtime distribution contains the exact 47-file Harness inventory, root `harness-manifest.json`, and a restricted 12-file host extension layer. V9 remains available only through Git history.
