@@ -20,7 +20,7 @@ PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 
 不要使用聊天、邮件或无关镜像转发的安装器。Release 还会提供 `SHA256SUMS.txt`，需要时可用于核对下载文件的校验值。
 
-除非对应 Release 的说明明确写明已签名，否则历史 Windows 制品均应视为未签名。对于声明已签名的 Release，请按照[代码签名政策](../../../CODE_SIGNING_POLICY.zh-CN.md)检查 Windows 签名和签名者。仅有校验和并不等于存在 Authenticode 签名。
+在 SignPath Foundation 申请等待期间，`1.0.0-alpha.2` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非对应 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。对于声明已签名的 Release，请按照[代码签名政策](../../../CODE_SIGNING_POLICY.zh-CN.md)检查 Windows 签名和签名者。仅有校验和并不等于存在 Authenticode 签名。
 
 ## 运行安装器
 
