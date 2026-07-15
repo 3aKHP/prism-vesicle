@@ -3,6 +3,11 @@ import type { EngineId, EngineProfile } from "../../core/engine/profile";
 import { engineIds } from "../../core/engine/profile";
 import type { PromptBundle } from "../../core/prompt/loader";
 import { composeSystemPrompt, loadPromptBundle } from "../../core/prompt/loader";
+import { createMcpRegistryForEngine, type McpRegistryOptions } from "../../mcp/registry";
+import { loadPermissionSettings } from "../../config/permissions";
+import { agentToolDefinitions } from "../../core/agents/tools";
+import { resolveProjectHarnessRuntime } from "../../core/harness";
+import { resolveShellProfile, type ShellInterpreterPreference } from "../../core/process/shell-profile";
 
 /**
  * `vesicle prompt dump` — print the fully composed system prompt the model
@@ -25,19 +30,76 @@ export async function runPromptDump(args: string[]): Promise<void> {
   }
 
   const { engine, shapeOnly } = parsed.value;
-  const profile = await loadEngineProfile(engine);
-  const bundle = await loadPromptBundle(profile);
+  const rootDir = process.cwd();
+  const harness = await resolveProjectHarnessRuntime(rootDir);
+  const profile = await loadEngineProfile(engine, rootDir, harness?.assets);
+  const bundle = await loadPromptBundle(profile, rootDir, harness?.assets);
   const systemPrompt = composeSystemPrompt(bundle);
+  const permissions = await loadPermissionSettings();
 
   if (shapeOnly) {
-    printShape(profile, systemPrompt);
+    await printShape(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter);
     return;
   }
 
-  printFullDump(profile, bundle, systemPrompt);
+  await printFullDump(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter);
 }
 
 type ParsedArgs = { ok: true; value: { engine: EngineId; shapeOnly: boolean } } | { ok: false; error: string };
+
+const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
+const alwaysVisibleToolNames = ["ask_user_question", "request_engine_switch"];
+
+export type EffectivePromptToolNames = {
+  modelVisible: string[];
+  hostContracts: string[];
+};
+
+export async function getEffectivePromptToolNames(
+  profile: EngineProfile,
+  options: McpRegistryOptions = {},
+  shellExecEnabled = false,
+  shellInterpreter: ShellInterpreterPreference = "auto",
+): Promise<EffectivePromptToolNames> {
+  const shellLaunchEnabled = shellExecEnabled && Boolean(resolveShellProfile(shellInterpreter));
+  const modelVisible: string[] = [];
+  const hostContracts: string[] = [];
+
+  for (const name of profile.defaultTools) {
+    if (hostContractNames.has(name)) {
+      pushUnique(hostContracts, name);
+      continue;
+    }
+    if (name === "shell_exec" && !shellLaunchEnabled) continue;
+    if ((name === "shell_output" || name === "shell_stop") && !shellExecEnabled) continue;
+    pushUnique(modelVisible, name);
+  }
+
+  if (profile.stopGates.length > 0) {
+    pushUnique(modelVisible, "request_confirmation");
+  }
+  for (const name of alwaysVisibleToolNames) {
+    pushUnique(modelVisible, name);
+  }
+  if (shellExecEnabled) {
+    if (shellLaunchEnabled) pushUnique(modelVisible, "shell_exec");
+    pushUnique(modelVisible, "shell_output");
+    pushUnique(modelVisible, "shell_stop");
+  }
+  for (const definition of agentToolDefinitions) {
+    pushUnique(modelVisible, definition.function.name);
+  }
+  const mcp = await createMcpRegistryForEngine(profile.id, options);
+  for (const definition of mcp.definitions) {
+    pushUnique(modelVisible, definition.function.name);
+  }
+
+  return { modelVisible, hostContracts };
+}
+
+function pushUnique(values: string[], value: string): void {
+  if (!values.includes(value)) values.push(value);
+}
 
 function parseArgs(args: string[]): ParsedArgs {
   let engine: string | undefined;
@@ -78,32 +140,49 @@ function printUsage(): void {
   console.error(`Engines: ${engineIds.join(", ")}`);
 }
 
-function printShape(profile: EngineProfile, systemPrompt: string): void {
+async function printShape(
+  profile: EngineProfile,
+  bundle: PromptBundle,
+  systemPrompt: string,
+  shellExecEnabled: boolean,
+  shellInterpreter: ShellInterpreterPreference,
+): Promise<void> {
+  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter);
+
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
   console.log(`System prompt length: ${systemPrompt.length} chars`);
   console.log(`Sections: ${profile.systemPrompt.length}`);
-  for (const path of profile.systemPrompt) {
-    console.log(`  - ${path}`);
+  for (const section of bundle.sections) {
+    console.log(`  - ${section.path} [${section.source}]`);
   }
-  console.log(`Model-visible tools: ${profile.defaultTools.filter((t) => !["config.load", "prompt.load", "session.write"].includes(t)).join(", ")}`);
-  console.log(`Host contracts: ${profile.defaultTools.filter((t) => ["config.load", "prompt.load", "session.write"].includes(t)).join(", ")}`);
+  console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
+  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log(`State roots: ${profile.stateRoots.join(", ")}`);
 }
 
-function printFullDump(profile: EngineProfile, bundle: PromptBundle, systemPrompt: string): void {
+async function printFullDump(
+  profile: EngineProfile,
+  bundle: PromptBundle,
+  systemPrompt: string,
+  shellExecEnabled: boolean,
+  shellInterpreter: ShellInterpreterPreference,
+): Promise<void> {
+  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter);
+
   console.log("=== Prism Vesicle Prompt Dump ===");
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
-  console.log(`Tools: ${profile.defaultTools.join(", ")}`);
+  console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
+  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log("");
   console.log("=== Sections ===");
   for (const section of bundle.sections) {
-    console.log(`--- ${section.path} (${section.text.length} chars) ---`);
+    console.log(`--- ${section.path} [${section.source}] (${section.text.length} chars) ---`);
   }
   console.log("");
   console.log("=== Composed System Prompt ===");

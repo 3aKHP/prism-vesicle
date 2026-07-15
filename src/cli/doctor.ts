@@ -1,15 +1,48 @@
-import { inspectConfig } from "../config/env";
+import { inspectProviderConfig, loadUserConfigEnvironment } from "../config/providers";
+import { inspectMcpConfig } from "../mcp/registry";
+import { inspectAssets } from "./assets";
+import { loadPermissionSettings } from "../config/permissions";
+import { resolveShellProfile } from "../core/process/shell-profile";
 
 export async function runDoctor(): Promise<void> {
-  const config = inspectConfig();
+  const config = await inspectProviderConfig();
+  const userEnv = await loadUserConfigEnvironment();
+  const mcp = await inspectMcpConfig();
+  const assets = await inspectAssets();
+  const permissions = await loadPermissionSettings();
+  const shell = resolveShellProfile(permissions.shellInterpreter);
   const bunVersion = Bun.version;
 
   console.log("Prism Vesicle Doctor");
   console.log(`Bun: ${bunVersion}`);
   console.log(`Project: ${process.cwd()}`);
-  console.log(`Provider: ${config.provider}`);
+  console.log(`Provider: ${config.providerId}`);
+  console.log(`Protocol: ${config.provider}`);
   console.log(`Base URL: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
+  console.log(`Vision input: ${config.capabilities?.vision === true ? "available" : "not declared"}`);
+  console.log(`Provider config: ${config.registry.source}${config.registry.path ? ` (${config.registry.path})` : ""}`);
+  console.log(`Provider env: ${config.hasProviderEnvFile ? "file" : "missing"} (${config.providerEnvPath})`);
   console.log(`API key: ${config.hasApiKey ? "available" : "missing"}`);
+  console.log(`Tavily web tools: ${userEnv.effectiveEnv.TAVILY_API_KEY ? "available" : "missing"} (${userEnv.path})`);
+  console.log(`MCP config: ${mcp.configured ? (mcp.enabled ? "enabled" : "disabled") : "not configured"} (${mcp.path})`);
+  console.log(`MCP env: ${mcp.hasEnvFile ? "file" : "missing"} (${mcp.envPath})`);
+  console.log(`Permissions: ${permissions.defaultMode}${permissions.exists ? "" : " (defaults)"} (${permissions.path})`);
+  console.log(`Shell exec: ${permissions.shellExec ? "enabled; permission mode applies" : "disabled"}; interpreter ${
+    shell ? `${shell.displayName} (${shell.executablePath})` : `${permissions.shellInterpreter} unavailable`
+  }`);
+  for (const layer of assets.layers) {
+    console.log(`Assets ${layer.source}: ${layer.present ? `${layer.fileCount} files` : "missing"} (${layer.directory})`);
+  }
+  console.log(assets.harness
+    ? `Harness: ${assets.harness.selection} ${assets.harness.identity.packId}@${assets.harness.identity.packVersion}`
+    : `Assets manifest: ${assets.manifest ? `${assets.manifest.source} (${assets.manifest.path})` : "missing"}`);
+  if (mcp.statuses.length > 0) {
+    for (const status of mcp.statuses) {
+      const state = status.connected ? `connected, ${status.toolCount} tools` : status.enabled ? "error" : "disabled";
+      const detail = status.error ?? status.detail;
+      console.log(`MCP server ${status.id}: ${state}${detail ? ` (${detail})` : ""}`);
+    }
+  }
   console.log(`Missing: ${config.missing.length > 0 ? config.missing.join(", ") : "none"}`);
 }

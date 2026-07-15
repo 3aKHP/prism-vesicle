@@ -1,4 +1,4 @@
-import { validateCharacterCard, validateScenarioCard } from "./index";
+import { validateCharacterCard, validateScenarioCard, validateRuntimePacket, validateEvaluateReport } from "./index";
 import type { ValidationResult, ValidatorName } from "./index";
 
 export type { ValidationResult, ValidatorName } from "./index";
@@ -8,24 +8,57 @@ export type { ValidationResult, ValidatorName } from "./index";
  * implementation. A profile that names an unknown validator fails loudly at
  * turn time via resolveValidators — same principle as tool resolution.
  *
+ * Each entry also declares an `applies` predicate that recognizes the content
+ * shape the validator targets. The agent loop runs a profile's validators only
+ * when at least one of them `applies` to the assistant content, so ordinary
+ * phase-transition prose is not reported as a schema failure and each engine's
+ * validator stays silent on content it does not recognize.
+ *
  * Validators are pure functions over content strings; they do not touch the
  * filesystem. The caller decides what content to feed them.
  */
-const registry: Record<string, (content: string) => ValidationResult> = {
-  "character-card": validateCharacterCard,
-  "scenario-card": validateScenarioCard,
+type ValidatorEntry = {
+  applies: (content: string) => boolean;
+  run: (content: string) => ValidationResult;
 };
 
-export function resolveValidators(names: string[]): Array<{ name: string; run: (content: string) => ValidationResult }> {
-  const resolved: Array<{ name: string; run: (content: string) => ValidationResult }> = [];
+const registry: Record<string, ValidatorEntry> = {
+  "character-card": { applies: isFrontmatterArtifact, run: validateCharacterCard },
+  "scenario-card": { applies: isFrontmatterArtifact, run: validateScenarioCard },
+  "runtime-packet": { applies: isRuntimePacket, run: validateRuntimePacket },
+  "evaluate-report": { applies: isEvaluateReport, run: validateEvaluateReport },
+};
+
+function isFrontmatterArtifact(content: string): boolean {
+  // ETL cards carry YAML frontmatter; ordinary phase-transition prose does not.
+  return content.trimStart().startsWith("---");
+}
+
+function isRuntimePacket(content: string): boolean {
+  // A runtime turn emits the three-part packet inline: a Hidden Neural Chain
+  // (HTML comment) and a five-line [Beat]/[Tension]/... Dynamic HUD.
+  return content.includes("[!Neural Chain]") || content.includes("[Beat]");
+}
+
+function isEvaluateReport(content: string): boolean {
+  // The audit report is emitted inline with a Neuro-Integrity heading and an
+  // Overall Verdict. If the model only writes reports/audit_*.md and returns a
+  // short summary, this stays false and validation is skipped (advisory only).
+  return /Neuro-Integrity Report|Overall Verdict/i.test(content);
+}
+
+export function resolveValidators(
+  names: string[],
+): Array<{ name: string; applies: (content: string) => boolean; run: (content: string) => ValidationResult }> {
+  const resolved: Array<{ name: string; applies: (content: string) => boolean; run: (content: string) => ValidationResult }> = [];
   for (const name of names) {
-    const run = registry[name];
-    if (!run) {
+    const entry = registry[name];
+    if (!entry) {
       throw new Error(
         `Unknown validator "${name}". Known validators: ${Object.keys(registry).join(", ")}.`,
       );
     }
-    resolved.push({ name, run });
+    resolved.push({ name, applies: entry.applies, run: entry.run });
   }
   return resolved;
 }

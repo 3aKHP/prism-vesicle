@@ -1,0 +1,17 @@
+id: explore
+displayName: Explore Agent
+description: Explore large project or source-material collections and return evidence-rich findings.
+systemPrompt:
+  - assets/prompts/agents/base.md
+  - assets/prompts/agents/explore.md
+tools:
+  - stat_path
+  - list_files
+  - list_directory
+  - grep_files
+  - read_file
+  - view_image
+contextMode: fresh
+modelPolicy: inherit
+defaultMode: background
+maxTurns: 24

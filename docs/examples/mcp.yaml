@@ -1,0 +1,31 @@
+# Copy this optional file to the same user-level directory as providers.yaml:
+#   ~/.config/prism-vesicle/mcp.yaml
+#
+# Secrets belong in the sibling .env file, not in this YAML:
+#   MCP_CLUSTER_TOKEN=...
+
+# Keep false until the example URL/token are replaced. Real configs may omit
+# this field; a present mcp.yaml defaults to enabled.
+enabled: false
+
+servers:
+  example:
+    enabled: true
+    # "http" is accepted as a compatibility alias for Streamable HTTP.
+    transport: streamable-http
+    url: https://mcp.example.com/example/mcp
+    timeoutSeconds: 30
+    protocolVersion: "2025-03-26"
+    toolPrefix: example
+    headers:
+      Authorization: "Bearer ${MCP_CLUSTER_TOKEN}"
+    # Filters match either the remote tool name or Vesicle alias.
+    includeTools:
+      - search
+      - fetch
+    excludeTools: []
+    # Omit enabledEngines to expose the server to every engine; prefer an
+    # explicit list for broad MCP servers.
+    enabledEngines:
+      - etl
+      - evaluate

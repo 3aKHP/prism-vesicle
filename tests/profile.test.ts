@@ -19,12 +19,24 @@ describe("engine profile loader", () => {
     expect(etl.stopGates).toContain("blueprint-confirmation");
     expect(etl.stopGates).toContain("phase-confirmation");
     expect(etl.displayName).toBe("Prism ETL Engine");
-    expect(etl.protocolVersion).toBe("v9.0-state-space");
+    expect(etl.protocolVersion).toBe("v10.0-tempered-voice");
   });
 
   test("runtime profile declares the runtime-turn stop gate", async () => {
     const runtime = await loadEngineProfile("runtime");
     expect(runtime.stopGates).toContain("runtime-turn");
+  });
+
+  test("Tavily web tools are scoped to research and audit engines", async () => {
+    const webTools = ["web_search", "web_fetch", "web_map", "web_crawl", "web_research"];
+    const etlTools = (await loadEngineProfile("etl")).defaultTools;
+    const evaluateTools = (await loadEngineProfile("evaluate")).defaultTools;
+    const runtimeTools = (await loadEngineProfile("runtime")).defaultTools;
+    for (const tool of webTools) {
+      expect(etlTools).toContain(tool);
+      expect(evaluateTools).toContain(tool);
+      expect(runtimeTools).not.toContain(tool);
+    }
   });
 
   test("rejects a profile whose id does not match the filename", async () => {

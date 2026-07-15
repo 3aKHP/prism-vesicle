@@ -1,5 +1,5 @@
-import { join } from "node:path";
 import type { EngineProfile } from "../engine/profile";
+import { createAssetResolver, type AssetResolver, type AssetSource } from "../runtime/assets";
 
 export type { EngineId } from "../engine/profile";
 
@@ -7,6 +7,7 @@ export type PromptSection = {
   /** Project-relative path the section was loaded from. */
   path: string;
   text: string;
+  source: AssetSource;
 };
 
 export type PromptBundle = {
@@ -22,12 +23,13 @@ export type PromptBundle = {
 export async function loadPromptBundle(
   profile: EngineProfile,
   rootDir = process.cwd(),
+  assets: AssetResolver = createAssetResolver(rootDir),
 ): Promise<PromptBundle> {
   const sections = await Promise.all(
     profile.systemPrompt.map(async (relativePath) => {
-      const absolutePath = join(rootDir, relativePath);
-      const text = await readFileText(absolutePath);
-      return { path: relativePath, text };
+      const resolved = await assets.resolveFile(relativePath);
+      const text = await assets.readText(resolved.logicalPath);
+      return { path: resolved.logicalPath, text, source: resolved.source };
     }),
   );
 
@@ -39,10 +41,4 @@ export function composeSystemPrompt(bundle: PromptBundle): string {
     .map((section) => section.text.trim())
     .filter((text) => text.length > 0)
     .join("\n\n");
-}
-
-async function readFileText(absolutePath: string): Promise<string> {
-  // Bun.file keeps the runtime dependency surface tiny and matches the
-  // existing session/prompt code shape.
-  return Bun.file(absolutePath).text();
 }

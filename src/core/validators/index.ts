@@ -4,7 +4,7 @@ export type ValidationResult = {
   errors: string[];
 };
 
-export type ValidatorName = "character-card" | "scenario-card";
+export type ValidatorName = "character-card" | "scenario-card" | "runtime-packet" | "evaluate-report";
 
 export function validateM0Output(content: string): ValidationResult {
   return {
@@ -281,6 +281,91 @@ export function validateScenarioCard(content: string): ValidationResult {
   }
 
   return makeResult(errors, warnings);
+}
+
+// --- Runtime Engine: three-part turn packet --------------------------------
+
+const RUNTIME_HUD_MARKERS = ["[Beat]", "[Tension]", "[Char]", "[Scene]", "[Turn]"];
+const RUNTIME_NEURAL_CHAIN_FIELDS = ["Perception", "Instinct", "State", "Decision"];
+
+/**
+ * Validate a Runtime engine turn packet against the three-part format declared
+ * in assets/prompts/engines/runtime.md: an HTML-comment Hidden Neural Chain, a
+ * five-line Dynamic HUD, and prose. The runtime output contract is owned by the
+ * mother project (Neural-Narratology), so this is a thin structural MVP over
+ * the format the current prompt emits; it will be tightened when prompts are
+ * rewritten.
+ *
+ * Checks:
+ * 1. Hidden Neural Chain block carries the [!Neural Chain] header.
+ * 2. All five Dynamic HUD line markers are present.
+ * 3. Neural Chain reasoning fields are present (advisory).
+ * 4. No L-System tag leak anywhere in the packet.
+ */
+export function validateRuntimePacket(content: string): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!content.includes("[!Neural Chain]")) {
+    errors.push("Runtime: Hidden Neural Chain block ([!Neural Chain]) is missing.");
+  }
+  for (const field of RUNTIME_NEURAL_CHAIN_FIELDS) {
+    if (!content.includes(`${field}:`)) {
+      warnings.push(`Runtime: Neural Chain field "${field}:" is missing.`);
+    }
+  }
+
+  for (const marker of RUNTIME_HUD_MARKERS) {
+    if (!content.includes(marker)) {
+      errors.push(`Runtime: Dynamic HUD is missing line marker ${marker}.`);
+    }
+  }
+
+  const leaked = findLeakedLSystemTags(content);
+  for (const tag of leaked) {
+    errors.push(`Runtime: L-System tag "${tag}" leaked into the packet.`);
+  }
+
+  return makeResult(errors, warnings);
+}
+
+// --- Evaluate Engine: audit report -----------------------------------------
+
+const EVALUATE_REPORT_SECTIONS = [
+  "## 1. Executive Summary",
+  "## 2. Dimension Scores",
+  "## 3. Detailed Findings",
+  "## 4. Issue List",
+  "## 5. Optimization Recommendations",
+];
+
+/**
+ * Validate an Evaluate engine audit report against the structure declared in
+ * assets/prompts/engines/evaluate.md: an Overall Verdict (PASS / CONDITIONAL /
+ * FAIL) and five numbered report sections. The report's content contract is
+ * owned by the mother project (Neural-Narratology); this is a thin structural
+ * MVP.
+ *
+ * Note: the Evaluate prompt writes the report to reports/audit_*.md. This
+ * validator runs only on assistant content emitted inline; if the model only
+ * writes the file and returns a short summary, validation stays silent.
+ * L-System terms are intentionally not flagged here because an audit may
+ * reference them legitimately in its findings.
+ */
+export function validateEvaluateReport(content: string): ValidationResult {
+  const errors: string[] = [];
+
+  if (!/\*\*Overall Verdict:\*\*\s*(PASS|CONDITIONAL|FAIL)/i.test(content)) {
+    errors.push('Evaluate: missing "**Overall Verdict:**" line with PASS / CONDITIONAL / FAIL.');
+  }
+
+  for (const section of EVALUATE_REPORT_SECTIONS) {
+    if (!content.includes(section)) {
+      errors.push(`Evaluate: missing report section "${section}".`);
+    }
+  }
+
+  return makeResult(errors, []);
 }
 
 type Beat = Record<string, string | undefined>;

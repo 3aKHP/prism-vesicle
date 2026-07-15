@@ -1,0 +1,82 @@
+default:
+  provider: deepseek
+  model: deepseek-v4-flash
+
+providers:
+  deepseek:
+    protocol: openai-chat-compatible
+    baseUrl: https://api.deepseek.com/v1
+    apiKeyEnv: DEEPSEEK_API_KEY
+    # Optional: which model "/model deepseek" switches to. Falls back to
+    # models[0] (deepseek-v4-flash here) when omitted.
+    defaultModel: deepseek-v4-flash
+    models:
+      - id: deepseek-v4-flash
+        capabilities:
+          streaming: true
+          tools: true
+        limits:
+          contextWindow: 1000000
+          maxOutputTokens: 65536
+      - id: deepseek-reasoner
+        generation:
+          temperature: 0.4
+          maxTokens: 8192
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
+        limits:
+          contextWindow: 1000000
+          maxOutputTokens: 65536
+          autoCompact:
+            enabled: true
+            threshold: 0.85
+            reserveOutputTokens: 20000
+
+  local:
+    protocol: openai-chat-compatible
+    baseUrl: http://127.0.0.1:11434/v1
+    apiKeyEnv: LOCAL_OPENAI_COMPAT_API_KEY
+    # Optional: replace Vesicle's generated branded User-Agent for this
+    # provider only. Other protocol fingerprint and auth headers stay fixed.
+    # userAgent: custom-client/1.0
+    models:
+      - qwen3
+
+  anthropic:
+    protocol: anthropic-messages
+    baseUrl: https://api.anthropic.com/v1
+    apiKeyEnv: ANTHROPIC_API_KEY
+    authMethod: x-api-key
+    models:
+      - id: claude-sonnet
+        generation:
+          maxTokens: 4096
+        capabilities:
+          tools: true
+          reasoningTier: true
+          vision: true
+        limits:
+          contextWindow: 200000
+          maxOutputTokens: 8192
+
+  google:
+    protocol: gemini-generate-content
+    baseUrl: https://generativelanguage.googleapis.com/v1beta
+    apiKeyEnv: GEMINI_API_KEY
+    authMethod: x-goog-api-key
+    models:
+      - id: gemini-2.5-pro
+        generation:
+          maxTokens: 8192
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
+          vision: true
+        limits:
+          contextWindow: 1000000
+          maxOutputTokens: 65536

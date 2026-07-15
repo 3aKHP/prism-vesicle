@@ -1,33 +1,12 @@
 import type { VesicleConfig } from "../../config/env";
-import type { ProviderAdapter, VesicleRequest, VesicleResponse } from "../shared/types";
-
-type ChatCompletionChoice = {
-  finish_reason?: string | null;
-  message?: {
-    content?: string | null;
-    tool_calls?: Array<{
-      id: string;
-      type: "function";
-      function: {
-        name: string;
-        arguments: string;
-      };
-    }>;
-  };
-};
-
-type ChatCompletionResponse = {
-  id?: string;
-  choices?: ChatCompletionChoice[];
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
-  error?: {
-    message?: string;
-  };
-};
+import { ProviderError } from "../shared/errors";
+import { fetchProvider } from "../shared/fetch";
+import { openAIChatHeaders } from "../shared/headers";
+import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../shared/types";
+import { toChatCompletionBody } from "./request";
+import { readProviderErrorMessage, responseFromChatCompletionBody } from "./response";
+import { isRetryableStreamRequestFailure, readChatCompletionStream } from "./stream";
+import type { ChatCompletionResponse } from "./types";
 
 export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
   readonly id = "openai-chat-compatible";
@@ -35,87 +14,73 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
   constructor(private readonly config: VesicleConfig) {}
 
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
-    if (!this.config.apiKey) {
-      throw new Error("VESICLE_API_KEY is required before making a provider request.");
-    }
+    this.requireApiKey();
 
-    const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${this.config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: request.model.model,
-        messages: [
-          ...request.system.map((content) => ({ role: "system", content })),
-          ...request.messages.map((message) => {
-            if (message.role === "tool") {
-              return {
-                role: "tool",
-                tool_call_id: message.toolCallId,
-                content: message.content,
-              };
-            }
-
-            if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
-              return {
-                role: "assistant",
-                content: message.content || null,
-                tool_calls: message.toolCalls.map((call) => ({
-                  id: call.id,
-                  type: "function",
-                  function: {
-                    name: call.name,
-                    arguments: call.arguments,
-                  },
-                })),
-              };
-            }
-
-            return {
-              role: message.role,
-              content: message.content,
-            };
-          }),
-        ],
-        tools: request.tools && request.tools.length > 0 ? request.tools : undefined,
-        tool_choice: request.tools && request.tools.length > 0 ? "auto" : undefined,
-        temperature: request.generation?.temperature ?? 0.7,
-        max_tokens: request.generation?.maxTokens,
-        stream: false,
-      }),
-    });
-
+    const response = await this.fetchChatCompletion(request, false, false);
     const body = await response.json().catch(() => undefined) as ChatCompletionResponse | undefined;
     if (!response.ok) {
       const providerMessage = body?.error?.message ?? response.statusText;
-      throw new Error(`Provider request failed (${response.status}): ${providerMessage}`);
+      throw new ProviderError(`Provider request failed (${response.status}): ${providerMessage}`, {
+        kind: "http_error",
+        providerId: this.config.providerId,
+        status: response.status,
+      });
     }
 
-    const choice = body?.choices?.[0];
-    const content = choice?.message?.content ?? "";
-    const toolCalls = choice?.message?.tool_calls?.map((toolCall) => ({
-      id: toolCall.id,
-      name: toolCall.function.name,
-      arguments: toolCall.function.arguments,
-    }));
+    return responseFromChatCompletionBody(body, request.id, this.config.providerId);
+  }
 
-    if (!content && (!toolCalls || toolCalls.length === 0)) {
-      throw new Error("Provider response did not include assistant content or tool calls.");
+  async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
+    this.requireApiKey();
+
+    const response = await this.fetchChatCompletion(request, true, true);
+    const retryWithoutStreamOptions = !response.ok && isRetryableStreamRequestFailure(response.status);
+    const streamResponse = retryWithoutStreamOptions
+      ? await this.fetchChatCompletion(request, true, false)
+      : response;
+
+    if (!streamResponse.ok && isRetryableStreamRequestFailure(streamResponse.status)) {
+      yield { type: "complete", response: await this.complete(request) };
+      return;
     }
 
-    return {
-      id: body?.id ?? request.id,
-      content,
-      toolCalls,
-      finishReason: choice?.finish_reason ?? undefined,
-      raw: body,
-      usage: {
-        inputTokens: body?.usage?.prompt_tokens,
-        outputTokens: body?.usage?.completion_tokens,
-        totalTokens: body?.usage?.total_tokens,
+    if (!streamResponse.ok) {
+      const providerMessage = await readProviderErrorMessage(streamResponse);
+      throw new ProviderError(`Provider request failed (${streamResponse.status}): ${providerMessage}`, {
+        kind: "http_error",
+        providerId: this.config.providerId,
+        status: streamResponse.status,
+      });
+    }
+    if (streamResponse.headers.get("content-type")?.includes("application/json")) {
+      const body = await streamResponse.json().catch(() => undefined) as ChatCompletionResponse | undefined;
+      yield { type: "complete", response: responseFromChatCompletionBody(body, request.id, this.config.providerId) };
+      return;
+    }
+
+    yield* readChatCompletionStream(streamResponse, request.id, this.config.providerId);
+  }
+
+  private fetchChatCompletion(request: VesicleRequest, stream: boolean, includeUsage: boolean): Promise<Response> {
+    return fetchProvider(`${this.config.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        ...openAIChatHeaders(this.config.userAgent),
+        "authorization": `Bearer ${this.config.apiKey}`,
       },
-    };
+      body: JSON.stringify(toChatCompletionBody(request, stream, includeUsage)),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
+    });
+  }
+
+  private requireApiKey(): void {
+    if (this.config.apiKey) return;
+    throw new ProviderError(`${this.config.apiKeyLabel ?? "provider API key"} is required before making a provider request.`, {
+      kind: "missing_credentials",
+      providerId: this.config.providerId,
+    });
   }
 }

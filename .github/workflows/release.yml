@@ -1,0 +1,108 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - id: release
+        name: Require an annotated version tag on the default branch history
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="$(jq -r '.version' package.json)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
+          test "$TAG" = "v$VERSION"
+          test "$(git cat-file -t "refs/tags/$TAG")" = "tag"
+          TAG_SHA="$(git rev-list -n 1 "$TAG")"
+          git fetch --no-tags origin "$DEFAULT_BRANCH"
+          git merge-base --is-ancestor "$TAG_SHA" FETCH_HEAD
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'sha=%s\n' "$TAG_SHA" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Rebuild and verify tagged release
+    needs: metadata
+    uses: ./.github/workflows/release-build.yml
+    with:
+      checkout_ref: ${{ needs.metadata.outputs.sha }}
+      expected_version: ${{ needs.metadata.outputs.version }}
+      artifact_prefix: publish
+      retention_days: 30
+
+  github-release:
+    name: Publish GitHub prerelease
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: publish-*
+          merge-multiple: true
+          path: release
+      - name: Write checksums
+        working-directory: release
+        run: sha256sum * > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Prism Vesicle v${{ needs.metadata.outputs.version }}
+          prerelease: ${{ contains(needs.metadata.outputs.version, '-') }}
+          make_latest: ${{ contains(needs.metadata.outputs.version, '-') == false }}
+          generate_release_notes: true
+          files: release/*
+
+  npm:
+    name: Publish npm package
+    needs: [metadata, build, github-release]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.metadata.outputs.sha }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      # npm Trusted Publishing requires Node 24's npm 11 OIDC implementation;
+      # setup-node also writes the public registry configuration.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: Publish the verified package if it is not already present
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          if npm view "prism-vesicle@$VERSION" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
+            echo "prism-vesicle@$VERSION is already published; nothing to retry."
+            exit 0
+          fi
+          npm publish --provenance --access public --tag latest

@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify source and release shape
+    uses: ./.github/workflows/release-build.yml
+    with:
+      checkout_ref: ${{ github.sha }}
+      artifact_prefix: ci
+      retention_days: 7

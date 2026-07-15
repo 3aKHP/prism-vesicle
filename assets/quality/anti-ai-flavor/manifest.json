@@ -1,0 +1,103 @@
+{
+  "schema": "rule-pack/v1",
+  "module": "anti-ai-flavor",
+  "version": "0.2.1",
+  "primaryLanguage": "zh-CN",
+  "sourceRepository": "3aKHP/Neural-Narratology",
+  "sourceCommit": "1aeb8b9acef4522889e5ba22728f8711390997b6",
+  "sourceState": "clean",
+  "sourceHash": "c710a7f6895b84731e041f7e43510de8e2c0f04644ddd7111ecd90059b576b76",
+  "moduleInputHash": "87e0bd4f95148bdf736f3ebc72b296ea30b679e57b21490f2df45edaccceee94",
+  "compilerHash": "f339e7b6bd783f48d3cc9557e8101a13302e9d77ad9653c0d1b3a01e89d4114b",
+  "ruleCount": 23,
+  "projectionCounts": {
+    "guidance": 21,
+    "detector": 7,
+    "judge": 21,
+    "replacement": 0
+  },
+  "requiredCapabilities": [
+    "quality-guard/anti-ai-flavor@1"
+  ],
+  "preprocessing": {
+    "line_endings": "LF",
+    "unicode_normalization": "NFC",
+    "offset_basis": "normalized-candidate",
+    "protected_regions": [
+      "markdown-fenced-code",
+      "markdown-blockquote",
+      "html-comment",
+      "prism-hud",
+      "host-provided-ranges"
+    ]
+  },
+  "sources": [
+    {
+      "id": "cn-antislop",
+      "name": "中文 AI 味(slop)指纹提取工具 / Chinese AI Slop Fingerprint Toolkit",
+      "url": "https://github.com/Yi-111-a/cn-antislop",
+      "license": "MIT",
+      "lang": "zh-CN",
+      "face": "both",
+      "status": "adopted",
+      "note": "四层指纹模型(F0-F3)方法论与破折号密度信号已采纳。其 L0/L1 中文词表与 骨架表仍列为后续评估对象,未批量导入。\n"
+    },
+    {
+      "id": "antislop-sampler",
+      "name": "antislop-sampler (sam-paech)",
+      "url": "https://github.com/sam-paech/antislop-sampler",
+      "license": "Apache-2.0",
+      "lang": "en-US",
+      "face": "B",
+      "status": "adopted",
+      "note": "已采用 took a deep breath 单条短语作为英文扩展与编译器多语言样例;其余 slop_phrases / slop_regexes 未导入。Apache-2.0 来源随 bundle manifest 保留。\n"
+    },
+    {
+      "id": "the-antislop",
+      "name": "The AntiSlop (Claude Skill)",
+      "url": "https://github.com/aplaceforallmystuff/the-antislop",
+      "license": "MIT",
+      "lang": "en-US",
+      "face": "A",
+      "status": "reference",
+      "note": "借其 Tier1/2/3 severity 分级形式与 Horoscope Test 启发式(\"Could anyone have written this, for anyone?\");不搬英文词条。\n"
+    },
+    {
+      "id": "sillytavern-regex",
+      "name": "SillyTavern 正则替换预设(社区)",
+      "url": "TBD — 待用户提供权威来源",
+      "license": "TBD",
+      "lang": "zh-CN",
+      "face": "B",
+      "status": "evaluating",
+      "note": "社区分散,无单一权威源。待用户指定具体仓库后评估。"
+    }
+  ],
+  "corpora": {
+    "detector": {
+      "cases": 12,
+      "hash": "e65aecc46a50788e3c90fad1af3b5d145524af447c1d6cb08b73de7293ae8db8"
+    },
+    "host-conformance": {
+      "cases": 8,
+      "hash": "f36cc5cbbed90b88b65be49589f234538ce011443bc4f4180f124e41b9cd871c"
+    },
+    "judge": {
+      "cases": 8,
+      "hash": "7eae55735c81b65006571f1a6e0878b2fd4b0340da4ada36f16b9e6c16241602"
+    }
+  },
+  "artifacts": {
+    "calibration/detector.jsonl": "e65aecc46a50788e3c90fad1af3b5d145524af447c1d6cb08b73de7293ae8db8",
+    "calibration/host-conformance.jsonl": "f36cc5cbbed90b88b65be49589f234538ce011443bc4f4180f124e41b9cd871c",
+    "calibration/judge.jsonl": "7eae55735c81b65006571f1a6e0878b2fd4b0340da4ada36f16b9e6c16241602",
+    "detector-rules.en-US.json": "335c8ead7ca0a5db97f63dd57c0ce0d9d259bf3232c8ed5d2a992f16d5ada8e9",
+    "detector-rules.zh-CN.json": "9f46b0990c6d90cab9957a8cd430a3126e32f40723298677ce8568434284a060",
+    "guidance.zh-CN.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
+    "judge-rubric.zh-CN.md": "8fa9445532688bed823dd3126e59c8c9e3992d6f59ba32599f35554e6b65acdd",
+    "schemas/detector-rules.schema.json": "feae4be50d7f6dc6f1b0be5646220abf8ae5aa5f70307aafdff1bc8626a0f7e0",
+    "schemas/host-conformance-case.schema.json": "d59b4b3b39858e0674f28900065e9d52ba8014a958553ca79cc6ff0372dc0d51",
+    "schemas/rule-pack.schema.json": "fe4623817c186290c22e982c4dfe04c8c36224dbb81c82fb239f1b6365761ec9",
+    "THIRD_PARTY_NOTICES.md": "20ddf8eb5615522f8dfa3c92539dc06dfb8a868cfc55c2a7f46692d3fc315b28"
+  }
+}

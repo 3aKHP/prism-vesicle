@@ -1,0 +1,117 @@
+{
+  "schema": "detector-rules/v1",
+  "module": "anti-ai-flavor",
+  "language": "zh-CN",
+  "rules": [
+    {
+      "id": "zh-f0-air-thick-with",
+      "tier": "F0",
+      "lang": "zh-CN",
+      "title": "「空气中弥漫着」环境套话",
+      "severity": "tier1",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "literal",
+        "value": "空气中弥漫着",
+        "unit": "candidate"
+      },
+      "source": "self"
+    },
+    {
+      "id": "zh-f0-meaningless-filler",
+      "tier": "F0",
+      "lang": "zh-CN",
+      "title": "无意义装饰短句",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "regex",
+        "value": "^(就这样(?:[，,][^。！？!?]{0,12})?|于是[^。！？!?]{0,8}了)[。！!？?]?$",
+        "unit": "sentence",
+        "flags": "u"
+      },
+      "source": "self"
+    },
+    {
+      "id": "zh-f0-essay-register-connectors",
+      "tier": "F0",
+      "lang": "zh-CN",
+      "title": "论说文语域连接词渗入叙事",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "regex",
+        "value": "(总而言之|不得不说|值得一提的是|与此同时[，,])",
+        "unit": "sentence",
+        "flags": "u"
+      },
+      "source": "self"
+    },
+    {
+      "id": "zh-f1-not-x-but-y",
+      "tier": "F1",
+      "lang": "zh-CN",
+      "title": "「不是……而是……」对比句式",
+      "severity": "tier1",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "regex",
+        "value": "不是[^。！？!?]{1,30}而是",
+        "unit": "sentence",
+        "flags": "u"
+      },
+      "source": "self"
+    },
+    {
+      "id": "zh-f1-narrator-filler-before-quote",
+      "tier": "F1",
+      "lang": "zh-CN",
+      "title": "引号前的旁白式停顿(\"她顿了一下,然后说——\")",
+      "severity": "tier1",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "regex",
+        "value": "(顿了一下|沉默了一会儿)[,，]?然后说",
+        "unit": "sentence",
+        "flags": "u"
+      },
+      "source": "self"
+    },
+    {
+      "id": "zh-f3-emdash-density",
+      "tier": "F3",
+      "lang": "zh-CN",
+      "title": "破折号密度过高",
+      "severity": "tier3",
+      "maturity": "experimental",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "metric",
+        "unit": "paragraph",
+        "metric": {
+          "signal": "em_dash_per_100_chars",
+          "operator": "gte",
+          "threshold": 2
+        }
+      },
+      "source": "cn-antislop"
+    }
+  ]
+}

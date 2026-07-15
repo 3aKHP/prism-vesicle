@@ -1,95 +1,593 @@
-import { createMemo, createSignal, For, Show, onMount } from "solid-js";
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid";
-import { readdir, stat } from "node:fs/promises";
-import { join, relative } from "node:path";
-import { inspectConfig } from "../config/env";
-import { resolveGate, runPrompt } from "../core/agent-loop/run";
-import type { RunPromptResult } from "../core/agent-loop/run";
-import type { AgentLoopEvent } from "../core/agent-loop/run";
+import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
+import { useRenderer, useTerminalDimensions } from "@opentui/solid";
+import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
-import type { GateResolution } from "../core/gate/types";
-import { copySelectionToClipboard } from "./clipboard";
-import { sharedSyntaxStyle, palette } from "./theme";
-import { GatePrompt, gateFocusOrder, gateResolutionFromState } from "./GatePrompt";
-import type { GateFocusTarget } from "./GatePrompt";
-import { listSessions, loadSessionSnapshot } from "../core/session/store";
-import type { SessionSummary } from "../core/session/store";
+import type { ReasoningTier } from "../providers/shared/types";
+import { engineAccent, palette } from "./theme";
+import { listSessions } from "../core/session/store";
+import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
+import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
+import type { ArtifactEntry } from "../core/artifacts/workbench";
 import { resolveTuiLayout } from "./layout";
-import { SessionPicker } from "./SessionPicker";
+import { Sidebar } from "./views/Sidebar";
+import { MessageStream } from "./views/MessageStream";
+import { rewindPickerPanelHeight } from "./RewindPicker";
+import { builtinCommands } from "./commands/builtin";
+import { executeCommand } from "./commands/dispatch";
+import type { CommandContext } from "./commands/types";
+import type { ActivityEntry, AgentCardState, Message, SelectedArtifact, SessionPickerState } from "./types";
+import { createRewindController } from "./rewind/controller";
+import { initDebugLogging } from "./debug-log";
+import { TurnCancellation } from "./turn-cancellation";
+import { AgentManager } from "../core/agents/manager";
+import { AgentStore } from "../core/agents/store";
+import { runChildAgent } from "../core/agents/child-runner";
+import { AgentContinuationScheduler } from "../core/agents/scheduler";
+import { agentActivitySummary } from "./agent-view";
+import { ToolPermissionBroker } from "../core/permissions";
+import { getProcessManager, type BackgroundProcessState } from "../core/process/manager";
+import {
+  backgroundProcessActivitySummary,
+  contextUsageTelemetryLine,
+  createUsageController,
+  footerLine,
+  headerLine,
+  latestTurnUsage,
+  sessionUsageTelemetryLine,
+  sumSessionUsage,
+  turnUsageTelemetryLine,
+  type TokenUsageSummary,
+} from "./telemetry";
+import { displayTranscriptFromSnapshot } from "./session-presenter";
+import { BottomSurface } from "./views/BottomSurface";
+import { createAgentProcessController } from "./agent-process-controller";
+import { createSessionResumeController } from "./session-resume-controller";
+import { createComposerController } from "./composer-controller";
+import { createDecisionController } from "./decision-controller";
+import { createTurnController } from "./turn-controller";
+import { createProviderConfigController, createProviderState } from "./provider-config-controller";
+import { createSessionActionsController } from "./session-actions-controller";
+import { createSessionPreferencesController } from "./session-preferences-controller";
+import { createAgentCommand } from "./agent-command";
+import { useInputRouting } from "./input-routing";
 
-type Role = "user" | "assistant" | "system" | "tool";
-
-type Message = {
-  role: Role;
-  content: string;
+export type AppProps = {
+  dangerouslySkipPermissions?: boolean;
 };
 
-type PendingGate = Extract<RunPromptResult, { kind: "needs_user" }>;
-
-type PendingGateState = Omit<PendingGate, "profile"> & {
-  profile?: PendingGate["profile"];
+export {
+  backgroundProcessActivitySummary,
+  contextUsageTelemetryLine,
+  displayTranscriptFromSnapshot,
+  footerLine,
+  headerLine,
+  latestTurnUsage,
+  sessionUsageTelemetryLine,
+  sumSessionUsage,
+  turnUsageTelemetryLine,
 };
+export type { TokenUsageSummary };
 
-type ArtifactEntry = {
-  path: string;
-  updatedAt: string;
-};
-
-type ActivityEntry = {
-  kind: "provider" | "assistant" | "tool" | "gate" | "validation" | "system";
-  text: string;
-};
-
-type SessionPickerState = {
-  sessions: SessionSummary[];
-  selected: number;
-};
-
-export function App() {
+export function App(props: AppProps = {}) {
+  initDebugLogging();
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
-  const config = inspectConfig();
+  const providerState = createProviderState(props.dangerouslySkipPermissions === true);
+  const {
+    activeModel,
+    activeModelCapabilities,
+    activeModelLimits,
+    activeProvider,
+    mcpStatus,
+    permissionMode,
+    permissionSettingsReady,
+    providerConfigReady,
+    providerHasApiKey,
+    providerRegistry,
+    setActiveModel,
+    setActiveModelCapabilities,
+    setActiveModelLimits,
+    setActiveProvider,
+    setMcpStatus,
+    setPermissionMode,
+    setPermissionSettingsReady,
+    setProviderConfigReady,
+    setProviderHasApiKey,
+    setProviderRegistry,
+    setShellExecEnabled,
+    setShellInterpreter,
+    shellExecEnabled,
+    shellInterpreter,
+  } = providerState;
+  const [activeEngine, setActiveEngine] = createSignal<EngineId>("etl");
+  const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
+  const [reasoningDisplayMode, setReasoningDisplayMode] = createSignal<ReasoningDisplayMode>("collapsed");
   const [messages, setMessages] = createSignal<Message[]>([
     {
       role: "system",
       content: "Ready. Enter one Prism prompt and press Enter.",
     },
+    ...(props.dangerouslySkipPermissions ? [{
+      role: "system" as const,
+      content: "DANGER: --dangerously-skip-permissions enabled YOLO for this process. Tool approvals are bypassed; runtime hard guards remain active.",
+    }] : []),
   ]);
-  const [status, setStatus] = createSignal(config.hasApiKey ? "provider configured" : "missing API key");
+  const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
   const [output, setOutput] = createSignal("");
-  const [inputValue, setInputValue] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const [restoringSession, setRestoringSession] = createSignal(false);
   const [resumableSessions, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
+  const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
+  const [selectedArtifact, setSelectedArtifact] = createSignal<SelectedArtifact | null>(null);
   const [activity, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
-  const [promptHistory, setPromptHistory] = createSignal<string[]>([]);
-  const [historyIndex, setHistoryIndex] = createSignal<number | null>(null);
+  const [agentCards, setAgentCards] = createSignal<AgentCardState[]>([]);
+  const [backgroundProcesses, setBackgroundProcesses] = createSignal<BackgroundProcessState[]>([]);
+  const [streamingAssistant, setStreamingAssistant] = createSignal("");
+  const [streamingReasoning, setStreamingReasoning] = createSignal("");
+  const usageController = createUsageController();
+  const {
+    beginTurn: beginUsageTurn,
+    lastTurnUsage,
+    publishTurn: publishTurnUsage,
+    recordIndependent: recordIndependentAgentUsage,
+    recordResponse: recordResponseUsage,
+    sessionUsage,
+    setLastTurnUsage,
+    setSessionUsage,
+  } = usageController;
+  const [lastDisplayedToolAssistantContent, setLastDisplayedToolAssistantContent] = createSignal<string | null>(null);
+  const turnCancellation = new TurnCancellation();
 
-  // Gate UI state. When pendingGate is non-null the input bar is replaced
-  // by the Select-style gate prompt; keyboard routing switches to gate mode.
-  const [pendingGate, setPendingGate] = createSignal<PendingGateState | null>(null);
-  const [gateFocus, setGateFocus] = createSignal<GateFocusTarget>("confirm");
-  const [gateFeedbackMode, setGateFeedbackMode] = createSignal<GateFocusTarget | null>(null);
-  const [gateFeedback, setGateFeedback] = createSignal("");
+  let turnController!: ReturnType<typeof createTurnController>;
+  let sessionPreferences!: ReturnType<typeof createSessionPreferencesController>;
+  const decisionController = createDecisionController({
+    busy,
+    activeEngine,
+    permissionMode,
+    setStatus,
+    submitPermission: (resolution) => { void turnController.submitPermissionResolution(resolution); },
+    submitChildPermission: (resolution) => turnController.submitChildPermissionResolution(resolution),
+    submitEngineSwitch: (resolution, submitOptions) => { void turnController.submitEngineSwitchResolution(resolution, submitOptions); },
+    submitGate: (resolution) => { void turnController.submitGateResolution(resolution); },
+    submitQuestionOption: (selectedIndex) => { void turnController.submitUserQuestionAnswer(selectedIndex); },
+    submitQuestionFreeform: (value) => turnController.submitUserQuestionFreeform(value),
+    applyPermissionMode: (mode) => sessionPreferences.applyPermissionMode(mode),
+  });
+  const {
+    activeGateRequest,
+    activePermissionRequest,
+    clearGateFeedback,
+    clearQuestionFreeform,
+    decisionPanelMinHeight,
+    gateFeedback,
+    gateFeedbackCursor,
+    gateFeedbackMode,
+    gateFocus,
+    handleGateKey,
+    handlePaste: handleDecisionPaste,
+    handleQuestionKey,
+    handleYoloKey,
+    pendingChildPermission,
+    pendingEngineSwitch,
+    pendingGate,
+    pendingPermission,
+    pendingUserQuestion,
+    questionFreeformCursor,
+    questionFreeformText,
+    questionSelected,
+    setGateFeedback,
+    setGateFeedbackCursor,
+    setGateFeedbackKillBuffer,
+    setGateFeedbackMode,
+    setGateFocus,
+    setPendingChildPermission,
+    setPendingEngineSwitch,
+    setPendingGate,
+    setPendingPermission,
+    setPendingUserQuestion,
+    setQuestionFreeformCursor,
+    setQuestionFreeformKillBuffer,
+    setQuestionFreeformText,
+    setQuestionSelected,
+    setYoloConfirmStage,
+    yoloConfirmStage,
+  } = decisionController;
+  sessionPreferences = createSessionPreferencesController({
+    rootDir: process.cwd(),
+    dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
+    sessionId,
+    nextSessionParent,
+    setNextSessionParent,
+    permissionMode,
+    setPermissionMode,
+    setGateFocus,
+    setYoloConfirmStage,
+    setStatus,
+    setMessages,
+    setConversation,
+  });
+  const {
+    changePermissionMode,
+    persistEngineSwitch,
+    persistProviderSwitch,
+    persistReasoningSwitch,
+    persistThinkingSwitch,
+  } = sessionPreferences;
+  let lastReportedAssetDriftKey: string | undefined;
+  const agentStore = new AgentStore(process.cwd());
+  const processManager = getProcessManager(process.cwd());
+  const agentProcessController = createAgentProcessController({
+    sessionId,
+    busy,
+    activeEngine,
+    activeModel,
+    backgroundProcesses,
+    setBackgroundProcesses,
+    setAgentCards,
+    setMessages,
+    setActivity,
+    setStatus,
+    setStreamingAssistant,
+    setStreamingReasoning,
+    setLastDisplayedToolAssistantContent,
+    markTurnSawResponse: () => turnController.markTurnSawResponse(),
+    recordResponseUsage,
+    recordIndependentAgentUsage,
+    assetDriftKey: () => lastReportedAssetDriftKey,
+    setAssetDriftKey: (key) => { lastReportedAssetDriftKey = key; },
+  });
+  const {
+    handleAgentEvent,
+    handleBackgroundProcessEvent,
+    recordActivity,
+  } = agentProcessController;
+  const providerConfigController = createProviderConfigController({
+    dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
+    providerRegistry,
+    setProviderRegistry,
+    setActiveProvider,
+    setActiveModel,
+    setActiveModelLimits,
+    setActiveModelCapabilities,
+    setProviderHasApiKey,
+    setProviderConfigReady,
+    setMcpStatus,
+    setPermissionMode,
+    setShellExecEnabled,
+    setShellInterpreter,
+    setPermissionSettingsReady,
+    thinkingTier,
+    activeProvider,
+    activeModel,
+    setStatus,
+    recordActivity,
+  });
+  const {
+    activeGeneration,
+    activeProviderSelection,
+    applyProviderSelection,
+    ensureProviderRegistry,
+    loadPermissionSettingsOnce,
+    loadProviderConfigOnce,
+    refreshMcpStatus,
+  } = providerConfigController;
+  let sessionActions!: ReturnType<typeof createSessionActionsController>;
+  const rewindController = createRewindController({
+    rootDir: process.cwd(),
+    sessionId,
+    branchHead: nextSessionParent,
+    busy,
+    engine: activeEngine,
+    providerSelection: activeProviderSelection,
+    generation: activeGeneration,
+    setStatus,
+    setBusy,
+    runCancellable: (operation) => turnCancellation.run(operation),
+    refreshArtifacts,
+    applyConversation: (result) => sessionActions.applyConversationRewind(result),
+  });
+  const rewindPicker = rewindController.state;
+  const composerController = createComposerController({
+    rootDir: process.cwd(),
+    terminalWidth: () => dimensions().width,
+    providerRegistry,
+    ensureProviderRegistry,
+    applyProviderSelection,
+    persistProviderSwitch,
+    agentCards,
+    sessionId,
+    busy,
+    activeModelCapabilities,
+    status,
+    setStatus,
+    setMessages,
+    recordActivity,
+    reportError: (error) => turnController.reportError(error),
+    submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
+    abortTurn: () => turnCancellation.abort(),
+    openRewind: rewindController.open,
+  });
+  const {
+    agentArgumentDraft,
+    applyState: applyComposerState,
+    clear: clearComposer,
+    commandArgumentItems,
+    commandArgumentMenuOpen,
+    commandArgumentSelected,
+    commandMenuItems,
+    commandMenuOpen,
+    commandMenuSelected,
+    composerInputWidth,
+    composerPopupOpen,
+    fixedArgumentDraft,
+    handleEscape: handleEscapeAtPrompt,
+    handleKey: handleComposerKey,
+    handleModelPickerKey,
+    historyIndex,
+    inputCursor,
+    inputElements,
+    inputImages,
+    inputNeedsExpandedBottom,
+    inputValue,
+    insertPastedText: insertComposerPaste,
+    modelArgumentDraft,
+    modelPicker,
+    modelPickerItems,
+    modelPickerTitle,
+    openModelPicker,
+    pasteClipboardImage,
+    recordHistory: recordPromptHistory,
+    setHistoryIndex,
+    setInputImages,
+    setPromptHistory,
+  } = composerController;
+  const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
+  onCleanup(() => {
+    unsubscribeProcesses();
+    void processManager.shutdown();
+  });
+  const permissionBroker = new ToolPermissionBroker();
+  permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
+  const pausedAgentDeliveries = new Set<string>();
+  let agentManager!: AgentManager;
+  turnController = createTurnController({
+    rootDir: process.cwd(),
+    dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
+    busy,
+    setBusy,
+    providerConfigReady,
+    setProviderConfigReady,
+    loadProviderConfig: loadProviderConfigOnce,
+    permissionSettingsReady,
+    loadPermissionSettings: loadPermissionSettingsOnce,
+    activeModelCapabilities,
+    activeEngine,
+    setActiveEngine,
+    activeModel,
+    activeProviderSelection,
+    activeGeneration,
+    permissionMode,
+    shellExecEnabled,
+    shellInterpreter,
+    sessionId,
+    setSessionId,
+    sessionPath,
+    setSessionPath,
+    conversation,
+    setConversation,
+    nextSessionParent,
+    setNextSessionParent,
+    setOutput,
+    setStatus,
+    messages,
+    setMessages,
+    agentCards,
+    setAgentCards,
+    setStreamingAssistant,
+    setStreamingReasoning,
+    lastDisplayedToolAssistantContent,
+    setLastDisplayedToolAssistantContent,
+    pendingGate,
+    setPendingGate,
+    pendingEngineSwitch,
+    setPendingEngineSwitch,
+    pendingUserQuestion,
+    setPendingUserQuestion,
+    pendingPermission,
+    setPendingPermission,
+    pendingChildPermission,
+    setQuestionSelected,
+    questionSelected,
+    questionFreeformText,
+    clearQuestionFreeform,
+    setGateFocus,
+    setGateFeedbackMode,
+    clearGateFeedback,
+    setSessionPicker,
+    pausedAgentDeliveries,
+    agentManager: () => agentManager,
+    permissionBroker,
+    runCancellable: (operation) => turnCancellation.run(operation),
+    handleAgentEvent,
+    beginUsageTurn,
+    publishTurnUsage,
+    recordIndependentAgentUsage,
+    recordActivity,
+    refreshArtifacts,
+    compactSession: (instructions) => sessionActions.compactSession(instructions),
+    executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
+    recordPromptHistory,
+    applyComposerState,
+    setInputImages,
+    setHistoryIndex,
+    setPromptHistory,
+    applyConversationRewind: (result) => sessionActions.applyConversationRewind(result),
+  });
+  const { reportError } = turnController;
+  const continuationScheduler = new AgentContinuationScheduler(agentStore, turnController.deliverAgentResults, {
+    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
+      && !pausedAgentDeliveries.has(parentSessionId)
+      && !restoringSession()
+      && !busy()
+      && !pendingGate()
+      && !pendingEngineSwitch()
+      && !pendingUserQuestion()
+      && !pendingPermission()
+      && !pendingChildPermission(),
+  });
+  agentManager = new AgentManager(agentStore, runChildAgent, {
+    onEvent: (event) => {
+      handleAgentEvent(event);
+      if (event.type === "agent_completed"
+        && event.result.mode === "background"
+        && event.result.status !== "cancelled") {
+        void continuationScheduler.notify(event.result.parentSessionId).catch(turnController.reportError);
+      }
+    },
+  });
+  const agentCommand = createAgentCommand({
+    rootDir: process.cwd(),
+    sessionId,
+    agentCards,
+    agentManager,
+    agentStore,
+    pausedDeliveries: pausedAgentDeliveries,
+    scheduler: continuationScheduler,
+    reportError,
+  });
+  const { resumeSession } = createSessionResumeController({
+    rootDir: process.cwd(),
+    dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
+    permissionSettingsReady,
+    loadPermissionSettings: loadPermissionSettingsOnce,
+    processManager,
+    agentStore,
+    agentCards,
+    setAgentCards,
+    permissionMode,
+    setPermissionMode,
+    applyProviderSelection,
+    setRestoringSession,
+    setSessionId,
+    setNextSessionParent,
+    setSessionPath,
+    setActiveEngine,
+    setConversation,
+    setLastTurnUsage,
+    setSessionUsage,
+    setOutput,
+    setSessionPicker,
+    setThinkingTier,
+    setReasoningDisplayMode,
+    setStatus,
+    setMessages,
+    setAssetDriftKey: (key) => { lastReportedAssetDriftKey = key; },
+    refreshArtifacts,
+    reportError: turnController.reportError,
+    setPendingGate,
+    setPendingEngineSwitch,
+    setPendingUserQuestion,
+    setPendingPermission,
+    setGateFocus,
+    setGateFeedbackMode,
+    setGateFeedback,
+    setGateFeedbackCursor,
+    setGateFeedbackKillBuffer,
+    setQuestionSelected,
+    setQuestionFreeformText,
+    setQuestionFreeformCursor,
+    setQuestionFreeformKillBuffer,
+  });
+  sessionActions = createSessionActionsController({
+    rootDir: process.cwd(),
+    sessionId,
+    activeEngine,
+    setActiveEngine,
+    activeProviderSelection,
+    activeGeneration,
+    providerConfigReady,
+    loadProviderConfig: loadProviderConfigOnce,
+    pendingGate,
+    setPendingGate,
+    pendingEngineSwitch,
+    setPendingEngineSwitch,
+    pendingUserQuestion,
+    setPendingUserQuestion,
+    pendingPermission,
+    setPendingPermission,
+    pendingChildPermission,
+    agentCards,
+    setConversation,
+    setMessages,
+    setThinkingTier,
+    setReasoningDisplayMode,
+    applyProviderSelection,
+    setOutput,
+    setNextSessionParent,
+    applyComposerState,
+    clearComposer,
+    setInputImages,
+    setHistoryIndex,
+    setLastTurnUsage,
+    setSessionUsage,
+    sessionPicker,
+    setSessionPicker,
+    setBusy,
+    setStatus,
+    recordActivity,
+    runCancellable: (operation) => turnCancellation.run(operation),
+    rewindReset: rewindController.reset,
+    refreshArtifacts,
+    resumeSession,
+  });
+  const {
+    compactSession,
+    handleSessionPickerKey,
+    resetRewindState,
+  } = sessionActions;
+  createEffect(() => {
+    const id = sessionId();
+    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingChildPermission();
+    if (id && ready) void continuationScheduler.notify(id).catch(reportError);
+  });
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()),
-    Boolean(sessionPicker()) || inputValue().startsWith("/"),
+    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
+    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || inputNeedsExpandedBottom(),
+    decisionPanelMinHeight(),
+    rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
+    rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
-
-  let lastCtrlCAt = 0;
+  const composerPopupMaxRows = createMemo(() => Math.min(8, Math.max(1, layout().bottomHeight - 4)));
 
   // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
     void refreshArtifacts();
+    void agentStore.recoverInterrupted().then((recovered) => {
+      if (recovered.length === 0) return;
+      setMessages((current) => [...current, {
+        role: "system",
+        content: `Recovered ${recovered.length} interrupted SubAgent${recovered.length === 1 ? "" : "s"}; foreground tool calls were closed and background failures will be delivered when their parent sessions resume.`,
+      }]);
+      for (const agent of recovered.filter((entry) => entry.mode === "background")) {
+        void continuationScheduler.notify(agent.parentSessionId).catch(reportError);
+      }
+    }).catch(reportError);
+    void refreshMcpStatus().catch(reportError);
+    if (!props.dangerouslySkipPermissions) void loadPermissionSettingsOnce().catch(reportError);
+    void loadProviderConfigOnce().catch((error) => {
+      setProviderConfigReady(true);
+      reportError(error);
+    });
     void listSessions().then((sessions) => {
       setResumableSessions(sessions);
       if (sessions.length > 0) {
@@ -104,673 +602,191 @@ export function App() {
     });
   });
 
-  useKeyboard((key) => {
-    if (key.ctrl && key.name === "c") {
-      void copySelectionToClipboard(renderer).then((copied) => {
-        if (copied) {
-          renderer.clearSelection();
-          setStatus("selection copied");
-          lastCtrlCAt = 0;
-          return;
-        }
-        const now = Date.now();
-        if (now - lastCtrlCAt < 3000) {
-          process.nextTick(() => renderer.destroy());
-          return;
-        }
-        lastCtrlCAt = now;
-        setStatus("press Ctrl+C again to exit");
-      });
-      return;
-    }
-
-    if (sessionPicker()) {
-      handleSessionPickerKey(key);
-      return;
-    }
-
-    if (pendingGate()) {
-      handleGateKey(key);
-      return;
-    }
-
-    if (key.name === "up" && !busy()) {
-      recallPromptHistory(-1);
-      return;
-    }
-    if (key.name === "down" && historyIndex() !== null && !busy()) {
-      recallPromptHistory(1);
-      return;
-    }
-
-    if ((key.ctrl && key.name === "q") || key.name === "escape") {
-      process.nextTick(() => renderer.destroy());
-    }
+  useInputRouting({
+    renderer,
+    setStatus,
+    rewindPicker,
+    handleRewindKey: rewindController.handleKey,
+    modelPicker,
+    handleModelPickerKey,
+    sessionPicker,
+    handleSessionPickerKey,
+    yoloConfirmStage,
+    handleYoloKey,
+    activePermissionRequest,
+    pendingUserQuestion,
+    handleQuestionKey,
+    activeGateRequest,
+    handleGateKey,
+    pasteClipboardImage,
+    handleComposerKey,
+    handlePromptEscape: handleEscapeAtPrompt,
+    handleDecisionPaste,
+    insertComposerPaste,
   });
-
-  function handleGateKey(key: { name?: string; ctrl?: boolean; shift?: boolean }) {
-    if (busy()) return;
-    if (key.name === "up" || (key.ctrl && key.name === "p")) {
-      const idx = gateFocusOrder.indexOf(gateFocus());
-      setGateFocus(gateFocusOrder[(idx - 1 + gateFocusOrder.length) % gateFocusOrder.length]);
-      return;
-    }
-    if (key.name === "down" || (key.ctrl && key.name === "n")) {
-      const idx = gateFocusOrder.indexOf(gateFocus());
-      setGateFocus(gateFocusOrder[(idx + 1) % gateFocusOrder.length]);
-      return;
-    }
-    if (key.name === "tab") {
-      const target = gateFocus();
-      if (target === "chat") return;
-      setGateFeedbackMode((prev) => (prev === target ? null : target));
-      setGateFeedback("");
-      return;
-    }
-    if (key.name === "return" || key.name === "enter") {
-      const resolution = gateResolutionFromState(gateFocus(), gateFeedback());
-      void submitGateResolution(resolution);
-      return;
-    }
-    if (key.name === "escape") {
-      // Cancel = retreat to chat without committing.
-      setGateFeedbackMode(null);
-      setGateFeedback("");
-      setGateFocus("chat");
-      return;
-    }
-  }
-
-  function recallPromptHistory(direction: -1 | 1) {
-    const history = promptHistory();
-    if (history.length === 0) return;
-    const current = historyIndex();
-    const next = current === null
-      ? history.length - 1
-      : Math.max(0, Math.min(history.length - 1, current + direction));
-    setHistoryIndex(next);
-    setInputValue(history[next]);
-  }
-
-  function handleSessionPickerKey(key: { name?: string; ctrl?: boolean }) {
-    const picker = sessionPicker();
-    if (!picker) return;
-
-    if (key.name === "up" || (key.ctrl && key.name === "p")) {
-      setSessionPicker({
-        ...picker,
-        selected: (picker.selected - 1 + picker.sessions.length) % picker.sessions.length,
-      });
-      return;
-    }
-    if (key.name === "down" || (key.ctrl && key.name === "n")) {
-      setSessionPicker({
-        ...picker,
-        selected: (picker.selected + 1) % picker.sessions.length,
-      });
-      return;
-    }
-    if (key.name === "return" || key.name === "enter") {
-      const target = picker.sessions[picker.selected];
-      if (target) void resumeSession(target);
-      return;
-    }
-    if (key.name === "escape") {
-      setSessionPicker(null);
-      setStatus("resume cancelled");
-      return;
-    }
-  }
-
-  const submitPrompt = async (value: string) => {
-    const prompt = value.trim();
-    if (!prompt || busy()) return;
-
-    // Slash commands for session management. These never hit the provider.
-    if (prompt.startsWith("/")) {
-      await handleCommand(prompt);
-      return;
-    }
-
-    setPromptHistory((prev) => [...prev.filter((entry) => entry !== prompt), prompt].slice(-50));
-    setHistoryIndex(null);
-    setSessionPicker(null);
-    setBusy(true);
-    setStatus("sending request");
-    recordActivity({ kind: "provider", text: "sending provider request" });
-    const requestMessages: VesicleMessage[] = [
-      ...conversation(),
-      { role: "user", content: prompt },
-    ];
-    setMessages((prev) => [...prev, { role: "user", content: prompt }]);
-
-    try {
-      const result = await runPrompt({
-        input: prompt,
-        engine: "etl",
-        sessionId: sessionId(),
-        messages: requestMessages,
-        onEvent: handleAgentEvent,
-      });
-      handleResult(result, requestMessages);
-    } catch (error) {
-      reportError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitGateResolution = async (resolution: GateResolution) => {
-    const gate = pendingGate();
-    if (!gate || busy()) return;
-
-    setBusy(true);
-    setStatus(`resolving gate: ${resolution.decision}`);
-    recordActivity({ kind: "gate", text: `resolving ${gate.gate.gate} as ${resolution.decision}` });
-    setPendingGate(null);
-    setGateFeedbackMode(null);
-    setGateFeedback("");
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: `[gate:${gate.gate.gate}] ${resolution.decision}${resolution.feedback ? ` — ${resolution.feedback}` : ""}` },
-    ]);
-
-    try {
-      const result = await resolveGate({
-        engine: "etl",
-        sessionId: gate.sessionId,
-        messages: gate.messages,
-        toolCallId: gate.toolCallId,
-        gate: gate.gate,
-        resolution,
-        onEvent: handleAgentEvent,
-      });
-      handleResult(result, gate.messages);
-    } catch (error) {
-      setPendingGate(gate);
-      reportError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /**
-   * Apply a runPrompt/resolveGate result. Shared by both paths so the
-   * needs_user / complete branching stays in one place.
-   */
-  function handleResult(result: RunPromptResult, carriedMessages: VesicleMessage[]) {
-    if (result.kind === "needs_user") {
-      setConversation([...result.messages]);
-      setSessionId(result.sessionId);
-      setSessionPath(result.sessionPath);
-      setPendingGate(result);
-      setSessionPicker(null);
-      setGateFocus("confirm");
-      setGateFeedbackMode(null);
-      setGateFeedback("");
-      setOutput(result.assistantContent);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: result.assistantContent },
-        { role: "system", content: `Stop gate pending: ${result.gate.gate}. Use ↑/↓ + Enter, or type into the amend box (Tab).` },
-      ]);
-      setStatus(`gate pending: ${result.gate.gate}`);
-      return;
-    }
-
-    setPendingGate(null);
-    setGateFeedbackMode(null);
-    setGateFeedback("");
-
-    const profileValidation = result.validation;
-    const ok = profileValidation ? profileValidation.ok : true;
-
-    // CR B2: carry the loop's full message list forward rather than appending
-    // to a stale snapshot. result.messages already contains every prior turn
-    // including tool calls and their results, so the next user prompt builds
-    // on a provider-valid view.
-    setConversation([...result.messages]);
-    setSessionId(result.sessionId);
-    setSessionPath(result.sessionPath);
-    setOutput(result.response.content);
-    void refreshArtifacts();
-
-    const appended: Message[] = [{ role: "assistant", content: result.response.content }];
-    if (profileValidation) {
-      appended.push({ role: "system", content: renderValidationNotice(profileValidation) });
-    }
-    setMessages((prev) => [...prev, ...appended]);
-    setStatus(ok ? "complete" : "complete with validation findings");
-  }
-
-  function reportError(error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    setStatus("error");
-    setOutput(message);
-    recordActivity({ kind: "system", text: `error: ${message}` });
-    setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${message}` }]);
-  }
-
-  function handleAgentEvent(event: AgentLoopEvent) {
-    switch (event.type) {
-      case "provider_request":
-        recordActivity({ kind: "provider", text: `provider request #${event.iteration + 1}` });
-        return;
-      case "assistant_response":
-        recordActivity({
-          kind: "assistant",
-          text: event.toolCallCount > 0
-            ? `assistant response with ${event.toolCallCount} tool call${event.toolCallCount > 1 ? "s" : ""}`
-            : "assistant response complete",
-        });
-        return;
-      case "tool_call":
-        recordActivity({ kind: "tool", text: `calling ${event.name}` });
-        return;
-      case "tool_result":
-        recordActivity({ kind: "tool", text: `${event.ok ? "ok" : "failed"} ${event.name}: ${event.content}` });
-        return;
-      case "gate_pending":
-        recordActivity({ kind: "gate", text: `gate pending: ${event.gate}` });
-        return;
-      case "validation":
-        recordActivity({ kind: "validation", text: event.ok ? "validation passed" : "validation found issues" });
-        return;
-    }
-  }
-
-  function recordActivity(entry: ActivityEntry) {
-    setActivity((prev) => [...prev, entry].slice(-60));
-  }
-
-  const handleSubmit = (value: unknown) => {
-    if (pendingGate()) return; // gate mode owns the input
-    const submitted = typeof value === "string" ? value : inputValue();
-    if (submitted.trim().length === 0) return;
-    setInputValue("");
-    void submitPrompt(submitted);
-  };
-
   /**
    * Slash commands for session management and help. These run locally and
    * never touch the provider:
    *   /resume           list resumable sessions with numeric indices
    *   /resume <n>       resume the nth session from the last /resume list
    *   /resume <id>      resume a session by full id prefix
+   *   /model            choose a provider/model interactively
+   *   /model <provider> switch to a provider's default model
+   *   /model <model>    switch model within the active provider
+   *   /model <p> <m>    switch to an exact provider/model pair
+   *   /engine [id]      list or switch Prism engines for future turns
+   *   /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto
+   *   /reasoning <mode> show reasoning: hidden/collapsed/expanded
+   *   /artifact [n|path] list or preview generated artifacts
+   *   /validate <n|path> validate an artifact file
    *   /new              abandon the current session and start fresh
    *   /help             show available commands
    */
-  async function handleCommand(input: string) {
-    const [command, ...rest] = input.slice(1).split(/\s+/);
-    const arg = rest.join(" ").trim();
-
-    if (command === "help") {
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: input },
-        {
-          role: "system",
-          content: "Commands:\n  /resume           list sessions\n  /resume <n|id>    resume a session\n  /new              start a fresh session\n  /help             show this help",
-        },
-      ]);
-      return;
-    }
-
-    if (command === "new") {
-      setMessages((prev) => [...prev, { role: "user", content: input }]);
-      setSessionId(undefined);
-      setSessionPath("no session yet");
-      setConversation([]);
-      setOutput("");
-      setPendingGate(null);
-      setStatus("fresh session");
-      setMessages((prev) => [...prev, { role: "system", content: "Started a fresh session. Type a prompt to begin." }]);
-      return;
-    }
-
-    if (command === "resume") {
-      const sessions = await listSessions();
-      setResumableSessions(sessions);
-      if (sessions.length === 0) {
-        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: "No existing sessions found." }]);
-        return;
-      }
-
-      if (!arg) {
-        setMessages((prev) => [...prev, { role: "user", content: input }]);
-        setSessionPicker({ sessions, selected: 0 });
-        setStatus("choose a session to resume");
-        return;
-      }
-
-      const target = resolveSessionTarget(sessions, arg);
-      if (!target) {
-        setMessages((prev) => [...prev, { role: "user", content: input }, { role: "system", content: `No session matches "${arg}".` }]);
-        return;
-      }
-
-      await resumeSession(target, input);
-      return;
-    }
-
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: input },
-      { role: "system", content: `Unknown command: /${command}. Type /help for available commands.` },
-    ]);
-  }
-
-  async function resumeSession(target: SessionSummary, commandEcho?: string) {
-    try {
-      const snapshot = await loadSessionSnapshot(process.cwd(), target.sessionId, {
-        synthesizeDanglingToolResults: false,
-      });
-      const resumedMessages = snapshot.messages as VesicleMessage[];
-      const transcript = resumedMessages.map(displayMessageFromResumed);
-      setSessionId(target.sessionId);
-      setSessionPath(joinSessionPath(target.sessionId));
-      setConversation(resumedMessages);
-      setOutput(snapshot.pendingGate?.assistantContent ?? "");
-      setSessionPicker(null);
-
-      const hostMessages: Message[] = [];
-      if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
-
-      if (snapshot.pendingGate) {
-        setPendingGate({
-          kind: "needs_user",
-          sessionId: target.sessionId,
-          sessionPath: joinSessionPath(target.sessionId),
-          gate: snapshot.pendingGate.gate,
-          toolCallId: snapshot.pendingGate.toolCallId,
-          assistantContent: snapshot.pendingGate.assistantContent,
-          messages: resumedMessages,
-        });
-        setGateFocus("confirm");
-        setGateFeedbackMode(null);
-        setGateFeedback("");
-        setStatus(`gate pending: ${snapshot.pendingGate.gate.gate}`);
-        hostMessages.push({
-          role: "system",
-          content: `Resumed pending gate ${snapshot.pendingGate.gate.gate}. Use the gate controls below to continue.`,
-        });
-      } else {
-        setPendingGate(null);
-        setStatus(`resumed ${target.sessionId.slice(11)}`);
-        hostMessages.push({
-          role: "system",
-          content: `Resumed session ${target.sessionId} with ${snapshot.messages.length} prior turns. Continue below.`,
-        });
-      }
-
-      setMessages([...transcript, ...hostMessages]);
-      await refreshArtifacts();
-    } catch (error) {
-      reportError(error);
-    }
-  }
-
-  async function refreshArtifacts() {
-    setArtifacts(await scanArtifacts(process.cwd()));
-  }
-
-  const renderMessage = (message: Message) => {
-    const color =
-      message.role === "user" ? palette.user
-        : message.role === "assistant" ? palette.assistant
-          : message.role === "system" ? palette.system
-            : palette.tool;
-    const prefix = message.role === "user" ? "you" : message.role;
-
-    // Assistant content gets full markdown rendering; user/system/tool stay
-    // as styled plain text so the user's own typing and host notices stay
-    // visually distinct from rendered model output.
-    if (message.role === "assistant" && message.content.trim()) {
-      return (
-        <box flexDirection="column" border borderColor={palette.assistant} paddingX={1}>
-          <text content="assistant" fg={palette.assistant} attributes={1} />
-          <markdown content={message.content} syntaxStyle={sharedSyntaxStyle} conceal={true} />
-        </box>
-      );
-    }
-
-    if (message.role === "user") {
-      return (
-        <box flexDirection="column" border borderColor={palette.user} paddingX={1}>
-          <text content="you" fg={palette.user} attributes={1} />
-          <text content={message.content} fg={palette.textPrimary} />
-        </box>
-      );
-    }
-
-    return (
-      <box flexDirection="column">
-        <text content={prefix} fg={color} attributes={1} />
-        <text content={message.content} fg={palette.textPrimary} />
-      </box>
-    );
+  // Command execution context: the surface slash-command handlers reach
+  // through. Built once from component signals/helpers; submitPrompt passes it
+  // to executeCommand. See src/tui/commands/.
+  const commandContext: CommandContext = {
+    setMessages,
+    activeProvider,
+    activeModel,
+    activeModelLimits,
+    ensureProviderRegistry,
+    applyProviderSelection,
+    persistProviderSwitch,
+    activeEngine,
+    setActiveEngine,
+    persistEngineSwitch,
+    thinkingTier,
+    setThinkingTier,
+    persistThinkingSwitch,
+    reasoningDisplayMode,
+    setReasoningDisplayMode,
+    persistReasoningSwitch,
+    permissionMode,
+    changePermissionMode,
+    artifacts,
+    refreshArtifacts,
+    loadArtifactPreview: (artifact, options) => loadArtifactPreview(process.cwd(), artifact, options),
+    setSelectedArtifact,
+    setStatus,
+    recordActivity,
+    setSessionId,
+    setSessionPath,
+    setConversation,
+    setOutput,
+    lastTurnUsage,
+    sessionUsage,
+    setLastTurnUsage,
+    setSessionUsage,
+    setPendingGate,
+    setPendingEngineSwitch,
+    setPendingUserQuestion,
+    setResumableSessions,
+    setSessionPicker,
+    listSessions,
+    resumeSession,
+    compactSession,
+    openRewindPicker: rewindController.open,
+    resetRewindState,
+    agentCommand,
+    openModelPicker,
   };
+
+  async function refreshArtifacts(): Promise<ArtifactEntry[]> {
+    const entries = await scanArtifacts(process.cwd());
+    setArtifacts(entries);
+    setSelectedArtifact((selected) => selected && entries.some((entry) => entry.path === selected.path) ? selected : null);
+    return entries;
+  }
 
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
         <text
-          content={headerLine(config.provider, config.model, status(), layout().width)}
-          fg={busy() ? palette.warn : pendingGate() ? palette.gateAccent : palette.success}
+          content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
+          fg={engineAccent(activeEngine())}
           attributes={1}
         />
+        <Show when={permissionMode() === "YOLO"} fallback={<box width={0} />}>
+          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} />
+        </Show>
       </box>
 
       <box flexDirection="row" flexGrow={1}>
-        <Show when={layout().showWorkspace} fallback={<box width={0} />}>
-          <box title="Workspace" border borderColor={palette.sectionBorder} width={layout().leftPanelWidth} padding={1} flexDirection="column">
-            <PanelLine content="Engine" fg={palette.textMuted} />
-            <PanelLine content="etl" fg={palette.textPrimary} attributes={1} />
-            <PanelLine content=" " fg={palette.textDim} />
-            <PanelLine content="Provider" fg={palette.textMuted} />
-            <PanelLine content={truncateLine(config.model, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
-            <PanelLine content={config.hasApiKey ? "API key: available" : "API key: missing"} fg={config.hasApiKey ? palette.success : palette.error} />
-            <PanelLine content=" " fg={palette.textDim} />
-            <PanelLine content="Session" fg={palette.textMuted} />
-            <PanelLine content={truncateMiddle(sessionPath(), layout().leftPanelWidth - 4)} fg={palette.textSecondary} />
-            <PanelLine content=" " fg={palette.textDim} />
-            <PanelLine content="Artifacts" fg={palette.textMuted} />
-            <Show when={artifacts().length > 0} fallback={<PanelLine content="none yet" fg={palette.textDim} />}>
-              <For each={artifacts().slice(0, 4)}>
-                {(artifact) => <PanelLine content={truncateMiddle(artifact.path, layout().leftPanelWidth - 4)} fg={palette.textSecondary} />}
-              </For>
-            </Show>
-          </box>
+        <Show when={layout().showSidebar} fallback={<box width={0} />}>
+          <Sidebar
+            status={status()}
+            thinkingTier={thinkingTier()}
+            reasoningMode={reasoningDisplayMode()}
+            sessionPath={sessionPath()}
+            mcp={mcpStatus()}
+            artifacts={artifacts()}
+            selectedArtifactPath={selectedArtifact()?.path}
+            agents={agentCards()}
+            processes={backgroundProcesses()}
+            currentSessionId={sessionId()}
+            width={layout().leftPanelWidth}
+          />
         </Show>
 
-        <box title="Messages" border borderColor={palette.sectionBorder} flexGrow={1} padding={1}>
-          <scrollbox width="100%" height="100%" stickyScroll stickyStart="bottom">
-            <box flexDirection="column">
-              {messages().map((message) => renderMessage(message))}
-            </box>
-          </scrollbox>
-        </box>
+        <MessageStream
+          messages={messages()}
+          streamingReasoning={streamingReasoning()}
+          streamingAssistant={streamingAssistant()}
+          reasoningMode={reasoningDisplayMode()}
+          contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
+          agents={agentCards()}
+        />
 
-        <Show when={layout().showOutput} fallback={<box width={0} />}>
-          <box title="Activity / Artifacts" border borderColor={palette.sectionBorder} width={layout().rightPanelWidth} padding={1}>
-            <scrollbox width="100%" height="100%" stickyScroll stickyStart="top">
-              <box flexDirection="column">
-                <text content="Activity" fg={palette.textMuted} />
-                <For each={activity().slice(-10)}>
-                  {(entry) => <text content={activityLine(entry, layout().rightPanelWidth - 4)} fg={activityColor(entry.kind)} />}
-                </For>
-                <text content=" " />
-                <text content="Recent artifacts" fg={palette.textMuted} />
-                <Show when={artifacts().length > 0} fallback={<text content="none yet" fg={palette.textDim} />}>
-                  <For each={artifacts().slice(0, 6)}>
-                    {(artifact) => <text content={truncateMiddle(artifact.path, layout().rightPanelWidth - 4)} fg={palette.textSecondary} />}
-                  </For>
-                </Show>
-              </box>
-            </scrollbox>
-          </box>
-        </Show>
+        {/* The former right-hand Activity / Artifacts pane was removed in the
+            TUI rewrite. Agent-loop activity and artifact detail now fold into
+            the message stream itself (tool-call rendering, Phase D). The left
+            Workspace sidebar holds the persistent artifact list. */}
       </box>
 
-      <Show
-        when={pendingGate()}
-        fallback={
-          <Show
-            when={sessionPicker()}
-            fallback={
-              <box height={inputValue().startsWith("/") ? layout().bottomHeight : 3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="column">
-                <Show when={inputValue().startsWith("/")} fallback={<box height={0} />}>
-                  <box flexDirection="column">
-                    <text content="/resume  list and resume sessions    /new  start fresh    /help  commands" fg={palette.textDim} />
-                    <text content="Up/Down recalls prompt history" fg={palette.textDim} />
-                  </box>
-                </Show>
-                <input
-                  focused
-                  placeholder={busy() ? "Request in flight..." : "Type prompt, Enter to send, /help for commands"}
-                  value={inputValue()}
-                  onInput={setInputValue}
-                  onSubmit={handleSubmit}
-                  width="100%"
-                />
-              </box>
-            }
-          >
-            {(picker) => (
-              <box height={layout().bottomHeight}>
-                <SessionPicker sessions={picker().sessions} selected={picker().selected} width={layout().width} />
-              </box>
-            )}
-          </Show>
-        }
-      >
-        {(g) => (
-          <box height={layout().bottomHeight}>
-            <GatePrompt
-              gate={g().gate}
-              focused={gateFocus()}
-              feedbackMode={gateFeedbackMode()}
-              feedback={gateFeedback()}
-              onFeedbackInput={setGateFeedback}
-              width={layout().width}
-              maxSummaryLines={layout().summaryLines}
-            />
-          </box>
-        )}
-      </Show>
+      <BottomSurface
+        layout={layout()}
+        yoloStage={yoloConfirmStage()}
+        permissionRequest={activePermissionRequest()}
+        question={pendingUserQuestion()}
+        gate={activeGateRequest()}
+        rewind={rewindPicker()}
+        session={sessionPicker()}
+        model={modelPicker()}
+        gateFocus={gateFocus()}
+        gateFeedbackMode={gateFeedbackMode()}
+        gateFeedback={gateFeedback()}
+        gateFeedbackCursor={gateFeedbackCursor()}
+        engineSwitchPending={Boolean(pendingEngineSwitch())}
+        questionSelected={questionSelected()}
+        questionFreeformText={questionFreeformText()}
+        questionFreeformCursor={questionFreeformCursor()}
+        modelItems={modelPickerItems()}
+        modelTitle={modelPickerTitle()}
+        commandMenuOpen={commandMenuOpen()}
+        commandItems={commandMenuItems()}
+        commandSelected={commandMenuSelected()}
+        commandArgumentMenuOpen={commandArgumentMenuOpen()}
+        commandArgumentItems={commandArgumentItems()}
+        commandArgumentSelected={commandArgumentSelected()}
+        modelArgumentDraft={modelArgumentDraft()}
+        fixedArgumentDraft={fixedArgumentDraft()}
+        agentArgumentDraft={agentArgumentDraft()}
+        composerPopupMaxRows={composerPopupMaxRows()}
+        composerPopupOpen={composerPopupOpen()}
+        inputNeedsExpandedBottom={inputNeedsExpandedBottom()}
+        inputValue={inputValue()}
+        inputCursor={inputCursor()}
+        inputWidth={composerInputWidth()}
+        busy={busy()}
+        providerConfigReady={providerConfigReady()}
+      />
+      <box height={layout().footerHeight} paddingLeft={1}>
+        <text
+          content={footerLine(activeProvider(), activeModel(), providerHasApiKey(), layout().width, lastTurnUsage(), sessionUsage(), activeModelLimits())}
+          fg={palette.textMuted}
+        />
+      </box>
     </box>
   );
-}
-
-function PanelLine(props: { content: string; fg: string; attributes?: number }) {
-  return (
-    <box height={1}>
-      <text content={props.content} fg={props.fg} attributes={props.attributes} width="100%" />
-    </box>
-  );
-}
-
-function headerLine(provider: string, model: string, status: string, width: number): string {
-  return truncateLine(`Prism Vesicle | etl | ${provider} | ${model} | ${status}`, Math.max(20, width - 4));
-}
-
-function activityLine(entry: ActivityEntry, width: number): string {
-  const label = entry.kind.padEnd(10, " ");
-  return truncateLine(`${label} ${entry.text}`, width);
-}
-
-function activityColor(kind: ActivityEntry["kind"]): string {
-  switch (kind) {
-    case "provider":
-      return palette.user;
-    case "assistant":
-      return palette.assistant;
-    case "tool":
-      return palette.tool;
-    case "gate":
-      return palette.gateAccent;
-    case "validation":
-      return palette.warn;
-    case "system":
-      return palette.textDim;
-  }
-}
-
-function displayMessageFromResumed(message: VesicleMessage): Message {
-  if (message.role === "user" || message.role === "assistant" || message.role === "tool") {
-    return { role: message.role, content: message.content };
-  }
-  return { role: "system", content: message.content };
-}
-
-function truncateLine(value: string, width: number): string {
-  const limit = Math.max(8, width);
-  if (value.length <= limit) return value;
-  return `${value.slice(0, limit - 3)}...`;
-}
-
-function truncateMiddle(value: string, width: number): string {
-  const limit = Math.max(8, width);
-  if (value.length <= limit) return value;
-  const head = Math.ceil((limit - 3) / 2);
-  const tail = Math.floor((limit - 3) / 2);
-  return `${value.slice(0, head)}...${value.slice(value.length - tail)}`;
-}
-
-async function scanArtifacts(rootDir: string): Promise<ArtifactEntry[]> {
-  const roots = ["workspace", "novels", "reports", "test_runs"];
-  const entries: ArtifactEntry[] = [];
-
-  for (const root of roots) {
-    const dir = join(rootDir, root);
-    await scanArtifactDir(rootDir, dir, entries).catch(() => undefined);
-  }
-
-  return entries
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 12);
-}
-
-async function scanArtifactDir(rootDir: string, dir: string, entries: ArtifactEntry[]) {
-  const children = await readdir(dir, { withFileTypes: true });
-  for (const child of children) {
-    if (child.name === ".gitkeep") continue;
-    const fullPath = join(dir, child.name);
-    if (child.isDirectory()) {
-      await scanArtifactDir(rootDir, fullPath, entries);
-      continue;
-    }
-    if (!child.isFile()) continue;
-    const info = await stat(fullPath);
-    entries.push({
-      path: relative(rootDir, fullPath).replace(/\\/g, "/"),
-      updatedAt: info.mtime.toISOString(),
-    });
-  }
-}
-
-function renderValidationNotice(validation: { ok: boolean; results: Array<{ name: string; result: { errors: string[]; warnings: string[] } }> }): string {
-  const lines: string[] = [`Validation ${validation.ok ? "passed" : "found issues"}:`];
-  for (const entry of validation.results) {
-    const tag = entry.result.errors.length > 0 ? "✗" : entry.result.warnings.length > 0 ? "⚠" : "✓";
-    lines.push(`  ${tag} ${entry.name}`);
-    for (const error of entry.result.errors) lines.push(`      ${error}`);
-    for (const warning of entry.result.warnings) lines.push(`      ${warning}`);
-  }
-  return lines.join("\n");
-}
-
-function resolveSessionTarget(sessions: SessionSummary[], arg: string): SessionSummary | null {
-  // Numeric index (1-based) into the most recent /resume list.
-  const numeric = Number(arg);
-  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= sessions.length) {
-    return sessions[numeric - 1];
-  }
-  // Otherwise treat as an id prefix.
-  const match = sessions.find((s) => s.sessionId.startsWith(arg));
-  return match ?? null;
-}
-
-function joinSessionPath(sessionId: string): string {
-  return `.vesicle/sessions/${sessionId}.jsonl`;
 }

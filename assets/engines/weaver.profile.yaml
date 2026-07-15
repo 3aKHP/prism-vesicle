@@ -1,16 +1,25 @@
 id: weaver
 displayName: Prism Weaver Engine
-protocolVersion: v9.0-state-space
+protocolVersion: v10.0-tempered-voice
 systemPrompt:
   - assets/prompts/shared/vesicle-base.md
+  - assets/quality/anti-ai-flavor/guidance.zh-CN.md
   - assets/prompts/engines/weaver.md
 defaultTools:
   - config.load
   - prompt.load
   - session.write
+  - stat_path
   - list_files
+  - list_directory
+  - grep_files
   - read_file
+  - view_image
+  - create_file
+  - create_directory
   - write_file
+  - replace_in_file
+  - append_file
 validators: []
 stopGates: []
 stateRoots:

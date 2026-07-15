@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { validateCharacterCard, validateScenarioCard, validateM0Output } from "../src/core/validators";
+import { validateCharacterCard, validateScenarioCard, validateRuntimePacket, validateEvaluateReport, validateM0Output } from "../src/core/validators";
 
 describe("validateM0Output (legacy stub, kept for non-artifact turns)", () => {
   test("passes on non-empty content", () => {
@@ -107,6 +107,87 @@ describe("validateScenarioCard (Module B)", () => {
     expect(result.errors.some((e) => e.includes('"L5"'))).toBe(true);
   });
 });
+
+describe("validateRuntimePacket (Runtime engine)", () => {
+  test("accepts a well-formed three-part packet", () => {
+    const result = validateRuntimePacket(VALID_RUNTIME_PACKET);
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  test("rejects a missing Hidden Neural Chain", () => {
+    const result = validateRuntimePacket(VALID_RUNTIME_PACKET.replace("[!Neural Chain]\n", ""));
+    expect(result.errors.some((e) => e.includes("[!Neural Chain]"))).toBe(true);
+  });
+
+  test("rejects a missing HUD line marker", () => {
+    const result = validateRuntimePacket(VALID_RUNTIME_PACKET.replace("[Scene]", "[Place]"));
+    expect(result.errors.some((e) => e.includes("[Scene]"))).toBe(true);
+  });
+
+  test("rejects leaked L-System tag", () => {
+    const result = validateRuntimePacket(VALID_RUNTIME_PACKET + "\n某段提及 L3-A 的文字\n");
+    expect(result.errors.some((e) => e.includes('"L3-A"'))).toBe(true);
+  });
+});
+
+describe("validateEvaluateReport (Evaluate engine)", () => {
+  test("accepts a well-formed audit report", () => {
+    const result = validateEvaluateReport(VALID_EVALUATE_REPORT);
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  test("rejects a missing Overall Verdict", () => {
+    const result = validateEvaluateReport(VALID_EVALUATE_REPORT.replace("**Overall Verdict:** CONDITIONAL", ""));
+    expect(result.errors.some((e) => e.includes("Overall Verdict"))).toBe(true);
+  });
+
+  test("rejects a missing report section", () => {
+    const result = validateEvaluateReport(VALID_EVALUATE_REPORT.replace("## 3. Detailed Findings\n", ""));
+    expect(result.errors.some((e) => e.includes("## 3. Detailed Findings"))).toBe(true);
+  });
+});
+
+const VALID_RUNTIME_PACKET = `<!--
+[!Neural Chain]
+Perception: 用户语气转冷被解读为边界试探
+Instinct: 防御本能上升，但有被触动的诱因
+State: Beat 1 / tension 45 / variant defense-softening / boundary approaching
+Decision: 选择半退半守，用一句反问拖延
+-->
+
+[Beat] Arrival（1 轮）| Config: defense-softening | Boundary: approaching
+[Tension] 45/100
+[Char] 洛天依 | 防御略起但仍开放
+[Scene] 屋顶，雨后
+[Turn] 1
+
+她没有回头，只是把指尖搭在栏杆上，雨后的凉意渗进声音里。
+
+"你来得比我以为的早。"
+`;
+
+const VALID_EVALUATE_REPORT = `# Neuro-Integrity Report: workspace/luotianyi.md
+**Date:** 2026-07-10
+**Overall Verdict:** CONDITIONAL
+
+## 1. Executive Summary
+角色卡基本合规，但 Variant Axes 缺少正向位移方向。
+
+## 2. Dimension Scores
+- Voice Fidelity: 8/10
+- Neuro-Logic: 7/10
+
+## 3. Detailed Findings
+Persona Topology 的 Invariant Axes 满足两条，Topology 结构完整。
+
+## 4. Issue List
+1. Variant Axes 无正向软化方向。
+
+## 5. Optimization Recommendations
+建议增加一条描述"张力下信任软化、真诚连接变得可达"的 Variant Axis。
+`;
 
 const VALID_CHARACTER_CARD = `---
 name: 洛天依

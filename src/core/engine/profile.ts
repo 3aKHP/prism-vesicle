@@ -1,5 +1,4 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { createAssetResolver, type AssetResolver, type AssetSource } from "../runtime/assets";
 
 /**
  * Engine identity. Mirrors the engine folders under assets/engines/ and
@@ -51,6 +50,11 @@ export type EngineProfile = {
    * root allowlists independently.
    */
   stateRoots: string[];
+  /** Host-only provenance for drift diagnostics; never sent to providers. */
+  asset: {
+    path: string;
+    source: AssetSource;
+  };
 };
 
 /**
@@ -65,9 +69,11 @@ export type EngineProfile = {
 export async function loadEngineProfile(
   engine: EngineId,
   rootDir = process.cwd(),
+  assets: AssetResolver = createAssetResolver(rootDir),
 ): Promise<EngineProfile> {
-  const profilePath = join(rootDir, "assets", "engines", `${engine}.profile.yaml`);
-  const source = await readFile(profilePath, "utf8");
+  const resolvedProfile = await assets.resolveFile(`assets/engines/${engine}.profile.yaml`);
+  const profilePath = resolvedProfile.logicalPath;
+  const source = await assets.readText(resolvedProfile.logicalPath);
   const raw = parseProfileYaml(source);
 
   const id = readString(raw, "id");
@@ -98,6 +104,10 @@ export async function loadEngineProfile(
     validators,
     stopGates,
     stateRoots,
+    asset: {
+      path: resolvedProfile.logicalPath,
+      source: resolvedProfile.source,
+    },
   };
 }
 

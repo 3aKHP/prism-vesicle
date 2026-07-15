@@ -1,20 +1,36 @@
 id: evaluate
 displayName: Prism Evaluate Engine
-protocolVersion: v9.0-state-space
+protocolVersion: v10.0-tempered-voice
 systemPrompt:
   - assets/prompts/shared/vesicle-base.md
+  - assets/quality/anti-ai-flavor/judge-rubric.zh-CN.md
   - assets/prompts/engines/evaluate.md
 defaultTools:
   - config.load
   - prompt.load
   - session.write
+  - stat_path
   - list_files
+  - list_directory
+  - grep_files
   - read_file
+  - view_image
+  - create_file
+  - create_directory
   - write_file
-validators: []
+  - replace_in_file
+  - append_file
+  - web_search
+  - web_fetch
+  - web_map
+  - web_crawl
+  - web_research
+validators:
+  - evaluate-report
 stopGates: []
 stateRoots:
   - source_materials
   - workspace
   - test_runs
+  - novels
   - reports

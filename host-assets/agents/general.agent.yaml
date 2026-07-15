@@ -1,0 +1,12 @@
+id: general
+displayName: General Agent
+description: Execute one focused delegated task with the explicitly available tools.
+systemPrompt:
+  - assets/prompts/agents/base.md
+  - assets/prompts/agents/general.md
+tools:
+  - "*"
+contextMode: summary
+modelPolicy: inherit
+defaultMode: foreground
+maxTurns: 32

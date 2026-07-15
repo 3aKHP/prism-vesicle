@@ -1,8 +1,9 @@
-import { For, Show } from "solid-js";
+import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import type { GateRequest, GateResolution } from "../core/gate/types";
 import { palette } from "./theme";
+import { PromptComposer } from "./PromptComposer";
 
 /**
  * Select-style gate prompt. Pure presentational component — all state
@@ -12,38 +13,64 @@ import { palette } from "./theme";
  *
  * Interaction shape borrows from Claude Code's PermissionPrompt:
  * - Numbered options with a focus indicator.
- * - Tab on confirm/revise expands an inline feedback input.
- * - A persistent "chat about this" escape hatch.
+ * - Tab on confirm expands an inline note input.
+ * - Reject owns a visible input but may be submitted empty.
  */
 export type GatePromptProps = {
   gate: GateRequest;
   focused: GateFocusTarget;
   feedbackMode: GateFocusTarget | null;
   feedback: string;
-  onFeedbackInput: (value: string) => void;
+  feedbackCursor?: number;
   width?: number;
   maxSummaryLines?: number;
+  showSummaryOption?: boolean;
 };
 
-export type GateFocusTarget = "confirm" | "revise" | "chat";
+export type GateFocusTarget = "confirm" | "confirm-summary" | "reject";
 
-export const gateFocusOrder: GateFocusTarget[] = ["confirm", "revise", "chat"];
+export const gateFocusOrder: GateFocusTarget[] = ["confirm", "reject"];
+export const engineSwitchGateFocusOrder: GateFocusTarget[] = ["confirm", "confirm-summary", "reject"];
+
+/** Reject always owns its visible composer; confirm requires Tab amend. */
+export function gateComposerIsActive(
+  focused: GateFocusTarget,
+  feedbackMode: GateFocusTarget | null,
+): boolean {
+  return focused === "reject" || feedbackMode !== null;
+}
+
+export function gateSummaryLineBudget(maxLines: number, composerActive: boolean, extraOptionRows = 0): number {
+  return Math.max(1, maxLines - (composerActive ? 1 : 0) - extraOptionRows);
+}
 
 const DEFAULT_CONFIRM_LABEL = "Confirm - proceed to next phase";
-const DEFAULT_REVISE_LABEL = "Revise - tell the engine what to change";
-const DEFAULT_CHAT_LABEL = "Chat about this";
+const DEFAULT_REJECT_LABEL = "Reject - discuss or request changes";
 const MIN_SUMMARY_WIDTH = 32;
 
 export function GatePrompt(props: GatePromptProps) {
   const renderer = useRenderer();
   const confirmLabel = labelFor(props.gate, "confirm", DEFAULT_CONFIRM_LABEL);
-  const reviseLabel = labelFor(props.gate, "revise", DEFAULT_REVISE_LABEL);
-  const chatLabel = labelFor(props.gate, "chat", DEFAULT_CHAT_LABEL);
+  const rejectLabel = labelFor(props.gate, "reject", DEFAULT_REJECT_LABEL);
   const summaryLines = () => visibleGateSummaryLines(
-    props.gate.summary,
+    renderGateSummaryText(props.gate.summary),
     Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 4),
     props.maxSummaryLines ?? 4,
   );
+  const inputWidth = () => Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 8);
+  const rows = (): GateRow[] => [
+    { kind: "option", index: 1, label: confirmLabel, focused: props.focused === "confirm" },
+    ...(props.feedbackMode === "confirm"
+      ? [{ kind: "feedback" as const, placeholder: "optional note: proceed, but also ..." }]
+      : []),
+    ...(props.showSummaryOption
+      ? [{ kind: "option" as const, index: 2, label: "Confirm with summary - compact context first", focused: props.focused === "confirm-summary" }]
+      : []),
+    { kind: "option", index: props.showSummaryOption ? 3 : 2, label: rejectLabel, focused: props.focused === "reject" },
+    ...(props.focused === "reject"
+      ? [{ kind: "feedback" as const, placeholder: "optional: what should change?" }]
+      : []),
+  ];
 
   return (
     <box flexDirection="column" border borderColor={palette.gateBorder} paddingX={1} width="100%" height="100%">
@@ -61,36 +88,22 @@ export function GatePrompt(props: GatePromptProps) {
         </For>
       </box>
 
-      <OptionRow index={1} label={confirmLabel} focused={props.focused === "confirm"} />
-      <Show when={props.feedbackMode === "confirm"} fallback={<box height={0} />}>
-        <FeedbackLine
-          placeholder="optional note: proceed, but also ..."
-          value={props.feedback}
-          onInput={props.onFeedbackInput}
-        />
-      </Show>
-
-      <OptionRow index={2} label={reviseLabel} focused={props.focused === "revise"} />
-      <Show when={props.feedbackMode === "revise"} fallback={<box height={0} />}>
-        <FeedbackLine
-          placeholder="tell the engine what to change"
-          value={props.feedback}
-          onInput={props.onFeedbackInput}
-        />
-      </Show>
-
-      <OptionRow index={3} label={chatLabel} focused={props.focused === "chat"} />
-      <Show when={props.focused === "chat"} fallback={<box height={0} />}>
-        <FeedbackLine
-          placeholder="chat freely before deciding"
-          value={props.feedback}
-          onInput={props.onFeedbackInput}
-        />
-      </Show>
+      <For each={rows()}>
+        {(row) => row.kind === "option" ? (
+          <OptionRow index={row.index} label={row.label} focused={row.focused} />
+        ) : (
+          <FeedbackLine
+            placeholder={row.placeholder}
+            value={props.feedback}
+            cursor={props.feedbackCursor ?? props.feedback.length}
+            width={inputWidth()}
+          />
+        )}
+      </For>
 
       <box>
         <text
-          content="↑/↓ navigate · Tab amend · Enter select · Esc cancel"
+          content="↑/↓ navigate · Tab note · Enter select · Esc cancel"
           fg={palette.textDim}
         />
       </box>
@@ -99,6 +112,7 @@ export function GatePrompt(props: GatePromptProps) {
 }
 
 function labelFor(gate: GateRequest, decision: GateFocusTarget, fallback: string): string {
+  if (decision === "confirm-summary") return fallback;
   return sanitizeGateLabel(gate.options?.find((o) => o.decision === decision)?.label ?? fallback);
 }
 
@@ -115,6 +129,10 @@ function OptionRow(props: { index: number; label: string; focused: boolean }) {
   );
 }
 
+type GateRow =
+  | { kind: "option"; index: number; label: string; focused: boolean }
+  | { kind: "feedback"; placeholder: string };
+
 export function gateOptionLine(index: number, label: string, focused: boolean): string {
   const prefix = focused ? ">" : " ";
   return `${prefix}${index}. ${label}`;
@@ -126,6 +144,14 @@ export function sanitizeGateLabel(value: string): string {
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function renderGateSummaryText(value: string): string {
+  return value
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/__([^_\n]+)__/g, "$1")
+    .replace(/`([^`\n]+)`/g, "$1");
 }
 
 export function wrapGateSummary(value: string, maxWidth: number): string[] {
@@ -188,16 +214,16 @@ function isWideCharacter(char: string): boolean {
   );
 }
 
-function FeedbackLine(props: { placeholder: string; value: string; onInput: (v: string) => void }) {
+function FeedbackLine(props: { placeholder: string; value: string; cursor: number; width: number }) {
   return (
-    <box marginLeft={4} flexDirection="row">
+    <box marginLeft={4} height={1} flexDirection="row">
       <text content="✎ " fg={palette.warn} />
-      <input
-        focused
-        placeholder={props.placeholder}
+      <PromptComposer
         value={props.value}
-        onInput={props.onInput}
-        width="100%"
+        cursor={props.cursor}
+        placeholder={props.placeholder}
+        width={props.width}
+        maxLines={1}
       />
     </box>
   );
@@ -212,7 +238,6 @@ export function gateResolutionFromState(
   feedback: string,
 ): GateResolution {
   const text = feedback.trim();
-  if (focused === "confirm") return text ? { decision: "confirm", feedback: text } : { decision: "confirm" };
-  if (focused === "revise") return text ? { decision: "revise", feedback: text } : { decision: "revise" };
-  return text ? { decision: "chat", feedback: text } : { decision: "chat" };
+  if (focused === "confirm" || focused === "confirm-summary") return text ? { decision: "confirm", feedback: text } : { decision: "confirm" };
+  return text ? { decision: "reject", feedback: text } : { decision: "reject" };
 }
