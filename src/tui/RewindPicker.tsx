@@ -10,6 +10,8 @@ export type RewindOption = {
   label: string;
 };
 
+const rewindVisibleRowLimit = 7;
+
 export function rewindRestoreOptions(point: RewindPoint): RewindOption[] {
   const canRestoreCode = Boolean(point.diffStats?.filesChanged.length);
   return [
@@ -26,7 +28,10 @@ export function rewindRestoreOptions(point: RewindPoint): RewindOption[] {
 }
 
 export function rewindPickerPanelHeight(state: RewindPickerState): number {
-  if (!state.target) return 8;
+  if (!state.target) {
+    const visibleRows = Math.min(state.points.length + 1, rewindVisibleRowLimit);
+    return Math.max(8, visibleRows + 5);
+  }
   const optionRows = rewindRestoreOptions(state.target).length;
   const warningRows = (state.target.diffStats?.filesChanged.length ? 1 : 0) + (state.target.checkpointTainted ? 1 : 0);
   return Math.min(14, 8 + optionRows + warningRows);
@@ -35,72 +40,73 @@ export function rewindPickerPanelHeight(state: RewindPickerState): number {
 export function RewindPicker(props: { state: RewindPickerState; width: number }) {
   const target = () => props.state.target;
   const options = () => target() ? rewindRestoreOptions(target()!) : [];
-  const visible = () => visibleRewindRows(props.state.points, props.state.selected, 7);
+  const visible = () => visibleRewindRows(props.state.points, props.state.selected, rewindVisibleRowLimit);
   const errors = () => props.state.error ? [props.state.error] : [];
 
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">
       <box height={1} flexDirection="row">
-        <text content="Rewind" fg={palette.brand} attributes={TextAttributes.BOLD} />
+        <text content="Rewind" fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
       </box>
 
       <For each={errors()}>
-        {(error) => <text content={`Error: ${truncateLine(error, props.width - 4)}`} fg={palette.error} />}
+        {(error) => <text content={`Error: ${truncateLine(error, props.width - 4)}`} fg={palette.error} wrapMode="none" />}
       </For>
 
       <Show when={!props.state.error && target()} fallback={
-        <Show when={props.state.points.length > 0} fallback={<text content="Nothing to rewind to yet." fg={palette.textSecondary} />}>
-          <text content="Restore the code and/or conversation to the point before…" fg={palette.textSecondary} />
+        <Show when={props.state.points.length > 0} fallback={<text content="Nothing to rewind to yet." fg={palette.textSecondary} wrapMode="none" />}>
+          <text content="Restore the code and/or conversation to the point before…" fg={palette.textSecondary} wrapMode="none" />
           <For each={visible()}>
             {(row) => {
               const selected = () => row.index === props.state.selected;
               return (
                 <box height={1} flexDirection="row">
-                  <text content={selected() ? ">" : " "} fg={palette.brand} attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE} />
+                  <text content={selected() ? ">" : " "} fg={palette.brand} attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE} wrapMode="none" />
                   <text
                     content={row.point ? rewindPointLine(row.point, props.width - 5) : "(current)"}
                     fg={selected() ? palette.textPrimary : palette.textSecondary}
                     attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE}
+                    wrapMode="none"
                   />
                 </box>
               );
             }}
           </For>
-          <text content="Enter to continue · Esc to exit" fg={palette.textDim} />
+          <text content="Enter to continue · Esc to exit" fg={palette.textDim} wrapMode="none" />
         </Show>
       }>
         {(point) => (
           <box flexDirection="column">
-            <text content="Confirm you want to restore to the point before you sent this message:" fg={palette.textSecondary} />
-            <text content={`  ${truncateLine(point().content.replace(/\s+/g, " "), props.width - 6)}`} fg={palette.textPrimary} />
-            <text content={`  (${formatRelativeTime(point().timestamp)})`} fg={palette.textDim} />
-            <text content={restoreDescription(options()[props.state.restoreSelected]?.value, point())} fg={palette.textDim} />
+            <text content={truncateLine("Confirm you want to restore to the point before you sent this message:", props.width - 4)} fg={palette.textSecondary} wrapMode="none" />
+            <text content={truncateLine(`  ${point().content.replace(/\s+/g, " ")} · ${formatRelativeTime(point().timestamp)}`, props.width - 4)} fg={palette.textPrimary} wrapMode="none" />
+            <text content={truncateLine(restoreDescription(options()[props.state.restoreSelected]?.value, point()), props.width - 4)} fg={palette.textDim} wrapMode="none" />
             <For each={options()}>
               {(option, index) => {
                 const selected = () => index() === props.state.restoreSelected;
                 return (
                   <box height={1} flexDirection="row">
-                    <text content={selected() ? ">" : " "} fg={palette.brand} />
+                    <text content={selected() ? ">" : " "} fg={palette.brand} wrapMode="none" />
                     <text
                       content={option.value === "summarize" && selected()
                         ? summaryInputLabel(option.label, props.state.summaryFeedback, props.state.summaryCursor, props.width - 6)
                         : option.label}
                       fg={selected() ? palette.textPrimary : palette.textSecondary}
                       attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE}
+                      wrapMode="none"
                     />
                   </box>
                 );
               }}
             </For>
             <For each={point().diffStats?.filesChanged.length ? [true] : []}>
-              {() => <text content="⚠ Rewinding does not affect files edited manually outside Vesicle tools." fg={palette.warn} />}
+              {() => <text content={truncateLine("⚠ Rewinding does not affect files edited manually outside Vesicle tools.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
             </For>
             <For each={point().checkpointTainted ? [true] : []}>
-              {() => <text content="⚠ This turn ran shell_exec; its file changes may not be restored." fg={palette.error} />}
+              {() => <text content={truncateLine("⚠ This turn ran shell_exec; its file changes may not be restored.", props.width - 4)} fg={palette.error} wrapMode="none" />}
             </For>
             <text content={props.state.busy
               ? props.state.restoringOption === "summarize" ? "Summarizing…" : "Restoring…"
-              : "↑/↓ choose · Enter select · Esc back"} fg={palette.textDim} />
+              : "↑/↓ choose · Enter select · Esc back"} fg={palette.textDim} wrapMode="none" />
           </box>
         )}
       </Show>

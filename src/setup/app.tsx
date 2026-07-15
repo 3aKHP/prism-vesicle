@@ -128,7 +128,7 @@ export function SetupApp(props: SetupAppProps) {
   const [projectInputReturnStep, setProjectInputReturnStep] = createSignal<"project-choice" | "review">("project-choice");
   const [writeResult, setWriteResult] = createSignal<SetupWriteResult>();
   const busy = createMemo(() => step() === "discovering" || step() === "mcp-testing" || step() === "saving");
-  const compactHeight = createMemo(() => dimensions().height < 20);
+  const compactHeight = createMemo(() => setupUsesCompactHeight(dimensions().height));
   const rootPaddingX = createMemo(() => dimensions().width < 64 ? 1 : 2);
   const panelPaddingX = createMemo(() => dimensions().width < 64 ? 1 : 2);
   const panelTextWidth = createMemo(() => Math.max(8, dimensions().width - (rootPaddingX() * 2) - (panelPaddingX() * 2) - 2));
@@ -671,7 +671,7 @@ export function SetupApp(props: SetupAppProps) {
 
   const visibleMultiItems = createMemo(() => {
     const values = step() === "models" ? models() : [...engineIds];
-    return visibleWindow(setupMultiSelectChoices(values), selectedIndex(), Math.max(5, Math.min(14, dimensions().height - 12)));
+    return visibleWindow(setupMultiSelectChoices(values), selectedIndex(), setupMultiSelectVisibleRowLimit(dimensions().height));
   });
 
   return (
@@ -682,7 +682,7 @@ export function SetupApp(props: SetupAppProps) {
       </box>
       <box marginTop={compactHeight() ? 0 : 1} flexGrow={1} flexDirection="column" border borderColor={palette.panelBorder} paddingX={panelPaddingX()} paddingY={compactHeight() ? 0 : 1} overflow="hidden">
         <text content={truncateLine(pageTitle(step()), panelTextWidth())} wrapMode="none" fg={palette.textPrimary} attributes={TextAttributes.BOLD} />
-        <text content={compactHeight() ? "" : pageDescription(step())} height={compactHeight() ? 0 : undefined} wrapMode="word" fg={palette.textSecondary} />
+        <text content={compactHeight() ? "" : truncateLine(pageDescription(step()), panelTextWidth())} height={compactHeight() ? 0 : 1} wrapMode="none" fg={palette.textSecondary} />
         <box marginTop={compactHeight() ? 0 : 1} flexDirection="column" flexGrow={1} overflow="hidden">
           <Show when={isInputPage(step())} fallback={renderChoiceContent()}>
             <text content={truncateLine(inputLabel(step() as InputPage), panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
@@ -783,6 +783,15 @@ export function resolveProjectPath(input: string, env: NodeJS.ProcessEnv = proce
   const home = env.USERPROFILE || env.HOME || homedir();
   const expanded = input.trim().replace(/^~(?=$|[\\/])/, home);
   return resolve(expanded);
+}
+
+export function setupUsesCompactHeight(height: number): boolean {
+  return height < 24;
+}
+
+export function setupMultiSelectVisibleRowLimit(height: number): number {
+  const structuralRows = setupUsesCompactHeight(height) ? 6 : 17;
+  return Math.max(5, Math.min(14, height - structuralRows));
 }
 
 function emptyMcpDraft(): SetupMcpServer {

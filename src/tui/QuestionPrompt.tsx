@@ -1,6 +1,7 @@
 import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { UserQuestionOption, UserQuestionRequest } from "../core/user-question/types";
+import { truncateLine } from "./format";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 
@@ -34,12 +35,12 @@ export function QuestionPrompt(props: QuestionPromptProps) {
   return (
     <box flexDirection="column" border borderColor={palette.gateBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
-        <text content="◆ " fg={palette.gateAccent} />
-        <text content={props.question.header} fg={palette.gateAccent} attributes={TextAttributes.BOLD} />
-        <text content="  ↑/↓ choose · Enter answer · free answer accepts typing" fg={palette.textDim} />
+        <text content="◆ " fg={palette.gateAccent} wrapMode="none" />
+        <text content={props.question.header} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <text content="  ↑/↓ choose · Enter answer · free answer accepts typing" fg={palette.textDim} wrapMode="none" />
       </box>
       <box height={1}>
-        <text content={truncateLine(props.question.question, width())} fg={palette.textPrimary} width="100%" />
+        <text content={truncateLine(props.question.question, width())} fg={palette.textPrimary} width="100%" wrapMode="none" />
       </box>
       <For each={rows()}>
         {(row) => row.kind === "option" ? (
@@ -49,11 +50,12 @@ export function QuestionPrompt(props: QuestionPromptProps) {
                 fg={row.index === props.selected ? palette.textPrimary : palette.textSecondary}
                 attributes={row.index === props.selected ? TextAttributes.BOLD : TextAttributes.NONE}
                 width="100%"
+                wrapMode="none"
               />
             </box>
           ) : (
               <box marginLeft={4} height={2} flexDirection="row">
-                <text content="✎ " fg={palette.warn} />
+                <text content="✎ " fg={palette.warn} wrapMode="none" />
                 <PromptComposer
                   value={props.freeformValue ?? ""}
                   cursor={props.freeformCursor ?? (props.freeformValue ?? "").length}
@@ -75,10 +77,4 @@ type QuestionRow =
 export function optionLine(index: number, label: string, description: string, selected: boolean, width: number): string {
   const marker = selected ? ">" : " ";
   return truncateLine(`${marker}${index}. ${label} - ${description}`, width);
-}
-
-function truncateLine(value: string, width: number): string {
-  const limit = Math.max(8, width);
-  if (value.length <= limit) return value;
-  return `${value.slice(0, limit - 3)}...`;
 }

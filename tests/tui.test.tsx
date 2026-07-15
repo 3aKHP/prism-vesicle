@@ -11,10 +11,11 @@ import { markdownRendererMode } from "../src/tui/widgets/MarkdownContent";
 import { Sidebar, artifactSidebarLine, mcpSidebarLines, processSidebarLines } from "../src/tui/views/Sidebar";
 import { RewindPicker, rewindPickerPanelHeight } from "../src/tui/RewindPicker";
 import { sharedSyntaxStyle } from "../src/tui/theme";
-import { PermissionPrompt } from "../src/tui/PermissionPrompt";
-import { YoloPrompt } from "../src/tui/YoloPrompt";
+import { PermissionPrompt, permissionPanelHeight } from "../src/tui/PermissionPrompt";
+import { YoloPrompt, yoloPanelHeight } from "../src/tui/YoloPrompt";
 import { ToolCard } from "../src/tui/widgets/ToolCard";
 import type { BackgroundProcessState } from "../src/core/process/manager";
+import { displayWidth, padDisplayEnd, truncateLine, truncateMiddle } from "../src/tui/format";
 
 function backgroundProcess(taskId: string, parentSessionId = "session-1"): BackgroundProcessState {
   return {
@@ -48,6 +49,14 @@ function backgroundProcess(taskId: string, parentSessionId = "session-1"): Backg
 }
 
 describe("TUI", () => {
+  test("truncates mixed CJK text by terminal columns", () => {
+    const value = "路径/非常长的中文文件名.md";
+    expect(displayWidth(truncateLine(value, 12))).toBeLessThanOrEqual(12);
+    expect(displayWidth(truncateMiddle(value, 12))).toBeLessThanOrEqual(12);
+    expect(displayWidth(padDisplayEnd("中文", 8))).toBe(8);
+    expect(truncateLine("plain ASCII", 20)).toBe("plain ASCII");
+  });
+
   test("registers shared markdown and code syntax styles", () => {
     const names = sharedSyntaxStyle.getRegisteredNames();
     expect(names).toContain("markup.heading.2");
@@ -449,7 +458,7 @@ describe("TUI", () => {
         feedbackCursor={0}
         width={80}
       />
-    ), { width: 80, height: 10 });
+    ), { width: 80, height: permissionPanelHeight });
     await setup.flush();
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
@@ -457,6 +466,50 @@ describe("TUI", () => {
     expect(frame).toContain(command);
     expect(frame).toContain("host-user authority");
     expect(frame).toContain("/bin/sh");
+  });
+
+  test("bounds long permission details without hiding the decision controls", async () => {
+    const command = `echo ${"非常长的命令参数".repeat(30)}`;
+    const setup = await testRender(() => (
+      <PermissionPrompt
+        request={{
+          id: "permission-long",
+          sessionId: "session",
+          toolCallId: "call-long",
+          toolName: "shell_exec",
+          arguments: JSON.stringify({ command }),
+          permissionClass: "arbitrary_exec",
+          mode: "MOMENTUM",
+          createdAt: new Date().toISOString(),
+          executionPlan: {
+            command,
+            cwd: ".",
+            shell: "posix-sh",
+            executablePath: "/bin/sh",
+            runtimePolicyVersion: 2,
+            timeoutMs: 120000,
+            envPolicyVersion: 1,
+            runInBackground: false,
+          },
+          planHash: "hash-long",
+        }}
+        focused="confirm"
+        feedbackMode={null}
+        feedback=""
+        feedbackCursor={0}
+        width={80}
+      />
+    ), { width: 80, height: permissionPanelHeight });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    expect(frame).toContain("hidden lines");
+    expect(frame).toContain("Allow once");
+    expect(frame).toContain("Reject");
+    expect(frame).toContain("Esc reject");
+    expect(frame.split("\n").at(-2)).toContain("└");
+    expect(resolveTuiLayout(80, 24, true, false, permissionPanelHeight).bottomHeight).toBe(permissionPanelHeight);
   });
 
   test("renders live shell output, elapsed time, and background task id", async () => {
@@ -551,6 +604,24 @@ describe("TUI", () => {
     expect(frame).toContain("Rewind cannot guarantee recovery");
   });
 
+  test("reserves every YOLO warning row in a narrow terminal", async () => {
+    const width = 36;
+    const panelHeight = yoloPanelHeight(2, width);
+    const setup = await testRender(() => (
+      <YoloPrompt stage={2} focused="confirm" width={width} />
+    ), { width, height: panelHeight });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    expect(panelHeight).toBe(12);
+    expect(resolveTuiLayout(width, 24, true, false, panelHeight).bottomHeight).toBe(panelHeight);
+    expect(frame).toContain("Enable YOLO for this process");
+    expect(frame).toContain("Cancel");
+    expect(frame).toContain("Esc cancel");
+    expect(frame.split("\n").at(-2)).toContain("└");
+  });
+
   test("warns when a rewind checkpoint was tainted by shell_exec", async () => {
     const point = {
       uuid: "user-1",
@@ -614,34 +685,61 @@ describe("TUI", () => {
   });
 
   test("renders the rewind message list and current virtual row at 80 columns", async () => {
+    const points = [
+      {
+        uuid: "user-1",
+        parentUuid: "root",
+        branchHeadUuid: "head",
+        content: "看看当前工作区状况。",
+        timestamp: new Date().toISOString(),
+        diffStats: { filesChanged: [], insertions: 0, deletions: 0 },
+      },
+      {
+        uuid: "user-2",
+        parentUuid: "user-1",
+        branchHeadUuid: "head",
+        content: "请先看图，然后进行一轮高精度的客观文字描述。 [Image #1]",
+        timestamp: new Date().toISOString(),
+        diffStats: { filesChanged: [], insertions: 0, deletions: 0 },
+      },
+      {
+        uuid: "user-3",
+        parentUuid: "user-2",
+        branchHeadUuid: "head",
+        content: "鞋子不太对。你再看看呢？",
+        timestamp: new Date().toISOString(),
+        diffStats: { filesChanged: [], insertions: 0, deletions: 0 },
+      },
+    ];
+    const state = {
+      points,
+      selected: 2,
+      restoreSelected: 0,
+      summaryFeedback: "",
+      summaryCursor: 0,
+      busy: false,
+    };
+    const panelHeight = rewindPickerPanelHeight(state);
+
+    expect(panelHeight).toBe(9);
     const setup = await testRender(() => (
       <RewindPicker
         width={80}
-        state={{
-          points: [{
-            uuid: "user-1",
-            parentUuid: "root",
-            branchHeadUuid: "head",
-            content: "Create the character card",
-            timestamp: new Date().toISOString(),
-            diffStats: { filesChanged: ["workspace/card.md"], insertions: 4, deletions: 1 },
-          }],
-          selected: 1,
-          restoreSelected: 0,
-          summaryFeedback: "",
-          summaryCursor: 0,
-          busy: false,
-        }}
+        state={state}
       />
-    ), { width: 80, height: 10 });
+    ), { width: 80, height: panelHeight });
     await setup.flush();
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
 
+    const rows = frame.split("\n");
+    const currentRow = rows.findIndex((line) => line.includes("(current)"));
+    const hintRow = rows.findIndex((line) => line.includes("Enter to continue"));
     expect(frame).toContain("Rewind");
-    expect(frame).toContain("Create the character card");
-    expect(frame).toContain("1 file +4 -1");
-    expect(frame).toContain(">(current)");
+    expect(frame).toContain("鞋子不太对");
+    expect(frame).toContain("(current)");
+    expect(currentRow).toBeGreaterThan(-1);
+    expect(hintRow).toBe(currentRow + 1);
   });
 
   test("reserves enough height for rewind file-restore warnings", async () => {
@@ -654,6 +752,7 @@ describe("TUI", () => {
         branchHeadUuid: "head",
         content: "Rewrite the scenario card",
         timestamp: new Date().toISOString(),
+        checkpointTainted: true as const,
         diffStats: { filesChanged: ["workspace/scenario.md"], insertions: 8, deletions: 2 },
       },
       restoreSelected: 4,
@@ -677,7 +776,12 @@ describe("TUI", () => {
 
     expect(frame).toContain(">Never mind");
     expect(frame).toContain("Rewinding does not affect files edited manually outside Vesicle tools.");
+    expect(frame).toContain("This turn ran shell_exec");
     expect(frame).toContain("↑/↓ choose");
+    const rows = frame.split("\n");
+    const confirmRow = rows.findIndex((line) => line.includes("Confirm you want"));
+    const promptRow = rows.findIndex((line) => line.includes("Rewrite the scenario card"));
+    expect(promptRow).toBe(confirmRow + 1);
   });
 
   test("renders stop gate markdown summaries instead of raw markdown markers", async () => {

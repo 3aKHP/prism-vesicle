@@ -1,3 +1,5 @@
+import { displayWidth } from "./format";
+
 export type ComposerVisualLine = {
   text: string;
   start: number;
@@ -147,40 +149,6 @@ function graphemeParts(value: string, start: number, end: number): GraphemePart[
     offset = nextOffset;
   }
   return parts;
-}
-
-export function displayWidth(value: string): number {
-  let width = 0;
-  for (const char of [...value]) {
-    if (/[\u0300-\u036f]/u.test(char)) continue;
-    if (isZeroWidth(char)) continue;
-    width += isWideCharacter(char) ? 2 : 1;
-  }
-  return width;
-}
-
-function isZeroWidth(char: string): boolean {
-  const code = char.codePointAt(0) ?? 0;
-  return (
-    (code >= 0x200b && code <= 0x200f) ||
-    code === 0xfeff ||
-    (code >= 0xfe00 && code <= 0xfe0f)
-  );
-}
-
-function isWideCharacter(char: string): boolean {
-  const code = char.codePointAt(0) ?? 0;
-  return (
-    (code >= 0x1100 && code <= 0x115f) ||
-    (code >= 0x2e80 && code <= 0xa4cf) ||
-    (code >= 0xac00 && code <= 0xd7a3) ||
-    (code >= 0xf900 && code <= 0xfaff) ||
-    (code >= 0xfe10 && code <= 0xfe19) ||
-    (code >= 0xfe30 && code <= 0xfe6f) ||
-    (code >= 0xff00 && code <= 0xff60) ||
-    (code >= 0xffe0 && code <= 0xffe6) ||
-    (code >= 0x1f300 && code <= 0x1faff)
-  );
 }
 
 function clamp(value: number, min: number, max: number): number {

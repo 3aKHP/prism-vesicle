@@ -43,9 +43,9 @@ export function CommandMenu(props: CommandMenuProps) {
           const markerAttr = () => isSelected() ? TextAttributes.BOLD : TextAttributes.NONE;
           return (
             <box height={1} flexDirection="row">
-              <text content={isSelected() ? ">" : " "} fg={palette.brand} attributes={markerAttr()} />
-              <text content={name} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={markerAttr()} />
-              <text content={desc} fg={isSelected() ? palette.textSecondary : palette.textDim} />
+              <text content={isSelected() ? ">" : " "} fg={palette.brand} attributes={markerAttr()} wrapMode="none" />
+              <text content={name} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={markerAttr()} wrapMode="none" />
+              <text content={desc} fg={isSelected() ? palette.textSecondary : palette.textDim} wrapMode="none" />
             </box>
           );
         }}

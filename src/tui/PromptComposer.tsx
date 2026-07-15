@@ -1,6 +1,7 @@
 import { For } from "solid-js";
 import { TextAttributes, createTextAttributes } from "@opentui/core";
-import { displayWidth, layoutComposerText } from "./composer-layout";
+import { layoutComposerText } from "./composer-layout";
+import { displayWidth } from "./format";
 import { palette } from "./theme";
 
 export type PromptComposerProps = {
@@ -27,15 +28,16 @@ export function PromptComposer(props: PromptComposerProps) {
       <For each={renderedLines()}>
         {(line) => (
           <box height={1} flexDirection="row">
-            <text content={line.prefix} fg={line.placeholder ? palette.textDim : palette.textPrimary} attributes={TextAttributes.NONE} />
+            <text content={line.prefix} fg={line.placeholder ? palette.textDim : palette.textPrimary} attributes={TextAttributes.NONE} wrapMode="none" />
             {line.cursor ? (
               <text
                 content={line.cursorChar}
                 fg={palette.textPrimary}
                 attributes={cursorAttributes}
+                wrapMode="none"
               />
             ) : null}
-            <text content={line.suffix} fg={line.placeholder ? palette.textDim : palette.textPrimary} attributes={TextAttributes.NONE} />
+            <text content={line.suffix} fg={line.placeholder ? palette.textDim : palette.textPrimary} attributes={TextAttributes.NONE} wrapMode="none" />
           </box>
         )}
       </For>

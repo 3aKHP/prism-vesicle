@@ -2,6 +2,7 @@ import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import type { GateRequest, GateResolution } from "../core/gate/types";
+import { displayWidth } from "./format";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 
@@ -74,15 +75,15 @@ export function GatePrompt(props: GatePromptProps) {
 
   return (
     <box flexDirection="column" border borderColor={palette.gateBorder} paddingX={1} width="100%" height="100%">
-      <box flexDirection="row">
-        <text content="◆ " fg={palette.gateAccent} />
-        <text content={`Stop Gate: ${props.gate.gate}`} fg={palette.gateAccent} attributes={TextAttributes.BOLD} />
+      <box flexDirection="row" height={1}>
+        <text content="◆ " fg={palette.gateAccent} wrapMode="none" />
+        <text content={`Stop Gate: ${props.gate.gate}`} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
       </box>
       <box flexDirection="column">
         <For each={summaryLines()}>
           {(line) => (
             <box height={1}>
-              <text content={line || " "} fg={palette.textPrimary} width="100%" />
+              <text content={line || " "} fg={palette.textPrimary} width="100%" wrapMode="none" />
             </box>
           )}
         </For>
@@ -105,6 +106,7 @@ export function GatePrompt(props: GatePromptProps) {
         <text
           content="↑/↓ navigate · Tab note · Enter select · Esc cancel"
           fg={palette.textDim}
+          wrapMode="none"
         />
       </box>
     </box>
@@ -124,6 +126,7 @@ function OptionRow(props: { index: number; label: string; focused: boolean }) {
         fg={props.focused ? palette.textPrimary : palette.textSecondary}
         attributes={props.focused ? TextAttributes.BOLD : TextAttributes.NONE}
         width="100%"
+        wrapMode="none"
       />
     </box>
   );
@@ -188,36 +191,10 @@ export function visibleGateSummaryLines(value: string, maxWidth: number, maxLine
   return [...lines.slice(0, limit - 1), "..."];
 }
 
-function displayWidth(value: string): number {
-  let width = 0;
-
-  for (const char of value) {
-    if (/[\u0300-\u036f]/u.test(char)) continue;
-    width += isWideCharacter(char) ? 2 : 1;
-  }
-
-  return width;
-}
-
-function isWideCharacter(char: string): boolean {
-  const code = char.codePointAt(0) ?? 0;
-  return (
-    (code >= 0x1100 && code <= 0x115f) ||
-    (code >= 0x2e80 && code <= 0xa4cf) ||
-    (code >= 0xac00 && code <= 0xd7a3) ||
-    (code >= 0xf900 && code <= 0xfaff) ||
-    (code >= 0xfe10 && code <= 0xfe19) ||
-    (code >= 0xfe30 && code <= 0xfe6f) ||
-    (code >= 0xff00 && code <= 0xff60) ||
-    (code >= 0xffe0 && code <= 0xffe6) ||
-    (code >= 0x1f300 && code <= 0x1faff)
-  );
-}
-
 function FeedbackLine(props: { placeholder: string; value: string; cursor: number; width: number }) {
   return (
     <box marginLeft={4} height={1} flexDirection="row">
-      <text content="✎ " fg={palette.warn} />
+      <text content="✎ " fg={palette.warn} wrapMode="none" />
       <PromptComposer
         value={props.value}
         cursor={props.cursor}
