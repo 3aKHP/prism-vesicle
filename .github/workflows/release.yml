@@ -33,6 +33,7 @@ jobs:
         run: |
           VERSION="$(jq -r '.version' package.json)"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
+          test "$VERSION" = "1.0.0-alpha.2"
           test "$TAG" = "v$VERSION"
           test "$(git cat-file -t "refs/tags/$TAG")" = "tag"
           TAG_SHA="$(git rev-list -n 1 "$TAG")"

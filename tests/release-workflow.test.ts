@@ -46,6 +46,7 @@ describe("release workflow contract", () => {
 
     expect(Object.keys(publish.on)).toEqual(["push"]);
     expect(publish.on.push).toEqual({ tags: ["v*"] });
+    expect(metadataScript).toContain('test "$VERSION" = "1.0.0-alpha.2"');
     expect(metadataScript).toContain('test "$TAG" = "v$VERSION"');
     expect(metadataScript).toContain('git cat-file -t "refs/tags/$TAG"');
     expect(metadataScript).toContain("git merge-base --is-ancestor");
@@ -64,6 +65,7 @@ describe("release workflow contract", () => {
 
     expect(releaseStep?.with?.generate_release_notes).toBe(true);
     expect(body).toContain("not Authenticode-signed");
+    expect(body).toContain("没有 Authenticode 签名");
     expect(body).toContain("SHA256SUMS.txt");
     expect(body).toContain("CODE_SIGNING_POLICY.md");
     expect(body).toContain("CODE_SIGNING_POLICY.zh-CN.md");
