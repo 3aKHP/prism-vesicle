@@ -34,12 +34,7 @@ Also read:
 - `docs/examples/provider.env.example` before changing provider secret loading
   behavior.
 
-For architecture, provider, TUI, session, or command-UX changes, first check
-whether the documented reference projects already solved a similar problem.
-Ignored local notes under `dev/docs/` may describe private reference locations;
-when present, start with `dev/docs/REFERENCE_PROJECTS.md` to find those local
-absolute paths. Use the notes, but never copy local absolute paths or
-machine-private details into public docs.
+For architecture, provider, TUI, session, or command-UX changes, first check whether the documented reference projects already solved a similar problem. Ignored local notes under `dev/docs/` may describe private reference locations; when present, start with `dev/docs/REFERENCE_PROJECTS.md` to find those local absolute paths and the current working/decision/archive routes. Use the notes, but treat archived plans as historical context and never copy local absolute paths or machine-private details into public docs.
 
 ## High-Risk Boundaries
 

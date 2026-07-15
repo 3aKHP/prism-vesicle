@@ -239,7 +239,8 @@ prism-vesicle/
 ├── docs/
 │   └── dev/              # Developer docs and architecture rules
 ├── dev/
-│   └── docs/working/     # Working plans and drafts
+│   ├── docs/             # Ignored local working notes, decisions, and archive
+│   └── drafts/           # Ignored local dogfood and miscellaneous material
 └── tests/                # Bun tests
 ```
 
