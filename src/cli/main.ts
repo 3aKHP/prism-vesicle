@@ -36,6 +36,15 @@ async function launchProjectArgument(input: string): Promise<void> {
   await launchProject(await resolveProjectDirectory(input));
 }
 
+async function launchProjectArgumentOrReport(input: string): Promise<void> {
+  try {
+    await launchProjectArgument(input);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
 async function runSetupFlow(): Promise<void> {
   if (!isCompiledBinary) {
     await import("@opentui/solid/preload");
@@ -134,7 +143,7 @@ switch (command) {
       process.exitCode = 1;
       break;
     }
-    await launchProjectArgument(invocation.args[1] ?? ".");
+    await launchProjectArgumentOrReport(invocation.args[1] ?? ".");
     break;
   }
   case undefined:
@@ -149,12 +158,8 @@ switch (command) {
   }
   default:
     if (invocation.args.length === 1) {
-      try {
-        await launchProjectArgument(command);
-        break;
-      } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-      }
+      await launchProjectArgumentOrReport(command);
+      break;
     }
     console.error(`Unknown command or project directory: ${command}`);
     console.error("Commands: setup, launch, doctor, once, prompt, debug, assets, dev");

@@ -6,13 +6,14 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import type { PermissionMode } from "../core/permissions";
 import { engineIds, type EngineId } from "../core/engine/profile";
 import { applyComposerKey, insertComposerText, normalizeKeyName, type ComposerState } from "../tui/composer";
+import { truncateLine } from "../tui/format";
 import { PromptComposer } from "../tui/PromptComposer";
 import { palette } from "../tui/theme";
 import { discoverOpenAIModels, normalizeOpenAIBaseUrl } from "./model-discovery";
 import { testMcpServer, type McpTestResult } from "./mcp-test";
 import { writeSetupConfiguration, type SetupMcpServer, type SetupWriteResult } from "./config-writer";
 
-type SetupStep =
+export type SetupStep =
   | "welcome"
   | "base-url"
   | "api-key"
@@ -65,6 +66,44 @@ const permissionOptions: Array<{ mode: Exclude<PermissionMode, "YOLO">; label: s
   { mode: "MANUAL", label: "Ask every time", detail: "Every model-visible tool asks first" },
 ];
 
+const explicitBackSteps: SetupStep[] = [
+  "discovery-error",
+  "default-model",
+  "tavily-choice",
+  "mcp-choice",
+  "mcp-auth",
+  "mcp-result",
+  "mcp-more",
+  "permissions",
+  "project-choice",
+  "review",
+];
+
+export type SetupMultiSelectChoice<T> =
+  | { kind: "value"; value: T }
+  | { kind: "back" };
+
+export function setupMultiSelectChoices<T>(values: readonly T[]): Array<SetupMultiSelectChoice<T>> {
+  return [...values.map((value) => ({ kind: "value" as const, value })), { kind: "back" }];
+}
+
+export function setupMultiSelectValueAt<T>(choices: Array<SetupMultiSelectChoice<T>>, index: number): T | undefined {
+  const choice = choices[index];
+  return choice?.kind === "value" ? choice.value : undefined;
+}
+
+export function setupMultiSelectBackAt<T>(choices: Array<SetupMultiSelectChoice<T>>, index: number): boolean {
+  return choices[index]?.kind === "back";
+}
+
+export function setupChoiceSupportsBack(step: SetupStep): boolean {
+  return explicitBackSteps.includes(step);
+}
+
+export function setupReviewBackIndex(projectDirectory: string): number {
+  return projectDirectory ? 1 : 0;
+}
+
 export function SetupApp(props: SetupAppProps) {
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
@@ -89,6 +128,10 @@ export function SetupApp(props: SetupAppProps) {
   const [projectInputReturnStep, setProjectInputReturnStep] = createSignal<"project-choice" | "review">("project-choice");
   const [writeResult, setWriteResult] = createSignal<SetupWriteResult>();
   const busy = createMemo(() => step() === "discovering" || step() === "mcp-testing" || step() === "saving");
+  const compactHeight = createMemo(() => dimensions().height < 20);
+  const rootPaddingX = createMemo(() => dimensions().width < 64 ? 1 : 2);
+  const panelPaddingX = createMemo(() => dimensions().width < 64 ? 1 : 2);
+  const panelTextWidth = createMemo(() => Math.max(8, dimensions().width - (rootPaddingX() * 2) - (panelPaddingX() * 2) - 2));
 
   useKeyboard((rawKey) => {
     const key = {
@@ -163,7 +206,7 @@ export function SetupApp(props: SetupAppProps) {
   }
 
   function handleMultiSelectKey(key: { name?: string; ctrl?: boolean }): void {
-    const items = step() === "models" ? models() : [...engineIds];
+    const items = setupMultiSelectChoices(step() === "models" ? models() : [...engineIds]);
     if (key.name === "up" || (key.ctrl && key.name === "p")) {
       setSelectedIndex((value) => wrapIndex(value - 1, items.length));
       return;
@@ -177,13 +220,17 @@ export function SetupApp(props: SetupAppProps) {
       return;
     }
     if (key.name === "space") {
-      const value = items[selectedIndex()];
+      const value = setupMultiSelectValueAt(items, selectedIndex());
       if (!value) return;
       if (step() === "models") toggleSelectedModel(value);
       else toggleEngine(value as EngineId);
       return;
     }
     if (key.name !== "enter" && key.name !== "return") return;
+    if (setupMultiSelectBackAt(items, selectedIndex())) {
+      goBackFromChoice();
+      return;
+    }
     if (step() === "models") {
       if (selectedModels().length === 0) {
         setStatus("Select at least one model with Space, or press A to add one.");
@@ -298,6 +345,10 @@ export function SetupApp(props: SetupAppProps) {
 
   function chooseCurrent(): void {
     const index = selectedIndex();
+    if (setupChoiceSupportsBack(step()) && index === choiceItems().length - 1) {
+      goBackFromChoice();
+      return;
+    }
     switch (step()) {
       case "welcome":
         if (index === 0) enterInput("base-url", "");
@@ -492,19 +543,25 @@ export function SetupApp(props: SetupAppProps) {
 
   function goBackFromChoice(): void {
     switch (step()) {
+      case "discovery-error": enterInput("api-key", ""); return;
       case "models": enterInput("api-key", ""); return;
-      case "default-model": setStep("models"); return;
-      case "tavily-choice": setStep("default-model"); return;
-      case "mcp-choice": setStep("tavily-choice"); return;
+      case "default-model": returnToChoice("models", Math.max(0, selectedModels().indexOf(defaultModel()))); return;
+      case "tavily-choice": returnToChoice("default-model", Math.max(0, selectedModels().indexOf(defaultModel()))); return;
+      case "mcp-choice": returnToChoice("tavily-choice", tavilyApiKey() ? 1 : 0); return;
       case "mcp-auth": enterInput("mcp-url", mcpDraft().url); return;
-      case "mcp-engines": setStep("mcp-auth"); return;
+      case "mcp-engines": returnToChoice("mcp-auth", Math.max(0, ["none", "bearer", "custom-header"].indexOf(mcpDraft().auth))); return;
       case "mcp-result": enterInput("mcp-url", mcpDraft().url); return;
-      case "mcp-more": setStep("mcp-choice"); return;
-      case "permissions": setStep("mcp-choice"); return;
-      case "project-choice": setStep("permissions"); return;
-      case "review": setStep("project-choice"); return;
-      case "save-error": setStep("review"); return;
+      case "mcp-more": returnToChoice("mcp-choice"); return;
+      case "permissions": returnToChoice("mcp-choice"); return;
+      case "project-choice": returnToChoice("permissions", Math.max(0, permissionOptions.findIndex((option) => option.mode === permissionMode()))); return;
+      case "review": returnToChoice("project-choice", setupReviewBackIndex(projectDirectory())); return;
+      case "save-error": returnToChoice("review"); return;
     }
+  }
+
+  function returnToChoice(next: SetupStep, index = 0): void {
+    setStep(next);
+    setSelectedIndex(index);
   }
 
   function enterInput(next: InputPage, value: string): void {
@@ -547,6 +604,13 @@ export function SetupApp(props: SetupAppProps) {
   }
 
   function choiceItems(): Array<{ label: string; detail?: string }> {
+    const items = baseChoiceItems();
+    return setupChoiceSupportsBack(step())
+      ? [...items, { label: "Back", detail: "Return to the previous step" }]
+      : items;
+  }
+
+  function baseChoiceItems(): Array<{ label: string; detail?: string }> {
     switch (step()) {
       case "welcome": return [
         { label: "Begin guided setup", detail: "No configuration files to edit" },
@@ -607,37 +671,37 @@ export function SetupApp(props: SetupAppProps) {
 
   const visibleMultiItems = createMemo(() => {
     const values = step() === "models" ? models() : [...engineIds];
-    return visibleWindow(values, selectedIndex(), Math.max(5, Math.min(14, dimensions().height - 12)));
+    return visibleWindow(setupMultiSelectChoices(values), selectedIndex(), Math.max(5, Math.min(14, dimensions().height - 12)));
   });
 
   return (
-    <box flexDirection="column" width="100%" height="100%" paddingX={2} paddingY={1} backgroundColor={palette.bg}>
-      <box height={2} flexDirection="column">
-        <text content="Prism Vesicle Setup" fg={palette.brand} attributes={TextAttributes.BOLD} />
-        <text content={progressLabel(step())} fg={palette.textDim} />
+    <box flexDirection="column" width="100%" height="100%" paddingX={rootPaddingX()} paddingY={compactHeight() ? 0 : 1} overflow="hidden" backgroundColor={palette.bg}>
+      <box height={compactHeight() ? 1 : 2} flexDirection="column" overflow="hidden">
+        <text content={truncateLine("Prism Vesicle Setup", panelTextWidth())} wrapMode="none" fg={palette.brand} attributes={TextAttributes.BOLD} />
+        <text content={compactHeight() ? "" : progressLabel(step())} height={compactHeight() ? 0 : 1} wrapMode="none" fg={palette.textDim} />
       </box>
-      <box marginTop={1} flexGrow={1} flexDirection="column" border borderColor={palette.panelBorder} paddingX={2} paddingY={1}>
-        <text content={pageTitle(step())} fg={palette.textPrimary} attributes={TextAttributes.BOLD} />
-        <text content={pageDescription(step())} fg={palette.textSecondary} />
-        <box marginTop={1} flexDirection="column" flexGrow={1}>
+      <box marginTop={compactHeight() ? 0 : 1} flexGrow={1} flexDirection="column" border borderColor={palette.panelBorder} paddingX={panelPaddingX()} paddingY={compactHeight() ? 0 : 1} overflow="hidden">
+        <text content={truncateLine(pageTitle(step()), panelTextWidth())} wrapMode="none" fg={palette.textPrimary} attributes={TextAttributes.BOLD} />
+        <text content={compactHeight() ? "" : pageDescription(step())} height={compactHeight() ? 0 : undefined} wrapMode="word" fg={palette.textSecondary} />
+        <box marginTop={compactHeight() ? 0 : 1} flexDirection="column" flexGrow={1} overflow="hidden">
           <Show when={isInputPage(step())} fallback={renderChoiceContent()}>
-            <text content={inputLabel(step() as InputPage)} fg={palette.textSecondary} />
+            <text content={truncateLine(inputLabel(step() as InputPage), panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
             <box marginTop={1} border borderColor={palette.brandDim} paddingX={1} height={3}>
               <PromptComposer
                 value={isSecretPage(step()) ? maskValue(draft()) : draft()}
                 cursor={draftCursor()}
                 placeholder={inputPlaceholder(step() as InputPage)}
-                width={Math.max(20, dimensions().width - 10)}
+                width={Math.max(4, panelTextWidth() - 4)}
                 maxLines={1}
               />
             </box>
-            <text content="Enter continues · Esc goes back" fg={palette.textDim} />
+            <text content={truncateLine("Enter continues · Esc goes back", panelTextWidth())} wrapMode="none" fg={palette.textDim} />
           </Show>
         </box>
       </box>
-      <box height={3} marginTop={1} flexDirection="column">
-        <text content={status()} fg={status().toLowerCase().includes("failed") || status().toLowerCase().includes("required") ? palette.error : palette.textSecondary} />
-        <text content="Secrets stay in .env; Setup never writes them to YAML or logs." fg={palette.textDim} />
+      <box height={compactHeight() ? 1 : 3} marginTop={compactHeight() ? 0 : 1} flexDirection="column" overflow="hidden">
+        <text content={truncateLine(status(), Math.max(8, dimensions().width - (rootPaddingX() * 2)))} wrapMode="none" fg={status().toLowerCase().includes("failed") || status().toLowerCase().includes("required") ? palette.error : palette.textSecondary} />
+        <text content={compactHeight() ? "" : truncateLine("Secrets stay in .env; Setup never writes them to YAML or logs.", Math.max(8, dimensions().width - (rootPaddingX() * 2)))} height={compactHeight() ? 0 : 1} wrapMode="none" fg={palette.textDim} />
       </box>
     </box>
   );
@@ -652,26 +716,36 @@ export function SetupApp(props: SetupAppProps) {
           <For each={visibleMultiItems().visible}>{(item, index) => {
             const absolute = () => visibleMultiItems().start + index();
             const selected = () => absolute() === selectedIndex();
-            const checked = () => step() === "models" ? selectedModels().includes(item) : mcpDraft().enabledEngines.includes(item as EngineId);
+            const checked = () => item.kind === "value" && (step() === "models"
+              ? selectedModels().includes(item.value)
+              : mcpDraft().enabledEngines.includes(item.value as EngineId));
+            const content = () => item.kind === "back"
+              ? `${selected() ? ">" : " "} Back  — Return to the previous step`
+              : `${selected() ? ">" : " "} [${checked() ? "x" : " "}] ${item.value}`;
             return <text
-              content={`${selected() ? ">" : " "} [${checked() ? "x" : " "}] ${item}`}
+              content={truncateLine(content(), panelTextWidth())}
+              wrapMode="none"
               fg={selected() ? palette.textPrimary : palette.textSecondary}
               attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE}
             />;
           }}</For>
-          <text content={step() === "models" ? "Space toggles · A adds a model · Enter continues" : "Space toggles · Enter tests connection"} fg={palette.textDim} />
+          <text content={truncateLine(step() === "models" ? "Space toggles · A adds a model · Enter continues · Esc goes back" : "Space toggles · Enter tests connection · Esc goes back", panelTextWidth())} wrapMode="none" fg={palette.textDim} />
         </box>
       );
     }
     if (step() === "review") {
       return (
         <box flexDirection="column">
-          <text content={`Provider  ${baseUrl()}`} fg={palette.textSecondary} />
-          <text content={`Models    ${selectedModels().length} selected · default ${defaultModel()}`} fg={palette.textSecondary} />
-          <text content={`Tavily    ${tavilyApiKey() ? "configured" : "skipped"}`} fg={palette.textSecondary} />
-          <text content={`MCP       ${mcpServers().length} server(s)`} fg={palette.textSecondary} />
-          <text content={`Permission ${permissionMode()} · shell disabled`} fg={palette.textSecondary} />
-          <text content={`First run ${projectDirectory() || "skipped; no project is pinned"}`} fg={palette.textSecondary} />
+          <text content={truncateLine(`Provider  ${baseUrl()}`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
+          <text content={truncateLine(`Models    ${selectedModels().length} selected · default ${defaultModel()}`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
+          <Show when={!compactHeight()} fallback={
+            <text content={truncateLine(`Permission ${permissionMode()} · Tavily ${tavilyApiKey() ? "on" : "off"} · MCP ${mcpServers().length}`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
+          }>
+            <text content={truncateLine(`Tavily    ${tavilyApiKey() ? "configured" : "skipped"}`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
+            <text content={truncateLine(`MCP       ${mcpServers().length} server(s)`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
+            <text content={truncateLine(`Permission ${permissionMode()} · shell disabled`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
+          </Show>
+          <text content={truncateLine(`First run ${projectDirectory() || "skipped; no project is pinned"}`, panelTextWidth())} wrapMode="none" fg={palette.textSecondary} />
           <box marginTop={1} flexDirection="column">{renderOptions(choiceItems())}</box>
         </box>
       );
@@ -679,7 +753,7 @@ export function SetupApp(props: SetupAppProps) {
     if (step() === "mcp-result") {
       return (
         <box flexDirection="column">
-          <text content={mcpTestError() || `Connected${mcpTestResult()?.serverName ? ` to ${mcpTestResult()!.serverName}` : ""}; ${mcpTestResult()?.toolCount ?? 0} tools found.`} fg={mcpTestError() ? palette.error : palette.success} />
+          <text content={truncateLine(mcpTestError() || `Connected${mcpTestResult()?.serverName ? ` to ${mcpTestResult()!.serverName}` : ""}; ${mcpTestResult()?.toolCount ?? 0} tools found.`, panelTextWidth())} wrapMode="none" fg={mcpTestError() ? palette.error : palette.success} />
           <box marginTop={1} flexDirection="column">{renderOptions(choiceItems())}</box>
         </box>
       );
@@ -691,7 +765,8 @@ export function SetupApp(props: SetupAppProps) {
     return <For each={items}>{(item, index) => {
       const selected = () => index() === selectedIndex();
       return <text
-        content={`${selected() ? ">" : " "} ${item.label}${item.detail ? `  — ${item.detail}` : ""}`}
+        content={truncateLine(`${selected() ? ">" : " "} ${item.label}${item.detail ? `  — ${item.detail}` : ""}`, panelTextWidth())}
+        wrapMode="none"
         fg={selected() ? palette.textPrimary : palette.textSecondary}
         attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE}
       />;

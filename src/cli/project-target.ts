@@ -5,7 +5,9 @@ export async function resolveProjectDirectory(
   input: string,
   cwd = process.cwd(),
 ): Promise<string> {
-  const target = resolve(cwd, input.trim() || ".");
+  const value = input.trim();
+  if (!value) throw new Error("Project directory is required.");
+  const target = resolve(cwd, value);
   const info = await stat(target).catch((error: unknown) => {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       throw new Error(`Project directory does not exist: ${target}`);

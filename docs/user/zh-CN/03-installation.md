@@ -32,13 +32,15 @@ PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 - **Prism Vesicle Doctor**：检查已有配置。
 - **Uninstall Prism Vesicle**：删除程序文件，但保留用户配置与项目。
 
-安装器还会注册 `vesicle` 命令和资源管理器目录操作 **Open in Prism Vesicle**。安装后请打开一个新终端，再测试该命令。
+安装器还会注册原生 `vesicle.exe` 命令和资源管理器目录操作 **Open in Prism Vesicle**。安装后请打开一个新终端，再测试该命令。
+
+如果已经安装 Prism Vesicle，再次打开安装器时会先显示 **重新安装 / 升级**、**修复** 和 **卸载**。重新安装会替换运行时并可再次打开引导式 Setup；修复会恢复程序文件、PATH、快捷方式和资源管理器集成，但不会重新打开引导式 Setup；卸载会启动现有卸载程序。正常生命周期下，这三种操作都会保留用户配置与项目目录。
 
 ## 打开引导式 Setup
 
 点击 **Finish**。随后会打开标题为 `Prism Vesicle Setup` 的终端窗口，并高亮显示 **Begin guided setup**。你不需要输入任何命令。
 
-使用方向键移动，按 Space 勾选，按 Enter 继续，按 Escape 返回上一页。密钥输入页只显示圆点，不会显示 API Key 原文。
+使用方向键移动，按 Space 勾选，按 Enter 继续，选择可见的 **Back** 选项或按 Escape 返回上一页。密钥输入页只显示圆点，不会显示 API Key 原文。终端窗口较小时，Setup 会切换到经过裁剪的紧凑布局，而不会让各行相互重叠。
 
 ## 安装失败时
 
