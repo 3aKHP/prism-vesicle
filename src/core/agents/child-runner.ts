@@ -137,7 +137,7 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
       let result: ToolResult;
       if (evaluatePermissionPolicy(permission.mode, permissionClassForTool(call.name)) === "ask") {
         const request = {
-          ...createPermissionRequest(session.sessionId, call, permission.mode),
+          ...createPermissionRequest(session.sessionId, call, permission.mode, permission.shellInterpreter),
           agent: { runId, handle, parentSessionId: spec.parentSessionId },
         };
         await session.append({
@@ -208,6 +208,7 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
           ? mcp.execute(call)
           : executeHostTool(invocation!.rootDir, call, {
             signal,
+            shellInterpreter: permission.shellInterpreter,
             beforeMutation: async (paths) => {
               await claimMutation(paths);
               await invocation!.beforeMutation?.(paths);

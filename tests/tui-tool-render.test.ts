@@ -176,7 +176,7 @@ describe("toolResultFooter", () => {
       stderrTail: "warn",
     };
     expect(toolResultFooter("shell_exec", true, "", undefined, undefined, undefined, event))
-      .toBe("background shell-1 · 1.3s · 16 bytes");
+      .toBe("background shell-1 · /bin/sh · 1.3s · 16 bytes");
     expect(processPreviewLines(event)).toEqual([
       { text: "first", stderr: false },
       { text: "second", stderr: false },

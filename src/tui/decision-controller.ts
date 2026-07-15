@@ -66,6 +66,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
   const decisionPanelMinHeight = createMemo(() => {
     const pending = pendingUserQuestion();
     if (pendingEngineSwitch()) return 10;
+    if (activePermissionRequest()) return 10;
     return pending ? questionPanelMinHeight(pending.question, questionSelected()) : 9;
   });
 

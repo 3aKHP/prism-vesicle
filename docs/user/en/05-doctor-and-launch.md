@@ -27,11 +27,12 @@ Provider config: file (...\prism-vesicle\providers.yaml)
 Provider env: file (...\prism-vesicle\.env)
 API key: available
 Permissions: MOMENTUM (...\permissions.yaml)
+Shell exec: disabled; interpreter PowerShell 7 (...\pwsh.exe)
 Harness: bundled prism-engine-v10@10.0.1-alpha.1
 Missing: none
 ```
 
-Optional Tavily or MCP lines may report unavailable, disabled, or a server-specific connection error. Those results do not invalidate the provider unless your intended workflow requires those tools.
+Optional Tavily or MCP lines may report unavailable, disabled, or a server-specific connection error. Those results do not invalidate the provider unless your intended workflow requires those tools. The Shell exec line reports both capability state and the resolved `shellInterpreter`; an unavailable explicit profile keeps shell tools out of the model tool surface until the configuration is corrected.
 
 ## Correct a Problem
 

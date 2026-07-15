@@ -35,7 +35,7 @@ export function planToolRound(
   const invalidShellCallIds = new Set(hostToolCalls.flatMap((call) => {
     if (call.name !== "shell_exec") return [];
     try {
-      parseShellExecPlan(call);
+      parseShellExecPlan(call, permission.shellInterpreter);
       return [];
     } catch {
       return [call.id];

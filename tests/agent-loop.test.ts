@@ -278,6 +278,41 @@ describe("agent loop sessions", () => {
       .toContain("no longer in the current Engine's effective tool surface");
   });
 
+  test("rejects a persisted shell plan that no longer matches its approval hash", async () => {
+    if (process.platform === "win32") return;
+    const rootDir = await createPromptRoot();
+    globalThis.fetch = (async () => Response.json({
+      id: "chat-permission-tamper",
+      choices: [{ message: { content: "", tool_calls: [{
+        id: "call-shell-tamper",
+        type: "function",
+        function: { name: "shell_exec", arguments: JSON.stringify({ command: "touch workspace/should-not-exist" }) },
+      }] } }],
+    })) as unknown as typeof fetch;
+    const paused = await runPrompt({
+      input: "run it",
+      rootDir,
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    });
+    if (paused.kind !== "needs_permission" || !paused.request.executionPlan) throw new Error("expected shell permission pause");
+    const tampered = {
+      ...paused.request,
+      executionPlan: { ...paused.request.executionPlan, executablePath: "/tmp/not-approved-shell" },
+    };
+
+    await expect(resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: tampered,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    })).rejects.toThrow("stored shell execution plan does not match");
+    expect(await Bun.file(join(rootDir, "workspace", "should-not-exist")).exists()).toBe(false);
+  });
+
   test("keeps a durable tool result resolved when the provider continuation fails", async () => {
     if (process.platform === "win32") return;
     const rootDir = await createPromptRoot();

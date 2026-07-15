@@ -2,6 +2,7 @@ import { inspectProviderConfig, loadUserConfigEnvironment } from "../config/prov
 import { inspectMcpConfig } from "../mcp/registry";
 import { inspectAssets } from "./assets";
 import { loadPermissionSettings } from "../config/permissions";
+import { resolveShellProfile } from "../core/process/shell-profile";
 
 export async function runDoctor(): Promise<void> {
   const config = await inspectProviderConfig();
@@ -9,6 +10,7 @@ export async function runDoctor(): Promise<void> {
   const mcp = await inspectMcpConfig();
   const assets = await inspectAssets();
   const permissions = await loadPermissionSettings();
+  const shell = resolveShellProfile(permissions.shellInterpreter);
   const bunVersion = Bun.version;
 
   console.log("Prism Vesicle Doctor");
@@ -26,7 +28,9 @@ export async function runDoctor(): Promise<void> {
   console.log(`MCP config: ${mcp.configured ? (mcp.enabled ? "enabled" : "disabled") : "not configured"} (${mcp.path})`);
   console.log(`MCP env: ${mcp.hasEnvFile ? "file" : "missing"} (${mcp.envPath})`);
   console.log(`Permissions: ${permissions.defaultMode}${permissions.exists ? "" : " (defaults)"} (${permissions.path})`);
-  console.log(`Shell exec: ${permissions.shellExec ? "enabled; permission mode applies" : "disabled"}`);
+  console.log(`Shell exec: ${permissions.shellExec ? "enabled; permission mode applies" : "disabled"}; interpreter ${
+    shell ? `${shell.displayName} (${shell.executablePath})` : `${permissions.shellInterpreter} unavailable`
+  }`);
   for (const layer of assets.layers) {
     console.log(`Assets ${layer.source}: ${layer.present ? `${layer.fileCount} files` : "missing"} (${layer.directory})`);
   }

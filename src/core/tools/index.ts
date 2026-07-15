@@ -41,10 +41,13 @@ import {
 } from "./web";
 import type { FileToolExecutionOptions, ProcessToolEvent, ToolCall, ToolDefinition, ToolResult } from "./types";
 import type { ProcessManager } from "../process/manager";
+import type { ProcessExecutionPlan } from "../permissions";
+import type { ShellInterpreterPreference } from "../process/shell-profile";
 import {
   executeShellExecTool,
   executeShellOutputTool,
   executeShellStopTool,
+  createShellExecToolDefinition,
   shellExecToolDefinition,
   shellOutputToolDefinition,
   shellStopToolDefinition,
@@ -55,6 +58,7 @@ export {
   executeShellExecTool,
   executeShellOutputTool,
   executeShellStopTool,
+  createShellExecToolDefinition,
   executionPlanHash,
   parseShellExecPlan,
   shellExecToolDefinition,
@@ -211,6 +215,8 @@ export async function executeHostTool(
     processManager?: ProcessManager;
     parentSessionId?: string;
     onProcessProgress?: (event: ProcessToolEvent) => void;
+    shellInterpreter?: ShellInterpreterPreference;
+    processExecutionPlan?: ProcessExecutionPlan;
   } = {},
 ): Promise<ToolResult> {
   if (call.name === "shell_exec") return executeShellExecTool(rootDir, call, {
@@ -218,6 +224,8 @@ export async function executeHostTool(
     processManager: options.processManager,
     parentSessionId: options.parentSessionId,
     onProgress: options.onProcessProgress,
+    shellInterpreter: options.shellInterpreter,
+    executionPlan: options.processExecutionPlan,
   });
   if (call.name === "shell_output") return executeShellOutputTool(rootDir, call, { signal: options.signal, processManager: options.processManager, parentSessionId: options.parentSessionId });
   if (call.name === "shell_stop") return executeShellStopTool(rootDir, call, { processManager: options.processManager, parentSessionId: options.parentSessionId });

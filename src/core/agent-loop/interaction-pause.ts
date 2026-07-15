@@ -50,7 +50,12 @@ async function pauseForPermission(options: ResolveInteractionPauseOptions): Prom
   );
   const [primary, ...remainingToolCalls] = options.plan.permissionRequiredCalls;
   const request = {
-    ...createPermissionRequest(options.session.sessionId, primary, options.permission.mode),
+    ...createPermissionRequest(
+      options.session.sessionId,
+      primary,
+      options.permission.mode,
+      options.permission.shellInterpreter,
+    ),
     ...(options.qualityState ? { qualityState: options.qualityState } : {}),
   };
   await options.session.append({

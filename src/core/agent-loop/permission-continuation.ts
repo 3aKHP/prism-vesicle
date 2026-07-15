@@ -65,8 +65,14 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
   const call = permissionCall(options.request);
   const capabilityAvailable = context.toolSurface.definitions.some((definition) => definition.function.name === call.name);
   const approvedShellPlanHash = options.resolution.decision === "allow_once" && capabilityAvailable && call.name === "shell_exec"
-    ? executionPlanHash(parseShellExecPlan(call))
+    ? executionPlanHash(parseShellExecPlan(call, context.permission.shellInterpreter))
     : undefined;
+  const storedShellPlanHash = options.request.executionPlan
+    ? executionPlanHash(options.request.executionPlan)
+    : undefined;
+  if (storedShellPlanHash && storedShellPlanHash !== options.request.planHash) {
+    throw new Error("The stored shell execution plan does not match its approval hash; permission was not applied.");
+  }
   if (approvedShellPlanHash && (!options.request.planHash || approvedShellPlanHash !== options.request.planHash)) {
     throw new Error("The approved shell execution plan changed before execution; permission was not applied.");
   }
@@ -260,6 +266,8 @@ async function executeApprovedEntry(
         signal: options.signal,
         processManager: getProcessManager(context.rootDir),
         parentSessionId: context.session.sessionId,
+        shellInterpreter: context.permission.shellInterpreter,
+        processExecutionPlan: call.name === "shell_exec" ? entry.request.executionPlan : undefined,
         onProcessProgress: (processEvent) => options.onEvent?.({ type: "process_update", callId: call.id, processEvent }),
         beforeMutation: async (paths) => {
           await context.agentManager.claimHostMutation(mutationOwner, paths);
@@ -281,7 +289,12 @@ async function createPermissionPause(
   onEvent?: (event: AgentLoopEvent) => void,
 ): Promise<RunPromptResult> {
   const request = {
-    ...createPermissionRequest(context.session.sessionId, call, context.permission.mode),
+    ...createPermissionRequest(
+      context.session.sessionId,
+      call,
+      context.permission.mode,
+      context.permission.shellInterpreter,
+    ),
     ...(qualityState ? { qualityState } : {}),
   };
   await context.session.append({ role: "system", content: `Permission required for ${call.name}.`, metadata: { kind: "permission-request", request } });

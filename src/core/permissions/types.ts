@@ -1,3 +1,5 @@
+import type { ProcessShellId, ShellInterpreterPreference } from "../process/shell-profile";
+
 export const permissionModes = ["MANUAL", "INERTIA", "MOMENTUM", "YOLO"] as const;
 
 export type PermissionMode = (typeof permissionModes)[number];
@@ -22,7 +24,9 @@ export type PermissionResolution =
 export type ProcessExecutionPlan = {
   command: string;
   cwd: ".";
-  shell: "posix-sh" | "powershell";
+  shell: ProcessShellId;
+  executablePath: string;
+  runtimePolicyVersion: number;
   timeoutMs: number;
   envPolicyVersion: number;
   runInBackground: boolean;
@@ -53,6 +57,8 @@ export type PermissionRuntimeOptions = {
   dangerouslySkipPermissions?: boolean;
   /** User-level host capability opt-in; the dangerous CLI override also enables it. */
   shellExecEnabled?: boolean;
+  /** Selected host shell profile. Auto stays within the platform's default shell family. */
+  shellInterpreter?: ShellInterpreterPreference;
 };
 
 export const defaultPermissionRuntime: PermissionRuntimeOptions = {

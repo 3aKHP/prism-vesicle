@@ -2,6 +2,8 @@ import type { PermissionRequest } from "../core/permissions";
 import type { GateFocusTarget } from "./GatePrompt";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
+import { processShellDisplay } from "../core/process/runtime";
+import { truncateLine } from "./format";
 
 export type PermissionPromptProps = {
   request: PermissionRequest;
@@ -34,7 +36,10 @@ export function PermissionPrompt(props: PermissionPromptProps) {
         content={dangerous() ? "Permission required · HOST COMMAND" : "Permission required"}
         fg={dangerous() ? palette.error : palette.gateAccent}
       />
-      <text content={`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}`} fg={palette.textDim} />
+      <text content={`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}${props.request.executionPlan ? ` · ${processShellDisplay(props.request.executionPlan)}` : ""}`} fg={palette.textDim} />
+      {props.request.executionPlan?.executablePath ? (
+        <text content={truncateLine(`Interpreter: ${props.request.executionPlan.executablePath}`, Math.max(20, props.width - 4))} fg={palette.textDim} wrapMode="none" />
+      ) : null}
       {dangerous() ? (
         <text content="This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind." fg={palette.error} />
       ) : null}

@@ -3,7 +3,7 @@ import type { VesicleMessage, VesicleRequest } from "../../providers/shared/type
 import { executeAgentTool, agentToolNames } from "../agents/tools";
 import type { AgentManager } from "../agents/manager";
 import type { EngineProfile } from "../engine/profile";
-import type { ToolPermissionBroker, PermissionRuntimeOptions } from "../permissions";
+import type { ProcessExecutionPlan, ToolPermissionBroker, PermissionRuntimeOptions } from "../permissions";
 import type { ProcessManager } from "../process/manager";
 import type { SessionStore } from "../session/store";
 import { executeHostTool } from "../tools";
@@ -100,8 +100,8 @@ async function executeNonAgentCalls(
       }
       if (agentToolNames.has(call.name)) continue;
       options.onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
-      await recordPolicyApprovedShellStart(options, call);
-      const result = await executeHostCall(options, call);
+      const processExecutionPlan = await recordPolicyApprovedShellStart(options, call);
+      const result = await executeHostCall(options, call, processExecutionPlan);
       await recordToolResult({
         result,
         messages: options.messages,
@@ -222,7 +222,11 @@ function executeAgentCall(options: ExecuteToolRoundOptions, call: ToolCall): Pro
   });
 }
 
-async function executeHostCall(options: ExecuteToolRoundOptions, call: ToolCall): Promise<ToolResult> {
+async function executeHostCall(
+  options: ExecuteToolRoundOptions,
+  call: ToolCall,
+  processExecutionPlan?: ProcessExecutionPlan,
+): Promise<ToolResult> {
   const mutationOwner = `${options.session.sessionId}:${call.id}`;
   try {
     return options.mcpRegistry.hasTool(call.name)
@@ -231,6 +235,8 @@ async function executeHostCall(options: ExecuteToolRoundOptions, call: ToolCall)
         signal: options.signal,
         processManager: options.processManager,
         parentSessionId: options.session.sessionId,
+        shellInterpreter: options.permission.shellInterpreter,
+        processExecutionPlan,
         onProcessProgress: (processEvent) => options.onEvent?.({ type: "process_update", callId: call.id, processEvent }),
         beforeMutation: async (paths) => {
           await options.agentManager.claimHostMutation(mutationOwner, paths);
@@ -242,10 +248,14 @@ async function executeHostCall(options: ExecuteToolRoundOptions, call: ToolCall)
   }
 }
 
-async function recordPolicyApprovedShellStart(options: ExecuteToolRoundOptions, call: ToolCall): Promise<void> {
-  if (call.name !== "shell_exec") return;
+async function recordPolicyApprovedShellStart(
+  options: ExecuteToolRoundOptions,
+  call: ToolCall,
+): Promise<ProcessExecutionPlan | undefined> {
+  if (call.name !== "shell_exec") return undefined;
   try {
-    const planHash = executionPlanHash(parseShellExecPlan(call));
+    const plan = parseShellExecPlan(call, options.permission.shellInterpreter);
+    const planHash = executionPlanHash(plan);
     await options.markCheckpointTainted();
     await options.session.append({
       role: "system",
@@ -260,8 +270,10 @@ async function recordPolicyApprovedShellStart(options: ExecuteToolRoundOptions, 
         checkpointTainted: true,
       },
     });
+    return plan;
   } catch {
     // Invalid arguments are returned through the normal tool wrapper.
+    return undefined;
   }
 }
 

@@ -14,6 +14,7 @@
  * is only used for failure messages.
  */
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../core/tools";
+import { shellDisplayName } from "../core/process/shell-profile";
 
 export type DiffKind = "ctx" | "add" | "del" | "elide";
 export type DiffLine = { kind: DiffKind; text: string };
@@ -285,12 +286,14 @@ function processEventDetail(e: ProcessToolEvent): string {
   if (e.status === "running") {
     return joinDetail(
       e.executionMode === "background" && e.taskId ? `background ${e.taskId}` : "running",
+      shellDisplayName(e.shell),
       `${formatDuration(e.durationMs)}`,
       e.stdoutBytes + e.stderrBytes > 0 ? `${e.stdoutBytes + e.stderrBytes} bytes` : null,
     );
   }
   return joinDetail(
     e.status === "interrupted" ? "interrupted" : e.timedOut ? "timed out" : e.aborted ? "cancelled" : `exit ${e.exitCode ?? "unknown"}`,
+    shellDisplayName(e.shell),
     formatDuration(e.durationMs),
     e.executionMode === "background" && e.taskId ? e.taskId : null,
     e.stdoutTruncated || e.stderrTruncated ? "truncated" : null,

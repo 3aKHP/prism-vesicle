@@ -14,6 +14,7 @@ import {
   type ProviderRegistry,
 } from "../config/providers";
 import { parseMcpConfig, mcpConfigPathFromEnv } from "../mcp/config";
+import { loadPermissionSettings } from "../config/permissions";
 
 export type SetupMcpServer = {
   name: string;
@@ -60,6 +61,7 @@ export async function writeSetupConfiguration(
   const existingRegistry = await loadExistingRegistry(providerPath, env);
   const merged = mergeProvider(existingRegistry, input);
   const existingEnv = await readOptional(envPath);
+  const existingPermissions = await loadPermissionSettings(env);
   const envUpdates: Record<string, string> = {
     [merged.apiKeyEnv]: input.apiKey,
     ...(input.tavilyApiKey?.trim() ? { TAVILY_API_KEY: input.tavilyApiKey.trim() } : {}),
@@ -75,7 +77,13 @@ export async function writeSetupConfiguration(
 
   const providerSource = serializeProviderRegistry(merged.registry);
   const envSource = setEnvValues(existingEnv ?? "", envUpdates);
-  const permissionsSource = `version: 1\ndefaultMode: ${input.permissionMode}\nshellExec: false\n`;
+  const permissionsSource = [
+    "version: 1",
+    `defaultMode: ${input.permissionMode}`,
+    `shellExec: ${existingPermissions.exists ? existingPermissions.shellExec : false}`,
+    `shellInterpreter: ${existingPermissions.exists ? existingPermissions.shellInterpreter : "auto"}`,
+    "",
+  ].join("\n");
 
   parseProviderConfig(providerSource, providerPath, { ...env, ...parseEnvFile(envSource, envPath) });
   if (mcpSource !== undefined) parseMcpConfig(mcpSource, mcpPath, { ...env, ...parseEnvFile(envSource, envPath) });

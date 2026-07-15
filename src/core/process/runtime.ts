@@ -1,7 +1,12 @@
-import { basename } from "node:path";
 import type { ProcessExecutionPlan } from "../permissions";
+import {
+  resolveShellProfile,
+  shellProfileForPlan,
+  type ShellInterpreterPreference,
+} from "./shell-profile";
 
 export const PROCESS_ENV_POLICY_VERSION = 1;
+export const PROCESS_RUNTIME_POLICY_VERSION = 2;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 120_000;
 export const MAX_PROCESS_TIMEOUT_MS = 600_000;
 export const MAX_PROCESS_STREAM_BYTES = 256 * 1024;
@@ -57,16 +62,21 @@ export function createProcessExecutionPlan(
   timeoutMs = DEFAULT_PROCESS_TIMEOUT_MS,
   platform: NodeJS.Platform = process.platform,
   runInBackground = false,
+  shellInterpreter: ShellInterpreterPreference = "auto",
 ): ProcessExecutionPlan {
   const normalizedCommand = command.trim();
   if (!normalizedCommand) throw new Error("shell_exec requires a non-empty command.");
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_PROCESS_TIMEOUT_MS) {
     throw new Error(`shell_exec timeoutMs must be an integer from 1 to ${MAX_PROCESS_TIMEOUT_MS}.`);
   }
+  const shell = resolveShellProfile(shellInterpreter, { platform });
+  if (!shell) throw new Error(`Configured shell interpreter "${shellInterpreter}" is not available on ${platform}.`);
   return {
     command: normalizedCommand,
     cwd: ".",
-    shell: platform === "win32" ? "powershell" : "posix-sh",
+    shell: shell.id,
+    executablePath: shell.executablePath,
+    runtimePolicyVersion: PROCESS_RUNTIME_POLICY_VERSION,
     timeoutMs,
     envPolicyVersion: PROCESS_ENV_POLICY_VERSION,
     runInBackground,
@@ -106,9 +116,7 @@ export function startProcessPlan(
   } = {},
 ): ProcessExecutionHandle {
   const platform = options.platform ?? process.platform;
-  const command = platform === "win32"
-    ? ["pwsh.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", plan.command]
-    : ["/bin/sh", "-c", plan.command];
+  const command = buildProcessCommand(plan);
   const started = performance.now();
   const child = Bun.spawn(command, {
     cwd: rootDir,
@@ -286,5 +294,28 @@ async function terminateProcessTree(pid: number, platform: NodeJS.Platform): Pro
 }
 
 export function processShellDisplay(plan: ProcessExecutionPlan): string {
-  return plan.shell === "powershell" ? "PowerShell 7" : basename("/bin/sh");
+  if ((plan.shell as string) === "powershell") return "PowerShell 7 (legacy plan)";
+  return shellProfileForPlan(plan.shell, plan.executablePath).displayName;
+}
+
+const POWERSHELL_UTF8_PREFIX = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[Console]::OutputEncoding } catch {}; ";
+
+export function buildProcessCommand(plan: ProcessExecutionPlan): string[] {
+  if (plan.shell === "powershell-7" || plan.shell === "windows-powershell-5.1") {
+    return [
+      plan.executablePath,
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `${POWERSHELL_UTF8_PREFIX}${plan.command}`,
+    ];
+  }
+  if (plan.shell === "cmd") {
+    return [plan.executablePath, "/D", "/S", "/C", `chcp 65001>nul & ${plan.command}`];
+  }
+  if (plan.shell === "git-bash") {
+    return [plan.executablePath, "--noprofile", "--norc", "-c", plan.command];
+  }
+  return [plan.executablePath, "-c", plan.command];
 }

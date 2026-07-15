@@ -21,7 +21,16 @@ function backgroundProcess(taskId: string, parentSessionId = "session-1"): Backg
     taskId,
     parentSessionId,
     parentToolCallId: `call-${taskId}`,
-    plan: { command: "bun test", cwd: ".", shell: "posix-sh", timeoutMs: 120_000, envPolicyVersion: 1, runInBackground: true },
+    plan: {
+      command: "bun test",
+      cwd: ".",
+      shell: "posix-sh",
+      executablePath: "/bin/sh",
+      runtimePolicyVersion: 2,
+      timeoutMs: 120_000,
+      envPolicyVersion: 1,
+      runInBackground: true,
+    },
     status: "running",
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -422,22 +431,32 @@ describe("TUI", () => {
           permissionClass: "arbitrary_exec",
           mode: "MOMENTUM",
           createdAt: new Date().toISOString(),
-          executionPlan: { command, cwd: ".", shell: "posix-sh", timeoutMs: 120000, envPolicyVersion: 1, runInBackground: false },
+          executionPlan: {
+            command,
+            cwd: ".",
+            shell: "posix-sh",
+            executablePath: "/bin/sh",
+            runtimePolicyVersion: 2,
+            timeoutMs: 120000,
+            envPolicyVersion: 1,
+            runInBackground: false,
+          },
           planHash: "hash",
         }}
         focused="confirm"
         feedbackMode={null}
         feedback=""
         feedbackCursor={0}
-        width={100}
+        width={80}
       />
-    ), { width: 100, height: 10 });
+    ), { width: 80, height: 10 });
     await setup.flush();
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
     expect(frame).toContain("HOST COMMAND");
     expect(frame).toContain(command);
     expect(frame).toContain("host-user authority");
+    expect(frame).toContain("/bin/sh");
   });
 
   test("renders live shell output, elapsed time, and background task id", async () => {
@@ -472,7 +491,7 @@ describe("TUI", () => {
     setup.renderer.destroy();
     expect(frame).toContain("● shell_exec  bun test");
     expect(frame).toContain("running test suite");
-    expect(frame).toContain("Running… · shell-1 · 2.5s");
+    expect(frame).toContain("Running… · shell-1 · /bin/sh · 2.5s");
   });
 
   test("keeps active background shells visible in the header and sidebar", () => {

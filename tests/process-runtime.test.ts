@@ -32,12 +32,78 @@ describe("process runtime", () => {
     const plan = parseShellExecPlan(call);
     expect(plan.command).toBe("pwd");
     expect(plan.cwd).toBe(".");
+    if (process.platform === "win32") expect(plan.executablePath).toMatch(/pwsh\.exe$|powershell\.exe$/i);
+    else expect(plan.executablePath).toBe("/bin/sh");
+    expect(plan.runtimePolicyVersion).toBe(2);
     expect(plan.runInBackground).toBe(false);
     expect(executionPlanHash(plan)).toHaveLength(64);
     expect(executionPlanHash(createProcessExecutionPlan("pwd", 500, process.platform, true))).not.toBe(executionPlanHash(plan));
+    expect(executionPlanHash({ ...plan, shell: "cmd", executablePath: "C:\\Windows\\System32\\cmd.exe" }))
+      .not.toBe(executionPlanHash(plan));
     expect(() => createProcessExecutionPlan("", 100)).toThrow("non-empty");
     expect(() => createProcessExecutionPlan("pwd", 600_001)).toThrow("must be an integer");
   });
+
+  test("rejects an approved plan when the resolved interpreter changes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
+    try {
+      const call = { id: "call-plan-drift", name: "shell_exec", arguments: JSON.stringify({ command: "printf safe" }) };
+      const approved = parseShellExecPlan(call);
+      const result = await executeShellExecTool(root, call, {
+        executionPlan: { ...approved, executablePath: `${approved.executablePath}.changed` },
+      });
+      expect(result.ok).toBe(false);
+      expect(result.content).toContain("approved shell execution plan changed");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  for (const [shellInterpreter, command] of [
+    ["powershell-7", "[Console]::Out.Write('中文')"],
+    ["windows-powershell-5.1", "[Console]::Out.Write('中文')"],
+    ["cmd", "echo 中文"],
+    ["git-bash", "printf '中文'"],
+  ] as const) {
+    test(`runs Windows ${shellInterpreter} with UTF-8 output`, async () => {
+      if (process.platform !== "win32") return;
+      const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
+      try {
+        const result = await executeProcessPlan(
+          root,
+          createProcessExecutionPlan(command, 5_000, "win32", false, shellInterpreter),
+        );
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("中文");
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }, 20_000);
+  }
+
+  test("Windows auto executes through 5.1 when PowerShell 7 is absent", async () => {
+    if (process.platform !== "win32") return;
+    const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
+    const previousPath = process.env.PATH;
+    const previousProgramFiles = process.env.ProgramFiles;
+    try {
+      process.env.PATH = `${process.env.SystemRoot ?? "C:\\Windows"}\\System32`;
+      process.env.ProgramFiles = join(root, "missing-program-files");
+      expect(() => createProcessExecutionPlan("Write-Output blocked", 5_000, "win32", false, "powershell-7"))
+        .toThrow("not available");
+      const plan = createProcessExecutionPlan("[Console]::Out.Write('中文')", 5_000, "win32");
+      expect(plan.shell).toBe("windows-powershell-5.1");
+      const result = await executeProcessPlan(root, plan);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe("中文");
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      if (previousProgramFiles === undefined) delete process.env.ProgramFiles;
+      else process.env.ProgramFiles = previousProgramFiles;
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 20_000);
 
   test("runs from the project root with separated output", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
