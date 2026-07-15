@@ -4,6 +4,8 @@ import { join } from "node:path";
 
 type WorkflowStep = {
   run?: string;
+  uses?: string;
+  with?: Record<string, string | boolean | number>;
 };
 
 type WorkflowJob = {
@@ -44,6 +46,7 @@ describe("release workflow contract", () => {
 
     expect(Object.keys(publish.on)).toEqual(["push"]);
     expect(publish.on.push).toEqual({ tags: ["v*"] });
+    expect(metadataScript).toContain('test "$VERSION" = "1.0.0-alpha.2"');
     expect(metadataScript).toContain('test "$TAG" = "v$VERSION"');
     expect(metadataScript).toContain('git cat-file -t "refs/tags/$TAG"');
     expect(metadataScript).toContain("git merge-base --is-ancestor");
@@ -51,6 +54,22 @@ describe("release workflow contract", () => {
     expect(publish.jobs["github-release"]?.permissions).toEqual({ contents: "write" });
     expect(publish.jobs.npm?.environment).toBe("npm");
     expect(publish.jobs.npm?.permissions).toEqual({ contents: "read", "id-token": "write" });
+  });
+
+  test("discloses the unsigned Windows alpha artifacts in generated release notes", async () => {
+    const publish = await loadWorkflow("release.yml");
+    const releaseStep = publish.jobs["github-release"]?.steps?.find(
+      (step) => step.uses === "softprops/action-gh-release@v2",
+    );
+    const body = String(releaseStep?.with?.body ?? "");
+
+    expect(releaseStep?.with?.generate_release_notes).toBe(true);
+    expect(body).toContain("1.0.0-alpha.2");
+    expect(body).toContain("not Authenticode-signed");
+    expect(body).toContain("没有 Authenticode 签名");
+    expect(body).toContain("SHA256SUMS.txt");
+    expect(body).toContain("CODE_SIGNING_POLICY.md");
+    expect(body).toContain("CODE_SIGNING_POLICY.zh-CN.md");
   });
 
   test("keeps every release gate in the reusable workflow", async () => {

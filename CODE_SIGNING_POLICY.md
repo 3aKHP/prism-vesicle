@@ -6,7 +6,9 @@ Last updated: 2026-07-15
 
 ## Current Status
 
-Prism Vesicle is applying to the SignPath Foundation open-source program. The planned attribution is: **Free code signing provided by SignPath.io, certificate by SignPath Foundation**. See [SignPath.io](https://about.signpath.io) and [SignPath Foundation](https://signpath.org).
+Prism Vesicle submitted its application to the SignPath Foundation open-source program on 2026-07-15. The planned attribution is: **Free code signing provided by SignPath.io, certificate by SignPath Foundation**. See [SignPath.io](https://about.signpath.io) and [SignPath Foundation](https://signpath.org).
+
+While that application and the CI integration are pending, `1.0.0-alpha.2` is explicitly authorized as an unsigned prerelease for a small, informed test group. Its GitHub Release must identify the Windows executable and installer as unsigned, link this policy, provide SHA-256 checksums, and tell users not to disable Windows security features globally. This temporary exception ends no later than `1.0.0-beta.1`; release-candidate builds must reuse a signing path already exercised during beta.
 
 Historical release artifacts remain unsigned unless their individual GitHub Release notes explicitly say otherwise. In particular, the existence of a checksum or npm provenance record does not mean that a Windows executable has an Authenticode signature.
 

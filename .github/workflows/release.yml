@@ -33,6 +33,7 @@ jobs:
         run: |
           VERSION="$(jq -r '.version' package.json)"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
+          test "$VERSION" = "1.0.0-alpha.2"
           test "$TAG" = "v$VERSION"
           test "$(git cat-file -t "refs/tags/$TAG")" = "tag"
           TAG_SHA="$(git rev-list -n 1 "$TAG")"
@@ -70,6 +71,14 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Prism Vesicle v${{ needs.metadata.outputs.version }}
+          body: |
+            ## Windows code-signing status / Windows 代码签名状态
+
+            The Windows executable and installer in `1.0.0-alpha.2` are not Authenticode-signed. This is a deliberate exception for a small, informed alpha test group while the SignPath Foundation application is pending. Download only from this official GitHub Release and verify the file against `SHA256SUMS.txt`. Do not disable Windows security features globally.
+
+            `1.0.0-alpha.2` 中的 Windows 可执行文件和安装器没有 Authenticode 签名。这是在 SignPath Foundation 申请等待期间，面向知情小范围 Alpha 测试群体的明确例外。请只从本 GitHub Release 官方页面下载，并使用 `SHA256SUMS.txt` 核对文件；不要在系统范围内关闭 Windows 安全功能。
+
+            See the [Code Signing Policy](https://github.com/3aKHP/prism-vesicle/blob/main/CODE_SIGNING_POLICY.md) / 参见[代码签名政策](https://github.com/3aKHP/prism-vesicle/blob/main/CODE_SIGNING_POLICY.zh-CN.md)。
           prerelease: ${{ contains(needs.metadata.outputs.version, '-') }}
           make_latest: ${{ contains(needs.metadata.outputs.version, '-') == false }}
           generate_release_notes: true
