@@ -6,7 +6,9 @@
 
 ## 当前状态
 
-Prism Vesicle 正在申请由 [SignPath.io](https://about.signpath.io) 免费提供、证书由 [SignPath Foundation](https://signpath.org) 签发的代码签名服务（Free code signing provided by SignPath.io, certificate by SignPath Foundation）。
+Prism Vesicle 已于 2026-07-15 提交 SignPath Foundation 开源项目申请，计划使用由 [SignPath.io](https://about.signpath.io) 免费提供、证书由 [SignPath Foundation](https://signpath.org) 签发的代码签名服务（Free code signing provided by SignPath.io, certificate by SignPath Foundation）。
+
+在申请和 CI 集成等待期间，`1.0.0-alpha.2` 被明确批准作为面向知情小范围测试群体的未签名预发布版本。对应 GitHub Release 必须说明 Windows 可执行文件和安装器未签名，链接本政策，提供 SHA-256 校验和，并提醒用户不要在系统范围内关闭 Windows 安全功能。该临时例外最迟在 `1.0.0-beta.1` 结束；Release Candidate 必须复用已经在 Beta 阶段实际验证过的签名链路。
 
 除非某个 GitHub Release 的说明明确写明已签名，否则历史发布制品均应视为未签名。特别需要注意：存在校验和或 npm provenance 记录，并不等于 Windows 可执行文件带有 Authenticode 签名。
 

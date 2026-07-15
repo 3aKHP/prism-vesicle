@@ -20,7 +20,7 @@ PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 
 Do not download an installer forwarded through chat, email, or an unrelated mirror. The release also provides `SHA256SUMS.txt` for users who need to verify the download checksum.
 
-Historical Windows artifacts are unsigned unless the individual Release notes explicitly say otherwise. For a Release described as signed, follow the [Code Signing Policy](../../../CODE_SIGNING_POLICY.md) to inspect the Windows signature and signer. A checksum alone is not an Authenticode signature.
+The Windows executable and installer for `1.0.0-alpha.2` are intentionally not Authenticode-signed while the SignPath Foundation application is pending. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless the individual Release notes explicitly say otherwise. For a Release described as signed, follow the [Code Signing Policy](../../../CODE_SIGNING_POLICY.md) to inspect the Windows signature and signer. A checksum alone is not an Authenticode signature.
 
 ## Run the Installer
 

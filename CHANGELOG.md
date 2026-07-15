@@ -32,6 +32,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Authorized `1.0.0-alpha.2` as an explicitly disclosed unsigned Windows prerelease for the informed alpha group while the submitted SignPath Foundation application is pending. The GitHub Release now prepends a bilingual unsigned-artifact warning, links the code-signing policy, and directs users to `SHA256SUMS.txt`; public-trust Authenticode becomes mandatory no later than `1.0.0-beta.1`.
 - Consolidated CI and release publication onto one reusable Linux/Windows release build. Pushing a protected annotated version tag on the accepted `main` commit now authorizes the workflow to rerun all gates, create the GitHub Release, and publish npm through Trusted Publishing. The normal path is command-line driven and has no Actions-page dispatch, Candidate workflow, or GitHub Environment approval step; future SignPath signing approval remains a separate manual trust gate, and bootstrap plus CLI retry rules are documented separately.
 - Advanced the dogfood candidate to `1.0.0-alpha.2` and made the single-download per-user Windows installer the primary non-technical onboarding path while retaining npm, PE/ELF, and assets-ZIP artifacts for development and expert use.
 

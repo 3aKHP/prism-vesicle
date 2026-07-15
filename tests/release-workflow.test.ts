@@ -4,6 +4,8 @@ import { join } from "node:path";
 
 type WorkflowStep = {
   run?: string;
+  uses?: string;
+  with?: Record<string, unknown>;
 };
 
 type WorkflowJob = {
@@ -51,6 +53,20 @@ describe("release workflow contract", () => {
     expect(publish.jobs["github-release"]?.permissions).toEqual({ contents: "write" });
     expect(publish.jobs.npm?.environment).toBe("npm");
     expect(publish.jobs.npm?.permissions).toEqual({ contents: "read", "id-token": "write" });
+  });
+
+  test("discloses the unsigned Windows alpha artifacts in generated release notes", async () => {
+    const publish = await loadWorkflow("release.yml");
+    const releaseStep = publish.jobs["github-release"]?.steps?.find(
+      (step) => step.uses === "softprops/action-gh-release@v2",
+    );
+    const body = String(releaseStep?.with?.body ?? "");
+
+    expect(releaseStep?.with?.generate_release_notes).toBe(true);
+    expect(body).toContain("not Authenticode-signed");
+    expect(body).toContain("SHA256SUMS.txt");
+    expect(body).toContain("CODE_SIGNING_POLICY.md");
+    expect(body).toContain("CODE_SIGNING_POLICY.zh-CN.md");
   });
 
   test("keeps every release gate in the reusable workflow", async () => {
