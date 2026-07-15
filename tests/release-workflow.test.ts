@@ -59,7 +59,7 @@ describe("release workflow contract", () => {
   test("discloses the unsigned Windows alpha artifacts in generated release notes", async () => {
     const publish = await loadWorkflow("release.yml");
     const releaseStep = publish.jobs["github-release"]?.steps?.find(
-      (step) => step.uses === "softprops/action-gh-release@v2",
+      (step) => step.uses === "softprops/action-gh-release@v3",
     );
     const body = String(releaseStep?.with?.body ?? "");
 
@@ -70,6 +70,51 @@ describe("release workflow contract", () => {
     expect(body).toContain("SHA256SUMS.txt");
     expect(body).toContain("CODE_SIGNING_POLICY.md");
     expect(body).toContain("CODE_SIGNING_POLICY.zh-CN.md");
+  });
+
+  test("uses Node 24 action runtime lines throughout CI and publication", async () => {
+    const workflows = await Promise.all([
+      loadWorkflow("release-build.yml"),
+      loadWorkflow("release.yml"),
+    ]);
+    const uses = workflows.flatMap((workflow) =>
+      Object.values(workflow.jobs).flatMap((job) =>
+        (job.steps ?? []).flatMap((step) => (step.uses ? [step.uses] : [])),
+      ),
+    );
+
+    expect(uses.filter((action) => action.startsWith("actions/checkout@"))).toEqual([
+      "actions/checkout@v7",
+      "actions/checkout@v7",
+      "actions/checkout@v7",
+      "actions/checkout@v7",
+      "actions/checkout@v7",
+    ]);
+    expect(uses.filter((action) => action.startsWith("actions/upload-artifact@"))).toEqual([
+      "actions/upload-artifact@v7",
+      "actions/upload-artifact@v7",
+    ]);
+    expect(uses.filter((action) => action.startsWith("actions/download-artifact@"))).toEqual([
+      "actions/download-artifact@v8",
+    ]);
+    expect(uses.filter((action) => action.startsWith("actions/setup-node@"))).toEqual([
+      "actions/setup-node@v7",
+    ]);
+    expect(uses.filter((action) => action.startsWith("oven-sh/setup-bun@"))).toEqual([
+      "oven-sh/setup-bun@v2",
+      "oven-sh/setup-bun@v2",
+      "oven-sh/setup-bun@v2",
+      "oven-sh/setup-bun@v2",
+    ]);
+    expect(uses.filter((action) => action.startsWith("softprops/action-gh-release@"))).toEqual([
+      "softprops/action-gh-release@v3",
+    ]);
+
+    const publish = workflows[1];
+    const setupNode = publish?.jobs.npm?.steps?.find(
+      (step) => step.uses === "actions/setup-node@v7",
+    );
+    expect(setupNode?.with?.["node-version"]).toBe("24");
   });
 
   test("keeps every release gate in the reusable workflow", async () => {
