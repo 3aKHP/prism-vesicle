@@ -20,7 +20,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
@@ -59,15 +59,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
+          digest-mismatch: error
           pattern: publish-*
           merge-multiple: true
           path: release
       - name: Write checksums
         working-directory: release
         run: sha256sum * > SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: Prism Vesicle v${{ needs.metadata.outputs.version }}
@@ -93,7 +94,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.metadata.outputs.sha }}
       - uses: oven-sh/setup-bun@v2
@@ -102,7 +103,7 @@ jobs:
       - run: bun install --frozen-lockfile
       # npm Trusted Publishing requires Node 24's npm 11 OIDC implementation;
       # setup-node also writes the public registry configuration.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"

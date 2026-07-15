@@ -139,6 +139,8 @@ CI/CD has two entry points and one shared implementation. A version-tag push is 
 
 The reusable workflow is the single owner of the release gates:
 
+- Bun 1.3.14 for project installation, tests, packaging, and standalone builds
+- Node 24 runtime lines for GitHub-maintained JavaScript Actions, `oven-sh/setup-bun`, and the GitHub Release Action; npm Trusted Publishing also installs Node 24 explicitly
 - frozen Bun install
 - package-version validation
 - typecheck, deterministic tests, dependency audit, npm allowlist check, and clean npm consumer smoke

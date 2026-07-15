@@ -35,7 +35,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.checkout_ref }}
       - uses: oven-sh/setup-bun@v2
@@ -65,7 +65,7 @@ jobs:
     needs: checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.checkout_ref }}
       - uses: oven-sh/setup-bun@v2
@@ -95,7 +95,7 @@ jobs:
           mkdir release
           cp prism-vesicle "release/prism-vesicle-linux-x64-${VERSION}"
           cp dist/prism-vesicle-assets.zip "release/prism-vesicle-assets-${VERSION}.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact_prefix }}-linux-${{ needs.checks.outputs.version }}
           path: release/
@@ -107,7 +107,7 @@ jobs:
     needs: checks
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.checkout_ref }}
       - uses: oven-sh/setup-bun@v2
@@ -157,7 +157,7 @@ jobs:
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item prism-vesicle.exe "release/prism-vesicle-windows-x64-$env:VERSION.exe"
           Copy-Item "dist/PrismVesicleSetup-$env:VERSION-windows-x64.exe" release/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact_prefix }}-windows-${{ needs.checks.outputs.version }}
           path: release/
