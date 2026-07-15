@@ -14,6 +14,8 @@ The command builds `prism-vesicle.exe`, stages the exact runtime payload under
 `dist/installer-stage/`, and writes
 `dist/PrismVesicleSetup-<version>-windows-x64.exe`.
 
+The installer renames the staged standalone binary to the native `vesicle.exe` command, so a new terminal can run `vesicle .` from any project without a batch wrapper. Per-user Explorer directory and directory-background actions provide the same path launch without a shell. Upgrades remove the old binary, wrapper, and Start Menu project launcher. Rerunning the installer shows Reinstall / Repair / Uninstall maintenance choices; Repair restores installed files and Windows integration without reopening Guided Setup. Setup never persists a global project directory.
+
 Use `INNO_SETUP_COMPILER` to point at a non-default `ISCC.exe`. Linux/WSL can
 run `bun run build:installer:stage` to verify the staged payload; compilation
 and install/uninstall smoke run on a native Windows CI runner.

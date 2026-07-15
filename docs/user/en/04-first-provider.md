@@ -4,7 +4,7 @@
 
 ## What You Will Accomplish
 
-You will connect an OpenAI-compatible provider, select the models Vesicle should offer, optionally configure Tavily and MCP, choose a safe permission preference, and create the first project without editing YAML.
+You will connect an OpenAI-compatible provider, select the models Vesicle should offer, optionally configure Tavily and MCP, and choose a safe permission preference without editing YAML. You may also choose a folder for the first launch, but it is never saved as a global project.
 
 **Estimated time:** 5–10 minutes
 
@@ -63,18 +63,20 @@ MCP secrets are stored in the user-level `.env`. `mcp.yaml` contains only enviro
 
 For the first run, keep **Recommended**. It maps to Vesicle's MOMENTUM mode: routine workspace work can proceed, while `shell_exec` stays disabled. The other choices ask for more approvals. Setup never saves YOLO.
 
-## Choose the First Project
+## Optional First Launch
 
-Keep the suggested folder under Documents or enter another folder. Setup creates it when configuration is saved. Prism Vesicle starts in this project instead of the installation directory.
+Choose **Skip project selection** to finish configuration without selecting a project. This is the normal choice when you already have project folders.
+
+Choose **Choose a folder for the first launch** only when you want Setup to create or open a folder immediately after saving. That folder is used once and is not persisted as a default. Future launches always use the directory you invoke.
 
 ## Review and Save
 
-The review page displays the provider address, selected/default models, whether Tavily is configured, MCP server count, permission mode, and project directory. It never displays secrets.
+The review page displays the provider address, selected/default models, whether Tavily is configured, MCP server count, permission mode, and optional one-time first-launch folder. It never displays secrets.
 
-Select **Save configuration**. Existing supported configuration is merged, and every changed existing file receives a timestamped backup. After validation succeeds, select **Launch Prism Vesicle**.
+Select **Save configuration**. Existing supported configuration is merged, and every changed existing file receives a timestamped backup. If you chose a first-launch folder, Setup offers to launch it once after validation.
 
 ## Completion Check
 
-You are ready when Setup reports **Setup complete** and offers **Launch Prism Vesicle**.
+You are ready when Setup reports **Setup complete**. No project directory has been saved globally.
 
 [Next: Run Doctor and Launch Vesicle →](./05-doctor-and-launch.md)

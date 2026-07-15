@@ -27,7 +27,22 @@ async function configureTreeSitterRuntime(): Promise<void> {
 
 async function launchProject(projectDirectory: string): Promise<void> {
   const { launchVesicleInProject } = await import("./launch");
-  process.exitCode = await launchVesicleInProject(projectDirectory, isCompiledBinary);
+  const args = invocation.dangerouslySkipPermissions ? ["--dangerously-skip-permissions"] : [];
+  process.exitCode = await launchVesicleInProject(projectDirectory, isCompiledBinary, args);
+}
+
+async function launchProjectArgument(input: string): Promise<void> {
+  const { resolveProjectDirectory } = await import("./project-target");
+  await launchProject(await resolveProjectDirectory(input));
+}
+
+async function launchProjectArgumentOrReport(input: string): Promise<void> {
+  try {
+    await launchProjectArgument(input);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }
 
 async function runSetupFlow(): Promise<void> {
@@ -123,10 +138,12 @@ switch (command) {
     break;
   }
   case "launch": {
-    const { readSetupState } = await import("../setup/config-writer");
-    const state = await readSetupState();
-    if (state) await launchProject(state.projectDirectory);
-    else await runSetupFlow();
+    if (invocation.args.length > 2) {
+      console.error("Usage: vesicle launch [project-directory]");
+      process.exitCode = 1;
+      break;
+    }
+    await launchProjectArgumentOrReport(invocation.args[1] ?? ".");
     break;
   }
   case undefined:
@@ -140,7 +157,11 @@ switch (command) {
     break;
   }
   default:
-    console.error(`Unknown command: ${command}`);
+    if (invocation.args.length === 1) {
+      await launchProjectArgumentOrReport(command);
+      break;
+    }
+    console.error(`Unknown command or project directory: ${command}`);
     console.error("Commands: setup, launch, doctor, once, prompt, debug, assets, dev");
-    process.exit(1);
+    process.exitCode = 1;
 }

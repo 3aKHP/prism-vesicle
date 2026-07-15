@@ -33,7 +33,7 @@ Do not edit session JSONL files by hand. Later chapters will explain supported r
 
 Vesicle finds `.vesicle\sessions` relative to the folder from which it is launched. If you start Vesicle from another project folder, you see that project's sessions instead.
 
-Open **Prism Vesicle** from the Start Menu. The launcher uses the project directory saved by guided Setup, so its sessions remain separate from other projects.
+Run `vesicle .` from the intended project directory. Session isolation follows that invocation directory, not a project saved by guided Setup.
 
 This project-local behavior keeps unrelated work separate. Provider configuration remains user-level and can be shared across projects.
 
@@ -115,7 +115,7 @@ Exit Vesicle with Ctrl+Q. In PowerShell, list the session file names without ope
 Get-ChildItem ".vesicle\sessions"
 ```
 
-Each `.jsonl` file is one durable session record. Return to Vesicle afterward from the Start Menu.
+Each `.jsonl` file is one durable session record. Return to the same project directory and run `vesicle .` again afterward.
 
 ## Completion Check
 

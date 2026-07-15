@@ -87,7 +87,7 @@ This is a local Vesicle command. It reports available context and usage informat
 
 ## Confirm Session Persistence
 
-Press Ctrl+Q to exit Vesicle, then open **Prism Vesicle** from the Start Menu again. The launcher returns to the project folder saved by Setup.
+Press Ctrl+Q to exit Vesicle, then run `vesicle .` again from the same project folder. No global project pointer is involved.
 
 Vesicle keeps session files under the project's `.vesicle` directory. A later manual chapter will explain `/resume`, session selection, and starting a clean session in detail.
 

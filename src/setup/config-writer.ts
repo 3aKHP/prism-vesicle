@@ -32,7 +32,7 @@ export type SetupConfiguration = {
   tavilyApiKey?: string;
   mcpServers?: SetupMcpServer[];
   permissionMode: Exclude<PermissionMode, "YOLO">;
-  projectDirectory: string;
+  projectDirectory?: string;
 };
 
 export type SetupWriteResult = {
@@ -40,9 +40,8 @@ export type SetupWriteResult = {
   providerPath: string;
   envPath: string;
   permissionsPath: string;
-  statePath: string;
   mcpPath?: string;
-  projectDirectory: string;
+  projectDirectory?: string;
   backups: string[];
 };
 
@@ -55,7 +54,6 @@ export async function writeSetupConfiguration(
   const providerPath = providerConfigPathFromEnv(env);
   const envPath = join(dirname(providerPath), ".env");
   const permissionsPath = join(configDir, "permissions.yaml");
-  const statePath = join(configDir, "setup-state.json");
   const mcpPath = mcpConfigPathFromEnv(env);
   await mkdir(configDir, { recursive: true });
 
@@ -78,7 +76,6 @@ export async function writeSetupConfiguration(
   const providerSource = serializeProviderRegistry(merged.registry);
   const envSource = setEnvValues(existingEnv ?? "", envUpdates);
   const permissionsSource = `version: 1\ndefaultMode: ${input.permissionMode}\nshellExec: false\n`;
-  const stateSource = `${JSON.stringify({ version: 1, projectDirectory: input.projectDirectory }, null, 2)}\n`;
 
   parseProviderConfig(providerSource, providerPath, { ...env, ...parseEnvFile(envSource, envPath) });
   if (mcpSource !== undefined) parseMcpConfig(mcpSource, mcpPath, { ...env, ...parseEnvFile(envSource, envPath) });
@@ -87,10 +84,9 @@ export async function writeSetupConfiguration(
     { path: providerPath, source: providerSource, secret: false },
     { path: envPath, source: envSource, secret: true },
     { path: permissionsPath, source: permissionsSource, secret: false },
-    { path: statePath, source: stateSource, secret: false },
     ...(!shouldWriteMcp || mcpSource === undefined ? [] : [{ path: mcpPath, source: mcpSource, secret: false }]),
   ];
-  await mkdir(input.projectDirectory, { recursive: true });
+  if (input.projectDirectory) await mkdir(input.projectDirectory, { recursive: true });
   const backups = await replaceFilesTransaction(writes);
 
   return {
@@ -98,33 +94,10 @@ export async function writeSetupConfiguration(
     providerPath,
     envPath,
     permissionsPath,
-    statePath,
     ...(!shouldWriteMcp ? {} : { mcpPath }),
-    projectDirectory: input.projectDirectory,
+    ...(input.projectDirectory ? { projectDirectory: input.projectDirectory } : {}),
     backups,
   };
-}
-
-export async function readSetupState(
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<{ version: 1; projectDirectory: string } | undefined> {
-  const path = join(userConfigDirectory(env), "setup-state.json");
-  const source = await readOptional(path);
-  if (source === undefined) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(source);
-  } catch {
-    throw new Error(`Setup state is not valid JSON: ${path}.`);
-  }
-  if (!parsed || typeof parsed !== "object" || (parsed as { version?: unknown }).version !== 1) {
-    throw new Error(`Setup state has an unsupported version: ${path}.`);
-  }
-  const projectDirectory = (parsed as { projectDirectory?: unknown }).projectDirectory;
-  if (typeof projectDirectory !== "string" || !projectDirectory.trim()) {
-    throw new Error(`Setup state is missing projectDirectory: ${path}.`);
-  }
-  return { version: 1, projectDirectory };
 }
 
 export function providerIdFromBaseUrl(baseUrl: string): string {
@@ -318,7 +291,9 @@ function validateSetupInput(input: SetupConfiguration): void {
   if (input.modelIds.length === 0) throw new Error("Select or add at least one model.");
   if (!input.modelIds.includes(input.defaultModel)) throw new Error("Default model must be one of the selected models.");
   if ((input.permissionMode as string) === "YOLO") throw new Error("YOLO cannot be saved by Setup.");
-  if (!input.projectDirectory.trim()) throw new Error("Project directory is required.");
+  if (input.projectDirectory !== undefined && !input.projectDirectory.trim()) {
+    throw new Error("Project directory must not be empty when provided.");
+  }
 }
 
 function validateMcpServer(server: SetupMcpServer): void {

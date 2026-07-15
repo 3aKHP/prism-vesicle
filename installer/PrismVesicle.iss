@@ -12,7 +12,8 @@
 #endif
 
 #define AppName "Prism Vesicle"
-#define AppExeName "prism-vesicle.exe"
+#define SourceExeName "prism-vesicle.exe"
+#define AppExeName "vesicle.exe"
 #define AppPublisher "3aKHP"
 #define AppUrl "https://github.com/3aKHP/prism-vesicle"
 
@@ -55,26 +56,119 @@ SetupLogging=yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "chinesesimplified"; MessagesFile: "languages\ChineseSimplified.isl"
 
+[CustomMessages]
+english.MaintenanceCaption=Prism Vesicle Maintenance
+english.MaintenanceDescription=Choose how to maintain the existing installation.
+english.MaintenanceSubCaption=Reinstall updates all installed files. Repair restores program integration without reopening Guided Setup. Uninstall starts the existing uninstaller.
+english.MaintenanceReinstall=Reinstall / upgrade Prism Vesicle
+english.MaintenanceRepair=Repair installed files and Windows integration
+english.MaintenanceUninstall=Uninstall Prism Vesicle
+english.MaintenanceUninstallFailed=The existing Prism Vesicle uninstaller could not be started:
+
 [Files]
-Source: "{#SourceRoot}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceRoot}\{#SourceExeName}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
 Source: "{#SourceRoot}\harness-manifest.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceRoot}\host-assets\*"; DestDir: "{app}\host-assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+Type: files; Name: "{app}\prism-vesicle.exe"
+Type: files; Name: "{app}\vesicle.cmd"
+Type: files; Name: "{group}\Prism Vesicle.lnk"
+
 [Icons]
-Name: "{group}\Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "launch"; WorkingDir: "{userdocs}"
 Name: "{group}\Configure Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"
 Name: "{group}\Prism Vesicle Doctor"; Filename: "{cmd}"; Parameters: "/k &quot;&quot;{app}\{#AppExeName}&quot; doctor&quot;"; WorkingDir: "{userdocs}"
 Name: "{group}\Uninstall Prism Vesicle"; Filename: "{uninstallexe}"
 
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueData: "Open in Prism Vesicle"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppExeName}"
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle"; ValueType: string; ValueData: "Open in Prism Vesicle"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppExeName}"
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%V"""
+
 [Run]
-Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"; Description: "Configure and launch Prism Vesicle"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"; Description: "Configure and launch Prism Vesicle"; Flags: postinstall nowait skipifsilent; Check: ShouldLaunchGuidedSetup
 
 [Code]
 const
   UserEnvironmentKey = 'Environment';
   InstallerStateKey = 'Software\3aKHP\Prism Vesicle\Installer';
+  ExistingUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{C573D44C-8972-4F71-9027-BD0A1F6C9752}_is1';
   PathManagedValue = 'PathManaged';
+
+var
+  MaintenancePage: TInputOptionWizardPage;
+  ExistingUninstaller: String;
+  MaintenanceOperation: Integer;
+  MaintenanceExitRequested: Boolean;
+
+function FindExistingUninstaller(var Filename: String): Boolean;
+var
+  UninstallCommand: String;
+begin
+  Result := RegQueryStringValue(HKCU, ExistingUninstallKey, 'UninstallString', UninstallCommand);
+  if Result then
+  begin
+    Filename := RemoveQuotes(Trim(UninstallCommand));
+    Result := FileExists(Filename);
+  end;
+end;
+
+procedure InitializeWizard;
+begin
+  MaintenanceOperation := 0;
+  MaintenanceExitRequested := False;
+  if FindExistingUninstaller(ExistingUninstaller) and not WizardSilent then
+  begin
+    MaintenancePage := CreateInputOptionPage(
+      wpWelcome,
+      CustomMessage('MaintenanceCaption'),
+      CustomMessage('MaintenanceDescription'),
+      CustomMessage('MaintenanceSubCaption'),
+      True,
+      False);
+    MaintenancePage.Add(CustomMessage('MaintenanceReinstall'));
+    MaintenancePage.Add(CustomMessage('MaintenanceRepair'));
+    MaintenancePage.Add(CustomMessage('MaintenanceUninstall'));
+    MaintenancePage.SelectedValueIndex := 0;
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  if (MaintenancePage <> nil) and (CurPageID = MaintenancePage.ID) then
+  begin
+    MaintenanceOperation := MaintenancePage.SelectedValueIndex;
+    if MaintenanceOperation = 2 then
+    begin
+      Result := False;
+      if Exec(ExistingUninstaller, '', '', SW_SHOW, ewNoWait, ResultCode) then
+      begin
+        MaintenanceExitRequested := True;
+        WizardForm.Close;
+      end
+      else
+        MsgBox(CustomMessage('MaintenanceUninstallFailed') + #13#10 + ExistingUninstaller, mbError, MB_OK);
+    end;
+  end;
+end;
+
+procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
+begin
+  if MaintenanceExitRequested then
+    Confirm := False;
+end;
+
+function ShouldLaunchGuidedSetup: Boolean;
+begin
+  Result := MaintenanceOperation <> 1;
+end;
 
 function NormalizePathEntry(Value: String): String;
 begin

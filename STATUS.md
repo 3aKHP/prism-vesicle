@@ -53,7 +53,7 @@ User-facing documentation is intentionally limited during this alpha. Treat the 
   profile runtime files remain an external V10 release pack containing `harness-manifest.json`, `assets/`, and `host-assets/`; executables preserve the invocation directory as the project root and locate defaults beside the executable. `vesicle debug
   markdown-runtime` is the non-interactive runtime smoke check and `bun run
   build:assets` creates the release ZIP.
-- Build a single-download per-user Windows installer around the complete standalone V10 payload. Its completion page launches `vesicle setup`, where OpenAI-compatible users enter a Base URL and masked API key, discover `/v1/models`, select and add models, optionally configure Tavily and Streamable HTTP MCP, choose a safe permission preset, and create a project without editing YAML. Existing user configuration is merged with timestamped backups; ordinary upgrade/uninstall leaves user and project state untouched.
+- Build a single-download per-user Windows installer around the complete standalone V10 payload. Its completion page launches `vesicle setup`, where OpenAI-compatible users enter a Base URL and masked API key, discover `/v1/models`, select and add models, optionally configure Tavily and Streamable HTTP MCP, and choose a safe permission preset without editing YAML. Setup provides explicit backward navigation, compacts safely in small terminal windows, may create a folder for its one-time first launch, and never persists one global project. The installer exposes the native `vesicle.exe` command and Explorer directory action, removes legacy launchers on upgrade, and presents Reinstall / Repair / Uninstall maintenance choices when rerun; existing user configuration and project state remain untouched.
 - Publish an npm/Bun package with pinned runtime dependencies, the exact bundled V10 Harness inventory, its root manifest, and the restricted host extension layer. Package invocations resolve their installed OpenTUI worker and runtime assets independently of the active project directory. `vesicle assets verify/install/use/status/rollback` manages already-extracted offline Harness Packs and the project lock; `assets materialize <assets/path> [--global]` creates sparse project or user overrides, and `assets init [--global]` retains full-snapshot compatibility.
 - GitHub Actions CI validates pull requests and `develop` pushes on Linux and
   Windows. The manual Release verification workflow builds and labels PE, ELF,
@@ -380,7 +380,7 @@ bun run doctor
 bun run build:installer:stage
 ```
 
-Native Windows CI installs pinned Inno Setup, builds the versioned guided installer, performs a silent per-user install, runs the standalone runtime diagnostics from a separate project directory, silently uninstalls, and verifies that user configuration/project sentinels survive while the exact PATH entry is removed.
+Native Windows CI installs pinned Inno Setup, builds the versioned guided installer, performs a silent per-user install plus a second upgrade install, removes simulated legacy executable/wrapper/Start Menu launchers, verifies the native `vesicle.exe` command and Explorer directory actions, runs standalone runtime diagnostics from a separate project directory, silently uninstalls, and proves that user configuration/project sentinels survive while the exact PATH entry and Explorer integration are removed.
 
 The `tests/e2e-gate.test.ts` suite runs against a real provider only when
 `BUN_E2E_REAL_PROVIDER=1` is explicitly set. This keeps `bun test`

@@ -32,11 +32,15 @@ The installer adds these Start Menu entries:
 - **Prism Vesicle Doctor** checks an existing configuration.
 - **Uninstall Prism Vesicle** removes program files while preserving user configuration and projects.
 
+It also registers the native `vesicle.exe` command and an Explorer **Open in Prism Vesicle** action for directories. Open a new terminal after installation before testing the command.
+
+If Prism Vesicle is already installed, opening the installer first presents **Reinstall / upgrade**, **Repair**, and **Uninstall**. Reinstall replaces the installed runtime and may reopen Guided Setup; Repair restores program files, PATH, shortcuts, and Explorer integration without reopening Guided Setup; Uninstall starts the existing uninstaller. All three preserve user configuration and project folders under the normal lifecycle.
+
 ## Open Guided Setup
 
 Select **Finish**. A terminal window opens with the title `Prism Vesicle Setup` and a highlighted **Begin guided setup** choice. You do not need to type a command.
 
-Use the arrow keys to move, Space to select checkboxes, Enter to continue, and Escape to return to the previous page. Secret fields display dots instead of the API key text.
+Use the arrow keys to move, Space to select checkboxes, Enter to continue, and either the visible **Back** choice or Escape to return to the previous page. Secret fields display dots instead of the API key text. Setup switches to a compact clipped layout instead of overlapping rows when the terminal window is small.
 
 ## If Installation Fails
 

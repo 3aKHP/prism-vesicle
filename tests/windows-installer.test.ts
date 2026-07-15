@@ -20,13 +20,34 @@ describe("Windows guided installer", () => {
     expect(source).not.toContain('MessagesFile: "compiler:Languages\\ChineseSimplified.isl"');
     expect(source).toContain('Source: "{#SourceRoot}\\harness-manifest.json"');
     expect(source).toContain('Source: "{#SourceRoot}\\host-assets\\*"');
+    expect(source).toContain('DestName: "{#AppExeName}"');
+    expect(source).toContain('#define AppExeName "vesicle.exe"');
+    expect(source).not.toContain('Source: "{#SourceRoot}\\vesicle.cmd"');
     expect(source).toContain('Parameters: "setup"');
-    expect(source).toContain('Parameters: "launch"');
+    expect(source).not.toContain('Parameters: "launch"');
+    expect(source).toContain('[InstallDelete]');
+    expect(source).toContain('Name: "{app}\\prism-vesicle.exe"');
+    expect(source).toContain('Name: "{app}\\vesicle.cmd"');
+    expect(source).toContain('Name: "{group}\\Prism Vesicle.lnk"');
+    expect(source).toContain('CreateInputOptionPage');
+    expect(source).toContain("MaintenancePage.Add(CustomMessage('MaintenanceReinstall'))");
+    expect(source).toContain("MaintenancePage.Add(CustomMessage('MaintenanceRepair'))");
+    expect(source).toContain("MaintenancePage.Add(CustomMessage('MaintenanceUninstall'))");
+    expect(source).toContain('Check: ShouldLaunchGuidedSetup');
+    expect(source).toContain("Software\\Classes\\Directory\\shell\\PrismVesicle");
+    expect(source).toContain('""%1""');
+    expect(source).toContain('""%V""');
     expect(source).toContain("RemoveFromUserPath");
     expect(source).toContain("PathManagedValue = 'PathManaged'");
     expect(source).toContain("RegWriteDWordValue(HKCU, InstallerStateKey, PathManagedValue, 1)");
     expect(source).toContain("RegQueryDWordValue(HKCU, InstallerStateKey, PathManagedValue, PathManaged)");
     expect(source).not.toContain("{userappdata}\\prism-vesicle");
+    const smoke = await readFile(join(import.meta.dir, "..", "scripts", "smoke-windows-installer.ps1"), "utf8");
+    expect(smoke).toContain("$DirectoryCommand");
+    expect(smoke).toContain("$BackgroundCommand");
+    expect(smoke).toContain("Get-Command vesicle -CommandType Application");
+    expect(smoke).toContain("Upgrade left a legacy launcher behind");
+    expect(smoke.match(/Assert-ExplorerIntegration \$Executable/g)).toHaveLength(2);
   });
 
   test("vendors the Simplified Chinese installer messages", async () => {
