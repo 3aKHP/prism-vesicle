@@ -1,4 +1,4 @@
-import { displayWidth } from "./format";
+import { displayWidth, segmentGraphemes } from "./format";
 
 export type ComposerVisualLine = {
   text: string;
@@ -143,7 +143,7 @@ function graphemeParts(value: string, start: number, end: number): GraphemePart[
   const text = value.slice(start, end);
   const parts: GraphemePart[] = [];
   let offset = start;
-  for (const part of [...text]) {
+  for (const part of segmentGraphemes(text)) {
     const nextOffset = offset + part.length;
     parts.push({ text: part, offset, nextOffset });
     offset = nextOffset;

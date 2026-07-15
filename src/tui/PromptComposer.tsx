@@ -1,7 +1,7 @@
 import { For } from "solid-js";
 import { TextAttributes, createTextAttributes } from "@opentui/core";
 import { layoutComposerText } from "./composer-layout";
-import { displayWidth } from "./format";
+import { displayWidth, segmentGraphemes } from "./format";
 import { palette } from "./theme";
 
 export type PromptComposerProps = {
@@ -117,9 +117,9 @@ function renderLineSegments(line: ComposerLine, width: number, cursor: number | 
     };
   }
 
-  const { char: cursorChar, end: cursorEnd } = charAtOffset(rawText, safeColumn);
+  const { char: cursorChar, start: cursorStart, end: cursorEnd } = charAtOffset(rawText, safeColumn);
   return {
-    prefix: rawText.slice(0, safeColumn),
+    prefix: rawText.slice(0, cursorStart),
     cursor: true,
     cursorChar,
     suffix: rawText.slice(cursorEnd),
@@ -128,30 +128,40 @@ function renderLineSegments(line: ComposerLine, width: number, cursor: number | 
 
 function clipToChars(value: string, width: number): string {
   const limit = Math.max(4, width);
-  if (value.length <= limit) return value;
-  return `${value.slice(0, limit - 3)}...`;
+  if (displayWidth(value) <= limit) return value;
+  let prefix = "";
+  let prefixWidth = 0;
+  for (const grapheme of segmentGraphemes(value)) {
+    const nextWidth = prefixWidth + displayWidth(grapheme);
+    if (nextWidth > limit - 3) break;
+    prefix += grapheme;
+    prefixWidth = nextWidth;
+  }
+  return `${prefix}...`;
 }
 
 function withHiddenPrefix(value: string): string {
-  if (value.length === 0) return "⋯";
-  if (value.length === 1) return "⋯";
-  return `⋯ ${value.slice(2)}`;
+  const graphemes = segmentGraphemes(value);
+  if (graphemes.length <= 2) return "⋯";
+  return `⋯ ${graphemes.slice(2).join("")}`;
 }
 
-function charAtOffset(value: string, offset: number): { char: string; end: number } {
-  if (offset >= value.length) return { char: " ", end: offset };
-  const codePoint = value.codePointAt(offset);
-  if (codePoint === undefined) return { char: " ", end: offset };
-  const char = String.fromCodePoint(codePoint);
-  return { char, end: offset + char.length };
+function charAtOffset(value: string, offset: number): { char: string; start: number; end: number } {
+  if (offset >= value.length) return { char: " ", start: offset, end: offset };
+  let start = 0;
+  for (const grapheme of segmentGraphemes(value)) {
+    const end = start + grapheme.length;
+    if (offset < end) return { char: grapheme, start, end };
+    start = end;
+  }
+  return { char: " ", start: offset, end: offset };
 }
 
 function charBeforeOffset(value: string, offset: number): { char: string; start: number; end: number } {
   const safeOffset = Math.max(0, Math.min(value.length, offset));
   if (safeOffset <= 0) return { char: " ", start: 0, end: 0 };
-  const prefix = value.slice(0, safeOffset);
-  const chars = [...prefix];
-  const char = chars[chars.length - 1] ?? " ";
+  const chars = segmentGraphemes(value.slice(0, safeOffset));
+  const char = chars.at(-1) ?? " ";
   const start = safeOffset - char.length;
   return { char, start, end: safeOffset };
 }

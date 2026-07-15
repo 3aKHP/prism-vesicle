@@ -4,7 +4,7 @@ import type { GateFocusTarget } from "./GatePrompt";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 import { processShellDisplay } from "../core/process/runtime";
-import { truncateLine, visibleDisplayLines, wrapDisplayLines } from "./format";
+import { displayWidth, truncateLine, visibleDisplayLines } from "./format";
 
 export const permissionPanelHeight = 14;
 const permissionContentRows = permissionPanelHeight - 2;
@@ -30,13 +30,23 @@ export function PermissionPrompt(props: PermissionPromptProps) {
     }
   };
   const contentWidth = () => Math.max(20, props.width - 4);
-  const warningLines = () => dangerous() ? wrapDisplayLines(hostAuthorityWarning, contentWidth()) : [];
-  const detailLineBudget = () => Math.max(1, permissionContentRows
+  const flexibleLineBudget = () => Math.max(2, permissionContentRows
     - 5
     - (props.request.executionPlan?.executablePath ? 1 : 0)
-    - warningLines().length
     - (props.feedbackMode === "reject" ? 2 : 0));
+  const warningLines = () => dangerous()
+    ? visibleDisplayLines(hostAuthorityWarning, contentWidth(), flexibleLineBudget() - 1)
+    : [];
+  const detailLineBudget = () => Math.max(1, flexibleLineBudget() - warningLines().length);
   const detailLines = () => visibleDisplayLines(detail(), contentWidth(), detailLineBudget());
+  const title = () => {
+    const full = dangerous() ? "Permission required · HOST COMMAND" : "Permission required";
+    return displayWidth(full) <= contentWidth() ? full : "Permission · HOST COMMAND";
+  };
+  const hint = () => {
+    const full = "↑/↓ choose · Enter confirm · Tab feedback · Esc reject";
+    return displayWidth(full) <= contentWidth() ? full : "↑/↓ · Enter · Tab · Esc reject";
+  };
   return (
     <box
       border
@@ -47,7 +57,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       height="100%"
     >
       <text
-        content={dangerous() ? "Permission required · HOST COMMAND" : "Permission required"}
+        content={title()}
         fg={dangerous() ? palette.error : palette.gateAccent}
         wrapMode="none"
       />
@@ -68,7 +78,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
           maxLines={2}
         />
       ) : null}
-      <text content="↑/↓ choose · Enter confirm · Tab feedback · Esc reject" fg={palette.textDim} wrapMode="none" />
+      <text content={hint()} fg={palette.textDim} wrapMode="none" />
     </box>
   );
 }

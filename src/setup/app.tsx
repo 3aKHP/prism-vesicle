@@ -50,6 +50,7 @@ export type SetupCompletion = {
 
 export type SetupAppProps = {
   env?: NodeJS.ProcessEnv;
+  initialStep?: SetupStep;
   discoverModels?: typeof discoverOpenAIModels;
   testMcp?: typeof testMcpServer;
   writeConfiguration?: typeof writeSetupConfiguration;
@@ -108,7 +109,7 @@ export function SetupApp(props: SetupAppProps) {
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
   const env = props.env ?? process.env;
-  const [step, setStep] = createSignal<SetupStep>("welcome");
+  const [step, setStep] = createSignal<SetupStep>(props.initialStep ?? "welcome");
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [draft, setDraft] = createSignal("");
   const [draftCursor, setDraftCursor] = createSignal(0);
@@ -128,7 +129,7 @@ export function SetupApp(props: SetupAppProps) {
   const [projectInputReturnStep, setProjectInputReturnStep] = createSignal<"project-choice" | "review">("project-choice");
   const [writeResult, setWriteResult] = createSignal<SetupWriteResult>();
   const busy = createMemo(() => step() === "discovering" || step() === "mcp-testing" || step() === "saving");
-  const compactHeight = createMemo(() => setupUsesCompactHeight(dimensions().height));
+  const compactHeight = createMemo(() => setupUsesCompactHeight(dimensions().height, step()));
   const rootPaddingX = createMemo(() => dimensions().width < 64 ? 1 : 2);
   const panelPaddingX = createMemo(() => dimensions().width < 64 ? 1 : 2);
   const panelTextWidth = createMemo(() => Math.max(8, dimensions().width - (rootPaddingX() * 2) - (panelPaddingX() * 2) - 2));
@@ -785,12 +786,12 @@ export function resolveProjectPath(input: string, env: NodeJS.ProcessEnv = proce
   return resolve(expanded);
 }
 
-export function setupUsesCompactHeight(height: number): boolean {
-  return height < 24;
+export function setupUsesCompactHeight(height: number, currentStep?: SetupStep): boolean {
+  return height < (currentStep === "review" ? 27 : 24);
 }
 
 export function setupMultiSelectVisibleRowLimit(height: number): number {
-  const structuralRows = setupUsesCompactHeight(height) ? 6 : 17;
+  const structuralRows = setupUsesCompactHeight(height, "models") ? 6 : 17;
   return Math.max(5, Math.min(14, height - structuralRows));
 }
 

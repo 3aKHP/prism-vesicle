@@ -74,10 +74,32 @@ describe("guided Setup UI", () => {
   test("budgets multi-select rows from the actual compact and regular panel structure", () => {
     expect(setupUsesCompactHeight(23)).toBe(true);
     expect(setupUsesCompactHeight(24)).toBe(false);
+    expect(setupUsesCompactHeight(24, "review")).toBe(true);
+    expect(setupUsesCompactHeight(26, "review")).toBe(true);
+    expect(setupUsesCompactHeight(27, "review")).toBe(false);
     expect(setupMultiSelectVisibleRowLimit(18)).toBe(12);
     expect(setupMultiSelectVisibleRowLimit(24)).toBe(7);
     expect(setupMultiSelectVisibleRowLimit(29)).toBe(12);
     expect(setupMultiSelectVisibleRowLimit(31)).toBe(14);
+  });
+
+  test("keeps every review action visible at 24 terminal rows", async () => {
+    const setup = await testRender(() => (
+      <SetupApp
+        initialStep="review"
+        onComplete={() => undefined}
+      />
+    ), { width: 80, height: 24 });
+    await setup.flush();
+
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("Review and save");
+    expect(frame).toContain("Save configuration");
+    expect(frame).toContain("Change one-time launch folder");
+    expect(frame).toContain("Skip the one-time launch");
+    expect(frame).toContain("Back");
+    expect(frame.split("\n")).toHaveLength(25);
   });
 
   test("offers explicit Back actions and resets review navigation to a valid project choice", () => {

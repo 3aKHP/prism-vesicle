@@ -21,6 +21,12 @@ export function padDisplayEnd(value: string, width: number): string {
   return `${value}${" ".repeat(Math.max(0, Math.floor(width) - displayWidth(value)))}`;
 }
 
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+export function segmentGraphemes(value: string): string[] {
+  return Array.from(graphemeSegmenter.segment(value), (part) => part.segment);
+}
+
 export function wrapDisplayLines(value: string, width: number): string[] {
   const limit = Math.max(1, Math.floor(width));
   const lines: string[] = [];
@@ -33,18 +39,18 @@ export function wrapDisplayLines(value: string, width: number): string[] {
 
     let line = "";
     let lineWidth = 0;
-    for (const char of rawLine) {
+    for (const char of segmentGraphemes(rawLine)) {
       const charWidth = displayWidth(char);
       if (line && lineWidth + charWidth > limit) {
         const breakAt = line.lastIndexOf(" ");
         if (breakAt > 0) {
           lines.push(line.slice(0, breakAt));
-          line = `${line.slice(breakAt + 1)}${char}`;
+          line = `${line.slice(breakAt + 1)}${char}`.trimStart();
           lineWidth = displayWidth(line);
         } else {
           lines.push(line);
-          line = char;
-          lineWidth = charWidth;
+          line = char.trimStart();
+          lineWidth = displayWidth(line);
         }
       } else {
         line += char;
@@ -77,7 +83,7 @@ export function visibleDisplayLines(value: string, width: number, maxLines: numb
 function takeDisplayPrefix(value: string, width: number): string {
   let result = "";
   let resultWidth = 0;
-  for (const char of value) {
+  for (const char of segmentGraphemes(value)) {
     const charWidth = displayWidth(char);
     if (resultWidth + charWidth > width) break;
     result += char;
@@ -89,7 +95,7 @@ function takeDisplayPrefix(value: string, width: number): string {
 function takeDisplaySuffix(value: string, width: number): string {
   let result = "";
   let resultWidth = 0;
-  for (const char of [...value].reverse()) {
+  for (const char of segmentGraphemes(value).reverse()) {
     const charWidth = displayWidth(char);
     if (resultWidth + charWidth > width) break;
     result = `${char}${result}`;
@@ -99,35 +105,5 @@ function takeDisplaySuffix(value: string, width: number): string {
 }
 
 export function displayWidth(value: string): number {
-  let width = 0;
-  for (const char of [...value]) {
-    if (/[\u0300-\u036f]/u.test(char)) continue;
-    if (isZeroWidth(char)) continue;
-    width += isWideCharacter(char) ? 2 : 1;
-  }
-  return width;
-}
-
-function isZeroWidth(char: string): boolean {
-  const code = char.codePointAt(0) ?? 0;
-  return (
-    (code >= 0x200b && code <= 0x200f) ||
-    code === 0xfeff ||
-    (code >= 0xfe00 && code <= 0xfe0f)
-  );
-}
-
-function isWideCharacter(char: string): boolean {
-  const code = char.codePointAt(0) ?? 0;
-  return (
-    (code >= 0x1100 && code <= 0x115f) ||
-    (code >= 0x2e80 && code <= 0xa4cf) ||
-    (code >= 0xac00 && code <= 0xd7a3) ||
-    (code >= 0xf900 && code <= 0xfaff) ||
-    (code >= 0xfe10 && code <= 0xfe19) ||
-    (code >= 0xfe30 && code <= 0xfe6f) ||
-    (code >= 0xff00 && code <= 0xff60) ||
-    (code >= 0xffe0 && code <= 0xffe6) ||
-    (code >= 0x1f300 && code <= 0x1faff)
-  );
+  return Bun.stringWidth(value);
 }

@@ -158,6 +158,9 @@ export function renderGateSummaryText(value: string): string {
 }
 
 export function wrapGateSummary(value: string, maxWidth: number): string[] {
+  // Gate summaries preserve their character stream and wrap at the exact
+  // display-column boundary. Generic display wrapping prefers word breaks,
+  // so sharing that helper would silently collapse boundary whitespace here.
   const width = Math.max(1, maxWidth);
   const lines: string[] = [];
 
