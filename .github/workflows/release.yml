@@ -74,9 +74,9 @@ jobs:
           body: |
             ## Windows code-signing status / Windows 代码签名状态
 
-            The Windows executable and installer in this prerelease are not Authenticode-signed. This is a deliberate exception for a small, informed alpha test group while the SignPath Foundation application is pending. Download only from this official GitHub Release and verify the file against `SHA256SUMS.txt`. Do not disable Windows security features globally.
+            The Windows executable and installer in `1.0.0-alpha.2` are not Authenticode-signed. This is a deliberate exception for a small, informed alpha test group while the SignPath Foundation application is pending. Download only from this official GitHub Release and verify the file against `SHA256SUMS.txt`. Do not disable Windows security features globally.
 
-            此预发布版本中的 Windows 可执行文件和安装器没有 Authenticode 签名。这是在 SignPath Foundation 申请等待期间，面向知情小范围 Alpha 测试群体的明确例外。请只从本 GitHub Release 官方页面下载，并使用 `SHA256SUMS.txt` 核对文件；不要在系统范围内关闭 Windows 安全功能。
+            `1.0.0-alpha.2` 中的 Windows 可执行文件和安装器没有 Authenticode 签名。这是在 SignPath Foundation 申请等待期间，面向知情小范围 Alpha 测试群体的明确例外。请只从本 GitHub Release 官方页面下载，并使用 `SHA256SUMS.txt` 核对文件；不要在系统范围内关闭 Windows 安全功能。
 
             See the [Code Signing Policy](https://github.com/3aKHP/prism-vesicle/blob/main/CODE_SIGNING_POLICY.md) / 参见[代码签名政策](https://github.com/3aKHP/prism-vesicle/blob/main/CODE_SIGNING_POLICY.zh-CN.md)。
           prerelease: ${{ contains(needs.metadata.outputs.version, '-') }}
