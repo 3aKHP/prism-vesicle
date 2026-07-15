@@ -32,6 +32,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Consolidated CI and release publication onto one reusable Linux/Windows release build. Pushing a protected annotated version tag on the accepted `main` commit now authorizes the workflow to rerun all gates, create the GitHub Release, and publish npm through Trusted Publishing. The normal path is command-line driven and has no Actions-page dispatch, Candidate workflow, or GitHub Environment approval step; future SignPath signing approval remains a separate manual trust gate, and bootstrap plus CLI retry rules are documented separately.
 - Advanced the dogfood candidate to `1.0.0-alpha.2` and made the single-download per-user Windows installer the primary non-technical onboarding path while retaining npm, PE/ELF, and assets-ZIP artifacts for development and expert use.
 
 - Replaced the working-tree V9 recovery assets with the complete verified `prism-engine-v10@10.0.1-alpha.1` baseline from Neural Narratology Release `harness-20260714-1`. A no-lock project now automatically activates bundled V10; the runtime distribution contains the exact 47-file Harness inventory, root `harness-manifest.json`, and a restricted 12-file host extension layer. V9 remains available only through Git history.
@@ -51,14 +52,14 @@ project follows Semantic Versioning once releases begin.
   packages contain only runtime files with pinned dependencies, package assets
   and the OpenTUI worker resolve independently of the caller's cwd, and
   `vesicle assets init` creates an editable project-local asset copy.
-- Protected matching `v<package.json version>` tags now publish the PE, ELF,
-  editable assets ZIP, SHA-256 checksums, and provenance-enabled npm package
-  after the same release gates.
+- The release pipeline builds versioned PE, ELF, editable assets ZIP, Windows installer, and SHA-256 checksums after the same shared gates; pushing the protected `main` version tag is the sole normal publication action.
 
 ### Added
 
+- Added bilingual public code-signing and privacy policies for the SignPath Foundation application. They define the intended Windows Authenticode scope and manual approval roles, preserve the unsigned status of historical artifacts, document signature verification and incident handling, and explain local state, external-service transfers, uninstall preservation, and deletion controls.
+
 - Added `vesicle setup`, a full-screen guided onboarding flow that accepts an OpenAI-compatible Base URL and masked API key, discovers `GET /v1/models`, offers checkbox model selection plus exact manual model ids, chooses a default model, and saves validated user-level configuration with timestamped backups. Optional Tavily, Streamable HTTP MCP authentication/testing/Engine scoping, safe permission presets, and first-project creation are integrated without requiring YAML editing.
-- Added an Inno Setup 6 per-user Windows installer with a stable upgrade identity, complete standalone V10 payload, Start Menu Setup/Doctor entries, exact user-PATH add/remove behavior, preserved user/project state, and Windows CI install/runtime/uninstall smoke coverage. Release verification and tag publishing now carry the versioned installer alongside the portable artifacts.
+- Added an Inno Setup 6 per-user Windows installer with a stable upgrade identity, complete standalone V10 payload, Start Menu Setup/Doctor entries, exact user-PATH add/remove behavior, preserved user/project state, and Windows CI install/runtime/uninstall smoke coverage. PR CI and tag-triggered publishing carry the versioned installer alongside the portable artifacts.
 
 - Deterministic `quality-guard/anti-ai-flavor@1` enforcement for verified Harness Packs. Vesicle now validates the released Rule Pack and detector contracts, preserves normalized UTF-16 evidence offsets across protected Markdown/HUD regions, buffers Runtime prose until Guard policy resolves, requests at most two rewrites from the original Runtime Engine, stops on repeated candidate hashes, and persists resumable bounded QualityEvents. Dyad, Weaver, Weaver-Orch, and Scene Writer use the released observe paths; Evaluate and Chapter Reviewer reports are not recursively guarded.
 - Contract-bound `prism-agent/delegation@1` over the existing SubAgent runtime. Verified Driver Contracts now uniquely bind parent Engine, Agent Profile, execution mode, purpose, and retry limit; reject undeclared, ambiguous, or mode-escalating requests; serialize Harness delegations; normalize Driver ABI errors; persist attempt and terminal metadata; and open the declared resumable user decision point when transient retries are exhausted. Child tool calls continue through the parent `/permissions` broker and existing Tool Runtime guards.
@@ -88,10 +89,7 @@ project follows Semantic Versioning once releases begin.
   `assets/` remain a separate release pack.
 - `bun run build:assets` now creates the separately distributed editable
   `dist/prism-vesicle-assets.zip` release pack.
-- GitHub Actions CI now validates Linux ELF and native Windows PE release
-  shapes, including the standalone Markdown runtime diagnostic and external
-  assets. A manual Release verification workflow uploads labelled candidate
-  artifacts without publishing a GitHub Release or npm package.
+- GitHub Actions CI now validates Linux ELF and native Windows PE release shapes, including the standalone Markdown runtime diagnostic and external assets. Pull-request runs upload short-lived versioned artifacts for review without publishing a GitHub Release or npm package.
 
 - Protocol-specific outbound request header profiles aligned with audited
   OpenCode Chat Completions, Claude Code Messages, and Gemini CLI behavior.

@@ -20,6 +20,8 @@ PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 
 Do not download an installer forwarded through chat, email, or an unrelated mirror. The release also provides `SHA256SUMS.txt` for users who need to verify the download checksum.
 
+Historical Windows artifacts are unsigned unless the individual Release notes explicitly say otherwise. For a Release described as signed, follow the [Code Signing Policy](../../../CODE_SIGNING_POLICY.md) to inspect the Windows signature and signer. A checksum alone is not an Authenticode signature.
+
 ## Run the Installer
 
 Open the downloaded installer. Prism Vesicle installs only for your Windows account under `%LOCALAPPDATA%\Programs\Prism Vesicle`, so it does not normally request administrator access.
@@ -35,6 +37,8 @@ The installer adds these Start Menu entries:
 It also registers the native `vesicle.exe` command and an Explorer **Open in Prism Vesicle** action for directories. Open a new terminal after installation before testing the command.
 
 If Prism Vesicle is already installed, opening the installer first presents **Reinstall / upgrade**, **Repair**, and **Uninstall**. Reinstall replaces the installed runtime and may reopen Guided Setup; Repair restores program files, PATH, shortcuts, and Explorer integration without reopening Guided Setup; Uninstall starts the existing uninstaller. All three preserve user configuration and project folders under the normal lifecycle.
+
+The [Privacy Policy](../../../PRIVACY.md) explains what remains on the computer after uninstall, how to remove that local data, and when configured providers or optional services receive data.
 
 ## Open Guided Setup
 

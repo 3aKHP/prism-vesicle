@@ -59,6 +59,8 @@ During a model request, the provider may receive:
 
 Vesicle keeps host-only session metadata and secret configuration out of normal provider messages, but you should still avoid submitting confidential material unless the provider and your account policy are appropriate for it.
 
+The project-wide [Privacy Policy](../../../PRIVACY.md) separately documents local storage, model-provider transfers, optional Tavily and MCP requests, user-authorized shell/network actions, and deletion.
+
 ## Choose a Tutorial Model
 
 The repository example currently names `deepseek-v4-flash` as the default tutorial model. Provider model catalogs can change. If the provider dashboard or API documentation no longer offers that exact id, choose a current tool-capable DeepSeek model and use its exact API model id in Chapter 04.

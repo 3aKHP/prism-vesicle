@@ -4,152 +4,59 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing v* tag whose npm publish should be retried
-        required: true
-        type: string
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  checks:
-    name: Verify tag and package
+  metadata:
+    name: Validate release tag
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - id: version
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+      - id: release
+        name: Require an annotated version tag on the default branch history
+        shell: bash
         env:
-          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          TAG: ${{ github.ref_name }}
         run: |
-          VERSION="$(bun -e 'console.log((await Bun.file("package.json").json()).version)')"
-          test "$TAG" = "v$VERSION"
+          VERSION="$(jq -r '.version' package.json)"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
+          test "$TAG" = "v$VERSION"
+          test "$(git cat-file -t "refs/tags/$TAG")" = "tag"
+          TAG_SHA="$(git rev-list -n 1 "$TAG")"
+          git fetch --no-tags origin "$DEFAULT_BRANCH"
+          git merge-base --is-ancestor "$TAG_SHA" FETCH_HEAD
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
-          printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
-      - run: bun run typecheck
-      - run: bun test
-      - run: bun audit
-      - run: bun run pack:check
-      - run: bun run pack:smoke
+          printf 'sha=%s\n' "$TAG_SHA" >> "$GITHUB_OUTPUT"
 
-  linux:
-    name: Build Linux release artifact
-    if: github.event_name != 'workflow_dispatch'
-    needs: checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - run: bun run build:exe linux
-      - run: bun run build:assets
-      - name: Smoke the release shape
-        run: |
-          mkdir -p smoke/release smoke/project
-          cp prism-vesicle smoke/release/prism-vesicle
-          unzip -q dist/prism-vesicle-assets.zip -d smoke/release
-          (
-            cd smoke/project
-            ../release/prism-vesicle debug markdown-runtime
-            ../release/prism-vesicle assets status
-            ../release/prism-vesicle assets materialize assets/prompts/shared/vesicle-base.md
-            test -f assets/prompts/shared/vesicle-base.md
-            VESICLE_CONFIG_DIR="$PWD/config" ../release/prism-vesicle assets materialize assets/prompts/engines/etl.md --global
-            VESICLE_CONFIG_DIR="$PWD/config" ../release/prism-vesicle prompt shape --engine etl
-          )
-      - name: Name release artifacts
-        env:
-          VERSION: ${{ needs.checks.outputs.version }}
-        run: |
-          mkdir release
-          cp prism-vesicle "release/prism-vesicle-linux-x64-${VERSION}"
-          cp dist/prism-vesicle-assets.zip "release/prism-vesicle-assets-${VERSION}.zip"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: publish-linux
-          path: release/
-
-  windows:
-    name: Build Windows release artifact
-    if: github.event_name != 'workflow_dispatch'
-    needs: checks
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - run: bun run build:exe windows
-      - run: bun run build:assets
-      - name: Smoke the release shape
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force smoke/release, smoke/project | Out-Null
-          Copy-Item prism-vesicle.exe smoke/release/prism-vesicle.exe
-          Expand-Archive -LiteralPath dist/prism-vesicle-assets.zip -DestinationPath smoke/release
-          Push-Location smoke/project
-          try {
-            $env:VESICLE_CONFIG_DIR = Join-Path (Get-Location) 'config'
-            & ..\release\prism-vesicle.exe debug markdown-runtime
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & ..\release\prism-vesicle.exe assets status
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & ..\release\prism-vesicle.exe assets materialize assets/prompts/shared/vesicle-base.md
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            if (-not (Test-Path assets/prompts/shared/vesicle-base.md)) { throw 'Project override was not written beneath the invocation cwd.' }
-            & ..\release\prism-vesicle.exe assets materialize assets/prompts/engines/etl.md --global
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & ..\release\prism-vesicle.exe prompt shape --engine etl
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } finally {
-            Pop-Location
-          }
-      - name: Install pinned Inno Setup
-        shell: pwsh
-        run: choco install innosetup --version=6.7.1 --no-progress -y
-      - name: Build and smoke guided installer
-        shell: pwsh
-        run: |
-          bun run build:installer
-          ./scripts/smoke-windows-installer.ps1 -InstallerPath "dist/PrismVesicleSetup-*-windows-x64.exe"
-      - name: Name release artifact
-        shell: pwsh
-        env:
-          VERSION: ${{ needs.checks.outputs.version }}
-        run: |
-          New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item prism-vesicle.exe "release/prism-vesicle-windows-x64-$env:VERSION.exe"
-          Copy-Item "dist/PrismVesicleSetup-$env:VERSION-windows-x64.exe" release/
-      - uses: actions/upload-artifact@v4
-        with:
-          name: publish-windows
-          path: release/
+  build:
+    name: Rebuild and verify tagged release
+    needs: metadata
+    uses: ./.github/workflows/release-build.yml
+    with:
+      checkout_ref: ${{ needs.metadata.outputs.sha }}
+      expected_version: ${{ needs.metadata.outputs.version }}
+      artifact_prefix: publish
+      retention_days: 30
 
   github-release:
-    name: Publish GitHub Release
-    if: github.event_name != 'workflow_dispatch'
-    needs: [checks, linux, windows]
+    name: Publish GitHub prerelease
+    needs: [metadata, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -161,19 +68,25 @@ jobs:
         run: sha256sum * > SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
-          name: Prism Vesicle v${{ needs.checks.outputs.version }}
-          prerelease: true
+          tag_name: ${{ github.ref_name }}
+          name: Prism Vesicle v${{ needs.metadata.outputs.version }}
+          prerelease: ${{ contains(needs.metadata.outputs.version, '-') }}
+          make_latest: ${{ contains(needs.metadata.outputs.version, '-') == false }}
           generate_release_notes: true
           files: release/*
 
   npm:
     name: Publish npm package
-    if: github.event_name != 'workflow_dispatch'
-    needs: [checks, github-release]
+    needs: [metadata, build, github-release]
     runs-on: ubuntu-latest
     environment: npm
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.metadata.outputs.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
@@ -184,29 +97,9 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-      - run: npm publish --provenance --access public --tag latest
-
-  npm-retry:
-    name: Retry npm package publish
-    if: github.event_name == 'workflow_dispatch'
-    needs: checks
-    runs-on: ubuntu-latest
-    environment: npm
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: refs/tags/${{ needs.checks.outputs.tag }}
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-      - run: bun install --frozen-lockfile
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-      - name: Publish the verified tag package
+      - name: Publish the verified package if it is not already present
         env:
-          VERSION: ${{ needs.checks.outputs.version }}
+          VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           if npm view "prism-vesicle@$VERSION" version --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
             echo "prism-vesicle@$VERSION is already published; nothing to retry."
