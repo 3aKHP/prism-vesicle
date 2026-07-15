@@ -12,6 +12,7 @@ import { resolveTuiLayout } from "./layout";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
+import { yoloPanelHeight } from "./YoloPrompt";
 import { builtinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
 import type { CommandContext } from "./commands/types";
@@ -563,7 +564,9 @@ export function App(props: AppProps = {}) {
     dimensions().height,
     Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || inputNeedsExpandedBottom(),
-    decisionPanelMinHeight(),
+    yoloConfirmStage()
+      ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
+      : decisionPanelMinHeight(),
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
@@ -706,9 +709,10 @@ export function App(props: AppProps = {}) {
           content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
           fg={engineAccent(activeEngine())}
           attributes={1}
+          wrapMode="none"
         />
         <Show when={permissionMode() === "YOLO"} fallback={<box width={0} />}>
-          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} />
+          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} wrapMode="none" />
         </Show>
       </box>
 
@@ -785,6 +789,7 @@ export function App(props: AppProps = {}) {
         <text
           content={footerLine(activeProvider(), activeModel(), providerHasApiKey(), layout().width, lastTurnUsage(), sessionUsage(), activeModelLimits())}
           fg={palette.textMuted}
+          wrapMode="none"
         />
       </box>
     </box>

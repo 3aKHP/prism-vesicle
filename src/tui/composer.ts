@@ -1,4 +1,5 @@
 import { moveComposerCursorVisual } from "./composer-layout";
+import { segmentGraphemes } from "./format";
 
 export type ComposerKey = {
   name?: string;
@@ -41,7 +42,7 @@ export type ComposerKeyOptions = {
 };
 
 export function applyComposerKey(state: ComposerState, key: ComposerKey, options: ComposerKeyOptions = {}): ComposerResult {
-  const cursor = normalizeElementCursor(clampCursor(state.cursor, state.value), state.elements);
+  const cursor = normalizeComposerCursor(state.value, state.cursor, state.elements);
   const current: ComposerState = { ...state, cursor };
   const name = normalizeKeyName(key.name);
 
@@ -68,9 +69,9 @@ export function applyComposerKey(state: ComposerState, key: ComposerKey, options
     case "delete":
       return handled(deleteAfter(current));
     case "left":
-      return handled({ ...current, cursor: moveCursorAcrossElements(cursor, -1, current.elements) });
+      return handled({ ...current, cursor: moveCursorAcrossElements(current.value, cursor, -1, current.elements) });
     case "right":
-      return handled({ ...current, cursor: moveCursorAcrossElements(cursor, 1, current.elements, current.value.length) });
+      return handled({ ...current, cursor: moveCursorAcrossElements(current.value, cursor, 1, current.elements) });
     case "home":
       return handled({ ...current, cursor: lineStart(current.value, cursor) });
     case "end":
@@ -92,7 +93,7 @@ export function applyComposerKey(state: ComposerState, key: ComposerKey, options
 }
 
 export function insertComposerText(state: ComposerState, text: string): ComposerState {
-  return insertText({ ...state, cursor: clampCursor(state.cursor, state.value) }, normalizeInputText(text));
+  return insertText({ ...state, cursor: normalizeComposerCursor(state.value, state.cursor, state.elements) }, normalizeInputText(text));
 }
 
 export function insertComposerImage(
@@ -100,7 +101,7 @@ export function insertComposerImage(
   attachmentId: string,
   placeholder: string,
 ): ComposerState {
-  const current = { ...state, cursor: clampCursor(state.cursor, state.value) };
+  const current = { ...state, cursor: normalizeComposerCursor(state.value, state.cursor, state.elements) };
   const start = current.cursor;
   const next = insertText(current, placeholder);
   return {
@@ -113,7 +114,7 @@ export function insertComposerImage(
 }
 
 export function setComposerValue(value: string, cursor = value.length): ComposerState {
-  return { value, cursor: clampCursor(cursor, value) };
+  return { value, cursor: normalizeGraphemeCursor(value, clampCursor(cursor, value)) };
 }
 
 function applyCtrlKey(state: ComposerState, name: string, options: ComposerKeyOptions): ComposerResult {
@@ -121,11 +122,11 @@ function applyCtrlKey(state: ComposerState, name: string, options: ComposerKeyOp
     case "a":
       return handled({ ...state, cursor: lineStart(state.value, state.cursor) });
     case "b":
-      return handled({ ...state, cursor: moveCursorAcrossElements(state.cursor, -1, state.elements) });
+      return handled({ ...state, cursor: moveCursorAcrossElements(state.value, state.cursor, -1, state.elements) });
     case "e":
       return handled({ ...state, cursor: lineEnd(state.value, state.cursor) });
     case "f":
-      return handled({ ...state, cursor: moveCursorAcrossElements(state.cursor, 1, state.elements, state.value.length) });
+      return handled({ ...state, cursor: moveCursorAcrossElements(state.value, state.cursor, 1, state.elements) });
     case "h":
       return handled(deleteBefore(state));
     case "k":
@@ -190,13 +191,13 @@ function isEnhancedNewlineSequence(key: ComposerKey): boolean {
 }
 
 function moveUpOrHistory(state: ComposerState, options: ComposerKeyOptions): ComposerResult {
-  const next = normalizeElementCursor(moveVertical(state.value, state.cursor, -1, options.columns), state.elements);
+  const next = normalizeComposerCursor(state.value, moveVertical(state.value, state.cursor, -1, options.columns), state.elements);
   if (next !== state.cursor) return handled({ ...state, cursor: next });
   return { state, handled: true, action: { type: "history_up" } };
 }
 
 function moveDownOrHistory(state: ComposerState, options: ComposerKeyOptions): ComposerResult {
-  const next = normalizeElementCursor(moveVertical(state.value, state.cursor, 1, options.columns), state.elements);
+  const next = normalizeComposerCursor(state.value, moveVertical(state.value, state.cursor, 1, options.columns), state.elements);
   if (next !== state.cursor) return handled({ ...state, cursor: next });
   return { state, handled: true, action: { type: "history_down" } };
 }
@@ -233,12 +234,12 @@ function insertText(state: ComposerState, text: string): ComposerState {
 
 function deleteBefore(state: ComposerState): ComposerState {
   if (state.cursor <= 0) return state;
-  return deleteRange(state, state.cursor - 1, state.cursor);
+  return deleteRange(state, previousGraphemeOffset(state.value, state.cursor), state.cursor);
 }
 
 function deleteAfter(state: ComposerState): ComposerState {
   if (state.cursor >= state.value.length) return state;
-  return deleteRange(state, state.cursor, state.cursor + 1);
+  return deleteRange(state, state.cursor, nextGraphemeOffset(state.value, state.cursor));
 }
 
 function killToLineStart(state: ComposerState): ComposerState {
@@ -354,12 +355,51 @@ function directionalElementCursor(cursor: number, direction: -1 | 1, elements: C
   return cursor;
 }
 
-function moveCursorAcrossElements(cursor: number, direction: -1 | 1, elements: ComposerElement[] | undefined, length = Number.MAX_SAFE_INTEGER): number {
-  const target = direction < 0 ? Math.max(0, cursor - 1) : Math.min(length, cursor + 1);
+function moveCursorAcrossElements(value: string, cursor: number, direction: -1 | 1, elements: ComposerElement[] | undefined): number {
+  const target = direction < 0
+    ? previousGraphemeOffset(value, cursor)
+    : nextGraphemeOffset(value, cursor);
   for (const element of elements ?? []) {
     if (target > element.start && target < element.end) return direction < 0 ? element.start : element.end;
   }
   return target;
+}
+
+function normalizeComposerCursor(value: string, cursor: number, elements: ComposerElement[] | undefined): number {
+  return normalizeElementCursor(normalizeGraphemeCursor(value, clampCursor(cursor, value)), elements);
+}
+
+function normalizeGraphemeCursor(value: string, cursor: number): number {
+  if (cursor <= 0 || cursor >= value.length) return cursor;
+  let offset = 0;
+  for (const grapheme of segmentGraphemes(value)) {
+    const next = offset + grapheme.length;
+    if (cursor <= offset) return offset;
+    if (cursor < next) return next;
+    offset = next;
+  }
+  return value.length;
+}
+
+function previousGraphemeOffset(value: string, cursor: number): number {
+  const bounded = clampCursor(cursor, value);
+  let offset = 0;
+  for (const grapheme of segmentGraphemes(value)) {
+    const next = offset + grapheme.length;
+    if (next >= bounded) return offset;
+    offset = next;
+  }
+  return Math.max(0, bounded);
+}
+
+function nextGraphemeOffset(value: string, cursor: number): number {
+  const bounded = clampCursor(cursor, value);
+  let offset = 0;
+  for (const grapheme of segmentGraphemes(value)) {
+    offset += grapheme.length;
+    if (offset > bounded) return offset;
+  }
+  return value.length;
 }
 
 function cloneElements(elements: ComposerElement[] | undefined): ComposerElement[] {

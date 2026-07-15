@@ -29,17 +29,8 @@ Read asset-specific docs when touching assets:
 - `docs/dev/ASSETS.md`: bundled V10 inventory, host extension layer, lineage, and update rules.
 - `docs/examples/providers.yaml`: canonical provider registry shape.
 - `docs/examples/provider.env.example`: user-level provider secret file shape.
-- `dev/docs/working/PLAN-Prism-Vesicle-architecture.md`: older architecture
-  plan; useful context, but current code plus `STATUS.md` and `docs/dev/*` are
-  authoritative when they differ.
 
-If a task touches architecture, provider behavior, TUI interaction, session
-semantics, or command UX, look for existing implementation patterns before
-inventing a new one. The ignored local `dev/docs/` area may contain private
-reference-project notes and local paths. When present, start with
-`dev/docs/REFERENCE_PROJECTS.md` to find the local reference project locations;
-use those notes when available, but do not copy local absolute paths or private
-machine details into public docs.
+If a task touches architecture, provider behavior, TUI interaction, session semantics, or command UX, look for existing implementation patterns before inventing a new one. The ignored local `dev/docs/` area may contain private reference-project notes and local paths. When present, start with `dev/docs/REFERENCE_PROJECTS.md` to find the local reference project locations; use its working/decision/archive routes when available, but do not copy local absolute paths or private machine details into public docs. Archived local plans are historical context, never current authority.
 
 ## Documentation Map
 

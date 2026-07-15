@@ -3,7 +3,7 @@ import { TextAttributes } from "@opentui/core";
 import type { OptionItem } from "../types";
 import { clampCommandMenuSelection } from "../commands/selection";
 import { palette } from "../theme";
-import { truncateLine } from "../format";
+import { padDisplayEnd, truncateLine } from "../format";
 
 export type ArgumentMenuProps = {
   items: OptionItem[];
@@ -25,15 +25,15 @@ export function ArgumentMenu(props: ArgumentMenuProps) {
         {(item, getIndex) => {
           const index = () => win().start + getIndex();
           const isSelected = () => index() === safeSelected();
-          const label = truncateLine(item.label, LABEL_COLUMN).padEnd(LABEL_COLUMN);
+          const label = padDisplayEnd(truncateLine(item.label, LABEL_COLUMN), LABEL_COLUMN);
           const detailBudget = Math.max(0, props.width - LABEL_COLUMN - 2);
           const detail = item.detail ? truncateLine(item.detail, detailBudget) : "";
           const attributes = () => isSelected() ? TextAttributes.BOLD : TextAttributes.NONE;
           return (
             <box height={1} flexDirection="row">
-              <text content={isSelected() ? ">" : " "} fg={palette.brand} attributes={attributes()} />
-              <text content={label} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={attributes()} />
-              <text content={detail} fg={isSelected() ? palette.textSecondary : palette.textDim} />
+              <text content={isSelected() ? ">" : " "} fg={palette.brand} attributes={attributes()} wrapMode="none" />
+              <text content={label} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={attributes()} wrapMode="none" />
+              <text content={detail} fg={isSelected() ? palette.textSecondary : palette.textDim} wrapMode="none" />
             </box>
           );
         }}

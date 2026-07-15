@@ -15,6 +15,7 @@ import {
   type GateFocusTarget,
 } from "./GatePrompt";
 import { questionComposerIsActive, questionPanelMinHeight } from "./QuestionPrompt";
+import { permissionPanelHeight } from "./PermissionPrompt";
 import {
   engineSwitchGateRequest,
   permissionResolutionFromGate,
@@ -66,7 +67,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
   const decisionPanelMinHeight = createMemo(() => {
     const pending = pendingUserQuestion();
     if (pendingEngineSwitch()) return 10;
-    if (activePermissionRequest()) return 10;
+    if (activePermissionRequest()) return permissionPanelHeight;
     return pending ? questionPanelMinHeight(pending.question, questionSelected()) : 9;
   });
 

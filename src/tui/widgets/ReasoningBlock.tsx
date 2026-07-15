@@ -27,9 +27,10 @@ export function ReasoningBlock(props: { content: string; streaming: boolean; mod
           content={`━━━━━━━━ ${props.streaming ? "thinking streaming" : props.mode === "expanded" ? "thinking expanded" : "thinking collapsed"} (${props.content.length} chars, ${rawLineCount()} line${rawLineCount() === 1 ? "" : "s"}) ${props.mode === "expanded" ? "/reasoning collapse" : "/reasoning expand"}`}
           fg={palette.textMuted}
           attributes={1}
+          wrapMode="none"
         />
         <For each={lines()}>
-          {(line) => <text content={line} fg={palette.textDim} />}
+          {(line) => <text content={line} fg={palette.textDim} wrapMode="none" />}
         </For>
         <text content=" " fg={palette.textDim} />
       </box>

@@ -39,6 +39,21 @@ describe("TUI prompt composer", () => {
     expect(result.state.cursor).toBe(6);
   });
 
+  test("moves across and deletes whole grapheme clusters", () => {
+    const family = "👨‍👩‍👧‍👦";
+    const value = `A${family}B`;
+    const afterB = applyComposerKey(setComposerValue(value), { name: "left" });
+    const beforeFamily = applyComposerKey(afterB.state, { name: "left" });
+    const afterFamily = applyComposerKey(beforeFamily.state, { name: "right" });
+
+    expect(afterB.state.cursor).toBe(value.length - 1);
+    expect(beforeFamily.state.cursor).toBe(1);
+    expect(afterFamily.state.cursor).toBe(1 + family.length);
+    expect(applyComposerKey(afterFamily.state, { name: "backspace" }).state.value).toBe("AB");
+    expect(applyComposerKey(beforeFamily.state, { name: "delete" }).state.value).toBe("AB");
+    expect(setComposerValue(value, 3).cursor).toBe(1 + family.length);
+  });
+
   test("plain enter submits, shift enter is inert, and ctrl enter inserts newlines", () => {
     const shift = applyComposerKey(setComposerValue("line one"), { name: "enter", shift: true });
     expect(shift.handled).toBe(true);

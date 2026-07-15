@@ -185,7 +185,7 @@ export function BottomSurface(props: BottomSurfaceProps) {
                   width={props.layout.width - 4}
                   maxVisible={props.composerPopupMaxRows}
                 />
-                <text content="↑/↓ choose · Tab/Enter complete · Esc cancel" fg={palette.textDim} />
+                <text content="↑/↓ choose · Tab/Enter complete · Esc cancel" fg={palette.textDim} wrapMode="none" />
               </box>
             </Match>
             <Match when={props.commandArgumentMenuOpen}>
@@ -196,7 +196,7 @@ export function BottomSurface(props: BottomSurfaceProps) {
                   width={props.layout.width - 4}
                   maxVisible={props.composerPopupMaxRows}
                 />
-                <text content={commandArgumentHint(props.modelArgumentDraft, props.fixedArgumentDraft, props.agentArgumentDraft)} fg={palette.textDim} />
+                <text content={commandArgumentHint(props.modelArgumentDraft, props.fixedArgumentDraft, props.agentArgumentDraft)} fg={palette.textDim} wrapMode="none" />
               </box>
             </Match>
           </Switch>
