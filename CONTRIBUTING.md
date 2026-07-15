@@ -4,6 +4,8 @@
 
 Prism Vesicle's internal development remains rapid, but public alpha release work follows the release branch and PR path in [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
 
+Release contributors must follow the public [Code Signing Policy](./CODE_SIGNING_POLICY.md). External contributors retain authorship; the human maintainer `3aKHP` reviews repository changes and is the current signing approver. Every production signing request requires separate manual approval after its source and build provenance are checked.
+
 ## Branch And Commit Style
 
 During ordinary rapid internal development, `develop` is the active trunk. Small and medium low-risk changes may go directly to `develop` when commit/push work is explicitly requested. Use a short-lived branch and PR for high-risk provider, tool, session, prompt, validator, engine-profile, large-refactor, release, or review-heavy work. Do not push directly to `main`.

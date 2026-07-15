@@ -20,6 +20,8 @@ PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 
 不要使用聊天、邮件或无关镜像转发的安装器。Release 还会提供 `SHA256SUMS.txt`，需要时可用于核对下载文件的校验值。
 
+除非对应 Release 的说明明确写明已签名，否则历史 Windows 制品均应视为未签名。对于声明已签名的 Release，请按照[代码签名政策](../../../CODE_SIGNING_POLICY.zh-CN.md)检查 Windows 签名和签名者。仅有校验和并不等于存在 Authenticode 签名。
+
 ## 运行安装器
 
 双击下载的安装器。Prism Vesicle 只会安装到当前 Windows 账户的 `%LOCALAPPDATA%\Programs\Prism Vesicle`，正常情况下不会申请管理员权限。
@@ -35,6 +37,8 @@ PrismVesicleSetup-1.0.0-alpha.2-windows-x64.exe
 安装器还会注册原生 `vesicle.exe` 命令和资源管理器目录操作 **Open in Prism Vesicle**。安装后请打开一个新终端，再测试该命令。
 
 如果已经安装 Prism Vesicle，再次打开安装器时会先显示 **重新安装 / 升级**、**修复** 和 **卸载**。重新安装会替换运行时并可再次打开引导式 Setup；修复会恢复程序文件、PATH、快捷方式和资源管理器集成，但不会重新打开引导式 Setup；卸载会启动现有卸载程序。正常生命周期下，这三种操作都会保留用户配置与项目目录。
+
+[隐私政策](../../../PRIVACY.zh-CN.md)说明了卸载后哪些数据仍保留在计算机上、如何删除这些本地数据，以及配置的供应商或可选服务会在什么情况下接收数据。
 
 ## 打开引导式 Setup
 
