@@ -111,6 +111,11 @@ describe("release workflow contract", () => {
     ]);
 
     const publish = workflows[1];
+    const downloadArtifact = publish?.jobs["github-release"]?.steps?.find(
+      (step) => step.uses === "actions/download-artifact@v8",
+    );
+    expect(downloadArtifact?.with?.["digest-mismatch"]).toBe("error");
+
     const setupNode = publish?.jobs.npm?.steps?.find(
       (step) => step.uses === "actions/setup-node@v7",
     );

@@ -61,6 +61,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
+          digest-mismatch: error
           pattern: publish-*
           merge-multiple: true
           path: release
