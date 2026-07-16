@@ -10,7 +10,7 @@ assets/                 # exact 54-file V10 Harness inventory
 host-assets/            # 12 Vesicle-owned host extension files
 ```
 
-The current bundled Harness is `prism-engine-v10@10.0.1-alpha.2`, sourced from Neural Narratology Release `harness-20260716-1` at commit `ce3d1f1e8b1738b3d5f19e1913298ac9756b8a36`. The manifest SHA-256 is `f1198be3eaa08bda540500a2fa7e272d61236373a4d4abf3bddde27c68ed737f`.
+The current bundled Harness is `prism-engine-v10@10.0.1-alpha.3`, sourced from Neural Narratology Release `harness-20260716-2` at commit `b975e1893d2b463f039605b4abb72f18c8f385bd`. The manifest SHA-256 is `5f9617d5c02c62b7bdd8f48c87285ddcd15cfab959e57bfa4249536101d25174`.
 
 `assets/` must match the manifest inventory and hashes exactly. Do not add Vesicle notes, host-only profiles, or local experiments to that directory. Update the bundled baseline from a published Harness Release and verify the complete inventory rather than copying selected files from another checkout.
 

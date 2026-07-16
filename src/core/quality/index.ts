@@ -24,7 +24,15 @@ export {
   upsertDurableQualityTarget,
   upsertQualityArtifactTarget,
 } from "./targets";
-export { loadQualityRuntime, parseDetectorRules, parseRulePackManifest } from "./loader";
+export { loadQualityRuntime, parseDetectorRules, parseJudgeRules, parseRulePackManifest } from "./loader";
+export {
+  defaultQualityJudgeTimeoutMs,
+  maxQualityJudgeCodeUnits,
+  maxQualityJudgeOutputTokens,
+  observeBoundQualityWithJudge,
+  parseQualityJudgeResponse,
+  runQualityJudge,
+} from "./judge";
 export type {
   QualityCandidate,
   QualityArtifactOperation,
@@ -45,6 +53,9 @@ export type {
   QualityEventTarget,
   QualityFinding,
   QualityFindingSummary,
+  QualityJudgeContract,
+  QualityJudgeRule,
+  QualityJudgeStatus,
   QualityOutcome,
   QualityProtectedRange,
   QualityResolution,
@@ -53,6 +64,8 @@ export type {
   QualityRuntimeContext,
   QualityWarning,
   QualityWarningReason,
+  QualityTargetWarningReason,
   QualityWarningTarget,
 } from "./types";
 export type { BoundQualityEvaluation } from "./guard";
+export type { QualityJudgeParsedResult, QualityJudgeRunResult } from "./judge";

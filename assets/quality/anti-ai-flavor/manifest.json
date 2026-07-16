@@ -1,13 +1,13 @@
 {
   "schema": "rule-pack/v1",
   "module": "anti-ai-flavor",
-  "version": "0.3.0-alpha.1",
+  "version": "0.3.0-alpha.2",
   "primaryLanguage": "zh-CN",
   "sourceRepository": "3aKHP/Neural-Narratology",
-  "sourceCommit": "ce3d1f1e8b1738b3d5f19e1913298ac9756b8a36",
+  "sourceCommit": "b975e1893d2b463f039605b4abb72f18c8f385bd",
   "sourceState": "clean",
-  "sourceHash": "1c943cbc332b3056f3bd4cba19384505b9e82ce2ad380e4d17ad013ea282189c",
-  "moduleInputHash": "c8083112c2ced9865abc0697563fb44790f60c3282d88e35074f3cc4ee34112f",
+  "sourceHash": "c5be2bbfb490543c0e2b057fffafa5b93ce256758614568decae227ad3737e01",
+  "moduleInputHash": "efdb0fd2b43d576ea1c7a52da2972d7b6ecf1e0becebf120266a10bf1ac6dd38",
   "compilerHash": "7ef9dd2990dea445209ee6f99ee015b4d327f4957bd2c6ad72436d0793562db1",
   "ruleCount": 29,
   "projectionCounts": {
@@ -18,7 +18,8 @@
   },
   "requiredCapabilities": [
     "quality-guard/anti-ai-flavor@1",
-    "quality-detector/document-metrics@1"
+    "quality-detector/document-metrics@1",
+    "quality-judge/anti-ai-flavor@1"
   ],
   "preprocessing": {
     "line_endings": "LF",
@@ -115,7 +116,7 @@
     "detector-rules.en-US.json": "335c8ead7ca0a5db97f63dd57c0ce0d9d259bf3232c8ed5d2a992f16d5ada8e9",
     "detector-rules.zh-CN.json": "44c31a0a8fd2f2c2a37b3c82a6a575a639db7214a7f33d30ccfedaa92d623dd1",
     "guidance.zh-CN.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
-    "judge-rubric.zh-CN.md": "8fa9445532688bed823dd3126e59c8c9e3992d6f59ba32599f35554e6b65acdd",
+    "judge-rubric.zh-CN.md": "698d690d23f9b7b26f3d6ea39e1cb1a3a6224c9343b1fb91d3ead2ee311dd617",
     "judge-rules.zh-CN.json": "7c71d432b7a1afe6a37f6bcf5706b79ae067d3f7d826c54e98c1fa493cfa9493",
     "schemas/calibration-case.schema.json": "0f0d24103da27703b81739e2502e1122005aa894e190dcea1b28e6787fe1afad",
     "schemas/candidate-evaluation.schema.json": "bcce45ea7c7c6c83608b89edfb2fa77e20299e77bdc916ea3017bc7891cd9a83",
@@ -124,6 +125,6 @@
     "schemas/judge-result.schema.json": "e677f81ce9d7160e6066207a63acd594f78ab0a2929fcd359ab61cba89938f0b",
     "schemas/judge-rules.schema.json": "a8953a7c4ee1d0c29c3484a1247c80bee60f459950b408f7e367ae77af855bf5",
     "schemas/rule-pack.schema.json": "fe4623817c186290c22e982c4dfe04c8c36224dbb81c82fb239f1b6365761ec9",
-    "THIRD_PARTY_NOTICES.md": "9f9a369ed9c53ddb2300e75bd87836635c03ee34e4e0289ed4d1994fb743549d"
+    "THIRD_PARTY_NOTICES.md": "05ef912b83f9564435875005d276e239aa20e26d6015c96ac68620f4b0b9655c"
   }
 }

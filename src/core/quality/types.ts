@@ -68,6 +68,25 @@ export type QualityDetectorRule = {
   source: string;
 };
 
+export type QualityJudgeRule = {
+  id: string;
+  title: string;
+  severity: string;
+  maturity: "experimental" | "stable";
+  targets: string[];
+  source: string;
+  evidence: {
+    mode: "exact-substring";
+    minCodePoints: number;
+    maxCodePoints: number;
+  };
+};
+
+export type QualityJudgeContract = {
+  rubric: string;
+  rules: QualityJudgeRule[];
+};
+
 export type QualityRulePackManifest = {
   schema: "rule-pack/v1";
   module: "anti-ai-flavor";
@@ -104,6 +123,7 @@ export type QualityRuntimeContext = {
   manifestSha256: string;
   ruleManifest: QualityRulePackManifest;
   rules: QualityDetectorRule[];
+  judge?: QualityJudgeContract;
   engineModes: Record<string, HarnessQualityMode>;
   agentModes: Record<string, HarnessQualityMode>;
 };
@@ -141,6 +161,10 @@ export type QualityFinding = {
   start: number;
   end: number;
   evidence: string;
+  source?: "detector" | "judge";
+  confidence?: number;
+  explanation?: string;
+  rewriteInstruction?: string;
   metric?: {
     signal: QualityMetricSignal;
     value: number;
@@ -149,17 +173,19 @@ export type QualityFinding = {
 };
 
 export type QualityFindingSummary = Pick<QualityFinding,
-  "ruleId" | "title" | "severity" | "maturity" | "evidence"
+  "ruleId" | "title" | "severity" | "maturity" | "evidence" | "confidence"
 > & {
   source: "detector" | "judge";
 };
+
+export type QualityJudgeStatus = "not-run" | "valid" | "invalid" | "timed-out" | "unavailable";
 
 export type QualityAssessment = {
   targetId: string;
   candidateHash: string;
   detectorFindings: QualityFinding[];
   judgeFindings: QualityFinding[];
-  judgeStatus: "not-run" | "valid" | "invalid" | "timed-out" | "unavailable";
+  judgeStatus: QualityJudgeStatus;
 };
 
 export type QualityOutcome = "clean" | "findings" | "rewrite-required" | "exhausted" | "inconclusive";
@@ -177,7 +203,7 @@ export type QualityEventTarget = {
   status: "clean" | "findings" | "rewrite-required" | "warning";
   findingIds: string[];
   findings: QualityFindingSummary[];
-  warningReason?: "target-unreadable" | "target-oversize" | "detector-budget-exhausted";
+  warningReason?: QualityTargetWarningReason;
 };
 
 export type QualityArtifactReadResult = {
@@ -206,6 +232,12 @@ export type QualityEvent = {
   decision: QualityDecision;
   findingIds: string[];
   detectorMs: number;
+  judgeMs?: number;
+  judgeStatus?: QualityJudgeStatus;
+  judgeProvider?: string;
+  judgeModel?: string;
+  judgeRequestCount?: number;
+  judgeUsage?: ResponseUsage;
   usage?: ResponseUsage;
 };
 
@@ -254,13 +286,17 @@ export type DurableQualityState = {
   candidate?: QualityDecisionCandidate;
 };
 
-export type QualityWarningReason =
-  | "exhausted"
+export type QualityTargetWarningReason =
   | "judge-invalid"
   | "judge-timeout"
+  | "judge-unavailable"
   | "detector-budget-exhausted"
   | "target-unreadable"
-  | "target-oversize"
+  | "target-oversize";
+
+export type QualityWarningReason =
+  | "exhausted"
+  | QualityTargetWarningReason
   | "user-abandoned";
 
 export type QualityWarningTarget = QualityEventTarget & {

@@ -36,11 +36,13 @@ describe("Harness Pack foundation", () => {
       expect(runtime?.selection).toBe("bundled");
       expect(runtime?.lock).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.2",
-        manifestSha256: "f1198be3eaa08bda540500a2fa7e272d61236373a4d4abf3bddde27c68ed737f",
+        packVersion: "10.0.1-alpha.3",
+        manifestSha256: "5f9617d5c02c62b7bdd8f48c87285ddcd15cfab959e57bfa4249536101d25174",
       });
       expect(runtime?.pack.assetCount).toBe(54);
       expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-detector/document-metrics@1");
+      expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-judge/anti-ai-flavor@1");
+      expect(runtime?.harness.quality?.judge?.rules).toHaveLength(21);
       expect((await runtime!.assets.resolveFile("assets/engines/etl.profile.yaml")).source).toBe("bundled");
       expect((await runtime!.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("host");
       expect((await listAgentProfiles(project, runtime!.assets)).map((profile) => profile.id)).toEqual([
@@ -305,7 +307,7 @@ describe("Harness Pack foundation", () => {
       expect(bundled?.selection).toBe("bundled");
       expect(bundled?.lock).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.2",
+        packVersion: "10.0.1-alpha.3",
       });
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
@@ -445,7 +447,7 @@ describe("Harness Pack foundation", () => {
       const snapshot = await loadSessionSnapshot(project, first.sessionId);
       expect(snapshot.harness).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.2",
+        packVersion: "10.0.1-alpha.3",
       });
       expect(snapshot.assets?.files.some((file) => file.source === "bundled")).toBe(true);
       expect(snapshot.assets?.files.some((file) => file.source === "host")).toBe(true);
@@ -460,7 +462,21 @@ describe("Harness Pack foundation", () => {
       expect(resumed.kind).toBe("complete");
 
       let runtimeRequests = 0;
-      globalThis.fetch = (async () => {
+      let judgeRequests = 0;
+      globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { messages?: Array<{ content?: string }> };
+        if (body.messages?.[0]?.content?.includes("quality-judge-result/v1")) {
+          judgeRequests += 1;
+          return Response.json({
+            id: `bundled-judge-${judgeRequests}`,
+            choices: [{ message: { content: JSON.stringify({
+              schema: "quality-judge-result/v1",
+              verdict: "pass",
+              confidence: 0.9,
+              findings: [],
+            }) } }],
+          });
+        }
         runtimeRequests += 1;
         return Response.json({
           id: `bundled-runtime-${runtimeRequests}`,
@@ -474,8 +490,10 @@ describe("Harness Pack foundation", () => {
       const guarded = await runPrompt({ input: "write", engine: "runtime", rootDir: project });
       expect(guarded.kind).toBe("complete");
       expect(runtimeRequests).toBe(2);
+      expect(judgeRequests).toBe(1);
       const guardedSnapshot = await loadSessionSnapshot(project, guarded.sessionId);
       expect(guardedSnapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
+      expect(guardedSnapshot.qualityEvents.at(-1)?.judgeStatus).toBe("valid");
 
       const legacy = await createSessionStore(project, "legacy-v9-session");
       await legacy.append({ role: "system", content: "legacy V9 prompt" });
