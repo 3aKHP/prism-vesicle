@@ -126,6 +126,7 @@ function isArtifactMutationEvent(event: FileToolEvent | undefined): event is Fil
 }
 
 function targetAppliesToProducer(producer: string, path: string): boolean {
+  if (producer === "weaver-orch") return false;
   if (producer !== "weaver" && producer !== "scene-writer") return true;
   return /(?:^|\/)Scene_[0-9]+\.md$/i.test(path);
 }

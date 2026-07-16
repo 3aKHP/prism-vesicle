@@ -11,7 +11,7 @@ import type { HarnessRuntimeContext } from "../src/core/harness";
 import { AssetResolver } from "../src/core/runtime/assets";
 import { getProcessManager } from "../src/core/process/manager";
 import { createSessionStore, listSessions, loadSessionRecords, loadSessionSnapshot } from "../src/core/session/store";
-import type { QualityDetectorRule, QualityRuntimeContext } from "../src/core/quality";
+import { qualityArtifactTargetFromResult, type QualityDetectorRule, type QualityRuntimeContext } from "../src/core/quality";
 import { createSessionResumeController } from "../src/tui/session-resume-controller";
 
 const originalFetch = globalThis.fetch;
@@ -248,6 +248,43 @@ describe("Output Quality Guard runtime", () => {
     expect(requests).toBe(3);
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
     expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
+  });
+
+  test("keeps Weaver-Orch prose-only across a same-response mutation boundary", async () => {
+    expect(qualityArtifactTargetFromResult("weaver-orch", {
+      callId: "call-orchestrator-write",
+      ok: true,
+      fileEvent: {
+        kind: "file_operation",
+        operation: "write",
+        path: "workspace/orchestrator.md",
+        changed: true,
+        bytes: 1,
+        sha256: "a".repeat(64),
+      },
+    })).toBeUndefined();
+
+    const root = await runtimeRoot("weaver-orch", ["orchestrator-check"]);
+    globalThis.fetch = (async () => providerTools("orchestrator-write-and-gate", [
+      { id: "call-orchestrator-file", name: "write_file", arguments: JSON.stringify({
+        path: "workspace/orchestrator.md",
+        content: "空气中弥漫着编排说明里的旧例。",
+      }) },
+      { id: "call-orchestrator-gate", name: "request_confirmation", arguments: JSON.stringify({
+        gate: "orchestrator-check",
+        summary: "Review orchestration.",
+      }) },
+    ])) as unknown as typeof fetch;
+    const result = await runPrompt({
+      input: "orchestrate",
+      engine: "weaver-orch",
+      rootDir: root,
+      messages: [{ role: "user", content: "orchestrate" }],
+      harness: harnessRuntime(),
+    });
+    expect(result.kind).toBe("needs_user");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.qualityEvents).toEqual([expect.objectContaining({ decision: "pass", findingIds: [] })]);
   });
 
   test("withholds a failing Runtime checkpoint, rewrites through the original Engine, and persists bounded events", async () => {
@@ -797,6 +834,118 @@ describe("Output Quality Guard runtime", () => {
     expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
   });
 
+  test("resumes an artifact target after cancellation only when the same path is repaired", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    const controller = new AbortController();
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTool("cancelled-target-write", "write_file", {
+          path: "workspace/runtime.md",
+          content: "### Part 3 - Prose Content\n空气中弥漫着雨味。",
+        });
+      }
+      if (requests === 2) {
+        return providerTool("cancelled-target-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      throw controller.signal.reason;
+    }) as unknown as typeof fetch;
+    await expect(runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+      signal: controller.signal,
+      onEvent: (event) => {
+        if (event.type === "quality_status" && event.phase === "rewriting") {
+          controller.abort(new DOMException("cancel artifact rewrite", "AbortError"));
+        }
+      },
+    })).rejects.toThrow();
+    const [summary] = await listSessions(root);
+    const interrupted = await loadSessionSnapshot(root, summary!.sessionId, { synthesizeDanglingToolResults: false });
+    expect(interrupted.pendingQualityRewrite?.targets).toEqual([
+      expect.objectContaining({ path: "workspace/runtime.md", rejectedHashes: [expect.any(String)] }),
+    ]);
+
+    let resumedRequests = 0;
+    globalThis.fetch = (async () => {
+      resumedRequests += 1;
+      if (resumedRequests === 1) {
+        return providerTool("cancelled-target-replace", "replace_in_file", {
+          path: "workspace/runtime.md",
+          oldText: "空气中弥漫着雨味。",
+          newText: "雨水沿着门框滑落。",
+        });
+      }
+      return providerTool("cancelled-target-clean-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review rewrite." });
+    }) as unknown as typeof fetch;
+    const resumed = await resumeQualityRewrite({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: summary!.sessionId,
+      harness: harnessRuntime(),
+    });
+    expect(resumed.kind).toBe("needs_user");
+    const restored = await loadSessionSnapshot(root, summary!.sessionId);
+    expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
+  });
+
+  test("resumes legacy candidateParts through the actual Guard", async () => {
+    const root = await runtimeRoot("runtime");
+    globalThis.fetch = (async () => Response.json({
+      id: "legacy-baseline",
+      choices: [{ message: { content: "雨水沿着门框滑落。" } }],
+    })) as unknown as typeof fetch;
+    const initial = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    const session = await createSessionStore(root, initial.sessionId);
+    await session.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "quality-check-pending",
+        qualityRewrite: {
+          producer: "runtime",
+          packId: "prism-engine-v10",
+          packVersion: "10.0.1-alpha.1",
+          manifestSha256: "a".repeat(64),
+          ruleVersion: "0.2.1",
+          ruleSourceHash: "b".repeat(64),
+          attempts: 0,
+          rejectedHashes: [],
+          candidateParts: ["空气中弥漫着旧 session 的雨味。"],
+        },
+      },
+    });
+
+    let resumedRequests = 0;
+    globalThis.fetch = (async () => {
+      resumedRequests += 1;
+      return Response.json({
+        id: `legacy-resume-${resumedRequests}`,
+        choices: [{ message: { content: "雨水敲了三下窗框。" } }],
+      });
+    }) as unknown as typeof fetch;
+    const resumed = await resumeQualityRewrite({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: initial.sessionId,
+      harness: harnessRuntime(),
+    });
+    expect(resumed.kind).toBe("complete");
+    expect(resumedRequests).toBe(2);
+    const restored = await loadSessionSnapshot(root, initial.sessionId);
+    expect(restored.qualityEvents.map((event) => event.decision).slice(-2)).toEqual(["rewrite", "pass"]);
+  });
+
   test("restores tool-boundary rewrite attempts before generic failed-tool filtering", async () => {
     const root = await runtimeRoot("runtime", ["runtime-turn"]);
     let requests = 0;
@@ -996,6 +1145,28 @@ describe("Output Quality Guard runtime", () => {
     const artifactRecords = await loadSessionRecords(root, artifactScene.childSessionId!);
     expect(artifactRecords.find((record) => record.metadata?.kind === "quality-event")?.metadata?.qualityEvent)
       .toMatchObject({ producer: "scene-writer", decision: "pass", findingIds: [] });
+
+    await writeFile(
+      join(root, "workspace", "Scene_003.md"),
+      "空气中弥漫着雨味。\n空气中弥漫着尘味。",
+      "utf8",
+    );
+    childRequests = 0;
+    globalThis.fetch = (async () => {
+      childRequests += 1;
+      if (childRequests === 1) {
+        return providerTool("child-partial-scene", "replace_in_file", {
+          path: "workspace/Scene_003.md",
+          oldText: "空气中弥漫着雨味。",
+          newText: "雨水沿着门框滑落。",
+        });
+      }
+      return Response.json({ id: "child-partial-done", choices: [{ message: { content: "Scene revised." } }] });
+    }) as unknown as typeof fetch;
+    const partialScene = await runChildAgent(childContext(root, "scene-writer"));
+    const partialRecords = await loadSessionRecords(root, partialScene.childSessionId!);
+    expect(partialRecords.find((record) => record.metadata?.kind === "quality-event")?.metadata?.qualityEvent)
+      .toMatchObject({ producer: "scene-writer", decision: "observe", findingIds: ["zh-f0-air-thick-with"] });
   });
 
   test("buffers streamed prose while rewrite enforcement is active", async () => {
@@ -1101,6 +1272,9 @@ async function childRoot(): Promise<string> {
       `  - assets/prompts/agents/${profile}.md`,
       "tools:",
       "  - read_file",
+      "  - write_file",
+      "  - replace_in_file",
+      "  - append_file",
       "contextMode: fresh",
       "modelPolicy: inherit",
       "defaultMode: foreground",
