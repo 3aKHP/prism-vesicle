@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   evaluatePermissionPolicy,
+  parsePermissionRequest,
   permissionClassForTool,
   ToolPermissionBroker,
   type PermissionClass,
@@ -32,6 +33,48 @@ describe("permission modes", () => {
     expect(permissionClassForTool("shell_output")).toBe("observe");
     expect(permissionClassForTool("shell_stop")).toBe("mutate");
     expect(permissionClassForTool("mcp_remote_claimed_readonly")).toBe("mutate");
+  });
+
+  test("accepts legacy quality state and rejects malformed durable artifact targets", () => {
+    const request = {
+      id: "permission-quality",
+      sessionId: "session",
+      toolCallId: "call-write",
+      toolName: "write_file",
+      arguments: "{}",
+      permissionClass: "mutate",
+      mode: "MANUAL",
+      createdAt: new Date().toISOString(),
+      qualityState: {
+        producer: "runtime",
+        packId: "pack",
+        packVersion: "1",
+        manifestSha256: "a".repeat(64),
+        ruleVersion: "1",
+        ruleSourceHash: "b".repeat(64),
+        attempts: 0,
+        rejectedHashes: [],
+        candidateParts: ["legacy"],
+      },
+    };
+    expect(parsePermissionRequest(request)?.qualityState?.candidateParts).toEqual(["legacy"]);
+    expect(parsePermissionRequest({
+      ...request,
+      qualityState: {
+        ...request.qualityState,
+        targets: [{
+          id: "artifact:workspace/a.md",
+          kind: "artifact-post-image",
+          candidateType: "runtime.prose",
+          path: "workspace/a.md",
+          operation: "write",
+          mutationCallIds: ["call-write"],
+          postImageHash: "not-a-hash",
+          bytes: 1,
+          rejectedHashes: [],
+        }],
+      },
+    })).toBeUndefined();
   });
 });
 

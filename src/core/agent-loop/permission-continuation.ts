@@ -16,7 +16,13 @@ import { validateDurablePermissionRequest } from "./permission-validation";
 import { runLoop } from "./turn-loop";
 import type { AgentLoopEvent, DeferredAgentPermission, RunPromptResult } from "./types";
 import { createTurnAgentManager } from "./agent-manager";
-import { qualityMutationPartsForProducer, type DurableQualityState } from "../quality";
+import {
+  hydrateQualityTargets,
+  isQualityArtifactMutationCall,
+  qualityMutationPartsForProducer,
+  upsertDurableQualityTarget,
+  type DurableQualityState,
+} from "../quality";
 
 type ResolvePermissionOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];
@@ -78,12 +84,17 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
   }
 
   if (options.resolution.decision === "allow_once" && qualityState
-    && mutationPartsForCall(call, qualityState.producer).length > 0) {
+    && isQualityArtifactMutationCall(call, qualityState.producer)) {
     const pendingState = {
       ...qualityState,
       candidateParts: [...qualityState.candidateParts],
+      targets: (qualityState.targets ?? []).map((target) => ({
+        ...target,
+        mutationCallIds: [...target.mutationCallIds],
+        rejectedHashes: [...target.rejectedHashes],
+      })),
     };
-    for (const deferredCall of options.remainingToolCalls) removeMutationParts(pendingState, deferredCall);
+    for (const deferredCall of options.remainingToolCalls) removeLegacyMutationParts(pendingState, deferredCall);
     await context.session.append({
       role: "system",
       content: "",
@@ -138,7 +149,11 @@ async function executeAndRecordEntries(
     result: await executeApprovedEntry(context, messages, entry, approvedShellPlanHash, options),
   })));
   for (const { entry, result } of results) {
-    if (!result.ok && state.qualityState) removeMutationParts(state.qualityState, permissionCall(entry.request));
+    if (!result.ok && state.qualityState) removeLegacyMutationParts(state.qualityState, permissionCall(entry.request));
+    if (state.qualityState) {
+      state.qualityState.targets ??= [];
+      upsertDurableQualityTarget(state.qualityState.targets, state.qualityState.producer, result);
+    }
     await recordToolResult({
       result,
       messages,
@@ -187,6 +202,7 @@ async function continuePermissionSequence(
       attempts: state.qualityState.attempts,
       rejectedHashes: new Set(state.qualityState.rejectedHashes),
       candidateParts: state.qualityState.candidateParts,
+      targets: hydrateQualityTargets(state.qualityState.targets ?? []),
     } : undefined,
   });
 }
@@ -331,15 +347,16 @@ function validatePermissionQualityState(
     ...state,
     rejectedHashes: [...state.rejectedHashes],
     candidateParts: [...state.candidateParts],
+    targets: (state.targets ?? []).map((target) => ({
+      ...target,
+      mutationCallIds: [...target.mutationCallIds],
+      rejectedHashes: [...target.rejectedHashes],
+    })),
   };
 }
 
-function mutationPartsForCall(call: ToolCall, producer: string = "runtime"): string[] {
-  return qualityMutationPartsForProducer({ id: call.id, content: "", toolCalls: [call] }, producer);
-}
-
-function removeMutationParts(state: DurableQualityState, call: ToolCall): void {
-  for (const part of mutationPartsForCall(call, state.producer)) {
+function removeLegacyMutationParts(state: DurableQualityState, call: ToolCall): void {
+  for (const part of qualityMutationPartsForProducer({ id: call.id, content: "", toolCalls: [call] }, state.producer)) {
     const index = state.candidateParts.lastIndexOf(part);
     if (index >= 0) state.candidateParts.splice(index, 1);
   }

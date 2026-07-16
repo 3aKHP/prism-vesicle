@@ -1,10 +1,10 @@
 export { evaluateQualityCandidate, normalizeCandidate } from "./detector";
 export {
   evaluateBoundQuality,
+  evaluateBoundQualityTargets,
   isQualityBoundary,
   maxQualityRewriteAttempts,
   qualityCandidateParts,
-  qualityCandidateTypeForProducer,
   qualityModeForAgent,
   qualityModeForEngine,
   qualityMutationParts,
@@ -13,12 +13,25 @@ export {
   recordQualityEvent,
   shouldBufferQualityOutput,
 } from "./guard";
+export {
+  durableQualityTargets,
+  hydrateQualityTargets,
+  isQualityArtifactMutationCall,
+  qualityArtifactTargetFromResult,
+  qualityCandidateTypeForProducer,
+  readQualityArtifactTargets,
+  upsertDurableQualityTarget,
+  upsertQualityArtifactTarget,
+} from "./targets";
 export { loadQualityRuntime, parseDetectorRules, parseRulePackManifest } from "./loader";
 export type {
   QualityCandidate,
+  QualityArtifactOperation,
+  QualityArtifactTarget,
   QualityCandidateType,
   QualityDecision,
   DurableQualityState,
+  DurableQualityArtifactTarget,
   QualityDetectorRule,
   QualityEvaluation,
   QualityEvent,

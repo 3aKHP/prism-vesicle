@@ -18,7 +18,14 @@ import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets"
 import { parsePermissionRequest } from "../permissions";
 import type { PermissionMode, PermissionRequest } from "../permissions";
 import { parseHarnessDelegationDecision, type HarnessDelegationDecision } from "../harness/driver";
-import { qualityCandidateParts, qualityMutationParts, type QualityEvent } from "../quality";
+import {
+  qualityCandidateParts,
+  qualityMutationParts,
+  upsertDurableQualityTarget,
+  type DurableQualityArtifactTarget,
+  type QualityCandidateType,
+  type QualityEvent,
+} from "../quality";
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
 
@@ -175,6 +182,7 @@ export type PendingQualityRewrite = {
   attempts: number;
   rejectedHashes: string[];
   candidateParts: string[];
+  targets: DurableQualityArtifactTarget[];
 };
 
 /**
@@ -578,6 +586,13 @@ function findPendingQualityRewrite(records: SessionRecord[]): PendingQualityRewr
         mutationParts.push(...parts);
       }
     }
+    if (record.role === "tool" && record.metadata?.ok === true && pending) {
+      const callId = typeof record.metadata.toolCallId === "string" ? record.metadata.toolCallId : undefined;
+      const fileEvent = record.metadata.fileEvent as FileToolEvent | undefined;
+      if (callId && fileEvent) {
+        upsertDurableQualityTarget(pending.targets, pending.producer, { callId, ok: true, fileEvent });
+      }
+    }
     if (record.role === "tool" && record.metadata?.ok === false && record.metadata?.kind !== "quality-rewrite-feedback") {
       const callId = typeof record.metadata.toolCallId === "string" ? record.metadata.toolCallId : undefined;
       const parts = callId ? mutationPartsByCallId.get(callId) : undefined;
@@ -585,7 +600,7 @@ function findPendingQualityRewrite(records: SessionRecord[]): PendingQualityRewr
         removeCandidateParts(mutationParts, parts);
         if (pending) removeCandidateParts(pending.candidateParts, parts);
       }
-      if (pending?.attempts === 0 && pending.candidateParts.length === 0) pending = undefined;
+      if (pending?.attempts === 0 && pending.candidateParts.length === 0 && pending.targets.length === 0) pending = undefined;
       continue;
     }
     if (record.metadata?.kind === "quality-event") {
@@ -605,6 +620,7 @@ function findPendingQualityRewrite(records: SessionRecord[]): PendingQualityRewr
         ...parsed,
         candidateParts: readPersistedCandidateParts(record.metadata.qualityRewrite)
           ?? [...qualityDeliveryParts(proseParts, mutationParts)],
+        targets: readPersistedQualityTargets(record.metadata.qualityRewrite),
       };
       continue;
     }
@@ -620,9 +636,15 @@ function findPendingQualityRewrite(records: SessionRecord[]): PendingQualityRewr
     proseParts = [];
     mutationParts = [];
     mutationPartsByCallId.clear();
-    if (parsed) pending = { ...parsed, candidateParts: [] };
+    if (parsed) pending = {
+      ...parsed,
+      candidateParts: readPersistedCandidateParts(record.metadata.qualityRewrite) ?? [],
+      targets: readPersistedQualityTargets(record.metadata.qualityRewrite),
+    };
   }
-  return pending;
+  return pending && (pending.attempts > 0 || pending.candidateParts.length > 0 || pending.targets.length > 0)
+    ? pending
+    : undefined;
 }
 
 function readPersistedCandidateParts(value: unknown): string[] | undefined {
@@ -630,6 +652,52 @@ function readPersistedCandidateParts(value: unknown): string[] | undefined {
   const parts = (value as { candidateParts?: unknown }).candidateParts;
   if (!Array.isArray(parts) || parts.some((part) => typeof part !== "string")) return undefined;
   return [...parts];
+}
+
+function readPersistedQualityTargets(value: unknown): DurableQualityArtifactTarget[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const targets = (value as { targets?: unknown }).targets;
+  if (!Array.isArray(targets)) return [];
+  return targets.flatMap((target) => {
+    if (!target || typeof target !== "object" || Array.isArray(target)) return [];
+    const item = target as Record<string, unknown>;
+    const path = typeof item.path === "string" ? item.path : undefined;
+    const operation = item.operation;
+    const candidateType = item.candidateType;
+    if (!path
+      || item.id !== `artifact:${path}`
+      || item.kind !== "artifact-post-image"
+      || !isQualityCandidateType(candidateType)
+      || !["create", "write", "replace", "append"].includes(String(operation))
+      || !Array.isArray(item.mutationCallIds)
+      || item.mutationCallIds.some((id) => typeof id !== "string")
+      || typeof item.postImageHash !== "string"
+      || !/^[a-f0-9]{64}$/.test(item.postImageHash)
+      || typeof item.bytes !== "number"
+      || item.bytes < 0
+      || !Array.isArray(item.rejectedHashes)
+      || item.rejectedHashes.some((hash) => typeof hash !== "string" || !/^[a-f0-9]{64}$/.test(hash))) return [];
+    return [{
+      id: `artifact:${path}` as const,
+      kind: "artifact-post-image" as const,
+      candidateType,
+      path,
+      operation: operation as DurableQualityArtifactTarget["operation"],
+      mutationCallIds: [...item.mutationCallIds] as string[],
+      postImageHash: item.postImageHash,
+      bytes: item.bytes,
+      rejectedHashes: [...item.rejectedHashes] as string[],
+    }];
+  });
+}
+
+function isQualityCandidateType(value: unknown): value is QualityCandidateType {
+  return [
+    "runtime.prose",
+    "dyad.character-response",
+    "scene.prose",
+    "orchestrator-authored-prose",
+  ].includes(String(value));
 }
 
 function qualityDeliveryParts(proseParts: string[], mutationParts: string[]): string[] {
@@ -643,7 +711,10 @@ function removeCandidateParts(candidateParts: string[], rejectedParts: string[])
   }
 }
 
-function parsePendingQualityRewrite(value: unknown, minimumAttempts: number): Omit<PendingQualityRewrite, "candidateParts"> | undefined {
+function parsePendingQualityRewrite(
+  value: unknown,
+  minimumAttempts: number,
+): Omit<PendingQualityRewrite, "candidateParts" | "targets"> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const raw = value as Partial<PendingQualityRewrite>;
   const producer = readEngineId(raw.producer);

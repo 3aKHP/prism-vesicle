@@ -12,7 +12,17 @@ import type { AgentRunner } from "./manager";
 import { createPermissionRequest, defaultPermissionRuntime, evaluatePermissionPolicy, permissionClassForTool } from "../permissions";
 import type { ToolResult } from "../tools";
 import { assertChildToolDeclaration, unsupportedChildToolNames } from "./tool-scope";
-import { evaluateBoundQuality, qualityCandidateParts, qualityModeForAgent, qualityMutationPartsForProducer, recordQualityEvent } from "../quality";
+import {
+  evaluateBoundQuality,
+  evaluateBoundQualityTargets,
+  qualityArtifactTargetFromResult,
+  qualityCandidateParts,
+  qualityModeForAgent,
+  readQualityArtifactTargets,
+  recordQualityEvent,
+  upsertQualityArtifactTarget,
+  type QualityArtifactTarget,
+} from "../quality";
 
 export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, invocation, onProgress, takeMessages, claimMutation, registerChildSession }) => {
   if (!invocation) throw new Error("SubAgent invocation context is missing.");
@@ -65,7 +75,7 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
   let toolUses = 0;
   let response: VesicleResponse | undefined;
   const qualityProseParts: string[] = [];
-  const qualityMutationCandidateParts: string[] = [];
+  const qualityTargets: QualityArtifactTarget[] = [];
 
   for (let iteration = 0; iteration < profile.maxTurns; iteration++) {
     if (signal.aborted) throw signal.reason;
@@ -112,15 +122,25 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
       const qualityMode = qualityModeForAgent(qualityRuntime, profile.id);
       if (qualityRuntime && qualityMode === "observe") {
         onProgress("checking prose quality");
-        const quality = evaluateBoundQuality({
-          runtime: qualityRuntime,
-          producer: profile.id,
-          mode: qualityMode,
-          content: (qualityMutationCandidateParts.length > 0 ? qualityMutationCandidateParts : qualityProseParts).join("\n\n"),
-          attempt: 0,
-          state: { attempts: 0, rejectedHashes: new Set() },
-          usage: response.usage,
-        });
+        const quality = qualityTargets.length > 0
+          ? evaluateBoundQualityTargets({
+            runtime: qualityRuntime,
+            producer: profile.id,
+            mode: qualityMode,
+            targets: await readQualityArtifactTargets(invocation.rootDir, qualityTargets),
+            attempt: 0,
+            state: { attempts: 0, rejectedHashes: new Set(), targets: qualityTargets },
+            usage: response.usage,
+          })
+          : evaluateBoundQuality({
+            runtime: qualityRuntime,
+            producer: profile.id,
+            mode: qualityMode,
+            content: qualityProseParts.join("\n\n"),
+            attempt: 0,
+            state: { attempts: 0, rejectedHashes: new Set() },
+            usage: response.usage,
+          });
         if (quality) await recordQualityEvent(session, quality);
       }
       return {
@@ -196,12 +216,8 @@ export const runChildAgent: AgentRunner = async ({ runId, handle, spec, signal, 
           ...(result.mcpEvent ? { mcpEvent: result.mcpEvent } : {}),
         },
       });
-      if (result.ok) {
-        qualityMutationCandidateParts.push(...qualityMutationPartsForProducer(
-          { id: response.id, content: "", toolCalls: [call] },
-          profile.id,
-        ));
-      }
+      const qualityTarget = qualityArtifactTargetFromResult(profile.id, result);
+      if (qualityTarget) upsertQualityArtifactTarget(qualityTargets, qualityTarget);
 
       async function executeChildHostTool(call: ToolCall): Promise<ToolResult> {
         return mcp.hasTool(call.name)

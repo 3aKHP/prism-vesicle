@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -48,6 +49,7 @@ describe("file tools v2", () => {
       path: "workspace/a.md",
       changed: true,
       bytes: 16,
+      sha256: sha256("alpha\nbeta\nalpha"),
     });
 
     await expectToolFailure("create_file", {
@@ -85,6 +87,7 @@ describe("file tools v2", () => {
       path: "workspace/a.md",
       changed: true,
       bytes: 16,
+      sha256: sha256("gamma\nbeta\ngamma"),
       occurrences: 2,
       matchLines: [1, 3],
     });
@@ -99,6 +102,7 @@ describe("file tools v2", () => {
       changed: true,
       bytes: 20,
       deltaBytes: 4,
+      sha256: sha256("gamma\nbeta\ngamma\nend"),
     });
 
     const statResult = await executeFileTool(rootDir, call("stat_path", { path: "workspace/a.md" }));
@@ -469,6 +473,10 @@ describe("file tools v2", () => {
     expect(await readFile(join(rootDir, "reports", "move-target.md"), "utf8")).toContain("Beta42");
   });
 });
+
+function sha256(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
 
 async function expectTool(name: string, args: Record<string, unknown>, content: string): Promise<ToolResult> {
   const result = await executeFileTool(rootDir, call(name, args));

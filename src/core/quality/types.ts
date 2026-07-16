@@ -90,6 +90,24 @@ export type QualityCandidate = {
   protectedRanges?: QualityProtectedRange[];
 };
 
+export type QualityArtifactOperation = "create" | "write" | "replace" | "append";
+
+export type QualityArtifactTarget = {
+  id: `artifact:${string}`;
+  kind: "artifact-post-image";
+  candidateType: QualityCandidateType;
+  path: string;
+  operation: QualityArtifactOperation;
+  mutationCallIds: string[];
+  postImageHash: string;
+  bytes: number;
+  rejectedHashes: Set<string>;
+};
+
+export type DurableQualityArtifactTarget = Omit<QualityArtifactTarget, "rejectedHashes"> & {
+  rejectedHashes: string[];
+};
+
 export type QualityFinding = {
   ruleId: string;
   title: string;
@@ -132,6 +150,7 @@ export type QualityRewriteState = {
   attempts: number;
   rejectedHashes: Set<string>;
   candidateParts?: string[];
+  targets?: QualityArtifactTarget[];
 };
 
 export type DurableQualityState = {
@@ -144,6 +163,7 @@ export type DurableQualityState = {
   attempts: number;
   rejectedHashes: string[];
   candidateParts: string[];
+  targets: DurableQualityArtifactTarget[];
 };
 
 export type QualityRuntimeSource = Pick<VerifiedHarnessPack,

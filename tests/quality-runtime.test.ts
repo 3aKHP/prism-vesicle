@@ -11,7 +11,7 @@ import type { HarnessRuntimeContext } from "../src/core/harness";
 import { AssetResolver } from "../src/core/runtime/assets";
 import { getProcessManager } from "../src/core/process/manager";
 import { createSessionStore, listSessions, loadSessionRecords, loadSessionSnapshot } from "../src/core/session/store";
-import type { QualityDetectorRule, QualityRuntimeContext } from "../src/core/quality";
+import { qualityArtifactTargetFromResult, type QualityDetectorRule, type QualityRuntimeContext } from "../src/core/quality";
 import { createSessionResumeController } from "../src/tui/session-resume-controller";
 
 const originalFetch = globalThis.fetch;
@@ -26,6 +26,267 @@ afterEach(async () => {
 });
 
 describe("Output Quality Guard runtime", () => {
+  test("does not let a clean completion summary pass an unchanged bad artifact", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTool("summary-bypass-write", "write_file", {
+          path: "workspace/runtime.md",
+          content: "### Part 3 - Prose Content\n空气中弥漫着雨味。",
+        });
+      }
+      if (requests === 2) {
+        return providerTool("summary-bypass-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      return Response.json({ id: "summary-bypass-done", choices: [{ message: { content: "已完成质量修订。" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+
+    expect(result.kind).toBe("complete");
+    expect(requests).toBe(3);
+    expect(await readFile(join(root, "workspace", "runtime.md"), "utf8")).toContain("空气中弥漫着");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId);
+    expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
+  });
+
+  test("checks the complete replace_in_file post-image", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTool("partial-replace-write", "write_file", {
+          path: "workspace/runtime.md",
+          content: "### Part 3 - Prose Content\n空气中弥漫着雨味。\n空气中弥漫着尘味。",
+        });
+      }
+      if (requests === 2) {
+        return providerTool("partial-replace-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      if (requests === 3) {
+        return providerTool("partial-replace-one", "replace_in_file", {
+          path: "workspace/runtime.md",
+          oldText: "空气中弥漫着雨味。",
+          newText: "雨水沿着门框滑落。",
+        });
+      }
+      if (requests === 4) {
+        return providerTool("partial-replace-second-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review rewrite." });
+      }
+      return Response.json({ id: "partial-replace-done", choices: [{ message: { content: "已完成质量修订。" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+
+    expect(result.kind).toBe("complete");
+    expect(requests).toBe(5);
+    expect(await readFile(join(root, "workspace", "runtime.md"), "utf8")).toContain("空气中弥漫着尘味");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId);
+    expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "rewrite", "exhausted"]);
+  });
+
+  test("checks the complete append_file post-image", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    await writeFile(join(root, "workspace", "runtime.md"), "### Part 3 - Prose Content\n空气中弥漫着旧纸味。\n", "utf8");
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTool("clean-append", "append_file", {
+          path: "workspace/runtime.md",
+          content: "她把窗推开。\n",
+        });
+      }
+      if (requests === 2) {
+        return providerTool("clean-append-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      return Response.json({ id: "clean-append-done", choices: [{ message: { content: "已完成质量修订。" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+
+    expect(result.kind).toBe("complete");
+    expect(requests).toBe(3);
+    const snapshot = await loadSessionSnapshot(root, result.sessionId);
+    expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
+  });
+
+  test("keeps each artifact target pending until that path is clean", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTools("two-target-write", [
+          { id: "call-two-target-clean", name: "write_file", arguments: JSON.stringify({ path: "workspace/clean.md", content: "雨水沿着门框滑落。" }) },
+          { id: "call-two-target-bad", name: "write_file", arguments: JSON.stringify({ path: "workspace/bad.md", content: "空气中弥漫着尘味。" }) },
+        ]);
+      }
+      if (requests === 2) {
+        return providerTool("two-target-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      if (requests === 3) {
+        return providerTool("two-target-rewrite-clean-only", "write_file", {
+          path: "workspace/clean.md",
+          content: "她把窗推得更开。",
+        });
+      }
+      if (requests === 4) {
+        return providerTool("two-target-second-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review rewrite." });
+      }
+      return Response.json({ id: "two-target-done", choices: [{ message: { content: "已完成质量修订。" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+
+    expect(result.kind).toBe("needs_user");
+    expect(requests).toBe(4);
+    expect(await readFile(join(root, "workspace", "bad.md"), "utf8")).toContain("空气中弥漫着");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId);
+    expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
+  });
+
+  test("checks a successful mutation before allowing a same-response gate", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTools("write-and-gate", [
+          { id: "call-write-and-gate-file", name: "write_file", arguments: JSON.stringify({
+            path: "workspace/runtime.md",
+            content: "### Part 3 - Prose Content\n空气中弥漫着雨味。",
+          }) },
+          { id: "call-write-and-gate-gate", name: "request_confirmation", arguments: JSON.stringify({
+            gate: "runtime-turn",
+            summary: "Review.",
+          }) },
+        ]);
+      }
+      if (requests === 2) {
+        return providerTool("write-and-gate-replace", "replace_in_file", {
+          path: "workspace/runtime.md",
+          oldText: "空气中弥漫着雨味。",
+          newText: "雨水沿着门框滑落。",
+        });
+      }
+      return providerTool("write-and-gate-clean", "request_confirmation", { gate: "runtime-turn", summary: "Review rewrite." });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+
+    expect(result.kind).toBe("needs_user");
+    expect(requests).toBe(3);
+    const snapshot = await loadSessionSnapshot(root, result.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
+  });
+
+  test("rereads the current post-image when the file changes after a successful mutation", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTool("external-edit-write", "write_file", {
+          path: "workspace/runtime.md",
+          content: "### Part 3 - Prose Content\n雨水沿着门框滑落。",
+        });
+      }
+      if (requests === 2) {
+        await writeFile(
+          join(root, "workspace", "runtime.md"),
+          "### Part 3 - Prose Content\n空气中弥漫着外部写入的雨味。",
+          "utf8",
+        );
+        return providerTool("external-edit-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      return Response.json({ id: "external-edit-done", choices: [{ message: { content: "已完成质量修订。" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+
+    expect(result.kind).toBe("complete");
+    expect(requests).toBe(3);
+    const snapshot = await loadSessionSnapshot(root, result.sessionId);
+    expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
+  });
+
+  test("keeps Weaver-Orch prose-only across a same-response mutation boundary", async () => {
+    expect(qualityArtifactTargetFromResult("weaver-orch", {
+      callId: "call-orchestrator-write",
+      ok: true,
+      fileEvent: {
+        kind: "file_operation",
+        operation: "write",
+        path: "workspace/orchestrator.md",
+        changed: true,
+        bytes: 1,
+        sha256: "a".repeat(64),
+      },
+    })).toBeUndefined();
+
+    const root = await runtimeRoot("weaver-orch", ["orchestrator-check"]);
+    globalThis.fetch = (async () => providerTools("orchestrator-write-and-gate", [
+      { id: "call-orchestrator-file", name: "write_file", arguments: JSON.stringify({
+        path: "workspace/orchestrator.md",
+        content: "空气中弥漫着编排说明里的旧例。",
+      }) },
+      { id: "call-orchestrator-gate", name: "request_confirmation", arguments: JSON.stringify({
+        gate: "orchestrator-check",
+        summary: "Review orchestration.",
+      }) },
+    ])) as unknown as typeof fetch;
+    const result = await runPrompt({
+      input: "orchestrate",
+      engine: "weaver-orch",
+      rootDir: root,
+      messages: [{ role: "user", content: "orchestrate" }],
+      harness: harnessRuntime(),
+    });
+    expect(result.kind).toBe("needs_user");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.qualityEvents).toEqual([expect.objectContaining({ decision: "pass", findingIds: [] })]);
+  });
+
   test("withholds a failing Runtime checkpoint, rewrites through the original Engine, and persists bounded events", async () => {
     const root = await runtimeRoot("runtime", ["runtime-turn"]);
     const requests: any[] = [];
@@ -125,7 +386,7 @@ describe("Output Quality Guard runtime", () => {
       harness,
     });
     if (first.kind !== "needs_permission") throw new Error("expected first permission");
-    expect(first.request.qualityState?.candidateParts.join("\n")).toContain("空气中弥漫着");
+    expect(first.request.qualityState).toMatchObject({ candidateParts: [], targets: [] });
     const second = await resolvePermission({
       engine: "runtime",
       rootDir: root,
@@ -139,7 +400,10 @@ describe("Output Quality Guard runtime", () => {
     });
     if (second.kind !== "needs_permission") throw new Error("expected rewrite permission");
     expect(second.request.qualityState).toMatchObject({ attempts: 1 });
-    expect(second.request.qualityState?.candidateParts.join("\n")).toContain("雨水顺着门轴");
+    expect(second.request.qualityState?.candidateParts).toEqual([]);
+    expect(second.request.qualityState?.targets).toEqual([
+      expect.objectContaining({ path: "workspace/runtime.md", rejectedHashes: [expect.any(String)] }),
+    ]);
     const final = await resolvePermission({
       engine: "runtime",
       rootDir: root,
@@ -183,8 +447,7 @@ describe("Output Quality Guard runtime", () => {
       harness,
     });
     if (first.kind !== "needs_permission") throw new Error("expected first permission");
-    expect(first.request.qualityState?.candidateParts.join("\n")).toContain("第一扇窗");
-    expect(first.request.qualityState?.candidateParts.join("\n")).toContain("第二种雨味");
+    expect(first.request.qualityState).toMatchObject({ candidateParts: [], targets: [] });
 
     const second = await resolvePermission({
       engine: "runtime",
@@ -198,13 +461,16 @@ describe("Output Quality Guard runtime", () => {
       harness,
     });
     if (second.kind !== "needs_permission") throw new Error("expected second permission");
-    expect(second.request.qualityState?.candidateParts.join("\n")).toContain("第一扇窗");
-    expect(second.request.qualityState?.candidateParts.join("\n")).toContain("第二种雨味");
+    expect(second.request.qualityState?.targets).toEqual([
+      expect.objectContaining({ path: "workspace/first.md" }),
+    ]);
 
     const [summary] = await listSessions(root);
     const paused = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
     expect(paused.pendingPermission?.toolCallId).toBe(second.request.toolCallId);
-    expect(paused.pendingQualityRewrite?.candidateParts.join("\n")).toContain("第一扇窗");
+    expect(paused.pendingQualityRewrite?.targets).toEqual([
+      expect.objectContaining({ path: "workspace/first.md" }),
+    ]);
     const restoredPermissions: unknown[] = [];
     const resumeErrors: unknown[] = [];
     const noop = (value: unknown) => value;
@@ -359,7 +625,9 @@ describe("Output Quality Guard runtime", () => {
     const [summary] = await listSessions(root);
     const interrupted = await loadSessionSnapshot(root, summary!.sessionId, { synthesizeDanglingToolResults: false });
     expect(interrupted.pendingPermission).toBeUndefined();
-    expect(interrupted.pendingQualityRewrite?.candidateParts.join("\n")).toContain("混合调用的雨味");
+    expect(interrupted.pendingQualityRewrite?.targets).toEqual([
+      expect.objectContaining({ path: "workspace/runtime.md" }),
+    ]);
 
     let resumedRequests = 0;
     globalThis.fetch = (async () => {
@@ -367,7 +635,14 @@ describe("Output Quality Guard runtime", () => {
       if (resumedRequests === 1) {
         return providerTool("mixed-recovery-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
       }
-      return Response.json({ id: "mixed-recovery-clean", choices: [{ message: { content: "雨水敲了三下窗框。" } }] });
+      if (resumedRequests === 2) {
+        return providerTool("mixed-recovery-replace", "replace_in_file", {
+          path: "workspace/runtime.md",
+          oldText: "空气中弥漫着混合调用的雨味。",
+          newText: "雨水敲了三下窗框。",
+        });
+      }
+      return providerTool("mixed-recovery-clean-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review rewrite." });
     }) as unknown as typeof fetch;
     const resumed = await resumeQualityRewrite({
       engine: "runtime",
@@ -376,7 +651,7 @@ describe("Output Quality Guard runtime", () => {
       permission: { mode: "MOMENTUM", shellExecEnabled: true },
       harness: harnessRuntime(),
     });
-    expect(resumed.kind).toBe("complete");
+    expect(resumed.kind).toBe("needs_user");
     const restored = await loadSessionSnapshot(root, summary!.sessionId);
     expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
   });
@@ -559,6 +834,118 @@ describe("Output Quality Guard runtime", () => {
     expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
   });
 
+  test("resumes an artifact target after cancellation only when the same path is repaired", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    const controller = new AbortController();
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) {
+        return providerTool("cancelled-target-write", "write_file", {
+          path: "workspace/runtime.md",
+          content: "### Part 3 - Prose Content\n空气中弥漫着雨味。",
+        });
+      }
+      if (requests === 2) {
+        return providerTool("cancelled-target-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      throw controller.signal.reason;
+    }) as unknown as typeof fetch;
+    await expect(runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+      signal: controller.signal,
+      onEvent: (event) => {
+        if (event.type === "quality_status" && event.phase === "rewriting") {
+          controller.abort(new DOMException("cancel artifact rewrite", "AbortError"));
+        }
+      },
+    })).rejects.toThrow();
+    const [summary] = await listSessions(root);
+    const interrupted = await loadSessionSnapshot(root, summary!.sessionId, { synthesizeDanglingToolResults: false });
+    expect(interrupted.pendingQualityRewrite?.targets).toEqual([
+      expect.objectContaining({ path: "workspace/runtime.md", rejectedHashes: [expect.any(String)] }),
+    ]);
+
+    let resumedRequests = 0;
+    globalThis.fetch = (async () => {
+      resumedRequests += 1;
+      if (resumedRequests === 1) {
+        return providerTool("cancelled-target-replace", "replace_in_file", {
+          path: "workspace/runtime.md",
+          oldText: "空气中弥漫着雨味。",
+          newText: "雨水沿着门框滑落。",
+        });
+      }
+      return providerTool("cancelled-target-clean-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review rewrite." });
+    }) as unknown as typeof fetch;
+    const resumed = await resumeQualityRewrite({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: summary!.sessionId,
+      harness: harnessRuntime(),
+    });
+    expect(resumed.kind).toBe("needs_user");
+    const restored = await loadSessionSnapshot(root, summary!.sessionId);
+    expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
+  });
+
+  test("resumes legacy candidateParts through the actual Guard", async () => {
+    const root = await runtimeRoot("runtime");
+    globalThis.fetch = (async () => Response.json({
+      id: "legacy-baseline",
+      choices: [{ message: { content: "雨水沿着门框滑落。" } }],
+    })) as unknown as typeof fetch;
+    const initial = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    const session = await createSessionStore(root, initial.sessionId);
+    await session.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "quality-check-pending",
+        qualityRewrite: {
+          producer: "runtime",
+          packId: "prism-engine-v10",
+          packVersion: "10.0.1-alpha.1",
+          manifestSha256: "a".repeat(64),
+          ruleVersion: "0.2.1",
+          ruleSourceHash: "b".repeat(64),
+          attempts: 0,
+          rejectedHashes: [],
+          candidateParts: ["空气中弥漫着旧 session 的雨味。"],
+        },
+      },
+    });
+
+    let resumedRequests = 0;
+    globalThis.fetch = (async () => {
+      resumedRequests += 1;
+      return Response.json({
+        id: `legacy-resume-${resumedRequests}`,
+        choices: [{ message: { content: "雨水敲了三下窗框。" } }],
+      });
+    }) as unknown as typeof fetch;
+    const resumed = await resumeQualityRewrite({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: initial.sessionId,
+      harness: harnessRuntime(),
+    });
+    expect(resumed.kind).toBe("complete");
+    expect(resumedRequests).toBe(2);
+    const restored = await loadSessionSnapshot(root, initial.sessionId);
+    expect(restored.qualityEvents.map((event) => event.decision).slice(-2)).toEqual(["rewrite", "pass"]);
+  });
+
   test("restores tool-boundary rewrite attempts before generic failed-tool filtering", async () => {
     const root = await runtimeRoot("runtime", ["runtime-turn"]);
     let requests = 0;
@@ -584,25 +971,40 @@ describe("Output Quality Guard runtime", () => {
     })).rejects.toThrow("tool-boundary feedback");
     const [summary] = await listSessions(root);
     const interrupted = await loadSessionSnapshot(root, summary!.sessionId, { synthesizeDanglingToolResults: false });
-    expect(interrupted.pendingQualityRewrite).toMatchObject({ attempts: 1, candidateParts: [] });
-    expect(interrupted.pendingQualityRewrite?.rejectedHashes).toHaveLength(1);
+    expect(interrupted.pendingQualityRewrite).toMatchObject({
+      attempts: 1,
+      candidateParts: [],
+      rejectedHashes: [],
+      targets: [expect.objectContaining({
+        path: "workspace/runtime.md",
+        rejectedHashes: [expect.any(String)],
+      })],
+    });
 
-    globalThis.fetch = (async () => Response.json({
-      id: "tool-feedback-clean",
-      choices: [{ message: { content: "雨水从檐角落进石槽。" } }],
-    })) as unknown as typeof fetch;
+    let resumedRequests = 0;
+    globalThis.fetch = (async () => {
+      resumedRequests += 1;
+      if (resumedRequests === 1) {
+        return providerTool("tool-feedback-replace", "replace_in_file", {
+          path: "workspace/runtime.md",
+          oldText: "空气中弥漫着工具边界的雨味。",
+          newText: "雨水从檐角落进石槽。",
+        });
+      }
+      return providerTool("tool-feedback-clean-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review rewrite." });
+    }) as unknown as typeof fetch;
     const resumed = await resumeQualityRewrite({
       engine: "runtime",
       rootDir: root,
       sessionId: summary!.sessionId,
       harness: harnessRuntime(),
     });
-    expect(resumed.kind).toBe("complete");
+    expect(resumed.kind).toBe("needs_user");
     const restored = await loadSessionSnapshot(root, summary!.sessionId);
     expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
   });
 
-  test("reconstructs a pending Runtime candidate when interruption occurs after mutation but before the checkpoint", async () => {
+  test("reconstructs a pending Runtime target when interruption occurs after mutation but before the checkpoint", async () => {
     const root = await runtimeRoot("runtime", ["runtime-turn"]);
     let requests = 0;
     globalThis.fetch = (async () => {
@@ -625,15 +1027,21 @@ describe("Output Quality Guard runtime", () => {
     const [summary] = await listSessions(root);
     const interrupted = await loadSessionSnapshot(root, summary!.sessionId, { synthesizeDanglingToolResults: false });
     expect(interrupted.pendingQualityRewrite).toMatchObject({ producer: "runtime", attempts: 0 });
-    expect(interrupted.pendingQualityRewrite?.candidateParts.join("\n")).toContain("空气中弥漫着");
+    expect(interrupted.pendingQualityRewrite?.targets).toEqual([
+      expect.objectContaining({ path: "workspace/runtime.md" }),
+    ]);
 
     let resumedRequests = 0;
     globalThis.fetch = (async () => {
       resumedRequests += 1;
       if (resumedRequests === 1) {
-        return providerTool("gate-after-crash", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+        return providerTool("replace-after-crash", "replace_in_file", {
+          path: "workspace/runtime.md",
+          oldText: "空气中弥漫着雨味。",
+          newText: "雨水顺着门轴滴到她的袖口。",
+        });
       }
-      return Response.json({ id: "good-after-crash", choices: [{ message: { content: "雨水顺着门轴滴到她的袖口。" } }] });
+      return providerTool("gate-after-crash", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
     }) as unknown as typeof fetch;
     const resumed = await resumeQualityRewrite({
       engine: "runtime",
@@ -641,10 +1049,10 @@ describe("Output Quality Guard runtime", () => {
       sessionId: summary!.sessionId,
       harness: harnessRuntime(),
     });
-    expect(resumed.kind).toBe("complete");
+    expect(resumed.kind).toBe("needs_user");
     const restored = await loadSessionSnapshot(root, summary!.sessionId);
     expect(restored.pendingQualityRewrite).toBeUndefined();
-    expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
+    expect(restored.qualityEvents.map((event) => event.decision)).toEqual(["pass"]);
   });
 
   test("persists every declared Engine observe path and excludes Evaluate analyze output", async () => {
@@ -737,6 +1145,28 @@ describe("Output Quality Guard runtime", () => {
     const artifactRecords = await loadSessionRecords(root, artifactScene.childSessionId!);
     expect(artifactRecords.find((record) => record.metadata?.kind === "quality-event")?.metadata?.qualityEvent)
       .toMatchObject({ producer: "scene-writer", decision: "pass", findingIds: [] });
+
+    await writeFile(
+      join(root, "workspace", "Scene_003.md"),
+      "空气中弥漫着雨味。\n空气中弥漫着尘味。",
+      "utf8",
+    );
+    childRequests = 0;
+    globalThis.fetch = (async () => {
+      childRequests += 1;
+      if (childRequests === 1) {
+        return providerTool("child-partial-scene", "replace_in_file", {
+          path: "workspace/Scene_003.md",
+          oldText: "空气中弥漫着雨味。",
+          newText: "雨水沿着门框滑落。",
+        });
+      }
+      return Response.json({ id: "child-partial-done", choices: [{ message: { content: "Scene revised." } }] });
+    }) as unknown as typeof fetch;
+    const partialScene = await runChildAgent(childContext(root, "scene-writer"));
+    const partialRecords = await loadSessionRecords(root, partialScene.childSessionId!);
+    expect(partialRecords.find((record) => record.metadata?.kind === "quality-event")?.metadata?.qualityEvent)
+      .toMatchObject({ producer: "scene-writer", decision: "observe", findingIds: ["zh-f0-air-thick-with"] });
   });
 
   test("buffers streamed prose while rewrite enforcement is active", async () => {
@@ -818,6 +1248,7 @@ async function runtimeRoot(engine: "runtime" | "dyad" | "weaver" | "weaver-orch"
     "defaultTools:",
     "  - write_file",
     "  - replace_in_file",
+    "  - append_file",
     "validators: []",
     ...(stopGates.length ? ["stopGates:", ...stopGates.map((gate) => `  - ${gate}`)] : ["stopGates: []"]),
     "stateRoots:",
@@ -841,6 +1272,9 @@ async function childRoot(): Promise<string> {
       `  - assets/prompts/agents/${profile}.md`,
       "tools:",
       "  - read_file",
+      "  - write_file",
+      "  - replace_in_file",
+      "  - append_file",
       "contextMode: fresh",
       "modelPolicy: inherit",
       "defaultMode: foreground",
