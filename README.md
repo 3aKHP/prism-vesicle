@@ -34,7 +34,7 @@ npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 ```
 
-The package includes the complete read-only `prism-engine-v10@10.0.1-alpha.1` runtime baseline. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. A restricted host layer supplies the Vesicle base prompts and five generic SubAgents.
+The package includes the complete read-only `prism-engine-v10@10.0.1-alpha.2` runtime baseline. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. A restricted host layer supplies the Vesicle base prompts and five generic SubAgents.
 
 Inspect the active layers and the source of the effective manifest:
 

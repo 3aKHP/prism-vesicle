@@ -3,15 +3,21 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import type {
   QualityDetectorRule,
+  QualityMetric,
+  QualityMetricPattern,
   QualityMatcher,
   QualityRulePackManifest,
   QualityRuntimeContext,
   QualityRuntimeSource,
 } from "./types";
+import { isDocumentMetricSignal, isQualityMetricSignal } from "./metrics";
 
 const sha256Pattern = /^[a-f0-9]{64}$/;
 const semverPattern = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const safeArtifactPattern = /^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
+const documentMetricsCapability = "quality-detector/document-metrics@1";
+const maxMetricPatterns = 64;
+const maxMetricPatternLength = 2_048;
 const requiredProtectedRegions = [
   "markdown-fenced-code",
   "markdown-blockquote",
@@ -37,6 +43,10 @@ export async function loadQualityRuntime(source: QualityRuntimeSource): Promise<
   }
   if (new Set(rules.map((rule) => rule.id)).size !== rules.length) {
     throw new Error("Rule Pack detector rule ids must be unique across languages.");
+  }
+  if (rules.some((rule) => rule.matcher.kind === "metric" && isDocumentMetricSignal(rule.matcher.metric.signal))
+    && !manifest.requiredCapabilities.includes(documentMetricsCapability)) {
+    throw new Error(`Rule Pack document metrics require ${documentMetricsCapability}.`);
   }
   return {
     packDirectory: source.directory,
@@ -193,7 +203,9 @@ function parseMatcher(value: unknown, index: number): QualityMatcher {
       kind,
       value: stringValue(raw.value, `Detector rule ${index + 1} matcher value`),
       unit,
-      ...(kind === "regex" && raw.flags !== undefined ? { flags: stringValue(raw.flags, `Detector rule ${index + 1} matcher flags`) } : {}),
+      ...(kind === "regex" && raw.flags !== undefined
+        ? { flags: stringValueAllowEmpty(raw.flags, `Detector rule ${index + 1} matcher flags`) }
+        : {}),
     };
     if (matcher.kind === "regex") {
       if (!/^[dimsuv]*$/.test(matcher.flags ?? "") || /[gy]/.test(matcher.flags ?? "")) {
@@ -209,18 +221,94 @@ function parseMatcher(value: unknown, index: number): QualityMatcher {
   }
   if (kind !== "metric") throw new Error(`Detector rule ${index + 1} matcher kind is unsupported.`);
   strictKeys(raw, `Detector rule ${index + 1} matcher`, ["kind", "unit", "metric"]);
-  const metric = strictObject(raw.metric, `Detector rule ${index + 1} metric`, ["signal", "operator", "threshold"]);
-  if (metric.signal !== "em_dash_per_100_chars") throw new Error(`Detector rule ${index + 1} metric signal is unsupported.`);
-  if (metric.operator !== "gte" && metric.operator !== "gt" && metric.operator !== "lte" && metric.operator !== "lt") {
+  const metricLabel = `Detector rule ${index + 1} metric`;
+  const metric = objectValue(raw.metric, metricLabel);
+  const signal = stringValue(metric.signal, `${metricLabel} signal`);
+  if (!isQualityMetricSignal(signal)) throw new Error(`Detector rule ${index + 1} metric signal is unsupported.`);
+  const operator = stringValue(metric.operator, `${metricLabel} operator`);
+  if (operator !== "gte" && operator !== "gt" && operator !== "lte" && operator !== "lt") {
     throw new Error(`Detector rule ${index + 1} metric operator is unsupported.`);
   }
   if (typeof metric.threshold !== "number" || !Number.isFinite(metric.threshold)) {
     throw new Error(`Detector rule ${index + 1} metric threshold is invalid.`);
   }
+  if (signal === "em_dash_per_100_chars") {
+    strictKeys(metric, metricLabel, ["signal", "operator", "threshold"]);
+    return {
+      kind: "metric",
+      unit,
+      metric: { signal, operator, threshold: metric.threshold },
+    };
+  }
+
+  strictKeys(metric, metricLabel, [
+    "signal", "operator", "threshold", "minimumMatches", "minimumCoreMatches", "minimumBuckets",
+    "minimumSeparators", "excludeDialogue", "patterns",
+  ]);
+  const minimumMatches = positiveInteger(metric.minimumMatches, `${metricLabel} minimumMatches`);
+  if (metric.excludeDialogue !== true) throw new Error(`${metricLabel} must exclude dialogue.`);
+  if (!Array.isArray(metric.patterns) || metric.patterns.length === 0 || metric.patterns.length > maxMetricPatterns) {
+    throw new Error(`${metricLabel} patterns must contain 1-${maxMetricPatterns} entries.`);
+  }
+  const patterns = metric.patterns.map((pattern, patternIndex) =>
+    parseMetricPattern(pattern, `${metricLabel} pattern ${patternIndex + 1}`)
+  );
+  if (new Set(patterns.map((pattern) => pattern.id)).size !== patterns.length) {
+    throw new Error(`${metricLabel} pattern ids must be unique.`);
+  }
+  const minimumCoreMatches = optionalPositiveInteger(metric.minimumCoreMatches, `${metricLabel} minimumCoreMatches`);
+  const minimumBuckets = optionalPositiveInteger(metric.minimumBuckets, `${metricLabel} minimumBuckets`);
+  const minimumSeparators = optionalPositiveInteger(metric.minimumSeparators, `${metricLabel} minimumSeparators`);
+  if (signal === "reasoning_chain_per_1000_chars") {
+    if (!minimumCoreMatches || !minimumBuckets) {
+      throw new Error(`${metricLabel} requires minimumCoreMatches and minimumBuckets.`);
+    }
+    if (!patterns.some((pattern) => pattern.core)) throw new Error(`${metricLabel} requires a core pattern.`);
+  }
+  if (signal === "action_list_verbs_per_paragraph" && !minimumSeparators) {
+    throw new Error(`${metricLabel} requires minimumSeparators.`);
+  }
+  const parsedMetric: QualityMetric = {
+    signal,
+    operator,
+    threshold: metric.threshold,
+    minimumMatches,
+    excludeDialogue: true,
+    patterns,
+    ...(minimumCoreMatches ? { minimumCoreMatches } : {}),
+    ...(minimumBuckets ? { minimumBuckets } : {}),
+    ...(minimumSeparators ? { minimumSeparators } : {}),
+  };
   return {
     kind: "metric",
     unit,
-    metric: { signal: "em_dash_per_100_chars", operator: metric.operator, threshold: metric.threshold },
+    metric: parsedMetric,
+  };
+}
+
+function parseMetricPattern(value: unknown, label: string): QualityMetricPattern {
+  const raw = objectValue(value, label);
+  strictKeys(raw, label, ["id", "value", "flags", "core"]);
+  const id = stringValue(raw.id, `${label} id`);
+  if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`${label} id must be kebab-case.`);
+  const pattern = stringValue(raw.value, `${label} value`);
+  if (pattern.length > maxMetricPatternLength) throw new Error(`${label} exceeds the pattern length limit.`);
+  const flags = raw.flags === undefined ? undefined : stringValueAllowEmpty(raw.flags, `${label} flags`);
+  if (flags !== undefined && (!/^[dimsuv]*$/.test(flags) || /[gy]/.test(flags))) {
+    throw new Error(`${label} flags are unsupported.`);
+  }
+  if (raw.core !== undefined && typeof raw.core !== "boolean") throw new Error(`${label} core must be a boolean.`);
+  try {
+    const expression = new RegExp(pattern, flags);
+    if (expression.test("")) throw new Error("pattern must not match empty text");
+  } catch (error) {
+    throw new Error(`${label} is invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return {
+    id,
+    value: pattern,
+    ...(flags !== undefined ? { flags } : {}),
+    ...(raw.core !== undefined ? { core: raw.core as boolean } : {}),
   };
 }
 
@@ -287,6 +375,11 @@ function stringValue(value: unknown, label: string): string {
   return value;
 }
 
+function stringValueAllowEmpty(value: unknown, label: string): string {
+  if (typeof value !== "string") throw new Error(`${label} must be a string.`);
+  return value;
+}
+
 function stringList(value: unknown, label: string): string[] {
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string" || entry.length === 0)) {
     throw new Error(`${label} must be a list of non-empty strings.`);
@@ -299,6 +392,10 @@ function stringList(value: unknown, label: string): string[] {
 function positiveInteger(value: unknown, label: string): number {
   if (!Number.isInteger(value) || Number(value) < 1) throw new Error(`${label} must be a positive integer.`);
   return Number(value);
+}
+
+function optionalPositiveInteger(value: unknown, label: string): number | undefined {
+  return value === undefined ? undefined : positiveInteger(value, label);
 }
 
 function nonNegativeInteger(value: unknown, label: string): number {

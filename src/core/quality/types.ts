@@ -14,6 +14,35 @@ export type QualityProtectedRange = {
   end: number;
 };
 
+export type QualityDocumentMetricSignal =
+  | "micro_action_per_1000_chars"
+  | "action_list_verbs_per_paragraph"
+  | "cliche_per_1000_chars"
+  | "metaphor_markers_per_1000_chars"
+  | "reasoning_chain_per_1000_chars"
+  | "abstract_summary_per_1000_chars";
+
+export type QualityMetricSignal = "em_dash_per_100_chars" | QualityDocumentMetricSignal;
+
+export type QualityMetricPattern = {
+  id: string;
+  value: string;
+  flags?: string;
+  core?: boolean;
+};
+
+export type QualityMetric = {
+  signal: QualityMetricSignal;
+  operator: "gte" | "gt" | "lte" | "lt";
+  threshold: number;
+  minimumMatches?: number;
+  minimumCoreMatches?: number;
+  minimumBuckets?: number;
+  minimumSeparators?: number;
+  excludeDialogue?: true;
+  patterns?: QualityMetricPattern[];
+};
+
 export type QualityMatcher =
   | {
       kind: "literal" | "regex";
@@ -24,11 +53,7 @@ export type QualityMatcher =
   | {
       kind: "metric";
       unit: "candidate" | "paragraph" | "sentence";
-      metric: {
-        signal: "em_dash_per_100_chars";
-        operator: "gte" | "gt" | "lte" | "lt";
-        threshold: number;
-      };
+      metric: QualityMetric;
     };
 
 export type QualityDetectorRule = {
@@ -116,6 +141,11 @@ export type QualityFinding = {
   start: number;
   end: number;
   evidence: string;
+  metric?: {
+    signal: QualityMetricSignal;
+    value: number;
+    threshold: number;
+  };
 };
 
 export type QualityFindingSummary = Pick<QualityFinding,
