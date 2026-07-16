@@ -53,7 +53,7 @@ describe("TUI turn result controller", () => {
   test("keeps clean, advisory, and inconclusive completion statuses distinct", () => {
     const expected = [
       ["clean", 0, "complete; no blocking quality rules matched"],
-      ["findings", 2, "complete with 2 non-blocking quality findings"],
+      ["findings", 2, "complete with 2 observed style issues"],
       ["inconclusive", 0, "complete; quality check incomplete"],
     ] as const;
     for (const [outcome, findingCount, status] of expected) {

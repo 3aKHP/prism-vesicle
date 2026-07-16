@@ -99,6 +99,8 @@ Started a fresh session. Type a prompt to begin.
 
 恢复这样的会话会还原相应面板，使你可以继续处理，而不是丢失尚未完成的决定。
 
+Runtime 正文会通过当前供应商与模型发起一次额外的 Semantic Judge 请求。该请求没有工具，也不包含普通会话历史，但会再次发送当前正文并消耗额外的供应商 token。语义 finding 只显示为观察到的文风问题，绝不触发自动修订。JSON 无效、供应商不可用、超时或正文超限时，界面与会话会记录检查未完成，不会显示 clean。
+
 处理质量决策时，`Revise again` 会授权同一个 Engine 再发起一次供应商请求；`Use current version` 和 `Stop` 都不会调用供应商，并且都会在持久会话记录中保留 warning。如果所需 Harness 或 Rule Pack 身份已经变化，在恢复完全相同的身份之前无法再次修订，但仍可选择使用当前版本或停止。Workspace 侧边栏中文件旁的 `!` 表示该路径仍保留可见的质量 warning。这个状态只报告当前规则发现的问题，不判断文本是否由 AI 写成，也不提供通用写作质量保证。
 
 ## 按编号或 id 恢复

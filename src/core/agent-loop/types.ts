@@ -11,7 +11,7 @@ import type { UserQuestionRequest } from "../user-question/types";
 import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
 import type { ValidationResult } from "../validators/registry";
-import type { QualityDecisionRequest, QualityOutcome } from "../quality";
+import type { QualityDecisionRequest, QualityFindingSummary, QualityOutcome, QualityTargetWarningReason } from "../quality";
 
 export type RunPromptOptions = {
   input: string;
@@ -61,6 +61,8 @@ export type AgentLoopEvent =
       phase: "checking" | "rewriting" | "clean" | "findings" | "inconclusive" | "observed" | "exhausted";
       attempt: number;
       findingCount: number;
+      findings?: Array<QualityFindingSummary & { targetPath?: string }>;
+      warningReasons?: QualityTargetWarningReason[];
     }
   | { type: "validation"; ok: boolean };
 

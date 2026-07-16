@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { RegExpParser, visitRegExpAST, type AST } from "@eslint-community/regexpp";
 import type {
   QualityDetectorRule,
+  QualityJudgeRule,
   QualityMetric,
   QualityMetricPattern,
   QualityMatcher,
@@ -17,6 +18,7 @@ const sha256Pattern = /^[a-f0-9]{64}$/;
 const semverPattern = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const safeArtifactPattern = /^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
 const documentMetricsCapability = "quality-detector/document-metrics@1";
+const semanticJudgeCapability = "quality-judge/anti-ai-flavor@1";
 const maxMetricPatterns = 64;
 const maxMetricPatternLength = 2_048;
 const maxMetricPatternQuantifiers = 25;
@@ -62,6 +64,9 @@ export async function loadQualityRuntime(source: QualityRuntimeSource): Promise<
     && !manifest.requiredCapabilities.includes(documentMetricsCapability)) {
     throw new Error(`Rule Pack document metrics require ${documentMetricsCapability}.`);
   }
+  const judge = manifest.requiredCapabilities.includes(semanticJudgeCapability)
+    ? await loadJudgeContract(moduleDirectory, manifest)
+    : undefined;
   return {
     packDirectory: source.directory,
     packId: source.manifest.id,
@@ -70,11 +75,36 @@ export async function loadQualityRuntime(source: QualityRuntimeSource): Promise<
     manifestSha256: source.manifestSha256,
     ruleManifest: manifest,
     rules,
+    ...(judge ? { judge } : {}),
     engineModes: Object.fromEntries(Object.entries(source.manifest.qualityBindings)
       .map(([owner, bindings]) => [owner, bindings["anti-ai-flavor"] ?? "off"])),
     agentModes: Object.fromEntries(Object.entries(source.manifest.agentQualityBindings)
       .map(([owner, bindings]) => [owner, bindings["anti-ai-flavor"] ?? "off"])),
   };
+}
+
+async function loadJudgeContract(
+  moduleDirectory: string,
+  manifest: QualityRulePackManifest,
+): Promise<{ rubric: string; rules: QualityJudgeRule[] }> {
+  const rubricPath = `judge-rubric.${manifest.primaryLanguage}.md`;
+  if (!manifest.artifacts[rubricPath]) throw new Error(`Rule Pack is missing Semantic Judge rubric ${rubricPath}.`);
+  const rubric = await readText(resolveModulePath(moduleDirectory, rubricPath), `Semantic Judge rubric ${rubricPath}`);
+  if (!rubric.trim()) throw new Error(`Semantic Judge rubric ${rubricPath} must not be empty.`);
+  const rulePaths = Object.keys(manifest.artifacts)
+    .filter((path) => /^judge-rules\.[A-Za-z0-9-]+\.json$/.test(path))
+    .sort();
+  if (rulePaths.length === 0) throw new Error("Rule Pack does not publish Semantic Judge rules.");
+  const rules = (await Promise.all(rulePaths.map(async (path) =>
+    parseJudgeRules(await readJson(resolveModulePath(moduleDirectory, path), `Semantic Judge rules ${path}`), manifest.module)
+  ))).flat();
+  if (rules.length !== manifest.projectionCounts.judge) {
+    throw new Error(`Rule Pack Judge count mismatch: manifest=${manifest.projectionCounts.judge}, loaded=${rules.length}.`);
+  }
+  if (new Set(rules.map((rule) => rule.id)).size !== rules.length) {
+    throw new Error("Rule Pack Semantic Judge rule ids must be unique across languages.");
+  }
+  return { rubric, rules };
 }
 
 async function verifyRulePackArtifacts(moduleDirectory: string, manifest: QualityRulePackManifest): Promise<void> {
@@ -181,6 +211,44 @@ export function parseDetectorRules(value: unknown, expectedModule = "anti-ai-fla
   const language = stringValue(raw.language, "Detector rules language");
   if (!Array.isArray(raw.rules) || raw.rules.length === 0) throw new Error("Detector rules must be a non-empty list.");
   return raw.rules.map((value, index) => parseDetectorRule(value, language, index));
+}
+
+export function parseJudgeRules(value: unknown, expectedModule = "anti-ai-flavor"): QualityJudgeRule[] {
+  const raw = strictObject(value, "Semantic Judge rules", ["schema", "module", "language", "rules"]);
+  if (raw.schema !== "judge-rules/v1") throw new Error("Unsupported Semantic Judge rules schema.");
+  if (raw.module !== expectedModule) throw new Error("Semantic Judge rules module does not match the Rule Pack.");
+  stringValue(raw.language, "Semantic Judge rules language");
+  if (!Array.isArray(raw.rules) || raw.rules.length === 0) {
+    throw new Error("Semantic Judge rules must be a non-empty list.");
+  }
+  const rules = raw.rules.map((value, index) => {
+    const label = `Semantic Judge rule ${index + 1}`;
+    const rule = strictObject(value, label, [
+      "id", "title", "severity", "maturity", "targets", "source", "evidence",
+    ]);
+    const id = stringValue(rule.id, `${label} id`);
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) throw new Error(`${label} id must be kebab-case.`);
+    const maturity = stringValue(rule.maturity, `${label} maturity`);
+    if (maturity !== "experimental" && maturity !== "stable") throw new Error(`${label} maturity is invalid.`);
+    const evidence = strictObject(rule.evidence, `${label} evidence`, ["mode", "minCodePoints", "maxCodePoints"]);
+    if (evidence.mode !== "exact-substring") throw new Error(`${label} evidence mode is unsupported.`);
+    const minCodePoints = positiveInteger(evidence.minCodePoints, `${label} evidence minCodePoints`);
+    const maxCodePoints = positiveInteger(evidence.maxCodePoints, `${label} evidence maxCodePoints`);
+    if (maxCodePoints > 512 || minCodePoints > maxCodePoints) throw new Error(`${label} evidence bounds are invalid.`);
+    return {
+      id,
+      title: stringValue(rule.title, `${label} title`),
+      severity: stringValue(rule.severity, `${label} severity`),
+      maturity: maturity as QualityJudgeRule["maturity"],
+      targets: stringList(rule.targets, `${label} targets`),
+      source: stringValue(rule.source, `${label} source`),
+      evidence: { mode: "exact-substring" as const, minCodePoints, maxCodePoints },
+    };
+  });
+  if (new Set(rules.map((rule) => rule.id)).size !== rules.length) {
+    throw new Error("Semantic Judge rule ids must be unique.");
+  }
+  return rules;
 }
 
 function parseDetectorRule(value: unknown, language: string, index: number): QualityDetectorRule {
@@ -463,11 +531,15 @@ function cappedCombinationSum(left: number, right: number): number {
 }
 
 async function validatePublishedSchemas(moduleDirectory: string, manifest: QualityRulePackManifest): Promise<void> {
-  const expected = [
+  const expected: Array<readonly [string, string]> = [
     ["schemas/rule-pack.schema.json", "Rule Pack Manifest v1"],
     ["schemas/detector-rules.schema.json", "Detector Rules v1"],
     ["schemas/host-conformance-case.schema.json", "Rule Host Conformance Case v1"],
-  ] as const;
+    ...(manifest.requiredCapabilities.includes(semanticJudgeCapability) ? [
+      ["schemas/judge-rules.schema.json", "Judge Rules v1"] as const,
+      ["schemas/judge-result.schema.json", "Judge Result v1"] as const,
+    ] : []),
+  ];
   for (const [path, title] of expected) {
     if (!manifest.artifacts[path]) throw new Error(`Rule Pack is missing published schema ${path}.`);
     const schema = objectValue(await readJson(resolveModulePath(moduleDirectory, path), `Published schema ${path}`), `Published schema ${path}`);
@@ -475,6 +547,76 @@ async function validatePublishedSchemas(moduleDirectory: string, manifest: Quali
       || schema.type !== "object" || schema.additionalProperties !== false || !Array.isArray(schema.required)) {
       throw new Error(`Published schema ${path} has an unsupported contract.`);
     }
+    if (path === "schemas/judge-rules.schema.json") validateJudgeRulesSchema(schema, path);
+    if (path === "schemas/judge-result.schema.json") validateJudgeResultSchema(schema, path);
+  }
+}
+
+function validateJudgeRulesSchema(schema: Record<string, unknown>, path: string): void {
+  assertExactStringSet(schema.required, ["schema", "module", "language", "rules"], path);
+  const properties = objectValue(schema.properties, `Published schema ${path} properties`);
+  const schemaProperty = objectValue(properties.schema, `Published schema ${path} schema property`);
+  const rules = objectValue(properties.rules, `Published schema ${path} rules property`);
+  const item = objectValue(rules.items, `Published schema ${path} rule item`);
+  if (schemaProperty.const !== "judge-rules/v1" || rules.type !== "array" || rules.minItems !== 1
+    || item.type !== "object" || item.additionalProperties !== false) {
+    throw new Error(`Published schema ${path} has an unsupported Judge rules contract.`);
+  }
+  assertExactStringSet(item.required, [
+    "id", "title", "severity", "maturity", "targets", "source", "evidence",
+  ], `${path} rule item`);
+  const itemProperties = objectValue(item.properties, `Published schema ${path} rule properties`);
+  const evidence = objectValue(itemProperties.evidence, `Published schema ${path} evidence property`);
+  assertExactStringSet(evidence.required, ["mode", "minCodePoints", "maxCodePoints"], `${path} evidence`);
+  const evidenceProperties = objectValue(evidence.properties, `Published schema ${path} evidence properties`);
+  const mode = objectValue(evidenceProperties.mode, `Published schema ${path} evidence mode`);
+  const maxCodePoints = objectValue(evidenceProperties.maxCodePoints, `Published schema ${path} maxCodePoints`);
+  if (evidence.type !== "object" || evidence.additionalProperties !== false
+    || mode.const !== "exact-substring" || maxCodePoints.maximum !== 512) {
+    throw new Error(`Published schema ${path} has an unsupported evidence contract.`);
+  }
+}
+
+function validateJudgeResultSchema(schema: Record<string, unknown>, path: string): void {
+  assertExactStringSet(schema.required, ["schema", "verdict", "confidence", "findings"], path);
+  const properties = objectValue(schema.properties, `Published schema ${path} properties`);
+  const schemaProperty = objectValue(properties.schema, `Published schema ${path} schema property`);
+  const verdict = objectValue(properties.verdict, `Published schema ${path} verdict property`);
+  const findings = objectValue(properties.findings, `Published schema ${path} findings property`);
+  const item = objectValue(findings.items, `Published schema ${path} finding item`);
+  if (schemaProperty.const !== "quality-judge-result/v1"
+    || !sameStringSet(verdict.enum, ["pass", "rewrite"])
+    || findings.type !== "array" || item.type !== "object" || item.additionalProperties !== false) {
+    throw new Error(`Published schema ${path} has an unsupported Judge result contract.`);
+  }
+  assertExactStringSet(item.required, [
+    "ruleId", "evidence", "confidence", "explanation", "rewriteInstruction",
+  ], `${path} finding item`);
+  const itemProperties = objectValue(item.properties, `Published schema ${path} finding properties`);
+  const evidence = objectValue(itemProperties.evidence, `Published schema ${path} evidence property`);
+  const explanation = objectValue(itemProperties.explanation, `Published schema ${path} explanation property`);
+  const rewriteInstruction = objectValue(itemProperties.rewriteInstruction, `Published schema ${path} rewriteInstruction property`);
+  if (evidence.maxLength !== 240 || explanation.maxLength !== 500 || rewriteInstruction.maxLength !== 500) {
+    throw new Error(`Published schema ${path} has unsupported finding bounds.`);
+  }
+}
+
+function assertExactStringSet(value: unknown, expected: string[], label: string): void {
+  if (!sameStringSet(value, expected)) throw new Error(`Published schema ${label} required keys are unsupported.`);
+}
+
+function sameStringSet(value: unknown, expected: string[]): boolean {
+  return Array.isArray(value)
+    && value.length === expected.length
+    && new Set(value).size === expected.length
+    && value.every((entry) => typeof entry === "string" && expected.includes(entry));
+}
+
+async function readText(path: string, label: string): Promise<string> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    throw new Error(`Cannot load ${label}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

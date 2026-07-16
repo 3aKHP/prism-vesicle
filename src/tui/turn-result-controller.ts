@@ -145,7 +145,7 @@ export function createTurnResultController(options: ResultOptions) {
     options.setMessages((previous) => [...previous, ...appended]);
     options.setStatus(result.validation?.ok === false ? "complete with validation findings"
       : result.quality?.outcome === "inconclusive" ? "complete; quality check incomplete"
-        : result.quality?.outcome === "findings" ? `complete with ${result.quality.findingCount} non-blocking quality finding${result.quality.findingCount === 1 ? "" : "s"}`
+        : result.quality?.outcome === "findings" ? `complete with ${result.quality.findingCount} observed style issue${result.quality.findingCount === 1 ? "" : "s"}`
           : result.quality?.outcome === "clean" ? "complete; no blocking quality rules matched"
             : "complete");
     void options.refreshQualityWarnings(result.sessionId);

@@ -99,6 +99,8 @@ The resume picker can also mark interrupted interactions:
 
 Resuming such a session restores the relevant panel so you can continue rather than losing the pending decision.
 
+Runtime prose receives an additional Semantic Judge request through the current provider and model. This request has no tools and no ordinary conversation history, but it does send the current prose again and consumes additional provider tokens. Semantic findings appear only as observed style issues and never trigger automatic revision. Invalid, unavailable, timed-out, or oversized checks are shown and saved as incomplete rather than clean.
+
 For a quality decision, `Revise again` authorizes one additional provider request from the same Engine. `Use current version` and `Stop` do not call the provider; both keep the warning in the durable session record. If the required Harness or Rule Pack identity has changed, revision is unavailable until that exact identity is restored, but you can still use or stop the current version. A `!` beside an artifact in the Workspace sidebar marks a path whose quality warning remains visible. This status reports findings from the active rules, not whether text was written by AI and not a general guarantee of writing quality.
 
 ## Resume by Number or Id

@@ -824,6 +824,7 @@ function parseQualityEvent(value: unknown): QualityEvent | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const event = value as Partial<QualityEvent>;
   const decision = isQualityDecision(event.decision) ? event.decision : undefined;
+  const judgeUsage = event.judgeUsage === undefined ? undefined : readResponseUsage(event.judgeUsage);
   if (!decision
     || event.guard !== "anti-ai-flavor"
     || typeof event.packId !== "string"
@@ -839,7 +840,13 @@ function parseQualityEvent(value: unknown): QualityEvent | undefined {
     || !Number.isInteger(event.attempt)
     || !Array.isArray(event.findingIds)
     || event.findingIds.some((id) => typeof id !== "string")
-    || typeof event.detectorMs !== "number") return undefined;
+    || typeof event.detectorMs !== "number"
+    || (event.judgeStatus !== undefined && !isQualityJudgeStatus(event.judgeStatus))
+    || (event.judgeMs !== undefined && (typeof event.judgeMs !== "number" || !Number.isFinite(event.judgeMs) || event.judgeMs < 0))
+    || (event.judgeProvider !== undefined && (typeof event.judgeProvider !== "string" || event.judgeProvider.length === 0))
+    || (event.judgeModel !== undefined && (typeof event.judgeModel !== "string" || event.judgeModel.length === 0))
+    || (event.judgeRequestCount !== undefined && (!Number.isInteger(event.judgeRequestCount) || Number(event.judgeRequestCount) < 0))
+    || (event.judgeUsage !== undefined && !judgeUsage)) return undefined;
   const outcome = isQualityOutcome(event.outcome)
     ? event.outcome
     : legacyQualityOutcome(decision, event.findingIds.length);
@@ -857,6 +864,7 @@ function parseQualityEvent(value: unknown): QualityEvent | undefined {
     outcome,
     action,
     policyVersion: "quality-policy/v1",
+    ...(judgeUsage ? { judgeUsage } : {}),
     targets: targets.length > 0 ? targets : [{
       id: `assistant:${event.candidateHash}`,
       kind: "assistant-response",
@@ -897,6 +905,8 @@ function parseQualityEventTarget(value: unknown): QualityEventTarget | undefined
       maturity: item.maturity as "experimental" | "stable",
       evidence: item.evidence,
       source: item.source as "detector" | "judge",
+      ...(typeof item.confidence === "number" && Number.isFinite(item.confidence)
+        && item.confidence >= 0 && item.confidence <= 1 ? { confidence: item.confidence } : {}),
     }];
   });
   return {
@@ -908,7 +918,7 @@ function parseQualityEventTarget(value: unknown): QualityEventTarget | undefined
     status: source.status as QualityEventTarget["status"],
     findingIds: [...source.findingIds] as string[],
     findings,
-    ...(["target-unreadable", "target-oversize", "detector-budget-exhausted"].includes(String(source.warningReason))
+    ...(["target-unreadable", "target-oversize", "detector-budget-exhausted", "judge-invalid", "judge-timeout", "judge-unavailable"].includes(String(source.warningReason))
       ? { warningReason: source.warningReason as QualityEventTarget["warningReason"] }
       : {}),
   };
@@ -924,6 +934,10 @@ function isQualityOutcome(value: unknown): value is QualityEvent["outcome"] {
 
 function isQualityAction(value: unknown): value is QualityEvent["action"] {
   return value === "deliver" || value === "observe" || value === "rewrite" || value === "ask-user";
+}
+
+function isQualityJudgeStatus(value: unknown): value is NonNullable<QualityEvent["judgeStatus"]> {
+  return value === "not-run" || value === "valid" || value === "invalid" || value === "timed-out" || value === "unavailable";
 }
 
 function legacyQualityOutcome(decision: QualityEvent["decision"], findingCount: number): QualityEvent["outcome"] {
@@ -1022,7 +1036,7 @@ function parseQualityWarning(value: unknown): QualityWarning | undefined {
   if (typeof source.id !== "string"
     || source.guard !== "anti-ai-flavor"
     || !producer
-    || !["exhausted", "judge-invalid", "judge-timeout", "detector-budget-exhausted", "target-unreadable", "target-oversize", "user-abandoned"].includes(String(source.reason))
+    || !["exhausted", "judge-invalid", "judge-timeout", "judge-unavailable", "detector-budget-exhausted", "target-unreadable", "target-oversize", "user-abandoned"].includes(String(source.reason))
     || !Number.isInteger(source.attempt)
     || !Array.isArray(source.targets)) return undefined;
   const targets = source.targets.flatMap((target) => {

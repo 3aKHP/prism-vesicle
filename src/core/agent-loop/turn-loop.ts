@@ -32,6 +32,7 @@ import {
   qualityArtifactTargetFromResult,
   readQualityArtifactTargets,
   qualityRewriteFeedback,
+  observeBoundQualityWithJudge,
   recordQualityEvent,
   shouldBufferQualityOutput,
   type BoundQualityEvaluation,
@@ -323,7 +324,7 @@ async function evaluateQualityBoundary(
   const mode = qualityModeForEngine(qualityRuntime, args.profile.id);
   if (mode === "off" || mode === "analyze") return undefined;
   args.onEvent?.({ type: "quality_status", phase: "checking", attempt: runtime.quality.attempts, findingCount: 0 });
-  const result = runtime.quality.targets.length > 0
+  const deterministic = runtime.quality.targets.length > 0
     ? evaluateBoundQualityTargets({
       runtime: qualityRuntime,
       producer: args.profile.id,
@@ -342,8 +343,18 @@ async function evaluateQualityBoundary(
       state: runtime.quality,
       usage: response.usage,
     });
-  if (!result) return undefined;
-  runtime.lastQuality = { outcome: result.outcome, findingCount: result.evaluation.findings.length };
+  if (!deterministic) return undefined;
+  const result = await observeBoundQualityWithJudge({
+    result: deterministic,
+    runtime: qualityRuntime,
+    provider: args.provider,
+    providerId: args.config.providerId,
+    model: args.config.model,
+    signal: args.signal,
+    temperatureSupported: args.config.capabilities?.temperature !== false,
+    reasoningTierSupported: args.config.capabilities?.reasoningTier === true,
+  });
+  runtime.lastQuality = { outcome: result.outcome, findingCount: qualityFindingCount(result) };
   if (result.action !== "ask-user" && result.event.targets.some((target) => target.warningReason)) {
     await recordInconclusiveWarnings(args, runtime, result);
   }
@@ -515,7 +526,10 @@ async function recordInconclusiveWarnings(
     synthesizeDanglingToolResults: false,
   });
   let reusedPendingWarning = false;
-  for (const reason of ["target-unreadable", "target-oversize", "detector-budget-exhausted"] as const) {
+  for (const reason of [
+    "target-unreadable", "target-oversize", "detector-budget-exhausted",
+    "judge-invalid", "judge-timeout", "judge-unavailable",
+  ] as const) {
     const existing = new Set(snapshot.qualityWarnings
       .filter((warning) => warning.id !== runtime.quality.warningId && warning.reason === reason)
       .flatMap((warning) => warning.targets.map((target) => target.id)));
@@ -537,9 +551,15 @@ async function recordInconclusiveWarnings(
     await args.session.append({
       role: "system",
       content: `${targets.length} quality target${targets.length === 1 ? " was" : "s were"} ${reason === "target-oversize"
-        ? "over the deterministic check size limit"
+        ? "over the quality check size limit"
         : reason === "detector-budget-exhausted"
           ? "over the deterministic check work limit"
+          : reason === "judge-invalid"
+            ? "returned an invalid Semantic Judge result"
+            : reason === "judge-timeout"
+              ? "not checked before the Semantic Judge timeout"
+              : reason === "judge-unavailable"
+                ? "not checked because the Semantic Judge provider was unavailable"
           : "not readable as a guarded UTF-8 file"}. The content was delivered without a clean quality result.`,
       metadata: { kind: "quality-warning", qualityWarning: warning },
     });
@@ -591,8 +611,19 @@ function emitQualityStatus(args: RunLoopArgs, runtime: LoopRuntime, result: Boun
           : result.outcome === "findings" ? "findings"
             : "clean",
     attempt: runtime.quality.attempts,
-    findingCount: result.evaluation.findings.length,
+    findingCount: qualityFindingCount(result),
+    findings: result.event.targets.flatMap((target) => target.findings.map((finding) => ({
+      ...finding,
+      ...(target.path ? { targetPath: target.path } : {}),
+    }))).slice(0, 8),
+    warningReasons: [...new Set(result.event.targets.flatMap((target) =>
+      target.warningReason ? [target.warningReason] : []
+    ))],
   });
+}
+
+function qualityFindingCount(result: BoundQualityEvaluation): number {
+  return result.event.targets.reduce((total, target) => total + target.findings.length, 0);
 }
 
 async function recordRejectedQualityRound(

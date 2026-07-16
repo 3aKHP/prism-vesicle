@@ -10,6 +10,7 @@ const supportedCapabilities = new Set([
   "prism-agent/delegation@1",
   "quality-guard/anti-ai-flavor@1",
   "quality-detector/document-metrics@1",
+  "quality-judge/anti-ai-flavor@1",
 ]);
 
 export const supportedHarnessCapabilities: readonly string[] = Object.freeze([...supportedCapabilities]);
