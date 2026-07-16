@@ -5,17 +5,32 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "schema",
     "name",
     "candidateType",
+    "language",
+    "targetType",
     "text",
-    "expectedRuleIds"
+    "expectedRuleIds",
+    "provenance"
   ],
   "properties": {
+    "schema": {
+      "const": "quality-host-conformance-case/v1"
+    },
     "name": {
       "type": "string",
       "minLength": 1
     },
     "candidateType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetType": {
       "type": "string",
       "minLength": 1
     },
@@ -50,6 +65,66 @@
         "minLength": 1
       },
       "uniqueItems": true
+    },
+    "expectedMetrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ruleId",
+          "signal",
+          "value",
+          "threshold",
+          "tolerance"
+        ],
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "signal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "number"
+          },
+          "threshold": {
+            "type": "number"
+          },
+          "tolerance": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "license"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

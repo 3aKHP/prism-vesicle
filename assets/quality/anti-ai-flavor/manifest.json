@@ -1,23 +1,24 @@
 {
   "schema": "rule-pack/v1",
   "module": "anti-ai-flavor",
-  "version": "0.2.1",
+  "version": "0.3.0-alpha.1",
   "primaryLanguage": "zh-CN",
   "sourceRepository": "3aKHP/Neural-Narratology",
-  "sourceCommit": "1aeb8b9acef4522889e5ba22728f8711390997b6",
+  "sourceCommit": "ce3d1f1e8b1738b3d5f19e1913298ac9756b8a36",
   "sourceState": "clean",
-  "sourceHash": "c710a7f6895b84731e041f7e43510de8e2c0f04644ddd7111ecd90059b576b76",
-  "moduleInputHash": "87e0bd4f95148bdf736f3ebc72b296ea30b679e57b21490f2df45edaccceee94",
-  "compilerHash": "f339e7b6bd783f48d3cc9557e8101a13302e9d77ad9653c0d1b3a01e89d4114b",
-  "ruleCount": 23,
+  "sourceHash": "1c943cbc332b3056f3bd4cba19384505b9e82ce2ad380e4d17ad013ea282189c",
+  "moduleInputHash": "c8083112c2ced9865abc0697563fb44790f60c3282d88e35074f3cc4ee34112f",
+  "compilerHash": "7ef9dd2990dea445209ee6f99ee015b4d327f4957bd2c6ad72436d0793562db1",
+  "ruleCount": 29,
   "projectionCounts": {
     "guidance": 21,
-    "detector": 7,
+    "detector": 13,
     "judge": 21,
     "replacement": 0
   },
   "requiredCapabilities": [
-    "quality-guard/anti-ai-flavor@1"
+    "quality-guard/anti-ai-flavor@1",
+    "quality-detector/document-metrics@1"
   ],
   "preprocessing": {
     "line_endings": "LF",
@@ -37,16 +38,29 @@
       "name": "中文 AI 味(slop)指纹提取工具 / Chinese AI Slop Fingerprint Toolkit",
       "url": "https://github.com/Yi-111-a/cn-antislop",
       "license": "MIT",
+      "commit": "d8a62764a21204fd06e2801f86cc64701bbcf23b",
       "lang": "zh-CN",
       "face": "both",
       "status": "adopted",
-      "note": "四层指纹模型(F0-F3)方法论与破折号密度信号已采纳。其 L0/L1 中文词表与 骨架表仍列为后续评估对象,未批量导入。\n"
+      "note": "四层指纹模型(F0-F3)方法论与破折号密度信号已采纳。固定快照只发布 deepseek-v4-flash 语料,尚无跨三个模型家族的复核证据;其 L0/L1 中文词表与 骨架表继续处于 evaluating,未导入 active detector rules。\n"
+    },
+    {
+      "id": "oh-story-claudecode",
+      "name": "oh-story-claudecode deterministic prose checks",
+      "url": "https://github.com/worldwonderer/oh-story-claudecode",
+      "license": "MIT",
+      "commit": "3419e939b8455400cadcdd062fb1da2a92a6d4b9",
+      "lang": "zh-CN",
+      "face": "B",
+      "status": "adopted",
+      "note": "采用固定快照中六个文档级 advisory signal 的检测语义、阈值与公开回归样例。 未复制 CLI、宿主集成、blocking policy 或其它规则;Vesicle 只消费编译后的 Rule Pack 数据。\n"
     },
     {
       "id": "antislop-sampler",
       "name": "antislop-sampler (sam-paech)",
       "url": "https://github.com/sam-paech/antislop-sampler",
       "license": "Apache-2.0",
+      "commit": "0ae330e98fbe6f09351f2d1063a51956378a44b2",
       "lang": "en-US",
       "face": "B",
       "status": "adopted",
@@ -57,6 +71,7 @@
       "name": "The AntiSlop (Claude Skill)",
       "url": "https://github.com/aplaceforallmystuff/the-antislop",
       "license": "MIT",
+      "commit": "5edbf8562041fc99070e1bd51e0862afbb535fff",
       "lang": "en-US",
       "face": "A",
       "status": "reference",
@@ -75,29 +90,40 @@
   ],
   "corpora": {
     "detector": {
-      "cases": 12,
-      "hash": "e65aecc46a50788e3c90fad1af3b5d145524af447c1d6cb08b73de7293ae8db8"
+      "cases": 28,
+      "hash": "c63afd1081276ccd8dfd4dae2ba0e92bba934f7c43ed2ed76f4a59362a48a70b"
+    },
+    "guidance-pairs": {
+      "cases": 42,
+      "hash": "70fabe785e62d7c0199442f417a27eb74de493ad7200860d6a01dcf1329044f4"
     },
     "host-conformance": {
-      "cases": 8,
-      "hash": "f36cc5cbbed90b88b65be49589f234538ce011443bc4f4180f124e41b9cd871c"
+      "cases": 24,
+      "hash": "43d4930cf096bbb63d4823f8918b1d5176db88260a13ac1d95d9ca84b234c453"
     },
     "judge": {
       "cases": 8,
-      "hash": "7eae55735c81b65006571f1a6e0878b2fd4b0340da4ada36f16b9e6c16241602"
+      "hash": "2365b3d36758d4c9bed740ed3ca20d22f623e1e673e39503417a924e60e96b7d"
     }
   },
   "artifacts": {
-    "calibration/detector.jsonl": "e65aecc46a50788e3c90fad1af3b5d145524af447c1d6cb08b73de7293ae8db8",
-    "calibration/host-conformance.jsonl": "f36cc5cbbed90b88b65be49589f234538ce011443bc4f4180f124e41b9cd871c",
-    "calibration/judge.jsonl": "7eae55735c81b65006571f1a6e0878b2fd4b0340da4ada36f16b9e6c16241602",
+    "calibration/detector.jsonl": "c63afd1081276ccd8dfd4dae2ba0e92bba934f7c43ed2ed76f4a59362a48a70b",
+    "calibration/guidance-pairs.jsonl": "70fabe785e62d7c0199442f417a27eb74de493ad7200860d6a01dcf1329044f4",
+    "calibration/host-conformance.jsonl": "43d4930cf096bbb63d4823f8918b1d5176db88260a13ac1d95d9ca84b234c453",
+    "calibration/judge.jsonl": "2365b3d36758d4c9bed740ed3ca20d22f623e1e673e39503417a924e60e96b7d",
+    "data/cn-antislop-candidates.json": "1acb1a7f64d789e866df1be8dae0029776672c9752a4cce272f7c7e184580f79",
     "detector-rules.en-US.json": "335c8ead7ca0a5db97f63dd57c0ce0d9d259bf3232c8ed5d2a992f16d5ada8e9",
-    "detector-rules.zh-CN.json": "9f46b0990c6d90cab9957a8cd430a3126e32f40723298677ce8568434284a060",
+    "detector-rules.zh-CN.json": "44c31a0a8fd2f2c2a37b3c82a6a575a639db7214a7f33d30ccfedaa92d623dd1",
     "guidance.zh-CN.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
     "judge-rubric.zh-CN.md": "8fa9445532688bed823dd3126e59c8c9e3992d6f59ba32599f35554e6b65acdd",
-    "schemas/detector-rules.schema.json": "feae4be50d7f6dc6f1b0be5646220abf8ae5aa5f70307aafdff1bc8626a0f7e0",
-    "schemas/host-conformance-case.schema.json": "d59b4b3b39858e0674f28900065e9d52ba8014a958553ca79cc6ff0372dc0d51",
+    "judge-rules.zh-CN.json": "7c71d432b7a1afe6a37f6bcf5706b79ae067d3f7d826c54e98c1fa493cfa9493",
+    "schemas/calibration-case.schema.json": "0f0d24103da27703b81739e2502e1122005aa894e190dcea1b28e6787fe1afad",
+    "schemas/candidate-evaluation.schema.json": "bcce45ea7c7c6c83608b89edfb2fa77e20299e77bdc916ea3017bc7891cd9a83",
+    "schemas/detector-rules.schema.json": "8013e95abd1b1370df70402426c1a7650d3c21dadec4255aafc9832e37c3a3ed",
+    "schemas/host-conformance-case.schema.json": "422df8c2b8bbf5d4422abe09995f9facb3613702a0c3620bd8f1a0d95e477b47",
+    "schemas/judge-result.schema.json": "e677f81ce9d7160e6066207a63acd594f78ab0a2929fcd359ab61cba89938f0b",
+    "schemas/judge-rules.schema.json": "a8953a7c4ee1d0c29c3484a1247c80bee60f459950b408f7e367ae77af855bf5",
     "schemas/rule-pack.schema.json": "fe4623817c186290c22e982c4dfe04c8c36224dbb81c82fb239f1b6365761ec9",
-    "THIRD_PARTY_NOTICES.md": "20ddf8eb5615522f8dfa3c92539dc06dfb8a868cfc55c2a7f46692d3fc315b28"
+    "THIRD_PARTY_NOTICES.md": "9f9a369ed9c53ddb2300e75bd87836635c03ee34e4e0289ed4d1994fb743549d"
   }
 }

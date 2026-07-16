@@ -4,10 +4,16 @@ import type {
   QualityDetectorRule,
   QualityEvaluation,
   QualityFinding,
+  QualityMetric,
+  QualityMetricPattern,
   QualityProtectedRange,
 } from "./types";
+import { isDocumentMetricSignal } from "./metrics";
 
 type TextUnit = { text: string; start: number; end: number };
+type DocumentMetricBudget = { remainingMatches: number; exhausted: boolean };
+
+const maxDocumentMetricMatchesPerTarget = 100_000;
 
 export function evaluateQualityCandidate(candidate: QualityCandidate, rules: readonly QualityDetectorRule[]): QualityEvaluation {
   const started = performance.now();
@@ -17,15 +23,28 @@ export function evaluateQualityCandidate(candidate: QualityCandidate, rules: rea
     ...validateProtectedRanges(candidate.protectedRanges ?? [], normalizedContent.length),
   ]);
   const masked = maskRanges(normalizedContent, protectedRanges);
+  const documentMetricMasked = maskRanges(normalizedContent, mergeRanges([
+    ...protectedRanges,
+    ...documentMetricProtectedRanges(normalizedContent),
+  ]));
+  const documentMetricBudget: DocumentMetricBudget = {
+    remainingMatches: maxDocumentMetricMatchesPerTarget,
+    exhausted: false,
+  };
   const findings = rules
     .filter((rule) => rule.targets.includes("narrative-prose"))
-    .flatMap((rule) => matchRule(rule, normalizedContent, masked));
+    .flatMap((rule) => matchRule(rule, normalizedContent, masked, documentMetricMasked, documentMetricBudget));
   const unique = deduplicateFindings(findings);
   return {
     normalizedContent,
     candidateHash: createHash("sha256").update(normalizedContent).digest("hex"),
     findings: unique,
-    blockingFindings: unique.filter((finding) => finding.maturity === "stable" && finding.severity === "tier1"),
+    blockingFindings: unique.filter((finding) =>
+      finding.maturity === "stable"
+      && finding.severity === "tier1"
+      && !(finding.metric && isDocumentMetricSignal(finding.metric.signal))
+    ),
+    detectorStatus: documentMetricBudget.exhausted ? "budget-exhausted" : "complete",
     detectorMs: Math.max(0, performance.now() - started),
   };
 }
@@ -34,8 +53,15 @@ export function normalizeCandidate(content: string): string {
   return content.replace(/\r\n?/g, "\n").normalize("NFC");
 }
 
-function matchRule(rule: QualityDetectorRule, original: string, masked: string): QualityFinding[] {
-  const units = textUnits(masked, rule.matcher.unit);
+function matchRule(
+  rule: QualityDetectorRule,
+  original: string,
+  masked: string,
+  documentMetricMasked: string,
+  documentMetricBudget: DocumentMetricBudget,
+): QualityFinding[] {
+  const metric = rule.matcher.kind === "metric" ? rule.matcher.metric : undefined;
+  const units = textUnits(metric && isDocumentMetricSignal(metric.signal) ? documentMetricMasked : masked, rule.matcher.unit);
   const findings: QualityFinding[] = [];
   for (const unit of units) {
     if (rule.matcher.kind === "literal") {
@@ -59,24 +85,137 @@ function matchRule(rule: QualityDetectorRule, original: string, masked: string):
       continue;
     }
     if (rule.matcher.kind !== "metric") continue;
-    const trimmed = trimUnit(unit);
-    if (!trimmed.text || !metricMatches(trimmed.text, rule.matcher.metric.operator, rule.matcher.metric.threshold)) continue;
-    findings.push(finding(rule, original, trimmed.start, trimmed.end));
+    const metricFinding = matchMetric(rule, original, unit, rule.matcher.metric, documentMetricBudget);
+    if (metricFinding) findings.push(metricFinding);
   }
   return findings;
 }
 
-function metricMatches(text: string, operator: "gte" | "gt" | "lte" | "lt", threshold: number): boolean {
-  const density = ((text.match(/—/g)?.length ?? 0) / Math.max(1, text.length)) * 100;
+function matchMetric(
+  rule: QualityDetectorRule,
+  original: string,
+  unit: TextUnit,
+  metric: QualityMetric,
+  documentMetricBudget: DocumentMetricBudget,
+): QualityFinding | undefined {
+  if (metric.signal === "em_dash_per_100_chars") {
+    const trimmed = trimUnit(unit);
+    const local = trimmed.text.indexOf("—");
+    if (local < 0) return undefined;
+    const value = ((trimmed.text.match(/—/g)?.length ?? 0) / Math.max(1, [...trimmed.text].length)) * 100;
+    if (!compareMetric(value, metric.operator, metric.threshold)) return undefined;
+    const start = trimmed.start + local;
+    return finding(rule, original, start, start + 1, {
+      signal: metric.signal,
+      value,
+      threshold: metric.threshold,
+    });
+  }
+
+  const narrative = metric.excludeDialogue ? metricProse(unit.text) : unit.text;
+  let firstMatch: { start: number; end: number } | undefined;
+  let matchCount = 0;
+  let coreMatches = 0;
+  const buckets = new Set<string>();
+  patternLoop: for (const pattern of metric.patterns ?? []) {
+    if (documentMetricBudget.exhausted) break;
+    const flags = `${pattern.flags ?? "u"}g`;
+    for (const match of narrative.matchAll(new RegExp(pattern.value, flags))) {
+      if (documentMetricBudget.remainingMatches === 0) {
+        documentMetricBudget.exhausted = true;
+        break patternLoop;
+      }
+      documentMetricBudget.remainingMatches -= 1;
+      if (!match[0]) continue;
+      if (shouldSkipMetricMatch(metric.signal, pattern, narrative, match.index)) continue;
+      const current = { start: match.index, end: match.index + match[0].length };
+      if (!firstMatch || current.start < firstMatch.start) firstMatch = current;
+      matchCount += 1;
+      buckets.add(pattern.id);
+      if (pattern.core) coreMatches += 1;
+    }
+  }
+  if (documentMetricBudget.exhausted && (metric.operator === "lte" || metric.operator === "lt")) {
+    return undefined;
+  }
+  if (!firstMatch || matchCount < (metric.minimumMatches ?? 1)) return undefined;
+  if (coreMatches < (metric.minimumCoreMatches ?? 0)) return undefined;
+  if (buckets.size < (metric.minimumBuckets ?? 0)) return undefined;
+
+  let value: number;
+  if (metric.signal === "action_list_verbs_per_paragraph") {
+    const separators = [...narrative].filter((char) => "，、；;".includes(char)).length;
+    if (separators < (metric.minimumSeparators ?? 1)) return undefined;
+    value = matchCount;
+  } else {
+    value = (matchCount / Math.max(1, visibleLength(narrative))) * 1_000;
+  }
+  if (!compareMetric(value, metric.operator, metric.threshold)) return undefined;
+  return finding(rule, original, unit.start + firstMatch.start, unit.start + firstMatch.end, {
+    signal: metric.signal,
+    value,
+    threshold: metric.threshold,
+  });
+}
+
+function shouldSkipMetricMatch(
+  signal: QualityMetric["signal"],
+  pattern: QualityMetricPattern,
+  narrative: string,
+  index: number,
+): boolean {
+  return signal === "metaphor_markers_per_1000_chars"
+    && pattern.id === "material-like-phrase"
+    && /好像|像是|像|仿佛|宛如|如同|犹如/u.test(narrative.slice(Math.max(0, index - 8), index));
+}
+
+function metricProse(text: string): string {
+  const chars = text.split("");
+  const quotePairs: Array<[string, string]> = [
+    ["「", "」"],
+    ["『", "』"],
+    ["【", "】"],
+    ["“", "”"],
+    ["‘", "’"],
+    ["\"", "\""],
+    ["'", "'"],
+  ];
+  for (const [open, close] of quotePairs) {
+    let cursor = 0;
+    while (cursor < text.length) {
+      const start = text.indexOf(open, cursor);
+      if (start < 0) break;
+      const end = text.indexOf(close, start + open.length);
+      if (end < 0) break;
+      for (let index = start; index < end + close.length; index += 1) {
+        if (chars[index] !== "\n") chars[index] = " ";
+      }
+      cursor = end + close.length;
+    }
+  }
+  return chars.join("");
+}
+
+function visibleLength(text: string): number {
+  return text.match(/[一-鿿Ａ-ｚA-Za-z0-9]/gu)?.length ?? 0;
+}
+
+function compareMetric(value: number, operator: "gte" | "gt" | "lte" | "lt", threshold: number): boolean {
   switch (operator) {
-    case "gte": return density >= threshold;
-    case "gt": return density > threshold;
-    case "lte": return density <= threshold;
-    case "lt": return density < threshold;
+    case "gte": return value >= threshold;
+    case "gt": return value > threshold;
+    case "lte": return value <= threshold;
+    case "lt": return value < threshold;
   }
 }
 
-function finding(rule: QualityDetectorRule, content: string, start: number, end: number): QualityFinding {
+function finding(
+  rule: QualityDetectorRule,
+  content: string,
+  start: number,
+  end: number,
+  metric?: QualityFinding["metric"],
+): QualityFinding {
   return {
     ruleId: rule.id,
     title: rule.title,
@@ -85,6 +224,7 @@ function finding(rule: QualityDetectorRule, content: string, start: number, end:
     start,
     end,
     evidence: content.slice(start, end).slice(0, 160),
+    ...(metric ? { metric } : {}),
   };
 }
 
@@ -112,12 +252,16 @@ function builtInProtectedRanges(content: string): QualityProtectedRange[] {
     ...fencedCodeRanges(content),
     ...regexRanges(content, /<!--[\s\S]*?(?:-->|$)/g),
     ...regexRanges(content, /^\s*>.*$/gm),
-    ...regexRanges(content, /^\s*\[(?:Beat|Tension|Char|Scene|Turn)(?:\]|:).*$/gim),
+    ...regexRanges(content, /^\s*\[(?:Beat|Tension|Char|Scene|Turn|!Neural Chain)(?:\]|:).*$/gim),
     ...regexRanges(content, /^---\s*$[\s\S]*?^---\s*$/gm),
     ...regexRanges(content, /^\s{0,3}#{1,6}\s+.*$/gm),
     ...regexRanges(content, /^\s*(?:[-+*]|\d+[.)])\s+.*$/gm),
     ...regexRanges(content, /^\s*\|.*\|\s*$/gm),
   ];
+}
+
+function documentMetricProtectedRanges(content: string): QualityProtectedRange[] {
+  return regexRanges(content, /^[ \t]*第[零一二三四五六七八九十百千万\d]+章(?:\s|_|$).*$/gm);
 }
 
 function fencedCodeRanges(content: string): QualityProtectedRange[] {

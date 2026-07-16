@@ -6,11 +6,11 @@ Prism Vesicle ships one verified V10 Harness baseline and a small, host-owned ex
 
 ```text
 harness-manifest.json   # exact prism-harness-pack/v1 Release manifest
-assets/                 # exact 47-file V10 Harness inventory
+assets/                 # exact 54-file V10 Harness inventory
 host-assets/            # 12 Vesicle-owned host extension files
 ```
 
-The current bundled Harness is `prism-engine-v10@10.0.1-alpha.1`, sourced from Neural Narratology Release `harness-20260714-1` at commit `1aeb8b9acef4522889e5ba22728f8711390997b6`. The manifest SHA-256 is `15624186f8e55d2f107432c417a21a5a57d8116ff35c2dffe716f58e3e9eedc2`.
+The current bundled Harness is `prism-engine-v10@10.0.1-alpha.2`, sourced from Neural Narratology Release `harness-20260716-1` at commit `ce3d1f1e8b1738b3d5f19e1913298ac9756b8a36`. The manifest SHA-256 is `f1198be3eaa08bda540500a2fa7e272d61236373a4d4abf3bddde27c68ed737f`.
 
 `assets/` must match the manifest inventory and hashes exactly. Do not add Vesicle notes, host-only profiles, or local experiments to that directory. Update the bundled baseline from a published Harness Release and verify the complete inventory rather than copying selected files from another checkout.
 

@@ -38,7 +38,7 @@ export type BoundQualityEvaluation = {
     target: QualityArtifactTarget;
     candidate: QualityCandidate;
     evaluation: QualityEvaluation;
-    warningReason?: "target-unreadable" | "target-oversize";
+    warningReason?: QualityEventTarget["warningReason"];
   }>;
 };
 
@@ -102,7 +102,7 @@ export function evaluateBoundQuality(options: {
   };
   const evaluation = evaluateQualityCandidate(candidate, options.runtime.rules);
   const decision = qualityDecision(options.mode, evaluation, options.state);
-  const policy = qualityPolicy(options.mode, evaluation, decision);
+  const policy = qualityPolicy(options.mode, evaluation, decision, evaluation.detectorStatus === "budget-exhausted");
   const assessment = qualityAssessment(`assistant:${evaluation.candidateHash}`, evaluation);
   return {
     mode: options.mode,
@@ -132,11 +132,14 @@ export function evaluateBoundQualityTargets(options: {
       type,
       content: extractProseCandidate(type, content ?? ""),
     };
+    const evaluation = evaluateQualityCandidate(candidate, options.runtime.rules);
     return {
       target,
       candidate,
-      evaluation: evaluateQualityCandidate(candidate, options.runtime.rules),
-      ...(warningReason ? { warningReason } : {}),
+      evaluation,
+      ...(warningReason || evaluation.detectorStatus === "budget-exhausted"
+        ? { warningReason: warningReason ?? "detector-budget-exhausted" as const }
+        : {}),
     };
   });
   const evaluation = aggregateTargetEvaluations(targetEvaluations);
@@ -254,6 +257,9 @@ function aggregateTargetEvaluations(
     candidateHash: createHash("sha256").update(identity).digest("hex"),
     findings: targets.flatMap((target) => target.evaluation.findings),
     blockingFindings: targets.flatMap((target) => target.evaluation.blockingFindings),
+    detectorStatus: targets.some((target) => target.evaluation.detectorStatus === "budget-exhausted")
+      ? "budget-exhausted"
+      : "complete",
     detectorMs: targets.reduce((total, target) => total + target.evaluation.detectorMs, 0),
   };
 }
@@ -335,6 +341,9 @@ function qualityEventTargets(
       candidateHash: evaluation.candidateHash,
       evaluation,
       decision,
+      ...(evaluation.detectorStatus === "budget-exhausted"
+        ? { warningReason: "detector-budget-exhausted" as const }
+        : {}),
     })];
   }
   return targets.map(({ target, evaluation: targetEvaluation, warningReason }) => qualityEventTarget({
@@ -357,7 +366,7 @@ function qualityEventTarget(options: {
   bytes?: number;
   evaluation: QualityEvaluation;
   decision: QualityDecision;
-  warningReason?: "target-unreadable" | "target-oversize";
+  warningReason?: QualityEventTarget["warningReason"];
 }): QualityEventTarget {
   const blocking = options.evaluation.blockingFindings.length > 0;
   const status: QualityEventTarget["status"] = options.warningReason ? "warning" : blocking

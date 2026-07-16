@@ -36,10 +36,11 @@ describe("Harness Pack foundation", () => {
       expect(runtime?.selection).toBe("bundled");
       expect(runtime?.lock).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.1",
-        manifestSha256: "15624186f8e55d2f107432c417a21a5a57d8116ff35c2dffe716f58e3e9eedc2",
+        packVersion: "10.0.1-alpha.2",
+        manifestSha256: "f1198be3eaa08bda540500a2fa7e272d61236373a4d4abf3bddde27c68ed737f",
       });
-      expect(runtime?.pack.assetCount).toBe(47);
+      expect(runtime?.pack.assetCount).toBe(54);
+      expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-detector/document-metrics@1");
       expect((await runtime!.assets.resolveFile("assets/engines/etl.profile.yaml")).source).toBe("bundled");
       expect((await runtime!.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("host");
       expect((await listAgentProfiles(project, runtime!.assets)).map((profile) => profile.id)).toEqual([
@@ -67,7 +68,7 @@ describe("Harness Pack foundation", () => {
       await cp(join(import.meta.dir, "..", "host-assets"), hostAssetsDirectory, { recursive: true });
       await cp(join(import.meta.dir, "..", "harness-manifest.json"), manifestPath);
       const layout = { rootDirectory: root, manifestPath, assetsDirectory, hostAssetsDirectory };
-      expect((await verifyBundledHarnessPack(layout)).assetCount).toBe(47);
+      expect((await verifyBundledHarnessPack(layout)).assetCount).toBe(54);
       await writeFile(join(assetsDirectory, "prompts", "engines", "etl.md"), "tampered", "utf8");
       await expect(verifyBundledHarnessPack(layout)).rejects.toThrow("hash mismatch");
     } finally {
@@ -304,7 +305,7 @@ describe("Harness Pack foundation", () => {
       expect(bundled?.selection).toBe("bundled");
       expect(bundled?.lock).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.1",
+        packVersion: "10.0.1-alpha.2",
       });
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
@@ -444,7 +445,7 @@ describe("Harness Pack foundation", () => {
       const snapshot = await loadSessionSnapshot(project, first.sessionId);
       expect(snapshot.harness).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.1",
+        packVersion: "10.0.1-alpha.2",
       });
       expect(snapshot.assets?.files.some((file) => file.source === "bundled")).toBe(true);
       expect(snapshot.assets?.files.some((file) => file.source === "host")).toBe(true);
