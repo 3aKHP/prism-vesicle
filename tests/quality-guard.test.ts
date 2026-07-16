@@ -276,6 +276,25 @@ describe("deterministic Output Quality Guard", () => {
         },
       })],
     })).toThrow("requires minimumSeparators");
+    const adversarialStarted = performance.now();
+    expect(() => parseDetectorRules({
+      schema: "detector-rules/v1",
+      module: "anti-ai-flavor",
+      language: "zh-CN",
+      rules: [detector("catastrophic-backtracking", "F3", "tier3", "experimental", {
+        kind: "metric",
+        unit: "candidate",
+        metric: {
+          signal: "cliche_per_1000_chars",
+          operator: "gte",
+          threshold: 1,
+          minimumMatches: 1,
+          excludeDialogue: true,
+          patterns: [{ id: "redos", value: "(a+)+$" }],
+        },
+      })],
+    })).toThrow("potentially unsafe regular expression");
+    expect(performance.now() - adversarialStarted).toBeLessThan(100);
   });
 });
 

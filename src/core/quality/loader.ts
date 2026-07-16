@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { RegExpParser, visitRegExpAST, type AST } from "@eslint-community/regexpp";
 import type {
   QualityDetectorRule,
   QualityMetric,
@@ -18,6 +19,9 @@ const safeArtifactPattern = /^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
 const documentMetricsCapability = "quality-detector/document-metrics@1";
 const maxMetricPatterns = 64;
 const maxMetricPatternLength = 2_048;
+const maxMetricPatternQuantifiers = 25;
+const maxMetricPatternRepetition = 64;
+const metricPatternParser = new RegExpParser({ ecmaVersion: 2025 });
 const requiredProtectedRegions = [
   "markdown-fenced-code",
   "markdown-blockquote",
@@ -301,6 +305,7 @@ function parseMetricPattern(value: unknown, label: string): QualityMetricPattern
   try {
     const expression = new RegExp(pattern, flags);
     if (expression.test("")) throw new Error("pattern must not match empty text");
+    assertSafeMetricPattern(pattern, flags, label);
   } catch (error) {
     throw new Error(`${label} is invalid: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -310,6 +315,42 @@ function parseMetricPattern(value: unknown, label: string): QualityMetricPattern
     ...(flags !== undefined ? { flags } : {}),
     ...(raw.core !== undefined ? { core: raw.core as boolean } : {}),
   };
+}
+
+function assertSafeMetricPattern(pattern: string, flags: string | undefined, label: string): void {
+  const parsed = metricPatternParser.parsePattern(pattern, 0, pattern.length, {
+    unicode: flags?.includes("u") ?? false,
+    unicodeSets: flags?.includes("v") ?? false,
+  });
+  const quantifierStack: AST.Quantifier[] = [];
+  let quantifierCount = 0;
+  let unsafeReason: string | undefined;
+  visitRegExpAST(parsed, {
+    onBackreferenceEnter() {
+      unsafeReason ??= "backreferences are not allowed";
+    },
+    onQuantifierEnter(node) {
+      quantifierCount += 1;
+      const parent = quantifierStack.at(-1);
+      if (node.max > maxMetricPatternRepetition) {
+        unsafeReason ??= `repetition upper bounds must not exceed ${maxMetricPatternRepetition}`;
+      } else if (parent && parent.max > 1 && node.max > 0) {
+        unsafeReason ??= "nested repeating quantifiers are not allowed";
+      } else if (node.max > 1
+        && (node.element.type === "Group" || node.element.type === "CapturingGroup")
+        && node.element.alternatives.length > 1) {
+        unsafeReason ??= "repeated groups with alternatives are not allowed";
+      }
+      quantifierStack.push(node);
+    },
+    onQuantifierLeave() {
+      quantifierStack.pop();
+    },
+  });
+  if (quantifierCount > maxMetricPatternQuantifiers) {
+    unsafeReason ??= `patterns must not contain more than ${maxMetricPatternQuantifiers} quantifiers`;
+  }
+  if (unsafeReason) throw new Error(`${label} contains a potentially unsafe regular expression: ${unsafeReason}`);
 }
 
 async function validatePublishedSchemas(moduleDirectory: string, manifest: QualityRulePackManifest): Promise<void> {
