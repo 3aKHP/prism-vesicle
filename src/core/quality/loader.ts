@@ -21,6 +21,7 @@ const maxMetricPatterns = 64;
 const maxMetricPatternLength = 2_048;
 const maxMetricPatternQuantifiers = 25;
 const maxMetricPatternRepetition = 64;
+const maxMetricPatternBacktrackingCombinations = 4_096;
 const metricPatternParser = new RegExpParser({ ecmaVersion: 2025 });
 const requiredProtectedRegions = [
   "markdown-fenced-code",
@@ -326,6 +327,11 @@ function assertSafeMetricPattern(pattern: string, flags: string | undefined, lab
   let quantifierCount = 0;
   let unsafeReason: string | undefined;
   visitRegExpAST(parsed, {
+    onAlternativeEnter(node) {
+      if (alternativeRepetitionCombinations(node) > maxMetricPatternBacktrackingCombinations) {
+        unsafeReason ??= `variable repetition combinations must not exceed ${maxMetricPatternBacktrackingCombinations}`;
+      }
+    },
     onBackreferenceEnter() {
       unsafeReason ??= "backreferences are not allowed";
     },
@@ -351,6 +357,38 @@ function assertSafeMetricPattern(pattern: string, flags: string | undefined, lab
     unsafeReason ??= `patterns must not contain more than ${maxMetricPatternQuantifiers} quantifiers`;
   }
   if (unsafeReason) throw new Error(`${label} contains a potentially unsafe regular expression: ${unsafeReason}`);
+}
+
+function alternativeRepetitionCombinations(alternative: AST.Alternative): number {
+  return alternative.elements.reduce(
+    (total, element) => cappedCombinationProduct(total, elementRepetitionCombinations(element)),
+    1,
+  );
+}
+
+function elementRepetitionCombinations(element: AST.Element): number {
+  if (element.type === "Quantifier") {
+    const choices = Math.min(
+      maxMetricPatternBacktrackingCombinations + 1,
+      element.max - element.min + 1,
+    );
+    return cappedCombinationProduct(choices, elementRepetitionCombinations(element.element));
+  }
+  if (element.type === "Group" || element.type === "CapturingGroup"
+    || (element.type === "Assertion" && (element.kind === "lookahead" || element.kind === "lookbehind"))) {
+    return Math.max(1, ...element.alternatives.map(alternativeRepetitionCombinations));
+  }
+  return 1;
+}
+
+function cappedCombinationProduct(left: number, right: number): number {
+  if (left > maxMetricPatternBacktrackingCombinations || right > maxMetricPatternBacktrackingCombinations) {
+    return maxMetricPatternBacktrackingCombinations + 1;
+  }
+  const product = left * right;
+  return product > maxMetricPatternBacktrackingCombinations
+    ? maxMetricPatternBacktrackingCombinations + 1
+    : product;
 }
 
 async function validatePublishedSchemas(moduleDirectory: string, manifest: QualityRulePackManifest): Promise<void> {
