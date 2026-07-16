@@ -31,6 +31,8 @@ export type FileToolEvent = {
   changed: boolean;
   /** Size of the resulting or observed file, or the deleted file for delete_file. */
   bytes?: number;
+  /** SHA-256 of the complete resulting file for prose mutation operations. */
+  sha256?: string;
   /** Bytes added by append_file. */
   deltaBytes?: number;
   lines?: number;

@@ -15,6 +15,7 @@ import { recordAssistantToolCalls } from "./assistant-recorder";
 import { resolveInteractionPause } from "./interaction-pause";
 import { completeProviderRound, emitAssistantResponse } from "./provider-round";
 import { executeToolRound } from "./tool-round-executor";
+import { failedToolResult, recordToolResult } from "./tool-result-recorder";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
 import type { AgentLoopEvent, RunPromptResult } from "./types";
@@ -22,15 +23,20 @@ import type { HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
 import {
   evaluateBoundQuality,
+  evaluateBoundQualityTargets,
+  durableQualityTargets,
   isQualityBoundary,
+  isQualityArtifactMutationCall,
   qualityCandidateParts,
   qualityModeForEngine,
-  qualityMutationPartsForProducer,
+  qualityArtifactTargetFromResult,
+  readQualityArtifactTargets,
   qualityRewriteFeedback,
   recordQualityEvent,
   shouldBufferQualityOutput,
   type BoundQualityEvaluation,
   type QualityRewriteState,
+  upsertQualityArtifactTarget,
 } from "../quality";
 
 const maxToolIterations = 40;
@@ -63,7 +69,7 @@ type LoopRuntime = {
   processManager: ProcessManager;
   permission: PermissionRuntimeOptions;
   trackCheckpointMutation: (paths: string[]) => Promise<void>;
-  quality: QualityRewriteState & { proseParts: string[]; mutationParts: string[] };
+  quality: QualityRewriteState & { proseParts: string[]; mutationParts: string[]; targets: NonNullable<QualityRewriteState["targets"]> };
 };
 
 export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -119,13 +125,14 @@ async function advanceRound(
   });
   const toolCalls = response.toolCalls ?? [];
   if (toolCalls.length === 0) runtime.quality.proseParts.push(...qualityCandidateParts(response));
-  runtime.quality.mutationParts.push(...qualityMutationPartsForProducer(response, args.profile.id));
-  const quality = await evaluateQualityBoundary(args, runtime, response);
+  const quality = await evaluateQualityBoundary(args, runtime, response, "before-mutations");
   if (quality?.decision === "rewrite") {
+    retainBlockingArtifactTargets(runtime, quality);
     await recordRejectedQualityRound(args, runtime, response, quality);
     await recordQualityEvent(args.session, quality);
     emitQualityStatus(args, runtime, quality);
-    clearQualityCandidate(runtime);
+    runtime.quality.proseParts = [];
+    runtime.quality.mutationParts = [];
     return { response, hadToolCalls: true, anyFailed: false };
   }
   const buffered = shouldBufferQualityOutput(qualityModeForEngine(args.harness?.quality, args.profile.id));
@@ -147,7 +154,6 @@ async function advanceRound(
     runtime,
     response,
     plan.executableHostToolCalls,
-    plan.permissionRequiredCalls,
   );
   const execution = await executeToolRound({
     plan,
@@ -172,7 +178,23 @@ async function advanceRound(
     trackCheckpointMutation: runtime.trackCheckpointMutation,
     markCheckpointTainted: async () => { await args.checkpoint?.markTaintedByHostProcess(); },
   });
-  removeFailedQualityMutations(runtime, toolCalls, execution.failedToolCallIds, args.profile.id);
+  for (const fileResult of execution.fileResults) {
+    const target = qualityArtifactTargetFromResult(args.profile.id, fileResult);
+    if (target) upsertQualityArtifactTarget(runtime.quality.targets, target);
+  }
+  const postMutationQuality = plan.permissionRequiredCalls.length === 0
+    ? await evaluateQualityBoundary(args, runtime, response, "after-mutations")
+    : undefined;
+  if (postMutationQuality?.decision === "rewrite") {
+    retainBlockingArtifactTargets(runtime, postMutationQuality);
+    await recordPostMutationQualityRewrite(args, runtime, plan.interactiveCalls, postMutationQuality);
+    await recordQualityEvent(args.session, postMutationQuality);
+    emitQualityStatus(args, runtime, postMutationQuality);
+    runtime.quality.proseParts = [];
+    runtime.quality.mutationParts = [];
+    return { response, hadToolCalls: true, anyFailed: execution.anyFailed };
+  }
+  if (postMutationQuality) clearQualityCandidate(runtime);
   if (execution.delegationPause) {
     return {
       response,
@@ -209,16 +231,6 @@ async function advanceRound(
   };
 }
 
-function removeFailedQualityMutations(runtime: LoopRuntime, calls: ToolCall[], failedCallIds: Set<string>, producer: string): void {
-  for (const call of calls) {
-    if (!failedCallIds.has(call.id)) continue;
-    for (const part of qualityMutationPartsForProducer({ id: call.id, content: "", toolCalls: [call] }, producer)) {
-      const index = runtime.quality.mutationParts.lastIndexOf(part);
-      if (index >= 0) runtime.quality.mutationParts.splice(index, 1);
-    }
-  }
-}
-
 function qualityDeliveryParts(runtime: LoopRuntime): string[] {
   return runtime.quality.mutationParts.length > 0 ? runtime.quality.mutationParts : runtime.quality.proseParts;
 }
@@ -226,6 +238,7 @@ function qualityDeliveryParts(runtime: LoopRuntime): string[] {
 function clearQualityCandidate(runtime: LoopRuntime): void {
   runtime.quality.proseParts = [];
   runtime.quality.mutationParts = [];
+  runtime.quality.targets = [];
 }
 
 async function recordPendingQualityCheck(
@@ -233,42 +246,22 @@ async function recordPendingQualityCheck(
   runtime: LoopRuntime,
   response: VesicleResponse,
   executableCalls: ToolCall[],
-  deferredCalls: ToolCall[],
 ): Promise<boolean> {
   const quality = args.harness?.quality;
-  if (!quality || isQualityBoundary(response)
-    || qualityMutationPartsForProducer({ ...response, toolCalls: executableCalls }, args.profile.id).length === 0) return false;
+  if (!quality
+    || !executableCalls.some((call) => isQualityArtifactMutationCall(call, args.profile.id))) return false;
   if (!shouldBufferQualityOutput(qualityModeForEngine(quality, args.profile.id))) return false;
-  const candidateParts = [...qualityDeliveryParts(runtime)];
-  removeMutationParts(candidateParts, deferredCalls, args.profile.id);
+  const pending = durableQualityState(args, runtime);
+  if (!pending) return false;
   await args.session.append({
     role: "system",
     content: "",
     metadata: {
       kind: "quality-check-pending",
-      qualityRewrite: {
-        producer: args.profile.id,
-        packId: quality.packId,
-        packVersion: quality.packVersion,
-        manifestSha256: quality.manifestSha256,
-        ruleVersion: quality.ruleManifest.version,
-        ruleSourceHash: quality.ruleManifest.sourceHash,
-        attempts: runtime.quality.attempts,
-        rejectedHashes: [...runtime.quality.rejectedHashes],
-        candidateParts,
-      },
+      qualityRewrite: pending,
     },
   });
   return true;
-}
-
-function removeMutationParts(candidateParts: string[], calls: ToolCall[], producer: string): void {
-  for (const call of calls) {
-    for (const part of qualityMutationPartsForProducer({ id: call.id, content: "", toolCalls: [call] }, producer)) {
-      const index = candidateParts.lastIndexOf(part);
-      if (index >= 0) candidateParts.splice(index, 1);
-    }
-  }
 }
 
 function durableQualityState(args: RunLoopArgs, runtime: LoopRuntime) {
@@ -284,6 +277,7 @@ function durableQualityState(args: RunLoopArgs, runtime: LoopRuntime) {
     attempts: runtime.quality.attempts,
     rejectedHashes: [...runtime.quality.rejectedHashes],
     candidateParts: [...qualityDeliveryParts(runtime)],
+    targets: durableQualityTargets(runtime.quality.targets),
   };
 }
 
@@ -291,27 +285,66 @@ async function evaluateQualityBoundary(
   args: RunLoopArgs,
   runtime: LoopRuntime,
   response: VesicleResponse,
+  phase: "before-mutations" | "after-mutations",
 ): Promise<BoundQualityEvaluation | undefined> {
   const qualityRuntime = args.harness?.quality;
   if (!qualityRuntime || !isQualityBoundary(response)) return undefined;
+  const hasArtifactMutation = (response.toolCalls ?? [])
+    .some((call) => isQualityArtifactMutationCall(call, args.profile.id));
+  if ((phase === "before-mutations" && hasArtifactMutation)
+    || (phase === "after-mutations" && !hasArtifactMutation)) return undefined;
   const mode = qualityModeForEngine(qualityRuntime, args.profile.id);
   if (mode === "off" || mode === "analyze") return undefined;
   args.onEvent?.({ type: "quality_status", phase: "checking", attempt: runtime.quality.attempts, findingCount: 0 });
-  const result = evaluateBoundQuality({
-    runtime: qualityRuntime,
-    producer: args.profile.id,
-    mode,
-    content: qualityDeliveryParts(runtime).join("\n\n"),
-    attempt: runtime.quality.attempts,
-    state: runtime.quality,
-    usage: response.usage,
-  });
+  const result = runtime.quality.targets.length > 0
+    ? evaluateBoundQualityTargets({
+      runtime: qualityRuntime,
+      producer: args.profile.id,
+      mode,
+      targets: await readQualityArtifactTargets(args.rootDir, runtime.quality.targets),
+      attempt: runtime.quality.attempts,
+      state: runtime.quality,
+      usage: response.usage,
+    })
+    : evaluateBoundQuality({
+      runtime: qualityRuntime,
+      producer: args.profile.id,
+      mode,
+      content: qualityDeliveryParts(runtime).join("\n\n"),
+      attempt: runtime.quality.attempts,
+      state: runtime.quality,
+      usage: response.usage,
+    });
   if (!result) return undefined;
   if (result.decision !== "rewrite") {
     await recordQualityEvent(args.session, result);
     emitQualityStatus(args, runtime, result);
   }
   return result;
+}
+
+async function recordPostMutationQualityRewrite(
+  args: RunLoopArgs,
+  runtime: LoopRuntime,
+  interactionCalls: ToolCall[],
+  result: BoundQualityEvaluation,
+): Promise<void> {
+  const persistedState = durableQualityState(args, runtime);
+  if (!persistedState) throw new Error("Quality rewrite state is unavailable under the active Guard.");
+  const feedback = qualityRewriteFeedback(result);
+  for (const call of interactionCalls) {
+    await recordToolResult({
+      result: failedToolResult(call.id, call.name, feedback),
+      messages: args.messages,
+      session: args.session,
+      metadata: {
+        kind: "quality-rewrite-feedback",
+        candidateHash: result.evaluation.candidateHash,
+        qualityRewrite: { ...persistedState, candidateParts: [] },
+      },
+      emitEvent: false,
+    });
+  }
 }
 
 function emitQualityStatus(args: RunLoopArgs, runtime: LoopRuntime, result: BoundQualityEvaluation): void {
@@ -333,16 +366,9 @@ async function recordRejectedQualityRound(
   result: BoundQualityEvaluation,
 ): Promise<void> {
   const calls = response.toolCalls ?? [];
-  const rewriteState = {
-    producer: args.profile.id,
-    packId: result.event.packId,
-    packVersion: result.event.packVersion,
-    manifestSha256: result.event.manifestSha256,
-    ruleVersion: result.event.ruleVersion,
-    ruleSourceHash: result.event.ruleSourceHash,
-    attempts: runtime.quality.attempts,
-    rejectedHashes: [...runtime.quality.rejectedHashes],
-  };
+  const persistedState = durableQualityState(args, runtime);
+  if (!persistedState) throw new Error("Quality rewrite state is unavailable under the active Guard.");
+  const rewriteState = { ...persistedState, candidateParts: [] };
   if (calls.length > 0) {
     const feedback = qualityRewriteFeedback(result);
     const assistantMessage: VesicleMessage = { role: "assistant", content: "", toolCalls: calls };
@@ -400,8 +426,21 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
       rejectedHashes: new Set(args.qualityState?.rejectedHashes ?? []),
       proseParts: [],
       mutationParts: [...(args.qualityState?.candidateParts ?? [])],
+      targets: (args.qualityState?.targets ?? []).map((target) => ({
+        ...target,
+        mutationCallIds: [...target.mutationCallIds],
+        rejectedHashes: new Set(target.rejectedHashes),
+      })),
     },
   };
+}
+
+function retainBlockingArtifactTargets(runtime: LoopRuntime, result: BoundQualityEvaluation): void {
+  if (!result.targetEvaluations) return;
+  const blockingIds = new Set(result.targetEvaluations
+    .filter((target) => target.evaluation.blockingFindings.length > 0)
+    .map((target) => target.target.id));
+  runtime.quality.targets = runtime.quality.targets.filter((target) => blockingIds.has(target.id));
 }
 
 function createCheckpointMutationTracker(checkpoint?: FileCheckpointManager): (paths: string[]) => Promise<void> {

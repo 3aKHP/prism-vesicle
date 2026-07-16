@@ -44,6 +44,7 @@ type ExecuteToolRoundOptions = {
 export async function executeToolRound(options: ExecuteToolRoundOptions): Promise<{
   anyFailed: boolean;
   failedToolCallIds: Set<string>;
+  fileResults: ToolResult[];
   delegationPause?: DelegationPause;
 }> {
   const { plan } = options;
@@ -79,15 +80,17 @@ export async function executeToolRound(options: ExecuteToolRoundOptions): Promis
   return {
     anyFailed: nonAgent.anyFailed || agents.anyFailed,
     failedToolCallIds: new Set([...nonAgent.failedToolCallIds, ...agents.failedToolCallIds]),
+    fileResults: nonAgent.fileResults,
     ...(delegationPause ? { delegationPause } : {}),
   };
 }
 
 async function executeNonAgentCalls(
   options: ExecuteToolRoundOptions,
-): Promise<{ anyFailed: boolean; failedToolCallIds: Set<string>; error?: unknown }> {
+): Promise<{ anyFailed: boolean; failedToolCallIds: Set<string>; fileResults: ToolResult[]; error?: unknown }> {
   let anyFailed = false;
   const failedToolCallIds = new Set<string>();
+  const fileResults: ToolResult[] = [];
 
   try {
     for (const call of options.plan.executableHostToolCalls) {
@@ -113,15 +116,16 @@ async function executeNonAgentCalls(
         },
         onEvent: options.onEvent,
       });
+      if (result.fileEvent) fileResults.push(result);
       if (!result.ok) {
         anyFailed = true;
         failedToolCallIds.add(call.id);
       }
     }
   } catch (error) {
-    return { anyFailed, failedToolCallIds, error };
+    return { anyFailed, failedToolCallIds, fileResults, error };
   }
-  return { anyFailed, failedToolCallIds };
+  return { anyFailed, failedToolCallIds, fileResults };
 }
 
 async function recordAgentCalls(

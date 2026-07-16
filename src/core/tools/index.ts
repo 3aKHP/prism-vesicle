@@ -53,7 +53,7 @@ import {
   shellStopToolDefinition,
 } from "./shell";
 
-export { executeFileTool, fileToolDefinitions } from "./fs";
+export { executeFileTool, fileToolDefinitions, readWritableProjectText } from "./fs";
 export {
   executeShellExecTool,
   executeShellOutputTool,

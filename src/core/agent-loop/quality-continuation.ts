@@ -6,6 +6,7 @@ import { loadSessionSnapshot } from "../session/store";
 import type { ContinuationContextOptions } from "./continuation-context";
 import { loadContinuationContext } from "./continuation-context";
 import { runLoop } from "./turn-loop";
+import { hydrateQualityTargets } from "../quality";
 import type { AgentLoopEvent, RunPromptResult } from "./types";
 
 type ResumeQualityRewriteOptions = ContinuationContextOptions & {
@@ -58,6 +59,7 @@ export async function resumeQualityRewrite(options: ResumeQualityRewriteOptions)
       attempts: pending.attempts,
       rejectedHashes: new Set(pending.rejectedHashes),
       candidateParts: pending.candidateParts,
+      targets: hydrateQualityTargets(pending.targets),
     },
   });
 }

@@ -1,6 +1,8 @@
 import type { Stats } from "node:fs";
+import { createHash } from "node:crypto";
 import { appendFile, copyFile, lstat, mkdir, readdir, readFile, realpath, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
+import { TextDecoder } from "node:util";
 import { writableProjectRoots } from "../artifacts/roots";
 import type { FileToolEvent, FileToolExecutionOptions, ToolCall, ToolDefinition, ToolResult } from "./types";
 import { ingestImageBytes, ingestImageFile } from "../attachments/store";
@@ -573,6 +575,7 @@ export async function executeFileTool(
           path: toProjectPath(rootDir, filePath),
           changed: true,
           bytes: textByteLength(args.content),
+          sha256: sha256(args.content),
         });
       }
 
@@ -607,6 +610,7 @@ export async function executeFileTool(
           path: toProjectPath(rootDir, filePath),
           changed: true,
           bytes: textByteLength(args.content),
+          sha256: sha256(args.content),
         });
       }
 
@@ -635,6 +639,7 @@ export async function executeFileTool(
           path: toProjectPath(rootDir, filePath),
           changed: true,
           bytes: textByteLength(next),
+          sha256: sha256(next),
           occurrences: args.replaceAll ? count : 1,
           ...(matchLines.length > 0 ? { matchLines } : {}),
         });
@@ -650,13 +655,14 @@ export async function executeFileTool(
         await options.beforeMutation?.(mutationPaths);
         await mkdir(dirname(filePath), { recursive: true });
         await appendFile(filePath, args.content, { encoding: "utf8", flag: "a" });
-        const appended = await stat(filePath);
+        const appended = await readFile(filePath);
         return ok(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`, {
           kind: "file_operation",
           operation: "append",
           path: toProjectPath(rootDir, filePath),
           changed: true,
-          bytes: appended.size,
+          bytes: appended.byteLength,
+          sha256: sha256(appended),
           deltaBytes: textByteLength(args.content),
         });
       }
@@ -822,6 +828,28 @@ async function resolveAllowed(rootDir: string, requestedPath: string, roots: str
   }
 
   return resolved;
+}
+
+export async function readWritableProjectText(rootDir: string, requestedPath: string): Promise<{
+  path: string;
+  content: string;
+  bytes: number;
+  sha256: string;
+}> {
+  const filePath = await resolveAllowed(rootDir, requestedPath, writableRoots);
+  await assertFile(filePath);
+  const bytes = await readFile(filePath);
+  const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  return {
+    path: toProjectPath(rootDir, filePath),
+    content,
+    bytes: bytes.byteLength,
+    sha256: sha256(bytes),
+  };
+}
+
+function sha256(value: string | Uint8Array): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function sliceLines(content: string, startLine: number | undefined, endLine: number | undefined): string {
