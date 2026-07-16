@@ -22,6 +22,8 @@ const maxMetricPatternLength = 2_048;
 const maxMetricPatternQuantifiers = 25;
 const maxMetricPatternRepetition = 64;
 const maxMetricPatternBacktrackingCombinations = 4_096;
+const maxMetricPatternBranches = 64;
+const maxMetricPatternBranchingGroups = 3;
 const metricPatternParser = new RegExpParser({ ecmaVersion: 2025 });
 const requiredProtectedRegions = [
   "markdown-fenced-code",
@@ -48,6 +50,13 @@ export async function loadQualityRuntime(source: QualityRuntimeSource): Promise<
   }
   if (new Set(rules.map((rule) => rule.id)).size !== rules.length) {
     throw new Error("Rule Pack detector rule ids must be unique across languages.");
+  }
+  const documentMetricPatternCount = rules.reduce((total, rule) =>
+    total + (rule.matcher.kind === "metric" && isDocumentMetricSignal(rule.matcher.metric.signal)
+      ? rule.matcher.metric.patterns?.length ?? 0
+      : 0), 0);
+  if (documentMetricPatternCount > maxMetricPatterns) {
+    throw new Error(`Rule Pack document metrics must not contain more than ${maxMetricPatterns} patterns in total.`);
   }
   if (rules.some((rule) => rule.matcher.kind === "metric" && isDocumentMetricSignal(rule.matcher.metric.signal))
     && !manifest.requiredCapabilities.includes(documentMetricsCapability)) {
@@ -323,17 +332,44 @@ function assertSafeMetricPattern(pattern: string, flags: string | undefined, lab
     unicode: flags?.includes("u") ?? false,
     unicodeSets: flags?.includes("v") ?? false,
   });
+  if (patternMinimumConsumption(parsed) === 0) {
+    throw new Error(`${label} must consume at least one character`);
+  }
+  if (parsed.alternatives.length > maxMetricPatternBranches) {
+    throw new Error(`${label} must not contain more than ${maxMetricPatternBranches} top-level alternatives`);
+  }
   const quantifierStack: AST.Quantifier[] = [];
   let quantifierCount = 0;
+  let branchingGroupCount = 0;
   let unsafeReason: string | undefined;
   visitRegExpAST(parsed, {
     onAlternativeEnter(node) {
-      if (alternativeRepetitionCombinations(node) > maxMetricPatternBacktrackingCombinations) {
-        unsafeReason ??= `variable repetition combinations must not exceed ${maxMetricPatternBacktrackingCombinations}`;
+      if (alternativeBacktrackingCombinations(node) > maxMetricPatternBacktrackingCombinations) {
+        unsafeReason ??= `backtracking combinations must not exceed ${maxMetricPatternBacktrackingCombinations}`;
       }
     },
     onBackreferenceEnter() {
       unsafeReason ??= "backreferences are not allowed";
+    },
+    onCapturingGroupEnter(node) {
+      if (node.alternatives.length > 1) branchingGroupCount += 1;
+      if (node.alternatives.length > maxMetricPatternBranches) {
+        unsafeReason ??= `groups must not contain more than ${maxMetricPatternBranches} alternatives`;
+      }
+    },
+    onGroupEnter(node) {
+      if (node.alternatives.length > 1) branchingGroupCount += 1;
+      if (node.alternatives.length > maxMetricPatternBranches) {
+        unsafeReason ??= `groups must not contain more than ${maxMetricPatternBranches} alternatives`;
+      }
+    },
+    onAssertionEnter(node) {
+      if ((node.kind === "lookahead" || node.kind === "lookbehind") && node.alternatives.length > 1) {
+        branchingGroupCount += 1;
+        if (node.alternatives.length > maxMetricPatternBranches) {
+          unsafeReason ??= `lookarounds must not contain more than ${maxMetricPatternBranches} alternatives`;
+        }
+      }
     },
     onQuantifierEnter(node) {
       quantifierCount += 1;
@@ -356,27 +392,55 @@ function assertSafeMetricPattern(pattern: string, flags: string | undefined, lab
   if (quantifierCount > maxMetricPatternQuantifiers) {
     unsafeReason ??= `patterns must not contain more than ${maxMetricPatternQuantifiers} quantifiers`;
   }
+  if (branchingGroupCount > maxMetricPatternBranchingGroups) {
+    unsafeReason ??= `patterns must not contain more than ${maxMetricPatternBranchingGroups} branching groups`;
+  }
   if (unsafeReason) throw new Error(`${label} contains a potentially unsafe regular expression: ${unsafeReason}`);
 }
 
-function alternativeRepetitionCombinations(alternative: AST.Alternative): number {
+function patternMinimumConsumption(pattern: AST.Pattern): number {
+  return Math.min(...pattern.alternatives.map(alternativeMinimumConsumption));
+}
+
+function alternativeMinimumConsumption(alternative: AST.Alternative): number {
+  return alternative.elements.reduce((total, element) => total + elementMinimumConsumption(element), 0);
+}
+
+function elementMinimumConsumption(element: AST.Element): number {
+  if (element.type === "Quantifier") {
+    return element.min * elementMinimumConsumption(element.element);
+  }
+  if (element.type === "Group" || element.type === "CapturingGroup") {
+    return Math.min(...element.alternatives.map(alternativeMinimumConsumption));
+  }
+  if (element.type === "Character" || element.type === "CharacterClass"
+    || element.type === "CharacterSet" || element.type === "ExpressionCharacterClass") {
+    return 1;
+  }
+  return 0;
+}
+
+function alternativeBacktrackingCombinations(alternative: AST.Alternative): number {
   return alternative.elements.reduce(
-    (total, element) => cappedCombinationProduct(total, elementRepetitionCombinations(element)),
+    (total, element) => cappedCombinationProduct(total, elementBacktrackingCombinations(element)),
     1,
   );
 }
 
-function elementRepetitionCombinations(element: AST.Element): number {
+function elementBacktrackingCombinations(element: AST.Element): number {
   if (element.type === "Quantifier") {
     const choices = Math.min(
       maxMetricPatternBacktrackingCombinations + 1,
       element.max - element.min + 1,
     );
-    return cappedCombinationProduct(choices, elementRepetitionCombinations(element.element));
+    return cappedCombinationProduct(choices, elementBacktrackingCombinations(element.element));
   }
   if (element.type === "Group" || element.type === "CapturingGroup"
     || (element.type === "Assertion" && (element.kind === "lookahead" || element.kind === "lookbehind"))) {
-    return Math.max(1, ...element.alternatives.map(alternativeRepetitionCombinations));
+    return element.alternatives.reduce(
+      (total, alternative) => cappedCombinationSum(total, alternativeBacktrackingCombinations(alternative)),
+      0,
+    );
   }
   return 1;
 }
@@ -389,6 +453,13 @@ function cappedCombinationProduct(left: number, right: number): number {
   return product > maxMetricPatternBacktrackingCombinations
     ? maxMetricPatternBacktrackingCombinations + 1
     : product;
+}
+
+function cappedCombinationSum(left: number, right: number): number {
+  const sum = left + right;
+  return sum > maxMetricPatternBacktrackingCombinations
+    ? maxMetricPatternBacktrackingCombinations + 1
+    : sum;
 }
 
 async function validatePublishedSchemas(moduleDirectory: string, manifest: QualityRulePackManifest): Promise<void> {

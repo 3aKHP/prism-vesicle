@@ -515,7 +515,7 @@ async function recordInconclusiveWarnings(
     synthesizeDanglingToolResults: false,
   });
   let reusedPendingWarning = false;
-  for (const reason of ["target-unreadable", "target-oversize"] as const) {
+  for (const reason of ["target-unreadable", "target-oversize", "detector-budget-exhausted"] as const) {
     const existing = new Set(snapshot.qualityWarnings
       .filter((warning) => warning.id !== runtime.quality.warningId && warning.reason === reason)
       .flatMap((warning) => warning.targets.map((target) => target.id)));
@@ -536,7 +536,11 @@ async function recordInconclusiveWarnings(
     };
     await args.session.append({
       role: "system",
-      content: `${targets.length} quality target${targets.length === 1 ? " was" : "s were"} ${reason === "target-oversize" ? "over the deterministic check limit" : "not readable as a guarded UTF-8 file"}. The content was delivered without a clean quality result.`,
+      content: `${targets.length} quality target${targets.length === 1 ? " was" : "s were"} ${reason === "target-oversize"
+        ? "over the deterministic check size limit"
+        : reason === "detector-budget-exhausted"
+          ? "over the deterministic check work limit"
+          : "not readable as a guarded UTF-8 file"}. The content was delivered without a clean quality result.`,
       metadata: { kind: "quality-warning", qualityWarning: warning },
     });
     if (warning.id === runtime.quality.warningId) reusedPendingWarning = true;

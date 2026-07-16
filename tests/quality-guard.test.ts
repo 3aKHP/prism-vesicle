@@ -181,6 +181,53 @@ describe("deterministic Output Quality Guard", () => {
     expect(result.detectorMs).toBeLessThan(2_000);
   }, 5_000);
 
+  test("turns dense document metric work into an inconclusive result within the target budget", () => {
+    const denseRule = detector("dense-document-metric", "F3", "tier3", "experimental", {
+      kind: "metric",
+      unit: "candidate",
+      metric: {
+        signal: "cliche_per_1000_chars",
+        operator: "gte",
+        threshold: 1,
+        minimumMatches: 1,
+        excludeDialogue: true,
+        patterns: [{ id: "dense", value: "a" }],
+      },
+    });
+    const runtime: QualityRuntimeContext = {
+      packDirectory: "/fixture",
+      packId: "prism-engine-v10",
+      packVersion: "10.0.1-alpha.2",
+      sourceCommit: "fixture",
+      manifestSha256: "a".repeat(64),
+      ruleManifest: parseRulePackManifest(ruleManifest({
+        requiredCapabilities: ["quality-guard/anti-ai-flavor@1", "quality-detector/document-metrics@1"],
+      })),
+      rules: [denseRule],
+      engineModes: { runtime: "rewrite" },
+      agentModes: {},
+    };
+    const state = { attempts: 0, rejectedHashes: new Set<string>() };
+    const result = evaluateBoundQuality({
+      runtime,
+      producer: "runtime",
+      mode: "rewrite",
+      content: "a".repeat(maxQualityArtifactBytes),
+      attempt: 0,
+      state,
+    });
+    expect(result).toMatchObject({
+      decision: "pass",
+      outcome: "inconclusive",
+      action: "deliver",
+      evaluation: { detectorStatus: "budget-exhausted" },
+      event: { targets: [{ status: "warning", warningReason: "detector-budget-exhausted" }] },
+    });
+    expect(result!.evaluation.detectorMs).toBeLessThan(2_000);
+    expect(state.attempts).toBe(0);
+    expect(state.rejectedHashes.size).toBe(0);
+  }, 5_000);
+
   test("rejects unsupported Rule Pack and Detector contracts", () => {
     expect(() => parseRulePackManifest(ruleManifest({ preprocessing: {
       line_endings: "LF",
@@ -311,7 +358,60 @@ describe("deterministic Output Quality Guard", () => {
           patterns: [{ id: "redos", value: "^a{0,64}a{0,64}a{0,64}a{0,64}a{0,64}b$" }],
         },
       })],
-    })).toThrow("variable repetition combinations");
+    })).toThrow("backtracking combinations");
+    const ambiguousBranchPattern = `^${"(?:a|aa)".repeat(30)}b$`;
+    expect(() => parseDetectorRules({
+      schema: "detector-rules/v1",
+      module: "anti-ai-flavor",
+      language: "zh-CN",
+      rules: [detector("ambiguous-branch-backtracking", "F3", "tier3", "experimental", {
+        kind: "metric",
+        unit: "candidate",
+        metric: {
+          signal: "cliche_per_1000_chars",
+          operator: "gte",
+          threshold: 1,
+          minimumMatches: 1,
+          excludeDialogue: true,
+          patterns: [{ id: "redos", value: ambiguousBranchPattern }],
+        },
+      })],
+    })).toThrow("backtracking combinations");
+    const slowFirstMatchPattern = `${"(?:a|aa)".repeat(12)}(?!a)`;
+    expect(() => parseDetectorRules({
+      schema: "detector-rules/v1",
+      module: "anti-ai-flavor",
+      language: "zh-CN",
+      rules: [detector("slow-first-match", "F3", "tier3", "experimental", {
+        kind: "metric",
+        unit: "candidate",
+        metric: {
+          signal: "cliche_per_1000_chars",
+          operator: "gte",
+          threshold: 1,
+          minimumMatches: 1,
+          excludeDialogue: true,
+          patterns: [{ id: "redos", value: slowFirstMatchPattern }],
+        },
+      })],
+    })).toThrow("branching groups");
+    expect(() => parseDetectorRules({
+      schema: "detector-rules/v1",
+      module: "anti-ai-flavor",
+      language: "zh-CN",
+      rules: [detector("zero-width-lookahead", "F3", "tier3", "experimental", {
+        kind: "metric",
+        unit: "candidate",
+        metric: {
+          signal: "cliche_per_1000_chars",
+          operator: "gte",
+          threshold: 1,
+          minimumMatches: 1,
+          excludeDialogue: true,
+          patterns: [{ id: "zero-width", value: "(?=a)" }],
+        },
+      })],
+    })).toThrow("must consume at least one character");
   });
 });
 

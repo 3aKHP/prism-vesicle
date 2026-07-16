@@ -247,7 +247,7 @@ export async function refreshQualityDecisionArtifacts(
         },
       ]);
       let reusedPointWarning = false;
-      for (const reason of ["target-unreadable", "target-oversize"] as const) {
+      for (const reason of ["target-unreadable", "target-oversize", "detector-budget-exhausted"] as const) {
         const existingTargetIds = new Set(snapshot.qualityWarnings
           .filter((warning) => warning.id !== point.warning.id && warning.reason === reason)
           .flatMap((warning) => warning.targets.map((target) => target.id)));

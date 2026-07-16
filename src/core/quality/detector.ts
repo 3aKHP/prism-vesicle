@@ -11,6 +11,9 @@ import type {
 import { isDocumentMetricSignal } from "./metrics";
 
 type TextUnit = { text: string; start: number; end: number };
+type DocumentMetricBudget = { remainingMatches: number; exhausted: boolean };
+
+const maxDocumentMetricMatchesPerTarget = 100_000;
 
 export function evaluateQualityCandidate(candidate: QualityCandidate, rules: readonly QualityDetectorRule[]): QualityEvaluation {
   const started = performance.now();
@@ -24,9 +27,13 @@ export function evaluateQualityCandidate(candidate: QualityCandidate, rules: rea
     ...protectedRanges,
     ...documentMetricProtectedRanges(normalizedContent),
   ]));
+  const documentMetricBudget: DocumentMetricBudget = {
+    remainingMatches: maxDocumentMetricMatchesPerTarget,
+    exhausted: false,
+  };
   const findings = rules
     .filter((rule) => rule.targets.includes("narrative-prose"))
-    .flatMap((rule) => matchRule(rule, normalizedContent, masked, documentMetricMasked));
+    .flatMap((rule) => matchRule(rule, normalizedContent, masked, documentMetricMasked, documentMetricBudget));
   const unique = deduplicateFindings(findings);
   return {
     normalizedContent,
@@ -37,6 +44,7 @@ export function evaluateQualityCandidate(candidate: QualityCandidate, rules: rea
       && finding.severity === "tier1"
       && !(finding.metric && isDocumentMetricSignal(finding.metric.signal))
     ),
+    detectorStatus: documentMetricBudget.exhausted ? "budget-exhausted" : "complete",
     detectorMs: Math.max(0, performance.now() - started),
   };
 }
@@ -50,6 +58,7 @@ function matchRule(
   original: string,
   masked: string,
   documentMetricMasked: string,
+  documentMetricBudget: DocumentMetricBudget,
 ): QualityFinding[] {
   const metric = rule.matcher.kind === "metric" ? rule.matcher.metric : undefined;
   const units = textUnits(metric && isDocumentMetricSignal(metric.signal) ? documentMetricMasked : masked, rule.matcher.unit);
@@ -76,7 +85,7 @@ function matchRule(
       continue;
     }
     if (rule.matcher.kind !== "metric") continue;
-    const metricFinding = matchMetric(rule, original, unit, rule.matcher.metric);
+    const metricFinding = matchMetric(rule, original, unit, rule.matcher.metric, documentMetricBudget);
     if (metricFinding) findings.push(metricFinding);
   }
   return findings;
@@ -87,6 +96,7 @@ function matchMetric(
   original: string,
   unit: TextUnit,
   metric: QualityMetric,
+  documentMetricBudget: DocumentMetricBudget,
 ): QualityFinding | undefined {
   if (metric.signal === "em_dash_per_100_chars") {
     const trimmed = trimUnit(unit);
@@ -107,9 +117,15 @@ function matchMetric(
   let matchCount = 0;
   let coreMatches = 0;
   const buckets = new Set<string>();
-  for (const pattern of metric.patterns ?? []) {
+  patternLoop: for (const pattern of metric.patterns ?? []) {
+    if (documentMetricBudget.exhausted) break;
     const flags = `${pattern.flags ?? "u"}g`;
     for (const match of narrative.matchAll(new RegExp(pattern.value, flags))) {
+      if (documentMetricBudget.remainingMatches === 0) {
+        documentMetricBudget.exhausted = true;
+        break patternLoop;
+      }
+      documentMetricBudget.remainingMatches -= 1;
       if (!match[0]) continue;
       if (shouldSkipMetricMatch(metric.signal, pattern, narrative, match.index)) continue;
       const current = { start: match.index, end: match.index + match[0].length };
@@ -118,6 +134,9 @@ function matchMetric(
       buckets.add(pattern.id);
       if (pattern.core) coreMatches += 1;
     }
+  }
+  if (documentMetricBudget.exhausted && (metric.operator === "lte" || metric.operator === "lt")) {
+    return undefined;
   }
   if (!firstMatch || matchCount < (metric.minimumMatches ?? 1)) return undefined;
   if (coreMatches < (metric.minimumCoreMatches ?? 0)) return undefined;

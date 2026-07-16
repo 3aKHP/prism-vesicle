@@ -908,8 +908,8 @@ function parseQualityEventTarget(value: unknown): QualityEventTarget | undefined
     status: source.status as QualityEventTarget["status"],
     findingIds: [...source.findingIds] as string[],
     findings,
-    ...(["target-unreadable", "target-oversize"].includes(String(source.warningReason))
-      ? { warningReason: source.warningReason as "target-unreadable" | "target-oversize" }
+    ...(["target-unreadable", "target-oversize", "detector-budget-exhausted"].includes(String(source.warningReason))
+      ? { warningReason: source.warningReason as QualityEventTarget["warningReason"] }
       : {}),
   };
 }
@@ -1022,7 +1022,7 @@ function parseQualityWarning(value: unknown): QualityWarning | undefined {
   if (typeof source.id !== "string"
     || source.guard !== "anti-ai-flavor"
     || !producer
-    || !["exhausted", "judge-invalid", "judge-timeout", "target-unreadable", "target-oversize", "user-abandoned"].includes(String(source.reason))
+    || !["exhausted", "judge-invalid", "judge-timeout", "detector-budget-exhausted", "target-unreadable", "target-oversize", "user-abandoned"].includes(String(source.reason))
     || !Number.isInteger(source.attempt)
     || !Array.isArray(source.targets)) return undefined;
   const targets = source.targets.flatMap((target) => {

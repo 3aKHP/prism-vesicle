@@ -808,6 +808,43 @@ describe("session resume", () => {
     ]);
   });
 
+  test("restores detector work-budget warnings as durable inconclusive targets", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-quality-budget-"));
+    const store = await createSessionStore(rootDir, "quality-detector-budget");
+    const target = {
+      id: "assistant:dense",
+      kind: "assistant-response" as const,
+      candidateHash: "d".repeat(64),
+      status: "warning" as const,
+      findingIds: ["dense-document-metric"],
+      findings: [],
+      warningReason: "detector-budget-exhausted" as const,
+    };
+    await store.append({ role: "system", content: "system" });
+    await store.append({
+      role: "system",
+      content: "quality check work limit reached",
+      metadata: {
+        kind: "quality-warning",
+        qualityWarning: {
+          id: "quality-warning_budget",
+          guard: "anti-ai-flavor",
+          reason: "detector-budget-exhausted",
+          producer: "runtime",
+          attempt: 0,
+          targets: [target],
+        },
+      },
+    });
+    const snapshot = await loadSessionSnapshot(rootDir, store.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.qualityWarnings).toEqual([
+      expect.objectContaining({
+        reason: "detector-budget-exhausted",
+        targets: [expect.objectContaining({ warningReason: "detector-budget-exhausted" })],
+      }),
+    ]);
+  });
+
   test("applies quality resolutions in record order when a target re-enters the same warning", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-quality-order-"));
     const store = await createSessionStore(rootDir, "quality-resolution-order");

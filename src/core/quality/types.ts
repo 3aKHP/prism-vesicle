@@ -177,7 +177,7 @@ export type QualityEventTarget = {
   status: "clean" | "findings" | "rewrite-required" | "warning";
   findingIds: string[];
   findings: QualityFindingSummary[];
-  warningReason?: "target-unreadable" | "target-oversize";
+  warningReason?: "target-unreadable" | "target-oversize" | "detector-budget-exhausted";
 };
 
 export type QualityArtifactReadResult = {
@@ -214,6 +214,7 @@ export type QualityEvaluation = {
   candidateHash: string;
   findings: QualityFinding[];
   blockingFindings: QualityFinding[];
+  detectorStatus: "complete" | "budget-exhausted";
   detectorMs: number;
 };
 
@@ -257,6 +258,7 @@ export type QualityWarningReason =
   | "exhausted"
   | "judge-invalid"
   | "judge-timeout"
+  | "detector-budget-exhausted"
   | "target-unreadable"
   | "target-oversize"
   | "user-abandoned";
