@@ -65,7 +65,7 @@ bunx vesicle assets use <pack-id>@<version>
 bunx vesicle assets status
 ```
 
-The project lock is `.vesicle/assets.lock.json`. Vesicle reverifies the installed pack on start and resume, and blocks sessions whose recorded Harness identity differs. `bunx vesicle assets rollback` removes the project selection and restores the bundled V10 baseline. Sessions created before the V10 baseline migration have no Harness identity and must be replaced with a new session. Archive extraction, online discovery, and automatic updates are not part of this offline flow.
+The project lock is `.vesicle/assets.lock.json`. Vesicle reverifies the installed pack on start and resume, and blocks provider continuation when the recorded Harness identity differs. A pending Output Quality Guard decision can still be opened to use or stop the current version locally, but revision remains unavailable until the exact recorded identity is restored. `bunx vesicle assets rollback` removes the project selection and restores the bundled V10 baseline. Sessions created before the V10 baseline migration have no Harness identity and must be replaced with a new session. Archive extraction, online discovery, and automatic updates are not part of this offline flow.
 
 ### Source checkout
 
@@ -154,6 +154,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 - Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
+- A target-aware Output Quality Guard that checks current Runtime artifact post-images, persists findings and warnings, and restores exhausted or interrupted revisions with explicit revise-again, use-current, and stop choices.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
 - Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with host-owned PowerShell, CMD, Git Bash, and POSIX shell profiles, exact interpreter-bound plan approval, filtered environment, bounded UTF-8 live output, timeout, process-tree cleanup, foreground/background execution, durable `shell-N` task state, completion notification, and explicit output/stop controls.
 - Foreground and background SubAgents with parallel execution, three V10 Driver-contract workflow Agents, five generic host Agents (`explore`, `general`, `plan`, `research`, and `reviewer`), custom Agent Profiles subject to the active Harness contract, dedicated live Agent cards, durable completion delivery, and parent continuation without polling.

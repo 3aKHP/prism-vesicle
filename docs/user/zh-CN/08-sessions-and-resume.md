@@ -25,7 +25,7 @@
 - 当前 Prism 引擎
 - 思考强度和推理显示设置
 - 用量元数据和验证通知
-- 尚未解决的确认门、引擎切换请求或用户问题
+- 尚未解决的确认门、引擎切换请求、用户问题或 Output Quality Guard 决策
 
 不要手动编辑会话 JSONL 文件。后续章节会介绍受支持的回退、备份和恢复操作。
 
@@ -94,8 +94,12 @@ Started a fresh session. Type a prompt to begin.
 - `[gate:...]` 表示有确认门正在等待。
 - `[engine:...]` 表示有引擎切换请求正在等待。
 - `[question:...]` 表示模型问题正在等待回答。
+- `[quality:interrupted]` 表示自动质量修订被中断。
+- `[quality:decision]` 表示自动修订已经耗尽，需要你作出决定。
 
 恢复这样的会话会还原相应面板，使你可以继续处理，而不是丢失尚未完成的决定。
+
+处理质量决策时，`Revise again` 会授权同一个 Engine 再发起一次供应商请求；`Use current version` 和 `Stop` 都不会调用供应商，并且都会在持久会话记录中保留 warning。如果所需 Harness 或 Rule Pack 身份已经变化，在恢复完全相同的身份之前无法再次修订，但仍可选择使用当前版本或停止。Workspace 侧边栏中文件旁的 `!` 表示该路径仍保留可见的质量 warning。这个状态只报告当前规则发现的问题，不判断文本是否由 AI 写成，也不提供通用写作质量保证。
 
 ## 按编号或 id 恢复
 
@@ -125,7 +129,7 @@ Get-ChildItem ".vesicle\sessions"
 - `/new` 会创建全新对话，但不会删除旧会话
 - 你创建了第二个练习会话
 - `/resume` 打开了从新到旧的选择器，并恢复了一个较早的对话
-- 你理解 gate、engine 和 question 等待标记
+- 你理解 gate、engine、question 和 quality 等待标记
 - 你可以找到 `.vesicle\sessions`，并且没有编辑其中的文件
 
 下一章会在一次完整 ETL 工作流中运用这些会话技能。

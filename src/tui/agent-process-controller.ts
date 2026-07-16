@@ -235,9 +235,11 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
       case "quality_status": {
         const status = event.phase === "checking" ? "checking prose quality"
           : event.phase === "rewriting" ? `rewriting prose ${event.attempt} of 2`
-            : event.phase === "exhausted" ? "quality rewrite exhausted"
+          : event.phase === "exhausted" ? "quality rewrite exhausted"
+            : event.phase === "inconclusive" ? "quality check incomplete · current version unconfirmed"
               : event.phase === "observed" ? `quality observed · ${event.findingCount} finding${event.findingCount === 1 ? "" : "s"}`
-                : "prose quality accepted";
+                : event.phase === "findings" ? `quality checked · ${event.findingCount} non-blocking finding${event.findingCount === 1 ? "" : "s"}`
+                  : "quality checked · no blocking rules matched";
         options.setStatus(status);
         if (event.phase === "rewriting") options.markTurnSawResponse();
         recordActivity({ kind: "validation", text: status });

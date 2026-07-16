@@ -34,6 +34,7 @@ export function Sidebar(props: {
   sessionPath: string;
   mcp?: SidebarMcpState;
   artifacts: { path: string }[];
+  qualityWarningPaths?: ReadonlySet<string>;
   selectedArtifactPath?: string;
   agents?: AgentCardState[];
   processes?: BackgroundProcessState[];
@@ -82,8 +83,8 @@ export function Sidebar(props: {
                       const selected = () => artifact.path === props.selectedArtifactPath;
                       return (
                         <PanelLine
-                          content={artifactSidebarLine(artifact.path, root, index(), props.width - 4)}
-                          fg={selected() ? palette.brand : palette.textSecondary}
+                          content={artifactSidebarLine(artifact.path, root, index(), props.width - 4, props.qualityWarningPaths?.has(artifact.path) === true)}
+                          fg={selected() ? palette.brand : props.qualityWarningPaths?.has(artifact.path) ? palette.warn : palette.textSecondary}
                           attributes={selected() ? 1 : 0}
                         />
                       );
@@ -176,8 +177,8 @@ function artifactsInRoot(artifacts: { path: string }[], root: string): { path: s
   return artifacts.filter((artifact) => artifact.path.startsWith(`${root}/`));
 }
 
-export function artifactSidebarLine(path: string, root: string, index: number, width: number): string {
+export function artifactSidebarLine(path: string, root: string, index: number, width: number, qualityWarning = false): string {
   const relativePath = path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
-  const prefix = `${index}. `;
+  const prefix = `${qualityWarning ? "! " : ""}${index}. `;
   return `${prefix}${truncateMiddle(relativePath, Math.max(8, width - prefix.length))}`;
 }

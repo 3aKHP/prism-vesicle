@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
-import { resolvePermission, resumeQualityRewrite, runPrompt, type AgentLoopEvent } from "../src/core/agent-loop/run";
+import { refreshQualityDecisionArtifacts, resolveGate, resolvePermission, resolveQualityDecision, resumeQualityRewrite, runPrompt, type AgentLoopEvent } from "../src/core/agent-loop/run";
 import { completeProviderRound } from "../src/core/agent-loop/provider-round";
 import { runChildAgent } from "../src/core/agents/child-runner";
 import { AgentStore } from "../src/core/agents/store";
@@ -11,8 +11,9 @@ import type { HarnessRuntimeContext } from "../src/core/harness";
 import { AssetResolver } from "../src/core/runtime/assets";
 import { getProcessManager } from "../src/core/process/manager";
 import { createSessionStore, listSessions, loadSessionRecords, loadSessionSnapshot } from "../src/core/session/store";
-import { qualityArtifactTargetFromResult, type QualityDetectorRule, type QualityRuntimeContext } from "../src/core/quality";
+import { qualityArtifactTargetFromResult, readQualityArtifactTargets, type QualityDetectorRule, type QualityRuntimeContext } from "../src/core/quality";
 import { createSessionResumeController } from "../src/tui/session-resume-controller";
+import { createDecisionContinuations } from "../src/tui/decision-continuations";
 
 const originalFetch = globalThis.fetch;
 const originalProvidersFile = process.env.VESICLE_PROVIDERS_FILE;
@@ -51,7 +52,7 @@ describe("Output Quality Guard runtime", () => {
       harness: harnessRuntime(),
     });
 
-    expect(result.kind).toBe("complete");
+    expect(result.kind).toBe("needs_quality_decision");
     expect(requests).toBe(3);
     expect(await readFile(join(root, "workspace", "runtime.md"), "utf8")).toContain("空气中弥漫着");
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
@@ -93,7 +94,7 @@ describe("Output Quality Guard runtime", () => {
       harness: harnessRuntime(),
     });
 
-    expect(result.kind).toBe("complete");
+    expect(result.kind).toBe("needs_quality_decision");
     expect(requests).toBe(5);
     expect(await readFile(join(root, "workspace", "runtime.md"), "utf8")).toContain("空气中弥漫着尘味");
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
@@ -126,7 +127,7 @@ describe("Output Quality Guard runtime", () => {
       harness: harnessRuntime(),
     });
 
-    expect(result.kind).toBe("complete");
+    expect(result.kind).toBe("needs_quality_decision");
     expect(requests).toBe(3);
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
     expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
@@ -166,7 +167,7 @@ describe("Output Quality Guard runtime", () => {
       harness: harnessRuntime(),
     });
 
-    expect(result.kind).toBe("needs_user");
+    expect(result.kind).toBe("needs_quality_decision");
     expect(requests).toBe(4);
     expect(await readFile(join(root, "workspace", "bad.md"), "utf8")).toContain("空气中弥漫着");
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
@@ -244,10 +245,251 @@ describe("Output Quality Guard runtime", () => {
       harness: harnessRuntime(),
     });
 
-    expect(result.kind).toBe("complete");
+    expect(result.kind).toBe("needs_quality_decision");
     expect(requests).toBe(3);
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
     expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
+  });
+
+  test("delivers an inconclusive warning for an unreadable target and clears it after the same path is clean", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTool("unreadable-write", "write_file", {
+        path: "workspace/runtime.md",
+        content: "雨水顺着门轴滴到她的袖口。",
+      });
+      if (requests === 2) {
+        await rm(join(root, "workspace", "runtime.md"));
+        return providerTool("unreadable-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      if (requests === 3) return providerTool("unreadable-repair", "write_file", {
+        path: "workspace/runtime.md",
+        content: "雨水顺着门轴滴到她的袖口。",
+      });
+      return providerTool("unreadable-repaired-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review repaired file." });
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_user");
+    if (first.kind !== "needs_user") throw new Error("expected gate");
+    const warned = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(warned.qualityEvents.at(-1)).toMatchObject({ outcome: "inconclusive", action: "deliver" });
+    expect(warned.qualityWarnings).toEqual([
+      expect.objectContaining({ reason: "target-unreadable", targets: [expect.objectContaining({ path: "workspace/runtime.md" })] }),
+    ]);
+    const resumed = await resolveGate({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      messages: first.messages,
+      toolCallId: first.toolCallId,
+      gate: first.gate,
+      resolution: { decision: "confirm" },
+      harness: harnessRuntime(),
+    });
+    expect(resumed.kind).toBe("needs_user");
+    const clean = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(clean.qualityWarnings).toEqual([]);
+  });
+
+  test("records an oversize post-image as inconclusive instead of clean or failed", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTool("oversize-write", "write_file", {
+        path: "workspace/runtime.md",
+        content: "small",
+      });
+      await writeFile(join(root, "workspace", "runtime.md"), "x".repeat(1024 * 1024 + 1), "utf8");
+      return providerTool("oversize-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+    }) as unknown as typeof fetch;
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(result.kind).toBe("needs_user");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.qualityEvents.at(-1)).toMatchObject({ outcome: "inconclusive" });
+    expect(snapshot.qualityWarnings[0]).toMatchObject({ reason: "target-oversize" });
+  });
+
+  test("retains an unreadable target while another target still requires rewrite", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTools("mixed-target-writes", [
+        { id: "mixed-a", name: "write_file", arguments: JSON.stringify({ path: "workspace/a.md", content: "空气中弥漫着雨味。" }) },
+        { id: "mixed-b", name: "write_file", arguments: JSON.stringify({ path: "workspace/b.md", content: "空气中弥漫着尘味。" }) },
+      ]);
+      if (requests === 2) {
+        await rm(join(root, "workspace", "a.md"));
+        return providerTool("mixed-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      if (requests === 3) return providerTool("mixed-repair", "replace_in_file", {
+        path: "workspace/b.md",
+        oldText: "空气中弥漫着尘味。",
+        newText: "雨水从檐角落进石槽。",
+      });
+      return providerTool("mixed-clean-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review repaired file." });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(result.kind).toBe("needs_user");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.qualityWarnings).toContainEqual(expect.objectContaining({
+      reason: "target-unreadable",
+      targets: [expect.objectContaining({ path: "workspace/a.md" })],
+    }));
+    expect(snapshot.qualityEvents.at(-1)).toMatchObject({ outcome: "inconclusive" });
+    expect(snapshot.qualityEvents.at(-1)?.targets).toContainEqual(expect.objectContaining({
+      path: "workspace/a.md",
+      warningReason: "target-unreadable",
+    }));
+  });
+
+  test("closes an exhausted decision when retry repairs one target but another is inconclusive", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTools("mixed-retry-writes", [
+        { id: "mixed-retry-a", name: "write_file", arguments: JSON.stringify({ path: "workspace/a.md", content: "空气中弥漫着雨味。" }) },
+        { id: "mixed-retry-b", name: "write_file", arguments: JSON.stringify({ path: "workspace/b.md", content: "空气中弥漫着尘味。" }) },
+      ]);
+      if (requests === 2) {
+        await rm(join(root, "workspace", "a.md"));
+        return providerTool("mixed-retry-gate-2", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      if (requests === 3) {
+        return providerTool(`mixed-retry-gate-${requests}`, "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      if (requests === 4) {
+        return providerTool("mixed-retry-repair", "replace_in_file", {
+          path: "workspace/b.md",
+          oldText: "空气中弥漫着尘味。",
+          newText: "雨水从檐角落进石槽。",
+        });
+      }
+      return providerTool("mixed-retry-clean-gate", "request_confirmation", { gate: "runtime-turn", summary: "Review repaired file." });
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    const exhausted = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(exhausted.pendingQualityDecision?.request.targets).toEqual([
+      expect.objectContaining({ path: "workspace/b.md" }),
+    ]);
+    expect(exhausted.qualityWarnings).toEqual([
+      expect.objectContaining({ reason: "target-unreadable", targets: [expect.objectContaining({ path: "workspace/a.md" })] }),
+      expect.objectContaining({ reason: "exhausted", targets: [expect.objectContaining({ path: "workspace/b.md" })] }),
+    ]);
+    const retried = await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "retry",
+      harness: harnessRuntime(),
+    });
+    expect(retried.kind).toBe("needs_user");
+    const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityDecision).toBeUndefined();
+    expect(snapshot.qualityWarnings).toEqual([
+      expect.objectContaining({
+        reason: "target-unreadable",
+        targets: [expect.objectContaining({ path: "workspace/a.md" })],
+      }),
+    ]);
+    expect(snapshot.qualityWarnings.flatMap((warning) => warning.targets).some((target) => target.path === "workspace/b.md")).toBe(false);
+  });
+
+  test("resolves an independent warning when retry leaves the decision target blocking", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTools("inverse-mixed-writes", [
+        { id: "inverse-a", name: "write_file", arguments: JSON.stringify({ path: "workspace/a.md", content: "空气中弥漫着雨味。" }) },
+        { id: "inverse-b", name: "write_file", arguments: JSON.stringify({ path: "workspace/b.md", content: "空气中弥漫着尘味。" }) },
+      ]);
+      if (requests === 2) {
+        await rm(join(root, "workspace", "a.md"));
+        return providerTool("inverse-gate-2", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      }
+      if (requests === 3) return providerTool("inverse-gate-3", "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+      if (requests === 4) return providerTool("inverse-repair-a", "write_file", {
+        path: "workspace/a.md",
+        content: "雨水从檐角落进石槽。",
+      });
+      return providerTool("inverse-gate-5", "request_confirmation", { gate: "runtime-turn", summary: "Review repaired file." });
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    const retried = await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "retry",
+      harness: harnessRuntime(),
+    });
+    expect(retried.kind).toBe("needs_quality_decision");
+    const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityDecision?.request.targets).toEqual([
+      expect.objectContaining({ path: "workspace/b.md" }),
+    ]);
+    expect(snapshot.qualityWarnings).toEqual([
+      expect.objectContaining({ reason: "exhausted", targets: [expect.objectContaining({ path: "workspace/b.md" })] }),
+    ]);
+  });
+
+  test("rereads a historically oversize target after an external edit shrinks it", async () => {
+    const root = await runtimeRoot("runtime");
+    const path = join(root, "workspace", "runtime.md");
+    await writeFile(path, "rain", "utf8");
+    const [result] = await readQualityArtifactTargets(root, [{
+      id: "artifact:workspace/runtime.md",
+      kind: "artifact-post-image",
+      candidateType: "runtime.prose",
+      path: "workspace/runtime.md",
+      operation: "write",
+      mutationCallIds: ["oversize-before-edit"],
+      postImageHash: "a".repeat(64),
+      bytes: 1024 * 1024 + 1,
+      rejectedHashes: new Set(),
+    }]);
+    expect(result?.warningReason).toBeUndefined();
+    expect(result?.content).toBe("rain");
+    expect(result?.target.bytes).toBe(4);
   });
 
   test("keeps Weaver-Orch prose-only across a same-response mutation boundary", async () => {
@@ -508,6 +750,9 @@ describe("Output Quality Guard runtime", () => {
       setPendingEngineSwitch: noop,
       setPendingUserQuestion: noop,
       setPendingPermission: (value: unknown) => { restoredPermissions.push(value); return value; },
+      setPendingQualityDecision: noop,
+      setQualitySelected: noop,
+      setQualityWarnings: noop,
       setGateFocus: noop,
       setGateFeedbackMode: noop,
       setGateFeedback: noop,
@@ -709,6 +954,44 @@ describe("Output Quality Guard runtime", () => {
     expect(snapshot.qualityEvents).toEqual([expect.objectContaining({ decision: "pass", findingIds: [] })]);
   });
 
+  test("delivers advisory findings without reporting an unconditional quality pass", async () => {
+    const root = await runtimeRoot("runtime");
+    const harness = harnessRuntime();
+    harness.quality!.rules.push({
+      ...literalRule(),
+      id: "zh-tier2-advisory",
+      title: "advisory phrase",
+      severity: "tier2",
+      matcher: { kind: "literal", value: "值得一提的是", unit: "candidate" },
+    });
+    const phases: string[] = [];
+    globalThis.fetch = (async () => Response.json({
+      id: "advisory",
+      choices: [{ message: { content: "值得一提的是，她把雨伞留在门外。" } }],
+    })) as unknown as typeof fetch;
+    const result = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness,
+      onEvent: (event) => {
+        if (event.type === "quality_status") phases.push(event.phase);
+      },
+    });
+    expect(result.kind).toBe("complete");
+    if (result.kind !== "complete") throw new Error("expected complete");
+    expect(result.quality).toEqual({ outcome: "findings", findingCount: 1 });
+    expect(phases).toContain("findings");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId);
+    expect(snapshot.qualityEvents.at(-1)).toMatchObject({
+      decision: "pass",
+      outcome: "findings",
+      action: "deliver",
+      targets: [expect.objectContaining({ status: "findings" })],
+    });
+  });
+
   test("stops Runtime rewriting when the provider repeats the same candidate hash", async () => {
     const root = await runtimeRoot("runtime", ["runtime-turn"]);
     let requests = 0;
@@ -727,10 +1010,10 @@ describe("Output Quality Guard runtime", () => {
       messages: [{ role: "user", content: "continue" }],
       harness: harnessRuntime(),
     });
-    expect(result.kind).toBe("complete");
+    expect(result.kind).toBe("needs_quality_decision");
     expect(requests).toBe(2);
-    if (result.kind !== "complete") throw new Error("expected complete");
-    expect(result.response.content).toBe("空气中弥漫着雨味。");
+    if (result.kind !== "needs_quality_decision") throw new Error("expected quality decision");
+    expect(result.assistantContent).toBe("空气中弥漫着雨味。");
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
     expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "exhausted"]);
   });
@@ -752,10 +1035,569 @@ describe("Output Quality Guard runtime", () => {
       messages: [{ role: "user", content: "continue" }],
       harness: harnessRuntime(),
     });
-    expect(result.kind).toBe("complete");
+    expect(result.kind).toBe("needs_quality_decision");
     expect(requests).toBe(3);
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
     expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "rewrite", "exhausted"]);
+  });
+
+  test("persists an exhausted decision and resolves it only after a user-authorized clean retry", async () => {
+    const root = await runtimeRoot("runtime");
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      return Response.json({
+        id: `quality-decision-${requests}`,
+        choices: [{ message: { content: requests < 3 ? "空气中弥漫着雨味。" : "雨水顺着门轴滴到她的袖口。" } }],
+      });
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    if (first.kind !== "needs_quality_decision") throw new Error("expected quality decision");
+    const pending = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(pending.pendingQualityDecision?.request).toMatchObject({ reason: "exhausted", canRetry: true });
+    expect(pending.qualityWarnings).toHaveLength(1);
+    expect(pending.qualityEvents.at(-1)).toMatchObject({
+      outcome: "exhausted",
+      action: "ask-user",
+      policyVersion: "quality-policy/v1",
+      targets: [expect.objectContaining({ status: "warning", findings: [expect.objectContaining({ source: "detector" })] })],
+    });
+    const [summary] = await listSessions(root);
+    expect(summary?.pendingQuality).toMatchObject({ state: "decision", producer: "runtime", findingCount: 1 });
+
+    const retried = await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "retry",
+      harness: harnessRuntime(),
+    });
+    expect(retried.kind).toBe("complete");
+    expect(requests).toBe(3);
+    const resolved = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(resolved.pendingQualityDecision).toBeUndefined();
+    expect(resolved.pendingQualityRewrite).toBeUndefined();
+    expect(resolved.qualityWarnings).toEqual([]);
+    expect(resolved.records).toContainEqual(expect.objectContaining({
+      metadata: expect.objectContaining({
+        kind: "quality-resolution",
+        qualityResolution: expect.objectContaining({ resolution: "revised-clean" }),
+      }),
+    }));
+  });
+
+  test("accepts or stops an exhausted response locally while retaining its warning", async () => {
+    for (const resolution of ["accept", "stop"] as const) {
+      const root = await runtimeRoot("runtime");
+      let requests = 0;
+      globalThis.fetch = (async () => {
+        requests += 1;
+        return Response.json({
+          id: `${resolution}-${requests}`,
+          choices: [{ message: { content: `空气中弥漫着${resolution}雨味。` } }],
+        });
+      }) as unknown as typeof fetch;
+      const first = await runPrompt({
+        input: "continue",
+        engine: "runtime",
+        rootDir: root,
+        messages: [{ role: "user", content: "continue" }],
+        harness: harnessRuntime(),
+      });
+      expect(first.kind).toBe("needs_quality_decision");
+      const beforeResolution = requests;
+      const settled = await resolveQualityDecision({
+        engine: "runtime",
+        rootDir: root,
+        sessionId: first.sessionId,
+        resolution,
+      });
+      expect(settled).toEqual({ kind: "quality_resolved", sessionId: first.sessionId, resolution });
+      expect(requests).toBe(beforeResolution);
+      const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+      expect(snapshot.pendingQualityDecision).toBeUndefined();
+      expect(snapshot.qualityWarnings).toEqual([
+        expect.objectContaining({
+          targets: [expect.objectContaining({ resolution: resolution === "accept" ? "accepted-by-user" : "stopped-by-user" })],
+        }),
+      ]);
+      const delivered = snapshot.messages.filter((message) => message.role === "assistant" && message.kind !== "quality-rejected-candidate");
+      expect(delivered.some((message) => message.content.includes(`${resolution}雨味`))).toBe(resolution === "accept");
+    }
+  });
+
+  test("keeps quality choice ahead of a gate and restores the gate after explicit acceptance", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTool("quality-gate-write", "write_file", {
+        path: "workspace/runtime.md",
+        content: "### Part 3 - Prose Content\n空气中弥漫着雨味。",
+      });
+      return providerTool(`quality-gate-${requests}`, "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    const settled = await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "accept",
+    });
+    expect(settled.kind).toBe("quality_resolved");
+    expect(requests).toBe(3);
+    const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityDecision).toBeUndefined();
+    expect(snapshot.pendingGate?.gate.gate).toBe("runtime-turn");
+    expect(snapshot.qualityWarnings[0]?.targets[0]).toMatchObject({
+      path: "workspace/runtime.md",
+      resolution: "accepted-by-user",
+    });
+  });
+
+  test("rechecks an externally edited artifact before settling its old quality decision", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTool("decision-edit-write", "write_file", {
+        path: "workspace/runtime.md",
+        content: "空气中弥漫着雨味。",
+      });
+      return providerTool(`decision-edit-gate-${requests}`, "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    await writeFile(join(root, "workspace", "runtime.md"), "雨水沿着门框滑落。", "utf8");
+
+    const settled = await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "accept",
+      harness: harnessRuntime(),
+    });
+    expect(settled).toEqual({ kind: "quality_resolved", sessionId: first.sessionId, resolution: "accept" });
+    expect(requests).toBe(3);
+    const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityDecision).toBeUndefined();
+    expect(snapshot.qualityWarnings).toEqual([]);
+    expect(snapshot.qualityEvents.at(-1)).toMatchObject({ outcome: "clean", action: "deliver" });
+    expect(snapshot.records.some((record) =>
+      (record.metadata?.qualityResolution as { resolution?: unknown } | undefined)?.resolution === "accepted-by-user"
+    )).toBe(false);
+  });
+
+  test("updates an old decision to inconclusive when its artifact becomes unreadable", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTool("decision-unreadable-write", "write_file", {
+        path: "workspace/runtime.md",
+        content: "空气中弥漫着雨味。",
+      });
+      return providerTool(`decision-unreadable-gate-${requests}`, "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    await rm(join(root, "workspace", "runtime.md"));
+
+    await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "accept",
+      harness: harnessRuntime(),
+    });
+    const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityDecision).toBeUndefined();
+    expect(snapshot.qualityWarnings).toEqual([
+      expect.objectContaining({ reason: "target-unreadable", targets: [expect.objectContaining({ path: "workspace/runtime.md" })] }),
+    ]);
+    expect(snapshot.records.some((record) =>
+      (record.metadata?.qualityResolution as { resolution?: unknown } | undefined)?.resolution === "revised-clean"
+    )).toBe(false);
+  });
+
+  test("does not append external-refresh records while an unreadable target is unchanged", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    const sessionId = await createMixedExhaustedSession(root, "unchanged-unreadable");
+    const before = await loadSessionSnapshot(root, sessionId, { synthesizeDanglingToolResults: false });
+
+    const after = await refreshQualityDecisionArtifacts(root, sessionId, harnessRuntime().quality!);
+    expect(after.records).toHaveLength(before.records.length);
+    expect(after.pendingQualityDecision?.request.targets).toEqual([
+      expect.objectContaining({ path: "workspace/b.md" }),
+    ]);
+  });
+
+  test("rechecks an unreadable target restored with its previous blocking hash", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    const sessionId = await createMixedExhaustedSession(root, "restored-same-hash");
+    await writeFile(join(root, "workspace", "a.md"), "空气中弥漫着雨味。", "utf8");
+
+    const refreshed = await refreshQualityDecisionArtifacts(root, sessionId, harnessRuntime().quality!);
+    expect(refreshed.pendingQualityDecision?.request.targets).toEqual([
+      expect.objectContaining({ path: "workspace/a.md" }),
+      expect.objectContaining({ path: "workspace/b.md" }),
+    ]);
+    expect(refreshed.qualityWarnings).toEqual([
+      expect.objectContaining({
+        reason: "exhausted",
+        targets: [
+          expect.objectContaining({ path: "workspace/a.md" }),
+          expect.objectContaining({ path: "workspace/b.md" }),
+        ],
+      }),
+    ]);
+  });
+
+  test("durably closes every unanswered interaction call when a quality decision stops", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests === 1) return providerTool("multi-interaction-write", "write_file", {
+        path: "workspace/runtime.md",
+        content: "空气中弥漫着雨味。",
+      });
+      return providerTools(`multi-interaction-${requests}`, [
+        { id: `multi-gate-${requests}`, name: "request_confirmation", arguments: JSON.stringify({ gate: "runtime-turn", summary: "Review." }) },
+        { id: `multi-question-${requests}`, name: "ask_user_question", arguments: JSON.stringify({ header: "Choose", question: "Continue?", options: [{ label: "Yes", description: "Continue." }, { label: "No", description: "Stop." }] }) },
+      ]);
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    if (first.kind !== "needs_quality_decision") throw new Error("expected quality decision");
+    const pending = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    const callIds = pending.pendingQualityDecision?.candidate.toolCalls.map((call) => call.id) ?? [];
+    expect(callIds).toHaveLength(2);
+    await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "stop",
+    });
+    const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    const durableResults = new Set(snapshot.records.flatMap((record) =>
+      record.role === "tool" && typeof record.metadata?.toolCallId === "string"
+        ? [record.metadata.toolCallId]
+        : []
+    ));
+    for (const callId of callIds) expect(durableResults.has(callId)).toBe(true);
+    expect(snapshot.pendingGate).toBeUndefined();
+    expect(snapshot.pendingUserQuestion).toBeUndefined();
+  });
+
+  test("retains the same quality decision after retry provider failure", async () => {
+    const root = await runtimeRoot("runtime");
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      if (requests <= 2) return Response.json({
+        id: `retry-failure-${requests}`,
+        choices: [{ message: { content: "空气中弥漫着雨味。" } }],
+      });
+      throw new Error("retry provider unavailable");
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    const warningId = first.kind === "needs_quality_decision" ? first.decision.id : "";
+    await expect(resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "retry",
+      harness: harnessRuntime(),
+    })).rejects.toThrow("retry provider unavailable");
+    const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityDecision?.request.id).toBe(warningId);
+    expect(snapshot.qualityWarnings).toHaveLength(1);
+  });
+
+  test("lets the user end an interrupted automatic rewrite without another provider request", async () => {
+    const root = await runtimeRoot("runtime");
+    let requests = 0;
+    const controller = new AbortController();
+    globalThis.fetch = (async () => {
+      requests += 1;
+      return Response.json({ id: "interrupted-quality", choices: [{ message: { content: "空气中弥漫着雨味。" } }] });
+    }) as unknown as typeof fetch;
+    await expect(runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+      signal: controller.signal,
+      onEvent: (event) => {
+        if (event.type === "quality_status" && event.phase === "rewriting") controller.abort();
+      },
+    })).rejects.toThrow();
+    const [summary] = await listSessions(root);
+    const beforeResolution = requests;
+    const settled = await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: summary!.sessionId,
+      resolution: "stop",
+    });
+    expect(settled.kind).toBe("quality_resolved");
+    expect(requests).toBe(beforeResolution);
+    const snapshot = await loadSessionSnapshot(root, summary!.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityRewrite).toBeUndefined();
+    expect(snapshot.qualityWarnings[0]).toMatchObject({
+      reason: "user-abandoned",
+      targets: [expect.objectContaining({ resolution: "stopped-by-user" })],
+    });
+  });
+
+  test("closes an unanswered gate when an interrupted rewrite is stopped", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    globalThis.fetch = (async () => Response.json({
+      id: "interrupted-gate-base",
+      choices: [{ message: { content: "雨水沿着门框滑落。" } }],
+    })) as unknown as typeof fetch;
+    const initial = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    const session = await createSessionStore(root, initial.sessionId);
+    const call = {
+      id: "interrupted-pending-gate",
+      name: "request_confirmation",
+      arguments: JSON.stringify({ gate: "runtime-turn", summary: "Review interrupted work." }),
+    };
+    const candidate = { responseId: "interrupted-pending-response", content: "", toolCalls: [call] };
+    await session.appendMany([
+      { role: "assistant", content: "", metadata: { providerResponseId: candidate.responseId, toolCalls: [call] } },
+      {
+        role: "system",
+        content: "",
+        metadata: {
+          kind: "quality-check-pending",
+          qualityRewrite: {
+            producer: "runtime",
+            packId: "prism-engine-v10",
+            packVersion: "10.0.1-alpha.1",
+            manifestSha256: "a".repeat(64),
+            ruleVersion: "0.2.1",
+            ruleSourceHash: "b".repeat(64),
+            attempts: 1,
+            rejectedHashes: [],
+            candidateParts: [],
+            targets: [{
+              id: "artifact:workspace/runtime.md",
+              kind: "artifact-post-image",
+              candidateType: "runtime.prose",
+              path: "workspace/runtime.md",
+              operation: "write",
+              mutationCallIds: ["interrupted-write"],
+              postImageHash: "c".repeat(64),
+              bytes: 8,
+              rejectedHashes: ["c".repeat(64)],
+            }],
+            candidate,
+          },
+        },
+      },
+    ]);
+    const before = await loadSessionSnapshot(root, initial.sessionId, { synthesizeDanglingToolResults: false });
+    expect(before.pendingQualityRewrite).toBeDefined();
+    expect(before.pendingGate?.toolCallId).toBe(call.id);
+
+    await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: initial.sessionId,
+      resolution: "stop",
+    });
+    const after = await loadSessionSnapshot(root, initial.sessionId, { synthesizeDanglingToolResults: false });
+    expect(after.pendingQualityRewrite).toBeUndefined();
+    expect(after.pendingGate).toBeUndefined();
+    expect(after.records).toContainEqual(expect.objectContaining({
+      role: "tool",
+      metadata: expect.objectContaining({
+        kind: "quality-decision-stopped-tool",
+        toolCallId: call.id,
+      }),
+    }));
+  });
+
+  test("routes retry, accept, and stop through the real TUI decision continuation", async () => {
+    for (const resolution of ["retry", "accept", "stop"] as const) {
+      const root = await runtimeRoot("runtime");
+      let requests = 0;
+      globalThis.fetch = (async () => {
+        requests += 1;
+        return Response.json({
+          id: `tui-${resolution}-${requests}`,
+          choices: [{ message: { content: requests < 3 ? "空气中弥漫着雨味。" : "雨水顺着门轴滴到她的袖口。" } }],
+        });
+      }) as unknown as typeof fetch;
+      const result = await runPrompt({
+        input: "continue",
+        engine: "runtime",
+        rootDir: root,
+        messages: [{ role: "user", content: "continue" }],
+        harness: harnessRuntime(),
+      });
+      if (result.kind !== "needs_quality_decision") throw new Error("expected quality decision");
+      const pending = { ...result, engine: "runtime" as const };
+      const handled: unknown[] = [];
+      const resumed: string[] = [];
+      const pendingUpdates: unknown[] = [];
+      const before = requests;
+      const continuations = createDecisionContinuations({
+        rootDir: root,
+        busy: () => false,
+        pendingQualityDecision: () => pending,
+        setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
+        setQualitySelected: (value: number) => value,
+        setBusy: (value: boolean) => value,
+        setStatus: (value: string) => value,
+        recordActivity: () => undefined,
+        setMessages: (value: unknown) => value,
+        beginUsageTurn: () => undefined,
+        activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
+        activeGeneration: () => undefined,
+        permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
+        handleAgentEvent: () => undefined,
+        agentManager: () => undefined as any,
+        permissionBroker: undefined as any,
+        runCancellable: async (operation: (signal: AbortSignal) => Promise<unknown>) => ({
+          kind: "complete" as const,
+          value: await operation(new AbortController().signal),
+        }),
+        handleResult: (value: unknown) => { handled.push(value); },
+        handleInterruptedTurn: () => undefined,
+        refreshQualityWarnings: async () => undefined,
+        resumeQualitySession: async (sessionId: string) => { resumed.push(sessionId); },
+        resolveQualityDecision: (options: any) => resolveQualityDecision({ ...options, harness: harnessRuntime() }),
+        reportError: (error: unknown) => { throw error; },
+      } as any);
+      await continuations.submitQualityDecision(resolution);
+      expect(pendingUpdates[0]).toBeNull();
+      if (resolution === "retry") {
+        expect(requests).toBe(before + 1);
+        expect(handled.at(-1)).toMatchObject({ kind: "complete" });
+      } else {
+        expect(requests).toBe(before);
+        expect(resumed).toEqual([result.sessionId]);
+      }
+    }
+  });
+
+  test("restores the TUI quality panel after retry cancellation or provider failure", async () => {
+    for (const failure of ["cancel", "provider"] as const) {
+      const root = await runtimeRoot("runtime");
+      let requests = 0;
+      globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+        requests += 1;
+        if (requests <= 2) return Response.json({
+          id: `tui-${failure}-${requests}`,
+          choices: [{ message: { content: "空气中弥漫着雨味。" } }],
+        });
+        if (failure === "provider") throw new Error("quality retry provider failure");
+        return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      }) as unknown as typeof fetch;
+      const result = await runPrompt({
+        input: "continue",
+        engine: "runtime",
+        rootDir: root,
+        messages: [{ role: "user", content: "continue" }],
+        harness: harnessRuntime(),
+      });
+      if (result.kind !== "needs_quality_decision") throw new Error("expected quality decision");
+      const pending = { ...result, engine: "runtime" as const };
+      const pendingUpdates: unknown[] = [];
+      const errors: unknown[] = [];
+      const controller = new AbortController();
+      const continuations = createDecisionContinuations({
+        rootDir: root,
+        busy: () => false,
+        pendingQualityDecision: () => pending,
+        setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
+        setQualitySelected: (value: number) => value,
+        setBusy: (value: boolean) => value,
+        setStatus: (value: string) => value,
+        recordActivity: () => undefined,
+        setMessages: (value: unknown) => value,
+        beginUsageTurn: () => undefined,
+        activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
+        activeGeneration: () => undefined,
+        permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
+        handleAgentEvent: (event: AgentLoopEvent) => {
+          if (failure === "cancel" && event.type === "provider_request") controller.abort(new DOMException("cancel quality retry", "AbortError"));
+        },
+        agentManager: () => undefined as any,
+        permissionBroker: undefined as any,
+        runCancellable: async (operation: (signal: AbortSignal) => Promise<unknown>) => {
+          try {
+            return { kind: "complete" as const, value: await operation(controller.signal) };
+          } catch (error) {
+            if (controller.signal.aborted) return { kind: "interrupted" as const };
+            throw error;
+          }
+        },
+        handleResult: () => undefined,
+        handleInterruptedTurn: () => undefined,
+        refreshQualityWarnings: async () => undefined,
+        resumeQualitySession: async () => undefined,
+        resolveQualityDecision: (options: any) => resolveQualityDecision({ ...options, harness: harnessRuntime() }),
+        reportError: (error: unknown) => { errors.push(error); },
+      } as any);
+      await continuations.submitQualityDecision("retry");
+      expect(pendingUpdates[0]).toBeNull();
+      expect(pendingUpdates.at(-1)).toMatchObject({ decision: { id: result.decision.id } });
+      expect(errors).toHaveLength(failure === "provider" ? 1 : 0);
+      const snapshot = await loadSessionSnapshot(root, result.sessionId, { synthesizeDanglingToolResults: false });
+      expect(snapshot.pendingQualityDecision?.request.id).toBe(result.decision.id);
+    }
   });
 
   test("resumes a durable Runtime rewrite only under the same Harness identity", async () => {
@@ -789,16 +1631,85 @@ describe("Output Quality Guard runtime", () => {
     expect(interrupted.pendingQualityRewrite).toMatchObject({ producer: "runtime", attempts: 1 });
 
     const resumeErrors: unknown[] = [];
+    const restoredQuality: unknown[] = [];
+    const noop = (value: unknown) => value;
     const harness = harnessRuntime();
+    let harnessLoadError: Error | undefined;
     const controllerForResume = createSessionResumeController({
       rootDir: root,
-      resolveHarnessRuntime: async () => ({ harness } as any),
+      resolveHarnessRuntime: async () => {
+        if (harnessLoadError) throw harnessLoadError;
+        return { harness } as any;
+      },
+      dangerouslySkipPermissions: false,
       permissionSettingsReady: () => true,
-      setRestoringSession: () => undefined,
+      loadPermissionSettings: async () => undefined,
+      processManager: getProcessManager(root),
+      agentStore: new AgentStore(root),
+      agentCards: () => [],
+      setAgentCards: noop,
+      permissionMode: () => "MANUAL",
+      setPermissionMode: noop,
+      applyProviderSelection: async (selection: any) => selection,
+      setRestoringSession: noop,
+      setSessionId: noop,
+      setNextSessionParent: noop,
+      setSessionPath: noop,
+      setActiveEngine: noop,
+      setConversation: noop,
+      setLastTurnUsage: noop,
+      setSessionUsage: noop,
+      setOutput: noop,
+      setSessionPicker: noop,
+      setThinkingTier: noop,
+      setReasoningDisplayMode: noop,
+      setStatus: noop,
+      setMessages: noop,
+      setAssetDriftKey: noop,
+      refreshArtifacts: async () => undefined,
       reportError: (error: unknown) => resumeErrors.push(error),
+      setPendingGate: noop,
+      setPendingEngineSwitch: noop,
+      setPendingUserQuestion: noop,
+      setPendingPermission: noop,
+      setPendingQualityDecision: (value: unknown) => { restoredQuality.push(value); return value; },
+      setQualitySelected: noop,
+      setQualityWarnings: noop,
+      setGateFocus: noop,
+      setGateFeedbackMode: noop,
+      setGateFeedback: noop,
+      setGateFeedbackCursor: noop,
+      setGateFeedbackKillBuffer: noop,
+      setQuestionSelected: noop,
+      setQuestionFreeformText: noop,
+      setQuestionFreeformCursor: noop,
+      setQuestionFreeformKillBuffer: noop,
     } as any);
     await controllerForResume.resumeSession(summary!);
-    expect(String(resumeErrors[0])).toContain("Output Quality Guard continuation pending");
+    expect(resumeErrors).toEqual([]);
+    expect(restoredQuality.at(-1)).toMatchObject({ decision: { reason: "interrupted", canRetry: true } });
+    const originalRuleHash = harness.quality!.ruleManifest.sourceHash;
+    harness.quality!.ruleManifest.sourceHash = "f".repeat(64);
+    await controllerForResume.resumeSession(summary!);
+    expect(resumeErrors).toEqual([]);
+    expect(restoredQuality.at(-1)).toMatchObject({
+      decision: {
+        canRetry: false,
+        blockedReason: expect.stringContaining("prism-engine-v10@10.0.1-alpha.1"),
+      },
+    });
+    harness.quality!.ruleManifest.sourceHash = originalRuleHash;
+
+    harnessLoadError = new Error("recorded Harness pack is missing");
+    await controllerForResume.resumeSession(summary!);
+    expect(resumeErrors).toEqual([]);
+    expect(restoredQuality.at(-1)).toMatchObject({
+      decision: {
+        canRetry: false,
+        blockedReason: expect.stringContaining("cannot be loaded"),
+      },
+    });
+    harnessLoadError = undefined;
 
     const manifestDrift = harnessRuntime();
     manifestDrift.manifestSha256 = "e".repeat(64);
@@ -1201,6 +2112,30 @@ describe("Output Quality Guard runtime", () => {
     expect(events.some((event) => event.type === "assistant_delta")).toBe(false);
   });
 });
+
+async function createMixedExhaustedSession(root: string, prefix: string): Promise<string> {
+  let requests = 0;
+  globalThis.fetch = (async () => {
+    requests += 1;
+    if (requests === 1) return providerTools(`${prefix}-writes`, [
+      { id: `${prefix}-a`, name: "write_file", arguments: JSON.stringify({ path: "workspace/a.md", content: "空气中弥漫着雨味。" }) },
+      { id: `${prefix}-b`, name: "write_file", arguments: JSON.stringify({ path: "workspace/b.md", content: "空气中弥漫着尘味。" }) },
+    ]);
+    if (requests === 2) {
+      await rm(join(root, "workspace", "a.md"));
+    }
+    return providerTool(`${prefix}-gate-${requests}`, "request_confirmation", { gate: "runtime-turn", summary: "Review." });
+  }) as unknown as typeof fetch;
+  const result = await runPrompt({
+    input: "continue",
+    engine: "runtime",
+    rootDir: root,
+    messages: [{ role: "user", content: "continue" }],
+    harness: harnessRuntime(),
+  });
+  if (result.kind !== "needs_quality_decision") throw new Error("expected mixed exhausted quality decision");
+  return result.sessionId;
+}
 
 function providerTool(id: string, name: string, args: Record<string, unknown>, usage?: Record<string, number>): Response {
   return Response.json({

@@ -25,7 +25,7 @@ A session can preserve:
 - the active Prism engine
 - thinking effort and reasoning display settings
 - usage metadata and validation notices
-- unresolved confirmation gates, engine-switch requests, or user questions
+- unresolved confirmation gates, engine-switch requests, user questions, or Output Quality Guard decisions
 
 Do not edit session JSONL files by hand. Later chapters will explain supported rewind, backup, and recovery operations.
 
@@ -94,8 +94,12 @@ The resume picker can also mark interrupted interactions:
 - `[gate:...]` means a confirmation gate is waiting.
 - `[engine:...]` means an engine-switch request is waiting.
 - `[question:...]` means a model question is waiting for an answer.
+- `[quality:interrupted]` means an automatic quality revision was interrupted.
+- `[quality:decision]` means automatic revision was exhausted and needs your decision.
 
 Resuming such a session restores the relevant panel so you can continue rather than losing the pending decision.
+
+For a quality decision, `Revise again` authorizes one additional provider request from the same Engine. `Use current version` and `Stop` do not call the provider; both keep the warning in the durable session record. If the required Harness or Rule Pack identity has changed, revision is unavailable until that exact identity is restored, but you can still use or stop the current version. A `!` beside an artifact in the Workspace sidebar marks a path whose quality warning remains visible. This status reports findings from the active rules, not whether text was written by AI and not a general guarantee of writing quality.
 
 ## Resume by Number or Id
 
@@ -125,7 +129,7 @@ You are ready when:
 - `/new` starts a fresh conversation without deleting older sessions
 - you created a second practice session
 - `/resume` opened a newest-first picker and restored an older conversation
-- you understand the pending gate, engine, and question markers
+- you understand the pending gate, engine, question, and quality markers
 - you can locate `.vesicle\sessions` without editing its files
 
 The next chapter will use these session skills during a complete ETL workflow.

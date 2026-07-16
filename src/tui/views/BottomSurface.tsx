@@ -14,6 +14,8 @@ import { RewindPicker } from "../RewindPicker";
 import { SessionPicker } from "../SessionPicker";
 import { YoloPrompt } from "../YoloPrompt";
 import type { PendingUserQuestionState } from "../decision-interaction";
+import type { PendingQualityDecisionState } from "../decision-interaction";
+import { QualityDecisionPrompt } from "../QualityDecisionPrompt";
 import { palette } from "../theme";
 import type { OptionItem, RewindPickerState, SessionPickerState } from "../types";
 import { ArgumentMenu } from "../widgets/ArgumentMenu";
@@ -30,6 +32,7 @@ export type BottomSurfaceMode =
   | { kind: "yolo"; stage: 1 | 2 }
   | { kind: "permission"; request: PermissionRequest }
   | { kind: "question"; pending: PendingUserQuestionState }
+  | { kind: "quality"; pending: PendingQualityDecisionState }
   | { kind: "gate"; gate: GateRequest }
   | { kind: "rewind"; picker: RewindPickerState }
   | { kind: "session"; picker: SessionPickerState }
@@ -40,6 +43,7 @@ export type BottomSurfaceState = {
   yoloStage: 1 | 2 | null;
   permissionRequest?: PermissionRequest;
   question: PendingUserQuestionState | null;
+  quality?: PendingQualityDecisionState | null;
   gate: GateRequest | null;
   rewind: RewindPickerState | null;
   session: SessionPickerState | null;
@@ -49,6 +53,7 @@ export type BottomSurfaceState = {
 export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfaceMode {
   if (state.yoloStage) return { kind: "yolo", stage: state.yoloStage };
   if (state.permissionRequest) return { kind: "permission", request: state.permissionRequest };
+  if (state.quality) return { kind: "quality", pending: state.quality };
   if (state.question) return { kind: "question", pending: state.question };
   if (state.gate) return { kind: "gate", gate: state.gate };
   if (state.rewind) return { kind: "rewind", picker: state.rewind };
@@ -65,6 +70,7 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   gateFeedbackCursor: number;
   engineSwitchPending: boolean;
   questionSelected: number;
+  qualitySelected: number;
   questionFreeformText: string;
   questionFreeformCursor: number;
   modelItems: OptionItem[];
@@ -122,6 +128,18 @@ export function BottomSurface(props: BottomSurfaceProps) {
               width={props.layout.width}
               freeformValue={props.questionFreeformText}
               freeformCursor={props.questionFreeformCursor}
+            />
+          </box>
+        )}
+      </Match>
+      <Match when={mode().kind === "quality" && mode() as Extract<BottomSurfaceMode, { kind: "quality" }> }>
+        {(current) => (
+          <box height={props.layout.bottomHeight}>
+            <QualityDecisionPrompt
+              decision={current().pending.decision}
+              selected={props.qualitySelected}
+              width={props.layout.width}
+              maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
             />
           </box>
         )}

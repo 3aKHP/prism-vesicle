@@ -4,10 +4,11 @@ import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
 import { engineAccent, palette } from "./theme";
-import { listSessions } from "../core/session/store";
+import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
+import type { QualityWarning } from "../core/quality";
 import { resolveTuiLayout } from "./layout";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
@@ -124,6 +125,7 @@ export function App(props: AppProps = {}) {
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
+  const [qualityWarnings, setQualityWarnings] = createSignal<QualityWarning[]>([]);
   const [selectedArtifact, setSelectedArtifact] = createSignal<SelectedArtifact | null>(null);
   const [activity, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
@@ -147,6 +149,7 @@ export function App(props: AppProps = {}) {
   const turnCancellation = new TurnCancellation();
 
   let turnController!: ReturnType<typeof createTurnController>;
+  let resumeSession!: ReturnType<typeof createSessionResumeController>["resumeSession"];
   let sessionPreferences!: ReturnType<typeof createSessionPreferencesController>;
   const decisionController = createDecisionController({
     busy,
@@ -159,6 +162,7 @@ export function App(props: AppProps = {}) {
     submitGate: (resolution) => { void turnController.submitGateResolution(resolution); },
     submitQuestionOption: (selectedIndex) => { void turnController.submitUserQuestionAnswer(selectedIndex); },
     submitQuestionFreeform: (value) => turnController.submitUserQuestionFreeform(value),
+    submitQualityDecision: (resolution) => { void turnController.submitQualityDecision(resolution); },
     applyPermissionMode: (mode) => sessionPreferences.applyPermissionMode(mode),
   });
   const {
@@ -174,15 +178,18 @@ export function App(props: AppProps = {}) {
     handleGateKey,
     handlePaste: handleDecisionPaste,
     handleQuestionKey,
+    handleQualityKey,
     handleYoloKey,
     pendingChildPermission,
     pendingEngineSwitch,
     pendingGate,
     pendingPermission,
+    pendingQualityDecision,
     pendingUserQuestion,
     questionFreeformCursor,
     questionFreeformText,
     questionSelected,
+    qualitySelected,
     setGateFeedback,
     setGateFeedbackCursor,
     setGateFeedbackKillBuffer,
@@ -192,11 +199,13 @@ export function App(props: AppProps = {}) {
     setPendingEngineSwitch,
     setPendingGate,
     setPendingPermission,
+    setPendingQualityDecision,
     setPendingUserQuestion,
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
     setQuestionFreeformText,
     setQuestionSelected,
+    setQualitySelected,
     setYoloConfirmStage,
     yoloConfirmStage,
   } = decisionController;
@@ -403,9 +412,12 @@ export function App(props: AppProps = {}) {
     setPendingUserQuestion,
     pendingPermission,
     setPendingPermission,
+    pendingQualityDecision,
+    setPendingQualityDecision,
     pendingChildPermission,
     setQuestionSelected,
     questionSelected,
+    setQualitySelected,
     questionFreeformText,
     clearQuestionFreeform,
     setGateFocus,
@@ -422,6 +434,12 @@ export function App(props: AppProps = {}) {
     recordIndependentAgentUsage,
     recordActivity,
     refreshArtifacts,
+    refreshQualityWarnings,
+    resumeQualitySession: async (targetSessionId) => {
+      const target = (await listSessions(process.cwd())).find((session) => session.sessionId === targetSessionId);
+      if (!target) throw new Error(`Session not found: ${targetSessionId}`);
+      await resumeSession(target);
+    },
     compactSession: (instructions) => sessionActions.compactSession(instructions),
     executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
     recordPromptHistory,
@@ -441,6 +459,7 @@ export function App(props: AppProps = {}) {
       && !pendingEngineSwitch()
       && !pendingUserQuestion()
       && !pendingPermission()
+      && !pendingQualityDecision()
       && !pendingChildPermission(),
   });
   agentManager = new AgentManager(agentStore, runChildAgent, {
@@ -463,7 +482,7 @@ export function App(props: AppProps = {}) {
     scheduler: continuationScheduler,
     reportError,
   });
-  const { resumeSession } = createSessionResumeController({
+  ({ resumeSession } = createSessionResumeController({
     rootDir: process.cwd(),
     dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
     permissionSettingsReady,
@@ -496,6 +515,9 @@ export function App(props: AppProps = {}) {
     setPendingEngineSwitch,
     setPendingUserQuestion,
     setPendingPermission,
+    setPendingQualityDecision,
+    setQualitySelected,
+    setQualityWarnings,
     setGateFocus,
     setGateFeedbackMode,
     setGateFeedback,
@@ -505,7 +527,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformText,
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
-  });
+  }));
   sessionActions = createSessionActionsController({
     rootDir: process.cwd(),
     sessionId,
@@ -523,6 +545,8 @@ export function App(props: AppProps = {}) {
     setPendingUserQuestion,
     pendingPermission,
     setPendingPermission,
+    pendingQualityDecision,
+    setPendingQualityDecision,
     pendingChildPermission,
     agentCards,
     setConversation,
@@ -555,14 +579,14 @@ export function App(props: AppProps = {}) {
   } = sessionActions;
   createEffect(() => {
     const id = sessionId();
-    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingChildPermission();
+    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
     if (id && ready) void continuationScheduler.notify(id).catch(reportError);
   });
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
+    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
@@ -570,6 +594,18 @@ export function App(props: AppProps = {}) {
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
+  const qualityWarningPaths = createMemo(() => new Set(qualityWarnings().flatMap((warning) =>
+    warning.targets.flatMap((target) => target.path ? [target.path] : [])
+  )));
+  const gateWithQualityWarning = createMemo(() => {
+    const gate = activeGateRequest();
+    if (!gate || qualityWarnings().length === 0) return gate;
+    const count = qualityWarnings().reduce((total, warning) => total + warning.targets.length, 0);
+    return {
+      ...gate,
+      summary: `Quality warning: ${count} target${count === 1 ? "" : "s"} remain unconfirmed.\n\n${gate.summary}`,
+    };
+  });
   const composerPopupMaxRows = createMemo(() => Math.min(8, Math.max(1, layout().bottomHeight - 4)));
 
   // On mount, detect existing sessions so the welcome line can offer resume.
@@ -619,6 +655,8 @@ export function App(props: AppProps = {}) {
     activePermissionRequest,
     pendingUserQuestion,
     handleQuestionKey,
+    pendingQualityDecision,
+    handleQualityKey,
     activeGateRequest,
     handleGateKey,
     pasteClipboardImage,
@@ -702,6 +740,18 @@ export function App(props: AppProps = {}) {
     return entries;
   }
 
+  async function refreshQualityWarnings(targetSessionId = sessionId()): Promise<QualityWarning[]> {
+    if (!targetSessionId) {
+      setQualityWarnings([]);
+      return [];
+    }
+    const snapshot = await loadSessionSnapshot(process.cwd(), targetSessionId, {
+      synthesizeDanglingToolResults: false,
+    });
+    setQualityWarnings(snapshot.qualityWarnings);
+    return snapshot.qualityWarnings;
+  }
+
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
@@ -725,6 +775,7 @@ export function App(props: AppProps = {}) {
             sessionPath={sessionPath()}
             mcp={mcpStatus()}
             artifacts={artifacts()}
+            qualityWarningPaths={qualityWarningPaths()}
             selectedArtifactPath={selectedArtifact()?.path}
             agents={agentCards()}
             processes={backgroundProcesses()}
@@ -753,7 +804,8 @@ export function App(props: AppProps = {}) {
         yoloStage={yoloConfirmStage()}
         permissionRequest={activePermissionRequest()}
         question={pendingUserQuestion()}
-        gate={activeGateRequest()}
+        quality={pendingQualityDecision()}
+        gate={gateWithQualityWarning()}
         rewind={rewindPicker()}
         session={sessionPicker()}
         model={modelPicker()}
@@ -763,6 +815,7 @@ export function App(props: AppProps = {}) {
         gateFeedbackCursor={gateFeedbackCursor()}
         engineSwitchPending={Boolean(pendingEngineSwitch())}
         questionSelected={questionSelected()}
+        qualitySelected={qualitySelected()}
         questionFreeformText={questionFreeformText()}
         questionFreeformCursor={questionFreeformCursor()}
         modelItems={modelPickerItems()}

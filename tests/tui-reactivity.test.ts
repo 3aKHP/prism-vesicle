@@ -28,7 +28,8 @@ describe("TUI reactivity static guard", () => {
     // The fix reads a reactive memo directly in the JSX when= prop so Solid
     // tracks the dependency and re-renders the Show branch when a gate or
     // engine switch request is set. Assert the positive pattern is present.
-    expect(appSource).toContain("gate={activeGateRequest()}");
+    expect(appSource).toContain("gate={gateWithQualityWarning()}");
+    expect(appSource).toContain("const gate = activeGateRequest()");
     expect(surfaceSource).toContain("resolveBottomSurfaceMode(props)");
 
     // And the buggy pattern — Show reading a bare `gate` local captured at

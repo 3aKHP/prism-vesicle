@@ -3,6 +3,7 @@ import type { EngineProfile } from "../engine/profile";
 import type { SessionStore } from "../session/store";
 import { resolveValidators, runValidators } from "../validators/registry";
 import type { AgentLoopEvent, RunPromptResult, ValidatorOutcome } from "./types";
+import type { QualityOutcome } from "../quality";
 
 export async function finalizeTurn(options: {
   response: VesicleResponse;
@@ -11,6 +12,7 @@ export async function finalizeTurn(options: {
   profile: EngineProfile;
   model: string;
   onEvent?: (event: AgentLoopEvent) => void;
+  quality?: { outcome: QualityOutcome; findingCount: number };
 }): Promise<RunPromptResult> {
   const { response } = options;
   if ((response.toolCalls?.length ?? 0) === 0) {
@@ -42,6 +44,7 @@ export async function finalizeTurn(options: {
     response,
     profile: options.profile,
     validation,
+    ...(options.quality ? { quality: options.quality } : {}),
     messages: options.messages,
   };
 }

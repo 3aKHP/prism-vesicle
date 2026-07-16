@@ -8,14 +8,18 @@ export type {
   AgentLoopEvent,
   EngineSwitchConfirmedResult,
   ResolveEngineSwitchResult,
+  ResolveQualityDecisionResult,
   RunPromptOptions,
   RunPromptResult,
+  QualityDecisionResolution,
   ValidatorOutcome,
 } from "./types";
 export { resolveEngineSwitch } from "./engine-switch-continuation";
 export { resolveGate } from "./gate-continuation";
 export { resolvePermission } from "./permission-continuation";
 export { resumeQualityRewrite } from "./quality-continuation";
+export { resolveQualityDecision } from "./quality-continuation";
+export { refreshQualityDecisionArtifacts } from "./quality-continuation";
 export { resolveUserQuestion } from "./user-question-continuation";
 
 export async function runPrompt(options: RunPromptOptions): Promise<RunPromptResult> {

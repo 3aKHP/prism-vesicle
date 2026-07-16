@@ -258,7 +258,7 @@ export function createTurnController(options: TurnControllerOptions) {
   }
 
   function hasPendingInteraction(): boolean {
-    return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingChildPermission());
+    return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingQualityDecision() || options.pendingChildPermission());
   }
 
   return {

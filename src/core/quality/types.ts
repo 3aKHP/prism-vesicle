@@ -1,6 +1,6 @@
 import type { EngineId } from "../engine/profile";
 import type { HarnessQualityMode, VerifiedHarnessPack } from "../harness/types";
-import type { ResponseUsage } from "../../providers/shared/types";
+import type { ProviderThinkingBlock, ResponseUsage } from "../../providers/shared/types";
 
 export type QualityCandidateType =
   | "runtime.prose"
@@ -118,7 +118,43 @@ export type QualityFinding = {
   evidence: string;
 };
 
+export type QualityFindingSummary = Pick<QualityFinding,
+  "ruleId" | "title" | "severity" | "maturity" | "evidence"
+> & {
+  source: "detector" | "judge";
+};
+
+export type QualityAssessment = {
+  targetId: string;
+  candidateHash: string;
+  detectorFindings: QualityFinding[];
+  judgeFindings: QualityFinding[];
+  judgeStatus: "not-run" | "valid" | "invalid" | "timed-out" | "unavailable";
+};
+
+export type QualityOutcome = "clean" | "findings" | "rewrite-required" | "exhausted" | "inconclusive";
+
+export type QualityAction = "deliver" | "observe" | "rewrite" | "ask-user";
+
 export type QualityDecision = "pass" | "observe" | "rewrite" | "exhausted";
+
+export type QualityEventTarget = {
+  id: string;
+  kind: "assistant-response" | "artifact-post-image";
+  path?: string;
+  candidateHash: string;
+  bytes?: number;
+  status: "clean" | "findings" | "rewrite-required" | "warning";
+  findingIds: string[];
+  findings: QualityFindingSummary[];
+  warningReason?: "target-unreadable" | "target-oversize";
+};
+
+export type QualityArtifactReadResult = {
+  target: QualityArtifactTarget;
+  content?: string;
+  warningReason?: "target-unreadable" | "target-oversize";
+};
 
 export type QualityEvent = {
   guard: "anti-ai-flavor";
@@ -132,6 +168,11 @@ export type QualityEvent = {
   candidateHash: string;
   mode: HarnessQualityMode;
   attempt: number;
+  outcome: QualityOutcome;
+  action: QualityAction;
+  policyVersion: "quality-policy/v1";
+  targets: QualityEventTarget[];
+  /** Legacy projection retained for existing session readers. */
   decision: QualityDecision;
   findingIds: string[];
   detectorMs: number;
@@ -151,6 +192,19 @@ export type QualityRewriteState = {
   rejectedHashes: Set<string>;
   candidateParts?: string[];
   targets?: QualityArtifactTarget[];
+  warningId?: string;
+  warningTargetIds?: string[];
+  candidate?: QualityDecisionCandidate;
+};
+
+export type QualityDecisionCandidate = {
+  responseId: string;
+  content: string;
+  toolCalls: Array<{ id: string; name: string; arguments: string }>;
+  reasoningContent?: string;
+  thinkingBlocks?: ProviderThinkingBlock[];
+  finishReason?: string;
+  usage?: ResponseUsage;
 };
 
 export type DurableQualityState = {
@@ -164,6 +218,55 @@ export type DurableQualityState = {
   rejectedHashes: string[];
   candidateParts: string[];
   targets: DurableQualityArtifactTarget[];
+  warningId?: string;
+  warningTargetIds?: string[];
+  candidate?: QualityDecisionCandidate;
+};
+
+export type QualityWarningReason =
+  | "exhausted"
+  | "judge-invalid"
+  | "judge-timeout"
+  | "target-unreadable"
+  | "target-oversize"
+  | "user-abandoned";
+
+export type QualityWarningTarget = QualityEventTarget & {
+  resolution?: "accepted-by-user" | "stopped-by-user";
+};
+
+export type QualityWarning = {
+  id: string;
+  guard: "anti-ai-flavor";
+  reason: QualityWarningReason;
+  producer: EngineId;
+  attempt: number;
+  targets: QualityWarningTarget[];
+};
+
+export type QualityResolution = {
+  warningId: string;
+  resolution: "revised-clean" | "accepted-by-user" | "stopped-by-user";
+  targetIds: string[];
+};
+
+export type QualityDecisionRequest = {
+  id: string;
+  reason: "exhausted" | "interrupted";
+  producer: EngineId;
+  findingCount: number;
+  targets: Array<{ id: string; path?: string; findingIds: string[] }>;
+  canRetry: boolean;
+  blockedReason?: string;
+};
+
+export type QualityDecisionPoint = {
+  request: QualityDecisionRequest;
+  warning: QualityWarning;
+  qualityState: DurableQualityState;
+  candidate: QualityDecisionCandidate;
+  phase: "before-mutations" | "after-mutations";
+  candidateRecorded: boolean;
 };
 
 export type QualityRuntimeSource = Pick<VerifiedHarnessPack,

@@ -21,12 +21,15 @@ type ResultOptions = Pick<TurnControllerOptions,
   | "setPendingEngineSwitch"
   | "setPendingGate"
   | "setPendingPermission"
+  | "setPendingQualityDecision"
   | "setPendingUserQuestion"
   | "setQuestionSelected"
+  | "setQualitySelected"
   | "setSessionId"
   | "setSessionPath"
   | "setSessionPicker"
   | "setStatus"
+  | "refreshQualityWarnings"
 >;
 
 export function createTurnResultController(options: ResultOptions) {
@@ -44,6 +47,9 @@ export function createTurnResultController(options: ResultOptions) {
         return;
       case "needs_permission":
         applyPendingPermissionResult(result);
+        return;
+      case "needs_quality_decision":
+        applyPendingQualityDecisionResult(result);
         return;
       case "complete":
         applyCompleteResult(result);
@@ -87,6 +93,18 @@ export function createTurnResultController(options: ResultOptions) {
     options.setStatus(`permission pending: ${result.request.toolName}`);
   }
 
+  function applyPendingQualityDecisionResult(result: Extract<RunPromptResult, { kind: "needs_quality_decision" }>): void {
+    applyPendingResultBase(result);
+    options.setPendingQualityDecision({ ...result, engine: result.profile.id });
+    options.setQualitySelected(result.decision.canRetry ? 0 : 1);
+    options.setMessages((previous) => [...previous, {
+      role: "system",
+      content: `Automatic quality revision is ${result.decision.reason}. The current version still has ${result.decision.findingCount} blocking finding${result.decision.findingCount === 1 ? "" : "s"}.`,
+    }]);
+    options.setStatus(`quality decision pending: ${result.decision.findingCount} finding${result.decision.findingCount === 1 ? "" : "s"}`);
+    void options.refreshQualityWarnings(result.sessionId);
+  }
+
   function applyPendingResultBase(result: Exclude<RunPromptResult, { kind: "complete" }>): void {
     options.setConversation([...result.messages]);
     options.setSessionId(result.sessionId);
@@ -95,6 +113,7 @@ export function createTurnResultController(options: ResultOptions) {
     options.setPendingEngineSwitch(null);
     options.setPendingUserQuestion(null);
     options.setPendingPermission(null);
+    options.setPendingQualityDecision(null);
     options.setSessionPicker(null);
     options.setOutput(result.assistantContent);
   }
@@ -124,7 +143,12 @@ export function createTurnResultController(options: ResultOptions) {
     }
     if (result.validation) appended.push({ role: "system", content: renderValidationNotice(result.validation) });
     options.setMessages((previous) => [...previous, ...appended]);
-    options.setStatus(result.validation?.ok === false ? "complete with validation findings" : "complete");
+    options.setStatus(result.validation?.ok === false ? "complete with validation findings"
+      : result.quality?.outcome === "inconclusive" ? "complete; quality check incomplete"
+        : result.quality?.outcome === "findings" ? `complete with ${result.quality.findingCount} non-blocking quality finding${result.quality.findingCount === 1 ? "" : "s"}`
+          : result.quality?.outcome === "clean" ? "complete; no blocking quality rules matched"
+            : "complete");
+    void options.refreshQualityWarnings(result.sessionId);
   }
 
   function clearPendingInteractions(): void {
@@ -132,6 +156,7 @@ export function createTurnResultController(options: ResultOptions) {
     options.setPendingEngineSwitch(null);
     options.setPendingUserQuestion(null);
     options.setPendingPermission(null);
+    options.setPendingQualityDecision(null);
     options.clearQuestionFreeform();
     options.setGateFeedbackMode(null);
     options.clearGateFeedback();
