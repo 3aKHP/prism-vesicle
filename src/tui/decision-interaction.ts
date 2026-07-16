@@ -32,6 +32,13 @@ export type PendingPermissionState = Omit<PendingPermission, "profile"> & {
   profile?: PendingPermission["profile"];
 };
 
+type PendingQualityDecision = Extract<RunPromptResult, { kind: "needs_quality_decision" }>;
+
+export type PendingQualityDecisionState = Omit<PendingQualityDecision, "profile"> & {
+  engine: EngineId;
+  profile?: PendingQualityDecision["profile"];
+};
+
 export type TuiKeyEvent = {
   name?: string;
   ctrl?: boolean;

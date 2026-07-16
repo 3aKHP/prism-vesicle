@@ -65,7 +65,7 @@ bunx vesicle assets use <pack-id>@<version>
 bunx vesicle assets status
 ```
 
-项目锁位于 `.vesicle/assets.lock.json`。Vesicle 会在启动和恢复会话时重新验证已安装的 Pack，并阻止 Harness 身份记录与项目不一致的会话。`bunx vesicle assets rollback` 会移除项目选择，并恢复内置 V10 基线。在 V10 基线迁移前创建的会话没有 Harness 身份，必须新建会话，不能直接恢复。压缩包解压、在线发现和自动更新不属于这条离线流程。
+项目锁位于 `.vesicle/assets.lock.json`。Vesicle 会在启动和恢复会话时重新验证已安装的 Pack，并在 Harness 身份记录与项目不一致时阻止供应商续接。尚未处理的 Output Quality Guard 决策仍可打开，以便在本地选择使用当前版本或停止；只有恢复完全相同的记录身份后，才能再次修订。`bunx vesicle assets rollback` 会移除项目选择，并恢复内置 V10 基线。在 V10 基线迁移前创建的会话没有 Harness 身份，必须新建会话，不能直接恢复。压缩包解压、在线发现和自动更新不属于这条离线流程。
 
 ### 从源码运行
 
@@ -154,6 +154,7 @@ bun run dev
 - 支持流式输出的 OpenAI-compatible、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
+- 面向实际 target 的 Output Quality Guard：检查当前 Runtime 制品的 post-image，持久保存 finding 与 warning，并为耗尽或中断的修订恢复“再次修订”“使用当前版本”和“停止”三种明确选择。
 - 可选的 Tavily Web 研究、Streamable HTTP MCP 工具，以及面向声明视觉能力模型的多模态图像输入。
 - 四档粗粒度工具批准模式，以及显式启用的非交互式 `shell_exec` 进程运行时；它提供宿主拥有的 PowerShell、CMD、Git Bash 与 POSIX shell 档案、绑定解释器的精确计划批准、环境过滤、受限 UTF-8 实时输出、超时、进程树清理、前台/后台执行、持久 `shell-N` 任务状态、完成通知和显式输出/停止控制。
 - 支持前台与后台 SubAgent、并行执行、三个受 V10 Driver 契约约束的工作流 Agent、五个通用宿主 Agent（`explore`、`general`、`plan`、`research`、`reviewer`）、受当前 Harness 契约约束的自定义 Agent Profile、专用实时 Agent 卡片、持久化结果投递，以及无需轮询的主 Engine 自动续接。

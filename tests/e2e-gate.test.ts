@@ -89,6 +89,10 @@ describe("E2E: ETL Phase 0 gate flow", () => {
       console.log(`[E2E] model requested permission for ${first.request.toolName}; skipping ETL gate assertions.`);
       return;
     }
+    if (first.kind === "needs_quality_decision") {
+      console.log(`[E2E] quality decision pending with ${first.decision.findingCount} findings; skipping ETL gate assertions.`);
+      return;
+    }
 
     expect(first.kind).toBe("needs_user");
     expect(first.gate.gate).toBe("blueprint-confirmation");
@@ -125,6 +129,9 @@ describe("E2E: ETL Phase 0 gate flow", () => {
       console.log(`[E2E] post-confirm content preview: ${resumed.assistantContent.slice(0, 200)}`);
     } else if (resumed.kind === "needs_permission") {
       console.log(`[E2E] post-confirm permission requested: ${resumed.request.toolName}`);
+      return;
+    } else if (resumed.kind === "needs_quality_decision") {
+      console.log(`[E2E] post-confirm quality decision pending with ${resumed.decision.findingCount} findings.`);
       return;
     } else {
       expect(resumed.response.content.length).toBeGreaterThan(0);

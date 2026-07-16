@@ -11,7 +11,7 @@ import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../p
 import type { ComposerElement, ComposerState } from "./composer";
 import type { PromptHistoryEntry } from "./composer-history";
 import type { GateFocusTarget } from "./GatePrompt";
-import type { PendingEngineSwitchState, PendingGateState, PendingPermissionState, PendingUserQuestionState } from "./decision-interaction";
+import type { PendingEngineSwitchState, PendingGateState, PendingPermissionState, PendingQualityDecisionState, PendingUserQuestionState } from "./decision-interaction";
 import type { ActivityEntry, AgentCardState, Message, SessionPickerState } from "./types";
 
 type GenerationSelection = { reasoningTier: ReasoningTier } | undefined;
@@ -61,9 +61,12 @@ export type TurnControllerOptions = {
   setPendingUserQuestion: Setter<PendingUserQuestionState | null>;
   pendingPermission: Accessor<PendingPermissionState | null>;
   setPendingPermission: Setter<PendingPermissionState | null>;
+  pendingQualityDecision: Accessor<PendingQualityDecisionState | null>;
+  setPendingQualityDecision: Setter<PendingQualityDecisionState | null>;
   pendingChildPermission: Accessor<unknown | null>;
   setQuestionSelected: Setter<number>;
   questionSelected: Accessor<number>;
+  setQualitySelected: Setter<number>;
   questionFreeformText: Accessor<string>;
   clearQuestionFreeform: () => void;
   setGateFocus: Setter<GateFocusTarget>;
@@ -80,6 +83,8 @@ export type TurnControllerOptions = {
   recordIndependentAgentUsage: (usage: NonNullable<AgentInboxEntry["usage"]>) => void;
   recordActivity: (entry: ActivityEntry) => void;
   refreshArtifacts: () => Promise<unknown>;
+  refreshQualityWarnings: (sessionId?: string) => Promise<unknown>;
+  resumeQualitySession: (sessionId: string) => Promise<void>;
   compactSession: (instructions?: string) => Promise<{ summary: string; messagesSummarized: number }>;
   executeLocalCommand: (prompt: string) => Promise<void>;
   recordPromptHistory: (value: string, elements: ComposerElement[], images: VesicleImageAttachment[]) => void;
@@ -106,6 +111,7 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
   | "pendingEngineSwitch"
   | "pendingGate"
   | "pendingPermission"
+  | "pendingQualityDecision"
   | "pendingUserQuestion"
   | "permissionBroker"
   | "questionFreeformText"
@@ -121,11 +127,15 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
   | "setPendingEngineSwitch"
   | "setPendingGate"
   | "setPendingPermission"
+  | "setPendingQualityDecision"
   | "setPendingUserQuestion"
   | "setQuestionSelected"
+  | "setQualitySelected"
   | "setSessionId"
   | "setSessionPath"
   | "setStatus"
+  | "refreshQualityWarnings"
+  | "resumeQualitySession"
 > & {
   handleResult: (result: RunPromptResult) => void;
   handleInterruptedTurn: () => void;
@@ -136,4 +146,5 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
     shellInterpreter: ShellInterpreterPreference;
   };
   reportError: (error: unknown) => void;
+  resolveQualityDecision?: typeof import("../core/agent-loop/run").resolveQualityDecision;
 };

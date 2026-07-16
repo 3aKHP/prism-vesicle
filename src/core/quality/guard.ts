@@ -10,9 +10,14 @@ import type {
   QualityCandidate,
   QualityArtifactTarget,
   QualityCandidateType,
+  QualityAction,
+  QualityArtifactReadResult,
+  QualityAssessment,
   QualityDecision,
   QualityEvaluation,
   QualityEvent,
+  QualityEventTarget,
+  QualityOutcome,
   QualityRewriteState,
   QualityRuntimeContext,
 } from "./types";
@@ -24,12 +29,16 @@ export type BoundQualityEvaluation = {
   mode: HarnessQualityMode;
   candidate: QualityCandidate;
   evaluation: QualityEvaluation;
+  assessments: QualityAssessment[];
+  outcome: QualityOutcome;
+  action: QualityAction;
   decision: QualityDecision;
   event: QualityEvent;
   targetEvaluations?: Array<{
     target: QualityArtifactTarget;
     candidate: QualityCandidate;
     evaluation: QualityEvaluation;
+    warningReason?: "target-unreadable" | "target-oversize";
   }>;
 };
 
@@ -93,28 +102,16 @@ export function evaluateBoundQuality(options: {
   };
   const evaluation = evaluateQualityCandidate(candidate, options.runtime.rules);
   const decision = qualityDecision(options.mode, evaluation, options.state);
+  const policy = qualityPolicy(options.mode, evaluation, decision);
+  const assessment = qualityAssessment(`assistant:${evaluation.candidateHash}`, evaluation);
   return {
     mode: options.mode,
     candidate,
     evaluation,
+    assessments: [assessment],
+    ...policy,
     decision,
-    event: {
-      guard: "anti-ai-flavor",
-      packId: options.runtime.packId,
-      packVersion: options.runtime.packVersion,
-      manifestSha256: options.runtime.manifestSha256,
-      ruleVersion: options.runtime.ruleManifest.version,
-      ruleSourceHash: options.runtime.ruleManifest.sourceHash,
-      producer: options.producer,
-      candidateType: type,
-      candidateHash: evaluation.candidateHash,
-      mode: options.mode,
-      attempt: options.attempt,
-      decision,
-      findingIds: [...new Set(evaluation.findings.map((finding) => finding.ruleId))].slice(0, 32),
-      detectorMs: Math.round(evaluation.detectorMs * 1000) / 1000,
-      ...(options.usage ? { usage: boundedUsage(options.usage) } : {}),
-    },
+    event: qualityEvent(options, type, evaluation, decision, policy),
   };
 }
 
@@ -122,23 +119,29 @@ export function evaluateBoundQualityTargets(options: {
   runtime: QualityRuntimeContext;
   producer: EngineId | string;
   mode: HarnessQualityMode;
-  targets: Array<{ target: QualityArtifactTarget; content: string }>;
+  targets: QualityArtifactReadResult[];
   attempt: number;
   state: QualityRewriteState;
   usage?: ResponseUsage;
 }): BoundQualityEvaluation | undefined {
   const type = qualityCandidateTypeForProducer(options.producer);
   if (!type || options.mode === "off" || options.mode === "analyze" || options.targets.length === 0) return undefined;
-  const targetEvaluations = options.targets.map(({ target, content }) => {
+  const targetEvaluations = options.targets.map(({ target, content, warningReason }) => {
     const candidate: QualityCandidate = {
       producer: options.producer,
       type,
-      content: extractProseCandidate(type, content),
+      content: extractProseCandidate(type, content ?? ""),
     };
-    return { target, candidate, evaluation: evaluateQualityCandidate(candidate, options.runtime.rules) };
+    return {
+      target,
+      candidate,
+      evaluation: evaluateQualityCandidate(candidate, options.runtime.rules),
+      ...(warningReason ? { warningReason } : {}),
+    };
   });
   const evaluation = aggregateTargetEvaluations(targetEvaluations);
   const decision = qualityTargetDecision(options.mode, targetEvaluations, options.state);
+  const policy = qualityPolicy(options.mode, evaluation, decision, targetEvaluations.some((target) => target.warningReason));
   const candidate: QualityCandidate = {
     producer: options.producer,
     type,
@@ -148,9 +151,13 @@ export function evaluateBoundQualityTargets(options: {
     mode: options.mode,
     candidate,
     evaluation,
+    assessments: targetEvaluations.map(({ target, evaluation: targetEvaluation }) =>
+      qualityAssessment(target.id, targetEvaluation)
+    ),
+    ...policy,
     decision,
     targetEvaluations,
-    event: qualityEvent(options, type, evaluation, decision),
+    event: qualityEvent(options, type, evaluation, decision, policy, targetEvaluations),
   };
 }
 
@@ -262,6 +269,8 @@ function qualityEvent(
   type: QualityCandidateType,
   evaluation: QualityEvaluation,
   decision: QualityDecision,
+  policy: { outcome: QualityOutcome; action: QualityAction },
+  targetEvaluations?: NonNullable<BoundQualityEvaluation["targetEvaluations"]>,
 ): QualityEvent {
   return {
     guard: "anti-ai-flavor",
@@ -275,10 +284,102 @@ function qualityEvent(
     candidateHash: evaluation.candidateHash,
     mode: options.mode,
     attempt: options.attempt,
+    ...policy,
+    policyVersion: "quality-policy/v1",
+    targets: qualityEventTargets(evaluation, decision, targetEvaluations),
     decision,
     findingIds: [...new Set(evaluation.findings.map((finding) => finding.ruleId))].slice(0, 32),
     detectorMs: Math.round(evaluation.detectorMs * 1000) / 1000,
     ...(options.usage ? { usage: boundedUsage(options.usage) } : {}),
+  };
+}
+
+function qualityPolicy(
+  mode: HarnessQualityMode,
+  evaluation: QualityEvaluation,
+  decision: QualityDecision,
+  inconclusive = false,
+): { outcome: QualityOutcome; action: QualityAction } {
+  if (decision === "rewrite") return { outcome: "rewrite-required", action: "rewrite" };
+  if (decision === "exhausted") return { outcome: "exhausted", action: "ask-user" };
+  if (inconclusive) return { outcome: "inconclusive", action: "deliver" };
+  if (mode === "observe") {
+    return evaluation.findings.length > 0
+      ? { outcome: "findings", action: "observe" }
+      : { outcome: "clean", action: "deliver" };
+  }
+  return evaluation.findings.length > 0
+    ? { outcome: "findings", action: "deliver" }
+    : { outcome: "clean", action: "deliver" };
+}
+
+function qualityAssessment(targetId: string, evaluation: QualityEvaluation): QualityAssessment {
+  return {
+    targetId,
+    candidateHash: evaluation.candidateHash,
+    detectorFindings: evaluation.findings,
+    judgeFindings: [],
+    judgeStatus: "not-run",
+  };
+}
+
+function qualityEventTargets(
+  evaluation: QualityEvaluation,
+  decision: QualityDecision,
+  targets?: NonNullable<BoundQualityEvaluation["targetEvaluations"]>,
+): QualityEventTarget[] {
+  if (!targets) {
+    return [qualityEventTarget({
+      id: `assistant:${evaluation.candidateHash}`,
+      kind: "assistant-response",
+      candidateHash: evaluation.candidateHash,
+      evaluation,
+      decision,
+    })];
+  }
+  return targets.map(({ target, evaluation: targetEvaluation, warningReason }) => qualityEventTarget({
+    id: target.id,
+    kind: "artifact-post-image",
+    path: target.path,
+    candidateHash: target.postImageHash,
+    bytes: target.bytes,
+    evaluation: targetEvaluation,
+    decision,
+    warningReason,
+  }));
+}
+
+function qualityEventTarget(options: {
+  id: string;
+  kind: QualityEventTarget["kind"];
+  path?: string;
+  candidateHash: string;
+  bytes?: number;
+  evaluation: QualityEvaluation;
+  decision: QualityDecision;
+  warningReason?: "target-unreadable" | "target-oversize";
+}): QualityEventTarget {
+  const blocking = options.evaluation.blockingFindings.length > 0;
+  const status: QualityEventTarget["status"] = options.warningReason ? "warning" : blocking
+    ? options.decision === "exhausted" ? "warning" : "rewrite-required"
+    : options.evaluation.findings.length > 0 ? "findings" : "clean";
+  return {
+    id: options.id,
+    kind: options.kind,
+    ...(options.path ? { path: options.path } : {}),
+    candidateHash: options.candidateHash,
+    ...(options.bytes !== undefined ? { bytes: options.bytes } : {}),
+    status,
+    findingIds: [...new Set(options.evaluation.findings.map((finding) => finding.ruleId))].slice(0, 32),
+    findings: options.evaluation.findings.slice(0, 16).map((finding) => ({
+      ruleId: finding.ruleId,
+      title: finding.title,
+      severity: finding.severity,
+      maturity: finding.maturity,
+      evidence: finding.evidence.slice(0, 240),
+      source: "detector",
+    })),
+    ...(options.warningReason ? { warningReason: options.warningReason } : {}),
   };
 }
 

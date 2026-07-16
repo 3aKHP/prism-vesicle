@@ -3,11 +3,13 @@ import { readWritableProjectText, type FileToolEvent, type ToolResult } from "..
 import type {
   DurableQualityArtifactTarget,
   QualityArtifactOperation,
+  QualityArtifactReadResult,
   QualityArtifactTarget,
   QualityCandidateType,
 } from "./types";
 
 const artifactOperations = new Set<QualityArtifactOperation>(["create", "write", "replace", "append"]);
+export const maxQualityArtifactBytes = 1024 * 1024;
 
 export function qualityCandidateTypeForProducer(producer: string): QualityCandidateType | undefined {
   switch (producer) {
@@ -87,14 +89,20 @@ export function upsertDurableQualityTarget(
 export async function readQualityArtifactTargets(
   rootDir: string,
   targets: QualityArtifactTarget[],
-): Promise<Array<{ target: QualityArtifactTarget; content: string }>> {
+): Promise<QualityArtifactReadResult[]> {
   return Promise.all(targets.map(async (target) => {
-    const postImage = await readWritableProjectText(rootDir, target.path);
-    target.path = postImage.path;
-    target.id = `artifact:${postImage.path}`;
-    target.postImageHash = postImage.sha256;
-    target.bytes = postImage.bytes;
-    return { target, content: postImage.content };
+    try {
+      const postImage = await readWritableProjectText(rootDir, target.path);
+      target.path = postImage.path;
+      target.id = `artifact:${postImage.path}`;
+      target.postImageHash = postImage.sha256;
+      target.bytes = postImage.bytes;
+      return postImage.bytes > maxQualityArtifactBytes
+        ? { target, warningReason: "target-oversize" }
+        : { target, content: postImage.content };
+    } catch {
+      return { target, warningReason: "target-unreadable" };
+    }
   }));
 }
 

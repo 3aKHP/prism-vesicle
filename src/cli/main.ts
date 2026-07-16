@@ -105,6 +105,11 @@ switch (command) {
       console.log(result.assistantContent);
       console.log(`\n[permission:${result.request.toolName}] This turn needs user approval; the 'once' subcommand is non-interactive.`);
       console.log(`Session: ${result.sessionPath}`);
+    } else if (result.kind === "needs_quality_decision") {
+      console.log(result.assistantContent);
+      console.log(`\n[quality:${result.decision.reason}] The current version still has ${result.decision.findingCount} blocking finding${result.decision.findingCount === 1 ? "" : "s"}.`);
+      console.log("Resume this session in the interactive TUI to revise again, use the current version, or stop.");
+      console.log(`Session: ${result.sessionPath}`);
     } else {
       console.log(result.response.content);
       console.log(`\nSession: ${result.sessionPath}`);
