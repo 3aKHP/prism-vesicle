@@ -319,7 +319,9 @@ function modelReport(
 ): QualityBenchmarkModelReport {
   const metrics = metricsFor(evaluations);
   const known = evaluations.filter((item) => item.expectedVerdict !== undefined);
-  const failureCaseIds = [...new Set(evaluations.filter((item) => item.result.status !== "valid" || predictedVerdict(item) !== item.expectedVerdict).map((item) => item.caseId))].sort();
+  const failureCaseIds = [...new Set(evaluations.filter((item) => item.result.status !== "valid"
+    || (item.expectedVerdict !== undefined && predictedVerdict(item) !== item.expectedVerdict)
+  ).map((item) => item.caseId))].sort();
   const latency = latencySummary(evaluations.map((item) => item.result.durationMs));
   const slices = sliceReports(evaluations, policy);
   const reasons = decisionReasons(
@@ -614,7 +616,9 @@ function predictedVerdict(item: QualityBenchmarkEvaluation): "pass" | "rewrite" 
 }
 
 function sameStringSet(left: string[], right: string[]): boolean {
-  return left.length === right.length && [...left].sort().every((item, index) => item === [...right].sort()[index]);
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.length === sortedRight.length && sortedLeft.every((item, index) => item === sortedRight[index]);
 }
 
 function evaluationKey(item: Pick<QualityBenchmarkEvaluation, "model" | "caseId" | "repeat">): string {
@@ -664,9 +668,14 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
 
 async function sleepWithSignal(milliseconds: number, signal?: AbortSignal): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, milliseconds);
+    const finish = () => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    };
+    const timer = setTimeout(finish, milliseconds);
     const abort = () => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       reject(signal?.reason ?? new DOMException("Benchmark cancelled.", "AbortError"));
     };
     signal?.addEventListener("abort", abort, { once: true });

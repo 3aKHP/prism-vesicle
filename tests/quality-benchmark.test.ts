@@ -132,6 +132,28 @@ describe("quality benchmark runner", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  test("does not call a valid blinded result a failure", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
+    try {
+      const blinded: QualityBenchmarkCase = {
+        ...cases[0]!,
+        caseId: "blind-case",
+      };
+      delete blinded.expectedVerdict;
+      delete blinded.expectedRuleIds;
+      const result = await runQualityBenchmark(benchmarkOptions(
+        join(directory, "events.jsonl"),
+        [model("openai-chat-completions", async () => response(passResult()))],
+        [blinded],
+        1,
+      ));
+      expect(result.report.models[0]?.failureCaseIds).toEqual([]);
+      expect(result.report.models[0]?.decision).toBe("inconclusive");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 function benchmarkOptions(
