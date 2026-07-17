@@ -43,6 +43,7 @@ describe("Harness Pack foundation", () => {
       expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-detector/document-metrics@1");
       expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-judge/anti-ai-flavor@1");
       expect(runtime?.harness.quality?.judge?.rules).toHaveLength(21);
+      expect(runtime?.harness.quality?.semanticRewritePolicy).toBeUndefined();
       expect((await runtime!.assets.resolveFile("assets/engines/etl.profile.yaml")).source).toBe("bundled");
       expect((await runtime!.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("host");
       expect((await listAgentProfiles(project, runtime!.assets)).map((profile) => profile.id)).toEqual([
@@ -99,6 +100,7 @@ describe("Harness Pack foundation", () => {
 
   test("reports unsupported capabilities without weakening integrity checks", async () => {
     expect(Object.isFrozen(supportedHarnessCapabilities)).toBe(true);
+    expect(supportedHarnessCapabilities).toContain("quality-policy/semantic-rewrite@1");
     expect(() => (supportedHarnessCapabilities as string[]).push("future-capability@1")).toThrow();
 
     const fixture = await createHarnessFixture({

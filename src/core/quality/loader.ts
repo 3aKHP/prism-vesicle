@@ -11,6 +11,8 @@ import type {
   QualityRulePackManifest,
   QualityRuntimeContext,
   QualityRuntimeSource,
+  QualitySemanticRewritePolicy,
+  QualitySemanticRewriteModelScope,
 } from "./types";
 import { isDocumentMetricSignal, isQualityMetricSignal } from "./metrics";
 
@@ -19,6 +21,7 @@ const semverPattern = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const safeArtifactPattern = /^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
 const documentMetricsCapability = "quality-detector/document-metrics@1";
 const semanticJudgeCapability = "quality-judge/anti-ai-flavor@1";
+const semanticRewritePolicyCapability = "quality-policy/semantic-rewrite@1";
 const maxMetricPatterns = 64;
 const maxMetricPatternLength = 2_048;
 const maxMetricPatternQuantifiers = 25;
@@ -67,6 +70,9 @@ export async function loadQualityRuntime(source: QualityRuntimeSource): Promise<
   const judge = manifest.requiredCapabilities.includes(semanticJudgeCapability)
     ? await loadJudgeContract(moduleDirectory, manifest)
     : undefined;
+  const semanticRewritePolicy = manifest.requiredCapabilities.includes(semanticRewritePolicyCapability)
+    ? await loadSemanticRewritePolicy(moduleDirectory, manifest, judge)
+    : undefined;
   return {
     packDirectory: source.directory,
     packId: source.manifest.id,
@@ -76,11 +82,33 @@ export async function loadQualityRuntime(source: QualityRuntimeSource): Promise<
     ruleManifest: manifest,
     rules,
     ...(judge ? { judge } : {}),
+    ...(semanticRewritePolicy ? { semanticRewritePolicy } : {}),
     engineModes: Object.fromEntries(Object.entries(source.manifest.qualityBindings)
       .map(([owner, bindings]) => [owner, bindings["anti-ai-flavor"] ?? "off"])),
     agentModes: Object.fromEntries(Object.entries(source.manifest.agentQualityBindings)
       .map(([owner, bindings]) => [owner, bindings["anti-ai-flavor"] ?? "off"])),
   };
+}
+
+async function loadSemanticRewritePolicy(
+  moduleDirectory: string,
+  manifest: QualityRulePackManifest,
+  judge: { rubric: string; rules: QualityJudgeRule[] } | undefined,
+): Promise<QualitySemanticRewritePolicy> {
+  if (!manifest.requiredCapabilities.includes(semanticJudgeCapability) || !judge) {
+    throw new Error(`Semantic Rewrite Policy requires ${semanticJudgeCapability}.`);
+  }
+  const path = "data/semantic-rewrite-policy.json";
+  if (!manifest.artifacts[path]) throw new Error(`Rule Pack is missing Semantic Rewrite Policy ${path}.`);
+  const policy = parseSemanticRewritePolicy(
+    await readJson(resolveModulePath(moduleDirectory, path), `Semantic Rewrite Policy ${path}`),
+    judge.rules,
+  );
+  if (policy.activation !== "active") throw new Error("Semantic Rewrite Policy must be active when its capability is required.");
+  if (isZeroHash(policy.calibration.corpusSha256) || isZeroHash(policy.calibration.reportSha256)) {
+    throw new Error("Semantic Rewrite Policy calibration digests must not be zero hashes.");
+  }
+  return policy;
 }
 
 async function loadJudgeContract(
@@ -249,6 +277,97 @@ export function parseJudgeRules(value: unknown, expectedModule = "anti-ai-flavor
     throw new Error("Semantic Judge rule ids must be unique.");
   }
   return rules;
+}
+
+export function parseSemanticRewritePolicy(
+  value: unknown,
+  judgeRules: QualityJudgeRule[],
+): QualitySemanticRewritePolicy {
+  const raw = strictObject(value, "Semantic Rewrite Policy", [
+    "schema", "module", "policyVersion", "activation", "targetTypes", "blockingRuleIds",
+    "minimumConfidenceByRule", "modelScopes", "onUnknownModel", "onInconclusive", "multiTargetAction", "calibration",
+  ]);
+  if (raw.schema !== "quality-semantic-rewrite-policy/v1") throw new Error("Unsupported Semantic Rewrite Policy schema.");
+  if (raw.module !== "anti-ai-flavor") throw new Error("Semantic Rewrite Policy module must be anti-ai-flavor.");
+  if (raw.policyVersion !== "quality-policy/v2") throw new Error("Semantic Rewrite Policy version is unsupported.");
+  const activation = stringValue(raw.activation, "Semantic Rewrite Policy activation");
+  if (activation !== "inactive" && activation !== "active") throw new Error("Semantic Rewrite Policy activation is invalid.");
+  const targetTypes = stringList(raw.targetTypes, "Semantic Rewrite Policy targetTypes");
+  if (targetTypes.length === 0 || targetTypes.some((type) => type !== "runtime.prose")) {
+    throw new Error("Semantic Rewrite Policy targetTypes are unsupported.");
+  }
+  const blockingRuleIds = stringList(raw.blockingRuleIds, "Semantic Rewrite Policy blockingRuleIds");
+  if (blockingRuleIds.length === 0) throw new Error("Semantic Rewrite Policy must include blocking rules.");
+  const knownRules = new Map(judgeRules.map((rule) => [rule.id, rule]));
+  for (const ruleId of blockingRuleIds) {
+    const rule = knownRules.get(ruleId);
+    if (!rule || rule.maturity !== "stable" || !rule.targets.includes("narrative-prose")) {
+      throw new Error(`Semantic Rewrite Policy blocking rule is unsupported: ${ruleId}.`);
+    }
+  }
+  const minimumConfidenceRaw = objectValue(raw.minimumConfidenceByRule, "Semantic Rewrite Policy minimumConfidenceByRule");
+  if (!sameStringSet(Object.keys(minimumConfidenceRaw), blockingRuleIds)) {
+    throw new Error("Semantic Rewrite Policy confidence rules must exactly match blocking rules.");
+  }
+  const minimumConfidenceByRule: Record<string, number> = {};
+  for (const ruleId of blockingRuleIds) {
+    const confidence = minimumConfidenceRaw[ruleId];
+    if (typeof confidence !== "number" || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+      throw new Error(`Semantic Rewrite Policy confidence is invalid for ${ruleId}.`);
+    }
+    minimumConfidenceByRule[ruleId] = confidence;
+  }
+  if (!Array.isArray(raw.modelScopes) || raw.modelScopes.length === 0) {
+    throw new Error("Semantic Rewrite Policy modelScopes must be a non-empty list.");
+  }
+  const modelScopes = raw.modelScopes.map((value, index) => parseSemanticRewriteModelScope(value, index));
+  const scopedModels = modelScopes.flatMap((scope) => scope.modelIds.map((modelId) => `${scope.protocol}\0${modelId}`));
+  if (new Set(scopedModels).size !== scopedModels.length) {
+    throw new Error("Semantic Rewrite Policy model scopes must not overlap.");
+  }
+  if (raw.onUnknownModel !== "observe") throw new Error("Semantic Rewrite Policy onUnknownModel must be observe.");
+  if (raw.onInconclusive !== "observe") throw new Error("Semantic Rewrite Policy onInconclusive must be observe.");
+  const multiTargetAction = stringValue(raw.multiTargetAction, "Semantic Rewrite Policy multiTargetAction");
+  if (multiTargetAction !== "inconclusive" && multiTargetAction !== "rewrite-with-warning") {
+    throw new Error("Semantic Rewrite Policy multiTargetAction is invalid.");
+  }
+  const calibration = strictObject(raw.calibration, "Semantic Rewrite Policy calibration", [
+    "corpusSha256", "reportSha256", "thresholdVersion",
+  ]);
+  return {
+    schema: "quality-semantic-rewrite-policy/v1",
+    module: "anti-ai-flavor",
+    policyVersion: "quality-policy/v2",
+    activation,
+    targetTypes: ["runtime.prose"],
+    blockingRuleIds,
+    minimumConfidenceByRule,
+    modelScopes,
+    onUnknownModel: "observe",
+    onInconclusive: "observe",
+    multiTargetAction,
+    calibration: {
+      corpusSha256: hashValue(calibration.corpusSha256, "Semantic Rewrite Policy corpusSha256"),
+      reportSha256: hashValue(calibration.reportSha256, "Semantic Rewrite Policy reportSha256"),
+      thresholdVersion: stringValue(calibration.thresholdVersion, "Semantic Rewrite Policy thresholdVersion"),
+    },
+  };
+}
+
+function parseSemanticRewriteModelScope(value: unknown, index: number): QualitySemanticRewriteModelScope {
+  const label = `Semantic Rewrite Policy model scope ${index + 1}`;
+  const raw = strictObject(value, label, ["protocol", "modelFamily", "modelIds"]);
+  const protocol = stringValue(raw.protocol, `${label} protocol`);
+  if (protocol !== "openai-chat-compatible" && protocol !== "anthropic-messages" && protocol !== "gemini-generate-content") {
+    throw new Error(`${label} protocol is unsupported.`);
+  }
+  const modelIds = stringList(raw.modelIds, `${label} modelIds`);
+  if (modelIds.length === 0) throw new Error(`${label} must include modelIds.`);
+  return {
+    protocol,
+    modelFamily: stringValue(raw.modelFamily, `${label} modelFamily`),
+    modelIds,
+  };
 }
 
 function parseDetectorRule(value: unknown, language: string, index: number): QualityDetectorRule {
@@ -539,6 +658,9 @@ async function validatePublishedSchemas(moduleDirectory: string, manifest: Quali
       ["schemas/judge-rules.schema.json", "Judge Rules v1"] as const,
       ["schemas/judge-result.schema.json", "Judge Result v1"] as const,
     ] : []),
+    ...(manifest.requiredCapabilities.includes(semanticRewritePolicyCapability) ? [
+      ["schemas/semantic-rewrite-policy.schema.json", "Semantic Rewrite Policy v1"] as const,
+    ] : []),
   ];
   for (const [path, title] of expected) {
     if (!manifest.artifacts[path]) throw new Error(`Rule Pack is missing published schema ${path}.`);
@@ -549,7 +671,64 @@ async function validatePublishedSchemas(moduleDirectory: string, manifest: Quali
     }
     if (path === "schemas/judge-rules.schema.json") validateJudgeRulesSchema(schema, path);
     if (path === "schemas/judge-result.schema.json") validateJudgeResultSchema(schema, path);
+    if (path === "schemas/semantic-rewrite-policy.schema.json") validateSemanticRewritePolicySchema(schema, path);
   }
+}
+
+function validateSemanticRewritePolicySchema(schema: Record<string, unknown>, path: string): void {
+  assertExactStringSet(schema.required, [
+    "schema", "module", "policyVersion", "activation", "targetTypes", "blockingRuleIds",
+    "minimumConfidenceByRule", "modelScopes", "onUnknownModel", "onInconclusive", "multiTargetAction", "calibration",
+  ], path);
+  const properties = objectValue(schema.properties, `Published schema ${path} properties`);
+  const schemaProperty = objectValue(properties.schema, `Published schema ${path} schema property`);
+  const module = objectValue(properties.module, `Published schema ${path} module property`);
+  const policyVersion = objectValue(properties.policyVersion, `Published schema ${path} policyVersion property`);
+  const activation = objectValue(properties.activation, `Published schema ${path} activation property`);
+  const targetTypes = objectValue(properties.targetTypes, `Published schema ${path} targetTypes property`);
+  const targetType = objectValue(targetTypes.items, `Published schema ${path} targetType property`);
+  const blockingRuleIds = objectValue(properties.blockingRuleIds, `Published schema ${path} blockingRuleIds property`);
+  const blockingRuleId = objectValue(blockingRuleIds.items, `Published schema ${path} blockingRuleId property`);
+  const minimumConfidence = objectValue(properties.minimumConfidenceByRule, `Published schema ${path} minimumConfidenceByRule property`);
+  const confidence = objectValue(minimumConfidence.additionalProperties, `Published schema ${path} confidence property`);
+  const confidenceRuleId = objectValue(minimumConfidence.propertyNames, `Published schema ${path} confidence rule id property`);
+  const unknown = objectValue(properties.onUnknownModel, `Published schema ${path} onUnknownModel property`);
+  const inconclusive = objectValue(properties.onInconclusive, `Published schema ${path} onInconclusive property`);
+  const multiTargetAction = objectValue(properties.multiTargetAction, `Published schema ${path} multiTargetAction property`);
+  const modelScopes = objectValue(properties.modelScopes, `Published schema ${path} modelScopes property`);
+  const scope = objectValue(modelScopes.items, `Published schema ${path} model scope`);
+  const scopeProperties = objectValue(scope.properties, `Published schema ${path} model scope properties`);
+  const scopeProtocol = objectValue(scopeProperties.protocol, `Published schema ${path} model scope protocol`);
+  const scopeFamily = objectValue(scopeProperties.modelFamily, `Published schema ${path} model scope modelFamily`);
+  const scopeModelIds = objectValue(scopeProperties.modelIds, `Published schema ${path} model scope modelIds`);
+  const calibration = objectValue(properties.calibration, `Published schema ${path} calibration property`);
+  const calibrationProperties = objectValue(calibration.properties, `Published schema ${path} calibration properties`);
+  const corpusSha256 = objectValue(calibrationProperties.corpusSha256, `Published schema ${path} corpusSha256`);
+  const reportSha256 = objectValue(calibrationProperties.reportSha256, `Published schema ${path} reportSha256`);
+  const thresholdVersion = objectValue(calibrationProperties.thresholdVersion, `Published schema ${path} thresholdVersion`);
+  if (schemaProperty.const !== "quality-semantic-rewrite-policy/v1" || module.const !== "anti-ai-flavor"
+    || policyVersion.const !== "quality-policy/v2" || !sameStringSet(activation.enum, ["inactive", "active"])
+    || targetTypes.type !== "array" || targetTypes.minItems !== 1 || targetTypes.uniqueItems !== true
+    || !sameStringSet(targetType.enum, ["runtime.prose"])
+    || blockingRuleIds.type !== "array" || blockingRuleIds.minItems !== 1 || blockingRuleIds.uniqueItems !== true
+    || blockingRuleId.type !== "string" || blockingRuleId.pattern !== "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    || minimumConfidence.type !== "object" || minimumConfidence.minProperties !== 1
+    || confidence.type !== "number" || confidence.minimum !== 0 || confidence.maximum !== 1
+    || confidenceRuleId.pattern !== "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    || unknown.const !== "observe" || inconclusive.const !== "observe"
+    || !sameStringSet(multiTargetAction.enum, ["inconclusive", "rewrite-with-warning"])
+    || modelScopes.type !== "array" || modelScopes.minItems !== 1 || scope.type !== "object" || scope.additionalProperties !== false
+    || !sameStringSet(scopeProtocol.enum, ["openai-chat-compatible", "anthropic-messages", "gemini-generate-content"])
+    || scopeFamily.type !== "string" || scopeFamily.minLength !== 1
+    || scopeModelIds.type !== "array" || scopeModelIds.minItems !== 1 || scopeModelIds.uniqueItems !== true
+    || calibration.type !== "object" || calibration.additionalProperties !== false
+    || corpusSha256.type !== "string" || corpusSha256.pattern !== "^[a-f0-9]{64}$"
+    || reportSha256.type !== "string" || reportSha256.pattern !== "^[a-f0-9]{64}$"
+    || thresholdVersion.type !== "string" || thresholdVersion.minLength !== 1) {
+    throw new Error(`Published schema ${path} has an unsupported Semantic Rewrite Policy contract.`);
+  }
+  assertExactStringSet(scope.required, ["protocol", "modelFamily", "modelIds"], `${path} model scope`);
+  assertExactStringSet(calibration.required, ["corpusSha256", "reportSha256", "thresholdVersion"], `${path} calibration`);
 }
 
 function validateJudgeRulesSchema(schema: Record<string, unknown>, path: string): void {
@@ -699,4 +878,8 @@ function hashValue(value: unknown, label: string): string {
   const hash = stringValue(value, label);
   if (!sha256Pattern.test(hash)) throw new Error(`${label} must be a SHA-256 hash.`);
   return hash;
+}
+
+function isZeroHash(value: string): boolean {
+  return /^0{64}$/.test(value);
 }

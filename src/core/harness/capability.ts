@@ -11,6 +11,7 @@ const supportedCapabilities = new Set([
   "quality-guard/anti-ai-flavor@1",
   "quality-detector/document-metrics@1",
   "quality-judge/anti-ai-flavor@1",
+  "quality-policy/semantic-rewrite@1",
 ]);
 
 export const supportedHarnessCapabilities: readonly string[] = Object.freeze([...supportedCapabilities]);

@@ -24,7 +24,14 @@ export {
   upsertDurableQualityTarget,
   upsertQualityArtifactTarget,
 } from "./targets";
-export { loadQualityRuntime, parseDetectorRules, parseJudgeRules, parseRulePackManifest } from "./loader";
+export {
+  loadQualityRuntime,
+  parseDetectorRules,
+  parseJudgeRules,
+  parseRulePackManifest,
+  parseSemanticRewritePolicy,
+} from "./loader";
+export { evaluateSemanticRewritePolicy } from "./policy";
 export {
   defaultQualityJudgeTimeoutMs,
   maxQualityJudgeCodeUnits,
@@ -67,6 +74,8 @@ export type {
   QualityRewriteState,
   QualityRulePackManifest,
   QualityRuntimeContext,
+  QualitySemanticRewriteModelScope,
+  QualitySemanticRewritePolicy,
   QualityWarning,
   QualityWarningReason,
   QualityTargetWarningReason,
@@ -74,6 +83,7 @@ export type {
 } from "./types";
 export type { BoundQualityEvaluation } from "./guard";
 export type { QualityJudgeParsedResult, QualityJudgeRunResult } from "./judge";
+export type { QualitySemanticRewritePolicyEvaluation } from "./policy";
 export type {
   QualityBenchmarkCase,
   QualityBenchmarkEvaluation,
