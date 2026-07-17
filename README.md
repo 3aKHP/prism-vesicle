@@ -185,6 +185,8 @@ bun run doctor
 
 `vesicle debug markdown-runtime` verifies the standalone OpenTUI worker and syntax runtime without opening the TUI. `vesicle prompt dump --engine <id>` prints the complete model-visible system prompt; `vesicle prompt shape --engine <id>` prints only its composed structure.
 
+The developer-only `vesicle quality benchmark` command runs an explicitly authorized, budget-capped Semantic Judge measurement against the active verified Harness. It remains separate from Runtime policy and requires `--allow-live`; see [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) before using it.
+
 Pull requests and `develop` pushes call one reusable Linux/Windows release build, including npm consumer validation and a silent guided-installer install/upgrade/uninstall smoke. A release is authorized from the command line by pushing a protected annotated `v<package version>` tag on the accepted `main` commit. The tag workflow reruns the same gates, creates the GitHub Release and checksums, and publishes npm with provenance; no normal Actions-page dispatch or GitHub Environment approval is required. Future SignPath signing approval remains a separate manual trust gate. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the exact commands, GitHub settings, and recovery rules.
 
 ## Documentation
@@ -200,6 +202,7 @@ Pull requests and `develop` pushes call one reusable Linux/Windows release build
 | [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Architecture and runtime boundaries |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, review, release, and documentation sweep |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled V10 inventory, host extension layer, lineage, and update rules |
+| [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | Developer-only Semantic Judge measurement, caps, resume, and evidence boundary |
 
 Repository-local AI collaborator instructions live in [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md).
 

@@ -33,6 +33,11 @@ export {
   parseQualityJudgeResponse,
   runQualityJudge,
 } from "./judge";
+export {
+  qualityBenchmarkReport,
+  readBenchmarkEvaluations,
+  runQualityBenchmark,
+} from "./benchmark";
 export type {
   QualityCandidate,
   QualityArtifactOperation,
@@ -69,3 +74,17 @@ export type {
 } from "./types";
 export type { BoundQualityEvaluation } from "./guard";
 export type { QualityJudgeParsedResult, QualityJudgeRunResult } from "./judge";
+export type {
+  QualityBenchmarkCase,
+  QualityBenchmarkEvaluation,
+  QualityBenchmarkIdentity,
+  QualityBenchmarkMetric,
+  QualityBenchmarkMetricName,
+  QualityBenchmarkModel,
+  QualityBenchmarkModelReport,
+  QualityBenchmarkPolicy,
+  QualityBenchmarkPricing,
+  QualityBenchmarkReport,
+  QualityBenchmarkRunResult,
+  RunQualityBenchmarkOptions,
+} from "./benchmark";
