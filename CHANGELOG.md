@@ -7,6 +7,10 @@ project follows Semantic Versioning once releases begin.
 
 ## [Unreleased]
 
+### Added
+
+- Added the developer-only `vesicle quality benchmark` command for PR 6B Semantic Judge measurement. It loads the active verified Harness contract, requires an explicit frozen plan and `--allow-live`, reserves the possible two-request repair path against request/token/cost caps, appends resumable hash-only JSONL rows, and writes per-model Wilson/slice reports without candidate text or raw provider responses. The command records measurement evidence only and cannot enable semantic blocking.
+
 ### Fixed
 
 - Output Quality Guard artifact enforcement now derives targets only from successful `create_file`, `write_file`, `replace_in_file`, and `append_file` results, reads each guarded path's complete current UTF-8 post-image at the quality boundary, and keeps blocking paths pending independently across rewrites, permission pauses, cancellation, and restart. A clean completion summary or unrelated clean file can no longer make an unchanged bad artifact pass; same-response mutation plus gate rounds are checked after the mutation succeeds.

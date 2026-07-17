@@ -130,6 +130,21 @@ switch (command) {
     }
     break;
   }
+  case "quality": {
+    if (invocation.args[1] !== "benchmark") {
+      console.error("Usage: vesicle quality benchmark --plan <path> --corpus <path> --output <jsonl> --report <json> --allow-live");
+      process.exitCode = 1;
+      break;
+    }
+    try {
+      const { runQualityBenchmarkCommand } = await import("./commands/quality-benchmark");
+      await runQualityBenchmarkCommand(invocation.args.slice(2));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+    break;
+  }
   case "debug": {
     if (invocation.args[1] !== "markdown-runtime") {
       console.error("Usage: vesicle debug markdown-runtime");
@@ -176,6 +191,6 @@ switch (command) {
       break;
     }
     console.error(`Unknown command or project directory: ${command}`);
-    console.error("Commands: setup, launch, doctor, once, prompt, debug, assets, dev");
+    console.error("Commands: setup, launch, doctor, once, prompt, quality, debug, assets, dev");
     process.exitCode = 1;
 }
