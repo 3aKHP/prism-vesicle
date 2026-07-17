@@ -87,6 +87,31 @@ export type QualityJudgeContract = {
   rules: QualityJudgeRule[];
 };
 
+export type QualitySemanticRewriteModelScope = {
+  protocol: "openai-chat-compatible" | "anthropic-messages" | "gemini-generate-content";
+  modelFamily: string;
+  modelIds: string[];
+};
+
+export type QualitySemanticRewritePolicy = {
+  schema: "quality-semantic-rewrite-policy/v1";
+  module: "anti-ai-flavor";
+  policyVersion: "quality-policy/v2";
+  activation: "inactive" | "active";
+  targetTypes: QualityCandidateType[];
+  blockingRuleIds: string[];
+  minimumConfidenceByRule: Record<string, number>;
+  modelScopes: QualitySemanticRewriteModelScope[];
+  onUnknownModel: "observe";
+  onInconclusive: "observe";
+  multiTargetAction: "inconclusive" | "rewrite-with-warning";
+  calibration: {
+    corpusSha256: string;
+    reportSha256: string;
+    thresholdVersion: string;
+  };
+};
+
 export type QualityRulePackManifest = {
   schema: "rule-pack/v1";
   module: "anti-ai-flavor";
@@ -124,6 +149,7 @@ export type QualityRuntimeContext = {
   ruleManifest: QualityRulePackManifest;
   rules: QualityDetectorRule[];
   judge?: QualityJudgeContract;
+  semanticRewritePolicy?: QualitySemanticRewritePolicy;
   engineModes: Record<string, HarnessQualityMode>;
   agentModes: Record<string, HarnessQualityMode>;
 };
