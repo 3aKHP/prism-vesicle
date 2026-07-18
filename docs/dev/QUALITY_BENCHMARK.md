@@ -72,7 +72,11 @@ held-out cases (`caseId`). Every record requires `text`, target/slice metadata,
 and either a matching `candidateSha256` or no hash, in which case the runner
 derives one. Dev cases may supply `expectedVerdict` and `expectedRuleIds`.
 Blinded cases intentionally omit them; their classification metrics are
-inconclusive until a separately governed labels join occurs.
+inconclusive until a separately governed labels join occurs. The current Runtime
+Semantic Judge benchmark accepts only `targetType: "narrative-prose"`; it rejects
+other target types before any provider call. Freeze a compatible corpus subset
+under its own digest, plan, and append-only output path rather than removing
+out-of-scope records from the source corpus.
 
 ## Run And Resume
 

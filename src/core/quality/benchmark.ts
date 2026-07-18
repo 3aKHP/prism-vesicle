@@ -541,6 +541,7 @@ function validateOptions(options: RunQualityBenchmarkOptions): void {
       || !/^[a-f0-9]{64}$/.test(item.candidateSha256) || sha256(item.text) !== item.candidateSha256) {
       throw new Error(`Benchmark case ${item.caseId || "<unknown>"} is invalid.`);
     }
+    candidateTypeForTarget(item.targetType);
     if ((item.expectedVerdict === "pass" && (item.expectedRuleIds?.length ?? 0) > 0)
       || (item.expectedVerdict === "rewrite" && (item.expectedRuleIds?.length ?? 0) === 0)
       || (item.expectedVerdict === undefined && item.expectedRuleIds !== undefined)) {
