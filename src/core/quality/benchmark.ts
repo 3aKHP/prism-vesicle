@@ -41,6 +41,7 @@ export type QualityBenchmarkPolicy = {
   tokenCap: number;
   costCapUsd: number;
   maxInputTokensPerRequest: number;
+  judgeTimeoutMs: number;
   minimumIntervalMs: number;
   goNoGo: {
     minimumRecall: number;
@@ -108,6 +109,7 @@ export type QualityBenchmarkReport = {
     requestCap: number;
     tokenCap: number;
     costCap: number;
+    judgeTimeoutMs: number;
     goNoGo: QualityBenchmarkPolicy["goNoGo"];
     earlyStop: QualityBenchmarkPolicy["earlyStop"];
   };
@@ -209,6 +211,7 @@ export async function runQualityBenchmark(options: RunQualityBenchmarkOptions): 
           targetKind: "assistant-response",
           content: item.text,
           signal: options.signal,
+          timeoutMs: options.policy.judgeTimeoutMs,
           temperatureSupported: model.temperatureSupported,
           reasoningTierSupported: model.reasoningTierSupported,
         });
@@ -277,6 +280,7 @@ export function qualityBenchmarkReport(
       requestCap: options.policy.requestCap,
       tokenCap: options.policy.tokenCap,
       costCap: options.policy.costCapUsd,
+      judgeTimeoutMs: options.policy.judgeTimeoutMs,
       goNoGo: options.policy.goNoGo,
       earlyStop: options.policy.earlyStop,
     },
@@ -506,6 +510,9 @@ function validateOptions(options: RunQualityBenchmarkOptions): void {
   if (options.cases.length === 0 || options.models.length === 0) throw new Error("Benchmark requires at least one case and model.");
   for (const value of [options.policy.repeatsPerCase, options.policy.minimumSliceN, options.policy.requestCap, options.policy.tokenCap, options.policy.maxInputTokensPerRequest]) {
     if (!Number.isInteger(value) || value < 1) throw new Error("Benchmark integer caps must be positive.");
+  }
+  if (!Number.isInteger(options.policy.judgeTimeoutMs) || options.policy.judgeTimeoutMs < 1_000 || options.policy.judgeTimeoutMs > 180_000) {
+    throw new Error("Benchmark Judge timeout must be an integer from 1000 to 180000 milliseconds.");
   }
   if (!Number.isFinite(options.policy.costCapUsd) || options.policy.costCapUsd <= 0) {
     throw new Error("Benchmark cost cap must be positive.");
