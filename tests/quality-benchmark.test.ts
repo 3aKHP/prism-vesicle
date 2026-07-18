@@ -123,7 +123,7 @@ describe("quality benchmark runner", () => {
         ...benchmarkOptions(join(directory, "events.jsonl"), [model("openai-chat-completions", async (request) =>
           await new Promise<VesicleResponse>((_resolve, reject) => request.signal?.addEventListener("abort", () => reject(request.signal?.reason), { once: true }))
         )], [cases[0]!], 1),
-        policy: { ...policy(), judgeTimeoutMs: 1_000 },
+        policy: { ...policy(), repeatsPerCase: 1, judgeTimeoutMs: 1_000 },
       });
       expect(result.evaluations[0]?.result.status).toBe("timed-out");
       expect(result.evaluations[0]?.result.durationMs).toBeGreaterThanOrEqual(900);
