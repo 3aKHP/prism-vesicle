@@ -168,6 +168,23 @@ describe("quality benchmark runner", () => {
     }
   });
 
+  test("rejects an unsupported target type before any provider request", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
+    try {
+      let calls = 0;
+      await expect(runQualityBenchmark({
+        ...benchmarkOptions(join(directory, "events.jsonl"), [model("openai-chat-completions", async () => {
+          calls += 1;
+          return response(passResult());
+        })]),
+        cases: [{ ...cases[0]!, caseId: "audit-meta-case", targetType: "audit-meta" }],
+      })).rejects.toThrow("Benchmark targetType audit-meta is not supported by the Runtime Semantic Judge.");
+      expect(calls).toBe(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("does not call a valid blinded result a failure", async () => {
     const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
     try {
