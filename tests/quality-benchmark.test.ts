@@ -127,6 +127,7 @@ describe("quality benchmark runner", () => {
       });
       expect(result.evaluations[0]?.result.status).toBe("timed-out");
       expect(result.evaluations[0]?.result.durationMs).toBeGreaterThanOrEqual(900);
+      expect(result.evaluations[0]?.result.durationMs).toBeLessThan(5_000);
       expect(result.report.policy.judgeTimeoutMs).toBe(1_000);
     } finally {
       await rm(directory, { recursive: true, force: true });
