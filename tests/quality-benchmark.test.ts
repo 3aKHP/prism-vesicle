@@ -116,6 +116,41 @@ describe("quality benchmark runner", () => {
     }
   });
 
+  test("uses the frozen benchmark Judge timeout instead of the interactive default", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
+    try {
+      const result = await runQualityBenchmark({
+        ...benchmarkOptions(join(directory, "events.jsonl"), [model("openai-chat-completions", async (request) =>
+          await new Promise<VesicleResponse>((_resolve, reject) => request.signal?.addEventListener("abort", () => reject(request.signal?.reason), { once: true }))
+        )], [cases[0]!], 1),
+        policy: { ...policy(), repeatsPerCase: 1, judgeTimeoutMs: 1_000 },
+      });
+      expect(result.evaluations[0]?.result.status).toBe("timed-out");
+      expect(result.evaluations[0]?.result.durationMs).toBeGreaterThanOrEqual(900);
+      expect(result.evaluations[0]?.result.durationMs).toBeLessThan(5_000);
+      expect(result.report.policy.judgeTimeoutMs).toBe(1_000);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects an out-of-range frozen Judge timeout before any provider request", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
+    try {
+      let calls = 0;
+      await expect(runQualityBenchmark({
+        ...benchmarkOptions(join(directory, "events.jsonl"), [model("openai-chat-completions", async () => {
+          calls += 1;
+          return response(passResult());
+        })]),
+        policy: { ...policy(), judgeTimeoutMs: 180_001 },
+      })).rejects.toThrow("Benchmark Judge timeout must be an integer from 1000 to 180000 milliseconds.");
+      expect(calls).toBe(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("rejects a tampered corpus case before any provider request", async () => {
     const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
     try {
@@ -183,6 +218,7 @@ function policy(): QualityBenchmarkPolicy {
     tokenCap: 1_000_000,
     costCapUsd: 100,
     maxInputTokensPerRequest: 10_000,
+    judgeTimeoutMs: 15_000,
     minimumIntervalMs: 0,
     goNoGo: {
       minimumRecall: 0,

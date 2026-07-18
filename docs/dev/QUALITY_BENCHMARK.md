@@ -29,6 +29,7 @@ statistics, and early-stop thresholds for one run.
     "tokenCap": 1000000,
     "costCapUsd": 10,
     "maxInputTokensPerRequest": 20000,
+    "judgeTimeoutMs": 120000,
     "minimumIntervalMs": 1000,
     "goNoGo": {
       "minimumRecall": 0.9,
@@ -59,9 +60,12 @@ statistics, and early-stop thresholds for one run.
 Do not treat the values above as approved production defaults. Freeze them with
 the rule allowlist, corpus digest, and privacy/annotation governance before a
 live pilot. `maxInputTokensPerRequest` must be a conservative upper bound for
-the selected request shape. The runner reserves the possible two-request
-format-repair path before each evaluation, so it stops before exceeding its
-request, token, or cost caps.
+the selected request shape. `judgeTimeoutMs` is the per-evaluation Semantic
+Judge deadline for this benchmark only; it must be an integer from 1,000 to
+180,000 milliseconds and is part of the frozen plan hash and report. It does
+not change the interactive Runtime Judge's 15-second timeout. The runner
+reserves the possible two-request format-repair path before each evaluation,
+so it stops before exceeding its request, token, or cost caps.
 
 The corpus is JSONL. It accepts PR 6A calibration cases (`name`) and blinded
 held-out cases (`caseId`). Every record requires `text`, target/slice metadata,
