@@ -10,7 +10,13 @@ describe("engine profile loader", () => {
       const profile = await loadEngineProfile(id);
       expect(profile.id).toBe(id);
       expect(profile.systemPrompt.length).toBeGreaterThanOrEqual(1);
-      expect(profile.defaultTools).toContain("write_file");
+      if (id === "stage") {
+        expect(profile.defaultTools).toEqual([]);
+        expect(profile.stopGates).toEqual([]);
+        expect(profile.validators).toEqual(["runtime-packet"]);
+      } else {
+        expect(profile.defaultTools).toContain("write_file");
+      }
     }
   });
 

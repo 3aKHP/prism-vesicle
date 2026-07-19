@@ -14,7 +14,7 @@ describe("agent loop tool round", () => {
       { id: "shell", name: "shell_exec", arguments: "{" },
       { id: "question", name: "ask_user_question", arguments: "{}" },
     ];
-    const plan = planToolRound(calls, [definition("read_file"), definition("shell_exec")], {
+    const plan = planToolRound(calls, [definition("read_file"), definition("shell_exec"), definition("ask_user_question")], {
       mode: "MANUAL",
       shellExecEnabled: true,
     });

@@ -2,6 +2,7 @@ import type { Accessor, Setter } from "solid-js";
 import type { ProviderSelection } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import { inspectEngineAssetDrift } from "../core/runtime/engine-assets";
+import { stageSourceDrift } from "../core/stage/bootstrap";
 import { loadSessionSnapshot } from "../core/session/store";
 import { createSessionStore } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSnapshot, SessionSummary } from "../core/session/store";
@@ -212,6 +213,15 @@ export function createSessionResumeController(options: SessionResumeControllerOp
     }
     restorePermissionMode(snapshot, hostMessages);
     if (!skipAssetDrift) await reportAssetDrift(target.sessionId, snapshot, restoredEngine, hostMessages);
+    if (restoredEngine === "stage" && snapshot.stageBootstrap) {
+      const changed = await stageSourceDrift(options.rootDir, snapshot.stageBootstrap);
+      if (changed.length > 0) {
+        hostMessages.push({
+          role: "system",
+          content: `Stage card source changed since this session began: ${changed.join(", ")}. The saved character and scene context remains active.`,
+        });
+      }
+    }
     await restoreProvider(snapshot, hostMessages);
     if (snapshot.reasoningTier) {
       options.setThinkingTier(snapshot.reasoningTier);

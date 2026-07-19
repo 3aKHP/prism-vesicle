@@ -28,7 +28,7 @@ export function createQualityPickerController(options: {
     if (picker.step === "provider") return registry ? providerOptionItems(registry) : [];
     if (picker.step === "model") return registry ? modelOptionItems(registry, picker.providerId) : [];
     return [
-      { id: "enable", label: "Enable rewrite", detail: "Use the existing two-attempt Runtime lifecycle" },
+      { id: "enable", label: "Enable rewrite", detail: "Use the existing two-attempt Engine lifecycle" },
       { id: "cancel", label: "Cancel", detail: "Keep the current setting" },
     ];
   });

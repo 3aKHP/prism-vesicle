@@ -1,0 +1,13 @@
+id: stage
+displayName: Prism Stage Engine
+protocolVersion: v10.0-tempered-voice
+systemPrompt:
+  - assets/prompts/shared/vesicle-base.md
+  - assets/quality/anti-ai-flavor/guidance.zh-CN.md
+  - assets/prompts/engines/stage.md
+defaultTools: []
+validators:
+  - runtime-packet
+stopGates: []
+stateRoots:
+  - workspace

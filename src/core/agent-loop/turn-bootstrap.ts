@@ -23,6 +23,10 @@ import { loadSessionSnapshot } from "../session/store";
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
   const rootDir = options.rootDir ?? process.cwd();
+  const isNewSession = !options.sessionId;
+  if (engine === "stage" && isNewSession) {
+    throw new Error("Stage sessions must start with /stage <character-card-path> <scenario-card-path> so bootstrap context is persisted before the first player action.");
+  }
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const permission = options.permission ?? defaultPermissionRuntime;
@@ -36,7 +40,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     ? options.experimentalQuality
     : await loadExperimentalQualityProfile(harness?.quality);
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir, assets ? { resolver: assets } : {});
-  const { profile, systemPrompt } = engineAssets;
+  const { profile } = engineAssets;
+  let systemPrompt = engineAssets.systemPrompt;
   const toolSurface = await resolveToolSurface(
     profile,
     config.capabilities?.vision === true,
@@ -44,10 +49,13 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     permission.shellInterpreter,
   );
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
-  const isNewSession = !options.sessionId;
   if (options.sessionId) {
     const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
+    if (engine === "stage") {
+      if (!snapshot.stageBootstrap) throw new Error("Stage session is missing frozen bootstrap metadata.");
+      systemPrompt = `${systemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
+    }
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   }
   const session = await createSessionStore(

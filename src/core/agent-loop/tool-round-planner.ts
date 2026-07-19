@@ -22,13 +22,13 @@ export function planToolRound(
   tools: ToolDefinition[],
   permission: PermissionRuntimeOptions,
 ): ToolRoundPlan {
+  const effectiveToolNames = new Set(tools.map((definition) => definition.function.name));
   const hostToolCalls: ToolCall[] = [];
   const interactiveCalls: ToolCall[] = [];
   for (const call of toolCalls) {
-    (interactionToolNames.has(call.name) ? interactiveCalls : hostToolCalls).push(call);
+    (interactionToolNames.has(call.name) && effectiveToolNames.has(call.name) ? interactiveCalls : hostToolCalls).push(call);
   }
 
-  const effectiveToolNames = new Set(tools.map((definition) => definition.function.name));
   const unavailableHostCallIds = new Set(hostToolCalls.flatMap((call) =>
     effectiveToolNames.has(call.name) ? [] : [call.id]
   ));

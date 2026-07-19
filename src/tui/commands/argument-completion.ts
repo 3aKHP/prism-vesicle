@@ -49,7 +49,7 @@ export function parseAgentArgumentDraft(value: string): AgentArgumentDraft | nul
 
 export function fixedArgumentOptions(command: FixedArgumentCommand): OptionItem[] {
   if (command === "engine") {
-    return engineIds.map((engine) => ({
+    return engineIds.filter((engine) => engine !== "stage").map((engine) => ({
       id: engine,
       label: engine,
       detail: `${engineDisplayName(engine)} profile`,

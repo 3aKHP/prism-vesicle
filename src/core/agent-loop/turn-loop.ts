@@ -293,7 +293,9 @@ async function recordPendingQualityCheck(
 
 function durableQualityState(args: RunLoopArgs, runtime: LoopRuntime) {
   const quality = args.harness?.quality;
-  if (!quality || !shouldBufferQualityOutput(qualityModeForEngine(quality, args.profile.id))) return undefined;
+  const experimentalRewrite = args.experimentalQuality?.mode === "rewrite"
+    && (args.profile.id === "runtime" || args.profile.id === "stage");
+  if (!quality || (!shouldBufferQualityOutput(qualityModeForEngine(quality, args.profile.id)) && !experimentalRewrite)) return undefined;
   return {
     producer: args.profile.id,
     packId: quality.packId,

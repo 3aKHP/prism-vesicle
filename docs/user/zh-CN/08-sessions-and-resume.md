@@ -57,7 +57,7 @@ Vesicle 会清空当前对话并报告：
 Started a fresh session. Type a prompt to begin.
 ```
 
-`/new` 不会删除以前的会话或其中的文件，也会保留当前选择的供应商、模型和引擎。提交下一条真实提示时，才会创建新的会话文件。
+`/new` 不会删除以前的会话或其中的文件。它会保留当前选择的供应商和模型，也会保留当前引擎，但 Stage 例外：每个 Stage 会话都需要卡片 bootstrap，因此 `/new` 会返回 ETL，下一个 Stage 叙事需要通过 `/stage` 启动。提交下一条真实提示时，才会创建新的会话文件。
 
 在练习中发送一条便于识别的简短提示：
 
@@ -101,7 +101,7 @@ Started a fresh session. Type a prompt to begin.
 
 实验性 Semantic Judge 默认关闭。`/quality` 会打开 mode、已登记 provider、model 与 rewrite 确认的选择器；`/quality status` 显示当前设置。也可以使用 `/quality observe <provider> <model> [timeout-ms]` 选择单独配置的供应商和模型；`/quality rewrite <provider> <model> [timeout-ms]` 会先显示一条明确的确认命令。设置保存在与 `providers.yaml` 同目录的用户级 `quality.yaml` 中；其中绝不包含 API key、URL、prompt、规则或工具权限。高级 alpha 内测人员可以从 [`docs/examples/quality.yaml`](../../examples/quality.yaml) 开始。
 
-启用后，Runtime 正文会通过选定的 Judge 供应商和模型发起一次额外请求。该请求没有工具，也不包含普通会话历史，但会再次发送当前正文并消耗额外的供应商 token。`observe` 只记录文风 finding，不会修订。经过明确确认的实验性 `rewrite` 模式最多可要求原 Runtime Engine 修订两次，然后重新检查最终 post-image。这不是经过校准的生产 Policy，也不是 AI 作者身份检测。JSON 无效、供应商不可用、超时、正文超限或配置已变化时，界面与会话会记录检查未完成，不会显示 clean，也不会阻断普通交付。
+启用后，符合条件的 Runtime 或 Stage 正文会通过选定的 Judge 供应商和模型发起一次额外请求。该请求没有工具，也不包含普通会话历史，但会再次发送当前正文并消耗额外的供应商 token。`observe` 只记录文风 finding，不会修订。经过明确确认的实验性 `rewrite` 模式最多可要求原 Engine 修订两次，然后重新检查最终 post-image。这不是经过校准的生产 Policy，也不是 AI 作者身份检测。JSON 无效、供应商不可用、超时、正文超限或配置已变化时，界面与会话会记录检查未完成，不会显示 clean，也不会阻断普通交付。
 
 处理质量决策时，`Revise again` 会授权同一个 Engine 再发起一次供应商请求；`Use current version` 和 `Stop` 都不会调用供应商，并且都会在持久会话记录中保留 warning。如果所需 Harness、Rule Pack 或实验性 Judge profile 身份已经变化，在恢复完全相同的身份之前无法再次修订，但仍可选择使用当前版本或停止。Workspace 侧边栏中文件旁的 `!` 表示该路径仍保留可见的质量 warning。这个状态只报告当前规则发现的问题，不判断文本是否由 AI 写成，也不提供通用写作质量保证。
 

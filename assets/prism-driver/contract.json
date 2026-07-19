@@ -1,7 +1,7 @@
 {
   "schema": "prism-driver-contract/v1",
   "id": "prism-engine-v10",
-  "version": "10.0.1-alpha.3",
+  "version": "10.0.1-alpha.7",
   "protocolVersion": "v10.0-tempered-voice",
   "resources": {
     "prompt.engine.etl": {
@@ -27,6 +27,10 @@
     "prompt.engine.dyad": {
       "kind": "engine-prompt",
       "source": "03_Modulation/Prism-Engine-V10.x/prompts/dyad.md"
+    },
+    "prompt.engine.stage": {
+      "kind": "engine-prompt",
+      "source": "03_Modulation/Prism-Engine-V10.x/prompts/stage.md"
     },
     "prompt.agent.scene-writer": {
       "kind": "agent-prompt",
@@ -91,6 +95,10 @@
     "template.story-bible": {
       "kind": "template",
       "source": "03_Modulation/Prism-Engine-V10.x/templates/tpl_story_bible.md"
+    },
+    "template.stage-context": {
+      "kind": "template",
+      "source": "03_Modulation/Prism-Engine-V10.x/templates/tpl_stage_context.md"
     }
   },
   "agents": {
@@ -621,6 +629,33 @@
         "mode": "observe",
         "candidate": "dyad.character-response",
         "rewriteOwner": "dyad",
+        "promptProjection": "guidance"
+      }
+    },
+    "stage": {
+      "displayName": "Prism Stage Engine",
+      "prompt": "prompt.engine.stage",
+      "operations": [
+        "quality.guard"
+      ],
+      "resources": [
+        "schema.character",
+        "schema.scenario",
+        "template.stage-context"
+      ],
+      "interactions": [],
+      "delegations": [],
+      "validators": [
+        "runtime-packet"
+      ],
+      "stateRoots": [
+        "workspace"
+      ],
+      "quality": {
+        "module": "anti-ai-flavor",
+        "mode": "observe",
+        "candidate": "stage.prose",
+        "rewriteOwner": "stage",
         "promptProjection": "guidance"
       }
     }

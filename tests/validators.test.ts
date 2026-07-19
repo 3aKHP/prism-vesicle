@@ -129,6 +129,15 @@ describe("validateRuntimePacket (Runtime engine)", () => {
     const result = validateRuntimePacket(VALID_RUNTIME_PACKET + "\n某段提及 L3-A 的文字\n");
     expect(result.errors.some((e) => e.includes('"L3-A"'))).toBe(true);
   });
+
+  test("accepts the published Stage packet variant", () => {
+    expect(validateRuntimePacket(VALID_STAGE_PACKET).ok).toBe(true);
+  });
+
+  test("rejects a Stage packet without its consumer HUD", () => {
+    const result = validateRuntimePacket(VALID_STAGE_PACKET.replace("[Impression]", "[View]"));
+    expect(result.errors.some((error) => error.includes("[Impression]"))).toBe(true);
+  });
 });
 
 describe("validateEvaluateReport (Evaluate engine)", () => {
@@ -167,6 +176,22 @@ Decision: 选择半退半守，用一句反问拖延
 
 "你来得比我以为的早。"
 `;
+
+const VALID_STAGE_PACKET = `<!--
+[!Neural Chain]
+Perception: Rain darkens the platform.
+Instinct: She keeps the umbrella tilted.
+State: guarded hope.
+Strategy: Let the silence hold.
+-->
+【Status】
+[Space-Time] Night | platform
+[Physical] Cold fingers | shared umbrella | worn coat
+[Psychology] Tension: 40 (waiting) | Lens: rain
+[Beat] Arrival (1 turn) | Config: guarded | Boundary: safe
+[Impression] The player remains nearby.
+
+Rain tapped softly against the umbrella.`;
 
 const VALID_EVALUATE_REPORT = `# Neuro-Integrity Report: workspace/luotianyi.md
 **Date:** 2026-07-10

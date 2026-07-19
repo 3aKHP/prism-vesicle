@@ -1,14 +1,14 @@
 {
   "schema": "rule-pack/v1",
   "module": "anti-ai-flavor",
-  "version": "0.3.0-alpha.2",
+  "version": "0.3.0-alpha.4",
   "primaryLanguage": "zh-CN",
   "sourceRepository": "3aKHP/Neural-Narratology",
-  "sourceCommit": "b975e1893d2b463f039605b4abb72f18c8f385bd",
+  "sourceCommit": "aaa171bcf0cbf95b3721382ec4949f5bbb402e9f",
   "sourceState": "clean",
-  "sourceHash": "c5be2bbfb490543c0e2b057fffafa5b93ce256758614568decae227ad3737e01",
-  "moduleInputHash": "efdb0fd2b43d576ea1c7a52da2972d7b6ecf1e0becebf120266a10bf1ac6dd38",
-  "compilerHash": "7ef9dd2990dea445209ee6f99ee015b4d327f4957bd2c6ad72436d0793562db1",
+  "sourceHash": "d2323360e48ae1cc4300f4df30271d1dcf951d3d188acbc631a1f5378811f74c",
+  "moduleInputHash": "71f88b8a1a8c363a5d462e43cea8bd07f9c3c3407d21802224064c2e55be888c",
+  "compilerHash": "0d06fc51676858118f7f234ea6a99ff48aedbd816201966fa42bbe959a8e466c",
   "ruleCount": 29,
   "projectionCounts": {
     "guidance": 21,
@@ -92,39 +92,47 @@
   "corpora": {
     "detector": {
       "cases": 28,
-      "hash": "c63afd1081276ccd8dfd4dae2ba0e92bba934f7c43ed2ed76f4a59362a48a70b"
+      "hash": "088acc05638b61e89285ac296992245b9ec8b22b6b3e1042af902c1880c24a0f"
     },
     "guidance-pairs": {
       "cases": 42,
-      "hash": "70fabe785e62d7c0199442f417a27eb74de493ad7200860d6a01dcf1329044f4"
+      "hash": "903288e5407926b1d15624d76c18bfd19a510d9c05c6d09b4408eb5d65ebca53"
     },
     "host-conformance": {
       "cases": 24,
-      "hash": "43d4930cf096bbb63d4823f8918b1d5176db88260a13ac1d95d9ca84b234c453"
+      "hash": "e73c8af011d98bd848e15289c9e63cab6ae4fc0910bdbe3145e2ae054963a7f4"
     },
     "judge": {
-      "cases": 8,
-      "hash": "2365b3d36758d4c9bed740ed3ca20d22f623e1e673e39503417a924e60e96b7d"
+      "cases": 30,
+      "hash": "6054c258202cf7c5f646bce29c2a0e9ed789ce6d10f69bc123d188e4b1fe280d"
     }
   },
   "artifacts": {
-    "calibration/detector.jsonl": "c63afd1081276ccd8dfd4dae2ba0e92bba934f7c43ed2ed76f4a59362a48a70b",
-    "calibration/guidance-pairs.jsonl": "70fabe785e62d7c0199442f417a27eb74de493ad7200860d6a01dcf1329044f4",
-    "calibration/host-conformance.jsonl": "43d4930cf096bbb63d4823f8918b1d5176db88260a13ac1d95d9ca84b234c453",
-    "calibration/judge.jsonl": "2365b3d36758d4c9bed740ed3ca20d22f623e1e673e39503417a924e60e96b7d",
+    "calibration/detector.jsonl": "088acc05638b61e89285ac296992245b9ec8b22b6b3e1042af902c1880c24a0f",
+    "calibration/guidance-pairs.jsonl": "903288e5407926b1d15624d76c18bfd19a510d9c05c6d09b4408eb5d65ebca53",
+    "calibration/host-conformance.jsonl": "e73c8af011d98bd848e15289c9e63cab6ae4fc0910bdbe3145e2ae054963a7f4",
+    "calibration/judge.jsonl": "6054c258202cf7c5f646bce29c2a0e9ed789ce6d10f69bc123d188e4b1fe280d",
     "data/cn-antislop-candidates.json": "1acb1a7f64d789e866df1be8dae0029776672c9752a4cce272f7c7e184580f79",
+    "data/semantic-rewrite-policy.json": "37a8a3b6b484edcef45c90458f01c7089330e96a4faa069256d6243900038187",
     "detector-rules.en-US.json": "335c8ead7ca0a5db97f63dd57c0ce0d9d259bf3232c8ed5d2a992f16d5ada8e9",
     "detector-rules.zh-CN.json": "44c31a0a8fd2f2c2a37b3c82a6a575a639db7214a7f33d30ccfedaa92d623dd1",
     "guidance.zh-CN.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
     "judge-rubric.zh-CN.md": "698d690d23f9b7b26f3d6ea39e1cb1a3a6224c9343b1fb91d3ead2ee311dd617",
     "judge-rules.zh-CN.json": "7c71d432b7a1afe6a37f6bcf5706b79ae067d3f7d826c54e98c1fa493cfa9493",
-    "schemas/calibration-case.schema.json": "0f0d24103da27703b81739e2502e1122005aa894e190dcea1b28e6787fe1afad",
+    "schemas/benchmark-report.schema.json": "a5c49d40d9c2ba297bae5a8a0157b2c205f71941bc7f97a341ed58157c75bce6",
+    "schemas/calibration-annotation.schema.json": "1f7a156b36f9bb960f201cf16be8e5a5e73744531f5e3af5f8913b8197a5e48c",
+    "schemas/calibration-blind-case.schema.json": "e7cd82b756b9302d13a6540d2bb625a3a82a8d6b67072f30158fec886a5a71c9",
+    "schemas/calibration-case.schema.json": "655c4af12da38a4c35290dcf1a0bcb06c54e7367e1af223c177e3d0c6fb85aa3",
+    "schemas/calibration-label.schema.json": "dcbfaf2b24a5396b3e1fa3df5e77235073da73cf1289ae58ac125a89e70bb1f8",
     "schemas/candidate-evaluation.schema.json": "bcce45ea7c7c6c83608b89edfb2fa77e20299e77bdc916ea3017bc7891cd9a83",
     "schemas/detector-rules.schema.json": "8013e95abd1b1370df70402426c1a7650d3c21dadec4255aafc9832e37c3a3ed",
-    "schemas/host-conformance-case.schema.json": "422df8c2b8bbf5d4422abe09995f9facb3613702a0c3620bd8f1a0d95e477b47",
+    "schemas/held-out-freeze.schema.json": "479a7d204bc810a9f928c2f7792bce93d5b340512946915b70878d5b6857859f",
+    "schemas/host-conformance-case.schema.json": "5722205f7cf9518f0b499254af1db885f1a19c0e86beaf6996b39c21fab8bbea",
     "schemas/judge-result.schema.json": "e677f81ce9d7160e6066207a63acd594f78ab0a2929fcd359ab61cba89938f0b",
     "schemas/judge-rules.schema.json": "a8953a7c4ee1d0c29c3484a1247c80bee60f459950b408f7e367ae77af855bf5",
+    "schemas/rewrite-case.schema.json": "b5ba7413ac9d9d0576a8e1347eca30748a2da92c6a7a1091929007f6eaed2ae6",
     "schemas/rule-pack.schema.json": "fe4623817c186290c22e982c4dfe04c8c36224dbb81c82fb239f1b6365761ec9",
-    "THIRD_PARTY_NOTICES.md": "05ef912b83f9564435875005d276e239aa20e26d6015c96ac68620f4b0b9655c"
+    "schemas/semantic-rewrite-policy.schema.json": "21a1fcbfe9d523df1e07a6671ffbd7653ff7c46a34579c70eb5f8b1128d9eeec",
+    "THIRD_PARTY_NOTICES.md": "984d1d7272545b48c29280b30c93a60dfcf62bda2c63cf8eec398c4ea072c691"
   }
 }

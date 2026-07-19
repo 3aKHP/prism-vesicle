@@ -28,6 +28,25 @@ describe("/engine command", () => {
     expect(messages[1]?.content).toContain("Use /engine <id> to switch");
   });
 
+  test("/new resets Stage to ETL because Stage requires /stage bootstrap", async () => {
+    const command = builtinCommands.find((entry) => entry.name === "new");
+    if (!command) throw new Error("Missing /new command.");
+    let activeEngine = "stage";
+    let messages: Message[] = [];
+    const ctx = {
+      activeEngine: () => activeEngine,
+      setActiveEngine(engine: typeof activeEngine) { activeEngine = engine; },
+      resetRewindState() {}, setSessionId() {}, setSessionPath() {}, setConversation() {}, setOutput() {},
+      setLastTurnUsage() {}, setSessionUsage() {}, setPendingGate() {}, setPendingEngineSwitch() {}, setPendingUserQuestion() {}, setStatus() {},
+      setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
+    } as unknown as CommandContext;
+
+    await command.run(ctx, "", "/new");
+
+    expect(activeEngine).toBe("etl");
+    expect(messages.at(-1)?.content).toContain("Start another Stage narrative with /stage");
+  });
+
   test("persists manual switches as direct engine transitions", async () => {
     const command = builtinCommands.find((entry) => entry.name === "engine");
     if (!command) throw new Error("Missing /engine command.");

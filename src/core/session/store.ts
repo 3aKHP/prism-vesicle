@@ -24,6 +24,7 @@ import {
   type QualityWarning,
 } from "../quality";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
+import { parseStageBootstrapMetadata, type StageBootstrapMetadata } from "../stage/types";
 import { buildActiveSessionBranch, normalizeSessionRecords, type ResumedToolCall, type SessionRecord } from "./record-model";
 import { projectSessionHistory } from "./history-projector";
 import { repairProviderHistory } from "./provider-history-repair";
@@ -253,6 +254,8 @@ export type SessionSnapshot = {
   /** Asset profile/prompt fingerprint recorded when the session began. */
   assets?: AssetFingerprint;
   harness?: HarnessRuntimeIdentity;
+  /** Frozen character/scenario context for a Stage session. */
+  stageBootstrap?: StageBootstrapMetadata;
   pendingGate?: {
     gate: GateRequest;
     toolCallId: string;
@@ -319,6 +322,10 @@ export async function loadSessionSnapshot(
   const pendingQualityRewrite = findPendingQualityRewrite(records);
   const pendingQualityDecision = findPendingQualityDecision(records);
   const qualityWarnings = findQualityWarnings(records);
+  const stageBootstrap = records
+    .filter((record) => record.role === "system")
+    .map((record) => parseStageBootstrapMetadata(record.metadata?.stageBootstrap))
+    .find((value): value is StageBootstrapMetadata => value !== undefined);
   const preservedPendingCallIds = options.synthesizeDanglingToolResults
     ? new Set<string>()
     : new Set([
@@ -346,6 +353,7 @@ export async function loadSessionSnapshot(
     ...(projection.permissionMode ? { permissionMode: projection.permissionMode } : {}),
     ...(projection.assets ? { assets: projection.assets } : {}),
     ...(projection.harness ? { harness: projection.harness } : {}),
+    ...(stageBootstrap ? { stageBootstrap } : {}),
     ...(pendingGate
       ? {
           pendingGate: {

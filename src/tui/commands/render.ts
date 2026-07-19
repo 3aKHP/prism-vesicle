@@ -15,6 +15,7 @@ export function renderEngineList(activeEngine: EngineId): string {
     weaver: "scene shard drafting",
     "weaver-orch": "long-form orchestration",
     dyad: "two-entity simulation data",
+    stage: "continuous character-driven narrative",
   };
   const lines = ["Prism engines:"];
   for (const engine of engineIds) {
@@ -22,7 +23,7 @@ export function renderEngineList(activeEngine: EngineId): string {
     lines.push(`${marker} ${engineDisplayName(engine)} (${engine}) - ${labels[engine]}`);
   }
   lines.push("");
-  lines.push("Use /engine <id> to switch the profile used by future turns.");
+  lines.push("Use /engine <id> to switch a profile for future turns. Start Stage with /stage <character-card-path> <scenario-card-path>.");
   return lines.join("\n");
 }
 

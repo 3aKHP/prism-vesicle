@@ -114,6 +114,7 @@ function unsupportedQualityPolicyBindings(manifest: HarnessManifest): string[] {
     weaver: new Set(["off", "observe"]),
     "weaver-orch": new Set(["off", "observe"]),
     dyad: new Set(["off", "observe"]),
+    stage: new Set(["off", "observe"]),
   };
   const agentModes: Record<string, Set<string>> = {
     "scene-writer": new Set(["off", "observe"]),

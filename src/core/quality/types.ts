@@ -4,6 +4,7 @@ import type { ProviderThinkingBlock, ResponseUsage } from "../../providers/share
 
 export type QualityCandidateType =
   | "runtime.prose"
+  | "stage.prose"
   | "dyad.character-response"
   | "scene.prose"
   | "orchestrator-authored-prose"

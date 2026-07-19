@@ -31,6 +31,7 @@ const HELP_TEXT = [
   "Commands:",
   "  /model [provider] [model]  switch provider/model (no args = pick)",
   "  /engine [id] [--summary [notes]] list or switch the Prism engine",
+  "  /stage <character-card-path> <scenario-card-path> start a new Stage narrative session",
   "  /compact [notes]  summarize this session and replace old context",
   "  /context          show current context window usage",
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
@@ -48,6 +49,21 @@ const HELP_TEXT = [
 ].join("\n");
 
 export const builtinCommands: Command[] = [
+  {
+    name: "stage",
+    description: "Start a new Stage narrative session from two cards",
+    usage: "/stage <character-card-path> <scenario-card-path>",
+    async run(ctx, args, raw) {
+      const parts = args.match(/(?:[^\s\"]+|\"[^\"]*\")+/g)?.map((part) => part.replace(/^\"|\"$/g, "")) ?? [];
+      if (parts.length !== 2) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /stage <character-card-path> <scenario-card-path>. Paths are project-relative and must be under an approved readable root." }]);
+        return;
+      }
+      if (!ctx.startStage) throw new Error("Stage startup is unavailable in this command context.");
+      await ctx.startStage(parts[0]!, parts[1]!, raw);
+    },
+  },
+
   {
     name: "help",
     description: "Show available commands",
@@ -103,7 +119,7 @@ export const builtinCommands: Command[] = [
         const config = await loadConfigForSelection({ provider: providerAlias, model: modelId });
         if (!config.apiKey) throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
         if (mode === "rewrite" && !confirm) {
-          ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental rewrite will send Runtime prose to ${providerAlias}/${modelId} and may request up to two Runtime revisions. Confirm with /quality confirm rewrite ${providerAlias} ${modelId} ${judgeTimeoutMs}.` }]);
+          ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental rewrite will send eligible narrative prose to ${providerAlias}/${modelId} and may request up to two original-Engine revisions. Confirm with /quality confirm rewrite ${providerAlias} ${modelId} ${judgeTimeoutMs}.` }]);
           return;
         }
         await writeExperimentalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs });
@@ -169,6 +185,10 @@ export const builtinCommands: Command[] = [
           { role: "user", content: raw },
           { role: "system", content: `Unknown engine "${args}". Available: ${engineIds.join(", ")}. Use /engine <id> [--summary [instructions]].` },
         ]);
+        return;
+      }
+      if (engine === "stage") {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Stage requires /stage <character-card-path> <scenario-card-path> so its frozen bootstrap context is recorded before the first player action." }]);
         return;
       }
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
@@ -378,6 +398,8 @@ export const builtinCommands: Command[] = [
     async run(ctx, _args, raw) {
       ctx.resetRewindState();
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      const resetStage = ctx.activeEngine() === "stage";
+      if (resetStage) ctx.setActiveEngine("etl");
       ctx.setSessionId(undefined);
       ctx.setSessionPath("no session yet");
       ctx.setConversation([]);
@@ -388,7 +410,12 @@ export const builtinCommands: Command[] = [
       ctx.setPendingEngineSwitch(null);
       ctx.setPendingUserQuestion(null);
       ctx.setStatus("fresh session");
-      ctx.setMessages((prev) => [...prev, { role: "system", content: "Started a fresh session. Type a prompt to begin." }]);
+      ctx.setMessages((prev) => [...prev, {
+        role: "system",
+        content: resetStage
+          ? "Started a fresh session with ETL. Start another Stage narrative with /stage <character-card-path> <scenario-card-path>."
+          : "Started a fresh session. Type a prompt to begin.",
+      }]);
     },
   },
 
