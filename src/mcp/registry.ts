@@ -38,8 +38,8 @@ export async function createMcpRegistryForEngine(
   options: McpRegistryOptions = {},
 ): Promise<McpRegistry> {
   const loaded = await loadMcpConfig(options.env).catch(() => null);
-  if (!loaded) return emptyRegistry();
-  if (!loaded.configured || !loaded.config.enabled) return emptyRegistry();
+  if (!loaded) return createEmptyMcpRegistry();
+  if (!loaded.configured || !loaded.config.enabled) return createEmptyMcpRegistry();
 
   const registry = await buildRegistry(loaded.config, options, engine);
   return registry;
@@ -277,7 +277,7 @@ function eventFromBinding(binding: McpToolBinding, isError: boolean): McpToolEve
   };
 }
 
-function emptyRegistry(): McpRegistry {
+export function createEmptyMcpRegistry(): McpRegistry {
   return {
     definitions: [],
     statuses: [],

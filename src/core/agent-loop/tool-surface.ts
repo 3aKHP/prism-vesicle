@@ -1,4 +1,4 @@
-import { createMcpRegistryForEngine, type McpRegistry } from "../../mcp/registry";
+import { createEmptyMcpRegistry, createMcpRegistryForEngine, type McpRegistry } from "../../mcp/registry";
 import { agentToolDefinitions } from "../agents/tools";
 import type { EngineProfile } from "../engine/profile";
 import { engineSwitchToolDefinition } from "../engine/switch";
@@ -21,7 +21,9 @@ export async function resolveToolSurface(
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
 ): Promise<ToolSurface> {
-  const mcp = await createMcpRegistryForEngine(profile.id);
+  const mcp = profile.id === "stage"
+    ? createEmptyMcpRegistry()
+    : await createMcpRegistryForEngine(profile.id);
   const shellProfile = shellExecEnabled ? resolveShellProfile(shellInterpreter) : undefined;
   const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled, shellInterpreter);
   const shellTools = shellExecEnabled

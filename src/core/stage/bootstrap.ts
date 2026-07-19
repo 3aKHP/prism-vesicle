@@ -166,6 +166,9 @@ function scalar(frontmatter: string, key: string): string {
 function openingParagraph(body: string): string {
   const visible = body.split("<!--", 1)[0]!.trim();
   const quote = visible.search(/^\s*["“]/m);
+  if (quote === 0) {
+    throw new Error("Module B visible text must begin with an opening paragraph before the first quoted character line.");
+  }
   const opening = (quote < 0 ? visible : visible.slice(0, quote)).trim();
   if (!opening) throw new Error("Stage bootstrap requires a Module B opening paragraph before the first character line.");
   return opening;
@@ -203,6 +206,7 @@ function commentField(body: string, label: string): string {
 function beatField(frontmatter: string, field: string): string {
   const lines = frontmatter.split(/\r?\n/);
   const beatMapIndex = lines.findIndex((line) => /^beat_map:\s*$/.test(line));
+  if (beatMapIndex < 0) throw new Error("Stage bootstrap requires a beat_map entry in the scenario frontmatter.");
   const firstBeatIndex = lines.findIndex((line, index) => index > beatMapIndex && /^\s*-\s*label:\s*(.+)$/.test(line));
   const firstLine = firstBeatIndex >= 0 ? lines[firstBeatIndex]! : undefined;
   const inline = field === "label" ? /^\s*-\s*label:\s*(.+)$/.exec(firstLine ?? "")?.[1] : undefined;

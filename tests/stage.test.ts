@@ -86,6 +86,27 @@ describe("Stage bootstrap", () => {
     }
   });
 
+  test("rejects a scenario card with no beat map", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-missing-beat-map-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      await writeFile(join(root, "workspace", "character.md"), characterCard, "utf8");
+      await writeFile(join(root, "workspace", "scenario.md"), scenarioCard.replace("beat_map:", "beats:"), "utf8");
+
+      await expect(startStageSession({
+        rootDir: root,
+        characterPath: "workspace/character.md",
+        scenarioPath: "workspace/scenario.md",
+        provider: "fixture",
+        providerId: "fixture",
+        model: "fixture-model",
+        permissionMode: "MOMENTUM",
+      })).rejects.toThrow("Module B: beat_map is missing from frontmatter.");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("has no model-visible tools, including optional host integrations", async () => {
     const profile = await loadEngineProfile("stage");
     const surface = await resolveToolSurface(profile, true, true, "auto");
@@ -145,7 +166,7 @@ describe("Stage bootstrap", () => {
   });
 
   test("rejects attempts to create an unbootstrapped Stage session", async () => {
-    const root = await stageRoot();
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-unbootstrapped-"));
     try {
       await expect(runPrompt({ input: "start", engine: "stage", rootDir: root }))
         .rejects.toThrow("Stage sessions must start with /stage");

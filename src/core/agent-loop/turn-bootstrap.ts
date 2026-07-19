@@ -23,6 +23,10 @@ import { loadSessionSnapshot } from "../session/store";
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
   const rootDir = options.rootDir ?? process.cwd();
+  const isNewSession = !options.sessionId;
+  if (engine === "stage" && isNewSession) {
+    throw new Error("Stage sessions must start with /stage <character-card-path> <scenario-card-path> so bootstrap context is persisted before the first player action.");
+  }
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const permission = options.permission ?? defaultPermissionRuntime;
@@ -45,10 +49,6 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     permission.shellInterpreter,
   );
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
-  const isNewSession = !options.sessionId;
-  if (engine === "stage" && isNewSession) {
-    throw new Error("Stage sessions must start with /stage <character-card-path> <scenario-card-path> so bootstrap context is persisted before the first player action.");
-  }
   if (options.sessionId) {
     const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
