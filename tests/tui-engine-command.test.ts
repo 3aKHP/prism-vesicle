@@ -47,6 +47,26 @@ describe("/engine command", () => {
     expect(messages.at(-1)?.content).toContain("Start another Stage narrative with /stage");
   });
 
+  test("/engine stage preserves the current engine and directs the user to /stage", async () => {
+    const command = builtinCommands.find((entry) => entry.name === "engine");
+    if (!command) throw new Error("Missing /engine command.");
+    let activeEngine = "runtime";
+    let switched = false;
+    let messages: Message[] = [];
+    const ctx = {
+      activeEngine: () => activeEngine,
+      setActiveEngine(engine: typeof activeEngine) { activeEngine = engine; },
+      async persistEngineSwitch() { switched = true; },
+      setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
+    } as unknown as CommandContext;
+
+    await command.run(ctx, "stage", "/engine stage");
+
+    expect(activeEngine).toBe("runtime");
+    expect(switched).toBe(false);
+    expect(messages.at(-1)?.content).toContain("Stage requires /stage");
+  });
+
   test("persists manual switches as direct engine transitions", async () => {
     const command = builtinCommands.find((entry) => entry.name === "engine");
     if (!command) throw new Error("Missing /engine command.");
