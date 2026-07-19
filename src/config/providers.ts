@@ -4,6 +4,7 @@ import type { VesicleConfig, VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
+import { readYamlKeyValue, readYamlLines, stripYamlComment, unquoteYamlValue } from "./yaml-line-reader";
 
 export type ProviderProtocol = VesicleProvider;
 
@@ -171,7 +172,7 @@ export function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
   const values: NodeJS.ProcessEnv = {};
   const lines = source.split(/\r?\n/);
   for (let index = 0; index < lines.length; index++) {
-    const raw = stripComment(lines[index]).trim();
+    const raw = stripYamlComment(lines[index]).trim();
     if (!raw) continue;
     const line = raw.startsWith("export ") ? raw.slice("export ".length).trimStart() : raw;
     const equals = line.indexOf("=");
@@ -183,13 +184,13 @@ export function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
       throw new Error(`Environment file parse error on line ${index + 1} in ${path}: invalid variable name "${key}".`);
     }
-    values[key] = unquote(line.slice(equals + 1).trim());
+    values[key] = unquoteYamlValue(line.slice(equals + 1).trim());
   }
   return values;
 }
 
 export function parseProviderConfig(source: string, path: string, env: NodeJS.ProcessEnv): ProviderRegistry {
-  const lines = source.split(/\r?\n/);
+  const lines = readYamlLines(source);
   const registry: ProviderRegistry = {
     source: "file",
     path,
@@ -256,11 +257,10 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     currentModelBlock = null;
   };
 
-  for (let index = 0; index < lines.length; index++) {
-    const raw = stripComment(lines[index]).replace(/\s+$/, "");
-    if (!raw.trim()) continue;
-    const indent = leadingSpaces(raw);
-    const line = raw.trim();
+  for (const parsedLine of lines) {
+    const index = parsedLine.number - 1;
+    const indent = parsedLine.indent;
+    const line = parsedLine.text;
 
     if (indent === 0) {
       finishProvider();
@@ -335,7 +335,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
         }
         currentModel = { id: value };
       } else {
-        currentProvider.models = [...(currentProvider.models ?? []), { id: unquote(entry) }];
+        currentProvider.models = [...(currentProvider.models ?? []), { id: unquoteYamlValue(entry) }];
       }
       continue;
     }
@@ -461,10 +461,7 @@ function readUserAgent(value: string, field: string): string {
 }
 
 function readKeyValue(line: string, index: number, path: string): [string, string] {
-  const colon = line.indexOf(":");
-  if (colon === -1) throw new Error(`Provider config parse error on line ${index + 1} in ${path}: missing colon.`);
-  const key = line.slice(0, colon).trim();
-  const value = unquote(line.slice(colon + 1).trim());
+  const [key, value] = readYamlKeyValue(line, index + 1, path, "Provider config");
   if (!value) throw new Error(`Provider config parse error on line ${index + 1} in ${path}: empty value for ${key}.`);
   return [key, value];
 }
@@ -539,38 +536,6 @@ function firstDuplicate(values: string[]): string | undefined {
   return undefined;
 }
 
-function stripComment(line: string): string {
-  let quote: "\"" | "'" | null = null;
-  for (let index = 0; index < line.length; index++) {
-    const char = line[index];
-    if ((char === "\"" || char === "'") && (index === 0 || line[index - 1] !== "\\")) {
-      quote = quote === char ? null : quote ?? char;
-      continue;
-    }
-    if (char === "#" && quote === null) return line.slice(0, index);
-  }
-  return line;
-}
-
-function leadingSpaces(line: string): number {
-  const match = line.match(/^ */);
-  return match ? match[0].length : 0;
-}
-
-function unquote(value: string): string {
-  if (value.startsWith("\"") && value.endsWith("\"")) {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      if (typeof parsed === "string") return parsed;
-    } catch {
-      return value.slice(1, -1);
-    }
-  }
-  if (value.startsWith("'") && value.endsWith("'")) {
-    return value.slice(1, -1).replace(/''/g, "'");
-  }
-  return value;
-}
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");

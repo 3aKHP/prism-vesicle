@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { loadUserConfigEnvironment, providerConfigPathFromEnv } from "../config/providers";
+import { readYamlKeyValue, readYamlLines, unquoteYamlValue } from "../config/yaml-line-reader";
 import { engineIds, type EngineId } from "../core/engine/profile";
 import type { McpConfig, McpServerConfig, McpTransport } from "./types";
 
@@ -54,7 +55,7 @@ export function mcpConfigPathFromEnv(env: NodeJS.ProcessEnv = process.env): stri
 }
 
 export function parseMcpConfig(source: string, path: string, env: NodeJS.ProcessEnv): McpConfig {
-  const lines = source.split(/\r?\n/);
+  const lines = readYamlLines(source);
   let enabled = true;
   let section: "servers" | null = null;
   let currentServer: Partial<McpServerConfig> | null = null;
@@ -85,11 +86,10 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
     currentNested = null;
   };
 
-  for (let index = 0; index < lines.length; index++) {
-    const raw = stripComment(lines[index]).replace(/\s+$/, "");
-    if (!raw.trim()) continue;
-    const indent = leadingSpaces(raw);
-    const line = raw.trim();
+  for (const parsedLine of lines) {
+    const index = parsedLine.number - 1;
+    const indent = parsedLine.indent;
+    const line = parsedLine.text;
 
     if (indent === 0) {
       finishServer();
@@ -149,7 +149,7 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
       }
       currentNested = null;
       const [key, rawValue] = readKeyValue(line, index, path);
-      const value = expandEnv(unquote(rawValue), env, index, path);
+      const value = expandEnv(unquoteYamlValue(rawValue), env, index, path);
       if (key === "enabled") currentServer.enabled = readBoolean(value, index, path);
       else if (key === "transport") currentServer.transport = readTransport(value, index, path);
       else if (key === "url") currentServer.url = value;
@@ -172,14 +172,14 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
       const [key, value] = readKeyValue(line, index, path);
       currentServer.headers = {
         ...(currentServer.headers ?? {}),
-        [key]: expandEnv(unquote(value), env, index, path),
+        [key]: expandEnv(unquoteYamlValue(value), env, index, path),
       };
       continue;
     }
 
     if (indent === 6 && currentNested && currentNested !== "headers") {
       if (!line.startsWith("- ")) throw new Error(`MCP config parse error on line ${index + 1}: list entries must start with "- ".`);
-      const value = expandEnv(unquote(line.slice(2).trim()), env, index, path);
+      const value = expandEnv(unquoteYamlValue(line.slice(2).trim()), env, index, path);
       if (currentNested === "includeTools") currentServer.includeTools = [...(currentServer.includeTools ?? []), value];
       if (currentNested === "excludeTools") currentServer.excludeTools = [...(currentServer.excludeTools ?? []), value];
       if (currentNested === "enabledEngines") currentServer.enabledEngines = readEngineList([...(currentServer.enabledEngines ?? []), value], index, path);
@@ -233,7 +233,7 @@ function readInlineList(value: string, index: number, path: string): string[] {
   }
   const inner = trimmed.slice(1, -1).trim();
   if (!inner) return [];
-  return inner.split(",").map((item) => unquote(item.trim())).filter(Boolean);
+  return inner.split(",").map((item) => unquoteYamlValue(item.trim())).filter(Boolean);
 }
 
 function expandEnv(value: string, env: NodeJS.ProcessEnv, index: number, path: string): string {
@@ -246,35 +246,5 @@ function expandEnv(value: string, env: NodeJS.ProcessEnv, index: number, path: s
 }
 
 function readKeyValue(line: string, index: number, path: string): [string, string] {
-  const colon = line.indexOf(":");
-  if (colon === -1) throw new Error(`MCP config parse error on line ${index + 1} in ${path}: expected key: value.`);
-  const key = line.slice(0, colon).trim();
-  const value = line.slice(colon + 1).trim();
-  if (!key) throw new Error(`MCP config parse error on line ${index + 1} in ${path}: empty key.`);
-  return [key, value];
-}
-
-function unquote(value: string): string {
-  const trimmed = value.trim();
-  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
-function stripComment(line: string): string {
-  let quote: '"' | "'" | null = null;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if ((char === '"' || char === "'") && line[i - 1] !== "\\") {
-      quote = quote === char ? null : quote ?? char;
-      continue;
-    }
-    if (char === "#" && !quote) return line.slice(0, i);
-  }
-  return line;
-}
-
-function leadingSpaces(value: string): number {
-  return value.length - value.trimStart().length;
+  return readYamlKeyValue(line, index + 1, path, "MCP config");
 }
