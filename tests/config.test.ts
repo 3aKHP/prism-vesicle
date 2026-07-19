@@ -4,6 +4,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfigForSelection, loadProviderRegistry } from "../src/config/providers";
 import { userConfigDirectory } from "../src/config/paths";
+import {
+  loadExperimentalQualityProfile,
+  loadExperimentalQualitySettings,
+  parseExperimentalQualitySettings,
+  writeExperimentalQualitySettings,
+} from "../src/config/quality";
 
 const tempDirs: string[] = [];
 
@@ -18,6 +24,39 @@ describe("config loading", () => {
       VESICLE_PROVIDERS_FILE: "/tmp/vesicle-custom/providers.yaml",
       VESICLE_CONFIG_DIR: "/tmp/ignored-default",
     })).toBe("/tmp/vesicle-custom");
+  });
+
+  test("defaults experimental Semantic Judge settings to off without reading a provider", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-quality-config-"));
+    tempDirs.push(rootDir);
+    const env = { VESICLE_CONFIG_DIR: join(rootDir, "config") };
+    const settings = await loadExperimentalQualitySettings(env);
+    expect(settings).toMatchObject({ mode: "off", exists: false });
+    await expect(loadExperimentalQualityProfile(undefined, env)).resolves.toBeUndefined();
+  });
+
+  test("validates and atomically writes an enabled experimental Judge profile", async () => {
+    const { env } = await writeProvidersFile([
+      "default:", "  provider: generation", "  model: main", "providers:",
+      "  generation:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: MAIN_KEY", "    models:", "      - main",
+      "  judge:", "    protocol: gemini-generate-content", "    baseUrl: https://example.test/v1", "    apiKeyEnv: JUDGE_KEY", "    models:", "      - judge-model", "",
+    ], ["MAIN_KEY=main-secret", "JUDGE_KEY=judge-secret"]);
+    const written = await writeExperimentalQualitySettings({
+      mode: "rewrite", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 30_000,
+    }, env);
+    expect(written).toMatchObject({ mode: "rewrite", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 30_000, exists: true });
+    const profile = await loadExperimentalQualityProfile({ judge: { rubric: "fixture", rules: [] } } as never, env);
+    expect(profile).toMatchObject({ mode: "rewrite", providerId: "judge", modelId: "judge-model", protocol: "gemini-generate-content", judgeTimeoutMs: 30_000 });
+    expect(profile?.configIdentity).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  test("rejects unsafe enabled Judge configuration before provider calls", () => {
+    expect(() => parseExperimentalQualitySettings("version: 1\nmode: rewrite\nproviderAlias: judge\nmodelId: m\njudgeTimeoutMs: 999\n"))
+      .toThrow("judgeTimeoutMs must be an integer from 1000 to 180000");
+    expect(() => parseExperimentalQualitySettings("version: 1\nmode: off\nproviderAlias: judge\n"))
+      .toThrow("mode off cannot retain");
+    expect(() => parseExperimentalQualitySettings("version: 1\nmode: observe\nproviderAlias: judge\nmodelId: m\njudgeTimeoutMs: 15000\nbaseUrl: https://bad.test\n"))
+      .toThrow("Unknown quality.yaml field: baseUrl");
   });
 
   test("requires a provider registry file instead of legacy single-key env fallback", async () => {

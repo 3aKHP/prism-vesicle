@@ -492,10 +492,10 @@ describe("Harness Pack foundation", () => {
       const guarded = await runPrompt({ input: "write", engine: "runtime", rootDir: project });
       expect(guarded.kind).toBe("complete");
       expect(runtimeRequests).toBe(2);
-      expect(judgeRequests).toBe(1);
+      expect(judgeRequests).toBe(0);
       const guardedSnapshot = await loadSessionSnapshot(project, guarded.sessionId);
       expect(guardedSnapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
-      expect(guardedSnapshot.qualityEvents.at(-1)?.judgeStatus).toBe("valid");
+      expect(guardedSnapshot.qualityEvents.at(-1)?.judgeStatus).toBeUndefined();
 
       const legacy = await createSessionStore(project, "legacy-v9-session");
       await legacy.append({ role: "system", content: "legacy V9 prompt" });

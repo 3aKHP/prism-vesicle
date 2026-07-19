@@ -162,6 +162,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
+    experimentalQuality: context.experimentalQuality,
   });
 }
 

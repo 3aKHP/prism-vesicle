@@ -198,11 +198,13 @@ async function continuePermissionSequence(
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
+    experimentalQuality: context.experimentalQuality,
     qualityState: state.qualityState ? {
       attempts: state.qualityState.attempts,
       rejectedHashes: new Set(state.qualityState.rejectedHashes),
       candidateParts: state.qualityState.candidateParts,
       targets: hydrateQualityTargets(state.qualityState.targets ?? []),
+      experimentalJudge: state.qualityState.experimentalJudge,
     } : undefined,
   });
 }

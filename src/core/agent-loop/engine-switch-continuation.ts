@@ -89,6 +89,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     permissionBroker: options.permissionBroker,
     harness: continuation.harness,
     assets: continuation.assets,
+    experimentalQuality: continuation.experimentalQuality,
   });
 }
 

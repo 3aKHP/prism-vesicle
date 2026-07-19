@@ -1,4 +1,5 @@
 import { loadConfigForSelection } from "../../config/providers";
+import { loadExperimentalQualityProfile } from "../../config/quality";
 import { createProvider } from "../../providers";
 import type { VesicleMessage } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
@@ -31,6 +32,9 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     : undefined;
   const assets = options.assets ?? projectHarness?.assets;
   const harness = options.harness ?? projectHarness?.harness;
+  const experimentalQuality = Object.hasOwn(options, "experimentalQuality")
+    ? options.experimentalQuality
+    : await loadExperimentalQualityProfile(harness?.quality);
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir, assets ? { resolver: assets } : {});
   const { profile, systemPrompt } = engineAssets;
   const toolSurface = await resolveToolSurface(
@@ -121,5 +125,6 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     permissionBroker: options.permissionBroker,
     harness,
     assets,
+    experimentalQuality,
   };
 }

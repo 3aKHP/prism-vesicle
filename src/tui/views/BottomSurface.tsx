@@ -28,6 +28,12 @@ export type ModelPickerState = {
   selected: number;
 };
 
+export type QualityPickerState =
+  | { step: "mode"; selected: number }
+  | { step: "provider"; mode: "observe" | "rewrite"; selected: number }
+  | { step: "model"; mode: "observe" | "rewrite"; providerId: string; selected: number }
+  | { step: "confirm"; providerId: string; modelId: string; selected: number };
+
 export type BottomSurfaceMode =
   | { kind: "yolo"; stage: 1 | 2 }
   | { kind: "permission"; request: PermissionRequest }
@@ -36,6 +42,7 @@ export type BottomSurfaceMode =
   | { kind: "gate"; gate: GateRequest }
   | { kind: "rewind"; picker: RewindPickerState }
   | { kind: "session"; picker: SessionPickerState }
+  | { kind: "quality-picker"; picker: QualityPickerState }
   | { kind: "model"; picker: ModelPickerState }
   | { kind: "composer" };
 
@@ -47,6 +54,7 @@ export type BottomSurfaceState = {
   gate: GateRequest | null;
   rewind: RewindPickerState | null;
   session: SessionPickerState | null;
+  qualityPicker?: QualityPickerState | null;
   model: ModelPickerState | null;
 };
 
@@ -58,6 +66,7 @@ export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfa
   if (state.gate) return { kind: "gate", gate: state.gate };
   if (state.rewind) return { kind: "rewind", picker: state.rewind };
   if (state.session) return { kind: "session", picker: state.session };
+  if (state.qualityPicker) return { kind: "quality-picker", picker: state.qualityPicker };
   if (state.model) return { kind: "model", picker: state.model };
   return { kind: "composer" };
 }
@@ -75,6 +84,8 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   questionFreeformCursor: number;
   modelItems: OptionItem[];
   modelTitle: string;
+  qualityPickerItems: OptionItem[];
+  qualityPickerTitle: string;
   commandMenuOpen: boolean;
   commandItems: Command[];
   commandSelected: number;
@@ -184,6 +195,20 @@ export function BottomSurface(props: BottomSurfaceProps) {
             <OptionPicker
               title={props.modelTitle}
               items={props.modelItems}
+              selected={current().picker.selected}
+              width={props.layout.width}
+              hint="↑/↓ choose · Enter select · Esc back"
+              maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
+            />
+          </box>
+        )}
+      </Match>
+      <Match when={mode().kind === "quality-picker" && mode() as Extract<BottomSurfaceMode, { kind: "quality-picker" }> }>
+        {(current) => (
+          <box height={props.layout.bottomHeight}>
+            <OptionPicker
+              title={props.qualityPickerTitle}
+              items={props.qualityPickerItems}
               selected={current().picker.selected}
               width={props.layout.width}
               hint="↑/↓ choose · Enter select · Esc back"

@@ -26,6 +26,7 @@ import {
   type QualityCandidateType,
   type QualityDecisionCandidate,
   type QualityDecisionPoint,
+  type ExperimentalQualityProfileSnapshot,
   type QualityEvent,
   type QualityEventTarget,
   type QualityResolution,
@@ -196,6 +197,7 @@ export type PendingQualityRewrite = {
   warningId?: string;
   warningTargetIds?: string[];
   candidate?: QualityDecisionCandidate;
+  experimentalJudge?: ExperimentalQualityProfileSnapshot;
 };
 
 /**
@@ -794,7 +796,7 @@ function parsePendingQualityRewrite(
   };
 }
 
-function readPersistedQualityContinuation(value: unknown): Pick<PendingQualityRewrite, "warningId" | "warningTargetIds" | "candidate"> {
+function readPersistedQualityContinuation(value: unknown): Partial<Pick<PendingQualityRewrite, "warningId" | "warningTargetIds" | "candidate" | "experimentalJudge">> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const source = value as Record<string, unknown>;
   const warningId = typeof source.warningId === "string" ? source.warningId : undefined;
@@ -803,10 +805,12 @@ function readPersistedQualityContinuation(value: unknown): Pick<PendingQualityRe
     ? [...source.warningTargetIds] as string[]
     : undefined;
   const candidate = parseQualityDecisionCandidate(source.candidate);
+  const experimentalJudge = parseExperimentalJudgeSnapshot(source.experimentalJudge);
   return {
     ...(warningId ? { warningId } : {}),
     ...(warningTargetIds ? { warningTargetIds } : {}),
     ...(candidate ? { candidate } : {}),
+    ...(experimentalJudge ? { experimentalJudge } : {}),
   };
 }
 
@@ -825,6 +829,7 @@ function parseQualityEvent(value: unknown): QualityEvent | undefined {
   const event = value as Partial<QualityEvent>;
   const decision = isQualityDecision(event.decision) ? event.decision : undefined;
   const judgeUsage = event.judgeUsage === undefined ? undefined : readResponseUsage(event.judgeUsage);
+  const experimentalJudge = event.experimentalJudge === undefined ? undefined : parseExperimentalJudgeSnapshot(event.experimentalJudge);
   if (!decision
     || event.guard !== "anti-ai-flavor"
     || typeof event.packId !== "string"
@@ -846,7 +851,8 @@ function parseQualityEvent(value: unknown): QualityEvent | undefined {
     || (event.judgeProvider !== undefined && (typeof event.judgeProvider !== "string" || event.judgeProvider.length === 0))
     || (event.judgeModel !== undefined && (typeof event.judgeModel !== "string" || event.judgeModel.length === 0))
     || (event.judgeRequestCount !== undefined && (!Number.isInteger(event.judgeRequestCount) || Number(event.judgeRequestCount) < 0))
-    || (event.judgeUsage !== undefined && !judgeUsage)) return undefined;
+    || (event.judgeUsage !== undefined && !judgeUsage)
+    || (event.experimentalJudge !== undefined && !experimentalJudge)) return undefined;
   const outcome = isQualityOutcome(event.outcome)
     ? event.outcome
     : legacyQualityOutcome(decision, event.findingIds.length);
@@ -865,6 +871,7 @@ function parseQualityEvent(value: unknown): QualityEvent | undefined {
     action,
     policyVersion: "quality-policy/v1",
     ...(judgeUsage ? { judgeUsage } : {}),
+    ...(experimentalJudge ? { experimentalJudge } : {}),
     targets: targets.length > 0 ? targets : [{
       id: `assistant:${event.candidateHash}`,
       kind: "assistant-response",
@@ -875,6 +882,25 @@ function parseQualityEvent(value: unknown): QualityEvent | undefined {
       findingIds: [...event.findingIds],
       findings: [],
     }],
+  };
+}
+
+function parseExperimentalJudgeSnapshot(value: unknown): QualityEvent["experimentalJudge"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const profile = value as Record<string, unknown>;
+  if ((profile.mode !== "observe" && profile.mode !== "rewrite")
+    || typeof profile.providerId !== "string" || profile.providerId.length === 0
+    || typeof profile.modelId !== "string" || profile.modelId.length === 0
+    || !["openai-chat-compatible", "anthropic-messages", "gemini-generate-content"].includes(String(profile.protocol))
+    || !Number.isInteger(profile.judgeTimeoutMs) || Number(profile.judgeTimeoutMs) < 1_000 || Number(profile.judgeTimeoutMs) > 180_000
+    || typeof profile.configIdentity !== "string" || !/^[a-f0-9]{64}$/.test(profile.configIdentity)) return undefined;
+  return {
+    mode: profile.mode,
+    providerId: profile.providerId,
+    modelId: profile.modelId,
+    protocol: profile.protocol as NonNullable<QualityEvent["experimentalJudge"]>["protocol"],
+    judgeTimeoutMs: Number(profile.judgeTimeoutMs),
+    configIdentity: profile.configIdentity,
   };
 }
 

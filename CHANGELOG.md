@@ -9,7 +9,9 @@ project follows Semantic Versioning once releases begin.
 
 ### Added
 
+- Added an opt-in experimental Runtime Semantic Judge. User-level `quality.yaml` defaults to `off`, accepts only a registered provider/model and bounded timeout, and is configured through `/quality`; `rewrite` requires an explicit confirmation command. The host records only a secret-free profile snapshot and bounded results, preserves strict Judge parsing and one repair, and rejects pending retry after profile drift. This experimental override is separate from calibrated Policy activation and makes no production-quality or AI-authorship claim.
 - Added the developer-only `vesicle quality benchmark` command for PR 6B Semantic Judge measurement. It loads the active verified Harness contract, requires an explicit frozen plan and `--allow-live`, reserves the possible two-request repair path against request/token/cost caps, appends resumable hash-only JSONL rows, and writes per-model Wilson/slice reports without candidate text or raw provider responses. The command records measurement evidence only and cannot enable semantic blocking.
+- Benchmark plans can now set `earlyStop.minimumEvaluations` to avoid applying a rate-based early stop before an operational pilot has enough observations; legacy plans retain the previous minimum of one evaluation.
 - Added fail-closed support for `quality-policy/semantic-rewrite@1`. A Harness that requires it must publish an active, hash-verified Semantic Rewrite Policy with known stable Judge rules, exact protocol/model scopes, complete per-rule confidence thresholds, and non-placeholder calibration digests. The host exposes only pure eligibility evaluation at this stage; current published Harnesses remain observe-only and semantic findings still cannot enter rewrite decisions.
 
 ### Fixed

@@ -1,5 +1,6 @@
 import type { ProviderAdapter, ResponseUsage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import type {
+  ExperimentalQualityProfileSnapshot,
   QualityCandidateType,
   QualityFinding,
   QualityJudgeContract,
@@ -8,7 +9,8 @@ import type {
   QualityRuntimeContext,
   QualityTargetWarningReason,
 } from "./types";
-import type { BoundQualityEvaluation } from "./guard";
+import { maxQualityRewriteAttempts, type BoundQualityEvaluation } from "./guard";
+import type { ExperimentalQualityProfile } from "../../config/quality";
 
 export const maxQualityJudgeCodeUnits = 30_000;
 export const maxQualityJudgeOutputTokens = 2_048;
@@ -31,15 +33,13 @@ export type QualityJudgeRunResult = {
 export async function observeBoundQualityWithJudge(options: {
   result: BoundQualityEvaluation;
   runtime: QualityRuntimeContext;
-  provider: ProviderAdapter;
-  providerId: string;
-  model: string;
+  experimentalProfile?: ExperimentalQualityProfile;
+  state: { attempts: number; rejectedHashes: Set<string> };
   signal?: AbortSignal;
-  temperatureSupported?: boolean;
-  reasoningTierSupported?: boolean;
 }): Promise<BoundQualityEvaluation> {
   const contract = options.runtime.judge;
-  if (!contract
+  const profile = options.experimentalProfile;
+  if (!contract || !profile
     || options.result.candidate.producer !== "runtime"
     || options.result.decision !== "pass") return options.result;
 
@@ -66,16 +66,17 @@ export async function observeBoundQualityWithJudge(options: {
   for (const candidate of candidates) {
     const oversize = candidate.content.length > maxQualityJudgeCodeUnits;
     const judged = await runQualityJudge({
-      provider: options.provider,
-      providerId: options.providerId,
-      model: options.model,
+      provider: profile.provider,
+      providerId: profile.providerId,
+      model: profile.modelId,
       contract,
       candidateType: candidate.candidateType,
       targetKind: candidate.targetKind,
       content: candidate.content,
       signal: options.signal,
-      temperatureSupported: options.temperatureSupported,
-      reasoningTierSupported: options.reasoningTierSupported,
+      timeoutMs: profile.judgeTimeoutMs,
+      temperatureSupported: profile.temperatureSupported,
+      reasoningTierSupported: profile.reasoningTierSupported,
     });
     statuses.push(judged.status);
     judgeMs += judged.durationMs;
@@ -88,7 +89,7 @@ export async function observeBoundQualityWithJudge(options: {
     }
     const target = options.result.event.targets.find((item) => item.id === candidate.targetId);
     if (!target) continue;
-    if (judged.status === "valid") {
+    if (judged.status === "valid" && profile.mode === "observe") {
       const summaries = judged.findings.map((finding) => ({
         ruleId: finding.ruleId,
         title: finding.title,
@@ -110,14 +111,17 @@ export async function observeBoundQualityWithJudge(options: {
   const judgeStatus = aggregateJudgeStatus(statuses);
   options.result.event.judgeMs = Math.round(judgeMs * 1_000) / 1_000;
   options.result.event.judgeStatus = judgeStatus;
-  options.result.event.judgeProvider = options.providerId;
-  options.result.event.judgeModel = options.model;
+  options.result.event.judgeProvider = profile.providerId;
+  options.result.event.judgeModel = profile.modelId;
   options.result.event.judgeRequestCount = judgeRequestCount;
+  options.result.event.experimentalJudge = snapshotProfile(profile);
   if (judgeUsage) options.result.event.judgeUsage = boundedUsage(judgeUsage);
   options.result.event.findingIds = [...new Set(options.result.event.targets.flatMap((target) => target.findingIds))].slice(0, 32);
   if (judgeStatus !== "valid") {
     options.result.outcome = "inconclusive";
     options.result.action = "deliver";
+  } else if (profile.mode === "rewrite" && options.result.assessments.some((assessment) => assessment.judgeFindings.length > 0)) {
+    promoteExperimentalRewrite(options.result, options.state);
   } else if (options.result.outcome !== "inconclusive"
     && options.result.assessments.some((assessment) => assessment.judgeFindings.length > 0)) {
     options.result.outcome = "findings";
@@ -126,6 +130,80 @@ export async function observeBoundQualityWithJudge(options: {
   options.result.event.outcome = options.result.outcome;
   options.result.event.action = options.result.action;
   return options.result;
+}
+
+function promoteExperimentalRewrite(
+  result: BoundQualityEvaluation,
+  state: { attempts: number; rejectedHashes: Set<string> },
+): void {
+  const targetById = new Map(result.event.targets.map((target) => [target.id, target]));
+  for (const assessment of result.assessments) {
+    if (assessment.judgeFindings.length === 0) continue;
+    const targetEvaluation = result.targetEvaluations?.find((item) => item.target.id === assessment.targetId);
+    const evaluation = targetEvaluation?.evaluation ?? result.evaluation;
+    evaluation.findings = [...evaluation.findings, ...assessment.judgeFindings];
+    evaluation.blockingFindings = [...evaluation.blockingFindings, ...assessment.judgeFindings];
+    const target = targetById.get(assessment.targetId);
+    if (!target || target.warningReason) continue;
+    const summaries = assessment.judgeFindings.map(summaryForEvent);
+    target.findings = [...target.findings, ...summaries].slice(0, 16);
+    target.findingIds = [...new Set([...target.findingIds, ...assessment.judgeFindings.map((finding) => finding.ruleId)])].slice(0, 32);
+  }
+  result.evaluation.findings = [...new Set(result.assessments.flatMap((assessment) => assessment.detectorFindings.concat(assessment.judgeFindings)))];
+  result.evaluation.blockingFindings = result.assessments.flatMap((assessment) => assessment.judgeFindings);
+  const blocked = result.assessments.filter((assessment) => assessment.judgeFindings.length > 0);
+  const repeated = result.targetEvaluations
+    ? result.targetEvaluations.some((item) => blocked.some((assessment) => assessment.targetId === item.target.id)
+      && item.target.rejectedHashes.has(item.target.postImageHash))
+    : state.rejectedHashes.has(result.evaluation.candidateHash);
+  if (repeated || state.attempts >= maxQualityRewriteAttempts) {
+    result.decision = "exhausted";
+    result.outcome = "exhausted";
+    result.action = "ask-user";
+  } else {
+    if (result.targetEvaluations) {
+      for (const item of result.targetEvaluations) {
+        if (blocked.some((assessment) => assessment.targetId === item.target.id)) item.target.rejectedHashes.add(item.target.postImageHash);
+      }
+    } else {
+      state.rejectedHashes.add(result.evaluation.candidateHash);
+    }
+    state.attempts += 1;
+    result.decision = "rewrite";
+    result.outcome = "rewrite-required";
+    result.action = "rewrite";
+  }
+  for (const assessment of blocked) {
+    const target = targetById.get(assessment.targetId);
+    if (target && !target.warningReason) target.status = result.decision === "exhausted" ? "warning" : "rewrite-required";
+  }
+  result.event.decision = result.decision;
+  result.event.outcome = result.outcome;
+  result.event.action = result.action;
+  result.event.findingIds = [...new Set(result.event.targets.flatMap((target) => target.findingIds))].slice(0, 32);
+}
+
+function summaryForEvent(finding: QualityFinding) {
+  return {
+    ruleId: finding.ruleId,
+    title: finding.title,
+    severity: finding.severity,
+    maturity: finding.maturity,
+    evidence: finding.evidence.slice(0, 240),
+    source: "judge" as const,
+    ...(finding.confidence === undefined ? {} : { confidence: finding.confidence }),
+  };
+}
+
+function snapshotProfile(profile: ExperimentalQualityProfile): ExperimentalQualityProfileSnapshot {
+  return {
+    mode: profile.mode,
+    providerId: profile.providerId,
+    modelId: profile.modelId,
+    protocol: profile.protocol,
+    judgeTimeoutMs: profile.judgeTimeoutMs,
+    configIdentity: profile.configIdentity,
+  };
 }
 
 export async function runQualityJudge(options: {

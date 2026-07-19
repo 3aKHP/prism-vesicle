@@ -12,6 +12,7 @@ import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harnes
 import type { AssetResolver } from "../runtime/assets";
 import type { ValidationResult } from "../validators/registry";
 import type { QualityDecisionRequest, QualityFindingSummary, QualityOutcome, QualityTargetWarningReason } from "../quality";
+import type { ExperimentalQualityProfile } from "../../config/quality";
 
 export type RunPromptOptions = {
   input: string;
@@ -32,6 +33,7 @@ export type RunPromptOptions = {
   permissionBroker?: ToolPermissionBroker;
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
+  experimentalQuality?: ExperimentalQualityProfile;
 };
 
 export type AgentLoopEvent =
