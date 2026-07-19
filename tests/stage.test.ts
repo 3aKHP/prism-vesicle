@@ -6,6 +6,7 @@ import { loadConfigForSelection } from "../src/config/providers";
 import { resolveToolSurface } from "../src/core/agent-loop/tool-surface";
 import { loadEngineProfile } from "../src/core/engine/profile";
 import { runPrompt } from "../src/core/agent-loop/run";
+import { listRewindPoints, rewindConversation } from "../src/core/rewind/service";
 import { stageSourceDrift, startStageSession } from "../src/core/stage/bootstrap";
 import { loadSessionSnapshot } from "../src/core/session/store";
 import { createProvider } from "../src/providers";
@@ -170,6 +171,47 @@ describe("Stage bootstrap", () => {
     try {
       await expect(runPrompt({ input: "start", engine: "stage", rootDir: root }))
         .rejects.toThrow("Stage sessions must start with /stage");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("resumes frozen context after source drift and retains bootstrap metadata across rewind", async () => {
+    const root = await stageRoot();
+    try {
+      const started = await startStageSession({
+        rootDir: root,
+        characterPath: "workspace/character.md",
+        scenarioPath: "workspace/scenario.md",
+        provider: "test",
+        providerId: "test",
+        model: "test-model",
+        permissionMode: "MOMENTUM",
+      });
+      await writeFile(join(root, "workspace", "character.md"), `${characterCard}\nChanged after bootstrap.\n`, "utf8");
+      const beforeResume = await loadSessionSnapshot(root, started.sessionId);
+      expect(await stageSourceDrift(root, beforeResume.stageBootstrap!)).toEqual(["workspace/character.md"]);
+
+      const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+      globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+        requests.push(JSON.parse(String(init.body)));
+        return Response.json({ id: "stage-resume", choices: [{ message: { content: stagePacket } }] });
+      }) as unknown as typeof fetch;
+
+      await expect(runPrompt({
+        input: "I wait for the train.",
+        engine: "stage",
+        rootDir: root,
+        sessionId: started.sessionId,
+        messages: [...beforeResume.messages, { role: "user", content: "I wait for the train." }],
+      })).resolves.toMatchObject({ kind: "complete" });
+
+      expect(requests[0]?.messages[0]?.content).toContain("Rain-dark hair and a worn coat.");
+      expect(requests[0]?.messages[0]?.content).not.toContain("Changed after bootstrap.");
+      const point = (await listRewindPoints(root, started.sessionId))[0]!;
+      const rewound = await rewindConversation(root, started.sessionId, point);
+      expect(rewound.snapshot.stageBootstrap).toEqual(beforeResume.stageBootstrap);
+      expect(rewound.snapshot.messages).toEqual([{ role: "assistant", content: started.opening, engine: "stage", kind: "stage-bootstrap-opening" }]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
