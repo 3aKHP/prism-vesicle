@@ -1,0 +1,11 @@
+# Experimental Semantic Judge settings. This is user-level host configuration,
+# stored beside providers.yaml and .env, never inside a project directory.
+version: 1
+mode: off
+
+# To opt in, replace the two lines above with exactly one registered provider
+# and model. API keys remain only in the sibling .env file.
+# mode: observe
+# providerAlias: deepseek
+# modelId: deepseek-v4-flash
+# judgeTimeoutMs: 15000

@@ -116,6 +116,25 @@ describe("quality benchmark runner", () => {
     }
   });
 
+  test("waits for the frozen minimum evaluation count before stopping invalid output", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
+    try {
+      let calls = 0;
+      const result = await runQualityBenchmark({
+        ...benchmarkOptions(join(directory, "invalid-minimum.jsonl"), [model("openai-chat-completions", async () => {
+          calls += 1;
+          return response("not-json");
+        })], cases, 3),
+        policy: { ...policy(), repeatsPerCase: 3, earlyStop: { ...policy().earlyStop, minimumEvaluations: 5, invalidRate: 0.1 } },
+      });
+      expect(result.evaluations).toHaveLength(5);
+      expect(calls).toBe(10);
+      expect(result.stoppedEarly[0]?.reason).toBe("early stop: invalid response rate");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("uses the frozen benchmark Judge timeout instead of the interactive default", async () => {
     const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-benchmark-"));
     try {
@@ -244,7 +263,7 @@ function policy(): QualityBenchmarkPolicy {
       maximumInvalidRate: 1,
       maximumP95LatencyMs: 60_000,
     },
-    earlyStop: { invalidRate: 1, timeoutRate: 1, falseRewriteRate: 1 },
+    earlyStop: { minimumEvaluations: 1, invalidRate: 1, timeoutRate: 1, falseRewriteRate: 1 },
   };
 }
 

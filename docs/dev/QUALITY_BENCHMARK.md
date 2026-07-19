@@ -3,8 +3,9 @@
 `vesicle quality benchmark` is a developer-only measurement command for PR 6B.
 It runs the active verified Harness's Semantic Judge contract against a frozen
 corpus and explicitly selected provider/model matrix. It does not change
-Runtime quality policy: Semantic Judge findings remain observe-only unless a
-later, separately reviewed Policy release authorizes semantic rewrite.
+The benchmark cannot change Runtime quality policy or enable semantic rewrite.
+The separately configured Alpha.3 experimental host override is user-level,
+defaults to off, and is not calibration or promotion evidence.
 
 The command refuses to call a provider unless `--allow-live` is present. That
 flag is an explicit acknowledgement that the run can send corpus text to the
@@ -39,6 +40,7 @@ statistics, and early-stop thresholds for one run.
       "maximumP95LatencyMs": 15000
     },
     "earlyStop": {
+      "minimumEvaluations": 1,
       "invalidRate": 0.1,
       "timeoutRate": 0.1,
       "falseRewriteRate": 0.1
@@ -96,7 +98,7 @@ or model matrix requires a new output path rather than mixing incomparable
 measurements.
 
 The runner is intentionally serial, which makes its concurrency cap one. It
-also waits for the frozen `minimumIntervalMs` between evaluations. Parallel
+also waits for the frozen `minimumIntervalMs` between evaluations. `earlyStop.minimumEvaluations` defaults to one for legacy plans; set it explicitly when an operational pilot needs enough observations before a rate can stop the run. Parallel
 benchmarking is deferred until it can preserve the same reservation and
 append-only resume guarantees.
 

@@ -21,6 +21,7 @@ import { finalizeTurn } from "./turn-finalizer";
 import type { AgentLoopEvent, RunPromptResult } from "./types";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
+import type { ExperimentalQualityProfile } from "../../config/quality";
 import {
   evaluateBoundQuality,
   evaluateBoundQualityTargets,
@@ -66,6 +67,7 @@ export type RunLoopArgs = {
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
   qualityState?: QualityRewriteState;
+  experimentalQuality?: ExperimentalQualityProfile;
 };
 
 type LoopRuntime = {
@@ -306,6 +308,7 @@ function durableQualityState(args: RunLoopArgs, runtime: LoopRuntime) {
     ...(runtime.quality.warningId ? { warningId: runtime.quality.warningId } : {}),
     ...(runtime.quality.warningTargetIds ? { warningTargetIds: [...runtime.quality.warningTargetIds] } : {}),
     ...(runtime.quality.candidate ? { candidate: runtime.quality.candidate } : {}),
+    ...(runtime.quality.experimentalJudge ? { experimentalJudge: runtime.quality.experimentalJudge } : {}),
   };
 }
 
@@ -347,13 +350,11 @@ async function evaluateQualityBoundary(
   const result = await observeBoundQualityWithJudge({
     result: deterministic,
     runtime: qualityRuntime,
-    provider: args.provider,
-    providerId: args.config.providerId,
-    model: args.config.model,
+    experimentalProfile: args.experimentalQuality,
+    state: runtime.quality,
     signal: args.signal,
-    temperatureSupported: args.config.capabilities?.temperature !== false,
-    reasoningTierSupported: args.config.capabilities?.reasoningTier === true,
   });
+  if (result.event.experimentalJudge) runtime.quality.experimentalJudge = result.event.experimentalJudge;
   runtime.lastQuality = { outcome: result.outcome, findingCount: qualityFindingCount(result) };
   if (result.action !== "ask-user" && result.event.targets.some((target) => target.warningReason)) {
     await recordInconclusiveWarnings(args, runtime, result);
@@ -705,6 +706,7 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
       warningId: args.qualityState?.warningId,
       warningTargetIds: args.qualityState?.warningTargetIds ? [...args.qualityState.warningTargetIds] : undefined,
       candidate: args.qualityState?.candidate,
+      experimentalJudge: args.qualityState?.experimentalJudge,
     },
   };
 }

@@ -61,6 +61,7 @@ export type {
   DurableQualityArtifactTarget,
   QualityDetectorRule,
   QualityEvaluation,
+  ExperimentalQualityProfileSnapshot,
   QualityEvent,
   QualityEventTarget,
   QualityFinding,

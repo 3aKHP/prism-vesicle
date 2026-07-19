@@ -94,6 +94,7 @@ export type CommandContext = {
 
   // —— model picker (used by /model with no args) ——
   openModelPicker: () => Promise<void>;
+  openQualityPicker: () => Promise<void>;
 };
 
 export type Command = {

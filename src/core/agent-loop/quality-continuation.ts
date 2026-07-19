@@ -61,6 +61,7 @@ export async function resumeQualityRewrite(options: ResumeQualityRewriteOptions)
     || quality.ruleManifest.sourceHash !== pending.ruleSourceHash) {
     throw new Error("Pending quality rewrite cannot resume without the same verified Harness and Rule Pack identity.");
   }
+  assertExperimentalJudgeIdentity(context.experimentalQuality, pending.experimentalJudge);
   return runLoop({
     rootDir: context.rootDir,
     config: context.config,
@@ -80,6 +81,7 @@ export async function resumeQualityRewrite(options: ResumeQualityRewriteOptions)
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
+    experimentalQuality: context.experimentalQuality,
     qualityState: {
       attempts: pending.attempts,
       rejectedHashes: new Set(pending.rejectedHashes),
@@ -88,6 +90,7 @@ export async function resumeQualityRewrite(options: ResumeQualityRewriteOptions)
       warningId: pending.warningId,
       warningTargetIds: pending.warningTargetIds,
       candidate: pending.candidate,
+      experimentalJudge: pending.experimentalJudge,
     },
   });
 }
@@ -316,6 +319,7 @@ async function retryQualityDecision(
 ): Promise<RunPromptResult> {
   const context = await loadContinuationContext(options);
   assertQualityIdentity(context.harness?.quality, point.qualityState);
+  assertExperimentalJudgeIdentity(context.experimentalQuality, point.qualityState.experimentalJudge);
   const snapshot = await loadSessionSnapshot(context.rootDir, options.sessionId, {
     synthesizeDanglingToolResults: false,
   });
@@ -354,6 +358,7 @@ async function retryQualityDecision(
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
+    experimentalQuality: context.experimentalQuality,
     qualityState: {
       attempts: point.qualityState.attempts,
       rejectedHashes: new Set(point.qualityState.rejectedHashes),
@@ -362,6 +367,7 @@ async function retryQualityDecision(
       warningId: point.warning.id,
       warningTargetIds: point.warning.targets.map((target) => target.id),
       candidate: point.candidate,
+      experimentalJudge: point.qualityState.experimentalJudge,
     },
   });
 }
@@ -701,6 +707,22 @@ function assertQualityIdentity(
       `Pending quality decision requires ${pending.packId}@${pending.packVersion} `
       + `with Rule Pack ${pending.ruleVersion}; the active verified identity does not match.`,
     );
+  }
+}
+
+function assertExperimentalJudgeIdentity(
+  profile: Awaited<ReturnType<typeof loadContinuationContext>>["experimentalQuality"],
+  pending: QualityDecisionPoint["qualityState"]["experimentalJudge"],
+): void {
+  if (!pending) return;
+  if (!profile
+    || profile.mode !== pending.mode
+    || profile.providerId !== pending.providerId
+    || profile.modelId !== pending.modelId
+    || profile.protocol !== pending.protocol
+    || profile.judgeTimeoutMs !== pending.judgeTimeoutMs
+    || profile.configIdentity !== pending.configIdentity) {
+    throw new Error("Pending experimental Semantic Judge rewrite cannot resume after quality profile configuration drift. Accept or stop it, or restore the exact profile before retrying.");
   }
 }
 

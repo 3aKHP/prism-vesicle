@@ -5,7 +5,7 @@ import type { PermissionRequest } from "../core/permissions";
 import { copySelectionToClipboard } from "./clipboard";
 import { normalizeKeyName } from "./composer";
 import type { PendingQualityDecisionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
-import { resolveBottomSurfaceMode, type ModelPickerState } from "./views/BottomSurface";
+import { resolveBottomSurfaceMode, type ModelPickerState, type QualityPickerState } from "./views/BottomSurface";
 import type { RewindPickerState, SessionPickerState } from "./types";
 
 export type InputRoutingOptions = {
@@ -15,6 +15,8 @@ export type InputRoutingOptions = {
   handleRewindKey: (key: TuiKeyEvent) => boolean;
   modelPicker: Accessor<ModelPickerState | null>;
   handleModelPickerKey: (key: TuiKeyEvent) => boolean;
+  qualityPicker: Accessor<QualityPickerState | null>;
+  handleQualityPickerKey: (key: TuiKeyEvent) => boolean;
   sessionPicker: Accessor<SessionPickerState | null>;
   handleSessionPickerKey: (key: TuiKeyEvent) => boolean;
   yoloConfirmStage: Accessor<1 | 2 | null>;
@@ -43,6 +45,7 @@ export function useInputRouting(options: InputRoutingOptions): void {
     gate: options.activeGateRequest(),
     rewind: options.rewindPicker(),
     session: options.sessionPicker(),
+    qualityPicker: options.qualityPicker(),
     model: options.modelPicker(),
   });
 
@@ -93,6 +96,9 @@ export function useInputRouting(options: InputRoutingOptions): void {
         return;
       case "model":
         if (options.handleModelPickerKey(key)) consumeKey(key);
+        return;
+      case "quality-picker":
+        if (options.handleQualityPickerKey(key)) consumeKey(key);
         return;
       case "composer":
         break;

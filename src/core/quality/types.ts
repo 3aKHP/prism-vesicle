@@ -206,6 +206,16 @@ export type QualityFindingSummary = Pick<QualityFinding,
 
 export type QualityJudgeStatus = "not-run" | "valid" | "invalid" | "timed-out" | "unavailable";
 
+/** Secret-free identity of the explicit Alpha.3 experimental host override. */
+export type ExperimentalQualityProfileSnapshot = {
+  mode: "observe" | "rewrite";
+  providerId: string;
+  modelId: string;
+  protocol: "openai-chat-compatible" | "anthropic-messages" | "gemini-generate-content";
+  judgeTimeoutMs: number;
+  configIdentity: string;
+};
+
 export type QualityAssessment = {
   targetId: string;
   candidateHash: string;
@@ -264,6 +274,7 @@ export type QualityEvent = {
   judgeModel?: string;
   judgeRequestCount?: number;
   judgeUsage?: ResponseUsage;
+  experimentalJudge?: ExperimentalQualityProfileSnapshot;
   usage?: ResponseUsage;
 };
 
@@ -284,6 +295,7 @@ export type QualityRewriteState = {
   warningId?: string;
   warningTargetIds?: string[];
   candidate?: QualityDecisionCandidate;
+  experimentalJudge?: ExperimentalQualityProfileSnapshot;
 };
 
 export type QualityDecisionCandidate = {
@@ -310,6 +322,7 @@ export type DurableQualityState = {
   warningId?: string;
   warningTargetIds?: string[];
   candidate?: QualityDecisionCandidate;
+  experimentalJudge?: ExperimentalQualityProfileSnapshot;
 };
 
 export type QualityTargetWarningReason =

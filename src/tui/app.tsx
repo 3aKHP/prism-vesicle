@@ -52,6 +52,7 @@ import { createSessionActionsController } from "./session-actions-controller";
 import { createSessionPreferencesController } from "./session-preferences-controller";
 import { createAgentCommand } from "./agent-command";
 import { useInputRouting } from "./input-routing";
+import { createQualityPickerController } from "./quality-picker-controller";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -358,6 +359,20 @@ export function App(props: AppProps = {}) {
     setInputImages,
     setPromptHistory,
   } = composerController;
+  const qualityPickerController = createQualityPickerController({
+    providerRegistry,
+    ensureProviderRegistry,
+    setStatus,
+    setMessages,
+    reportError: (error) => turnController.reportError(error),
+  });
+  const {
+    qualityPicker,
+    qualityPickerItems,
+    qualityPickerTitle,
+    handleQualityPickerKey,
+    openQualityPicker,
+  } = qualityPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
   onCleanup(() => {
     unsubscribeProcesses();
@@ -587,7 +602,7 @@ export function App(props: AppProps = {}) {
     dimensions().width,
     dimensions().height,
     Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
-    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || inputNeedsExpandedBottom(),
+    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
       : decisionPanelMinHeight(),
@@ -648,6 +663,8 @@ export function App(props: AppProps = {}) {
     handleRewindKey: rewindController.handleKey,
     modelPicker,
     handleModelPickerKey,
+    qualityPicker,
+    handleQualityPickerKey,
     sessionPicker,
     handleSessionPickerKey,
     yoloConfirmStage,
@@ -731,6 +748,7 @@ export function App(props: AppProps = {}) {
     resetRewindState,
     agentCommand,
     openModelPicker,
+    openQualityPicker,
   };
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
@@ -808,6 +826,7 @@ export function App(props: AppProps = {}) {
         gate={gateWithQualityWarning()}
         rewind={rewindPicker()}
         session={sessionPicker()}
+        qualityPicker={qualityPicker()}
         model={modelPicker()}
         gateFocus={gateFocus()}
         gateFeedbackMode={gateFeedbackMode()}
@@ -820,6 +839,8 @@ export function App(props: AppProps = {}) {
         questionFreeformCursor={questionFreeformCursor()}
         modelItems={modelPickerItems()}
         modelTitle={modelPickerTitle()}
+        qualityPickerItems={qualityPickerItems()}
+        qualityPickerTitle={qualityPickerTitle()}
         commandMenuOpen={commandMenuOpen()}
         commandItems={commandMenuItems()}
         commandSelected={commandMenuSelected()}

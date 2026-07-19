@@ -51,6 +51,7 @@ export type QualityBenchmarkPolicy = {
     maximumP95LatencyMs: number;
   };
   earlyStop: {
+    minimumEvaluations?: number;
     invalidRate: number;
     timeoutRate: number;
     falseRewriteRate: number;
@@ -440,6 +441,8 @@ function thresholdReasons(
 }
 
 function earlyStopReason(evaluations: QualityBenchmarkEvaluation[], policy: QualityBenchmarkPolicy): string | undefined {
+  const minimumEvaluations = policy.earlyStop.minimumEvaluations ?? 1;
+  if (evaluations.length < minimumEvaluations) return undefined;
   const metrics = metricsFor(evaluations);
   if (metrics.invalidRate.denominator > 0 && metrics.invalidRate.value > policy.earlyStop.invalidRate) return "early stop: invalid response rate";
   if (metrics.timeoutRate.denominator > 0 && metrics.timeoutRate.value > policy.earlyStop.timeoutRate) return "early stop: timeout rate";
@@ -531,8 +534,16 @@ function validateOptions(options: RunQualityBenchmarkOptions): void {
   if (!Number.isFinite(options.policy.goNoGo.maximumP95LatencyMs) || options.policy.goNoGo.maximumP95LatencyMs < 0) {
     throw new Error("Benchmark p95 latency threshold must be non-negative.");
   }
-  for (const value of Object.values(options.policy.earlyStop)) {
+  for (const value of [
+    options.policy.earlyStop.invalidRate,
+    options.policy.earlyStop.timeoutRate,
+    options.policy.earlyStop.falseRewriteRate,
+  ]) {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error("Benchmark early-stop rates must be between zero and one.");
+  }
+  if (options.policy.earlyStop.minimumEvaluations !== undefined
+    && (!Number.isInteger(options.policy.earlyStop.minimumEvaluations) || options.policy.earlyStop.minimumEvaluations < 1)) {
+    throw new Error("Benchmark early-stop minimum evaluations must be a positive integer.");
   }
   if (new Set(options.cases.map((item) => item.caseId)).size !== options.cases.length) throw new Error("Benchmark case ids must be unique.");
   if (new Set(options.models.map(modelKey)).size !== options.models.length) throw new Error("Benchmark models must be unique.");

@@ -7,6 +7,11 @@ import { engineIds } from "../../core/engine/profile";
 import type { EngineId } from "../../core/engine/profile";
 import { createManualEngineTransition } from "../../core/engine/transition";
 import type { ProviderSelection } from "../../config/providers";
+import { loadConfigForSelection } from "../../config/providers";
+import {
+  loadExperimentalQualitySettings,
+  writeExperimentalQualitySettings,
+} from "../../config/quality";
 import type { Command } from "./types";
 import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
@@ -32,6 +37,7 @@ const HELP_TEXT = [
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
+  "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
   "  /artifact [n|path] list or preview generated artifacts",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
@@ -51,6 +57,62 @@ export const builtinCommands: Command[] = [
         { role: "user", content: raw },
         { role: "system", content: HELP_TEXT },
       ]);
+    },
+  },
+
+  {
+    name: "quality",
+    description: "Show or configure the experimental Semantic Judge",
+    usage: "/quality [off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]",
+    async run(ctx, args, raw) {
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      const parts = args.split(/\s+/).filter(Boolean);
+      if (parts.length === 0) {
+        await ctx.openQualityPicker();
+        return;
+      }
+      if (parts[0] === "status" && parts.length === 1) {
+        const settings = await loadExperimentalQualitySettings();
+        ctx.setMessages((prev) => [...prev, { role: "system", content: renderQualitySettings(settings) }]);
+        return;
+      }
+      if (parts[0] === "off" && parts.length === 1) {
+        await writeExperimentalQualitySettings({ mode: "off" });
+        ctx.setStatus("experimental Semantic Judge off");
+        ctx.recordActivity({ kind: "system", text: "experimental Semantic Judge disabled" });
+        ctx.setMessages((prev) => [...prev, { role: "system", content: "Experimental Semantic Judge is off. Future turns make no Judge request." }]);
+        return;
+      }
+      const confirm = parts[0] === "confirm";
+      const offset = confirm ? 1 : 0;
+      const mode = parts[offset];
+      const providerAlias = parts[offset + 1];
+      const modelId = parts[offset + 2];
+      const timeoutRaw = parts[offset + 3];
+      if ((mode !== "observe" && mode !== "rewrite") || !providerAlias || !modelId || parts.length > offset + 4) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: "Usage: /quality [status|off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]." }]);
+        return;
+      }
+      const judgeTimeoutMs = timeoutRaw ? Number(timeoutRaw) : 15_000;
+      if (!Number.isInteger(judgeTimeoutMs)) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: "Judge timeout must be an integer number of milliseconds." }]);
+        return;
+      }
+      try {
+        await ctx.ensureProviderRegistry();
+        const config = await loadConfigForSelection({ provider: providerAlias, model: modelId });
+        if (!config.apiKey) throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
+        if (mode === "rewrite" && !confirm) {
+          ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental rewrite will send Runtime prose to ${providerAlias}/${modelId} and may request up to two Runtime revisions. Confirm with /quality confirm rewrite ${providerAlias} ${modelId} ${judgeTimeoutMs}.` }]);
+          return;
+        }
+        await writeExperimentalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs });
+        ctx.setStatus(`experimental Semantic Judge ${mode}`);
+        ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge ${mode} ${providerAlias}/${modelId}` });
+        ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge ${mode} is set to ${providerAlias}/${modelId} (${judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
+      } catch (error) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+      }
     },
   },
 
@@ -356,6 +418,11 @@ export const builtinCommands: Command[] = [
     },
   },
 ];
+
+function renderQualitySettings(settings: Awaited<ReturnType<typeof loadExperimentalQualitySettings>>): string {
+  if (settings.mode === "off") return "Experimental Semantic Judge: off. Future turns make no Judge request.";
+  return `Experimental Semantic Judge: ${settings.mode} with ${settings.providerAlias}/${settings.modelId} (${settings.judgeTimeoutMs} ms). It is not calibrated production policy.`;
+}
 
 function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
   const limits = ctx.activeModelLimits();
