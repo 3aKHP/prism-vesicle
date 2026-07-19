@@ -107,6 +107,16 @@ describe("Stage bootstrap", () => {
       });
       globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
         requests.push(JSON.parse(String(init.body)));
+        if (requests.length === 1) {
+          return Response.json({ id: "stage-unavailable-question", choices: [{ message: {
+            content: "",
+            tool_calls: [{
+              id: "stage-question",
+              type: "function",
+              function: { name: "ask_user_question", arguments: '{\"header\":\"Choose\",\"question\":\"Continue?\",\"options\":[{\"label\":\"Yes\",\"description\":\"Continue\"},{\"label\":\"No\",\"description\":\"Stop\"}]}' },
+            }],
+          } }] });
+        }
         return Response.json({ id: "stage-complete", choices: [{ message: { content: stagePacket } }] });
       }) as unknown as typeof fetch;
 
@@ -119,7 +129,7 @@ describe("Stage bootstrap", () => {
       });
 
       if (result.kind !== "complete") throw new Error(`expected complete Stage turn, got ${result.kind}`);
-      expect(requests).toHaveLength(1);
+      expect(requests).toHaveLength(2);
       expect(requests[0]?.tools).toBeUndefined();
       expect(requests[0]?.messages.slice(1).map((message) => message.content)).toEqual([
         started.opening,
@@ -314,13 +324,13 @@ const stagePacket = `<!--[!Neural Chain]
 Perception: Rain blurs the platform lights.
 Instinct: She angles the umbrella closer.
 State: guarded hope
-Decision: Let the silence hold for one breath.
+Strategy: Let the silence hold for one breath.
 -->
+【Status】
+[Space-Time] Night | rain-dark platform
+[Physical] Cold fingers | shared umbrella | worn coat
+[Psychology] Tension: 40 (waiting) | Lens: rain and waiting
 [Beat] Arrival
-[Tension] 40
-[Char] guarded
-[Scene] platform
-[Turn] 1
 [Impression] The player has not left her alone in the rain.
 
 Rain tapped softly against the umbrella as Lin made room beside her.`;

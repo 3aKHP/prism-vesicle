@@ -57,7 +57,7 @@ Vesicle clears the active conversation and reports:
 Started a fresh session. Type a prompt to begin.
 ```
 
-`/new` does not delete the previous session or its files. It also keeps the currently selected provider, model, and engine. The new session file is created when you submit the next real prompt.
+`/new` does not delete the previous session or its files. It keeps the selected provider and model, and it keeps the selected engine except for Stage: because every Stage session needs card bootstrap, `/new` returns to ETL and you start the next Stage narrative with `/stage`. The new session file is created when you submit the next real prompt.
 
 For the exercise, send a short identifying prompt:
 

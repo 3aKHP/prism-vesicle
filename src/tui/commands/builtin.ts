@@ -398,6 +398,8 @@ export const builtinCommands: Command[] = [
     async run(ctx, _args, raw) {
       ctx.resetRewindState();
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      const resetStage = ctx.activeEngine() === "stage";
+      if (resetStage) ctx.setActiveEngine("etl");
       ctx.setSessionId(undefined);
       ctx.setSessionPath("no session yet");
       ctx.setConversation([]);
@@ -408,7 +410,12 @@ export const builtinCommands: Command[] = [
       ctx.setPendingEngineSwitch(null);
       ctx.setPendingUserQuestion(null);
       ctx.setStatus("fresh session");
-      ctx.setMessages((prev) => [...prev, { role: "system", content: "Started a fresh session. Type a prompt to begin." }]);
+      ctx.setMessages((prev) => [...prev, {
+        role: "system",
+        content: resetStage
+          ? "Started a fresh session with ETL. Start another Stage narrative with /stage <character-card-path> <scenario-card-path>."
+          : "Started a fresh session. Type a prompt to begin.",
+      }]);
     },
   },
 
