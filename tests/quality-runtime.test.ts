@@ -19,12 +19,15 @@ import type { ExperimentalQualityProfile } from "../src/config/quality";
 
 const originalFetch = globalThis.fetch;
 const originalProvidersFile = process.env.VESICLE_PROVIDERS_FILE;
+const originalQualityFile = process.env.VESICLE_QUALITY_FILE;
 const roots: string[] = [];
 
 afterEach(async () => {
   globalThis.fetch = originalFetch;
   if (originalProvidersFile === undefined) delete process.env.VESICLE_PROVIDERS_FILE;
   else process.env.VESICLE_PROVIDERS_FILE = originalProvidersFile;
+  if (originalQualityFile === undefined) delete process.env.VESICLE_QUALITY_FILE;
+  else process.env.VESICLE_QUALITY_FILE = originalQualityFile;
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -2229,6 +2232,51 @@ describe("Output Quality Guard runtime", () => {
     const snapshot = await loadSessionSnapshot(root, result.sessionId);
     expect(snapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
     expect(snapshot.qualityEvents[0]).toMatchObject({ experimentalJudge: { mode: "rewrite", providerId: "judge-fixture" } });
+    expect(snapshot.qualityEvents).toEqual(expect.not.arrayContaining([
+      expect.objectContaining({ targets: expect.arrayContaining([expect.objectContaining({ warningReason: "judge-unavailable" })]) }),
+    ]));
+    expect(snapshot.qualityWarnings).toEqual([]);
+  });
+
+  test("rejects a Semantic Judge retry when its resolved provider endpoint drifts", async () => {
+    const root = await runtimeRoot("runtime");
+    const configDirectory = join(root, "quality-config");
+    const providersPath = join(configDirectory, "providers.yaml");
+    const qualityPath = join(configDirectory, "quality.yaml");
+    await mkdir(configDirectory, { recursive: true });
+    await writeFile(providersPath, qualityProviderConfig("https://judge.example.test/v1"), "utf8");
+    await writeFile(join(configDirectory, ".env"), "JUDGE_KEY=test-key\n", "utf8");
+    await writeFile(qualityPath, [
+      "version: 1", "mode: rewrite", "providerAlias: judge", "modelId: judge-model", "judgeTimeoutMs: 15000", "",
+    ].join("\n"), "utf8");
+    process.env.VESICLE_PROVIDERS_FILE = providersPath;
+    process.env.VESICLE_QUALITY_FILE = qualityPath;
+
+    let engineRequests = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { messages?: Array<{ content?: string }> };
+      if (body.messages?.[0]?.content?.includes("quality-judge-result/v1")) {
+        return Response.json({ id: "judge", choices: [{ message: { content: JSON.stringify({
+          schema: "quality-judge-result/v1", verdict: "rewrite", confidence: 0.9, findings: [{
+            ruleId: "zh-f1-pov-leak", evidence: "她不知道", confidence: 0.9, explanation: "POV leak", rewriteInstruction: "Use observable detail.",
+          }],
+        }) } }] });
+      }
+      engineRequests += 1;
+      return Response.json({ id: `runtime-${engineRequests}`, choices: [{ message: { content: `她不知道，雨水敲窗第${engineRequests}次。` } }] });
+    }) as unknown as typeof fetch;
+
+    const initial = await runPrompt({
+      input: "continue", engine: "runtime", rootDir: root,
+      messages: [{ role: "user", content: "continue" }], harness: harnessRuntime({ judge: true }),
+    });
+    expect(initial.kind).toBe("needs_quality_decision");
+    await writeFile(providersPath, qualityProviderConfig("https://drifted.example.test/v1"), "utf8");
+
+    await expect(resolveQualityDecision({
+      engine: "runtime", rootDir: root, sessionId: initial.sessionId,
+      harness: harnessRuntime({ judge: true }), resolution: "retry",
+    })).rejects.toThrow("quality profile configuration drift");
   });
 
   test("persists invalid Judge output as inconclusive after one repair", async () => {
@@ -2620,6 +2668,13 @@ function experimentalJudge(mode: "observe" | "rewrite"): ExperimentalQualityProf
     temperatureSupported: true,
     reasoningTierSupported: false,
   };
+}
+
+function qualityProviderConfig(baseUrl: string): string {
+  return [
+    "default:", "  provider: judge", "  model: judge-model", "providers:",
+    "  judge:", "    protocol: openai-chat-compatible", `    baseUrl: ${baseUrl}`, "    apiKeyEnv: JUDGE_KEY", "    models:", "      - judge-model", "",
+  ].join("\n");
 }
 
 function literalRule(): QualityDetectorRule {

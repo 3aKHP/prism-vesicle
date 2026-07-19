@@ -89,7 +89,7 @@ export async function observeBoundQualityWithJudge(options: {
     }
     const target = options.result.event.targets.find((item) => item.id === candidate.targetId);
     if (!target) continue;
-    if (judged.status === "valid" && profile.mode === "observe") {
+    if (judged.status === "valid") {
       const summaries = judged.findings.map((finding) => ({
         ruleId: finding.ruleId,
         title: finding.title,

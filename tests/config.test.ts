@@ -48,6 +48,13 @@ describe("config loading", () => {
     const profile = await loadExperimentalQualityProfile({ judge: { rubric: "fixture", rules: [] } } as never, env);
     expect(profile).toMatchObject({ mode: "rewrite", providerId: "judge", modelId: "judge-model", protocol: "gemini-generate-content", judgeTimeoutMs: 30_000 });
     expect(profile?.configIdentity).toMatch(/^[a-f0-9]{64}$/);
+    await writeFile(env.VESICLE_PROVIDERS_FILE!, [
+      "default:", "  provider: generation", "  model: main", "providers:",
+      "  generation:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: MAIN_KEY", "    models:", "      - main",
+      "  judge:", "    protocol: gemini-generate-content", "    baseUrl: https://drifted.example.test/v1", "    apiKeyEnv: JUDGE_KEY", "    models:", "      - judge-model", "",
+    ].join("\n"));
+    const drifted = await loadExperimentalQualityProfile({ judge: { rubric: "fixture", rules: [] } } as never, env);
+    expect(drifted?.configIdentity).not.toBe(profile?.configIdentity);
   });
 
   test("rejects unsafe enabled Judge configuration before provider calls", () => {

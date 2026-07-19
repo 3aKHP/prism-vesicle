@@ -85,7 +85,7 @@ export async function loadExperimentalQualityProfile(
     modelId: config.model,
     protocol: config.provider,
     judgeTimeoutMs: settings.judgeTimeoutMs!,
-    configIdentity: settings.identity,
+    configIdentity: resolvedProfileIdentity(settings, config),
     settingsPath: settings.path,
     temperatureSupported: config.capabilities?.temperature !== false,
     reasoningTierSupported: config.capabilities?.reasoningTier === true,
@@ -194,6 +194,28 @@ function disabledSettings(path: string, exists: boolean, source = "version: 1\nm
 
 function canonicalQualitySettings(settings: { mode: ExperimentalQualityMode; providerAlias: string; modelId: string; judgeTimeoutMs: number }): string {
   return JSON.stringify(settings);
+}
+
+function resolvedProfileIdentity(settings: ExperimentalQualitySettings, config: VesicleConfig): string {
+  return sha256(JSON.stringify({
+    settings: {
+      mode: settings.mode,
+      providerAlias: settings.providerAlias,
+      modelId: settings.modelId,
+      judgeTimeoutMs: settings.judgeTimeoutMs,
+    },
+    provider: {
+      provider: config.provider,
+      providerId: config.providerId,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      authMethod: config.authMethod ?? null,
+      apiKeyLabel: config.apiKeyLabel ?? null,
+      userAgent: config.userAgent ?? null,
+      temperatureSupported: config.capabilities?.temperature !== false,
+      reasoningTierSupported: config.capabilities?.reasoningTier === true,
+    },
+  }));
 }
 
 function sha256(value: string): string {
