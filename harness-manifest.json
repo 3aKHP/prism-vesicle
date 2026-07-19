@@ -1,12 +1,12 @@
 {
   "schema": "prism-harness-pack/v1",
   "id": "prism-engine-v10",
-  "version": "10.0.1-alpha.3",
+  "version": "10.0.1-alpha.7",
   "sourceRepository": "3aKHP/Neural-Narratology",
-  "sourceCommit": "b975e1893d2b463f039605b4abb72f18c8f385bd",
+  "sourceCommit": "aaa171bcf0cbf95b3721382ec4949f5bbb402e9f",
   "sourceState": "clean",
-  "harnessConfigHash": "9aec053fd9e0472299bae67ee27a082c586303abfc59149ac17ba615fa20b6df",
-  "compilerHash": "7ef9dd2990dea445209ee6f99ee015b4d327f4957bd2c6ad72436d0793562db1",
+  "harnessConfigHash": "8d68ba1f2124bf7e2a73c47537b0bfb2cc168eef14c04103346e5034646229f6",
+  "compilerHash": "0d06fc51676858118f7f234ea6a99ff48aedbd816201966fa42bbe959a8e466c",
   "requiredCapabilities": [
     "prism-agent/delegation@1",
     "prism-driver/v1",
@@ -24,11 +24,11 @@
   ],
   "driver": {
     "contract": "assets/prism-driver/contract.json",
-    "contractHash": "7d15752acb99b8652c25ad323db6c9b4fc6102c9e1c2e36f9088beb196fd21e4",
-    "contractSourceHash": "9b15f3e0917f0ef2a817c81e1decdf802491941b1e01f2df4bd5bec9bf428b8b",
+    "contractHash": "a6d6eca0ab7d8f3ad7a9f8483df28cfb3fec433a5146c3c97b83cf32b349922b",
+    "contractSourceHash": "367a369ecafa47dfc9a2cfd6e6d6ff6f62fd82b790d9029cfc8e03bf55bc20f8",
     "adapter": "assets/prism-driver/adapter.json",
-    "adapterHash": "84356815e8f9acca0f32783db87c99e6dac841e176d884e41b824b25e83896ac",
-    "adapterSourceHash": "f994970c1b69b51c047abf28cdea7a1289aaf58bb247079d0189f4e4c39c61e7",
+    "adapterHash": "0dd3133a82a4076f9dbe8896977f97da84c76d898bf8610249e0d9c382eb965e",
+    "adapterSourceHash": "4d599f38e93ad43c3af39df2783ce18a8126696acba30d25950f873ea7003991",
     "adapterId": "vesicle-v1",
     "adapterVersion": "1.0.0",
     "targetHost": "Prism Vesicle"
@@ -45,7 +45,8 @@
     "evaluate": "assets/engines/evaluate.profile.yaml",
     "weaver": "assets/engines/weaver.profile.yaml",
     "weaver-orch": "assets/engines/weaver-orch.profile.yaml",
-    "dyad": "assets/engines/dyad.profile.yaml"
+    "dyad": "assets/engines/dyad.profile.yaml",
+    "stage": "assets/engines/stage.profile.yaml"
   },
   "agentProfileBindings": {
     "scene-writer": "assets/agents/scene-writer.agent.yaml",
@@ -81,6 +82,11 @@
       "assets/prompts/shared/vesicle-base.md",
       "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
       "assets/prompts/engines/dyad.md"
+    ],
+    "stage": [
+      "assets/prompts/shared/vesicle-base.md",
+      "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
+      "assets/prompts/engines/stage.md"
     ]
   },
   "agentPromptBindings": {
@@ -117,6 +123,9 @@
     },
     "dyad": {
       "anti-ai-flavor": "observe"
+    },
+    "stage": {
+      "anti-ai-flavor": "observe"
     }
   },
   "agentQualityBindings": {
@@ -136,10 +145,11 @@
     "assets/engines/etl.profile.yaml": "a1afb4dcabe94ebf716e12358e38d24e7e1e37d6ef6c488cb52a6b630a7edaac",
     "assets/engines/evaluate.profile.yaml": "437e7f651cf7a63244828df6ac01c183befe7b381dcfa3dafd6623aacf0f6a57",
     "assets/engines/runtime.profile.yaml": "50e918a5a60df76a9217153955cbbb1cc2f8c3ef5aeae71bd62059e15704fa71",
+    "assets/engines/stage.profile.yaml": "23a8ef5c8f05b9cd9587e5fce69192a0d70b06ba4dd6cc98a56aa83d99aff50d",
     "assets/engines/weaver-orch.profile.yaml": "18fd8d4d1864d79954d23bd7e8998941e07cd4876cf58c800df9baa8888ea104",
     "assets/engines/weaver.profile.yaml": "20e78b2c011fe39567471255251dfadcce641d6174fcfbe10ef90ced7cb22459",
-    "assets/prism-driver/adapter.json": "84356815e8f9acca0f32783db87c99e6dac841e176d884e41b824b25e83896ac",
-    "assets/prism-driver/contract.json": "7d15752acb99b8652c25ad323db6c9b4fc6102c9e1c2e36f9088beb196fd21e4",
+    "assets/prism-driver/adapter.json": "0dd3133a82a4076f9dbe8896977f97da84c76d898bf8610249e0d9c382eb965e",
+    "assets/prism-driver/contract.json": "a6d6eca0ab7d8f3ad7a9f8483df28cfb3fec433a5146c3c97b83cf32b349922b",
     "assets/prompts/agents/chapter-reviewer.md": "22548974ec78503aed4a6aaaf7e59eba5de270c4ed776926d0fa5ba8950541cc",
     "assets/prompts/agents/continuity-editor.md": "0fd37867ee7c4b34c441ac4dc60f091289592c30d7f5a6955dce9032112f8be5",
     "assets/prompts/agents/quality/anti-ai-flavor.guidance.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
@@ -149,27 +159,36 @@
     "assets/prompts/engines/etl.md": "417c865df3092d3b7ac55b6f6f8b12beb1ddc4fb6645906fdcb8f77cb43b850f",
     "assets/prompts/engines/evaluate.md": "4c2e526a5c7d97c4a7af72d76aca1f5d9361eb285149285e16ecb33e0a5bfe07",
     "assets/prompts/engines/runtime.md": "135918dd19e0969bfb424d22b8ec60a97eb3c4d9238476fbe3077545207da5e7",
+    "assets/prompts/engines/stage.md": "ae48414ebe3edb562ae9cb8dd9a1b0cba7a24028e14b4cb2928ad762828ccfa5",
     "assets/prompts/engines/weaver-orch.md": "455ec36b2eaea02ee90115c81d1add873037a3974f9827e347cb56ebe4495b1d",
     "assets/prompts/engines/weaver.md": "ebafbf6e7f47c1f3b388a10cdcfc54b5a63bf3d6535677fd90f0e849ace6cb1e",
-    "assets/quality/anti-ai-flavor/THIRD_PARTY_NOTICES.md": "05ef912b83f9564435875005d276e239aa20e26d6015c96ac68620f4b0b9655c",
-    "assets/quality/anti-ai-flavor/calibration/detector.jsonl": "c63afd1081276ccd8dfd4dae2ba0e92bba934f7c43ed2ed76f4a59362a48a70b",
-    "assets/quality/anti-ai-flavor/calibration/guidance-pairs.jsonl": "70fabe785e62d7c0199442f417a27eb74de493ad7200860d6a01dcf1329044f4",
-    "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl": "43d4930cf096bbb63d4823f8918b1d5176db88260a13ac1d95d9ca84b234c453",
-    "assets/quality/anti-ai-flavor/calibration/judge.jsonl": "2365b3d36758d4c9bed740ed3ca20d22f623e1e673e39503417a924e60e96b7d",
+    "assets/quality/anti-ai-flavor/THIRD_PARTY_NOTICES.md": "984d1d7272545b48c29280b30c93a60dfcf62bda2c63cf8eec398c4ea072c691",
+    "assets/quality/anti-ai-flavor/calibration/detector.jsonl": "088acc05638b61e89285ac296992245b9ec8b22b6b3e1042af902c1880c24a0f",
+    "assets/quality/anti-ai-flavor/calibration/guidance-pairs.jsonl": "903288e5407926b1d15624d76c18bfd19a510d9c05c6d09b4408eb5d65ebca53",
+    "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl": "e73c8af011d98bd848e15289c9e63cab6ae4fc0910bdbe3145e2ae054963a7f4",
+    "assets/quality/anti-ai-flavor/calibration/judge.jsonl": "6054c258202cf7c5f646bce29c2a0e9ed789ce6d10f69bc123d188e4b1fe280d",
     "assets/quality/anti-ai-flavor/data/cn-antislop-candidates.json": "1acb1a7f64d789e866df1be8dae0029776672c9752a4cce272f7c7e184580f79",
+    "assets/quality/anti-ai-flavor/data/semantic-rewrite-policy.json": "37a8a3b6b484edcef45c90458f01c7089330e96a4faa069256d6243900038187",
     "assets/quality/anti-ai-flavor/detector-rules.en-US.json": "335c8ead7ca0a5db97f63dd57c0ce0d9d259bf3232c8ed5d2a992f16d5ada8e9",
     "assets/quality/anti-ai-flavor/detector-rules.zh-CN.json": "44c31a0a8fd2f2c2a37b3c82a6a575a639db7214a7f33d30ccfedaa92d623dd1",
     "assets/quality/anti-ai-flavor/guidance.zh-CN.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
     "assets/quality/anti-ai-flavor/judge-rubric.zh-CN.md": "698d690d23f9b7b26f3d6ea39e1cb1a3a6224c9343b1fb91d3ead2ee311dd617",
     "assets/quality/anti-ai-flavor/judge-rules.zh-CN.json": "7c71d432b7a1afe6a37f6bcf5706b79ae067d3f7d826c54e98c1fa493cfa9493",
-    "assets/quality/anti-ai-flavor/manifest.json": "436c8f9d17eba1aa4746770a1f83dc5c90bee890d6ff1354b197d4f537ba79aa",
-    "assets/quality/anti-ai-flavor/schemas/calibration-case.schema.json": "0f0d24103da27703b81739e2502e1122005aa894e190dcea1b28e6787fe1afad",
+    "assets/quality/anti-ai-flavor/manifest.json": "ab53f8c07281f737abc620704894ae1a2c298910f1a98e9bdbb73397f5b0daa6",
+    "assets/quality/anti-ai-flavor/schemas/benchmark-report.schema.json": "a5c49d40d9c2ba297bae5a8a0157b2c205f71941bc7f97a341ed58157c75bce6",
+    "assets/quality/anti-ai-flavor/schemas/calibration-annotation.schema.json": "1f7a156b36f9bb960f201cf16be8e5a5e73744531f5e3af5f8913b8197a5e48c",
+    "assets/quality/anti-ai-flavor/schemas/calibration-blind-case.schema.json": "e7cd82b756b9302d13a6540d2bb625a3a82a8d6b67072f30158fec886a5a71c9",
+    "assets/quality/anti-ai-flavor/schemas/calibration-case.schema.json": "655c4af12da38a4c35290dcf1a0bcb06c54e7367e1af223c177e3d0c6fb85aa3",
+    "assets/quality/anti-ai-flavor/schemas/calibration-label.schema.json": "dcbfaf2b24a5396b3e1fa3df5e77235073da73cf1289ae58ac125a89e70bb1f8",
     "assets/quality/anti-ai-flavor/schemas/candidate-evaluation.schema.json": "bcce45ea7c7c6c83608b89edfb2fa77e20299e77bdc916ea3017bc7891cd9a83",
     "assets/quality/anti-ai-flavor/schemas/detector-rules.schema.json": "8013e95abd1b1370df70402426c1a7650d3c21dadec4255aafc9832e37c3a3ed",
-    "assets/quality/anti-ai-flavor/schemas/host-conformance-case.schema.json": "422df8c2b8bbf5d4422abe09995f9facb3613702a0c3620bd8f1a0d95e477b47",
+    "assets/quality/anti-ai-flavor/schemas/held-out-freeze.schema.json": "479a7d204bc810a9f928c2f7792bce93d5b340512946915b70878d5b6857859f",
+    "assets/quality/anti-ai-flavor/schemas/host-conformance-case.schema.json": "5722205f7cf9518f0b499254af1db885f1a19c0e86beaf6996b39c21fab8bbea",
     "assets/quality/anti-ai-flavor/schemas/judge-result.schema.json": "e677f81ce9d7160e6066207a63acd594f78ab0a2929fcd359ab61cba89938f0b",
     "assets/quality/anti-ai-flavor/schemas/judge-rules.schema.json": "a8953a7c4ee1d0c29c3484a1247c80bee60f459950b408f7e367ae77af855bf5",
+    "assets/quality/anti-ai-flavor/schemas/rewrite-case.schema.json": "b5ba7413ac9d9d0576a8e1347eca30748a2da92c6a7a1091929007f6eaed2ae6",
     "assets/quality/anti-ai-flavor/schemas/rule-pack.schema.json": "fe4623817c186290c22e982c4dfe04c8c36224dbb81c82fb239f1b6365761ec9",
+    "assets/quality/anti-ai-flavor/schemas/semantic-rewrite-policy.schema.json": "21a1fcbfe9d523df1e07a6671ffbd7653ff7c46a34579c70eb5f8b1128d9eeec",
     "assets/specs/schema_character.md": "5eed890c61d04fa74007424d9efd6e38158d436770b333b152f4dac511d14bdb",
     "assets/specs/schema_dlc.md": "aa5859bea50cf77cc38377b510d04aee2111ce4bb7951bf047a3f3ab29fd24ed",
     "assets/specs/schema_outline.md": "fa32f7ba8f17e2c51e3d34bfc7a425c8cf4af098a04df2e9753a55de0577b945",
@@ -182,6 +201,7 @@
     "assets/templates/tpl_outline.md": "4b3d6ce0b7ea3af8673a13a5b7473f88c79f60bb61b24c430162ed309f0db434",
     "assets/templates/tpl_persona_prompt_compatible.md": "a15e465aec5f6a2ec460540fa373f49fe88c7d991aeca3e0cd8cf4fa6a5d79fe",
     "assets/templates/tpl_persona_prompt_immersive.md": "43fe499058fefa080a5514a4700c99ad7375d535e4e9f345283f9b109d2cdbf1",
+    "assets/templates/tpl_stage_context.md": "d873115145cfe792aeb8492183a26382cab3bf42c08983e2044ccf07b02c29ce",
     "assets/templates/tpl_story_bible.md": "fb1e4504bec7cf3e613e926a06b5c22dc829a6281174ee806955c3c6650a5a1c"
   }
 }

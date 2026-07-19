@@ -51,7 +51,7 @@ To interrupt a running child:
 
 Typing `/agents ` opens handle completion, including only queued or running children after `/agents stop `. Existing sessions that contain older UUID-style ids remain compatible, but new tool results and commands use short handles.
 
-Agent Profiles are runtime assets, so advanced users and Harness Packs can add custom roles without adding them to the six-engine list.
+Agent Profiles are runtime assets, so advanced users and Harness Packs can add custom roles without adding them to the seven-engine list.
 
 If background-result integration exhausts the provider's normal retries, Vesicle keeps the durable result ready instead of starting an unbounded charged retry loop. Submit `/agents retry` to retry that delivery explicitly.
 
@@ -105,8 +105,21 @@ Vesicle lists the bundled engines and marks the active one with `*`:
 | `weaver` | Draft scene shards |
 | `weaver-orch` | Coordinate long-form writing |
 | `dyad` | Work with two-entity simulation data |
+| `stage` | Run a continuous, character-driven narrative from prepared cards |
 
 The current alpha has different levels of validation and confirmation support across these engines. `STATUS.md` is the authority for current limitations; do not assume that every engine has the same validators or guided workflow.
+
+## Start a Stage Session
+
+Stage is the one engine that cannot be entered through `/engine stage`. It needs a prepared Module A character card and Module B scenario card before the session exists, so start it with:
+
+```text
+/stage workspace/character.md workspace/scenario.md
+```
+
+Both paths must be project-relative and under an approved project root. Vesicle validates both cards before creating the session, then saves the rendered character context and opening scene before your first action. Stage has no model-visible tools, confirmation gate, MCP tools, or automatic rewrite by default. If you later edit either source card, a resumed Stage session keeps its saved character and scene context and can show a source-drift notice.
+
+Stage responses use the shared three-part packet. The full player-facing rendering of its hidden reasoning and HUD is still deferred in this alpha, so do not treat raw packet visibility as the final consumer experience.
 
 ## Switch an Engine
 
@@ -144,10 +157,11 @@ You are ready when:
 
 - you can explain why a model and an engine are different
 - `/model` opens the two-step provider and model picker
-- `/engine` lists six bundled Prism engines and marks the active one
+- `/engine` lists bundled Prism engines and marks the active one; Stage starts only through `/stage`
+- you know that `/stage` starts the seventh Engine from a character and scenario card
 - you switched to `evaluate` and back to `etl` without making a provider request
 - you understand that switches affect future turns and can be restored with a session
-- `/agents` lists specialized profiles independently of the six Prism engines
+- `/agents` lists specialized profiles independently of the seven Prism engines
 - you understand the difference between foreground waiting and background result delivery
 
 [Next: Sessions and Resume →](./08-sessions-and-resume.md)

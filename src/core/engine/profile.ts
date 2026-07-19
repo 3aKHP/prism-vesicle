@@ -5,7 +5,7 @@ import { createAssetResolver, type AssetResolver, type AssetSource } from "../ru
  * assets/prompts/engines/. Keep this as the single source of truth for the
  * set of engines Vesicle recognises.
  */
-export type EngineId = "etl" | "runtime" | "evaluate" | "weaver" | "weaver-orch" | "dyad";
+export type EngineId = "etl" | "runtime" | "evaluate" | "weaver" | "weaver-orch" | "dyad" | "stage";
 
 export const engineIds: readonly EngineId[] = [
   "etl",
@@ -14,6 +14,7 @@ export const engineIds: readonly EngineId[] = [
   "weaver",
   "weaver-orch",
   "dyad",
+  "stage",
 ];
 
 export type EngineProfile = {

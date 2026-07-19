@@ -91,6 +91,7 @@ export type CommandContext = {
   openRewindPicker: () => Promise<void>;
   resetRewindState: () => void;
   agentCommand: (args: string) => Promise<string>;
+  startStage?: (characterPath: string, scenarioPath: string, commandEcho: string) => Promise<void>;
 
   // —— model picker (used by /model with no args) ——
   openModelPicker: () => Promise<void>;

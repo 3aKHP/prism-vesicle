@@ -14,6 +14,7 @@ export const maxQualityArtifactBytes = 1024 * 1024;
 export function qualityCandidateTypeForProducer(producer: string): QualityCandidateType | undefined {
   switch (producer) {
     case "runtime": return "runtime.prose";
+    case "stage": return "stage.prose";
     case "dyad": return "dyad.character-response";
     case "weaver":
     case "scene-writer": return "scene.prose";

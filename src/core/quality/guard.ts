@@ -393,10 +393,23 @@ function qualityEventTarget(options: {
 }
 
 function extractProseCandidate(type: QualityCandidateType, content: string): string {
+  if (type === "stage.prose") return extractStageProseCandidate(content);
   if (type !== "runtime.prose" && type !== "dyad.character-response") return content;
   const sections = extractPartThreeSections(content);
   if (sections.length === 0) return looksLikeStructuredPacket(content) ? "" : content;
   return type === "runtime.prose" ? sections.at(-1)! : sections.join("\n\n");
+}
+
+function extractStageProseCandidate(content: string): string {
+  const sections = extractPartThreeSections(content);
+  if (sections.length > 0) return sections.at(-1)!;
+  // The published Stage packet is an HTML-comment Neural Chain followed by a
+  // six-row HUD. Part 3 begins immediately after the final HUD row instead of
+  // carrying a Markdown heading, so the generic Runtime extraction cannot
+  // identify it.
+  const impression = /^\s*\[Impression\][^\n]*(?:\n|$)/im.exec(content);
+  if (impression?.index !== undefined) return content.slice(impression.index + impression[0].length).trim();
+  return looksLikeStructuredPacket(content) ? "" : content;
 }
 
 function looksLikeStructuredPacket(content: string): boolean {

@@ -14,8 +14,8 @@ export function parseEngineSwitchRequest(call: ToolCall): EngineSwitchRequest {
     throw new Error(`parseEngineSwitchRequest called on non-engine-switch tool: ${call.name}`);
   }
   const args = JSON.parse(call.arguments || "{}") as Partial<EngineSwitchRequest>;
-  if (typeof args.targetEngine !== "string" || !(engineIds as readonly string[]).includes(args.targetEngine)) {
-    throw new Error(`request_engine_switch requires targetEngine to be one of: ${engineIds.join(", ")}.`);
+  if (typeof args.targetEngine !== "string" || !(engineIds as readonly string[]).includes(args.targetEngine) || args.targetEngine === "stage") {
+    throw new Error(`request_engine_switch requires targetEngine to be one of: ${engineIds.filter((engine) => engine !== "stage").join(", ")}.`);
   }
   if (typeof args.reason !== "string" || args.reason.trim() === "") {
     throw new Error("request_engine_switch requires a non-empty `reason` string.");
@@ -45,7 +45,7 @@ export const engineSwitchToolDefinition: ToolDefinition = {
       properties: {
         targetEngine: {
           type: "string",
-          enum: [...engineIds],
+          enum: engineIds.filter((engine) => engine !== "stage"),
           description: "The Prism engine profile that should handle future turns.",
         },
         reason: {

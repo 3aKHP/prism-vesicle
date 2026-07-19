@@ -156,6 +156,7 @@ function readPersistedQualityTargets(value: unknown): DurableQualityArtifactTarg
 function isQualityCandidateType(value: unknown): value is QualityCandidateType {
   return [
     "runtime.prose",
+    "stage.prose",
     "dyad.character-response",
     "scene.prose",
     "orchestrator-authored-prose",

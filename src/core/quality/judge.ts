@@ -40,7 +40,7 @@ export async function observeBoundQualityWithJudge(options: {
   const contract = options.runtime.judge;
   const profile = options.experimentalProfile;
   if (!contract || !profile
-    || options.result.candidate.producer !== "runtime"
+    || (options.result.candidate.producer !== "runtime" && options.result.candidate.producer !== "stage")
     || options.result.decision !== "pass") return options.result;
 
   const candidates = (options.result.targetEvaluations

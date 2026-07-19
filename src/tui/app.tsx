@@ -53,6 +53,7 @@ import { createSessionPreferencesController } from "./session-preferences-contro
 import { createAgentCommand } from "./agent-command";
 import { useInputRouting } from "./input-routing";
 import { createQualityPickerController } from "./quality-picker-controller";
+import { startStageSession } from "../core/stage/bootstrap";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -747,6 +748,38 @@ export function App(props: AppProps = {}) {
     openRewindPicker: rewindController.open,
     resetRewindState,
     agentCommand,
+    startStage: async (characterPath, scenarioPath, commandEcho) => {
+      const started = await startStageSession({
+        rootDir: process.cwd(),
+        characterPath,
+        scenarioPath,
+        provider: activeProvider(),
+        providerId: activeProvider(),
+        model: activeModel(),
+        permissionMode: permissionMode(),
+        reasoningTier: thinkingTier(),
+      });
+      setSessionId(started.sessionId);
+      setSessionPath(started.sessionPath);
+      setActiveEngine("stage");
+      setConversation(started.messages);
+      setOutput(started.opening);
+      setLastTurnUsage(undefined);
+      setSessionUsage({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: 0 });
+      setNextSessionParent(null);
+      setPendingGate(null);
+      setPendingEngineSwitch(null);
+      setPendingUserQuestion(null);
+      setPendingPermission(null);
+      setPendingQualityDecision(null);
+      setMessages([
+        { role: "user", content: commandEcho },
+        ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
+        { role: "assistant", content: started.opening, engine: "stage" },
+      ]);
+      setStatus("Stage session ready");
+      recordActivity({ kind: "system", text: `started Stage session ${started.sessionId}` });
+    },
     openModelPicker,
     openQualityPicker,
   };
