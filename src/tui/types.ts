@@ -14,9 +14,12 @@ import type { ResponseUsage } from "../providers/shared/types";
 export type Role = "user" | "assistant" | "system" | "tool";
 
 export type Message = {
+  id?: string;
+  /** Ephemeral Stage source-view state; never written to session records. */
+  stageSource?: boolean;
   role: Role;
   content: string;
-  kind?: "reasoning" | "artifact" | "agent";
+  kind?: "reasoning" | "artifact" | "agent" | "stage-bootstrap-opening";
   agentRunId?: string;
   artifactPath?: string;
   artifactTruncated?: boolean;

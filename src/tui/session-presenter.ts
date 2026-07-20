@@ -62,8 +62,10 @@ export function displayMessagesFromResumed(
     if (reasoningText?.trim()) out.push({ role: "system", content: reasoningText, kind: "reasoning" });
     if (message.content.trim()) {
       out.push({
+        ...(message.recordUuid ? { id: message.recordUuid } : {}),
         role: "assistant",
         content: message.content,
+        ...(message.kind === "stage-bootstrap-opening" ? { kind: "stage-bootstrap-opening" as const } : {}),
         ...(message.engine ? { engine: message.engine } : {}),
         ...(message.model ? { model: message.model } : {}),
       });

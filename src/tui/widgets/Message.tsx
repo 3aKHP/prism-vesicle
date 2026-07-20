@@ -5,10 +5,14 @@ import { ReasoningBlock } from "./ReasoningBlock";
 import { ToolCard } from "./ToolCard";
 import { ArtifactCard } from "./ArtifactCard";
 import { AgentCard } from "./AgentCard";
+import { StageMessageContent } from "./StageMessageContent";
+import { useRenderer } from "@opentui/solid";
 import type { AgentCardState } from "../types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
+import { parseStageMessageContent } from "../stage-message-content";
 
 type MessageLike = {
+  stageSource?: boolean;
   role: string;
   content: string;
   kind?: string;
@@ -37,7 +41,16 @@ type MessageLike = {
  * The lane is engine-independent (role-based); engine accent lives on the
  * header and future turn markers.
  */
-export function Message(props: { message: MessageLike; reasoningMode: string; width: number; agent?: AgentCardState }) {
+export function Message(props: {
+  message: MessageLike & { id?: string };
+  reasoningMode: string;
+  width: number;
+  agent?: AgentCardState;
+  stageSource?: boolean;
+  onStageToggle?: () => void;
+  streaming?: boolean;
+}) {
+  const renderer = useRenderer();
   const m = props.message;
 
   if (m.kind === "agent" && props.agent) {
@@ -53,15 +66,54 @@ export function Message(props: { message: MessageLike; reasoningMode: string; wi
   }
 
   if (m.role === "assistant" && m.content.trim()) {
+    const stageParsed = m.engine === "stage" ? parseStageMessageContent(m.content, m.id ?? "stage-message", props.streaming === true) : undefined;
+    const showStageProjection = m.engine === "stage" && (
+      m.kind === "stage-bootstrap-opening"
+      || stageParsed?.hud !== undefined
+      || stageParsed?.pendingCommentStart !== undefined
+      || (props.streaming === true && stageParsed?.segments.some((segment) => segment.kind === "comment" && segment.raw.includes("[!Neural Chain]")))
+    );
+    let dragged = false;
+    const beginPointer = () => { dragged = false; };
+    const trackDrag = () => { dragged = true; };
+    const endPointer = (event: { button: number; isDragging?: boolean; defaultPrevented: boolean }) => {
+      if (!showStageProjection || dragged || event.isDragging || event.defaultPrevented || renderer.hasSelection || event.button !== 0) return;
+      props.onStageToggle?.();
+    };
     return (
-      <box flexDirection="column">
+      <box
+        id={m.id}
+        flexDirection="column"
+        focusable={showStageProjection}
+        onKeyDown={(key) => {
+          if (!showStageProjection || (key.name !== "enter" && key.name !== "return" && key.name !== "space")) return;
+          key.preventDefault();
+          key.stopPropagation();
+          props.onStageToggle?.();
+        }}
+      >
         <box flexDirection="row">
-          <box width={1} backgroundColor={palette.laneAssistant} />
+          <box
+            width={1}
+            backgroundColor={palette.laneAssistant}
+            onMouseDown={beginPointer}
+            onMouseDrag={trackDrag}
+            onMouseUp={endPointer}
+          />
           <box flexDirection="column" paddingX={1} flexGrow={1}>
             {m.engine && (
-              <text content={`▣ ${engineDisplayName(m.engine)}${m.model ? `·${m.model}` : ""}`} fg={engineAccent(m.engine)} attributes={1} />
+              <text
+                content={`▣ ${engineDisplayName(m.engine)}${m.model ? `·${m.model}` : ""}`}
+                fg={engineAccent(m.engine)}
+                attributes={1}
+                onMouseDown={beginPointer}
+                onMouseDrag={trackDrag}
+                onMouseUp={endPointer}
+              />
             )}
-            <MarkdownContent content={m.content} />
+            {showStageProjection
+              ? <StageMessageContent content={m.content} messageId={m.id ?? "stage-message"} source={props.stageSource ?? m.stageSource === true} streaming={props.streaming} />
+              : <MarkdownContent content={m.content} />}
           </box>
         </box>
         <text content=" " fg={palette.textDim} />

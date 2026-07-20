@@ -1,17 +1,17 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolveAllowedPath, toProjectPath } from "../tools/file/path-policy";
+import { listDirectoryEntries } from "../tools/file/query-operations";
 import { writableProjectRoots } from "../artifacts/roots";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { createSessionStore } from "../session/store";
 import { requireProjectHarnessRuntime, resolveProjectHarnessRuntime } from "../harness/activation";
-import { validateCharacterCard, validateScenarioCard } from "../validators";
-import type { ValidationResult } from "../validators";
 import type { PermissionMode } from "../permissions";
 import type { ReasoningTier, VesicleMessage } from "../../providers/shared/types";
 import type { StageBootstrapMetadata } from "./types";
 
-const stageContextVersion = "stage-context/v1";
+const stageContextVersion = "stage-context/v2";
+const stageCompletionFileLimit = 200;
 
 export type StartStageSessionOptions = {
   rootDir?: string;
@@ -29,10 +29,35 @@ export type StartedStageSession = {
   sessionPath: string;
   systemPrompt: string;
   opening: string;
+  openingRecordUuid: string;
   messages: VesicleMessage[];
   bootstrap: StageBootstrapMetadata;
   warnings: string[];
 };
+
+/** List guarded project-relative files eligible for Stage card selection. */
+export async function listStageCardPaths(rootDir: string): Promise<string[]> {
+  const paths: string[] = [];
+  for (const root of writableProjectRoots) {
+    if (paths.length >= stageCompletionFileLimit) break;
+    const directory = await resolveAllowedPath(rootDir, root, writableProjectRoots).catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (!directory) continue;
+    const result = await listDirectoryEntries(rootDir, directory, true).catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (!result) continue;
+    for (const entry of result.entries) {
+      if (entry.type !== "file" || entry.path.endsWith("/.gitkeep") || entry.path === ".gitkeep") continue;
+      paths.push(entry.path);
+      if (paths.length >= stageCompletionFileLimit) break;
+    }
+  }
+  return paths.sort((left, right) => left.localeCompare(right));
+}
 
 /** Start a new Stage session from two guarded, immutable-at-bootstrap card inputs. */
 export async function startStageSession(options: StartStageSessionOptions): Promise<StartedStageSession> {
@@ -45,11 +70,6 @@ export async function startStageSession(options: StartStageSessionOptions): Prom
     readFile(characterFile, "utf8"),
     readFile(scenarioFile, "utf8"),
   ]);
-  const characterValidation = validateCharacterCard(characterContent);
-  const scenarioValidation = validateScenarioCard(scenarioContent);
-  const errors = [...characterValidation.errors, ...scenarioValidation.errors];
-  if (errors.length > 0) throw new Error(`Stage startup rejected:\n- ${errors.join("\n- ")}`);
-
   const projectHarness = requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir));
   const engineAssets = await loadEngineAssetRuntime("stage", rootDir, { resolver: projectHarness.assets });
   if (engineAssets.profile.defaultTools.length !== 0 || engineAssets.profile.stopGates.length !== 0) {
@@ -67,7 +87,7 @@ export async function startStageSession(options: StartStageSessionOptions): Prom
   };
   const session = await createSessionStore(rootDir);
   const systemPrompt = `${engineAssets.systemPrompt}\n\n${bootstrap.renderedCharacterContext}`;
-  await session.appendMany([
+  const records = await session.appendMany([
     {
       role: "system",
       content: systemPrompt,
@@ -102,9 +122,10 @@ export async function startStageSession(options: StartStageSessionOptions): Prom
     sessionPath: session.sessionPath,
     systemPrompt,
     opening: bootstrap.renderedOpening,
+    openingRecordUuid: records[1]!.uuid,
     messages: [{ role: "assistant", content: bootstrap.renderedOpening, kind: "stage-bootstrap-opening" }],
     bootstrap,
-    warnings: validationWarnings(characterValidation, scenarioValidation),
+    warnings: compatibilityWarnings(characterContent, scenarioContent, rendered.unclosedLogicMarker),
   };
 }
 
@@ -123,101 +144,28 @@ export async function stageSourceDrift(rootDir: string, bootstrap: StageBootstra
 }
 
 function renderStageContext(template: string, characterContent: string, scenarioContent: string) {
-  const character = splitCard(characterContent, "Module A");
-  const scenario = splitCard(scenarioContent, "Module B");
+  const scenario = splitVisibleScenario(scenarioContent);
   const values: Record<string, string> = {
-    "module_a.name": scalar(character.frontmatter, "name"),
-    "module_a.archetype": scalar(character.frontmatter, "archetype"),
-    "module_a.age_gender": scalar(character.frontmatter, "age_gender"),
-    "module_a.inventory": scalar(character.frontmatter, "inventory"),
-    "module_a.body": character.body.trim(),
-    "module_b.opening_paragraph": openingParagraph(scenario.body),
-    "module_b.first_line": firstLine(scenario.body),
-    "module_b.scene_premise": commentSection(scenario.body, "Scene Premise"),
-    "module_b.surface_emotion": commentField(scenario.body, "Surface emotion"),
-    "module_b.tension_source": commentField(scenario.body, "Tension source"),
-    "module_b.active_lens": commentField(scenario.body, "Active lens"),
-    "module_b.identity": commentField(scenario.body, "Identity"),
-    "module_b.immediate_goal": commentField(scenario.body, "Immediate goal"),
-    "module_b.first_beat.label": beatField(scenario.frontmatter, "label"),
-    "module_b.first_beat.tension_target": beatField(scenario.frontmatter, "tension_target"),
-    "module_b.first_beat.variant_config": beatField(scenario.frontmatter, "variant_config"),
+    "module_a.raw": characterContent,
+    "module_b.visible": scenario.visible,
+    "module_b.logic": scenario.logic,
   };
   const blocks = [...template.matchAll(/```\n([\s\S]*?)\n```/g)].map((match) => match[1]!);
   if (blocks.length < 2) throw new Error("Stage context template must declare character and opening blocks.");
   return {
     characterContext: fillTemplate(blocks[0]!, values),
     opening: fillTemplate(blocks[1]!, values),
+    unclosedLogicMarker: scenario.unclosedLogicMarker,
   };
 }
 
-function splitCard(content: string, label: string): { frontmatter: string; body: string } {
-  const match = /^(?:\uFEFF)?---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(content);
-  if (!match) throw new Error(`${label} must begin with YAML frontmatter.`);
-  return { frontmatter: match[1]!, body: match[2]! };
-}
-
-function scalar(frontmatter: string, key: string): string {
-  const value = new RegExp(`^${key}:\\s*(.+)$`, "m").exec(frontmatter)?.[1]?.trim();
-  if (!value) throw new Error(`Stage bootstrap requires Module A frontmatter field ${key}.`);
-  return value.replace(/^['"]|['"]$/g, "");
-}
-
-function openingParagraph(body: string): string {
-  const visible = body.split("<!--", 1)[0]!.trim();
-  const quote = visible.search(/^\s*["“]/m);
-  if (quote === 0) {
-    throw new Error("Module B visible text must begin with an opening paragraph before the first quoted character line.");
+function splitVisibleScenario(content: string): { visible: string; logic: string; unclosedLogicMarker: boolean } {
+  const start = content.indexOf("<!--");
+  if (start < 0) return { visible: content, logic: "", unclosedLogicMarker: false };
+  if (content.indexOf("-->", start + 4) < 0) {
+    return { visible: content, logic: "", unclosedLogicMarker: true };
   }
-  const opening = (quote < 0 ? visible : visible.slice(0, quote)).trim();
-  if (!opening) throw new Error("Stage bootstrap requires a Module B opening paragraph before the first character line.");
-  return opening;
-}
-
-function firstLine(body: string): string {
-  const visible = body.split("<!--", 1)[0]!;
-  const match = /^\s*["“]([^"”\n]+)["”]\s*$/m.exec(visible);
-  if (!match) throw new Error("Stage bootstrap requires a quoted Module B first character line.");
-  return match[1]!.trim();
-}
-
-function commentBlock(body: string): string {
-  const match = /<!--\s*([\s\S]*?)\s*-->/.exec(body);
-  if (!match) throw new Error("Stage bootstrap requires the Module B HTML-comment logic layer.");
-  return match[1]!;
-}
-
-function commentSection(body: string, heading: string): string {
-  const block = commentBlock(body);
-  const match = new RegExp(`## ${heading}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`).exec(block);
-  const value = match?.[1]?.trim();
-  if (!value) throw new Error(`Stage bootstrap requires Module B ${heading}.`);
-  return value;
-}
-
-function commentField(body: string, label: string): string {
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`^-\\s*(?:\\*\\*)?${escaped}:\\s*(?:\\*\\*)?\\s*(.+)$`, "mi").exec(commentBlock(body));
-  const value = match?.[1]?.trim();
-  if (!value) throw new Error(`Stage bootstrap requires Module B ${label}.`);
-  return value;
-}
-
-function beatField(frontmatter: string, field: string): string {
-  const lines = frontmatter.split(/\r?\n/);
-  const beatMapIndex = lines.findIndex((line) => /^beat_map:\s*$/.test(line));
-  if (beatMapIndex < 0) throw new Error("Stage bootstrap requires a beat_map entry in the scenario frontmatter.");
-  const firstBeatIndex = lines.findIndex((line, index) => index > beatMapIndex && /^\s*-\s*label:\s*(.+)$/.test(line));
-  const firstLine = firstBeatIndex >= 0 ? lines[firstBeatIndex]! : undefined;
-  const inline = field === "label" ? /^\s*-\s*label:\s*(.+)$/.exec(firstLine ?? "")?.[1] : undefined;
-  const nested = firstBeatIndex >= 0
-    ? lines.slice(firstBeatIndex + 1).find((line) => /^\s*-\s*label:/.test(line) || new RegExp(`^\\s+${field}:\\s*(.+)$`).test(line))
-    : undefined;
-  const value = inline ?? (nested && !/^\s*-\s*label:/.test(nested)
-    ? new RegExp(`^\\s+${field}:\\s*(.+)$`).exec(nested)?.[1]
-    : undefined);
-  if (!value) throw new Error(`Stage bootstrap requires first beat ${field}.`);
-  return value.trim().replace(/^['"]|['"]$/g, "");
+  return { visible: content.slice(0, start), logic: content.slice(start), unclosedLogicMarker: false };
 }
 
 function fillTemplate(template: string, values: Record<string, string>): string {
@@ -234,6 +182,12 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function validationWarnings(...results: ValidationResult[]): string[] {
-  return results.flatMap((result) => result.warnings);
+function compatibilityWarnings(characterContent: string, scenarioContent: string, unclosedLogicMarker: boolean): string[] {
+  const warnings: string[] = [];
+  if (!/^\uFEFF?---\r?\n/.test(characterContent)) warnings.push("Module A has no YAML frontmatter; its supplied text was frozen unchanged.");
+  if (!/^\uFEFF?---\r?\n/.test(scenarioContent)) warnings.push("Module B has no YAML frontmatter; its supplied text was frozen unchanged.");
+  if (!scenarioContent.includes("<!--")) warnings.push("Module B has no optional logic content; Stage will continue from visible material.");
+  if (unclosedLogicMarker) warnings.push("Module B has an unclosed HTML comment marker; it was kept in visible content unchanged.");
+  if (characterContent.trim().length === 0 || scenarioContent.trim().length === 0) warnings.push("An empty Stage input was frozen unchanged; add narrative material before relying on continuity.");
+  return warnings.slice(0, 3);
 }

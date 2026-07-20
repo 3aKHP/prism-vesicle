@@ -218,6 +218,8 @@ export async function listSessions(
  * - tool records map directly to { role: "tool", toolCallId, content }.
  */
 export type ResumedMessage = {
+  /** Durable JSONL record identity for presentation state such as Stage source view. */
+  recordUuid?: string;
   role: "user" | "assistant" | "tool";
   content: string;
   reasoningContent?: string;

@@ -8,6 +8,7 @@ import { loadEngineProfile } from "../src/core/engine/profile";
 import { runPrompt } from "../src/core/agent-loop/run";
 import { listRewindPoints, rewindConversation } from "../src/core/rewind/service";
 import { stageSourceDrift, startStageSession } from "../src/core/stage/bootstrap";
+import { parseStageBootstrapMetadata } from "../src/core/stage/types";
 import { loadSessionSnapshot } from "../src/core/session/store";
 import { createProvider } from "../src/providers";
 
@@ -23,7 +24,18 @@ afterEach(async () => {
 });
 
 describe("Stage bootstrap", () => {
-  test("freezes guarded cards into the system prompt and opening assistant record", async () => {
+  test("retains frozen v1 bootstrap metadata for exact resume", () => {
+    expect(parseStageBootstrapMetadata({
+      schema: "prism-stage-bootstrap/v1",
+      contextVersion: "stage-context/v1",
+      character: { path: "workspace/character.md", sha256: "a".repeat(64) },
+      scenario: { path: "workspace/scenario.md", sha256: "b".repeat(64) },
+      renderedCharacterContext: "frozen character",
+      renderedOpening: "frozen opening",
+    })).toMatchObject({ contextVersion: "stage-context/v1", renderedOpening: "frozen opening" });
+  });
+
+  test("freezes raw cards into the v2 system prompt and opening assistant record", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-stage-"));
     try {
       await mkdir(join(root, "workspace"), { recursive: true });
@@ -41,13 +53,16 @@ describe("Stage bootstrap", () => {
       });
       const snapshot = await loadSessionSnapshot(root, started.sessionId);
 
-      expect(started.systemPrompt).toContain("CHARACTER CONTEXT (HOST-INJECTED)");
-      expect(started.systemPrompt).toContain("**Lin** · Watcher · adult");
+      expect(started.systemPrompt).toContain("CHARACTER CONTEXT (HOST-INJECTED, RAW)");
+      expect(started.systemPrompt).toContain(characterCard);
       expect(started.opening).toContain("雨落在空站台上");
       expect(started.opening).toContain("Scene Premise");
       expect(snapshot.engine).toBe("stage");
-      expect(snapshot.messages).toEqual([{ role: "assistant", content: started.opening, engine: "stage", kind: "stage-bootstrap-opening" }]);
+      expect(snapshot.messages).toHaveLength(1);
+      expect(snapshot.messages[0]).toMatchObject({ role: "assistant", content: started.opening, engine: "stage", kind: "stage-bootstrap-opening" });
+      expect(snapshot.messages[0]?.recordUuid).toBe(started.openingRecordUuid);
       expect(snapshot.stageBootstrap?.renderedCharacterContext).toContain("## World Context");
+      expect(snapshot.stageBootstrap?.contextVersion).toBe("stage-context/v2");
       expect(snapshot.stageBootstrap?.character.sha256).toHaveLength(64);
       expect(await stageSourceDrift(root, snapshot.stageBootstrap!)).toEqual([]);
 
@@ -59,7 +74,32 @@ describe("Stage bootstrap", () => {
     }
   });
 
-  test("rejects invalid cards and paths before it creates a session", async () => {
+  test("does not use the static Harness asset review budget to block frozen Stage context", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-large-context-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      const largeCharacter = `${characterCard}\n${"x".repeat(24_000)}`;
+      await writeFile(join(root, "workspace", "character.md"), largeCharacter, "utf8");
+      await writeFile(join(root, "workspace", "scenario.md"), scenarioCard, "utf8");
+
+      const started = await startStageSession({
+        rootDir: root,
+        characterPath: "workspace/character.md",
+        scenarioPath: "workspace/scenario.md",
+        provider: "fixture",
+        providerId: "fixture",
+        model: "fixture-model",
+        permissionMode: "MOMENTUM",
+      });
+
+      expect([...started.systemPrompt].length).toBeGreaterThan(24_000);
+      expect(started.systemPrompt).toContain(largeCharacter);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps path guards while accepting harmless card variation with bounded warnings", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-stage-invalid-"));
     try {
       await mkdir(join(root, "workspace"), { recursive: true });
@@ -73,7 +113,7 @@ describe("Stage bootstrap", () => {
         model: "fixture-model",
         permissionMode: "MOMENTUM",
       })).rejects.toThrow("Path");
-      await expect(startStageSession({
+      const started = await startStageSession({
         rootDir: root,
         characterPath: "workspace/bad.md",
         scenarioPath: "workspace/bad.md",
@@ -81,20 +121,66 @@ describe("Stage bootstrap", () => {
         providerId: "fixture",
         model: "fixture-model",
         permissionMode: "MOMENTUM",
-      })).rejects.toThrow("Stage startup rejected");
+      });
+      expect(started.warnings).toHaveLength(3);
+      expect(started.systemPrompt).toContain("not a card");
+      expect(started.opening).toContain("not a card");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  test("rejects a scenario card with no beat map", async () => {
-    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-missing-beat-map-"));
+  test("does not treat cosmetic card variation as Stage admission criteria", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-variation-"));
     try {
       await mkdir(join(root, "workspace"), { recursive: true });
-      await writeFile(join(root, "workspace", "character.md"), characterCard, "utf8");
-      await writeFile(join(root, "workspace", "scenario.md"), scenarioCard.replace("beat_map:", "beats:"), "utf8");
+      const variants = [
+        {
+          character: `\n  ${characterCard}`,
+          scenario: scenarioCard.replace('"别错过最后一班车。"', "「别错过最后一班车。」"),
+        },
+        {
+          character: characterCard.replace("name: Lin\narchetype: Watcher", "archetype: Watcher\nname: Lin"),
+          scenario: scenarioCard.replace("beat_map:", "beats:"),
+        },
+      ];
 
-      await expect(startStageSession({
+      for (const [index, variant] of variants.entries()) {
+        await writeFile(join(root, "workspace", "character.md"), variant.character, "utf8");
+        await writeFile(join(root, "workspace", "scenario.md"), variant.scenario, "utf8");
+        const started = await startStageSession({
+          rootDir: root,
+          characterPath: "workspace/character.md",
+          scenarioPath: "workspace/scenario.md",
+          provider: "fixture",
+          providerId: "fixture",
+          model: "fixture-model",
+          permissionMode: "MOMENTUM",
+        });
+
+        expect(started.systemPrompt).toContain(variant.character);
+        const logicStart = variant.scenario.indexOf("<!--");
+        const visible = logicStart < 0 ? variant.scenario : variant.scenario.slice(0, logicStart);
+        const logic = logicStart < 0 ? "" : variant.scenario.slice(logicStart);
+        expect(started.opening).toContain(visible);
+        expect(started.opening.indexOf(visible)).toBe(0);
+        expect(started.opening).toContain(logic);
+        expect(started.opening.indexOf(logic)).toBeGreaterThanOrEqual(started.opening.indexOf(visible) + visible.length);
+        if (index === 0) expect(started.warnings).toContain("Module A has no YAML frontmatter; its supplied text was frozen unchanged.");
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps an unclosed optional logic marker in the visible opening", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-unclosed-logic-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      const scenario = `${scenarioCard.replace("-->", "")}\n`;
+      await writeFile(join(root, "workspace", "character.md"), characterCard, "utf8");
+      await writeFile(join(root, "workspace", "scenario.md"), scenario, "utf8");
+      const started = await startStageSession({
         rootDir: root,
         characterPath: "workspace/character.md",
         scenarioPath: "workspace/scenario.md",
@@ -102,7 +188,34 @@ describe("Stage bootstrap", () => {
         providerId: "fixture",
         model: "fixture-model",
         permissionMode: "MOMENTUM",
-      })).rejects.toThrow("Module B: beat_map is missing from frontmatter.");
+      });
+
+      expect(started.opening).toContain(scenario);
+      expect(started.opening.indexOf("<!--")).toBe(scenario.indexOf("<!--"));
+      expect(started.warnings).toContain("Module B has an unclosed HTML comment marker; it was kept in visible content unchanged.");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("preserves a scenario with missing optional structure", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-missing-beat-map-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      await writeFile(join(root, "workspace", "character.md"), characterCard, "utf8");
+      await writeFile(join(root, "workspace", "scenario.md"), scenarioCard.replace("beat_map:", "beats:"), "utf8");
+
+      const started = await startStageSession({
+        rootDir: root,
+        characterPath: "workspace/character.md",
+        scenarioPath: "workspace/scenario.md",
+        provider: "fixture",
+        providerId: "fixture",
+        model: "fixture-model",
+        permissionMode: "MOMENTUM",
+      });
+      expect(started.warnings).toEqual([]);
+      expect(started.opening).toContain("beats:");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -153,6 +266,11 @@ describe("Stage bootstrap", () => {
       if (result.kind !== "complete") throw new Error(`expected complete Stage turn, got ${result.kind}`);
       expect(requests).toHaveLength(2);
       expect(requests[0]?.tools).toBeUndefined();
+      const system = requests[0]?.messages[0]?.content ?? "";
+      expect(system).toContain("CHARACTER CONTEXT (HOST-INJECTED, RAW)");
+      for (const forbidden of ["spawn_agent", "shell_exec", "web_search", "assets/", "Host Adapter Binding", "guidance.zh-CN", "judge-rubric"]) {
+        expect(system).not.toContain(forbidden);
+      }
       expect(requests[0]?.messages.slice(1).map((message) => message.content)).toEqual([
         started.opening,
         "I step beneath the umbrella.",
@@ -211,7 +329,9 @@ describe("Stage bootstrap", () => {
       const point = (await listRewindPoints(root, started.sessionId))[0]!;
       const rewound = await rewindConversation(root, started.sessionId, point);
       expect(rewound.snapshot.stageBootstrap).toEqual(beforeResume.stageBootstrap);
-      expect(rewound.snapshot.messages).toEqual([{ role: "assistant", content: started.opening, engine: "stage", kind: "stage-bootstrap-opening" }]);
+      expect(rewound.snapshot.messages).toHaveLength(1);
+      expect(rewound.snapshot.messages[0]).toMatchObject({ role: "assistant", content: started.opening, engine: "stage", kind: "stage-bootstrap-opening" });
+      expect(rewound.snapshot.messages[0]?.recordUuid).toBe(started.openingRecordUuid);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

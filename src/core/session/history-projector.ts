@@ -62,7 +62,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
       const messageModel = typeof record.metadata?.model === "string" ? record.metadata.model : undefined;
       const usage = readResponseUsage(record.metadata?.usage);
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
-      messages.push({ role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
+      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
       continue;
     }
 

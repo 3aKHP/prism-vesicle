@@ -87,6 +87,8 @@ export type RunPromptResult =
       profile: EngineProfile;
       validation?: ValidatorOutcome;
       quality?: { outcome: QualityOutcome; findingCount: number };
+      /** Durable assistant record ID when the response did not contain tools. */
+      assistantRecordUuid?: string;
       messages: VesicleMessage[];
     }
   | {

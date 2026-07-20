@@ -139,7 +139,7 @@ export function createTurnResultController(options: ResultOptions) {
     const reasoningText = displayTextFromThinkingBlocks(result.response.thinkingBlocks) ?? result.response.reasoningContent;
     if (!result.response.toolCalls?.length && reasoningText?.trim()) appended.push({ role: "system", content: reasoningText, kind: "reasoning" });
     if (!result.response.toolCalls?.length && result.response.content.trim()) {
-      appended.push({ role: "assistant", content: result.response.content, engine: options.activeEngine(), model: options.activeModel() });
+      appended.push({ ...(result.assistantRecordUuid ? { id: result.assistantRecordUuid } : {}), role: "assistant", content: result.response.content, engine: options.activeEngine(), model: options.activeModel() });
     }
     if (result.validation) appended.push({ role: "system", content: renderValidationNotice(result.validation) });
     options.setMessages((previous) => [...previous, ...appended]);
