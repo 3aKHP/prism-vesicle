@@ -33,7 +33,7 @@ Windows 可执行文件可用 Authenticode 签名。**校验和不等于签名**
 - 务必按上面方法核对 `SHA256SUMS.txt`;
 - **不要**为了绕过提示而全局关闭 Windows 安全功能。
 
-完整政策见 [Code Signing Policy](../../../CODE_SIGNING_POLICY.md)。
+完整政策见 [Code Signing Policy](../../../../CODE_SIGNING_POLICY.md)。
 
 ## 签名启用后如何验证
 
@@ -52,4 +52,4 @@ Get-AuthenticodeSignature .\PrismVesicleSetup-<version>-windows-x64.exe | Format
 
 ## 怀疑文件有问题
 
-若签名无效、签名者异常、或在官方发布流程之外发现"已签名"的本项目文件:不要运行或转发;到 [GitHub Issues](https://github.com/3aKHP/prism-vesicle/issues) 开一个 issue,只附 Release 链接、文件名、SHA-256、签名状态和证书截图——**不要**附可执行文件、密钥或个人数据。处置流程见 [Code Signing Policy](../../../CODE_SIGNING_POLICY.md)。
+若签名无效、签名者异常、或在官方发布流程之外发现"已签名"的本项目文件:不要运行或转发;到 [GitHub Issues](https://github.com/3aKHP/prism-vesicle/issues) 开一个 issue,只附 Release 链接、文件名、SHA-256、签名状态和证书截图——**不要**附可执行文件、密钥或个人数据。处置流程见 [Code Signing Policy](../../../../CODE_SIGNING_POLICY.md)。
