@@ -10,7 +10,12 @@ export function StageMessageContent(props: {
   return (
     <Show when={props.source} fallback={
       <box flexDirection="column" width="100%">
-        {props.parsed.hud ? <text content={`◇ ${props.parsed.hud.summary}`} fg={palette.textDim} /> : <box height={0} />}
+        {props.parsed.hud
+          ? <box flexDirection="column" width="100%">
+              <text content={`◇ ${props.parsed.hud.summary}`} fg={palette.textDim} />
+              <box height={1} />
+            </box>
+          : <box height={0} />}
         {normalStageRenderParts(props.parsed).map((part) => part.kind === "anchor"
           ? <box id={part.id} height={0} />
           : <text id={part.segment.id} content={renderMarkdownPlainText(part.segment.raw)} fg={palette.textPrimary} />)}

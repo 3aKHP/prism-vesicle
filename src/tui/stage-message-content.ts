@@ -107,9 +107,14 @@ export function parseStageMessageContent(content: string, messageId: string, str
   const hudStart = skipWhitespace(content, neuralChain.end);
   if (!content.startsWith("【Status】", hudStart)) return { segments, hasNeuralChain: true };
   const hud = readStageHud(content, hudStart);
-  if (hud) return { segments, hud, hasNeuralChain: true };
+  if (hud) {
+    // Fold the concealed block as [comment tail, HUD, prose lead) so the blank
+    // lines surrounding the HUD do not leak into the visible transcript.
+    const proseStart = skipBlankLines(content, hud.end);
+    return { segments, hud: { ...hud, start: neuralChain.end, end: proseStart }, hasNeuralChain: true };
+  }
   return streaming
-    ? { segments, hasNeuralChain: true, pendingHudStart: hudStart }
+    ? { segments, hasNeuralChain: true, pendingHudStart: neuralChain.end }
     : { segments, hasNeuralChain: true };
 }
 
@@ -198,6 +203,16 @@ function sliceSegment(segment: MessageCommentSegment, start: number, end: number
 function skipWhitespace(content: string, index: number): number {
   while (index < content.length && /\s/.test(content[index]!)) index += 1;
   return index;
+}
+
+function skipBlankLines(content: string, index: number): number {
+  let cursor = index;
+  while (cursor < content.length) {
+    const lineEnd = content.indexOf("\n", cursor);
+    if (lineEnd < 0 || content.slice(cursor, lineEnd).replace(/\r$/, "").trim()) return cursor;
+    cursor = lineEnd + 1;
+  }
+  return cursor;
 }
 
 function isLineStart(content: string, index: number): boolean {
