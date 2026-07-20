@@ -57,5 +57,14 @@ bun test
 bun run doctor
 ```
 
-Add focused tests for changed provider, gate, session, TUI, tool, validator, or
-artifact behavior. Report any skipped or unavailable verification explicitly.
+## Test Value Discipline
+
+Follow the full test-value rules in `AGENTS.md`. Do not add a test merely because code changed or because a task was completed. New test code must protect a user-visible behavior, security or durability boundary, external contract, or plausible uncovered regression, with an oracle independent of the implementation where practical.
+
+- Features and fixes normally receive focused regression coverage for observable behavior; chores and mechanical changes do not receive new tests by default.
+- Do not lock tests to local variable names, statement order, source snippets, or constants that only restate the implementation unless they are stable external or architecture contracts.
+- Do not preserve brittle or redundant tests at the cost of large adaptation work. Reassess, narrow, merge, replace, or remove them when meaningful coverage is already present elsewhere.
+- Report conditional coverage as skipped or unavailable rather than returning early and counting it as passing.
+- Test counts are not a quality target, and verification does not imply that every change needs new test code.
+
+Add or update focused tests only when the changed provider, gate, session, TUI, tool, validator, artifact, workflow, or release behavior creates a real coverage need. Report any skipped or unavailable verification explicitly.

@@ -167,8 +167,23 @@ bun test
 bun run doctor
 ```
 
-For provider, gate, TUI, or artifact behavior, add or update focused tests.
-When practical, also run a real TUI or provider smoke.
+### Test Value Discipline
+
+Do not add tests merely because code changed. A test is justified when it protects a user-visible behavior, a security or durability boundary, an external contract, or a plausible regression that is not already covered at the appropriate level. Verification is required; new test code is not an automatic deliverable.
+
+Before adding or substantially adapting a test, identify the behavior or contract it protects and a realistic defect that would make it fail. Prefer an oracle derived from product requirements, protocol specifications, persisted artifacts, or externally observable results rather than from the implementation under test.
+
+- Features and fixes normally need focused regression coverage when they introduce or correct observable behavior.
+- Refactors need new characterization tests only when existing coverage cannot protect a risky boundary. Mechanical moves with adequate coverage should reuse that coverage.
+- Chores, documentation, formatting, metadata updates, dependency maintenance, and mechanical renames do not receive new tests by default. Add one only when the change alters an executable workflow, package/release shape, compatibility boundary, or another concrete contract.
+- Prefer extending the narrowest existing test over creating another file or duplicating setup.
+- Do not test local variable names, statement order, source snippets, or a constant merely restated by the assertion unless that text or value is itself a stable external or architecture contract.
+- Do not write mocks that only echo the test fixture and then assert the echo. Do not inspect a smoke-test script merely to prove that the script contains checks when CI already executes those checks.
+- Conditional or unavailable coverage must be reported as skipped or unavailable, not returned from early and counted as passing.
+- If adapting brittle tests becomes a large part of an otherwise small change, stop and reassess whether the tests protect behavior or only the previous implementation. Replace, narrow, merge, or remove low-value tests instead of changing correct production code to satisfy them.
+- Test counts are not a quality target. Removing redundant, tautological, implementation-locked, or superseded tests is acceptable when meaningful coverage is preserved or improved.
+
+For provider, gate, TUI, session, tool, validator, or artifact behavior, add or update focused tests only when the change creates a real coverage need under the rules above. When practical and proportionate, also run a real TUI, provider, package, binary, or installer smoke at the boundary actually affected.
 
 Before finishing behavior/config/docs changes, run a targeted stale-term pass.
 Examples:
