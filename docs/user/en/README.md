@@ -1,58 +1,38 @@
 # Prism Vesicle User Manual
 
-[English](./README.md) | [简体中文](../zh-CN/README.md)
+English | [简体中文](../zh-CN/README.md)
 
-This manual teaches Prism Vesicle from first principles. It assumes that you may be new to terminals, configuration files, API keys, and AI model providers.
+Prism Vesicle is a terminal host for Prism Engine creative workflows: it connects to your own model API and turns source material into structured character cards, scenario cards, and long-form narrative.
 
-The main path uses Windows 11, Windows Terminal, and PowerShell. Linux and WSL users can still follow the product concepts, but platform-specific commands are intentionally kept out of the beginner path.
+## Start here: how did you get Vesicle?
 
-## How To Use This Manual
+| I have… | Good for | Start page |
+|---|---|---|
+| The Windows installer (`PrismVesicleSetup-<version>-windows-x64.exe`) | First time with a terminal program; want a guided wizard | [Windows installer](./start/windows-installer.md) |
+| The npm package (`prism-vesicle`) | A developer already using Bun | [npm install](./start/npm.md) |
+| The Windows single-file build (`prism-vesicle-windows-x64-<version>.exe` + asset pack) | Don't want an installer; need no-install or self-verification | [Windows portable](./start/windows-portable.md) |
+| The Linux single-file build (`prism-vesicle-linux-x64-<version>` + asset pack) | Linux / WSL users | [Linux portable](./start/linux-portable.md) |
 
-Read the numbered chapters in order. Each chapter introduces only the concepts needed for its task, shows the interaction to complete, explains the expected result, and ends with a completion check.
+> Other Linux packages such as `.deb` are not published yet; a row will be added when they are.
 
-Chapters `00`–`06` form the first complete learning path: understand the product, prepare Windows, install Vesicle, configure one provider, pass Doctor, and complete a first conversation.
+Not sure which? A Windows user with no history here is best off with the installer.
 
-## Beginner Path
+## After that (every start page converges)
 
-1. [00 — Welcome and Safety](./00-welcome.md)
-2. [01 — Windows, Files, and PowerShell](./01-windows-basics.md)
-3. [02 — Model Providers, API Keys, Cost, and Privacy](./02-model-providers.md)
-4. [03 — Install Prism Vesicle](./03-installation.md)
-5. [04 — Configure Your First Provider in Guided Setup](./04-first-provider.md)
-6. [05 — Run Doctor and Launch Vesicle](./05-doctor-and-launch.md)
-7. [06 — Complete Your First Conversation](./06-first-conversation.md)
+Whichever entry you use, the destination is the same: `vesicle doctor` passes, and Vesicle is open in your project directory. Then continue from one shared tutorial path:
 
-## Everyday Use
+1. [First conversation](./tutorials/first-conversation.md)
+2. [First character card](./tutorials/first-character-card.md)
+3. … (full contents in the [tutorial index](./tutorials/README.md))
 
-8. [07 — Models and Prism Engines](./07-models-and-engines.md)
-9. [08 — Sessions and Resume](./08-sessions-and-resume.md)
+## Reference
 
-## Prism Workflows
+Command cheatsheet, configuration files, the permission and security model, checksums and signing, updates and uninstall, and troubleshooting live in the [reference section](./reference/README.md).
 
-10. [09 — A Complete ETL Workflow](./09-complete-etl-workflow.md)
+## Advanced and experimental
 
-## Advanced Operation
+Host shell, Output Quality Guard, SubAgents, Stage, and other advanced capabilities live in the [advanced section](./advanced/README.md).
 
-11. [10 — Tool Permissions and the Host Shell](./10-tool-permissions-and-shell.md)
+## Manual status
 
-## Planned Learning Path
-
-The following chapters will extend the manual from everyday use to advanced operation:
-
-- `11` — Artifacts and validation
-- `12` — Gates, questions, and engine handoffs
-- `13` — Rewind and file checkpoints
-- `14` — Context, compaction, effort, and reasoning
-- `15` — Images and web research
-- `16` — MCP tools
-- `17` — Advanced provider configuration
-- `18` — Troubleshooting and recovery
-- `19` — Updates, backups, migration, and removal
-
-Reference pages for commands, configuration, terminology, and frequently asked questions will be added separately from the numbered learning path.
-
-## Manual Status
-
-Prism Vesicle is currently an alpha product. The manual documents the supported onboarding path, but screens, commands, provider models, and workflow details may change. When the manual and the program disagree, run `vesicle doctor`, record the exact command and output, and report the mismatch.
-
-[Start with Chapter 00 →](./00-welcome.md)
+Prism Vesicle is in alpha; the interface and commands may change. When the manual disagrees with the program, trust `vesicle doctor` and please report the discrepancy.

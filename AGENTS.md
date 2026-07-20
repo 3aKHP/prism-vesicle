@@ -19,7 +19,7 @@ workflow, or documentation change, also read:
   independent CR expectations, and documentation sweep.
 - `CONTRIBUTING.md`: Conventional Commits, public repo boundary, local runtime, provider config location, documentation style, and PR checklist.
 - `README.md`: project entry point, installation, first run, concise capability overview, and documentation navigation.
-- `docs/user/en/README.md`: canonical ordered user-manual curriculum; pair user-facing chapter changes with the matching `docs/user/zh-CN/` file.
+- `docs/user/zh-CN/README.md`: canonical user-manual entry point; pair user-manual changes with the matching `docs/user/en/` page.
 
 Read `CHANGELOG.md` before any user-visible behavior, config, runtime contract,
 tool surface, TUI, prompt, or documentation-status change.
@@ -39,10 +39,12 @@ Use the docs by responsibility:
 | File | Authority |
 |------|-----------|
 | `README.md` | Project entry point, installation, first run, feature overview, and doc navigation |
-| `docs/user/` | Ordered beginner-to-advanced user manuals; English canonical, Simplified Chinese mirrored |
+| `docs/user/` | Channel-funnelled user manuals (start pages, tutorials, reference); Simplified Chinese canonical, English mirrored |
 | `STATUS.md` | Current implemented state, limits, tool surface, verification |
 | `CHANGELOG.md` | User-visible and notable unreleased changes |
 | `CONTRIBUTING.md` | Contributor workflow, repo boundary, provider setup, and documentation style |
+| `CODE_SIGNING_POLICY.md` | Windows signing scope, approval, verification, and incident handling |
+| `PRIVACY.md` | Local data, external-service transfers, uninstall behavior, and deletion |
 | `docs/dev/STYLE.md` | Code architecture and runtime boundaries |
 | `docs/dev/WORKFLOW.md` | Branching, PRs, hotfixes, independent CR |
 | `AGENTS.md` / `CLAUDE.md` | AI collaborator startup and coordination |
@@ -52,7 +54,7 @@ same branch. Do not leave documentation drift for a later pass.
 
 Follow the Markdown conventions in `CONTRIBUTING.md`: prose uses natural line wrapping rather than fixed-column hard wraps.
 
-`README.md` and `CONTRIBUTING.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, mirror every changed `docs/user/en/` chapter to the same relative path under `docs/user/zh-CN/`.
+`README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
 
 ## Branch And PR Rules
 

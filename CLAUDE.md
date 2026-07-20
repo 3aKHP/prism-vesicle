@@ -26,7 +26,7 @@ Also read:
 
 - `README.md` when setup, user-facing commands, provider configuration, or
   capabilities are affected.
-- `docs/user/en/README.md` and the affected English/Chinese chapter pair when beginner onboarding or user-manual behavior is affected.
+- `docs/user/zh-CN/README.md` (canonical) and the affected English/Chinese page pair when beginner onboarding or user-manual behavior is affected.
 - `CHANGELOG.md` before user-visible behavior, config, runtime, prompt, TUI,
   docs-status, or tool-surface changes.
 - `assets/README.md` before editing copied Prism assets.

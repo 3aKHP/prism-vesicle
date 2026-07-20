@@ -132,7 +132,7 @@ Use the smallest verification set that proves the change:
 
 ## CI/CD State Machine
 
-CI/CD has two entry points and one shared implementation. A version-tag push is the publication authorization; normal releases do not require an Actions-page dispatch or GitHub Environment approval. If SignPath Authenticode is enabled, its required per-request human signing approval remains a separate external trust gate.
+CI/CD has two entry points and one shared implementation. A version-tag push is the publication authorization; normal releases do not require an Actions-page dispatch or GitHub Environment approval. If Windows signing is enabled, its required per-request human signing approval remains a separate external trust gate.
 
 | Entry point | Trigger | Source | Retention | External side effects |
 |-------------|---------|--------|-----------|-----------------------|
@@ -188,11 +188,11 @@ Do not tag `develop` or a release branch. After publication, forward-sync the re
 
 ### Code Signing Readiness
 
-The public [Code Signing Policy](../../CODE_SIGNING_POLICY.md) defines the intended Windows signing scope, maintainer roles, user verification, and incident handling. The [Privacy Policy](../../PRIVACY.md) documents the local and external-service data behavior required for public distribution. The SignPath Foundation application was submitted on 2026-07-15, but approval and Authenticode CI integration remain pending.
+The public [Code Signing Policy](../../CODE_SIGNING_POLICY.md) defines the intended Windows signing scope, maintainer roles, user verification, and incident handling. The [Privacy Policy](../../PRIVACY.md) documents the local and external-service data behavior required for public distribution. Windows signing is deferred until a viable signing provider is in place, with no version deadline.
 
-`1.0.0-alpha.2` is an explicit unsigned exception for the small, informed alpha test group. Its generated GitHub Release notes must prepend a bilingual warning that identifies both Windows artifacts as unsigned, links the code-signing policy, points to `SHA256SUMS.txt`, and tells users not to disable Windows security globally. While this exception is active, release metadata validation pins the only publishable package version to exactly `1.0.0-alpha.2`; every later version requires a reviewed workflow change that either integrates signing or records another explicit alpha decision. This exception ends no later than `1.0.0-beta.1`; a release candidate must reuse a signing path already exercised during beta rather than introducing signing for the first time.
+`1.0.0-alpha.2` is an explicit unsigned exception for the small, informed alpha test group. Its generated GitHub Release notes must prepend a bilingual warning that identifies both Windows artifacts as unsigned, links the code-signing policy, points to `SHA256SUMS.txt`, and tells users not to disable Windows security globally. While this exception is active, release metadata validation pins the only publishable package version to exactly `1.0.0-alpha.2`; every later version requires a reviewed workflow change that either integrates signing or records another explicit alpha decision. There is no version deadline for adding signing; whenever it is taken up, a release candidate must reuse a signing path already exercised during earlier releases rather than introducing signing for the first time.
 
-After SignPath acceptance, tag push remains the maintainer's command-line publication authorization, but every production signing request must also be manually inspected and approved in SignPath. The signing implementation must sign and verify the portable PE before installer staging, enable and verify the generated signed uninstaller, then sign and verify the final installer. A failed or unapproved signing request must block publication of the affected Windows artifact; it must never silently fall back to an unsigned file.
+If signing is taken up later, tag push remains the maintainer's command-line publication authorization, but every production signing request must also be manually inspected and approved through the signing provider. The signing implementation must sign and verify the portable PE before installer staging, enable and verify the generated signed uninstaller, then sign and verify the final installer. A failed or unapproved signing request must block publication of the affected Windows artifact; it must never silently fall back to an unsigned file.
 
 ### First-Time Bootstrap
 

@@ -7,25 +7,37 @@ hard to fool.
 ## Layering
 
 ```text
-cli/            # command dispatch only
-tui/            # OpenTUI rendering and keyboard interaction
-config/         # environment loading and config inspection
-setup/          # guided onboarding, discovery, validated config transactions
-core/engine/    # engine profile YAML loading
-core/artifacts/ # artifact discovery, preview bounds, validation selection
-core/prompt/    # prompt asset loading and composition
-core/session/   # durable session persistence + resume helpers
-core/tools/     # host tool contracts and execution
-mcp/            # external MCP tool discovery and execution
-core/gate/      # request_confirmation tool + GateRequest types
-core/agent-loop/# provider requests, tool loop, gate pause/resume
-core/agents/    # Agent profiles, child lifecycle, concurrency, inbox delivery
-core/harness/   # Harness manifest verification, compatibility, immutable install
-core/validators/# Module A/B v9 schema checks + registry
-providers/      # protocol adapters only
-assets/         # exact bundled V10 Harness manifest inventory
-host-assets/    # restricted Vesicle prompts and generic Agent extensions
-harness-manifest.json # bundled V10 Harness identity and hashes
+cli/  # command dispatch only
+tui/  # OpenTUI rendering and keyboard interaction
+config/  # environment loading and config inspection
+setup/  # guided onboarding, discovery, validated config transactions
+core/agent-loop/  # provider requests, tool loop, gate pause/resume
+core/agents/  # Agent profiles, child lifecycle, concurrency, inbox delivery
+core/artifacts/  # artifact discovery, preview bounds, validation selection
+core/attachments/  # clipboard image content-addressed store
+core/checkpoints/  # per-turn file snapshots, diff stats, restore
+core/compact/  # context compaction service
+core/engine/  # engine profile YAML loading
+core/gate/  # request_confirmation tool + GateRequest types
+core/harness/  # Harness manifest verification, compatibility, immutable install
+core/permissions/  # Tool Permission Runtime broker and policy
+core/process/  # bounded Process Runtime and shell profiles
+core/prompt/  # prompt asset loading and composition
+core/quality/  # Output Quality Guard host runtime
+core/rewind/  # conversation rewind and partial summarization
+core/runtime/  # engine and runtime asset resolution helpers
+core/session/  # durable session persistence + resume helpers
+core/stage/  # Stage consumer bootstrap
+core/tools/  # host tool contracts and execution
+core/user-question/  # ask_user_question host question types
+core/validators/  # Module A/B v9 schema checks + registry
+mcp/  # external MCP tool discovery and execution
+providers/  # protocol adapters only
+skills/  # future controlled skill bundle surface
+types/  # shared host types
+assets/  # exact bundled V10 Harness manifest inventory
+host-assets/  # restricted Vesicle prompts and generic Agent extensions
+harness-manifest.json  # bundled V10 Harness identity and hashes
 ```
 
 Allowed dependency direction:

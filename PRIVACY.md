@@ -2,7 +2,7 @@
 
 [English](./PRIVACY.md) | [简体中文](./PRIVACY.zh-CN.md)
 
-Last updated: 2026-07-15
+Last updated: 2026-07-21
 
 ## Summary
 
