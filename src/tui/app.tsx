@@ -54,6 +54,8 @@ import { createAgentCommand } from "./agent-command";
 import { useInputRouting } from "./input-routing";
 import { createQualityPickerController } from "./quality-picker-controller";
 import { startStageSession } from "../core/stage/bootstrap";
+import { artifactFocusAction, artifactFocusPath, initialArtifactFocusPath } from "./artifact-focus";
+import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -129,6 +131,7 @@ export function App(props: AppProps = {}) {
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
   const [qualityWarnings, setQualityWarnings] = createSignal<QualityWarning[]>([]);
   const [selectedArtifact, setSelectedArtifact] = createSignal<SelectedArtifact | null>(null);
+  const [focusedArtifactPath, setFocusedArtifactPath] = createSignal<string | null>(null);
   const [activity, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
@@ -612,6 +615,9 @@ export function App(props: AppProps = {}) {
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
+  createEffect(() => {
+    if (focusedArtifactPath() && !layout().showSidebar) setFocusedArtifactPath(null);
+  });
   const qualityWarningPaths = createMemo(() => new Set(qualityWarnings().flatMap((warning) =>
     warning.targets.flatMap((target) => target.path ? [target.path] : [])
   )));
@@ -685,6 +691,9 @@ export function App(props: AppProps = {}) {
     handleDecisionPaste,
     insertComposerPaste,
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
+    artifactFocusActive: () => focusedArtifactPath() !== null,
+    enterArtifactFocus,
+    handleArtifactFocusKey,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -791,7 +800,38 @@ export function App(props: AppProps = {}) {
     const entries = await scanArtifacts(process.cwd());
     setArtifacts(entries);
     setSelectedArtifact((selected) => selected && entries.some((entry) => entry.path === selected.path) ? selected : null);
+    setFocusedArtifactPath((path) => entries.some((entry) => entry.path === path) ? path : null);
     return entries;
+  }
+
+  function enterArtifactFocus(): boolean {
+    if (!layout().showSidebar || busy()) return false;
+    const path = initialArtifactFocusPath(artifacts(), selectedArtifact()?.path);
+    if (!path) return false;
+    setFocusedArtifactPath(path);
+    return true;
+  }
+
+  function handleArtifactFocusKey(key: import("./decision-interaction").TuiKeyEvent): boolean {
+    const action = artifactFocusAction(key);
+    if (action === "exit") {
+      setFocusedArtifactPath(null);
+      return true;
+    }
+    if (action === "previous" || action === "next") {
+      setFocusedArtifactPath((path) => artifactFocusPath(artifacts(), path, action === "previous" ? -1 : 1));
+      return true;
+    }
+    if (action === "preview") {
+      const path = focusedArtifactPath();
+      const index = artifacts().findIndex((artifact) => artifact.path === path);
+      if (index >= 0 && !busy()) {
+        setFocusedArtifactPath(null);
+        void turnController.submitPrompt(`/artifact ${index + 1}`);
+      }
+      return true;
+    }
+    return true;
   }
 
   async function refreshQualityWarnings(targetSessionId = sessionId()): Promise<QualityWarning[]> {
@@ -820,6 +860,15 @@ export function App(props: AppProps = {}) {
         </Show>
       </box>
 
+      <Show when={focusedArtifactPath()} fallback={<box height={0} />}>
+        {(path) => <ArtifactFocusPreview
+          path={path()}
+          index={Math.max(0, artifacts().findIndex((artifact) => artifact.path === path()))}
+          total={artifacts().length}
+          width={layout().width}
+        />}
+      </Show>
+
       <box flexDirection="row" flexGrow={1}>
         <Show when={layout().showSidebar} fallback={<box width={0} />}>
           <Sidebar
@@ -831,6 +880,7 @@ export function App(props: AppProps = {}) {
             artifacts={artifacts()}
             qualityWarningPaths={qualityWarningPaths()}
             selectedArtifactPath={selectedArtifact()?.path}
+            focusedArtifactPath={focusedArtifactPath() ?? undefined}
             agents={agentCards()}
             processes={backgroundProcesses()}
             currentSessionId={sessionId()}

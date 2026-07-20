@@ -7,6 +7,7 @@ import type { ArtifactEntry } from "../src/core/artifacts/workbench";
 import { listStageCardPaths } from "../src/core/stage/bootstrap";
 import { resolveCommandArgumentCompletion } from "../src/tui/commands/argument-completion";
 import { builtinCommands } from "../src/tui/commands/builtin";
+import { argumentMenuLabelBudget } from "../src/tui/widgets/ArgumentMenu";
 import type { CommandArgumentCompletion, CommandCompletionContext } from "../src/tui/commands/types";
 
 const roots: string[] = [];
@@ -136,10 +137,16 @@ describe("Stage completion paths", () => {
     const first = resolve("/stage ", { rootDir: root });
     const candidate = (await items(first))[0]!;
     expect(candidate.id).toBe("workspace/cards/mira card.md");
+    expect(candidate.detail).toBeUndefined();
     expect(first.complete(candidate)).toBe('/stage "workspace/cards/mira card.md" ');
 
     const second = resolve('/stage "workspace/cards/mira card.md" ', { rootDir: root });
     expect(second.complete((await items(second))[0]!)).toBe('/stage "workspace/cards/mira card.md" "workspace/cards/mira card.md"');
+  });
+
+  test("lets Stage paths use the whole candidate row when no item detail is present", () => {
+    expect(argumentMenuLabelBudget(80, false)).toBe(79);
+    expect(argumentMenuLabelBudget(80, true)).toBe(22);
   });
 });
 

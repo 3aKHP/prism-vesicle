@@ -34,6 +34,9 @@ export type InputRoutingOptions = {
   handleDecisionPaste: (text: string) => boolean;
   insertComposerPaste: (text: string) => void;
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
+  artifactFocusActive?: Accessor<boolean>;
+  enterArtifactFocus?: () => boolean;
+  handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
 };
 
 export function useInputRouting(options: InputRoutingOptions): void {
@@ -104,6 +107,14 @@ export function useInputRouting(options: InputRoutingOptions): void {
         return;
       case "composer":
         break;
+    }
+    if (options.artifactFocusActive?.()) {
+      if (options.handleArtifactFocusKey?.(key)) consumeKey(key);
+      return;
+    }
+    if ((key.meta || key.option) && key.name === "a" && options.enterArtifactFocus?.()) {
+      consumeKey(key);
+      return;
     }
     if (key.name?.toLowerCase() === "v" && (key.meta || key.option)) {
       consumeKey(key);

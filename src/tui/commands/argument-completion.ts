@@ -328,7 +328,6 @@ export const stageCommandCompletion: CommandCompletion = {
       async () => (await listStageCardPaths(context.rootDir)).map((path) => ({
         id: path,
         label: path,
-        detail: "guarded project-relative file",
       })),
       (item) => selectingSecond
         ? `/stage ${quoteArgument(firstPath!)} ${quoteArgument(item.id)}`

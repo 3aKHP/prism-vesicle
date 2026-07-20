@@ -36,6 +36,7 @@ export function Sidebar(props: {
   artifacts: { path: string }[];
   qualityWarningPaths?: ReadonlySet<string>;
   selectedArtifactPath?: string;
+  focusedArtifactPath?: string;
   agents?: AgentCardState[];
   processes?: BackgroundProcessState[];
   currentSessionId?: string;
@@ -81,11 +82,12 @@ export function Sidebar(props: {
                     {(artifact) => {
                       const index = () => props.artifacts.indexOf(artifact) + 1;
                       const selected = () => artifact.path === props.selectedArtifactPath;
+                      const focused = () => artifact.path === props.focusedArtifactPath;
                       return (
                         <PanelLine
                           content={artifactSidebarLine(artifact.path, root, index(), props.width - 4, props.qualityWarningPaths?.has(artifact.path) === true)}
-                          fg={selected() ? palette.brand : props.qualityWarningPaths?.has(artifact.path) ? palette.warn : palette.textSecondary}
-                          attributes={selected() ? 1 : 0}
+                          fg={focused() ? palette.brand : selected() ? palette.brandDim : props.qualityWarningPaths?.has(artifact.path) ? palette.warn : palette.textSecondary}
+                          attributes={focused() || selected() ? 1 : 0}
                         />
                       );
                     }}

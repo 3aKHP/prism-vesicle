@@ -58,6 +58,12 @@ describe("TUI reactivity static guard", () => {
     expect(layoutBlock).not.toContain("inputValue()");
   });
 
+  test("artifact focus closes when the sidebar is no longer visible", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "src", "tui", "app.tsx"), "utf8");
+
+    expect(source).toContain("if (focusedArtifactPath() && !layout().showSidebar) setFocusedArtifactPath(null)");
+  });
+
   test("slash-command rows derive selection reactively", async () => {
     const source = await readFile(join(import.meta.dir, "..", "src", "tui", "widgets", "CommandMenu.tsx"), "utf8");
 
