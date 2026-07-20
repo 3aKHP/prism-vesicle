@@ -28,7 +28,7 @@ Provider env: file (...\prism-vesicle\.env)
 API key: available
 Permissions: MOMENTUM (...\permissions.yaml)
 Shell exec: disabled; interpreter PowerShell 7 (...\pwsh.exe)
-Harness: bundled prism-engine-v10@10.0.1-alpha.3
+Harness: bundled prism-engine-v10@10.1.0-rc.1
 Missing: none
 ```
 

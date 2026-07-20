@@ -446,6 +446,9 @@ Prompts are runtime assets, not hardcoded source literals.
   the shared argument-completion popup instead of requiring memorized input.
   Keep completion values sourced from the runtime enum where one exists, and
   preserve parser aliases while completing to canonical values.
+- See [`COMMAND_COMPLETION.md`](./COMMAND_COMPLETION.md) for the command-owned
+  registration contract, dynamic candidate rules, and required regression
+  coverage for slash-command argument completion.
 - Main prompt editing should go through Vesicle's host-owned composer layer,
   not directly through OpenTUI's single-line `<input>`. Keep the core keyboard
   semantics aligned with Claude Code's prompt input model: ordinary editing
