@@ -38,7 +38,7 @@ _Last updated: 2026-07-21_
 The 1.0 alpha makes Vesicle a credible direct API host for Prism Engine, not just a
 Chat wrapper:
 
-User-facing documentation is intentionally limited during this alpha. Treat the Windows-first `docs/user/` manual, README installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and `docs/examples/` as the supported onboarding references; other behavior is subject to alpha-level change while feature/fix work remains the priority.
+User-facing documentation is intentionally limited during this alpha. Treat the `docs/user/` manual, README installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and `docs/examples/` as the supported onboarding references; other behavior is subject to alpha-level change while feature/fix work remains the priority.
 
 - Resolve each logical `assets/...` file through sparse project overrides, user-global overrides, then one complete verified V10 baseline without exposing physical paths to the model. The baseline is either a project-pinned managed Harness Pack or the packaged/standalone bundled `prism-engine-v10@10.1.0-rc.1` Pack. The Harness owns its declared prompt sections; a restricted host layer supplies only the five generic Vesicle Agent Profiles and their prompts. Load engine profiles from `assets/engines/*.yaml` and drive systemPrompt,
   tool surface, validators, and stop gates from them at runtime.

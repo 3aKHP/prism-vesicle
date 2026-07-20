@@ -16,6 +16,12 @@ project follows Semantic Versioning once releases begin.
 - Benchmark plans can now set `earlyStop.minimumEvaluations` to avoid applying a rate-based early stop before an operational pilot has enough observations; legacy plans retain the previous minimum of one evaluation.
 - Added fail-closed support for `quality-policy/semantic-rewrite@1`. A Harness that requires it must publish an active, hash-verified Semantic Rewrite Policy with known stable Judge rules, exact protocol/model scopes, complete per-rule confidence thresholds, and non-placeholder calibration digests. The host exposes only pure eligibility evaluation at this stage; current published Harnesses remain observe-only and semantic findings still cannot enter rewrite decisions.
 
+### Changed
+
+- Rewrote the user manual from a single linear Windows-first curriculum into a channel-funnelled structure: a routing page, four start pages (Windows installer, npm, Windows portable, Linux portable), five channel-agnostic tutorials, and a reference section. Content is grounded in the current CLI, guided Setup wizard, doctor output, validators, config files, installer, and release artifacts rather than carried over from the prior prose.
+- The user manual is now Simplified-Chinese-canonical with an English mirror at the same relative paths. Root and `docs/dev` governance docs remain English-canonical; only the user-manual language policy changed.
+- The npm path now recommends a global install (`npm install -g prism-vesicle`) so the standard workflow is `cd project && vesicle .`; the root READMEs were updated accordingly.
+
 ### Fixed
 
 - Stage source-view toggling now uses `Ctrl+Alt+S` instead of plain Enter or Space, so a focused Stage message cannot intercept composer text, command spaces, prompt submission, or `Ctrl+Enter` newlines.

@@ -83,7 +83,7 @@ Prefer links to the authoritative document over duplicating detailed inventories
 
 `README.md` and `CONTRIBUTING.md` are canonical English root documents. Their Simplified Chinese counterparts use the `.zh-CN.md` suffix and should be updated in the same change whenever shared meaning changes.
 
-The user manual scales by language directory: `docs/user/en/` is canonical and `docs/user/zh-CN/` mirrors the same relative filenames, chapter numbers, navigation, commands, and shared meaning. `docs/user/README.md` is the language landing page.
+The user manual scales by language directory: `docs/user/zh-CN/` is canonical and `docs/user/en/` mirrors the same relative filenames, navigation, commands, and shared meaning. `docs/user/README.md` is the language landing page.
 
 Keep commands, paths, configuration keys, code, and product identifiers unchanged across languages. Translate the surrounding explanation for clarity rather than mirroring English sentence structure mechanically.
 
