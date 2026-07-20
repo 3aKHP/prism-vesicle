@@ -22,6 +22,16 @@ import {
   resolveSessionTarget,
 } from "./dispatch";
 import {
+  agentsCommandCompletion,
+  artifactCommandCompletion,
+  engineCommandCompletion,
+  fixedCommandCompletion,
+  modelCommandCompletion,
+  qualityCommandCompletion,
+  resumeCommandCompletion,
+  stageCommandCompletion,
+} from "./argument-completion";
+import {
   renderArtifactList,
   renderValidationNotice,
   renderEngineList,
@@ -53,6 +63,7 @@ export const builtinCommands: Command[] = [
     name: "stage",
     description: "Start a new Stage narrative session from two cards",
     usage: "/stage <character-card-path> <scenario-card-path>",
+    completion: stageCommandCompletion,
     async run(ctx, args, raw) {
       const parts = args.match(/(?:[^\s\"]+|\"[^\"]*\")+/g)?.map((part) => part.replace(/^\"|\"$/g, "")) ?? [];
       if (parts.length !== 2) {
@@ -80,6 +91,7 @@ export const builtinCommands: Command[] = [
     name: "quality",
     description: "Show or configure the experimental Semantic Judge",
     usage: "/quality [off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]",
+    completion: qualityCommandCompletion,
     async run(ctx, args, raw) {
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
       const parts = args.split(/\s+/).filter(Boolean);
@@ -136,6 +148,7 @@ export const builtinCommands: Command[] = [
     name: "permissions",
     description: "Show or change the tool approval mode",
     usage: "/permissions [MANUAL|INERTIA|MOMENTUM|YOLO]",
+    completion: fixedCommandCompletion("permissions"),
     async run(ctx, args, raw) {
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
       if (!args) {
@@ -158,6 +171,7 @@ export const builtinCommands: Command[] = [
     name: "agents",
     description: "List Agent Profiles and current SubAgents",
     usage: "/agents [handle|stop <handle>|retry]",
+    completion: agentsCommandCompletion,
     async run(ctx, args, raw) {
       const result = await ctx.agentCommand(args);
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: result }]);
@@ -168,6 +182,7 @@ export const builtinCommands: Command[] = [
     name: "engine",
     description: "List or switch the Prism engine for future turns",
     usage: "/engine [id]",
+    completion: engineCommandCompletion,
     async run(ctx, args, raw) {
       if (!args) {
         ctx.setMessages((prev) => [
@@ -246,6 +261,7 @@ export const builtinCommands: Command[] = [
     name: "model",
     description: "Switch provider/model (no args opens a picker)",
     usage: "/model [provider] [model]",
+    completion: modelCommandCompletion,
     async run(ctx, args, raw) {
       const parts = args.split(/\s+/).filter(Boolean);
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
@@ -279,6 +295,7 @@ export const builtinCommands: Command[] = [
     name: "effort",
     description: "Set provider thinking effort",
     usage: "/effort off|low|medium|high|xhigh|max|auto",
+    completion: fixedCommandCompletion("effort"),
     async run(ctx, args, raw) {
       if (!args) {
         ctx.setMessages((prev) => [
@@ -313,6 +330,7 @@ export const builtinCommands: Command[] = [
     name: "reasoning",
     description: "Set reasoning display mode",
     usage: "/reasoning hidden|collapsed|expanded",
+    completion: fixedCommandCompletion("reasoning"),
     async run(ctx, args, raw) {
       if (!args) {
         ctx.setMessages((prev) => [
@@ -339,6 +357,7 @@ export const builtinCommands: Command[] = [
     name: "artifact",
     description: "List artifacts or preview one in the message stream",
     usage: "/artifact [n|path]",
+    completion: artifactCommandCompletion("artifact"),
     async run(ctx, args, raw) {
       const entries = args ? (ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts()) : await ctx.refreshArtifacts();
       if (!args) {
@@ -370,6 +389,7 @@ export const builtinCommands: Command[] = [
     name: "validate",
     description: "Validate an artifact file",
     usage: "/validate <n|path>",
+    completion: artifactCommandCompletion("validate"),
     async run(ctx, args, raw) {
       const entries = ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts();
       const artifact = resolveArtifactTarget(entries, args);
@@ -423,6 +443,7 @@ export const builtinCommands: Command[] = [
     name: "resume",
     description: "Resume a saved session",
     usage: "/resume [n|id]",
+    completion: resumeCommandCompletion,
     async run(ctx, args, raw) {
       const sessions = await ctx.listSessions();
       ctx.setResumableSessions(sessions);

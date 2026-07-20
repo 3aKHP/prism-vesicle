@@ -1,31 +1,28 @@
-import { createEffect, createMemo, createSignal, type Accessor, type Setter } from "solid-js";
+import { createEffect, createMemo, createSignal, untrack, type Accessor, type Setter } from "solid-js";
 import type { ProviderRegistry } from "../config/providers";
+import type { ArtifactEntry } from "../core/artifacts/workbench";
+import type { SessionSummary } from "../core/session/store";
 import type { VesicleImageAttachment } from "../providers/shared/types";
 import { builtinCommands } from "./commands/builtin";
-import {
-  completeAgentArgument,
-  completeFixedArgument,
-  completeModelArgument,
-  fixedArgumentOptions,
-  matchOptionItems,
-  parseAgentArgumentDraft,
-  parseFixedArgumentDraft,
-  parseModelArgumentDraft,
-} from "./commands/argument-completion";
+import { matchOptionItems, resolveCommandArgumentCompletion } from "./commands/argument-completion";
 import { matchCommands } from "./commands/match";
-import { modelOptionItems, providerOptionItems } from "./commands/options";
+import type { CommandArgumentCompletion } from "./commands/types";
 import { clampCommandMenuSelection, moveCommandMenuSelection } from "./commands/selection";
 import { normalizeKeyName, setComposerValue, type ComposerState } from "./composer";
 import type { TuiKeyEvent } from "./decision-interaction";
 import type { AgentCardState, OptionItem } from "./types";
 
 export type CommandCompletionControllerOptions = {
+  rootDir: string;
   inputValue: Accessor<string>;
   applyComposerState: (state: ComposerState) => void;
   clearComposer: () => void;
   setInputImages: Setter<VesicleImageAttachment[]>;
   setHistoryIndex: Setter<number | null>;
   providerRegistry: Accessor<ProviderRegistry | null>;
+  activeProvider: Accessor<string>;
+  refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  listSessions: () => Promise<SessionSummary[]>;
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
   busy: Accessor<boolean>;
@@ -48,58 +45,65 @@ export function createCommandCompletionController(options: CommandCompletionCont
     previousCommandMenuQuery = query;
   });
 
-  const modelArgumentDraft = createMemo(() => parseModelArgumentDraft(options.inputValue()));
-  const fixedArgumentDraft = createMemo(() => parseFixedArgumentDraft(options.inputValue()));
-  const agentArgumentDraft = createMemo(() => parseAgentArgumentDraft(options.inputValue()));
-  const commandArgumentMenuOpen = createMemo(() => Boolean(modelArgumentDraft() || fixedArgumentDraft() || agentArgumentDraft()));
-  const commandArgumentItems = createMemo<OptionItem[]>(() => {
-    const modelDraft = modelArgumentDraft();
-    if (modelDraft) {
-      const registry = options.providerRegistry();
-      if (!registry) return [];
-      const candidates = modelDraft.stage === "provider"
-        ? providerOptionItems(registry)
-        : modelOptionItems(registry, modelDraft.providerId);
-      return matchOptionItems(modelDraft.query, candidates);
+  const commandArgumentDraft = createMemo(() => resolveCommandArgumentCompletion(options.inputValue(), builtinCommands, {
+    rootDir: options.rootDir,
+    providerRegistry: options.providerRegistry,
+    activeProvider: options.activeProvider,
+    refreshArtifacts: options.refreshArtifacts,
+    listSessions: options.listSessions,
+    agentOptions,
+  }));
+  const commandArgumentSourceKey = createMemo(() => commandArgumentDraft()?.sourceKey ?? null);
+  const [loadedItems, setLoadedItems] = createSignal<OptionItem[]>([]);
+  const [loadedSourceKey, setLoadedSourceKey] = createSignal<string | null>(null);
+
+  // Dynamic sources refresh once per grammar stage. Query edits reuse their
+  // candidates, and a cleanup guard prevents an old scan from replacing a new
+  // stage after the draft changes or the user presses Escape.
+  createEffect(() => {
+    const sourceKey = commandArgumentSourceKey();
+    const draft = untrack(commandArgumentDraft);
+    if (!sourceKey || !draft || Array.isArray(draft.items)) {
+      setLoadedSourceKey(null);
+      setLoadedItems([]);
+      return;
     }
-    const fixedDraft = fixedArgumentDraft();
-    if (fixedDraft) return matchOptionItems(fixedDraft.query, fixedArgumentOptions(fixedDraft.command));
-    const agentDraft = agentArgumentDraft();
-    if (!agentDraft) return [];
-    const handles = agentOptionItems();
-    const candidates = agentDraft.stage === "command"
-      ? [
-          { id: "stop", label: "stop", detail: "Interrupt a running SubAgent" },
-          { id: "retry", label: "retry", detail: "Retry paused background-result delivery" },
-          ...handles,
-        ]
-      : handles.filter((item) => {
-          const agent = options.agentCards().find((candidate) => candidate.handle === item.id);
-          return agent?.status === "queued" || agent?.status === "running";
-        });
-    return matchOptionItems(agentDraft.query, candidates);
+    let current = true;
+    setLoadedSourceKey(null);
+    setLoadedItems([]);
+    void draft.items().then((items) => {
+      if (!current) return;
+      setLoadedItems(items);
+      setLoadedSourceKey(sourceKey);
+    }).catch(() => {
+      if (!current) return;
+      setLoadedItems([]);
+      setLoadedSourceKey(sourceKey);
+    });
+    return () => { current = false; };
   });
+
+  const commandArgumentItems = createMemo<OptionItem[]>(() => {
+    const draft = commandArgumentDraft();
+    if (!draft) return [];
+    const items = Array.isArray(draft.items)
+      ? draft.items
+      : loadedSourceKey() === draft.sourceKey ? loadedItems() : [];
+    return matchOptionItems(draft.query, items);
+  });
+  const commandArgumentMenuOpen = createMemo(() => Boolean(commandArgumentDraft()));
   const [commandArgumentSelected, setCommandArgumentSelected] = createSignal(0);
   createEffect(() => {
     setCommandArgumentSelected((selected) => clampCommandMenuSelection(selected, commandArgumentItems().length));
   });
   let previousCommandArgumentKey: string | null = null;
   createEffect(() => {
-    const modelDraft = modelArgumentDraft();
-    const fixedDraft = fixedArgumentDraft();
-    const agentDraft = agentArgumentDraft();
-    const key = modelDraft
-      ? `model:${modelDraft.stage}:${modelDraft.stage === "model" ? `${modelDraft.providerId}:` : ""}${modelDraft.query}`
-      : fixedDraft
-        ? `fixed:${fixedDraft.command}:${fixedDraft.query}`
-        : agentDraft
-          ? `agent:${agentDraft.stage}:${agentDraft.query}`
-          : null;
+    const key = commandArgumentDraft()?.selectionKey ?? null;
     if (key !== previousCommandArgumentKey) setCommandArgumentSelected(0);
     previousCommandArgumentKey = key;
   });
 
-  function agentOptionItems(): OptionItem[] {
+  function agentOptions(): OptionItem[] {
     return options.agentCards()
       .filter((agent) => agent.parentSessionId === options.sessionId())
       .map((agent) => ({ id: agent.handle, label: agent.handle, detail: `${agent.status} · ${agent.description}` }));
@@ -185,12 +189,7 @@ export function createCommandCompletionController(options: CommandCompletionCont
   }
 
   function selectedCommandArgumentValue(item: OptionItem): string | null {
-    const modelDraft = modelArgumentDraft();
-    if (modelDraft) return completeModelArgument(modelDraft, item);
-    const fixedDraft = fixedArgumentDraft();
-    if (fixedDraft) return completeFixedArgument(fixedDraft, item);
-    const agentDraft = agentArgumentDraft();
-    return agentDraft ? completeAgentArgument(agentDraft, item) : null;
+    return commandArgumentDraft()?.complete(item) ?? null;
   }
 
   function submitCompletedCommandArgument(value: string): void {
@@ -210,15 +209,13 @@ export function createCommandCompletionController(options: CommandCompletionCont
   }
 
   return {
-    agentArgumentDraft,
+    commandArgumentDraft,
     commandArgumentItems,
     commandArgumentMenuOpen,
     commandArgumentSelected,
     commandMenuItems,
     commandMenuOpen,
     commandMenuSelected,
-    fixedArgumentDraft,
     handleKey,
-    modelArgumentDraft,
   };
 }

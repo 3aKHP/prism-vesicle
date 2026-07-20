@@ -149,6 +149,7 @@ export function App(props: AppProps = {}) {
   } = usageController;
   const [lastDisplayedToolAssistantContent, setLastDisplayedToolAssistantContent] = createSignal<string | null>(null);
   const turnCancellation = new TurnCancellation();
+  let handleStageMessageKey: ((key: import("./decision-interaction").TuiKeyEvent) => boolean) | undefined;
 
   let turnController!: ReturnType<typeof createTurnController>;
   let resumeSession!: ReturnType<typeof createSessionResumeController>["resumeSession"];
@@ -310,11 +311,14 @@ export function App(props: AppProps = {}) {
     rootDir: process.cwd(),
     terminalWidth: () => dimensions().width,
     providerRegistry,
+    activeProvider,
     ensureProviderRegistry,
     applyProviderSelection,
     persistProviderSwitch,
     agentCards,
     sessionId,
+    refreshArtifacts,
+    listSessions,
     busy,
     activeModelCapabilities,
     status,
@@ -327,10 +331,10 @@ export function App(props: AppProps = {}) {
     openRewind: rewindController.open,
   });
   const {
-    agentArgumentDraft,
     applyState: applyComposerState,
     clear: clearComposer,
     commandArgumentItems,
+    commandArgumentDraft,
     commandArgumentMenuOpen,
     commandArgumentSelected,
     commandMenuItems,
@@ -338,7 +342,6 @@ export function App(props: AppProps = {}) {
     commandMenuSelected,
     composerInputWidth,
     composerPopupOpen,
-    fixedArgumentDraft,
     handleEscape: handleEscapeAtPrompt,
     handleKey: handleComposerKey,
     handleModelPickerKey,
@@ -349,7 +352,6 @@ export function App(props: AppProps = {}) {
     inputNeedsExpandedBottom,
     inputValue,
     insertPastedText: insertComposerPaste,
-    modelArgumentDraft,
     modelPicker,
     modelPickerItems,
     modelPickerTitle,
@@ -682,6 +684,7 @@ export function App(props: AppProps = {}) {
     handlePromptEscape: handleEscapeAtPrompt,
     handleDecisionPaste,
     insertComposerPaste,
+    handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -775,7 +778,7 @@ export function App(props: AppProps = {}) {
       setMessages([
         { role: "user", content: commandEcho },
         ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
-        { role: "assistant", content: started.opening, engine: "stage" },
+        { id: started.openingRecordUuid, role: "assistant", content: started.opening, kind: "stage-bootstrap-opening", engine: "stage" },
       ]);
       setStatus("Stage session ready");
       recordActivity({ kind: "system", text: `started Stage session ${started.sessionId}` });
@@ -842,6 +845,11 @@ export function App(props: AppProps = {}) {
           reasoningMode={reasoningDisplayMode()}
           contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
           agents={agentCards()}
+          activeEngine={activeEngine()}
+          sessionId={sessionId()}
+          transcriptKey={messages().map((message, index) => message.id ?? `${index}:${message.role}:${message.content}`).join("\u0001")}
+          onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
+          registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
         />
 
         {/* The former right-hand Activity / Artifacts pane was removed in the
@@ -880,9 +888,7 @@ export function App(props: AppProps = {}) {
         commandArgumentMenuOpen={commandArgumentMenuOpen()}
         commandArgumentItems={commandArgumentItems()}
         commandArgumentSelected={commandArgumentSelected()}
-        modelArgumentDraft={modelArgumentDraft()}
-        fixedArgumentDraft={fixedArgumentDraft()}
-        agentArgumentDraft={agentArgumentDraft()}
+        commandArgumentDraft={commandArgumentDraft()}
         composerPopupMaxRows={composerPopupMaxRows()}
         composerPopupOpen={composerPopupOpen()}
         inputNeedsExpandedBottom={inputNeedsExpandedBottom()}

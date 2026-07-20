@@ -33,6 +33,7 @@ export type InputRoutingOptions = {
   handlePromptEscape: () => void;
   handleDecisionPaste: (text: string) => boolean;
   insertComposerPaste: (text: string) => void;
+  handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
 };
 
 export function useInputRouting(options: InputRoutingOptions): void {
@@ -50,8 +51,9 @@ export function useInputRouting(options: InputRoutingOptions): void {
   });
 
   useKeyboard((rawKey) => {
-    const key = { ...rawKey, name: normalizeKeyName(rawKey.name) };
+    const key = createRoutingKey(rawKey);
     if (key.ctrl && key.name === "c") {
+      consumeKey(key);
       void copySelectionToClipboard(options.renderer).then((copied) => {
         if (copied) {
           options.renderer.clearSelection();
@@ -108,7 +110,16 @@ export function useInputRouting(options: InputRoutingOptions): void {
       void options.pasteClipboardImage();
       return;
     }
+    if (options.handleStageMessageKey?.(key)) {
+      consumeKey(key);
+      return;
+    }
     if (options.handleComposerKey(key)) {
+      consumeKey(key);
+      return;
+    }
+    if (isComposerDirectionKey(key)) {
+      // ScrollBox handles modified arrows too, but composer intentionally does not.
       consumeKey(key);
       return;
     }
@@ -133,7 +144,20 @@ export function useInputRouting(options: InputRoutingOptions): void {
   });
 }
 
-function consumeKey(key: TuiKeyEvent): void {
+export function createRoutingKey(rawKey: TuiKeyEvent): TuiKeyEvent {
+  return {
+    ...rawKey,
+    name: normalizeKeyName(rawKey.name),
+    preventDefault: rawKey.preventDefault?.bind(rawKey),
+    stopPropagation: rawKey.stopPropagation?.bind(rawKey),
+  };
+}
+
+export function consumeKey(key: TuiKeyEvent): void {
   key.preventDefault?.();
   key.stopPropagation?.();
+}
+
+function isComposerDirectionKey(key: TuiKeyEvent): boolean {
+  return key.name === "up" || key.name === "down" || key.name === "left" || key.name === "right";
 }
