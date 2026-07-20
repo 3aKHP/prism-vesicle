@@ -54,6 +54,8 @@ Without this file, the defaults are `MOMENTUM` + `shellExec: false` + `shellInte
 
 `shellInterpreter`: `auto` is `/bin/sh` on Linux/WSL and prefers PowerShell 7 on Windows, falling back only within the PowerShell family; an explicit `posix-sh`/`cmd`/`git-bash` choice never silently switches shell families.
 
+> The full Process Runtime (background tasks, the complete interpreter-profile set, process-tree cleanup, plan binding) is in [Advanced: host shell](../advanced/shell-exec.md).
+
 ## Process-level approval skip
 
 To skip approval for **this one run** only (dangerous):

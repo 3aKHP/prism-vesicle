@@ -54,6 +54,8 @@ shellInterpreter: auto  # auto / posix-sh / powershell-7 / windows-powershell-5.
 
 `shellInterpreter`:`auto` 在 Linux/WSL 是 `/bin/sh`,Windows 优先 PowerShell 7 并只在 PowerShell 家族内兜底;显式选 `posix-sh`/`cmd`/`git-bash` 等不会跨 shell 家族静默切换。
 
+> 完整的 Process Runtime(后台任务、解释器档案全集、进程树清理、计划绑定)见 [高级:宿主 Shell](../advanced/shell-exec.md)。
+
 ## 进程级跳过确认
 
 只想对**这一次运行**全程不打断(危险):

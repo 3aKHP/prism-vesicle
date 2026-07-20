@@ -21,6 +21,7 @@ project follows Semantic Versioning once releases begin.
 - Rewrote the user manual from a single linear Windows-first curriculum into a channel-funnelled structure: a routing page, four start pages (Windows installer, npm, Windows portable, Linux portable), five channel-agnostic tutorials, and a reference section. Content is grounded in the current CLI, guided Setup wizard, doctor output, validators, config files, installer, and release artifacts rather than carried over from the prior prose.
 - The user manual is now Simplified-Chinese-canonical with an English mirror at the same relative paths. Root and `docs/dev` governance docs remain English-canonical; only the user-manual language policy changed.
 - The npm path now recommends a global install (`npm install -g prism-vesicle`) so the standard workflow is `cd project && vesicle .`; the root READMEs were updated accordingly.
+- Added an `advanced/` section to the user manual (host shell/Process Runtime, Output Quality Guard, SubAgents, Stage) with Simplified Chinese canonical and an English mirror. Each page marks a point-in-time 🟢/🟡 status that defers to STATUS.md, so experimental features can graduate without rewriting the prose.
 
 ### Fixed
 

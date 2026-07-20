@@ -29,6 +29,10 @@ Whichever entry you use, the destination is the same: `vesicle doctor` passes, a
 
 Command cheatsheet, configuration files, the permission and security model, checksums and signing, updates and uninstall, and troubleshooting live in the [reference section](./reference/README.md).
 
+## Advanced and experimental
+
+Host shell, Output Quality Guard, SubAgents, Stage, and other advanced capabilities live in the [advanced section](./advanced/README.md).
+
 ## Manual status
 
 Prism Vesicle is in alpha; the interface and commands may change. When the manual disagrees with the program, trust `vesicle doctor` and please report the discrepancy.
