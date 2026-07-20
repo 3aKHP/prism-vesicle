@@ -82,7 +82,7 @@ export function applyComposerKey(state: ComposerState, key: ComposerKey, options
       return moveDownOrHistory(current, options);
     case "enter":
     case "return":
-      return applyEnter(current, key);
+      return applyEnter(current);
     case "tab":
       return handled(insertText(current, "  "));
   }
@@ -160,7 +160,7 @@ function applyMetaKey(state: ComposerState, name: string): ComposerResult {
   return { state, handled: false };
 }
 
-function applyEnter(state: ComposerState, key: ComposerKey): ComposerResult {
+function applyEnter(state: ComposerState): ComposerResult {
   if (state.cursor > 0 && state.value[state.cursor - 1] === "\\") {
     const withoutSlash = deleteRange(state, state.cursor - 1, state.cursor);
     return handled(insertText(withoutSlash, "\n"));

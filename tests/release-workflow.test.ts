@@ -129,6 +129,7 @@ describe("release workflow contract", () => {
       .map((step) => step.run ?? "")
       .join("\n");
 
+    expect(commands).toContain("bun run lint");
     expect(commands).toContain("bun run typecheck");
     expect(commands).toContain("bun test");
     expect(commands).toContain("bun audit");

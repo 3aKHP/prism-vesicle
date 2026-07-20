@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { normalizeAssetPath, type AssetResolver } from "../../runtime/assets";
-import { isEnoent, toProjectPath } from "./path-policy";
+import { toProjectPath } from "./path-policy";
 
 export function sliceLines(content: string, startLine: number | undefined, endLine: number | undefined): string {
   if (startLine === undefined && endLine === undefined) return content;

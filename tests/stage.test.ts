@@ -272,7 +272,7 @@ describe("Stage bootstrap", () => {
             tool_calls: [{
               id: "stage-question",
               type: "function",
-              function: { name: "ask_user_question", arguments: '{\"header\":\"Choose\",\"question\":\"Continue?\",\"options\":[{\"label\":\"Yes\",\"description\":\"Continue\"},{\"label\":\"No\",\"description\":\"Stop\"}]}' },
+              function: { name: "ask_user_question", arguments: '{"header":"Choose","question":"Continue?","options":[{"label":"Yes","description":"Continue"},{"label":"No","description":"Stop"}]}' },
             }],
           } }] });
         }

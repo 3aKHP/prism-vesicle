@@ -5,7 +5,7 @@ import type { EngineId } from "../core/engine/profile";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import type { ConversationRewind } from "../core/rewind/service";
 import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
-import type { ComposerElement, ComposerState } from "./composer";
+import type { ComposerState } from "./composer";
 import { composerElementsForImages } from "./composer-history";
 import type { PendingEngineSwitchState, PendingGateState, PendingPermissionState, PendingQualityDecisionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
 import { displayTranscriptFromSnapshot, vesicleMessagesFromResumed } from "./session-presenter";

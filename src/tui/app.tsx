@@ -122,17 +122,17 @@ export function App(props: AppProps = {}) {
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
-  const [output, setOutput] = createSignal("");
+  const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [restoringSession, setRestoringSession] = createSignal(false);
-  const [resumableSessions, setResumableSessions] = createSignal<SessionSummary[]>([]);
+  const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
   const [qualityWarnings, setQualityWarnings] = createSignal<QualityWarning[]>([]);
   const [selectedArtifact, setSelectedArtifact] = createSignal<SelectedArtifact | null>(null);
   const [focusedArtifactPath, setFocusedArtifactPath] = createSignal<string | null>(null);
-  const [activity, setActivity] = createSignal<ActivityEntry[]>([
+  const [, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
   const [agentCards, setAgentCards] = createSignal<AgentCardState[]>([]);
@@ -348,10 +348,7 @@ export function App(props: AppProps = {}) {
     handleEscape: handleEscapeAtPrompt,
     handleKey: handleComposerKey,
     handleModelPickerKey,
-    historyIndex,
     inputCursor,
-    inputElements,
-    inputImages,
     inputNeedsExpandedBottom,
     inputValue,
     insertPastedText: insertComposerPaste,

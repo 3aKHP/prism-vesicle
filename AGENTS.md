@@ -87,6 +87,7 @@ before merge.
 - Standard verification:
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -162,6 +163,7 @@ These are non-negotiable boundaries; see `docs/dev/STYLE.md` for detail.
 Choose verification proportional to risk. For most changes, run:
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor

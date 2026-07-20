@@ -41,11 +41,15 @@ Use [`docs/examples/provider.env.example`](./docs/examples/provider.env.example)
 
 ```bash
 bun install
+bun run hooks:install
 bun run doctor
+bun run lint
 bun run typecheck
 bun test
 bun run dev
 ```
+
+`bun run hooks:install` selects the tracked `.githooks/` directory for this checkout. Its pre-push hook runs `bun run lint` and blocks the push when Biome reports a diagnostic.
 
 The TUI reads provider settings from:
 

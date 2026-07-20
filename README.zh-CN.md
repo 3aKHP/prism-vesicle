@@ -165,6 +165,7 @@ bun run dev
 ## 开发
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -173,6 +174,7 @@ bun run doctor
 | 脚本 | 用途 |
 |---|---|
 | `bun run dev` | 从源码运行 TUI |
+| `bun run lint` | 运行固定版本的 Biome 正确性检查，不格式化文件 |
 | `bun run typecheck` | 验证 TypeScript，但不生成文件 |
 | `bun test` | 运行确定性测试套件 |
 | `BUN_E2E_REAL_PROVIDER=1 bun test tests/e2e-gate.test.ts` | 运行可选的真实供应商确认门验收测试 |

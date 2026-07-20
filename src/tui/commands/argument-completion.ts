@@ -1,4 +1,3 @@
-import type { ProviderRegistry } from "../../config/providers";
 import { engineIds } from "../../core/engine/profile";
 import { permissionModes } from "../../core/permissions";
 import { listStageCardPaths } from "../../core/stage/bootstrap";
@@ -221,7 +220,7 @@ export const qualityCommandCompletion: CommandCompletion = {
     const args = commandArguments(value, "quality");
     if (args === null) return null;
     const tokens = splitTokens(args);
-    const [first, second, third] = tokens.values;
+    const [first, second] = tokens.values;
     const fixedModes = [
       { id: "status", label: "status", detail: "Show Semantic Judge settings" },
       { id: "off", label: "off", detail: "Disable the Semantic Judge" },

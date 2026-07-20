@@ -1,4 +1,4 @@
-import type { EngineSwitchConfirmedResult, RunPromptResult } from "../core/agent-loop/run";
+import type { EngineSwitchConfirmedResult } from "../core/agent-loop/run";
 import { resolveEngineSwitch, resolveGate, resolvePermission, resolveQualityDecision, resolveUserQuestion } from "../core/agent-loop/run";
 import type { GateResolution } from "../core/gate/types";
 import type { PermissionResolution } from "../core/permissions";

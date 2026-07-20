@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, type Accessor, type Setter } from "solid-js";
+import { createMemo, createSignal, type Accessor, type Setter } from "solid-js";
 import type { ModelCapabilities } from "../config/env";
 import type { ProviderRegistry, ProviderSelection } from "../config/providers";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
@@ -16,7 +16,7 @@ import {
 } from "./composer";
 import type { PromptHistoryEntry } from "./composer-history";
 import { composerVisualLineCount } from "./composer-layout";
-import type { ActivityEntry, AgentCardState, Message, OptionItem } from "./types";
+import type { ActivityEntry, AgentCardState, Message } from "./types";
 import type { TuiKeyEvent } from "./decision-interaction";
 import { PromptEscapeController } from "./prompt-escape";
 import { createModelPickerController } from "./model-picker-controller";

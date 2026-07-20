@@ -6,7 +6,6 @@ import type { VesicleImageAttachment } from "../providers/shared/types";
 import { builtinCommands } from "./commands/builtin";
 import { matchOptionItems, resolveCommandArgumentCompletion } from "./commands/argument-completion";
 import { matchCommands } from "./commands/match";
-import type { CommandArgumentCompletion } from "./commands/types";
 import { clampCommandMenuSelection, moveCommandMenuSelection } from "./commands/selection";
 import { normalizeKeyName, setComposerValue, type ComposerState } from "./composer";
 import type { TuiKeyEvent } from "./decision-interaction";

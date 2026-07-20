@@ -52,6 +52,7 @@ For architecture, provider, TUI, session, or command-UX changes, first check whe
 ## Standard Verification
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor

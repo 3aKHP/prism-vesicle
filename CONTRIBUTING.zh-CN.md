@@ -41,11 +41,15 @@ type(scope): summary
 
 ```bash
 bun install
+bun run hooks:install
 bun run doctor
+bun run lint
 bun run typecheck
 bun test
 bun run dev
 ```
+
+`bun run hooks:install` 会让当前检出使用仓库追踪的 `.githooks/` 目录。其中的 pre-push hook 会运行 `bun run lint`，并在 Biome 报告诊断时阻止推送。
 
 TUI 从以下位置读取供应商设置：
 

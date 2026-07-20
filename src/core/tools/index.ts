@@ -47,7 +47,6 @@ import {
   executeShellExecTool,
   executeShellOutputTool,
   executeShellStopTool,
-  createShellExecToolDefinition,
   shellExecToolDefinition,
   shellOutputToolDefinition,
   shellStopToolDefinition,

@@ -165,6 +165,7 @@ See [`STATUS.md`](./STATUS.md) for the authoritative implementation inventory, t
 ## Development
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -173,6 +174,7 @@ bun run doctor
 | Script | Purpose |
 |---|---|
 | `bun run dev` | Run the TUI from source |
+| `bun run lint` | Run the pinned Biome correctness checks without formatting files |
 | `bun run typecheck` | Validate TypeScript without emitting files |
 | `bun test` | Run the deterministic test suite |
 | `BUN_E2E_REAL_PROVIDER=1 bun test tests/e2e-gate.test.ts` | Run the opt-in real-provider gate acceptance test |

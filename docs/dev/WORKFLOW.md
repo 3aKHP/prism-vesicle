@@ -91,6 +91,8 @@ the integration trunk for subsequent internal iteration.
 
 ### Normal Change
 
+Run `bun run hooks:install` once per checkout so the tracked pre-push hook enforces `bun run lint` before remote updates.
+
 1. Align scope: state what changes, files likely touched, risks, and validation.
 2. Decide whether the Rapid Development Exception allows direct `develop`
    work. Otherwise branch from `develop`.
@@ -98,6 +100,7 @@ the integration trunk for subsequent internal iteration.
 4. Run local verification:
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -123,9 +126,9 @@ Use the smallest verification set that proves the change:
 | Change type | Minimum verification |
 |-------------|----------------------|
 | docs only | targeted docs grep and, when cheap, `bun run typecheck` |
-| small code | `bun run typecheck` plus focused tests |
-| provider/session/tool/gate/TUI runtime | `bun run typecheck`, relevant tests, `bun run doctor` |
-| release or `main` snapshot | `bun run typecheck`, `bun test`, `bun run doctor`, and real TUI/provider smoke when practical |
+| small code | `bun run lint`, `bun run typecheck`, plus focused tests |
+| provider/session/tool/gate/TUI runtime | `bun run lint`, `bun run typecheck`, relevant tests, `bun run doctor` |
+| release or `main` snapshot | `bun run lint`, `bun run typecheck`, `bun test`, `bun run doctor`, and real TUI/provider smoke when practical |
 
 ## CI/CD State Machine
 
@@ -143,7 +146,7 @@ The reusable workflow is the single owner of the release gates:
 - Node 24 runtime lines for GitHub-maintained JavaScript Actions, `oven-sh/setup-bun`, and the GitHub Release Action; npm Trusted Publishing also installs Node 24 explicitly
 - frozen Bun install
 - package-version validation
-- typecheck, deterministic tests, dependency audit, npm allowlist check, and clean npm consumer smoke
+- Biome lint, typecheck, deterministic tests, dependency audit, npm allowlist check, and clean npm consumer smoke
 - Linux ELF build and empty-project release-shape smoke
 - Windows PE build, focused Windows runtime tests, and empty-project release-shape smoke
 - pinned Inno Setup build, silent install, upgrade, runtime, and uninstall smoke
@@ -289,6 +292,7 @@ Return:
 
 ## Test Plan
 
+- [ ] `bun run lint`
 - [ ] `bun run typecheck`
 - [ ] `bun test`
 - [ ] `bun run doctor`

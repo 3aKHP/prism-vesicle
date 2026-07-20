@@ -1,6 +1,6 @@
 # Prism Vesicle Project Status
 
-_Last updated: 2026-07-20_
+_Last updated: 2026-07-21_
 
 ## Current Version
 
@@ -364,6 +364,7 @@ never abort a turn. Validators run only on artifact-shaped assistant content
 Current standard checks:
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor

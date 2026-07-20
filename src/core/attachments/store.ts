@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import type { ImageDetail, VesicleImageAttachment } from "../../providers/shared/types";
 
 export const maxImageAttachmentBytes = 5 * 1024 * 1024;
