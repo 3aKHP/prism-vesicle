@@ -8,7 +8,6 @@ import {
   type QualityCandidateType,
   type QualityDecisionCandidate,
   type QualityDecisionPoint,
-  type ExperimentalQualityProfileSnapshot,
   type QualityEvent,
   type QualityEventTarget,
   type QualityResolution,
@@ -568,10 +567,6 @@ function parseQualityDecisionCandidate(value: unknown): QualityDecisionCandidate
     ...(typeof source.finishReason === "string" ? { finishReason: source.finishReason } : {}),
     ...(usage ? { usage } : {}),
   };
-}
-
-function findLastQualityFindingCount(records: SessionRecord[]): number {
-  return findQualityEvents(records).at(-1)?.findingIds.length ?? 0;
 }
 
 function readEngineId(value: unknown): EngineId | undefined {

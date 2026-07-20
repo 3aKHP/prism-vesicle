@@ -2,7 +2,7 @@ import { Match, Switch } from "solid-js";
 import type { GateRequest } from "../../core/gate/types";
 import type { PermissionRequest } from "../../core/permissions";
 import type { ResponsiveTuiLayout } from "../layout";
-import type { AgentArgumentDraft, FixedArgumentDraft, ModelArgumentDraft } from "../commands/argument-completion";
+import type { CommandArgumentCompletion } from "../commands/types";
 import type { Command } from "../commands/types";
 import { commandArgumentHint } from "../commands/options";
 import type { GateFocusTarget } from "../GatePrompt";
@@ -92,9 +92,7 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   commandArgumentMenuOpen: boolean;
   commandArgumentItems: OptionItem[];
   commandArgumentSelected: number;
-  modelArgumentDraft: ModelArgumentDraft | null;
-  fixedArgumentDraft: FixedArgumentDraft | null;
-  agentArgumentDraft: AgentArgumentDraft | null;
+  commandArgumentDraft: CommandArgumentCompletion | null;
   composerPopupMaxRows: number;
   composerPopupOpen: boolean;
   inputNeedsExpandedBottom: boolean;
@@ -239,7 +237,7 @@ export function BottomSurface(props: BottomSurfaceProps) {
                   width={props.layout.width - 4}
                   maxVisible={props.composerPopupMaxRows}
                 />
-                <text content={commandArgumentHint(props.modelArgumentDraft, props.fixedArgumentDraft, props.agentArgumentDraft)} fg={palette.textDim} wrapMode="none" />
+                <text content={commandArgumentHint(props.commandArgumentDraft)} fg={palette.textDim} wrapMode="none" />
               </box>
             </Match>
           </Switch>

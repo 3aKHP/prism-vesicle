@@ -16,6 +16,7 @@ import type { ArtifactEntry } from "../../core/artifacts/workbench";
 import type {
   ActivityEntry,
   Message,
+  OptionItem,
   SelectedArtifact,
   SessionPickerState,
 } from "../types";
@@ -25,6 +26,35 @@ export type UsageTelemetrySummary = {
   outputTokens: number;
   cachedInputTokens: number;
   contextInputTokens: number;
+};
+
+/**
+ * Host-owned data sources available to command argument completion. Command
+ * definitions describe their grammar; the TUI controller owns async loading,
+ * filtering, and keyboard interaction.
+ */
+export type CommandCompletionContext = {
+  rootDir: string;
+  providerRegistry: () => ProviderRegistry | null;
+  activeProvider: () => string;
+  refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  listSessions: () => Promise<SessionSummary[]>;
+  agentOptions: () => OptionItem[];
+};
+
+export type CommandArgumentCompletion = {
+  /** Stable while only the filter query changes; used to discard stale loads. */
+  sourceKey: string;
+  /** Changes for every editable draft so selection resets predictably. */
+  selectionKey: string;
+  query: string;
+  hint: string;
+  items: OptionItem[] | (() => Promise<OptionItem[]>);
+  complete: (item: OptionItem) => string;
+};
+
+export type CommandCompletion = {
+  resolve: (draft: string, context: CommandCompletionContext) => CommandArgumentCompletion | null;
 };
 
 /**
@@ -105,6 +135,8 @@ export type Command = {
   description: string;
   /** Usage hint, e.g. "/engine <id>". */
   usage?: string;
+  /** Optional command-owned argument grammar and candidate sources. */
+  completion?: CommandCompletion;
   /**
    * Execute the command. `args` is the raw text after the command name
    * (trimmed, whitespace-normalised); `raw` is the full input including the

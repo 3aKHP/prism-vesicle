@@ -1,14 +1,11 @@
 id: dyad
 displayName: Prism Dyad Engine
-protocolVersion: v10.0-tempered-voice
+protocolVersion: v10.1-prompt-assembly
 systemPrompt:
-  - assets/prompts/shared/vesicle-base.md
-  - assets/quality/anti-ai-flavor/guidance.zh-CN.md
+  - assets/prompts/host/runtime.md
+  - assets/quality/anti-ai-flavor/generation-brief.zh-CN.md
   - assets/prompts/engines/dyad.md
 defaultTools:
-  - config.load
-  - prompt.load
-  - session.write
   - stat_path
   - list_files
   - list_directory

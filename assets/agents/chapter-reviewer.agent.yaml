@@ -2,8 +2,8 @@ id: chapter-reviewer
 displayName: Prism Chapter Reviewer
 description: Independently audit one compiled chapter against its cards, outline, Story Bible, and prose-quality rubric.
 systemPrompt:
-  - assets/prompts/agents/base.md
-  - assets/prompts/agents/quality/anti-ai-flavor.judge-rubric.md
+  - assets/prompts/host/review.md
+  - assets/prompts/agents/quality/anti-ai-flavor.review-brief.md
   - assets/prompts/agents/chapter-reviewer.md
 tools:
   - stat_path

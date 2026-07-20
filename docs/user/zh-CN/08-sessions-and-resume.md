@@ -107,7 +107,7 @@ Started a fresh session. Type a prompt to begin.
 
 ## 按编号或 id 恢复
 
-选择器是最安全的新手方式。Vesicle 也支持：
+选择器是带引导的新手方式。Vesicle 也支持：
 
 ```text
 /resume 2

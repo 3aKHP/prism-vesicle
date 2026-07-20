@@ -54,6 +54,8 @@ import { createAgentCommand } from "./agent-command";
 import { useInputRouting } from "./input-routing";
 import { createQualityPickerController } from "./quality-picker-controller";
 import { startStageSession } from "../core/stage/bootstrap";
+import { artifactFocusAction, artifactFocusPath, initialArtifactFocusPath } from "./artifact-focus";
+import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -120,16 +122,17 @@ export function App(props: AppProps = {}) {
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
-  const [output, setOutput] = createSignal("");
+  const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [restoringSession, setRestoringSession] = createSignal(false);
-  const [resumableSessions, setResumableSessions] = createSignal<SessionSummary[]>([]);
+  const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
   const [qualityWarnings, setQualityWarnings] = createSignal<QualityWarning[]>([]);
   const [selectedArtifact, setSelectedArtifact] = createSignal<SelectedArtifact | null>(null);
-  const [activity, setActivity] = createSignal<ActivityEntry[]>([
+  const [focusedArtifactPath, setFocusedArtifactPath] = createSignal<string | null>(null);
+  const [, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
   const [agentCards, setAgentCards] = createSignal<AgentCardState[]>([]);
@@ -149,6 +152,7 @@ export function App(props: AppProps = {}) {
   } = usageController;
   const [lastDisplayedToolAssistantContent, setLastDisplayedToolAssistantContent] = createSignal<string | null>(null);
   const turnCancellation = new TurnCancellation();
+  let handleStageMessageKey: ((key: import("./decision-interaction").TuiKeyEvent) => boolean) | undefined;
 
   let turnController!: ReturnType<typeof createTurnController>;
   let resumeSession!: ReturnType<typeof createSessionResumeController>["resumeSession"];
@@ -310,11 +314,14 @@ export function App(props: AppProps = {}) {
     rootDir: process.cwd(),
     terminalWidth: () => dimensions().width,
     providerRegistry,
+    activeProvider,
     ensureProviderRegistry,
     applyProviderSelection,
     persistProviderSwitch,
     agentCards,
     sessionId,
+    refreshArtifacts,
+    listSessions,
     busy,
     activeModelCapabilities,
     status,
@@ -327,10 +334,10 @@ export function App(props: AppProps = {}) {
     openRewind: rewindController.open,
   });
   const {
-    agentArgumentDraft,
     applyState: applyComposerState,
     clear: clearComposer,
     commandArgumentItems,
+    commandArgumentDraft,
     commandArgumentMenuOpen,
     commandArgumentSelected,
     commandMenuItems,
@@ -338,18 +345,13 @@ export function App(props: AppProps = {}) {
     commandMenuSelected,
     composerInputWidth,
     composerPopupOpen,
-    fixedArgumentDraft,
     handleEscape: handleEscapeAtPrompt,
     handleKey: handleComposerKey,
     handleModelPickerKey,
-    historyIndex,
     inputCursor,
-    inputElements,
-    inputImages,
     inputNeedsExpandedBottom,
     inputValue,
     insertPastedText: insertComposerPaste,
-    modelArgumentDraft,
     modelPicker,
     modelPickerItems,
     modelPickerTitle,
@@ -610,6 +612,9 @@ export function App(props: AppProps = {}) {
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
+  createEffect(() => {
+    if (focusedArtifactPath() && !layout().showSidebar) setFocusedArtifactPath(null);
+  });
   const qualityWarningPaths = createMemo(() => new Set(qualityWarnings().flatMap((warning) =>
     warning.targets.flatMap((target) => target.path ? [target.path] : [])
   )));
@@ -682,6 +687,10 @@ export function App(props: AppProps = {}) {
     handlePromptEscape: handleEscapeAtPrompt,
     handleDecisionPaste,
     insertComposerPaste,
+    handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
+    artifactFocusActive: () => focusedArtifactPath() !== null,
+    enterArtifactFocus,
+    handleArtifactFocusKey,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -775,7 +784,7 @@ export function App(props: AppProps = {}) {
       setMessages([
         { role: "user", content: commandEcho },
         ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
-        { role: "assistant", content: started.opening, engine: "stage" },
+        { id: started.openingRecordUuid, role: "assistant", content: started.opening, kind: "stage-bootstrap-opening", engine: "stage" },
       ]);
       setStatus("Stage session ready");
       recordActivity({ kind: "system", text: `started Stage session ${started.sessionId}` });
@@ -788,7 +797,38 @@ export function App(props: AppProps = {}) {
     const entries = await scanArtifacts(process.cwd());
     setArtifacts(entries);
     setSelectedArtifact((selected) => selected && entries.some((entry) => entry.path === selected.path) ? selected : null);
+    setFocusedArtifactPath((path) => entries.some((entry) => entry.path === path) ? path : null);
     return entries;
+  }
+
+  function enterArtifactFocus(): boolean {
+    if (!layout().showSidebar || busy()) return false;
+    const path = initialArtifactFocusPath(artifacts(), selectedArtifact()?.path);
+    if (!path) return false;
+    setFocusedArtifactPath(path);
+    return true;
+  }
+
+  function handleArtifactFocusKey(key: import("./decision-interaction").TuiKeyEvent): boolean {
+    const action = artifactFocusAction(key);
+    if (action === "exit") {
+      setFocusedArtifactPath(null);
+      return true;
+    }
+    if (action === "previous" || action === "next") {
+      setFocusedArtifactPath((path) => artifactFocusPath(artifacts(), path, action === "previous" ? -1 : 1));
+      return true;
+    }
+    if (action === "preview") {
+      const path = focusedArtifactPath();
+      const index = artifacts().findIndex((artifact) => artifact.path === path);
+      if (index >= 0 && !busy()) {
+        setFocusedArtifactPath(null);
+        void turnController.submitPrompt(`/artifact ${index + 1}`);
+      }
+      return true;
+    }
+    return true;
   }
 
   async function refreshQualityWarnings(targetSessionId = sessionId()): Promise<QualityWarning[]> {
@@ -817,6 +857,15 @@ export function App(props: AppProps = {}) {
         </Show>
       </box>
 
+      <Show when={focusedArtifactPath()} fallback={<box height={0} />}>
+        {(path) => <ArtifactFocusPreview
+          path={path()}
+          index={Math.max(0, artifacts().findIndex((artifact) => artifact.path === path()))}
+          total={artifacts().length}
+          width={layout().width}
+        />}
+      </Show>
+
       <box flexDirection="row" flexGrow={1}>
         <Show when={layout().showSidebar} fallback={<box width={0} />}>
           <Sidebar
@@ -828,6 +877,7 @@ export function App(props: AppProps = {}) {
             artifacts={artifacts()}
             qualityWarningPaths={qualityWarningPaths()}
             selectedArtifactPath={selectedArtifact()?.path}
+            focusedArtifactPath={focusedArtifactPath() ?? undefined}
             agents={agentCards()}
             processes={backgroundProcesses()}
             currentSessionId={sessionId()}
@@ -842,6 +892,10 @@ export function App(props: AppProps = {}) {
           reasoningMode={reasoningDisplayMode()}
           contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
           agents={agentCards()}
+          activeEngine={activeEngine()}
+          sessionId={sessionId()}
+          onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
+          registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
         />
 
         {/* The former right-hand Activity / Artifacts pane was removed in the
@@ -880,9 +934,7 @@ export function App(props: AppProps = {}) {
         commandArgumentMenuOpen={commandArgumentMenuOpen()}
         commandArgumentItems={commandArgumentItems()}
         commandArgumentSelected={commandArgumentSelected()}
-        modelArgumentDraft={modelArgumentDraft()}
-        fixedArgumentDraft={fixedArgumentDraft()}
-        agentArgumentDraft={agentArgumentDraft()}
+        commandArgumentDraft={commandArgumentDraft()}
         composerPopupMaxRows={composerPopupMaxRows()}
         composerPopupOpen={composerPopupOpen()}
         inputNeedsExpandedBottom={inputNeedsExpandedBottom()}

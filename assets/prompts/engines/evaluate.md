@@ -101,19 +101,3 @@
 ```
 
 所有发现映射到具体文件、段落和稳定 rule ID；证据不足时标记待核查，不能补写不存在的事实。
-
-## Host Adapter Binding — Prism Vesicle
-
-本节由 Harness 编译器依据 Prism Driver ABI 生成。宿主工具名与路径只在编译产物中出现。
-
-### Resolved Resources
-
-- HAL resource `schema.character` resolves to `assets/specs/schema_character.md`.
-- HAL resource `schema.scenario` resolves to `assets/specs/schema_scenario.md`.
-- HAL resource `schema.dlc` resolves to `assets/specs/schema_dlc.md`.
-- HAL resource `schema.outline` resolves to `assets/specs/schema_outline.md`.
-- HAL resource `schema.story-bible` resolves to `assets/specs/schema_story_bible.md`.
-
-### Quality Binding
-
-- 候选范围：`audit.target-prose`；模式：`analyze`；执行面：可选工具 `analyze_prose_quality`。

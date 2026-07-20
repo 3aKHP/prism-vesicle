@@ -107,7 +107,7 @@ For a quality decision, `Revise again` authorizes one additional provider reques
 
 ## Resume by Number or Id
 
-The picker is the safest beginner method. Vesicle also supports:
+The picker is the guided beginner method. Vesicle also supports:
 
 ```text
 /resume 2

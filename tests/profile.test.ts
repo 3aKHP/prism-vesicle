@@ -25,7 +25,7 @@ describe("engine profile loader", () => {
     expect(etl.stopGates).toContain("blueprint-confirmation");
     expect(etl.stopGates).toContain("phase-confirmation");
     expect(etl.displayName).toBe("Prism ETL Engine");
-    expect(etl.protocolVersion).toBe("v10.0-tempered-voice");
+    expect(etl.protocolVersion).toBe("v10.1-prompt-assembly");
   });
 
   test("runtime profile declares the runtime-turn stop gate", async () => {

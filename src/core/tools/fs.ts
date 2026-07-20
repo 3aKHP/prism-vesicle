@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { appendFile, copyFile, mkdir, readdir, readFile, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname } from "node:path";
 import { TextDecoder } from "node:util";
 import { writableProjectRoots } from "../artifacts/roots";
 import type { FileToolEvent, FileToolExecutionOptions, ToolCall, ToolResult } from "./types";
@@ -23,7 +23,7 @@ export async function executeFileTool(
   const assets = options.assets ?? createAssetResolver(rootDir);
   try {
     if (["stat_path", "list_files", "list_directory", "grep_files", "read_file", "view_image"].includes(call.name)) {
-      return await executeFileReadOperation(rootDir, call, options, assets);
+      return await executeFileReadOperation(rootDir, call, assets);
     }
     return await executeFileMutationOperation(rootDir, call, options, assets);
   } catch (error) {
@@ -34,7 +34,6 @@ export async function executeFileTool(
 async function executeFileReadOperation(
   rootDir: string,
   call: ToolCall,
-  options: FileToolExecutionOptions,
   assets: AssetResolver,
 ): Promise<ToolResult> {
   switch (call.name) {

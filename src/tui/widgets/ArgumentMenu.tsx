@@ -1,4 +1,4 @@
-import { For } from "solid-js";
+import { createMemo, For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { OptionItem } from "../types";
 import { clampCommandMenuSelection } from "../commands/selection";
@@ -14,10 +14,16 @@ export type ArgumentMenuProps = {
 
 const LABEL_COLUMN = 22;
 
+/** Keep a single-column candidate list readable when it has no per-item detail. */
+export function argumentMenuLabelBudget(width: number, hasDetails: boolean): number {
+  return hasDetails ? LABEL_COLUMN : Math.max(8, width - 1);
+}
+
 /** Inline command-argument candidates shown above the prompt composer. */
 export function ArgumentMenu(props: ArgumentMenuProps) {
   const safeSelected = () => clampCommandMenuSelection(props.selected, props.items.length);
   const win = () => visibleWindow(props.items, safeSelected(), props.maxVisible ?? 8);
+  const hasDetails = createMemo(() => props.items.some((item) => Boolean(item.detail)));
 
   return (
     <box flexDirection="column">
@@ -25,8 +31,11 @@ export function ArgumentMenu(props: ArgumentMenuProps) {
         {(item, getIndex) => {
           const index = () => win().start + getIndex();
           const isSelected = () => index() === safeSelected();
-          const label = padDisplayEnd(truncateLine(item.label, LABEL_COLUMN), LABEL_COLUMN);
-          const detailBudget = Math.max(0, props.width - LABEL_COLUMN - 2);
+          const labelBudget = argumentMenuLabelBudget(props.width, hasDetails());
+          const label = hasDetails()
+            ? padDisplayEnd(truncateLine(item.label, labelBudget), labelBudget)
+            : truncateLine(item.label, labelBudget);
+          const detailBudget = Math.max(0, props.width - labelBudget - 2);
           const detail = item.detail ? truncateLine(item.detail, detailBudget) : "";
           const attributes = () => isSelected() ? TextAttributes.BOLD : TextAttributes.NONE;
           return (

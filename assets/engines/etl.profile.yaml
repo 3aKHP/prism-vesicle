@@ -1,13 +1,10 @@
 id: etl
 displayName: Prism ETL Engine
-protocolVersion: v10.0-tempered-voice
+protocolVersion: v10.1-prompt-assembly
 systemPrompt:
-  - assets/prompts/shared/vesicle-base.md
+  - assets/prompts/host/authoring.md
   - assets/prompts/engines/etl.md
 defaultTools:
-  - config.load
-  - prompt.load
-  - session.write
   - stat_path
   - list_files
   - list_directory

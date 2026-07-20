@@ -3,7 +3,7 @@ import { parseImageAttachments } from "../attachments/store";
 import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets";
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
-import { reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage, type VesicleImageAttachment } from "../../providers/shared/types";
+import { reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { PermissionMode } from "../permissions";
@@ -62,7 +62,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
       const messageModel = typeof record.metadata?.model === "string" ? record.metadata.model : undefined;
       const usage = readResponseUsage(record.metadata?.usage);
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
-      messages.push({ role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
+      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
       continue;
     }
 

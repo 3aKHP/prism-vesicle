@@ -3,11 +3,12 @@ import type { EngineId, EngineProfile } from "../../core/engine/profile";
 import { engineIds } from "../../core/engine/profile";
 import type { PromptBundle } from "../../core/prompt/loader";
 import { composeSystemPrompt, loadPromptBundle } from "../../core/prompt/loader";
-import { createMcpRegistryForEngine, type McpRegistryOptions } from "../../mcp/registry";
+import type { McpRegistryOptions } from "../../mcp/registry";
 import { loadPermissionSettings } from "../../config/permissions";
-import { agentToolDefinitions } from "../../core/agents/tools";
+import { resolveToolSurface } from "../../core/agent-loop/tool-surface";
 import { resolveProjectHarnessRuntime } from "../../core/harness";
-import { resolveShellProfile, type ShellInterpreterPreference } from "../../core/process/shell-profile";
+import type { ShellInterpreterPreference } from "../../core/process/shell-profile";
+import type { AssetResolver } from "../../core/runtime/assets";
 
 /**
  * `vesicle prompt dump` — print the fully composed system prompt the model
@@ -38,21 +39,17 @@ export async function runPromptDump(args: string[]): Promise<void> {
   const permissions = await loadPermissionSettings();
 
   if (shapeOnly) {
-    await printShape(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter);
+    await printShape(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
     return;
   }
 
-  await printFullDump(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter);
+  await printFullDump(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
 }
 
 type ParsedArgs = { ok: true; value: { engine: EngineId; shapeOnly: boolean } } | { ok: false; error: string };
 
-const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
-const alwaysVisibleToolNames = ["ask_user_question", "request_engine_switch"];
-
 export type EffectivePromptToolNames = {
   modelVisible: string[];
-  hostContracts: string[];
 };
 
 export async function getEffectivePromptToolNames(
@@ -61,44 +58,10 @@ export async function getEffectivePromptToolNames(
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
 ): Promise<EffectivePromptToolNames> {
-  const shellLaunchEnabled = shellExecEnabled && Boolean(resolveShellProfile(shellInterpreter));
-  const modelVisible: string[] = [];
-  const hostContracts: string[] = [];
-
-  for (const name of profile.defaultTools) {
-    if (hostContractNames.has(name)) {
-      pushUnique(hostContracts, name);
-      continue;
-    }
-    if (name === "shell_exec" && !shellLaunchEnabled) continue;
-    if ((name === "shell_output" || name === "shell_stop") && !shellExecEnabled) continue;
-    pushUnique(modelVisible, name);
-  }
-
-  if (profile.stopGates.length > 0) {
-    pushUnique(modelVisible, "request_confirmation");
-  }
-  for (const name of alwaysVisibleToolNames) {
-    pushUnique(modelVisible, name);
-  }
-  if (shellExecEnabled) {
-    if (shellLaunchEnabled) pushUnique(modelVisible, "shell_exec");
-    pushUnique(modelVisible, "shell_output");
-    pushUnique(modelVisible, "shell_stop");
-  }
-  for (const definition of agentToolDefinitions) {
-    pushUnique(modelVisible, definition.function.name);
-  }
-  const mcp = await createMcpRegistryForEngine(profile.id, options);
-  for (const definition of mcp.definitions) {
-    pushUnique(modelVisible, definition.function.name);
-  }
-
-  return { modelVisible, hostContracts };
-}
-
-function pushUnique(values: string[], value: string): void {
-  if (!values.includes(value)) values.push(value);
+  const surface = await resolveToolSurface(profile, true, shellExecEnabled, shellInterpreter, options);
+  return {
+    modelVisible: surface.definitions.map((definition) => definition.function.name),
+  };
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -146,18 +109,20 @@ async function printShape(
   systemPrompt: string,
   shellExecEnabled: boolean,
   shellInterpreter: ShellInterpreterPreference,
+  assets?: AssetResolver,
 ): Promise<void> {
   const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter);
 
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
-  console.log(`System prompt length: ${systemPrompt.length} chars`);
+  console.log(`System prompt length: ${[...systemPrompt].length} chars (${Buffer.byteLength(systemPrompt, "utf8")} bytes)`);
   console.log(`Sections: ${profile.systemPrompt.length}`);
   for (const section of bundle.sections) {
-    console.log(`  - ${section.path} [${section.source}]`);
+    console.log(`  - ${section.path} [${section.source}] (${[...section.text].length} chars, ${Buffer.byteLength(section.text, "utf8")} bytes)`);
   }
+  const ledger = assets ? await loadStaticAssetLedger(assets, profile.id) : undefined;
+  printStaticAssetLedger(profile.id, ledger);
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
-  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log(`State roots: ${profile.stateRoots.join(", ")}`);
@@ -169,6 +134,7 @@ async function printFullDump(
   systemPrompt: string,
   shellExecEnabled: boolean,
   shellInterpreter: ShellInterpreterPreference,
+  assets?: AssetResolver,
 ): Promise<void> {
   const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter);
 
@@ -176,17 +142,40 @@ async function printFullDump(
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
-  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log("");
   console.log("=== Sections ===");
   for (const section of bundle.sections) {
-    console.log(`--- ${section.path} [${section.source}] (${section.text.length} chars) ---`);
+    console.log(`--- ${section.path} [${section.source}] (${[...section.text].length} chars, ${Buffer.byteLength(section.text, "utf8")} bytes) ---`);
   }
+  const ledger = assets ? await loadStaticAssetLedger(assets, profile.id) : undefined;
+  printStaticAssetLedger(profile.id, ledger);
   console.log("");
   console.log("=== Composed System Prompt ===");
   console.log(systemPrompt);
   console.log("");
-  console.log("=== End (length: " + systemPrompt.length + " chars) ===");
+  console.log("=== End (length: " + [...systemPrompt].length + " chars) ===");
+}
+
+type StaticAssetLedgerEntry = { budgetCharacters: number; remainingCharacters: number };
+
+function printStaticAssetLedger(engine: EngineId, ledger: StaticAssetLedgerEntry | undefined): void {
+  if (!ledger) return;
+  console.log(`Static Harness asset limit: ${ledger.budgetCharacters} chars; unallocated static asset budget: ${ledger.remainingCharacters} chars`);
+  if (engine === "stage") {
+    console.log("Stage runtime context is excluded: /stage adds frozen Module A system text and Module B assistant history; the static asset limit never blocks the assembled request.");
+  }
+}
+
+async function loadStaticAssetLedger(assets: AssetResolver, engine: EngineId): Promise<StaticAssetLedgerEntry | undefined> {
+  const source = await assets.readText("assets/prompt-context-ledger.json").catch(() => undefined);
+  if (!source) return undefined;
+  try {
+    const parsed = JSON.parse(source) as { engines?: Record<string, StaticAssetLedgerEntry> };
+    const entry = parsed.engines?.[engine];
+    return entry && Number.isInteger(entry.budgetCharacters) && Number.isInteger(entry.remainingCharacters) ? entry : undefined;
+  } catch {
+    return undefined;
+  }
 }

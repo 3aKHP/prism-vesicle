@@ -34,7 +34,7 @@ npm install prism-vesicle
 bunx vesicle prompt shape --engine etl
 ```
 
-软件包包含完整、只读的 `prism-engine-v10@10.0.1-alpha.3` 默认运行时基线。普通使用不需要项目锁，也不需要额外安装 Harness。Vesicle 会先解析当前项目与用户级全局的稀疏 `assets/` 覆盖，然后只使用一个经过验证的完整基线：项目固定的托管 Harness Pack，或当前软件包与独立发行版附带的内置 V10 Pack。受限的宿主扩展层还会提供 Vesicle 基础提示和五个通用 SubAgent。
+软件包包含完整、只读的 `prism-engine-v10@10.1.0-rc.1` 默认运行时基线。普通使用不需要项目锁，也不需要额外安装 Harness。Vesicle 会先解析当前项目与用户级全局的稀疏 `assets/` 覆盖，然后只使用一个经过验证的完整基线：项目固定的托管 Harness Pack，或当前软件包与独立发行版附带的内置 V10 Pack。Harness 自己拥有已声明的提示词片段；受限的宿主扩展层提供五个通用 SubAgent 及其提示词。
 
 查看当前资产层和生效 manifest 的来源：
 
@@ -165,6 +165,7 @@ bun run dev
 ## 开发
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -173,6 +174,7 @@ bun run doctor
 | 脚本 | 用途 |
 |---|---|
 | `bun run dev` | 从源码运行 TUI |
+| `bun run lint` | 运行固定版本的 Biome 正确性检查，不格式化文件 |
 | `bun run typecheck` | 验证 TypeScript，但不生成文件 |
 | `bun test` | 运行确定性测试套件 |
 | `BUN_E2E_REAL_PROVIDER=1 bun test tests/e2e-gate.test.ts` | 运行可选的真实供应商确认门验收测试 |

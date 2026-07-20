@@ -54,6 +54,7 @@ jobs:
             test "$VERSION" = "$EXPECTED_VERSION"
           fi
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+      - run: bun run lint
       - run: bun run typecheck
       - run: bun test
       - run: bun audit

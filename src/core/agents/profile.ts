@@ -51,8 +51,8 @@ export async function loadAgentProfile(
   const systemPrompt = readStringList(raw, "systemPrompt");
   if (systemPrompt.length === 0) throw new Error(`Agent profile "${id}" must declare at least one systemPrompt path.`);
   for (const path of systemPrompt) {
-    if (!path.startsWith("assets/prompts/agents/")) {
-      throw new Error(`Agent profile "${id}" systemPrompt paths must stay under assets/prompts/agents/: ${path}.`);
+    if (!path.startsWith("assets/prompts/agents/") && !path.startsWith("assets/prompts/host/")) {
+      throw new Error(`Agent profile "${id}" systemPrompt paths must stay under assets/prompts/agents/ or assets/prompts/host/: ${path}.`);
     }
     await assets.resolveFile(path);
   }

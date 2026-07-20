@@ -70,7 +70,7 @@ The picker has two steps:
 
 Ctrl+P and Ctrl+N are alternatives to Up and Down. Escape returns from the model step to the provider step; pressing Escape again closes the picker without changing anything.
 
-The Chapter 04 beginner configuration contains only one provider and one model, so the picker may have only one choice at each step. Later, after additional profiles are added to `providers.yaml`, the same picker becomes the safest way to switch.
+The Chapter 04 beginner configuration contains only one provider and one model, so the picker may have only one choice at each step. Later, after additional profiles are added to `providers.yaml`, the same picker remains the guided way to switch.
 
 Opening or using the picker is a local host action. It does not send a prompt or spend model tokens. The selected provider and model are used by future provider turns and are recorded in an existing session.
 
@@ -117,9 +117,9 @@ Stage is the one engine that cannot be entered through `/engine stage`. It needs
 /stage workspace/character.md workspace/scenario.md
 ```
 
-Both paths must be project-relative and under an approved project root. Vesicle validates both cards before creating the session, then saves the rendered character context and opening scene before your first action. Stage has no model-visible tools, confirmation gate, MCP tools, or automatic rewrite by default. If you later edit either source card, a resumed Stage session keeps its saved character and scene context and can show a source-drift notice.
+Both paths must be project-relative and under an approved project root. Vesicle freezes the supplied character card and visible scenario opening before your first action. It may show a short compatibility warning for missing or unusual card structure, but that warning does not certify, rewrite, or reject your creative work. Only an unreadable or unsafe path, an unavailable verified Harness, or a failure to save the new session prevents startup. Stage has no model-visible tools, confirmation gate, MCP tools, or automatic rewrite by default. If you later edit either source card, a resumed Stage session keeps its saved character and scene context and can show a source-drift notice.
 
-Stage responses use the shared three-part packet. The full player-facing rendering of its hidden reasoning and HUD is still deferred in this alpha, so do not treat raw packet visibility as the final consumer experience.
+Stage responses use the shared three-part packet. The player view keeps the prose primary, shows a compact status indicator, and hides complete opening logic comments and Neural Chain comments by default. Click a Stage assistant message to switch that message to its exact raw source, including every HTML-comment delimiter and HUD line; click again to return to the player view. A focused Stage message also supports `Ctrl+Alt+S`. This view state is temporary, so resumed and rewound sessions begin in the player view while the raw packet remains unchanged in provider history and the session file.
 
 ## Switch an Engine
 

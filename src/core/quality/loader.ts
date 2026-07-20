@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { RegExpParser, visitRegExpAST, type AST } from "@eslint-community/regexpp";
 import type {
   QualityDetectorRule,
