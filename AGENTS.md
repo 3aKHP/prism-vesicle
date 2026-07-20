@@ -43,6 +43,8 @@ Use the docs by responsibility:
 | `STATUS.md` | Current implemented state, limits, tool surface, verification |
 | `CHANGELOG.md` | User-visible and notable unreleased changes |
 | `CONTRIBUTING.md` | Contributor workflow, repo boundary, provider setup, and documentation style |
+| `CODE_SIGNING_POLICY.md` | Windows signing scope, approval, verification, and incident handling |
+| `PRIVACY.md` | Local data, external-service transfers, uninstall behavior, and deletion |
 | `docs/dev/STYLE.md` | Code architecture and runtime boundaries |
 | `docs/dev/WORKFLOW.md` | Branching, PRs, hotfixes, independent CR |
 | `AGENTS.md` / `CLAUDE.md` | AI collaborator startup and coordination |
@@ -52,7 +54,7 @@ same branch. Do not leave documentation drift for a later pass.
 
 Follow the Markdown conventions in `CONTRIBUTING.md`: prose uses natural line wrapping rather than fixed-column hard wraps.
 
-`README.md` and `CONTRIBUTING.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
+`README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
 
 ## Branch And PR Rules
 

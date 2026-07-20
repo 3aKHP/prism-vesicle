@@ -4,7 +4,7 @@
 
 Prism Vesicle's internal development remains rapid, but public alpha release work follows the release branch and PR path in [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
 
-Release contributors must follow the public [Code Signing Policy](./CODE_SIGNING_POLICY.md). External contributors retain authorship; the human maintainer `3aKHP` reviews repository changes and is the current signing approver. Every production signing request requires separate manual approval after its source and build provenance are checked.
+Release contributors must follow the public [Code Signing Policy](./CODE_SIGNING_POLICY.md). External contributors retain authorship; the human maintainer `3aKHP` reviews repository changes. Windows signing is currently deferred, so the signing-approver role and per-request manual approval apply only when signing is taken up in the future.
 
 ## Branch And Commit Style
 
@@ -81,7 +81,7 @@ Prefer links to the authoritative document over duplicating detailed inventories
 
 ### Documentation Languages
 
-`README.md` and `CONTRIBUTING.md` are canonical English root documents. Their Simplified Chinese counterparts use the `.zh-CN.md` suffix and should be updated in the same change whenever shared meaning changes.
+`README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. Their Simplified Chinese counterparts use the `.zh-CN.md` suffix and should be updated in the same change whenever shared meaning changes.
 
 The user manual scales by language directory: `docs/user/zh-CN/` is canonical and `docs/user/en/` mirrors the same relative filenames, navigation, commands, and shared meaning. `docs/user/README.md` is the language landing page.
 

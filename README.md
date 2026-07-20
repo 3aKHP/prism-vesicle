@@ -14,7 +14,7 @@ New to terminals, API keys, or model providers? Start with the [step-by-step use
 
 Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub prerelease and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, and choose a safe permission preset without manual configuration-file editing. Project selection is optional and applies only to the one-time launch immediately after Setup; Vesicle never stores one global project directory.
 
-The Windows executable and installer for `1.0.0-alpha.2` are intentionally not Authenticode-signed while the SignPath Foundation application is pending. This exception is limited to the informed alpha test group; download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
+The Windows executable and installer for `1.0.0-alpha.2` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
 The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
@@ -135,6 +135,7 @@ Useful commands:
 |---|---|
 | `/model` | Pick a configured provider and model |
 | `/engine [id]` | Inspect or switch the active Prism engine |
+| `/stage <character-card-path> <scenario-card-path>` | Start the consumer Stage engine with frozen Module A/B cards |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | Control provider thinking effort |
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display |
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Inspect or change tool approval behavior |
@@ -151,6 +152,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 ## What Vesicle Supports
 
 - Profile-driven Prism engines whose prompts, tools, validators, and stop gates resolve through project/user overrides over a managed Harness or bundled recovery baseline.
+- A consumer-grade Stage engine that freezes supplied Module A/B cards into a prose-first narrative bootstrap with no model-visible tools, gates, or rewrite surface.
 - Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
@@ -189,7 +191,7 @@ bun run doctor
 
 The developer-only `vesicle quality benchmark` command runs an explicitly authorized, budget-capped Semantic Judge measurement against the active verified Harness. It remains separate from Runtime policy and requires `--allow-live`; see [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) before using it.
 
-Pull requests and `develop` pushes call one reusable Linux/Windows release build, including npm consumer validation and a silent guided-installer install/upgrade/uninstall smoke. A release is authorized from the command line by pushing a protected annotated `v<package version>` tag on the accepted `main` commit. The tag workflow reruns the same gates, creates the GitHub Release and checksums, and publishes npm with provenance; no normal Actions-page dispatch or GitHub Environment approval is required. Future SignPath signing approval remains a separate manual trust gate. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the exact commands, GitHub settings, and recovery rules.
+Pull requests and `develop` pushes call one reusable Linux/Windows release build, including npm consumer validation and a silent guided-installer install/upgrade/uninstall smoke. A release is authorized from the command line by pushing a protected annotated `v<package version>` tag on the accepted `main` commit. The tag workflow reruns the same gates, creates the GitHub Release and checksums, and publishes npm with provenance; no normal Actions-page dispatch or GitHub Environment approval is required. Windows signing is deferred and is not part of this publication path. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the exact commands, GitHub settings, and recovery rules.
 
 ## Documentation
 
