@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
-_Target: 1.0.0-alpha.3. Subject to change until tagged._
+## [1.0.0-alpha.3] - 2026-07-21
 
 ### Added
 
@@ -28,6 +28,7 @@ _Target: 1.0.0-alpha.3. Subject to change until tagged._
 
 ### Fixed
 
+- **Stage transcript projection** folds blank lines around the concealed Neural Chain and compact HUD without stripping meaningful indentation from the visible prose, while preserving one stable visual gap below the HUD.
 - **Stage source-view toggle** uses `Ctrl+Alt+S` instead of plain Enter or Space, so a focused Stage message cannot intercept composer text, command spaces, prompt submission, or `Ctrl+Enter` newlines.
 - **Output Quality Guard artifact enforcement** derives targets only from successful `create_file`, `write_file`, `replace_in_file`, and `append_file` results, reads each guarded path's complete current post-image at the quality boundary, and keeps blocking paths pending independently across rewrites, pauses, cancellation, and restart. A clean completion summary or unrelated clean file can no longer make an unchanged bad artifact pass.
 - **Quality Guard exhaustion** no longer falls through as ordinary completion. Quality events separate assessment outcome from host action; append-only warning and resolution records preserve exhausted, unreadable, and oversize targets across restart, and the TUI restores interrupted or exhausted revisions as a three-way decision (retry once with the same Engine / use the current version with its warning / stop without a provider call).
@@ -204,7 +205,8 @@ _Target: 1.0.0-alpha.3. Subject to change until tagged._
 - Fixed the input bar not clearing after submit.
 - Fixed per-turn session creation that caused model memory loss across turns.
 
-[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.2...HEAD
+[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.3...HEAD
+[1.0.0-alpha.3]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
 [1.0.0-alpha.2]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.1...v1.0.0-alpha.2
 [1.0.0-alpha.1]: https://github.com/3aKHP/prism-vesicle/compare/v0.1.0...v1.0.0-alpha.1
 [0.1.0]: https://github.com/3aKHP/prism-vesicle/releases/tag/v0.1.0

@@ -27,7 +27,7 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 
 Windows 可执行文件可用 Authenticode 签名。**校验和不等于签名**——哈希只能发现下载后的改动,不能证明是谁发布的。
 
-**当前状态(`1.0.0-alpha.2`)**:Windows 可执行文件与安装器**有意未签名**。Windows 签名推迟到项目具备引入签名服务的条件后再考虑,不设版本截止期限。因此:
+**当前状态(`1.0.0-alpha.3`)**:Windows 可执行文件与安装器**有意未签名**。Windows 签名推迟到项目具备引入签名服务的条件后再考虑,不设版本截止期限。因此:
 
 - 只从[官方 GitHub Releases](https://github.com/3aKHP/prism-vesicle/releases)下载;
 - 务必按上面方法核对 `SHA256SUMS.txt`;
