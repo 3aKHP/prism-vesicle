@@ -152,7 +152,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 ## What Vesicle Supports
 
 - Profile-driven Prism engines whose prompts, tools, validators, and stop gates resolve through project/user overrides over a managed Harness or bundled recovery baseline.
-- A consumer-grade Stage engine that freezes supplied Module A/B cards into a prose-first narrative bootstrap with no model-visible tools, gates, or rewrite surface.
+- A consumer-grade Stage engine that freezes supplied Module A/B cards into a prose-first narrative bootstrap with no model-visible tools or gates. Quality enforcement defaults to observe; only an explicitly enabled host quality configuration can trigger an experimental bounded rewrite.
 - Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.

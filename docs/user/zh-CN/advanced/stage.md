@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/stage.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.2`):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(develop 快照,2026-07-21):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 Stage 是 Prism 的**消费端**协作小说引擎:喂给它一张角色卡(Module A)和一张情景卡(Module B),它开一个第三人称连续叙事会话——你发消息即你角色的行动,它续写反应。
 

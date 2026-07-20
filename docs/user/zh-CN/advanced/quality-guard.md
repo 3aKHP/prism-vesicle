@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/quality-guard.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.2`):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(develop 快照,2026-07-21):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 Output Quality Guard 是一层**面向 target** 的质量检查:在质量边界上重新读取受保护制品的完整 post-image,用 anti-ai-flavor 规则包检测"机器味",并可选用一个实验性 Semantic Judge 复核。它的目的是让产出散文更像人写的,而不是判定作者是不是 AI。
 
@@ -63,4 +63,4 @@ judgeTimeoutMs: 15000
 
 ## 状态会变
 
-本页的 🟢/🟡 标注反映 `1.0.0-alpha.2` 时的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。
+本页的 🟢/🟡 标注反映 develop 快照(`2026-07-21`)时的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。

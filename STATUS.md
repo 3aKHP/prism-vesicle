@@ -6,33 +6,34 @@ _Snapshot: 1.0.0-alpha.2 development cycle (2026-07-21)._
 
 ## Version & Capabilities
 
-Current release: **1.0.0-alpha.2**. The `State` column tracks when each capability reaches users: `shipped` = in the 1.0.0-alpha.2 package; `develop` = implemented on the `develop` trunk, pending a later release; `deferred` = not yet started (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Current release: **1.0.0-alpha.2**. The `State` column tracks when each capability first reached users: `released` = in the 1.0.0-alpha.2 GitHub Release or npm package; `develop` = on the `develop` trunk, pending a later release (alpha.3); `deferred` = not yet started (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10@10.1.0-rc.1`, verified 73-file inventory) | shipped |
-| Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | develop |
-| Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | shipped |
-| Providers | Multi-provider registry with generation defaults and capability/limits metadata | shipped |
-| Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | develop |
-| Providers | Thinking-effort controls and reasoning-block visibility | shipped |
-| TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | shipped |
-| TUI | Clipboard image attachments (`Alt+V`, vision-gated) | develop |
-| TUI | Rewind: conversation branches plus per-turn file checkpoints | develop |
-| Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | shipped |
-| Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | develop |
-| Tools | Streamable-HTTP MCP tools | develop |
-| Tools | Opt-in `shell_exec` with bounded Process Runtime | develop |
-| Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | develop |
-| Agents | Foreground/background SubAgents with contract-bound Harness delegation | develop |
+| Assets | Bundled V10 Harness (`prism-engine-v10@10.0.1-alpha.1`, verified 73-file inventory) | released |
+| Assets | Bundled V10 baseline refresh to `prism-engine-v10@10.1.0-rc.1` | develop |
+| Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | released |
+| Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
+| Providers | Multi-provider registry with generation defaults and capability/limits metadata | released |
+| Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | released |
+| Providers | Thinking-effort controls and reasoning-block visibility | released |
+| TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
+| TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
+| TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
+| Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
+| Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | released |
+| Tools | Streamable-HTTP MCP tools | released |
+| Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
+| Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | released |
+| Agents | Foreground/background SubAgents with contract-bound Harness delegation | released |
 | Stage | First-party consumer RP bootstrap Engine (`/stage`) | develop |
-| Validators | Module A, Module B v9, runtime packet, and evaluate-report checks | shipped |
-| Workbench | `/artifact` discovery, preview, validation, and revision | shipped |
-| Quality | Output Quality Guard: deterministic findings, document metrics, experimental Semantic Judge, rewrite-policy loader, durable decisions | develop |
-| Release | Standalone Windows PE and Linux ELF binaries | develop |
-| Release | npm/Bun package with pinned runtime dependencies | develop |
-| Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | develop |
-| Release | Reusable Linux/Windows release build with tag-triggered publication | develop |
+| Validators | Module A, Module B v9, runtime packet, and evaluate-report checks | released |
+| Workbench | `/artifact` discovery, preview, validation, and revision | released |
+| Quality | Output Quality Guard: deterministic findings, document metrics, durable decisions (experimental Semantic Judge and rewrite-policy loader are `develop`) | released |
+| Release | Standalone Windows PE and Linux ELF binaries | released |
+| Release | npm/Bun package with pinned runtime dependencies | released |
+| Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | released |
+| Release | Reusable Linux/Windows release build with tag-triggered publication | released |
 
 ## Scope
 
@@ -149,10 +150,10 @@ Engines with empty `stopGates` never offer `request_confirmation`, so their mode
 |-----------|--------|--------|
 | `character-card` | etl | Module A v9: frontmatter allowlist, seven sections, Persona Topology subsections, axis counts, L-System leakage |
 | `scenario-card` | etl | Module B v9: 3–5 beat map, per-beat fields, tension range, trajectory, legacy field rejection |
-| `runtime-packet` | runtime | Three-part turn packet: Hidden Neural Chain (`[!Neural Chain]`), five-line Dynamic HUD markers, L-System leakage (thin MVP; output contract owned by Neural-Narratology) |
+| `runtime-packet` | runtime, stage | Three-part turn packet: Hidden Neural Chain (`[!Neural Chain]`), five-line Dynamic HUD markers, L-System leakage (thin MVP; output contract owned by Neural-Narratology) |
 | `evaluate-report` | evaluate | Audit report Overall Verdict (PASS/CONDITIONAL/FAIL) and five numbered sections; inline only — file-written reports are not read yet |
 
-Validator findings are advisory: they surface in the TUI and session log but never abort a turn. Validators run only on artifact-shaped assistant content (YAML-frontmatter documents), not on ordinary phase-transition prose.
+Validator findings are advisory: they surface in the TUI and session log but never abort a turn. Each validator runs only when its own applicable content shape matches — Module A/B YAML-frontmatter artifacts for `character-card` and `scenario-card`, the three-part turn packet for `runtime-packet` on Runtime and Stage, or an inline audit report for `evaluate-report` — never on ordinary phase-transition prose.
 
 ## Known Limits & Deferred Work
 

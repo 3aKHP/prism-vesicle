@@ -2,7 +2,7 @@
 
 English | [简体中文](../../zh-CN/advanced/quality-guard.md)
 
-> **Status (as of `1.0.0-alpha.2`):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (develop snapshot, 2026-07-21):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 The Output Quality Guard is a **target-aware** quality layer: at the quality boundary it re-reads the complete post-image of a guarded artifact and checks the prose against an anti-ai-flavor rule pack, optionally followed by an experimental Semantic Judge. Its goal is to make produced prose read more human — not to judge whether the author was AI.
 
@@ -63,4 +63,4 @@ When a future Harness Pack requires it, Vesicle recognizes and fail-closed hash-
 
 ## Status will change
 
-The 🟢/🟡 markers on this page reflect maturity at `1.0.0-alpha.2`. The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.
+The 🟢/🟡 markers on this page reflect maturity at the develop snapshot (`2026-07-21`). The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.
