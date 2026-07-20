@@ -50,11 +50,7 @@ The runtime asset archive and npm package must contain `harness-manifest.json`, 
 
 ## Static Prompt Asset Ledger
 
-`assets/prompt-context-ledger.json` is a raw, static Harness prompt-asset
-ledger. Its 24,000-character static asset limit is verified when a Harness is
-activated, but it is not a provider context-window limit and never blocks a
-request. Runtime injections and conversation history are deliberately
-excluded.
+`assets/prompt-context-ledger.json` is a raw, static Harness prompt-asset ledger. Its 24,000-character static asset limit is verified when a Harness is activated, but it is not a provider context-window limit and never blocks a request. Runtime injections and conversation history are deliberately excluded.
 
 For Stage, `/stage` appends the frozen Module A source to the system message
 and sends the frozen Module B opening as assistant history. Those user-supplied
