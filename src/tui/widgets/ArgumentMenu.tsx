@@ -1,4 +1,4 @@
-import { For } from "solid-js";
+import { createMemo, For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { OptionItem } from "../types";
 import { clampCommandMenuSelection } from "../commands/selection";
@@ -23,7 +23,7 @@ export function argumentMenuLabelBudget(width: number, hasDetails: boolean): num
 export function ArgumentMenu(props: ArgumentMenuProps) {
   const safeSelected = () => clampCommandMenuSelection(props.selected, props.items.length);
   const win = () => visibleWindow(props.items, safeSelected(), props.maxVisible ?? 8);
-  const hasDetails = () => props.items.some((item) => Boolean(item.detail));
+  const hasDetails = createMemo(() => props.items.some((item) => Boolean(item.detail)));
 
   return (
     <box flexDirection="column">

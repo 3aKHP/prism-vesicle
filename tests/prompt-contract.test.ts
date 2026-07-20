@@ -68,7 +68,6 @@ describe("prompt audit tool surface", () => {
       expect(reported.modelVisible).toEqual(names);
       if (engine === "stage") {
         expect(names).toEqual([]);
-        expect(reported.hostContracts).toEqual([]);
       } else {
         expect(names).toContain("ask_user_question");
         expect(names).toContain("request_engine_switch");
@@ -92,12 +91,11 @@ describe("prompt audit tool surface", () => {
     expect(runtime.modelVisible).toContain("request_confirmation");
     expect(runtime.modelVisible).toContain("ask_user_question");
     expect(runtime.modelVisible).toContain("request_engine_switch");
-    expect(runtime.hostContracts).toEqual([]);
 
     expect(dyad.modelVisible).not.toContain("request_confirmation");
     expect(dyad.modelVisible).toContain("ask_user_question");
     expect(dyad.modelVisible).toContain("request_engine_switch");
-    expect(stage).toEqual({ modelVisible: [], hostContracts: [] });
+    expect(stage).toEqual({ modelVisible: [] });
   });
 
   test("prompt audit omits unavailable launches but keeps background controls", async () => {

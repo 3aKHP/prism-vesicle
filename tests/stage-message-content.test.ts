@@ -55,13 +55,15 @@ describe("Stage message content", () => {
     expect(normalStageMarkdownSegments(parsed).map((segment) => segment.raw).join("")).not.toContain("【Status】");
   });
 
-  test("buffers an incomplete streaming HUD but shows malformed final content literally", () => {
+  test("buffers an incomplete streaming HUD and conceals its completed control comment", () => {
     const partial = stagePacket.slice(0, stagePacket.indexOf("[Impression]"));
     const streaming = parseStageMessageContent(partial, "message-4", true);
     expect(streaming.pendingHudStart).toBeDefined();
     expect(normalStageMarkdownSegments(streaming).map((segment) => segment.raw).join("")).not.toContain("【Status】");
     const completed = parseStageMessageContent(partial, "message-4");
+    expect(completed.hasNeuralChain).toBe(true);
     expect(normalStageMarkdownSegments(completed).map((segment) => segment.raw).join("")).toContain("【Status】");
+    expect(normalStageMarkdownSegments(completed).map((segment) => segment.raw).join("")).not.toContain("[!Neural Chain]");
   });
 
   test("holds an unfinished streaming comment without treating code text as a comment", () => {

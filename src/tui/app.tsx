@@ -897,7 +897,6 @@ export function App(props: AppProps = {}) {
           agents={agentCards()}
           activeEngine={activeEngine()}
           sessionId={sessionId()}
-          transcriptKey={messages().map((message, index) => message.id ?? `${index}:${message.role}:${message.content}`).join("\u0001")}
           onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
           registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
         />

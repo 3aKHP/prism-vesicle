@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, Show, type Accessor } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, Show, type Accessor } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
 import { palette } from "../theme";
@@ -6,7 +6,7 @@ import { Message } from "../widgets/Message";
 import { ReasoningBlock } from "../widgets/ReasoningBlock";
 import type { AgentCardState, Message as StreamMessage } from "../types";
 import type { TuiKeyEvent } from "../decision-interaction";
-import { parseStageMessageContent } from "../stage-message-content";
+import { parseStageMessageContent, type StageMessageContent } from "../stage-message-content";
 import { isStageMessageToggleShortcut } from "../stage-message-interaction";
 
 /**
@@ -23,7 +23,6 @@ export function MessageStream(props: {
   agents: AgentCardState[];
   activeEngine?: string;
   sessionId?: string;
-  transcriptKey?: string;
   onStageViewChange?: (id: string, source: boolean) => void;
   registerStageKeyHandler?: (handler: (key: TuiKeyEvent) => boolean) => void;
 }) {
@@ -34,10 +33,22 @@ export function MessageStream(props: {
   let pointerStartMessageId: string | undefined;
   let pointerDragged = false;
 
-
   function messageId(message: StreamMessage, index: number): string {
     return message.id ?? `message:${props.sessionId ?? "new"}:${index}`;
   }
+
+  const stageMessageMetadata = createMemo(() => {
+    const parsedById = new Map<string, StageMessageContent>();
+    const eligibleIds: string[] = [];
+    for (const [index, message] of props.messages.entries()) {
+      if (message.role !== "assistant" || message.engine !== "stage") continue;
+      const id = messageId(message, index);
+      const parsed = parseStageMessageContent(message.content, id);
+      parsedById.set(id, parsed);
+      if (message.kind === "stage-bootstrap-opening" || parsed.hud || parsed.hasNeuralChain) eligibleIds.push(id);
+    }
+    return { parsedById, eligibleIds };
+  });
 
   function toggleStageMessage(id: string): void {
     setFocusedStageMessageId(id);
@@ -74,19 +85,14 @@ export function MessageStream(props: {
     return props.messages.flatMap((message, index) => {
       const id = messageId(message, index);
       if (message.role !== "assistant" || message.engine !== "stage") return [id];
-      const parsed = parseStageMessageContent(message.content, id);
-      if (message.kind !== "stage-bootstrap-opening" && !parsed.hud) return [id];
-      return parsed.segments.flatMap((segment) => segment.kind === "comment" ? [segment.id] : [segment.id]);
+      const parsed = stageMessageMetadata().parsedById.get(id);
+      if (!parsed || (message.kind !== "stage-bootstrap-opening" && !parsed.hud && !parsed.hasNeuralChain)) return [id];
+      return parsed.segments.map((segment) => segment.id);
     });
   }
 
   function eligibleStageMessageIds(): string[] {
-    return props.messages.flatMap((message, index) => {
-      if (message.role !== "assistant" || message.engine !== "stage") return [];
-      const id = messageId(message, index);
-      const parsed = parseStageMessageContent(message.content, id);
-      return message.kind === "stage-bootstrap-opening" || parsed.hud ? [id] : [];
-    });
+    return stageMessageMetadata().eligibleIds;
   }
 
   function stageMessageAt(y: number): string | undefined {
@@ -97,9 +103,12 @@ export function MessageStream(props: {
   }
 
   function handleStageMessageKey(key: TuiKeyEvent): boolean {
+    const navigation = key.option && (key.name === "up" || key.name === "down");
+    const toggle = isStageMessageToggleShortcut(key);
+    if (!navigation && !toggle) return false;
     const ids = eligibleStageMessageIds();
     if (ids.length === 0) return false;
-    if (key.option && (key.name === "up" || key.name === "down")) {
+    if (navigation) {
       const current = focusedStageMessageId();
       const currentIndex = current ? ids.indexOf(current) : -1;
       const direction = key.name === "up" ? -1 : 1;
@@ -147,6 +156,7 @@ export function MessageStream(props: {
               width={props.contentWidth}
               agent={message.agentRunId ? props.agents.find((agent) => agent.runId === message.agentRunId) : undefined}
               expanded={() => message.stageSource === true}
+              parsed={stageMessageMetadata().parsedById.get(id)}
               onToggle={() => toggleStageMessage(id)}
             />;
           }}</For>
@@ -176,6 +186,7 @@ function StageStreamMessage(props: {
   width: number;
   agent?: AgentCardState;
   expanded: Accessor<boolean>;
+  parsed?: StageMessageContent;
   onToggle: () => void;
 }) {
   const message = (stageSource: boolean) => <Message
@@ -184,6 +195,7 @@ function StageStreamMessage(props: {
     width={props.width}
     agent={props.agent}
     stageSource={stageSource}
+    stageParsed={props.parsed}
     onStageToggle={props.onToggle}
   />;
   return <Show when={props.expanded()} fallback={message(false)}>{message(true)}</Show>;

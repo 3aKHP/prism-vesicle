@@ -150,7 +150,7 @@ function renderStageContext(template: string, characterContent: string, scenario
     "module_b.visible": scenario.visible,
     "module_b.logic": scenario.logic,
   };
-  const blocks = [...template.matchAll(/```\n([\s\S]*?)\n```/g)].map((match) => match[1]!);
+  const blocks = [...template.matchAll(/```\r?\n([\s\S]*?)\r?\n```/g)].map((match) => match[1]!);
   if (blocks.length < 2) throw new Error("Stage context template must declare character and opening blocks.");
   return {
     characterContext: fillTemplate(blocks[0]!, values),
@@ -184,10 +184,10 @@ function sha256(value: string): string {
 
 function compatibilityWarnings(characterContent: string, scenarioContent: string, unclosedLogicMarker: boolean): string[] {
   const warnings: string[] = [];
+  if (characterContent.trim().length === 0 || scenarioContent.trim().length === 0) warnings.push("An empty Stage input was frozen unchanged; add narrative material before relying on continuity.");
   if (!/^\uFEFF?---\r?\n/.test(characterContent)) warnings.push("Module A has no YAML frontmatter; its supplied text was frozen unchanged.");
   if (!/^\uFEFF?---\r?\n/.test(scenarioContent)) warnings.push("Module B has no YAML frontmatter; its supplied text was frozen unchanged.");
   if (!scenarioContent.includes("<!--")) warnings.push("Module B has no optional logic content; Stage will continue from visible material.");
   if (unclosedLogicMarker) warnings.push("Module B has an unclosed HTML comment marker; it was kept in visible content unchanged.");
-  if (characterContent.trim().length === 0 || scenarioContent.trim().length === 0) warnings.push("An empty Stage input was frozen unchanged; add narrative material before relying on continuity.");
   return warnings.slice(0, 3);
 }

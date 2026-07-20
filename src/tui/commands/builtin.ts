@@ -29,6 +29,7 @@ import {
   modelCommandCompletion,
   qualityCommandCompletion,
   resumeCommandCompletion,
+  splitTokens,
   stageCommandCompletion,
 } from "./argument-completion";
 import {
@@ -65,7 +66,7 @@ export const builtinCommands: Command[] = [
     usage: "/stage <character-card-path> <scenario-card-path>",
     completion: stageCommandCompletion,
     async run(ctx, args, raw) {
-      const parts = args.match(/(?:[^\s\"]+|\"[^\"]*\")+/g)?.map((part) => part.replace(/^\"|\"$/g, "")) ?? [];
+      const parts = splitTokens(args).values;
       if (parts.length !== 2) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /stage <character-card-path> <scenario-card-path>. Paths are project-relative and must be under an approved readable root." }]);
         return;

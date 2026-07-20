@@ -372,7 +372,7 @@ function commandName(value: string): string | null {
   return match?.[1]?.toLowerCase() ?? null;
 }
 
-function splitTokens(value: string): { values: string[]; trailingSpace: boolean } {
+export function splitTokens(value: string): { values: string[]; trailingSpace: boolean } {
   const values = value.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((part) => part.replace(/^"|"$/g, "")) ?? [];
   return { values, trailingSpace: /\s$/.test(value) };
 }

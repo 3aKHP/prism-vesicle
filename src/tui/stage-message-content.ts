@@ -15,8 +15,14 @@ export type StageHud = {
 export type StageMessageContent = {
   segments: MessageCommentSegment[];
   hud?: StageHud;
+  hasNeuralChain?: boolean;
   pendingCommentStart?: number;
   pendingHudStart?: number;
+};
+
+type MessageCommentScan = {
+  segments: MessageCommentSegment[];
+  pendingCommentStart?: number;
 };
 
 /**
@@ -25,11 +31,16 @@ export type StageMessageContent = {
  * never opt into this parser's presentation behavior.
  */
 export function splitMessageCommentSegments(content: string, messageId: string): MessageCommentSegment[] {
+  return scanMessageComments(content, messageId).segments;
+}
+
+function scanMessageComments(content: string, messageId: string): MessageCommentScan {
   const segments: MessageCommentSegment[] = [];
   let markdownStart = 0;
   let index = 0;
   let inlineTicks = 0;
   let fence: { marker: "`" | "~"; length: number } | undefined;
+  let pendingCommentStart: number | undefined;
 
   const push = (kind: MessageCommentSegment["kind"], start: number, end: number) => {
     if (end <= start) return;
@@ -69,13 +80,15 @@ export function splitMessageCommentSegments(content: string, messageId: string):
         index = end;
         continue;
       }
+      pendingCommentStart = index;
+      break;
     }
 
     index += 1;
   }
 
   push("markdown", markdownStart, content.length);
-  return segments;
+  return { segments, ...(pendingCommentStart === undefined ? {} : { pendingCommentStart }) };
 }
 
 /**
@@ -83,18 +96,21 @@ export function splitMessageCommentSegments(content: string, messageId: string):
  * into the unchanged source string so the renderer can compact it safely.
  */
 export function parseStageMessageContent(content: string, messageId: string, streaming = false): StageMessageContent {
-  const segments = splitMessageCommentSegments(content, messageId);
+  const scan = scanMessageComments(content, messageId);
+  const { segments } = scan;
   const neuralChain = segments.find((segment) => segment.kind === "comment" && segment.raw.includes("[!Neural Chain]"));
   if (!neuralChain) {
-    const pendingCommentStart = streaming ? unfinishedCommentStart(content) : undefined;
+    const pendingCommentStart = streaming ? scan.pendingCommentStart : undefined;
     return { segments, ...(pendingCommentStart === undefined ? {} : { pendingCommentStart }) };
   }
 
   const hudStart = skipWhitespace(content, neuralChain.end);
-  if (!content.startsWith("【Status】", hudStart)) return { segments };
+  if (!content.startsWith("【Status】", hudStart)) return { segments, hasNeuralChain: true };
   const hud = readStageHud(content, hudStart);
-  if (hud) return { segments, hud };
-  return streaming ? { segments, pendingHudStart: hudStart } : { segments };
+  if (hud) return { segments, hud, hasNeuralChain: true };
+  return streaming
+    ? { segments, hasNeuralChain: true, pendingHudStart: hudStart }
+    : { segments, hasNeuralChain: true };
 }
 
 export function normalStageMarkdownSegments(parsed: StageMessageContent): MessageCommentSegment[] {
@@ -182,41 +198,6 @@ function sliceSegment(segment: MessageCommentSegment, start: number, end: number
 function skipWhitespace(content: string, index: number): number {
   while (index < content.length && /\s/.test(content[index]!)) index += 1;
   return index;
-}
-
-function unfinishedCommentStart(content: string): number | undefined {
-  let index = 0;
-  let inlineTicks = 0;
-  let fence: { marker: "`" | "~"; length: number } | undefined;
-  while (index < content.length) {
-    if (isLineStart(content, index)) {
-      const lineFence = readFence(content, index);
-      if (lineFence && (!fence || (lineFence.marker === fence.marker && lineFence.length >= fence.length))) {
-        fence = fence ? undefined : lineFence;
-        index += lineFence.width;
-        continue;
-      }
-    }
-    if (fence) {
-      index += 1;
-      continue;
-    }
-    if (content[index] === "`") {
-      const run = countRun(content, index, "`");
-      if (inlineTicks === 0) inlineTicks = run;
-      else if (run === inlineTicks) inlineTicks = 0;
-      index += run;
-      continue;
-    }
-    if (inlineTicks === 0 && content.startsWith("<!--", index)) {
-      const close = content.indexOf("-->", index + 4);
-      if (close < 0) return index;
-      index = close + 3;
-      continue;
-    }
-    index += 1;
-  }
-  return undefined;
 }
 
 function isLineStart(content: string, index: number): boolean {

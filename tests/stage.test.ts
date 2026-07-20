@@ -130,6 +130,30 @@ describe("Stage bootstrap", () => {
     }
   });
 
+  test("keeps the empty-input warning within the bounded Stage diagnostics", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-empty-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      await writeFile(join(root, "workspace", "character.md"), "", "utf8");
+      await writeFile(join(root, "workspace", "scenario.md"), "", "utf8");
+
+      const started = await startStageSession({
+        rootDir: root,
+        characterPath: "workspace/character.md",
+        scenarioPath: "workspace/scenario.md",
+        provider: "fixture",
+        providerId: "fixture",
+        model: "fixture-model",
+        permissionMode: "MOMENTUM",
+      });
+
+      expect(started.warnings).toHaveLength(3);
+      expect(started.warnings[0]).toContain("empty Stage input");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("does not treat cosmetic card variation as Stage admission criteria", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-stage-variation-"));
     try {

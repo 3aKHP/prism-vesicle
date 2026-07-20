@@ -48,11 +48,8 @@ export async function runPromptDump(args: string[]): Promise<void> {
 
 type ParsedArgs = { ok: true; value: { engine: EngineId; shapeOnly: boolean } } | { ok: false; error: string };
 
-const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
-
 export type EffectivePromptToolNames = {
   modelVisible: string[];
-  hostContracts: string[];
 };
 
 export async function getEffectivePromptToolNames(
@@ -62,17 +59,8 @@ export async function getEffectivePromptToolNames(
   shellInterpreter: ShellInterpreterPreference = "auto",
 ): Promise<EffectivePromptToolNames> {
   const surface = await resolveToolSurface(profile, true, shellExecEnabled, shellInterpreter, options);
-  const hostContracts: string[] = [];
-
-  for (const name of profile.defaultTools) {
-    if (hostContractNames.has(name)) {
-      hostContracts.push(name);
-    }
-  }
-
   return {
     modelVisible: surface.definitions.map((definition) => definition.function.name),
-    hostContracts,
   };
 }
 
@@ -135,7 +123,6 @@ async function printShape(
   const ledger = assets ? await loadStaticAssetLedger(assets, profile.id) : undefined;
   printStaticAssetLedger(profile.id, ledger);
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
-  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log(`State roots: ${profile.stateRoots.join(", ")}`);
@@ -155,7 +142,6 @@ async function printFullDump(
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
-  console.log(`Host contracts: ${effectiveTools.hostContracts.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
   console.log("");

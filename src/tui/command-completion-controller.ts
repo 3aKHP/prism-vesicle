@@ -56,6 +56,7 @@ export function createCommandCompletionController(options: CommandCompletionCont
   const commandArgumentSourceKey = createMemo(() => commandArgumentDraft()?.sourceKey ?? null);
   const [loadedItems, setLoadedItems] = createSignal<OptionItem[]>([]);
   const [loadedSourceKey, setLoadedSourceKey] = createSignal<string | null>(null);
+  const dynamicLoads = new Map<string, Promise<OptionItem[]>>();
 
   // Dynamic sources refresh once per grammar stage. Query edits reuse their
   // candidates, and a cleanup guard prevents an old scan from replacing a new
@@ -71,7 +72,14 @@ export function createCommandCompletionController(options: CommandCompletionCont
     let current = true;
     setLoadedSourceKey(null);
     setLoadedItems([]);
-    void draft.items().then((items) => {
+    const loadKey = sourceKey.startsWith("stage:") ? "stage:cards" : sourceKey;
+    let load = dynamicLoads.get(loadKey);
+    if (!load) {
+      load = draft.items();
+      dynamicLoads.set(loadKey, load);
+      void load.catch(() => { dynamicLoads.delete(loadKey); });
+    }
+    void load.then((items) => {
       if (!current) return;
       setLoadedItems(items);
       setLoadedSourceKey(sourceKey);
