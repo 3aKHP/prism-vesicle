@@ -27,7 +27,7 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 
 Windows 可执行文件可用 Authenticode 签名。**校验和不等于签名**——哈希只能发现下载后的改动,不能证明是谁发布的。
 
-**当前状态(`1.0.0-alpha.2`)**:Windows 可执行文件与安装器**有意未签名**。本项目的 SignPath Foundation 申请(2026-07-15 提交)尚在审批中。这一例外只针对知情的小范围测试群体,最迟在 `1.0.0-beta.1` 前必须接入签名。因此 alpha 阶段:
+**当前状态(`1.0.0-alpha.2`)**:Windows 可执行文件与安装器**有意未签名**。Windows 签名推迟到项目具备引入签名服务的条件后再考虑,不设版本截止期限。因此:
 
 - 只从[官方 GitHub Releases](https://github.com/3aKHP/prism-vesicle/releases)下载;
 - 务必按上面方法核对 `SHA256SUMS.txt`;
@@ -46,7 +46,7 @@ Windows 可执行文件可用 Authenticode 签名。**校验和不等于签名**
 Get-AuthenticodeSignature .\PrismVesicleSetup-<version>-windows-x64.exe | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
 ```
 
-期望结果:`Status: Valid`,且签名者为可信的 SignPath Foundation 证书链,带时间戳。
+期望结果:`Status: Valid`,且签名者为签名服务可信的证书链,带时间戳。
 
 > 有效签名能识别发布者、发现签名后的改动,但**不能**保证软件无缺陷,也不能保证 Microsoft SmartScreen 对新版本不弹信誉警告。
 

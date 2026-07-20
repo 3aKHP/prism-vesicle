@@ -24,7 +24,7 @@ Get-FileHash .\prism-vesicle-assets-<version>.zip -Algorithm SHA256
 
 把输出和 `SHA256SUMS.txt` 里对应行比对。
 
-> alpha 阶段的 Windows 工件有意未做 Authenticode 签名(SignPath 审批中)。校验和能确认文件未被篡改,但不等于签名。详见[参考:校验和与签名](../reference/checksums-and-signing.md)。
+> alpha 阶段的 Windows 工件有意未做 Authenticode 签名(签名已推迟)。校验和能确认文件未被篡改,但不等于签名。详见[参考:校验和与签名](../reference/checksums-and-signing.md)。
 
 ## 摆放布局
 

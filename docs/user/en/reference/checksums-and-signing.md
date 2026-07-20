@@ -27,7 +27,7 @@ Match the computed hash against the line for that file in `SHA256SUMS.txt`; a ma
 
 Windows executables can carry an Authenticode signature. **A checksum is not a signature** — a hash detects changes after download but cannot prove who published the file.
 
-**Current status (`1.0.0-alpha.2`)**: the Windows executable and installer are **intentionally unsigned**. The SignPath Foundation application for this project (submitted 2026-07-15) is still pending. This exception is only for a small, informed test group and must end no later than `1.0.0-beta.1`. So during alpha:
+**Current status (`1.0.0-alpha.2`)**: the Windows executable and installer are **intentionally unsigned**. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. So:
 
 - Download only from the [official GitHub Releases](https://github.com/3aKHP/prism-vesicle/releases);
 - Always verify against `SHA256SUMS.txt` as shown above;
@@ -46,7 +46,7 @@ When a Release's notes say its Windows files are signed, verify like this:
 Get-AuthenticodeSignature .\PrismVesicleSetup-<version>-windows-x64.exe | Format-List Status,StatusMessage,SignerCertificate,TimeStamperCertificate
 ```
 
-Expected: `Status: Valid`, with a trusted SignPath Foundation certificate chain and a timestamp.
+Expected: `Status: Valid`, with a trusted certificate chain from the signing provider and a timestamp.
 
 > A valid signature identifies the publisher and detects post-signing changes, but **cannot** guarantee the software is defect-free or that Microsoft SmartScreen will never show a reputation warning for a new release.
 

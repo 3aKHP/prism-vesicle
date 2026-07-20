@@ -18,6 +18,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Changed
 
+- Deferred Windows Authenticode signing. Windows artifacts remain unsigned and rely on the official GitHub Release, SHA-256 checksums, and npm provenance; signing will be reconsidered once the project has a stronger basis for it, with no version deadline. The earlier `1.0.0-beta.1` signing deadline is superseded with no replacement version gate. Updated `CODE_SIGNING_POLICY*`, `README*`, `STATUS.md`, `CONTRIBUTING*`, the generated release-note text, and the user-manual signing reference to match.
 - Rewrote the user manual from a single linear Windows-first curriculum into a channel-funnelled structure: a routing page, four start pages (Windows installer, npm, Windows portable, Linux portable), five channel-agnostic tutorials, and a reference section. Content is grounded in the current CLI, guided Setup wizard, doctor output, validators, config files, installer, and release artifacts rather than carried over from the prior prose.
 - The user manual is now Simplified-Chinese-canonical with an English mirror at the same relative paths. Root and `docs/dev` governance docs remain English-canonical; only the user-manual language policy changed.
 - The npm path now recommends a global install (`npm install -g prism-vesicle`) so the standard workflow is `cd project && vesicle .`; the root READMEs were updated accordingly.

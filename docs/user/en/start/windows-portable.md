@@ -24,7 +24,7 @@ Get-FileHash .\prism-vesicle-assets-<version>.zip -Algorithm SHA256
 
 Match the output to the corresponding line in `SHA256SUMS.txt`.
 
-> The alpha Windows artifacts are intentionally not Authenticode-signed (SignPath approval is pending). A checksum confirms the file was not tampered with; it is not the same as a signature. See [Reference: Checksums and signing](../reference/checksums-and-signing.md).
+> The alpha artifacts are intentionally not Authenticode-signed (signing is deferred). A checksum confirms the file was not tampered with; it is not the same as a signature. See [Reference: Checksums and signing](../reference/checksums-and-signing.md).
 
 ## Layout
 
