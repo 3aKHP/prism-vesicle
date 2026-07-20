@@ -1,0 +1,235 @@
+{
+  "schema": "prism-static-prompt-asset-ledger/v1",
+  "measurement": {
+    "scope": "raw-static-harness-prompt-assets",
+    "excludes": [
+      "runtime-injected system content",
+      "conversation history"
+    ],
+    "enforcement": "static-asset-limit"
+  },
+  "engines": {
+    "dyad": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 1256,
+      "remainingCharacters": 22744,
+      "usedBytes": 2178,
+      "sections": [
+        {
+          "path": "assets/prompts/host/runtime.md",
+          "characters": 61,
+          "bytes": 173
+        },
+        {
+          "path": "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+          "characters": 258,
+          "bytes": 436
+        },
+        {
+          "path": "assets/prompts/engines/dyad.md",
+          "characters": 937,
+          "bytes": 1569
+        }
+      ]
+    },
+    "etl": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 3334,
+      "remainingCharacters": 20666,
+      "usedBytes": 5220,
+      "sections": [
+        {
+          "path": "assets/prompts/host/authoring.md",
+          "characters": 80,
+          "bytes": 230
+        },
+        {
+          "path": "assets/prompts/engines/etl.md",
+          "characters": 3254,
+          "bytes": 4990
+        }
+      ]
+    },
+    "evaluate": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 2585,
+      "remainingCharacters": 21415,
+      "usedBytes": 4139,
+      "sections": [
+        {
+          "path": "assets/prompts/host/review.md",
+          "characters": 64,
+          "bytes": 182
+        },
+        {
+          "path": "assets/quality/anti-ai-flavor/review-brief.zh-CN.md",
+          "characters": 253,
+          "bytes": 429
+        },
+        {
+          "path": "assets/prompts/engines/evaluate.md",
+          "characters": 2268,
+          "bytes": 3528
+        }
+      ]
+    },
+    "runtime": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 2635,
+      "remainingCharacters": 21365,
+      "usedBytes": 4609,
+      "sections": [
+        {
+          "path": "assets/prompts/host/runtime.md",
+          "characters": 61,
+          "bytes": 173
+        },
+        {
+          "path": "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+          "characters": 258,
+          "bytes": 436
+        },
+        {
+          "path": "assets/prompts/engines/runtime.md",
+          "characters": 2316,
+          "bytes": 4000
+        }
+      ]
+    },
+    "stage": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 4405,
+      "remainingCharacters": 19595,
+      "usedBytes": 8944,
+      "sections": [
+        {
+          "path": "assets/prompts/host/consumer-stage.md",
+          "characters": 61,
+          "bytes": 173
+        },
+        {
+          "path": "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+          "characters": 258,
+          "bytes": 436
+        },
+        {
+          "path": "assets/prompts/engines/stage.md",
+          "characters": 4086,
+          "bytes": 8335
+        }
+      ]
+    },
+    "weaver": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 1784,
+      "remainingCharacters": 22216,
+      "usedBytes": 3000,
+      "sections": [
+        {
+          "path": "assets/prompts/host/writing.md",
+          "characters": 62,
+          "bytes": 176
+        },
+        {
+          "path": "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+          "characters": 258,
+          "bytes": 436
+        },
+        {
+          "path": "assets/prompts/engines/weaver.md",
+          "characters": 1464,
+          "bytes": 2388
+        }
+      ]
+    },
+    "weaver-orch": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 2945,
+      "remainingCharacters": 21055,
+      "usedBytes": 4783,
+      "sections": [
+        {
+          "path": "assets/prompts/host/writing.md",
+          "characters": 62,
+          "bytes": 176
+        },
+        {
+          "path": "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+          "characters": 258,
+          "bytes": 436
+        },
+        {
+          "path": "assets/prompts/engines/weaver-orch.md",
+          "characters": 2625,
+          "bytes": 4171
+        }
+      ]
+    }
+  },
+  "agents": {
+    "chapter-reviewer": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 1307,
+      "remainingCharacters": 22693,
+      "usedBytes": 2097,
+      "sections": [
+        {
+          "path": "assets/prompts/host/review.md",
+          "characters": 64,
+          "bytes": 182
+        },
+        {
+          "path": "assets/prompts/agents/quality/anti-ai-flavor.review-brief.md",
+          "characters": 253,
+          "bytes": 429
+        },
+        {
+          "path": "assets/prompts/agents/chapter-reviewer.md",
+          "characters": 990,
+          "bytes": 1486
+        }
+      ]
+    },
+    "continuity-editor": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 1012,
+      "remainingCharacters": 22988,
+      "usedBytes": 1708,
+      "sections": [
+        {
+          "path": "assets/prompts/host/writing.md",
+          "characters": 62,
+          "bytes": 176
+        },
+        {
+          "path": "assets/prompts/agents/continuity-editor.md",
+          "characters": 950,
+          "bytes": 1532
+        }
+      ]
+    },
+    "scene-writer": {
+      "budgetCharacters": 24000,
+      "usedCharacters": 1116,
+      "remainingCharacters": 22884,
+      "usedBytes": 1952,
+      "sections": [
+        {
+          "path": "assets/prompts/host/writing.md",
+          "characters": 62,
+          "bytes": 176
+        },
+        {
+          "path": "assets/prompts/agents/quality/anti-ai-flavor.generation-brief.md",
+          "characters": 258,
+          "bytes": 436
+        },
+        {
+          "path": "assets/prompts/agents/scene-writer.md",
+          "characters": 796,
+          "bytes": 1340
+        }
+      ]
+    }
+  }
+}

@@ -2,7 +2,7 @@ id: continuity-editor
 displayName: Prism Continuity Editor
 description: Snapshot and synchronize one completed chapter into the Story Bible without writing prose or deciding the audit verdict.
 systemPrompt:
-  - assets/prompts/agents/base.md
+  - assets/prompts/host/writing.md
   - assets/prompts/agents/continuity-editor.md
 tools:
   - stat_path

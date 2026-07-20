@@ -1,12 +1,12 @@
 {
   "schema": "prism-harness-pack/v1",
   "id": "prism-engine-v10",
-  "version": "10.0.1-alpha.7",
+  "version": "10.1.0-rc.1",
   "sourceRepository": "3aKHP/Neural-Narratology",
-  "sourceCommit": "aaa171bcf0cbf95b3721382ec4949f5bbb402e9f",
+  "sourceCommit": "90f65c952bd5c84da9d1c5a22fbe87c3c583a70a",
   "sourceState": "clean",
-  "harnessConfigHash": "8d68ba1f2124bf7e2a73c47537b0bfb2cc168eef14c04103346e5034646229f6",
-  "compilerHash": "0d06fc51676858118f7f234ea6a99ff48aedbd816201966fa42bbe959a8e466c",
+  "harnessConfigHash": "d3cb2cbc9562407551f69df3fbd443f1a5f521124ed5b7af44a8ca2575f17df7",
+  "compilerHash": "7bcbef0559517e27c658889e541c2001d4c16e7d678b80c72aa8f7c0d0e88bb9",
   "requiredCapabilities": [
     "prism-agent/delegation@1",
     "prism-driver/v1",
@@ -18,19 +18,16 @@
     "quality-guard/anti-ai-flavor@1",
     "quality-judge/anti-ai-flavor@1"
   ],
-  "externalHostAssets": [
-    "assets/prompts/agents/base.md",
-    "assets/prompts/shared/vesicle-base.md"
-  ],
+  "externalHostAssets": [],
   "driver": {
     "contract": "assets/prism-driver/contract.json",
-    "contractHash": "a6d6eca0ab7d8f3ad7a9f8483df28cfb3fec433a5146c3c97b83cf32b349922b",
-    "contractSourceHash": "367a369ecafa47dfc9a2cfd6e6d6ff6f62fd82b790d9029cfc8e03bf55bc20f8",
+    "contractHash": "fa68d23e530b9b93cc62a337601f9d7753d8d1aaa177aeeed9c4923f73e77322",
+    "contractSourceHash": "41c2d4e20432a8c7ec75986cce7487ae4d8c931706ec1ec0c4880386ac6fd58d",
     "adapter": "assets/prism-driver/adapter.json",
-    "adapterHash": "0dd3133a82a4076f9dbe8896977f97da84c76d898bf8610249e0d9c382eb965e",
-    "adapterSourceHash": "4d599f38e93ad43c3af39df2783ce18a8126696acba30d25950f873ea7003991",
+    "adapterHash": "ed5d2915805756b7ddb39817b77a5a95a25b0cf926ffdb29968197e0f181376c",
+    "adapterSourceHash": "ee98e11aaf0025bf40e505ffe68cfa5009b2630b56d1b99f007f17748118830d",
     "adapterId": "vesicle-v1",
-    "adapterVersion": "1.0.0",
+    "adapterVersion": "1.1.0",
     "targetHost": "Prism Vesicle"
   },
   "ruleModules": [
@@ -55,53 +52,53 @@
   },
   "promptBindings": {
     "etl": [
-      "assets/prompts/shared/vesicle-base.md",
+      "assets/prompts/host/authoring.md",
       "assets/prompts/engines/etl.md"
     ],
     "runtime": [
-      "assets/prompts/shared/vesicle-base.md",
-      "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
+      "assets/prompts/host/runtime.md",
+      "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
       "assets/prompts/engines/runtime.md"
     ],
     "evaluate": [
-      "assets/prompts/shared/vesicle-base.md",
-      "assets/quality/anti-ai-flavor/judge-rubric.zh-CN.md",
+      "assets/prompts/host/review.md",
+      "assets/quality/anti-ai-flavor/review-brief.zh-CN.md",
       "assets/prompts/engines/evaluate.md"
     ],
     "weaver": [
-      "assets/prompts/shared/vesicle-base.md",
-      "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
+      "assets/prompts/host/writing.md",
+      "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
       "assets/prompts/engines/weaver.md"
     ],
     "weaver-orch": [
-      "assets/prompts/shared/vesicle-base.md",
-      "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
+      "assets/prompts/host/writing.md",
+      "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
       "assets/prompts/engines/weaver-orch.md"
     ],
     "dyad": [
-      "assets/prompts/shared/vesicle-base.md",
-      "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
+      "assets/prompts/host/runtime.md",
+      "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
       "assets/prompts/engines/dyad.md"
     ],
     "stage": [
-      "assets/prompts/shared/vesicle-base.md",
-      "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
+      "assets/prompts/host/consumer-stage.md",
+      "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
       "assets/prompts/engines/stage.md"
     ]
   },
   "agentPromptBindings": {
     "scene-writer": [
-      "assets/prompts/agents/base.md",
-      "assets/prompts/agents/quality/anti-ai-flavor.guidance.md",
+      "assets/prompts/host/writing.md",
+      "assets/prompts/agents/quality/anti-ai-flavor.generation-brief.md",
       "assets/prompts/agents/scene-writer.md"
     ],
     "continuity-editor": [
-      "assets/prompts/agents/base.md",
+      "assets/prompts/host/writing.md",
       "assets/prompts/agents/continuity-editor.md"
     ],
     "chapter-reviewer": [
-      "assets/prompts/agents/base.md",
-      "assets/prompts/agents/quality/anti-ai-flavor.judge-rubric.md",
+      "assets/prompts/host/review.md",
+      "assets/prompts/agents/quality/anti-ai-flavor.review-brief.md",
       "assets/prompts/agents/chapter-reviewer.md"
     ]
   },
@@ -138,30 +135,36 @@
     }
   },
   "assets": {
-    "assets/agents/chapter-reviewer.agent.yaml": "8452c1e0eb9277da09db6b41e540cbec30138f05126ad964b0c74231c0dd04a3",
-    "assets/agents/continuity-editor.agent.yaml": "6bf906ad4c41232b602e28c7bb6767cad22974a2ec4c8165fede17f7fed2660a",
-    "assets/agents/scene-writer.agent.yaml": "b9246b0999acfdf8c3bf999a1acb45cd9ca809398e7e5da386a39af7d724a3c3",
-    "assets/engines/dyad.profile.yaml": "0152d1a25c1c164d1f05b6f3b8c643e5435236d68344d15f1ef9f85daf8af08c",
-    "assets/engines/etl.profile.yaml": "a1afb4dcabe94ebf716e12358e38d24e7e1e37d6ef6c488cb52a6b630a7edaac",
-    "assets/engines/evaluate.profile.yaml": "437e7f651cf7a63244828df6ac01c183befe7b381dcfa3dafd6623aacf0f6a57",
-    "assets/engines/runtime.profile.yaml": "50e918a5a60df76a9217153955cbbb1cc2f8c3ef5aeae71bd62059e15704fa71",
-    "assets/engines/stage.profile.yaml": "23a8ef5c8f05b9cd9587e5fce69192a0d70b06ba4dd6cc98a56aa83d99aff50d",
-    "assets/engines/weaver-orch.profile.yaml": "18fd8d4d1864d79954d23bd7e8998941e07cd4876cf58c800df9baa8888ea104",
-    "assets/engines/weaver.profile.yaml": "20e78b2c011fe39567471255251dfadcce641d6174fcfbe10ef90ced7cb22459",
-    "assets/prism-driver/adapter.json": "0dd3133a82a4076f9dbe8896977f97da84c76d898bf8610249e0d9c382eb965e",
-    "assets/prism-driver/contract.json": "a6d6eca0ab7d8f3ad7a9f8483df28cfb3fec433a5146c3c97b83cf32b349922b",
-    "assets/prompts/agents/chapter-reviewer.md": "22548974ec78503aed4a6aaaf7e59eba5de270c4ed776926d0fa5ba8950541cc",
-    "assets/prompts/agents/continuity-editor.md": "0fd37867ee7c4b34c441ac4dc60f091289592c30d7f5a6955dce9032112f8be5",
-    "assets/prompts/agents/quality/anti-ai-flavor.guidance.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
-    "assets/prompts/agents/quality/anti-ai-flavor.judge-rubric.md": "698d690d23f9b7b26f3d6ea39e1cb1a3a6224c9343b1fb91d3ead2ee311dd617",
-    "assets/prompts/agents/scene-writer.md": "ad58e37d9121b25d9a3e06a0f09011d6305a6f630c5e0ea42801f5207be062c7",
-    "assets/prompts/engines/dyad.md": "be1f609f357dbc244b18c7b36f990328bf9490588ce8dafa5ea728b18c4c29b7",
-    "assets/prompts/engines/etl.md": "417c865df3092d3b7ac55b6f6f8b12beb1ddc4fb6645906fdcb8f77cb43b850f",
-    "assets/prompts/engines/evaluate.md": "4c2e526a5c7d97c4a7af72d76aca1f5d9361eb285149285e16ecb33e0a5bfe07",
-    "assets/prompts/engines/runtime.md": "135918dd19e0969bfb424d22b8ec60a97eb3c4d9238476fbe3077545207da5e7",
-    "assets/prompts/engines/stage.md": "ae48414ebe3edb562ae9cb8dd9a1b0cba7a24028e14b4cb2928ad762828ccfa5",
-    "assets/prompts/engines/weaver-orch.md": "455ec36b2eaea02ee90115c81d1add873037a3974f9827e347cb56ebe4495b1d",
-    "assets/prompts/engines/weaver.md": "ebafbf6e7f47c1f3b388a10cdcfc54b5a63bf3d6535677fd90f0e849ace6cb1e",
+    "assets/agents/chapter-reviewer.agent.yaml": "efa41736a120696df877b5bd7ccec1c6aeaf873eee2171593a887d654f23c4a1",
+    "assets/agents/continuity-editor.agent.yaml": "037f9dbd8b5c56e38d880d5a5c44b4d40a6064f5cad6851913f5eef5f5d744bf",
+    "assets/agents/scene-writer.agent.yaml": "81e707b4add7e056ce289ac5a263bbf36f0a0fdcd4a7eb6fcbaee12a372d7139",
+    "assets/engines/dyad.profile.yaml": "7e3db55278e5a3a4063b14e604c8d2db224e89ad259981e4bde34f1924d8d2cc",
+    "assets/engines/etl.profile.yaml": "8d148e8b20e46bf6be05667e17414dbc2a03ada632f87b3abd698cfa1788cc5d",
+    "assets/engines/evaluate.profile.yaml": "a1b83ba5e27192a655a43ccea0926dd0e9e8d30fdf2d601617ee58ff6d1392df",
+    "assets/engines/runtime.profile.yaml": "7f3bff4ece3a212dbf0726c8bca78ee22bc5aa0741b1dba96afaac3a841bb1ba",
+    "assets/engines/stage.profile.yaml": "4b011b3d1f03f3519609a6be84993ddbe86d8964967c1f87e7887bd78b042573",
+    "assets/engines/weaver-orch.profile.yaml": "96f8cf248d13debb3e97fdd668bec88c933574f7b840070fb9ebdda016174e36",
+    "assets/engines/weaver.profile.yaml": "92c1182007f692d22666dd89546563f5d20c535d0344f23cfe03c7c1ca8c977a",
+    "assets/prism-driver/adapter.json": "ed5d2915805756b7ddb39817b77a5a95a25b0cf926ffdb29968197e0f181376c",
+    "assets/prism-driver/contract.json": "fa68d23e530b9b93cc62a337601f9d7753d8d1aaa177aeeed9c4923f73e77322",
+    "assets/prompt-context-ledger.json": "480902ed7a5a69e9ea193e40d4391f8c2ee1138ff5f1e699008d217a90007330",
+    "assets/prompts/agents/chapter-reviewer.md": "6f79bdfb5abbe40678681404146dcf72ff92589bdd4f6b207a285baaf9824a14",
+    "assets/prompts/agents/continuity-editor.md": "103745e53eb772c8b9a7267758d3a52630af42898916767af0a3258167b62e4e",
+    "assets/prompts/agents/quality/anti-ai-flavor.generation-brief.md": "c6ecc912bed67666a0e8ecd06a485099c76972cb50c59553fd815aabed54c2fc",
+    "assets/prompts/agents/quality/anti-ai-flavor.review-brief.md": "0eb60d4011a40c346bf3796f53f703260555110eccc97d59d49cc464ab5b8cd7",
+    "assets/prompts/agents/scene-writer.md": "2a1aee1c9a6258134c47477cc2e6beca5746b05cbe39d7ec92db835129eb3282",
+    "assets/prompts/engines/dyad.md": "5c774e5c57310ab4c19ea29ff306ebfcb56655d25215be89ee0e6234de7dd837",
+    "assets/prompts/engines/etl.md": "eefb567144a4875cdabcd953a4401d44143ebff988e0c94d5879755e2c8e1357",
+    "assets/prompts/engines/evaluate.md": "2ec2bc342924f0a63263d117b95fdb9bb6d4dfd15cd08b56b7f4a01a3d62ca9f",
+    "assets/prompts/engines/runtime.md": "4f5386693b9efb0f73fd52916a855b9d6fad324b0255c1e51eaf942a1e7d4d7e",
+    "assets/prompts/engines/stage.md": "b8629bf77ececcf674dfa1f72e94b0d9cc194dd912b075c480d9a4646d4ac729",
+    "assets/prompts/engines/weaver-orch.md": "a78e13a15062bc11376b201cd54bde2497389ee5765b741d3c2eb8612c535a30",
+    "assets/prompts/engines/weaver.md": "4b91c3ce577e055d847ca7b6120eb3f543e36624c2c2820e157997e018ad6293",
+    "assets/prompts/host/authoring.md": "7199bbd585611010bccdd8f80e2428f5b66713b0b6809f836071968e91cfa471",
+    "assets/prompts/host/consumer-stage.md": "bebc9446f8502414efb795087d8d347c75abcc20e1bc7b259fc88f453f348c76",
+    "assets/prompts/host/review.md": "bbc2f6da3e32df160272e12e2d29891285880545db3211595877ff1dec37b950",
+    "assets/prompts/host/runtime.md": "144a896984d14fe6407338d90dfd6751e0df8de087fbf4f1bdfd9d506a295a66",
+    "assets/prompts/host/writing.md": "d9b942c40958d29a3e2930e203b958be5792a484dcc705fe399f3bf57dd653f2",
     "assets/quality/anti-ai-flavor/THIRD_PARTY_NOTICES.md": "984d1d7272545b48c29280b30c93a60dfcf62bda2c63cf8eec398c4ea072c691",
     "assets/quality/anti-ai-flavor/calibration/detector.jsonl": "088acc05638b61e89285ac296992245b9ec8b22b6b3e1042af902c1880c24a0f",
     "assets/quality/anti-ai-flavor/calibration/guidance-pairs.jsonl": "903288e5407926b1d15624d76c18bfd19a510d9c05c6d09b4408eb5d65ebca53",
@@ -171,10 +174,12 @@
     "assets/quality/anti-ai-flavor/data/semantic-rewrite-policy.json": "37a8a3b6b484edcef45c90458f01c7089330e96a4faa069256d6243900038187",
     "assets/quality/anti-ai-flavor/detector-rules.en-US.json": "335c8ead7ca0a5db97f63dd57c0ce0d9d259bf3232c8ed5d2a992f16d5ada8e9",
     "assets/quality/anti-ai-flavor/detector-rules.zh-CN.json": "44c31a0a8fd2f2c2a37b3c82a6a575a639db7214a7f33d30ccfedaa92d623dd1",
+    "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md": "c6ecc912bed67666a0e8ecd06a485099c76972cb50c59553fd815aabed54c2fc",
     "assets/quality/anti-ai-flavor/guidance.zh-CN.md": "c73fd19a46c2fd7ab8cc5a4bf7fdd8920989ac3c70c449f3fade85ec379cb432",
     "assets/quality/anti-ai-flavor/judge-rubric.zh-CN.md": "698d690d23f9b7b26f3d6ea39e1cb1a3a6224c9343b1fb91d3ead2ee311dd617",
     "assets/quality/anti-ai-flavor/judge-rules.zh-CN.json": "7c71d432b7a1afe6a37f6bcf5706b79ae067d3f7d826c54e98c1fa493cfa9493",
-    "assets/quality/anti-ai-flavor/manifest.json": "ab53f8c07281f737abc620704894ae1a2c298910f1a98e9bdbb73397f5b0daa6",
+    "assets/quality/anti-ai-flavor/manifest.json": "a36eeea01eb91dda6e5b19b12d7874d230a37d8af612da20a6d95d8351e5612a",
+    "assets/quality/anti-ai-flavor/review-brief.zh-CN.md": "0eb60d4011a40c346bf3796f53f703260555110eccc97d59d49cc464ab5b8cd7",
     "assets/quality/anti-ai-flavor/schemas/benchmark-report.schema.json": "a5c49d40d9c2ba297bae5a8a0157b2c205f71941bc7f97a341ed58157c75bce6",
     "assets/quality/anti-ai-flavor/schemas/calibration-annotation.schema.json": "1f7a156b36f9bb960f201cf16be8e5a5e73744531f5e3af5f8913b8197a5e48c",
     "assets/quality/anti-ai-flavor/schemas/calibration-blind-case.schema.json": "e7cd82b756b9302d13a6540d2bb625a3a82a8d6b67072f30158fec886a5a71c9",
@@ -194,14 +199,14 @@
     "assets/specs/schema_outline.md": "fa32f7ba8f17e2c51e3d34bfc7a425c8cf4af098a04df2e9753a55de0577b945",
     "assets/specs/schema_persona_prompt_compatible.md": "ed4708615aeaf14dc505bf6bc10cee2729cbf124c2b5dd13880f40a82644b2dd",
     "assets/specs/schema_persona_prompt_immersive.md": "e6f1125c3227fb739ffb3b2dafd040a7a1de987428b833c0488ac1b2e015433a",
-    "assets/specs/schema_scenario.md": "d2d5ff80c8459c366e3c3f45ed534a8aa65116bf46bb7d52c2debcd3a3432e11",
+    "assets/specs/schema_scenario.md": "a978e16ccd57c390faeba9e704cf8c17b1fec214f08412ae2682242e00b2fa75",
     "assets/specs/schema_story_bible.md": "fdcdfbfcbbd35a411c4f40e07c4155221869e4d061cbdd8668a0771c6a1a056b",
     "assets/templates/tpl_module_a.md": "703614977e52b0fcfe4235b1e4aa2092d02d2432a569fdf2f9744ea0679e044e",
     "assets/templates/tpl_module_b.md": "ee1b4ecec16d316563736c2eeafc34c8d5c7b99af388a882ac7bfad666dbf18f",
     "assets/templates/tpl_outline.md": "4b3d6ce0b7ea3af8673a13a5b7473f88c79f60bb61b24c430162ed309f0db434",
     "assets/templates/tpl_persona_prompt_compatible.md": "a15e465aec5f6a2ec460540fa373f49fe88c7d991aeca3e0cd8cf4fa6a5d79fe",
     "assets/templates/tpl_persona_prompt_immersive.md": "43fe499058fefa080a5514a4700c99ad7375d535e4e9f345283f9b109d2cdbf1",
-    "assets/templates/tpl_stage_context.md": "d873115145cfe792aeb8492183a26382cab3bf42c08983e2044ccf07b02c29ce",
+    "assets/templates/tpl_stage_context.md": "fe92f6f2877ede53ceea34875ba7cc179767b587e67f31203935f42b181d6715",
     "assets/templates/tpl_story_bible.md": "fb1e4504bec7cf3e613e926a06b5c22dc829a6281174ee806955c3c6650a5a1c"
   }
 }
