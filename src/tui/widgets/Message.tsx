@@ -10,6 +10,7 @@ import { useRenderer } from "@opentui/solid";
 import type { AgentCardState } from "../types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import { parseStageMessageContent } from "../stage-message-content";
+import { isStageMessageToggleShortcut } from "../stage-message-interaction";
 
 type MessageLike = {
   stageSource?: boolean;
@@ -86,7 +87,7 @@ export function Message(props: {
         flexDirection="column"
         focusable={showStageProjection}
         onKeyDown={(key) => {
-          if (!showStageProjection || (key.name !== "enter" && key.name !== "return" && key.name !== "space")) return;
+          if (!showStageProjection || !isStageMessageToggleShortcut(key)) return;
           key.preventDefault();
           key.stopPropagation();
           props.onStageToggle?.();

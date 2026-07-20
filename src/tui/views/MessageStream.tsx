@@ -7,6 +7,7 @@ import { ReasoningBlock } from "../widgets/ReasoningBlock";
 import type { AgentCardState, Message as StreamMessage } from "../types";
 import type { TuiKeyEvent } from "../decision-interaction";
 import { parseStageMessageContent } from "../stage-message-content";
+import { isStageMessageToggleShortcut } from "../stage-message-interaction";
 
 /**
  * The hero conversation surface: a sticky-bottom scrollbox of messages plus the
@@ -111,7 +112,7 @@ export function MessageStream(props: {
       return true;
     }
     const focused = focusedStageMessageId();
-    if (focused && (key.name === "enter" || key.name === "return" || key.name === "space")) {
+    if (focused && isStageMessageToggleShortcut(key)) {
       toggleStageMessage(focused);
       return true;
     }

@@ -17,6 +17,7 @@ project follows Semantic Versioning once releases begin.
 
 ### Fixed
 
+- Stage source-view toggling now uses `Ctrl+Alt+S` instead of plain Enter or Space, so a focused Stage message cannot intercept composer text, command spaces, prompt submission, or `Ctrl+Enter` newlines.
 - Slash-command argument completion is now command-owned instead of a controller whitelist. Built-in commands register their own grammar, candidate source, and canonical draft builder; `/quality`, `/artifact`, `/validate`, `/resume`, `/stage`, and `/engine --summary` now complete their arguments. Dynamic artifact, session, and Stage path candidates refresh safely, while `/model` retains its provider-first interaction and now also offers the established active-provider model shorthand.
 - Composer-owned arrow keys now consume their original OpenTUI event before
   renderable dispatch, so cursor movement and prompt-history recall cannot
