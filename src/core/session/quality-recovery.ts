@@ -131,7 +131,8 @@ function readPersistedQualityTargets(value: unknown): DurableQualityArtifactTarg
       || !isQualityCandidateType(candidateType)
       || !["create", "write", "replace", "append"].includes(String(operation))
       || !Array.isArray(item.mutationCallIds)
-      || item.mutationCallIds.some((id) => typeof id !== "string")
+      || item.mutationCallIds.length === 0
+      || item.mutationCallIds.some((id) => typeof id !== "string" || !id)
       || typeof item.postImageHash !== "string"
       || !/^[a-f0-9]{64}$/.test(item.postImageHash)
       || typeof item.bytes !== "number"

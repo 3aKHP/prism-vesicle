@@ -75,6 +75,23 @@ describe("permission modes", () => {
         }],
       },
     })).toBeUndefined();
+    expect(parsePermissionRequest({
+      ...request,
+      qualityState: {
+        ...request.qualityState,
+        targets: [{
+          id: "artifact:workspace/a.md",
+          kind: "artifact-post-image",
+          candidateType: "runtime.prose",
+          path: "workspace/a.md",
+          operation: "write",
+          mutationCallIds: [],
+          postImageHash: "c".repeat(64),
+          bytes: 1,
+          rejectedHashes: [],
+        }],
+      },
+    })).toBeUndefined();
   });
 });
 

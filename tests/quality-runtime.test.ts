@@ -1396,6 +1396,54 @@ describe("Output Quality Guard runtime", () => {
     });
   });
 
+  test("drops a persisted artifact target without mutation provenance", async () => {
+    const root = await runtimeRoot("runtime");
+    globalThis.fetch = (async () => Response.json({
+      id: "invalid-target-base",
+      choices: [{ message: { content: "雨水沿着门框滑落。" } }],
+    })) as unknown as typeof fetch;
+    const initial = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    const session = await createSessionStore(root, initial.sessionId);
+    await session.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "quality-check-pending",
+        qualityRewrite: {
+          producer: "runtime",
+          packId: "prism-engine-v10",
+          packVersion: "10.1.0-rc.1",
+          manifestSha256: "a".repeat(64),
+          ruleVersion: "0.2.1",
+          ruleSourceHash: "b".repeat(64),
+          attempts: 1,
+          rejectedHashes: [],
+          candidateParts: [],
+          targets: [{
+            id: "artifact:workspace/runtime.md",
+            kind: "artifact-post-image",
+            candidateType: "runtime.prose",
+            path: "workspace/runtime.md",
+            operation: "write",
+            mutationCallIds: [],
+            postImageHash: "c".repeat(64),
+            bytes: 8,
+            rejectedHashes: [],
+          }],
+        },
+      },
+    });
+
+    const snapshot = await loadSessionSnapshot(root, initial.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.pendingQualityRewrite?.targets).toEqual([]);
+  });
+
   test("closes an unanswered gate when an interrupted rewrite is stopped", async () => {
     const root = await runtimeRoot("runtime", ["runtime-turn"]);
     globalThis.fetch = (async () => Response.json({
