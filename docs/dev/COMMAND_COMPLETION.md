@@ -103,7 +103,7 @@ Keep `/model` behavior compatible: the first visible stage remains provider-firs
 
 ## Tests And Verification
 
-Add or extend tests in `tests/tui-command-completion.test.ts` and the command-specific test file. Cover the command registration, each finite or dynamic stage, canonical draft construction, active-provider/provider-scoped model paths where applicable, empty results, and guarded project-relative paths.
+Add or extend tests in `tests/unit/tui/tui-command-completion.test.ts` and the command-specific test file. Cover the command registration, each finite or dynamic stage, canonical draft construction, active-provider/provider-scoped model paths where applicable, empty results, and guarded project-relative paths.
 
 The current OpenTUI/Solid test runtime does not replay all client-side effects reliably. Keep focused pure resolver tests for grammar and source behavior, and use a narrow static guard for controller cancellation/keyboard invariants when a client effect cannot be exercised. Do not replace a feasible behavioral test with a static source assertion.
 
