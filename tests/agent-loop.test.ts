@@ -102,6 +102,56 @@ describe("agent loop sessions", () => {
     expect(records.filter((record) => record.metadata?.kind === "file-history-snapshot")).toHaveLength(2);
   });
 
+  test("injects queued user messages after a complete tool round and before the next provider request", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "source_materials", "note.md"), "tool boundary", "utf8");
+    const requestBodies: any[] = [];
+    let drains = 0;
+    const boundaryOrder: string[] = [];
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      const body = JSON.parse(String(init.body));
+      requestBodies.push(body);
+      if (requestBodies.length === 1) {
+        return Response.json({
+          id: "queued-boundary-1",
+          choices: [{ message: {
+            content: "",
+            tool_calls: [{
+              id: "call-read-before-queue",
+              type: "function",
+              function: { name: "read_file", arguments: '{"path":"source_materials/note.md"}' },
+            }],
+          } }],
+        });
+      }
+      return Response.json({ id: "queued-boundary-2", choices: [{ message: { content: "steered" } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "inspect the note",
+      rootDir,
+      runToolBoundaryCommands: async () => { boundaryOrder.push("commands"); },
+      takePendingUserInputs: () => {
+        boundaryOrder.push("messages");
+        drains += 1;
+        return drains === 1 ? [{ content: "focus only on the tool result" }] : [];
+      },
+    });
+
+    expect(result.kind).toBe("complete");
+    expect(boundaryOrder).toEqual(["commands", "messages"]);
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[1].messages.slice(-2)).toEqual([
+      expect.objectContaining({ role: "tool", tool_call_id: "call-read-before-queue" }),
+      expect.objectContaining({ role: "user", content: "focus only on the tool result" }),
+    ]);
+    const records = await loadSessionRecords(rootDir, result.sessionId);
+    expect(records.some((record) => record.role === "user"
+      && record.content === "focus only on the tool result"
+      && record.metadata?.kind === "queued-user-message")).toBe(true);
+    expect(records.filter((record) => record.metadata?.kind === "file-history-snapshot")).toHaveLength(2);
+  });
+
   test("materializes conversation images and persists only attachment references", async () => {
     await configureTestProviderEnv({ vision: true });
     const rootDir = await createPromptRoot();
@@ -1292,6 +1342,8 @@ describe("agent loop gates", () => {
     const originalPausedLength = paused.messages.length;
     await writeFile(join(rootDir, "assets", "prompts", "engines", "etl.md"), "etl changed\n", "utf8");
     const continuationEvents: AgentLoopEvent[] = [];
+    let pendingInputs = [{ content: "Before you continue, emphasize the conflict." }];
+    let commandBoundaries = 0;
 
     const resumed = await resolveGate({
       engine: "etl",
@@ -1302,17 +1354,27 @@ describe("agent loop gates", () => {
       gate: paused.gate,
       resolution: { decision: "confirm" },
       onEvent: (event) => continuationEvents.push(event),
+      runToolBoundaryCommands: async () => { commandBoundaries += 1; },
+      takePendingUserInputs: () => {
+        const current = pendingInputs;
+        pendingInputs = [];
+        return current;
+      },
     });
 
     expect(resumed.kind).toBe("complete");
     if (resumed.kind !== "complete") throw new Error("expected complete");
     expect(resumed.response.content).toBe("Advancing to Phase 1.");
+    expect(commandBoundaries).toBe(1);
 
     // The follow-up request the provider saw must include the tool result
     // for the gate call and the synthetic user turn carrying the decision.
     const finalMessages = seenBodies[1].messages;
     expect(finalMessages.some((m) => m.role === "tool" && m.content.includes("Confirmed"))).toBe(true);
     expect(finalMessages.some((m) => m.role === "user" && m.content.includes("[gate:blueprint-confirmation resolved as confirm]"))).toBe(true);
+    const gateResultIndex = finalMessages.findIndex((m) => m.role === "tool" && m.content.includes("Confirmed"));
+    const queuedInputIndex = finalMessages.findIndex((m) => m.role === "user" && m.content === "Before you continue, emphasize the conflict.");
+    expect(queuedInputIndex).toBeGreaterThan(gateResultIndex);
 
     // CR S2/B2: resolveGate must not mutate the caller's message array, and
     // the complete result must carry the full threaded message list so the

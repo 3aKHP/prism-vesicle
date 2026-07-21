@@ -234,7 +234,7 @@ async function executeHostCall(
   const mutationOwner = `${options.session.sessionId}:${call.id}`;
   try {
     return options.mcpRegistry.hasTool(call.name)
-      ? await options.mcpRegistry.execute(call)
+      ? await options.mcpRegistry.execute(call, { signal: options.signal })
       : await executeHostTool(options.rootDir, call, {
         signal: options.signal,
         processManager: options.processManager,

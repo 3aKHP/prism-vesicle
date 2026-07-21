@@ -108,6 +108,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     });
   const checkpoint = new FileCheckpointManager(rootDir, session, userRecord.uuid);
   await checkpoint.createSnapshot();
+  options.onSessionReady?.(session.sessionId, session.sessionPath);
   const messages: VesicleMessage[] = options.messages ?? [{
     role: "user",
     content: options.input,
@@ -134,5 +135,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     harness,
     assets,
     experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
   };
 }

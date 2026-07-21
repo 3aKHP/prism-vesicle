@@ -29,12 +29,14 @@ type ResultOptions = Pick<TurnControllerOptions,
   | "setSessionPath"
   | "setSessionPicker"
   | "setStatus"
+  | "setQueuedInputReady"
   | "refreshQualityWarnings"
 >;
 
 export function createTurnResultController(options: ResultOptions) {
   function handleResult(result: RunPromptResult): void {
     options.publishTurnUsage();
+    options.setQueuedInputReady(result.kind === "complete");
     switch (result.kind) {
       case "needs_user":
         applyPendingGateResult(result);

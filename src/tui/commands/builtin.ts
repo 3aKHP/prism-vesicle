@@ -59,9 +59,14 @@ const HELP_TEXT = [
   "  /help             show this help",
 ].join("\n");
 
+const immediate = { kind: "immediate" } as const;
+const afterToolRound = { kind: "queue", boundary: "tool-round" } as const;
+const afterAgentLoop = { kind: "queue", boundary: "agent-loop" } as const;
+
 export const builtinCommands: Command[] = [
   {
     name: "stage",
+    busyBehavior: afterAgentLoop,
     description: "Start a new Stage narrative session from two cards",
     usage: "/stage <character-card-path> <scenario-card-path>",
     completion: stageCommandCompletion,
@@ -78,6 +83,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "help",
+    busyBehavior: immediate,
     description: "Show available commands",
     async run(ctx, _args, raw) {
       ctx.setMessages((prev) => [
@@ -90,6 +96,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "quality",
+    busyBehavior: (args) => args.trim() === "status" ? immediate : afterAgentLoop,
     description: "Show or configure the experimental Semantic Judge",
     usage: "/quality [off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]",
     completion: qualityCommandCompletion,
@@ -147,6 +154,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "permissions",
+    busyBehavior: (args) => args ? afterAgentLoop : immediate,
     description: "Show or change the tool approval mode",
     usage: "/permissions [MANUAL|INERTIA|MOMENTUM|YOLO]",
     completion: fixedCommandCompletion("permissions"),
@@ -170,6 +178,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "agents",
+    busyBehavior: (args) => args.trim() === "retry" ? afterAgentLoop : immediate,
     description: "List Agent Profiles and current SubAgents",
     usage: "/agents [handle|stop <handle>|retry]",
     completion: agentsCommandCompletion,
@@ -181,6 +190,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "engine",
+    busyBehavior: (args) => args ? afterAgentLoop : immediate,
     description: "List or switch the Prism engine for future turns",
     usage: "/engine [id]",
     completion: engineCommandCompletion,
@@ -233,6 +243,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "compact",
+    busyBehavior: afterAgentLoop,
     description: "Summarize this session and replace old provider context",
     usage: "/compact [summary instructions]",
     async run(ctx, args, raw) {
@@ -247,6 +258,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "context",
+    busyBehavior: immediate,
     description: "Show current context window usage",
     usage: "/context",
     async run(ctx, _args, raw) {
@@ -260,6 +272,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "model",
+    busyBehavior: afterAgentLoop,
     description: "Switch provider/model (no args opens a picker)",
     usage: "/model [provider] [model]",
     completion: modelCommandCompletion,
@@ -294,6 +307,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "effort",
+    busyBehavior: (args) => args ? afterAgentLoop : immediate,
     description: "Set provider thinking effort",
     usage: "/effort off|low|medium|high|xhigh|max|auto",
     completion: fixedCommandCompletion("effort"),
@@ -329,6 +343,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "reasoning",
+    busyBehavior: immediate,
     description: "Set reasoning display mode",
     usage: "/reasoning hidden|collapsed|expanded",
     completion: fixedCommandCompletion("reasoning"),
@@ -356,11 +371,12 @@ export const builtinCommands: Command[] = [
 
   {
     name: "artifact",
+    busyBehavior: afterToolRound,
     description: "List artifacts or preview one in the message stream",
     usage: "/artifact [n|path]",
     completion: artifactCommandCompletion("artifact"),
     async run(ctx, args, raw) {
-      const entries = args ? (ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts()) : await ctx.refreshArtifacts();
+      const entries = await ctx.refreshArtifacts();
       if (!args) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: renderArtifactList(entries) }]);
         return;
@@ -388,11 +404,12 @@ export const builtinCommands: Command[] = [
 
   {
     name: "validate",
+    busyBehavior: afterToolRound,
     description: "Validate an artifact file",
     usage: "/validate <n|path>",
     completion: artifactCommandCompletion("validate"),
     async run(ctx, args, raw) {
-      const entries = ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts();
+      const entries = await ctx.refreshArtifacts();
       const artifact = resolveArtifactTarget(entries, args);
       if (!artifact) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `No artifact matches "${args || "(empty)"}". Use /artifact to list.` }]);
@@ -406,6 +423,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "rewind",
+    busyBehavior: afterAgentLoop,
     aliases: ["checkpoint"],
     description: "Restore code and/or conversation to an earlier point",
     async run(ctx) {
@@ -415,6 +433,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "new",
+    busyBehavior: afterAgentLoop,
     description: "Start a fresh session",
     async run(ctx, _args, raw) {
       ctx.resetRewindState();
@@ -442,6 +461,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "resume",
+    busyBehavior: afterAgentLoop,
     description: "Resume a saved session",
     usage: "/resume [n|id]",
     completion: resumeCommandCompletion,

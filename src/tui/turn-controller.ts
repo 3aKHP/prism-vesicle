@@ -10,6 +10,8 @@ import { setAgentDeliveryState } from "./agent-view";
 import { combineIndependentUsage } from "./telemetry";
 import { createTurnResultController } from "./turn-result-controller";
 import { createDecisionContinuations } from "./decision-continuations";
+import { displayTranscriptFromSnapshot, vesicleMessagesFromResumed } from "./session-presenter";
+import { executeQueuedCommands } from "./command-scheduler";
 
 export type { TurnControllerOptions } from "./turn-controller-options";
 import type { TurnControllerOptions } from "./turn-controller-options";
@@ -22,6 +24,8 @@ export function createTurnController(options: TurnControllerOptions) {
     handleInterruptedTurn,
     permissionContext,
     reportError,
+    takePendingUserInputs,
+    runToolBoundaryCommands,
   });
 
   function markTurnSawResponse(): void {
@@ -90,6 +94,8 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setHistoryIndex(null);
     options.setSessionPicker(null);
     options.setLastDisplayedToolAssistantContent(null);
+    options.setQueuedInputReady(false);
+    options.setQueuedSendAfterInterrupt(false);
     options.setBusy(true);
     options.setStatus("sending request");
     options.recordActivity({ kind: "provider", text: "sending provider request" });
@@ -114,9 +120,16 @@ export function createTurnController(options: TurnControllerOptions) {
         onEvent: options.handleAgentEvent,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
+        takePendingUserInputs,
+        runToolBoundaryCommands,
+        onSessionReady: (sessionId, sessionPath) => {
+          options.setSessionId(sessionId);
+          options.setSessionPath(sessionPath);
+        },
       }));
       if (outcome.kind === "interrupted") {
-        if (!activeTurnSawResponse) await restoreInterruptedPrompt(originalValue, images, elements);
+        if (options.queuedSendAfterInterrupt()) await reconcileInterruptedSession();
+        else if (!activeTurnSawResponse) await restoreInterruptedPrompt(originalValue, images, elements);
         handleInterruptedTurn();
       } else {
         handleResult(outcome.value);
@@ -131,6 +144,8 @@ export function createTurnController(options: TurnControllerOptions) {
 
   async function deliverAgentResults(parentSessionId: string, entries: AgentInboxEntry[], packet: string): Promise<void> {
     if (options.sessionId() !== parentSessionId || options.busy() || hasPendingInteraction()) throw new AgentDeliveryDeferred();
+    options.setQueuedInputReady(false);
+    options.setQueuedSendAfterInterrupt(false);
     options.setBusy(true);
     try {
       beginAgentDelivery(entries);
@@ -155,10 +170,13 @@ export function createTurnController(options: TurnControllerOptions) {
         onEvent: options.handleAgentEvent,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
+        takePendingUserInputs,
+        runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
+        if (options.queuedSendAfterInterrupt()) await reconcileInterruptedSession();
         handleInterruptedTurn();
-        throw new Error("SubAgent result delivery was interrupted.");
+        throw new AgentDeliveryDeferred();
       }
       handleResult(outcome.value);
       options.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrated", "result integrated"));
@@ -194,6 +212,7 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setOutput(message);
     options.setStreamingAssistant("");
     options.setStreamingReasoning("");
+    options.setQueuedInputReady(false);
     options.recordActivity({ kind: "system", text: `error: ${message}` });
     options.setMessages((previous) => [...previous, { role: "assistant", content: `Error: ${message}` }]);
   }
@@ -203,6 +222,8 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setStreamingAssistant("");
     options.setStreamingReasoning("");
     options.setLastDisplayedToolAssistantContent(null);
+    options.setQueuedInputReady(options.queuedSendAfterInterrupt());
+    options.setQueuedSendAfterInterrupt(false);
     options.recordActivity({ kind: "system", text: "request interrupted" });
   }
 
@@ -218,8 +239,18 @@ export function createTurnController(options: TurnControllerOptions) {
     if (!point) return;
     await options.applyConversationRewind(await rewindConversation(options.rootDir, id, point));
     options.setPromptHistory((previous) => previous.at(-1)?.value === prompt ? previous.slice(0, -1) : previous);
-    options.applyComposerState({ value: prompt, cursor: prompt.length, elements: elements.map((element) => ({ ...element })) });
-    options.setInputImages(images.map((image) => ({ ...image })));
+    if (options.composerValue().length === 0) {
+      options.applyComposerState({ value: prompt, cursor: prompt.length, elements: elements.map((element) => ({ ...element })) });
+      options.setInputImages(images.map((image) => ({ ...image })));
+    }
+  }
+
+  async function reconcileInterruptedSession(): Promise<void> {
+    const id = options.sessionId();
+    if (!id) return;
+    const snapshot = await loadSessionSnapshot(options.rootDir, id, { synthesizeDanglingToolResults: true });
+    options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+    options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
   }
 
   function permissionContext() {
@@ -229,6 +260,37 @@ export function createTurnController(options: TurnControllerOptions) {
       shellExecEnabled: options.shellExecEnabled(),
       shellInterpreter: options.shellInterpreter(),
     };
+  }
+
+  function takePendingUserInputs() {
+    const queued = options.takeQueuedMessages();
+    if (queued.length === 0) return [];
+    for (const message of queued) {
+      options.recordPromptHistory(message.value, message.elements, message.images);
+    }
+    options.setMessages((previous) => [
+      ...previous,
+      ...queued.map((message) => ({
+        role: "user" as const,
+        content: message.value.trim(),
+        ...(message.images.length ? { images: message.images } : {}),
+      })),
+    ]);
+    options.setStatus(`sending ${queued.length} queued message${queued.length === 1 ? "" : "s"}`);
+    options.recordActivity({ kind: "provider", text: `injecting ${queued.length} queued user message${queued.length === 1 ? "" : "s"}` });
+    return queued.map((message) => ({
+      content: message.value,
+      ...(message.images.length ? { images: message.images } : {}),
+    }));
+  }
+
+  async function runToolBoundaryCommands(): Promise<void> {
+    await executeQueuedCommands(options.takeToolBoundaryCommands(), {
+      beforeExecute: (command) => options.setStatus(`running queued command /${command.commandName}`),
+      execute: options.executeLocalCommand,
+      restoreNext: options.restoreNextQueuedInput,
+      reportError,
+    });
   }
 
   function hasPendingInteraction(): boolean {

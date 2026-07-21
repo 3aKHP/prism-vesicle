@@ -3,7 +3,7 @@ import type { McpRegistry } from "../../mcp/registry";
 import { createProvider } from "../../providers";
 import type { VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import type { AgentManager } from "../agents/manager";
-import type { FileCheckpointManager } from "../checkpoints/file-history";
+import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { EngineProfile } from "../engine/profile";
 import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
@@ -18,10 +18,12 @@ import { executeToolRound } from "./tool-round-executor";
 import { failedToolResult, recordToolResult } from "./tool-result-recorder";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
-import type { AgentLoopEvent, RunPromptResult } from "./types";
+import type { AgentLoopEvent, PendingUserInput, RunPromptResult } from "./types";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
 import type { ExperimentalQualityProfile } from "../../config/quality";
+import { persistedImageAttachments } from "../attachments/store";
+import { generationMetadata } from "./generation";
 import {
   evaluateBoundQuality,
   evaluateBoundQualityTargets,
@@ -68,13 +70,17 @@ export type RunLoopArgs = {
   assets?: AssetResolver;
   qualityState?: QualityRewriteState;
   experimentalQuality?: ExperimentalQualityProfile;
+  takePendingUserInputs?: () => PendingUserInput[];
+  runToolBoundaryCommands?: () => Promise<void>;
+  injectPendingBeforeFirstProvider?: boolean;
 };
 
 type LoopRuntime = {
   agentManager: AgentManager;
   processManager: ProcessManager;
   permission: PermissionRuntimeOptions;
-  trackCheckpointMutation: (paths: string[]) => Promise<void>;
+  checkpoint?: FileCheckpointManager;
+  checkpointMutationTail: Promise<void>;
   quality: QualityRewriteState & { proseParts: string[]; mutationParts: string[]; targets: NonNullable<QualityRewriteState["targets"]> };
   lastQuality?: { outcome: BoundQualityEvaluation["outcome"]; findingCount: number };
 };
@@ -84,11 +90,14 @@ export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   let response: VesicleResponse | undefined;
   let consecutiveFailures = 0;
 
+  if (args.injectPendingBeforeFirstProvider) await processInputBoundary(args, runtime);
+
   for (let iteration = 0; iteration < maxToolIterations; iteration++) {
     const round = await advanceRound(args, runtime, iteration);
     response = round.response;
     if (round.pause) return round.pause;
     if (!round.hadToolCalls) break;
+    await processInputBoundary(args, runtime);
 
     consecutiveFailures = round.anyFailed ? consecutiveFailures + 1 : 0;
     if (consecutiveFailures >= maxConsecutiveFailedTools) {
@@ -192,8 +201,8 @@ async function advanceRound(
     permissionBroker: args.permissionBroker,
     harness: args.harness,
     assets: args.assets,
-    trackCheckpointMutation: runtime.trackCheckpointMutation,
-    markCheckpointTainted: async () => { await args.checkpoint?.markTaintedByHostProcess(); },
+    trackCheckpointMutation: (paths) => trackCheckpointMutation(runtime, paths),
+    markCheckpointTainted: async () => { await runtime.checkpoint?.markTaintedByHostProcess(); },
   });
   for (const fileResult of execution.fileResults) {
     const target = qualityArtifactTargetFromResult(args.profile.id, fileResult);
@@ -694,7 +703,8 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
     agentManager: args.agentManager ?? createTurnAgentManager(args.rootDir, args.onEvent),
     processManager: getProcessManager(args.rootDir),
     permission: args.permission ?? defaultPermissionRuntime,
-    trackCheckpointMutation: createCheckpointMutationTracker(args.checkpoint),
+    checkpoint: args.checkpoint,
+    checkpointMutationTail: Promise.resolve(),
     quality: {
       attempts: args.qualityState?.attempts ?? 0,
       rejectedHashes: new Set(args.qualityState?.rejectedHashes ?? []),
@@ -721,13 +731,41 @@ function retainBlockingArtifactTargets(runtime: LoopRuntime, result: BoundQualit
   runtime.quality.targets = runtime.quality.targets.filter((target) => unresolvedIds.has(target.id));
 }
 
-function createCheckpointMutationTracker(checkpoint?: FileCheckpointManager): (paths: string[]) => Promise<void> {
-  let tail = Promise.resolve();
-  return (paths) => {
-    const next = tail.then(async () => checkpoint?.trackBeforeMutation(paths));
-    tail = next.catch(() => undefined);
-    return next;
-  };
+function trackCheckpointMutation(runtime: LoopRuntime, paths: string[]): Promise<void> {
+  const checkpoint = runtime.checkpoint;
+  const next = runtime.checkpointMutationTail.then(async () => checkpoint?.trackBeforeMutation(paths));
+  runtime.checkpointMutationTail = next.catch(() => undefined);
+  return next;
+}
+
+async function injectPendingUserInputs(args: RunLoopArgs, runtime: LoopRuntime): Promise<void> {
+  const pending = args.takePendingUserInputs?.() ?? [];
+  for (const input of pending) {
+    const content = input.content.trim();
+    if (!content) continue;
+    const record = await args.session.append({
+      role: "user",
+      content,
+      metadata: {
+        kind: "queued-user-message",
+        engine: args.profile.id,
+        provider: args.config.provider,
+        providerId: args.config.providerId,
+        model: args.config.model,
+        ...generationMetadata(args.generation),
+        ...(input.images?.length ? { images: persistedImageAttachments(input.images) } : {}),
+      },
+    });
+    const checkpoint = new FileCheckpointManager(args.rootDir, args.session, record.uuid);
+    await checkpoint.createSnapshot();
+    runtime.checkpoint = checkpoint;
+    args.messages.push({ role: "user", content, ...(input.images?.length ? { images: input.images } : {}) });
+  }
+}
+
+async function processInputBoundary(args: RunLoopArgs, runtime: LoopRuntime): Promise<void> {
+  await args.runToolBoundaryCommands?.();
+  await injectPendingUserInputs(args, runtime);
 }
 
 async function recordNoProgressBreak(session: SessionStore, consecutiveFailures: number): Promise<void> {

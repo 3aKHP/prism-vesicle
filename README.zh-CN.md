@@ -147,7 +147,7 @@ bun run dev
 | `/context` | 查看 token 总量和已配置的上下文限制 |
 | `/agents [handle\|stop <handle>\|retry]` | 使用 `explore-1` 这类短句柄列出、查看、中断 SubAgent，或重试暂停的结果投递 |
 
-主输入框使用 Enter 提交，使用 Ctrl+Enter 插入换行。Escape 会取消正在进行的供应商请求；输入框为空时，双击 Escape 会打开回退选择器。声明视觉能力的模型可以通过 Alt+V 接收剪贴板图像；WSL 终端上报 Ctrl+Alt+V 时同样受支持。
+主输入框使用 Enter 提交，使用 Ctrl+Enter 插入换行。Agent Loop 运行期间，Enter 会把普通消息加入队列；当前完整工具轮次结束后，Vesicle 会在下一次供应商请求前注入这些消息。Slash 命令使用命令自身声明的调度方式：安全的纯宿主命令立即执行，制品读取等待当前工具轮次，配置、选择器或会话命令等待 Agent Loop。混合队列显示在输入框上方，草稿为空时按 Up 可取回最新一条队列输入进行编辑。Escape 会中断当前供应商请求或工具操作，并立即处理下一条队列输入；输入框为空时，双击 Escape 会打开回退选择器。声明视觉能力的模型可以通过 Alt+V 接收剪贴板图像；WSL 终端上报 Ctrl+Alt+V 时同样受支持。
 
 ## Vesicle 当前支持的能力
 

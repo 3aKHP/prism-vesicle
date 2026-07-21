@@ -77,6 +77,9 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     harness: context.harness,
     assets: context.assets,
     experimentalQuality: context.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 

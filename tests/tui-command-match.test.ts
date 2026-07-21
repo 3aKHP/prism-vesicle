@@ -7,9 +7,9 @@ import { matchCommands } from "../src/tui/commands/match";
 // modules). Ranking: 0 exact name, 1 name prefix, 2 alias prefix, 3 name
 // substring, 4 alias substring, 5 description substring.
 const commands: Command[] = [
-  { name: "model", description: "switch the model", run: async () => {} },
-  { name: "engine", aliases: ["profile"], description: "switch the engine", run: async () => {} },
-  { name: "effort", description: "set provider thinking effort", run: async () => {} },
+  { name: "model", busyBehavior: { kind: "queue", boundary: "agent-loop" }, description: "switch the model", run: async () => {} },
+  { name: "engine", aliases: ["profile"], busyBehavior: { kind: "queue", boundary: "agent-loop" }, description: "switch the engine", run: async () => {} },
+  { name: "effort", busyBehavior: { kind: "queue", boundary: "agent-loop" }, description: "set provider thinking effort", run: async () => {} },
 ];
 
 const names = (result: Command[]) => result.map((c) => c.name);

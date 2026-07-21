@@ -21,7 +21,7 @@ export type McpRegistry = {
   definitions: ToolDefinition[];
   statuses: McpServerStatus[];
   hasTool: (name: string) => boolean;
-  execute: (call: ToolCall) => Promise<ToolResult>;
+  execute: (call: ToolCall, options?: { signal?: AbortSignal }) => Promise<ToolResult>;
 };
 
 export type McpInspection = {
@@ -159,7 +159,7 @@ async function buildRegistry(
     definitions: [...bindings.values()].map(toolDefinitionFromMcpBinding),
     statuses,
     hasTool: (name) => bindings.has(name),
-    execute: async (call) => {
+    execute: async (call, executeOptions = {}) => {
       const binding = bindings.get(call.name);
       if (!binding) {
         return {
@@ -190,7 +190,7 @@ async function buildRegistry(
         };
       }
       try {
-        const result = await client.callTool(binding.toolName, args.value);
+        const result = await client.callTool(binding.toolName, args.value, executeOptions);
         return {
           callId: call.id,
           name: call.name,
@@ -199,6 +199,7 @@ async function buildRegistry(
           mcpEvent: eventFromBinding(binding, result.isError),
         };
       } catch (error) {
+        if (executeOptions.signal?.aborted) throw error;
         return {
           callId: call.id,
           name: call.name,

@@ -57,6 +57,15 @@ export type CommandCompletion = {
   resolve: (draft: string, context: CommandCompletionContext) => CommandArgumentCompletion | null;
 };
 
+export type CommandQueueBoundary = "tool-round" | "agent-loop";
+
+export type CommandBusyBehavior =
+  | { kind: "immediate" }
+  | { kind: "queue"; boundary: CommandQueueBoundary }
+  | { kind: "reject"; reason: string };
+
+export type CommandBusyBehaviorResolver = CommandBusyBehavior | ((args: string) => CommandBusyBehavior);
+
 /**
  * Everything a slash command handler needs from the TUI. The App component
  * constructs one instance and passes it to executeCommand. Fields group by
@@ -131,6 +140,8 @@ export type CommandContext = {
 export type Command = {
   name: string;
   aliases?: string[];
+  /** Required scheduling contract when the Agent Loop is busy. */
+  busyBehavior: CommandBusyBehaviorResolver;
   /** One-line summary shown in /help and the popup. */
   description: string;
   /** Usage hint, e.g. "/engine <id>". */

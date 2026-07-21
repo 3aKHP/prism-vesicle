@@ -147,7 +147,7 @@ Useful commands:
 | `/context` | Inspect token totals and configured context limits |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry paused delivery for SubAgents using short handles such as `explore-1` |
 
-The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escape cancels an active provider request; with an empty composer, double Escape opens rewind. Vision-capable models can receive a clipboard image through Alt+V, with Ctrl+Alt+V accepted when reported by WSL terminals.
+The main composer uses Enter to submit and Ctrl+Enter to insert a newline. While the Agent Loop is running, Enter queues ordinary messages; after the current complete tool round, Vesicle injects them before the next provider request. Slash commands use command-owned scheduling: safe host-only commands run immediately, artifact reads wait for the tool round, and configuration, picker, or session commands wait for the Agent Loop. The mixed queue is shown above the composer, and Up with an empty draft retrieves its latest item for editing. Escape interrupts the current provider or tool operation and immediately processes the next queued input; with an empty composer, double Escape opens rewind. Vision-capable models can receive a clipboard image through Alt+V, with Ctrl+Alt+V accepted when reported by WSL terminals.
 
 ## What Vesicle Supports
 

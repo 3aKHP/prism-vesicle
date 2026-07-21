@@ -24,9 +24,7 @@ export type CommandCompletionControllerOptions = {
   listSessions: () => Promise<SessionSummary[]>;
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
-  busy: Accessor<boolean>;
-  setStatus: Setter<string>;
-  submitPrompt: (value: string) => Promise<void>;
+  submitCommand: (value: string) => boolean;
 };
 
 export function createCommandCompletionController(options: CommandCompletionControllerOptions) {
@@ -200,12 +198,8 @@ export function createCommandCompletionController(options: CommandCompletionCont
   }
 
   function submitCompletedCommandArgument(value: string): void {
-    if (options.busy()) {
-      options.setStatus("request in flight; draft kept");
-      return;
-    }
+    if (!options.submitCommand(value)) return;
     options.clearComposer();
-    void options.submitPrompt(value);
   }
 
   function applyCompletedCommandArgument(value: string): void {

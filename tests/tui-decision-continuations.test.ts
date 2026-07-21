@@ -5,6 +5,55 @@ import { expect, test } from "bun:test";
 import { createSessionStore } from "../src/core/session/store";
 import { createDecisionContinuations } from "../src/tui/decision-continuations";
 
+test("gate interruption releases the modal when queued input should send", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vesicle-tui-gate-queue-"));
+  try {
+    const session = await createSessionStore(root, "parent");
+    await session.append({ role: "user", content: "start" });
+    const pending = {
+      kind: "needs_user",
+      sessionId: "parent",
+      sessionPath: session.sessionPath,
+      engine: "etl",
+      gate: { gate: "blueprint-confirmation", summary: "Review", options: [{ label: "Confirm", decision: "confirm" }] },
+      toolCallId: "gate-call-1",
+      assistantContent: "Blueprint",
+      messages: [],
+    } as const;
+    const pendingUpdates: unknown[] = [];
+    let interrupted = 0;
+    let conversationRebuilt = 0;
+    const continuations = createDecisionContinuations({
+      rootDir: root,
+      busy: () => false,
+      queuedSendAfterInterrupt: () => true,
+      pendingGate: () => pending,
+      setBusy: (value: boolean) => value,
+      setQueuedInputReady: (value: boolean) => value,
+      setPendingGate: (value: unknown) => { pendingUpdates.push(value); return value; },
+      setGateFeedbackMode: (value: unknown) => value,
+      clearGateFeedback: () => undefined,
+      setStatus: (value: string) => value,
+      setMessages: (value: unknown) => value,
+      setConversation: (value: unknown) => { conversationRebuilt += 1; return value; },
+      agentCards: () => [],
+      beginUsageTurn: () => undefined,
+      recordActivity: () => undefined,
+      runCancellable: async () => ({ kind: "interrupted" as const }),
+      handleInterruptedTurn: () => { interrupted += 1; },
+      reportError: () => undefined,
+    } as any);
+
+    await continuations.submitGateResolution({ decision: "confirm" });
+
+    expect(pendingUpdates).toEqual([null]);
+    expect(conversationRebuilt).toBe(1);
+    expect(interrupted).toBe(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("user-question interruption does not restore a resolved Harness retry decision", async () => {
   const root = await mkdtemp(join(tmpdir(), "vesicle-tui-delegation-recovery-"));
   try {
@@ -57,8 +106,10 @@ test("user-question interruption does not restore a resolved Harness retry decis
     const continuations = createDecisionContinuations({
       rootDir: root,
       busy: () => false,
+      queuedSendAfterInterrupt: () => false,
       pendingUserQuestion: () => pending,
       setBusy: (value: boolean) => { busy.push(value); return value; },
+      setQueuedInputReady: (value: boolean) => value,
       setStatus: (value: string) => { statuses.push(value); return value; },
       setPendingUserQuestion: (value: unknown) => { pendingUpdates.push(value); return value; },
       setQuestionSelected: (value: number) => value,
@@ -105,8 +156,10 @@ test("user-question recovery fails closed when the durable session cannot be loa
     const continuations = createDecisionContinuations({
       rootDir: root,
       busy: () => false,
+      queuedSendAfterInterrupt: () => false,
       pendingUserQuestion: () => pending,
       setBusy: (value: boolean) => { busy.push(value); return value; },
+      setQueuedInputReady: (value: boolean) => value,
       setStatus: (value: string) => { statuses.push(value); return value; },
       setPendingUserQuestion: (value: unknown) => { pendingUpdates.push(value); return value; },
       setQuestionSelected: (value: number) => value,

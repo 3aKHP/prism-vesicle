@@ -82,6 +82,9 @@ export async function resumeQualityRewrite(options: ResumeQualityRewriteOptions)
     harness: context.harness,
     assets: context.assets,
     experimentalQuality: context.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
     qualityState: {
       attempts: pending.attempts,
       rejectedHashes: new Set(pending.rejectedHashes),
@@ -359,6 +362,9 @@ async function retryQualityDecision(
     harness: context.harness,
     assets: context.assets,
     experimentalQuality: context.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
     qualityState: {
       attempts: point.qualityState.attempts,
       rejectedHashes: new Set(point.qualityState.rejectedHashes),

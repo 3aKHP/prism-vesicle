@@ -163,6 +163,9 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     harness: context.harness,
     assets: context.assets,
     experimentalQuality: context.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 
