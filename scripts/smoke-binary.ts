@@ -146,12 +146,15 @@ async function main(): Promise<void> {
       r.exitCode !== 0,
       `expected non-zero exit on corrupt manifest, got ${r.exitCode}; stdout=${r.stdout.slice(0, 200)}`,
     );
-    // Fail-closed means it stops with an error, not that the error text is pretty.
-    // (The assets command currently leaks a stack here — tracked separately; the
-    // contract under test is "does not silently proceed with corrupt data".)
+    // Fail-closed means it stops with a concise user-facing error and does not
+    // silently proceed with corrupt data.
     assert(
       /manifest/i.test(r.stderr) || /manifest/i.test(r.stdout),
       `expected a manifest-related error; stderr=${r.stderr.slice(0, 200)}`,
+    );
+    assert(
+      !r.stderr.includes("/$bunfs/") && !r.stderr.includes("src/cli/") && !r.stderr.includes("Bun v"),
+      `expected a clean user-facing error without a runtime stack; stderr=${r.stderr.slice(0, 200)}`,
     );
   });
 

@@ -39,6 +39,17 @@ describe("CLI source journey: non-interactive commands", () => {
     });
   });
 
+  test("assets command failures exit cleanly without leaking a runtime stack", async () => {
+    await withTempProject("vesicle-cli-assets-error-", async (projectDir, configDir) => {
+      const result = await runCli(["assets", "init", "--bogus"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr.trim()).toBe("Asset scope accepts only --global.");
+      expect(result.stderr).not.toContain("src/cli/");
+      expect(result.stderr).not.toContain("Bun v");
+    });
+  });
+
   test("VESICLE_CONFIG_DIR routes config to the isolated dir, not the host path", async () => {
     await withTempProject("vesicle-cli-config-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

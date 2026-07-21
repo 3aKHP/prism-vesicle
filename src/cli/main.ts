@@ -159,7 +159,12 @@ switch (command) {
   }
   case "assets": {
     const { runAssetsCommand } = await import("./assets");
-    await runAssetsCommand(invocation.args.slice(1));
+    try {
+      await runAssetsCommand(invocation.args.slice(1));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
     break;
   }
   case "setup": {

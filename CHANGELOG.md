@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Message and command queue.** While the Agent Loop is running, Enter queues ordinary text and image input, shows a bounded mixed FIFO preview above the composer, and clears the draft for another input. Queued messages steer the active loop after its current complete tool round and before the next provider request. Every slash command now declares a required busy-turn behavior in the command registry: safe host-only commands run immediately, artifact reads wait for the current tool round, and configuration, picker, or session commands wait for the Agent Loop. Escape interrupts the current provider or tool operation and processes the next queued input immediately. Empty-draft Up retrieves the latest queued input for editing.
 
+### Fixed
+
+- **Assets CLI errors** now exit with a concise user-facing message instead of leaking a Bun stack trace when Harness manifest or argument validation fails.
+
 ## [1.0.0-alpha.3] - 2026-07-21
 
 ### Added
