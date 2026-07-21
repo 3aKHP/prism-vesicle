@@ -18,6 +18,7 @@
 import { copyFile, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import packageJson from "../package.json";
 
 export {};
 
@@ -117,6 +118,28 @@ async function main(): Promise<void> {
   const assert = (condition: boolean, message: string): void => {
     if (!condition) throw new Error(message);
   };
+
+  await scenario("--version prints the baked-in package version", async () => {
+    const r = await runBinary(binary, ["--version"], project, config);
+    assert(r.exitCode === 0, `exit ${r.exitCode}; stderr=${r.stderr.slice(0, 200)}`);
+    assert(r.stdout.trim() === packageJson.version, `expected ${packageJson.version}, got "${r.stdout.trim()}"`);
+  });
+
+  await scenario("-v matches --version on the compiled binary", async () => {
+    const r = await runBinary(binary, ["-v"], project, config);
+    assert(r.exitCode === 0, `exit ${r.exitCode}; stderr=${r.stderr.slice(0, 200)}`);
+    assert(r.stdout.trim() === packageJson.version, `got "${r.stdout.trim()}"`);
+  });
+
+  await scenario("-- lets a dash-prefixed token be launched as a path", async () => {
+    // The compiled binary keeps the literal "--" (Bun's `run` path consumes
+    // it), so "-nope" is classified as a launch path and fails on the missing
+    // directory instead of "Unknown option: -n".
+    const r = await runBinary(binary, ["--", "-nope"], project, config);
+    assert(r.exitCode !== 0, `expected non-zero, got ${r.exitCode}`);
+    assert(/does not exist/.test(r.stderr), `expected a missing-dir error; stderr=${r.stderr.slice(0, 200)}`);
+    assert(!/Unknown option/.test(r.stderr), `should not be an option error; stderr=${r.stderr.slice(0, 200)}`);
+  });
 
   await scenario("debug markdown-runtime loads the embedded tree-sitter worker", async () => {
     const r = await runBinary(binary, ["debug", "markdown-runtime"], project, config);

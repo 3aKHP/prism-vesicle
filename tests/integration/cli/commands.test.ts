@@ -1,6 +1,7 @@
 import { stat } from "node:fs/promises";
 import { describe, expect, test } from "bun:test";
 import { runCli, seedProvidersConfig, withTempProject } from "./support";
+import packageJson from "../../../package.json";
 
 /**
  * CLI source journey (A): drive the real CLI as a subprocess through its
@@ -104,6 +105,45 @@ describe("CLI source journey: non-interactive commands", () => {
       // No runtime stack leaked to the user-facing error surface.
       expect(result.stderr).not.toContain("src/cli/project-target.ts");
       expect(result.stderr).not.toContain("Bun v");
+    });
+  });
+
+  test("--version / -v print the package version and exit 0", async () => {
+    await withTempProject("vesicle-cli-version-", async (projectDir, configDir) => {
+      const long = await runCli(["--version"], { cwd: projectDir, configDir });
+      expect(long.exitCode).toBe(0);
+      expect(long.stderr).toBe("");
+      expect(long.stdout.trim()).toBe(packageJson.version);
+
+      const short = await runCli(["-v"], { cwd: projectDir, configDir });
+      expect(short.exitCode).toBe(0);
+      expect(short.stdout.trim()).toBe(packageJson.version);
+    });
+  });
+
+  test("--help prints the global usage and exits 0", async () => {
+    await withTempProject("vesicle-cli-help-", async (projectDir, configDir) => {
+      const result = await runCli(["--help"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Usage:");
+      expect(result.stdout).toContain("--version");
+    });
+  });
+
+  test("an unknown option exits 1 with a concise error", async () => {
+    await withTempProject("vesicle-cli-unknown-opt-", async (projectDir, configDir) => {
+      const result = await runCli(["--bogus"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unknown option: --bogus");
+    });
+  });
+
+  test("top-level parsing leaves command-owned terminators to the command", async () => {
+    await withTempProject("vesicle-cli-command-terminator-", async (projectDir, configDir) => {
+      const result = await runCli(["prompt", "shape", "--", "--engine"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unknown argument: --");
+      expect(result.stderr).not.toContain("Usage: vesicle [flags] -- [project-directory]");
     });
   });
 });

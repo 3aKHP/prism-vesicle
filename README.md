@@ -127,6 +127,8 @@ bun run doctor
 bun run dev
 ```
 
+Run `vesicle --version` (or `-v`) to print the installed version, or `vesicle --help` for the global usage summary.
+
 Generated files are limited to guarded project roots. Research material belongs under `source_materials/`; final artifacts belong under `workspace/`, `novels/`, `reports/`, or `test_runs/`. Models may organize these roots into nested directories, inspect directory entries, move or rename directory trees, and delete empty directories; fixed roots and symbolic-link traversal remain protected. File and directory changes made through Vesicle tools participate in rewind checkpoints under `.vesicle/file-history/`.
 
 Useful commands:

@@ -20,7 +20,7 @@ vesicle doctor
 | `Assets …` / `Harness: …` | 运行时资源与基线 | `missing` → 便携版检查三件是否并排;npm 版重装 |
 | `Shell exec: enabled` / `disabled` | shell 工具是否打开 | 按需改 `permissions.yaml` |
 
-doctor 打印的是 `Bun: <版本>`,不打印 Vesicle 包版本;要查 Vesicle 版本看 GitHub Release 或 `package.json`。
+doctor 打印的是 `Bun: <版本>`,不打印 Vesicle 包版本;查 Vesicle 版本用 `vesicle --version`(或 `-v`)。
 
 ## 常见问题
 

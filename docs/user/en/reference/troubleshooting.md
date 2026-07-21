@@ -20,7 +20,7 @@ Focus on these lines:
 | `Assets …` / `Harness: …` | Runtime resources and baseline | `missing` → portable: check the three pieces are side by side; npm: reinstall |
 | `Shell exec: enabled` / `disabled` | Whether the shell tool is on | Adjust `permissions.yaml` as needed |
 
-Doctor prints `Bun: <version>`, not the Vesicle package version; for the Vesicle version check the GitHub Release or `package.json`.
+Doctor prints `Bun: <version>`, not the Vesicle package version; for the Vesicle version run `vesicle --version` (or `-v`).
 
 ## Common problems
 
