@@ -56,6 +56,8 @@ import { createQualityPickerController } from "./quality-picker-controller";
 import { startStageSession } from "../core/stage/bootstrap";
 import { artifactFocusAction, artifactFocusPath, initialArtifactFocusPath } from "./artifact-focus";
 import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
+import { createInputQueue } from "./input-queue";
+import { routeCommandSubmission } from "./command-scheduler";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -124,6 +126,9 @@ export function App(props: AppProps = {}) {
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
   const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const [queuedInputReady, setQueuedInputReady] = createSignal(false);
+  const [queuedSendAfterInterrupt, setQueuedSendAfterInterrupt] = createSignal(false);
+  const inputQueue = createInputQueue();
   const [restoringSession, setRestoringSession] = createSignal(false);
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
@@ -310,6 +315,20 @@ export function App(props: AppProps = {}) {
     applyConversation: (result) => sessionActions.applyConversationRewind(result),
   });
   const rewindPicker = rewindController.state;
+  function submitCommand(raw: string): boolean {
+    return routeCommandSubmission(raw, busy(), builtinCommands, {
+      execute: (value) => {
+        void executeCommand(value, commandContext, builtinCommands).catch((error) => turnController.reportError(error));
+      },
+      enqueue: (command) => {
+        const count = inputQueue.enqueueCommand(command);
+        setStatus(`command queued (${count})`);
+        recordActivity({ kind: "system", text: `queued command ${command.commandName} (${count})` });
+        return count;
+      },
+      reject: setStatus,
+    });
+  }
   const composerController = createComposerController({
     rootDir: process.cwd(),
     terminalWidth: () => dimensions().width,
@@ -329,8 +348,14 @@ export function App(props: AppProps = {}) {
     setMessages,
     recordActivity,
     reportError: (error) => turnController.reportError(error),
+    inputQueue,
+    submitCommand,
     submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
-    abortTurn: () => turnCancellation.abort(),
+    abortTurn: () => {
+      const aborted = turnCancellation.abort();
+      if (aborted) setQueuedSendAfterInterrupt(inputQueue.items().length > 0);
+      return aborted;
+    },
     openRewind: rewindController.open,
   });
   const {
@@ -357,10 +382,16 @@ export function App(props: AppProps = {}) {
     modelPickerTitle,
     openModelPicker,
     pasteClipboardImage,
+    queuedInputs,
     recordHistory: recordPromptHistory,
+    clearQueuedInputs,
+    restoreNextQueuedInput,
     setHistoryIndex,
     setInputImages,
     setPromptHistory,
+    takeQueuedMessages,
+    takeNextQueuedInput,
+    takeToolBoundaryCommands,
   } = composerController;
   const qualityPickerController = createQualityPickerController({
     providerRegistry,
@@ -390,6 +421,9 @@ export function App(props: AppProps = {}) {
     dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
     busy,
     setBusy,
+    setQueuedInputReady,
+    queuedSendAfterInterrupt,
+    setQueuedSendAfterInterrupt,
     providerConfigReady,
     setProviderConfigReady,
     loadProviderConfig: loadProviderConfigOnce,
@@ -462,9 +496,13 @@ export function App(props: AppProps = {}) {
     executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
     recordPromptHistory,
     applyComposerState,
+    composerValue: inputValue,
     setInputImages,
     setHistoryIndex,
     setPromptHistory,
+    takeQueuedMessages,
+    takeToolBoundaryCommands,
+    restoreNextQueuedInput,
     applyConversationRewind: (result) => sessionActions.applyConversationRewind(result),
   });
   const { reportError } = turnController;
@@ -513,6 +551,7 @@ export function App(props: AppProps = {}) {
     setPermissionMode,
     applyProviderSelection,
     setRestoringSession,
+    sessionId,
     setSessionId,
     setNextSessionParent,
     setSessionPath,
@@ -545,6 +584,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformText,
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
+    clearQueuedInputs,
   }));
   sessionActions = createSessionActionsController({
     rootDir: process.cwd(),
@@ -595,6 +635,40 @@ export function App(props: AppProps = {}) {
     handleSessionPickerKey,
     resetRewindState,
   } = sessionActions;
+  createEffect(() => {
+    const ready = queuedInputReady()
+      && !restoringSession()
+      && !busy()
+      && !pendingGate()
+      && !pendingEngineSwitch()
+      && !pendingUserQuestion()
+      && !pendingPermission()
+      && !pendingQualityDecision()
+      && !pendingChildPermission()
+      && !rewindPicker()
+      && !sessionPicker()
+      && !modelPicker()
+      && !qualityPicker()
+      && !yoloConfirmStage();
+    if (!ready || queuedInputs().length === 0) return;
+    const next = takeNextQueuedInput();
+    if (!next) return;
+    setQueuedInputReady(false);
+    if (next.kind === "message") {
+      void turnController.submitPrompt(next.value, next.images, next.elements).catch((error) => {
+        restoreNextQueuedInput(next);
+        reportError(error);
+      });
+      return;
+    }
+    void executeCommand(next.raw, commandContext, builtinCommands).then(
+      () => setQueuedInputReady(true),
+      (error) => {
+        reportError(error);
+        setQueuedInputReady(true);
+      },
+    );
+  });
   createEffect(() => {
     const id = sessionId();
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
@@ -738,7 +812,10 @@ export function App(props: AppProps = {}) {
     setSelectedArtifact,
     setStatus,
     recordActivity,
-    setSessionId,
+    setSessionId: (value) => {
+      if (typeof value !== "function" && value === undefined) clearQueuedInputs();
+      return setSessionId(value);
+    },
     setSessionPath,
     setConversation,
     setOutput,
@@ -768,6 +845,7 @@ export function App(props: AppProps = {}) {
         permissionMode: permissionMode(),
         reasoningTier: thinkingTier(),
       });
+      clearQueuedInputs();
       setSessionId(started.sessionId);
       setSessionPath(started.sessionPath);
       setActiveEngine("stage");
@@ -942,6 +1020,7 @@ export function App(props: AppProps = {}) {
         inputCursor={inputCursor()}
         inputWidth={composerInputWidth()}
         busy={busy()}
+        queuedInputs={queuedInputs()}
         providerConfigReady={providerConfigReady()}
       />
       <box height={layout().footerHeight} paddingLeft={1}>

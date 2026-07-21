@@ -62,12 +62,23 @@ describe("TUI turn result controller", () => {
       expect(harness.status()).toBe(status);
     }
   });
+
+  test("opens queued-input delivery only after a complete turn", () => {
+    const pending = createHarness();
+    pending.handle(permissionResult(""));
+    expect(pending.queuedInputReady()).toBe(false);
+
+    const complete = createHarness();
+    complete.handle(completeQualityResult("clean", 0));
+    expect(complete.queuedInputReady()).toBe(true);
+  });
 });
 
 function createHarness(lastDisplayedContent: string | null = null) {
   let messages: Message[] = [];
   let pendingQuality: unknown;
   let status = "";
+  let queuedInputReady = false;
   const noop = () => undefined;
   const controller = createTurnResultController({
     activeEngine: () => "etl",
@@ -97,6 +108,10 @@ function createHarness(lastDisplayedContent: string | null = null) {
     setSessionId: noop,
     setSessionPath: noop,
     setSessionPicker: noop,
+    setQueuedInputReady: (value) => {
+      queuedInputReady = typeof value === "function" ? value(queuedInputReady) : value;
+      return queuedInputReady;
+    },
     setStatus: (value) => {
       status = typeof value === "function" ? value(status) : value;
       return status;
@@ -107,6 +122,7 @@ function createHarness(lastDisplayedContent: string | null = null) {
     messages: () => messages,
     pendingQuality: () => pendingQuality,
     status: () => status,
+    queuedInputReady: () => queuedInputReady,
   };
 }
 

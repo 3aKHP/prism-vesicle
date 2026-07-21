@@ -45,22 +45,22 @@ export class McpStreamableHttpClient {
     return tools;
   }
 
-  async callTool(toolName: string, args: Record<string, unknown>): Promise<McpToolCallResult> {
+  async callTool(toolName: string, args: Record<string, unknown>, options: { signal?: AbortSignal } = {}): Promise<McpToolCallResult> {
     const result = await this.request("tools/call", {
       name: toolName,
       arguments: args,
-    });
+    }, options);
     return formatMcpToolResult(result);
   }
 
-  private async request(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async request(method: string, params: Record<string, unknown>, options: { signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
     const id = this.nextId++;
     const envelopes = await this.post({
       jsonrpc: "2.0",
       id,
       method,
       params,
-    });
+    }, options);
     const envelope = findResponseEnvelope(envelopes, id);
     if (!envelope) {
       throw new McpError(`MCP server ${this.config.id} returned no JSON-RPC response for ${method}.`);
@@ -81,8 +81,9 @@ export class McpStreamableHttpClient {
     });
   }
 
-  private async post(payload: JsonRpcEnvelope): Promise<JsonRpcEnvelope[]> {
+  private async post(payload: JsonRpcEnvelope, options: { signal?: AbortSignal } = {}): Promise<JsonRpcEnvelope[]> {
     const timeout = setTimeoutController(this.config.timeoutSeconds);
+    const signal = options.signal ? AbortSignal.any([options.signal, timeout.signal]) : timeout.signal;
     try {
       const response = await this.fetchImpl(this.config.url, {
         method: "POST",
@@ -93,7 +94,7 @@ export class McpStreamableHttpClient {
           ...(this.sessionId ? { "MCP-Session-Id": this.sessionId } : {}),
         },
         body: JSON.stringify(payload),
-        signal: timeout.signal,
+        signal,
       });
       if (!response.ok) {
         throw new McpError(`MCP server ${this.config.id} HTTP ${response.status}.`);
@@ -112,6 +113,7 @@ export class McpStreamableHttpClient {
       if (isRecord(parsed)) return [parsed];
       throw new McpError(`MCP server ${this.config.id} returned a non-object JSON response.`);
     } catch (error) {
+      if (options.signal?.aborted) throw error;
       if (error instanceof McpError) throw error;
       if (error instanceof DOMException && error.name === "AbortError") {
         throw new McpError(`MCP server ${this.config.id} timed out after ${this.config.timeoutSeconds}s.`);

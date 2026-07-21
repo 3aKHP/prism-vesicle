@@ -36,11 +36,22 @@ describe("/artifact command", () => {
       content: "## Mira\n\nPreview body.",
     });
     expect(harness.selected()?.path).toBe("workspace/cards/mira.md");
+    expect(harness.refreshes()).toBe(1);
+  });
+
+  test("refreshes artifacts before resolving a target", async () => {
+    const refreshed = [{ path: "workspace/new.md", updatedAt: "2026-07-21T00:00:00.000Z" }];
+    const harness = commandHarness("artifact", refreshed);
+
+    await harness.command.run(harness.ctx, "workspace/new.md", "/artifact workspace/new.md");
+
+    expect(harness.refreshes()).toBe(1);
+    expect(harness.selected()?.path).toBe("workspace/new.md");
   });
 });
 
-function commandHarness() {
-  const command = builtinCommands.find((entry) => entry.name === "artifact");
+function commandHarness(commandName = "artifact", refreshedEntries = entries) {
+  const command = builtinCommands.find((entry) => entry.name === commandName);
   if (!command) throw new Error("Missing /artifact command.");
   let messages: Message[] = [];
   let refreshCount = 0;
@@ -53,7 +64,7 @@ function commandHarness() {
     artifacts: () => entries,
     async refreshArtifacts() {
       refreshCount += 1;
-      return entries;
+      return refreshedEntries;
     },
     async loadArtifactPreview(artifact: ArtifactEntry): Promise<ArtifactPreview> {
       return {

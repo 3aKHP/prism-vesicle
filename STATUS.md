@@ -6,7 +6,7 @@ _Snapshot: 1.0.0-alpha.3 release candidate (2026-07-21)._
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-alpha.3**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.3 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-alpha.3**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.3 GitHub Release and npm package once the accepted candidate is tagged; `unreleased` = implemented on `develop` but not yet included in a public release; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
@@ -17,6 +17,7 @@ Release candidate: **1.0.0-alpha.3**. The `State` column tracks the candidate's 
 | Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | released |
 | Providers | Thinking-effort controls and reasoning-block visibility | released |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
+| TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | unreleased |
 | TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |

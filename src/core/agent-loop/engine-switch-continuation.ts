@@ -90,6 +90,9 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     harness: continuation.harness,
     assets: continuation.assets,
     experimentalQuality: continuation.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 

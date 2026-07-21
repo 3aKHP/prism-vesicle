@@ -206,6 +206,9 @@ async function continuePermissionSequence(
       targets: hydrateQualityTargets(state.qualityState.targets ?? []),
       experimentalJudge: state.qualityState.experimentalJudge,
     } : undefined,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 

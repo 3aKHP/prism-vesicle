@@ -185,6 +185,31 @@ describe("Streamable HTTP MCP client", () => {
       "session-1",
     ]);
   });
+
+  test("aborts an in-flight tool call with the turn cancellation signal", async () => {
+    const controller = new AbortController();
+    const client = new McpStreamableHttpClient({
+      id: "slow",
+      enabled: true,
+      transport: "streamable-http",
+      url: "https://mcp.example.test/slow/mcp",
+      headers: {},
+      timeoutSeconds: 30,
+      protocolVersion: "2025-03-26",
+      includeTools: [],
+      excludeTools: [],
+      enabledEngines: [],
+    }, {
+      fetchImpl: ((_url, init) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      })) as typeof fetch,
+    });
+
+    const running = client.callTool("wait", {}, { signal: controller.signal });
+    controller.abort(new DOMException("user cancelled", "AbortError"));
+
+    await expect(running).rejects.toMatchObject({ name: "AbortError" });
+  });
 });
 
 describe("MCP registry", () => {

@@ -34,6 +34,14 @@ export type RunPromptOptions = {
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
   experimentalQuality?: ExperimentalQualityProfile;
+  takePendingUserInputs?: () => PendingUserInput[];
+  runToolBoundaryCommands?: () => Promise<void>;
+  onSessionReady?: (sessionId: string, sessionPath: string) => void;
+};
+
+export type PendingUserInput = {
+  content: string;
+  images?: VesicleImageAttachment[];
 };
 
 export type AgentLoopEvent =

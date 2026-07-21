@@ -12,7 +12,7 @@ import type { AssetFingerprint } from "../runtime/assets";
 import type { AssetResolver } from "../runtime/assets";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import { mergeGeneration } from "./generation";
-import type { AgentLoopEvent } from "./types";
+import type { AgentLoopEvent, PendingUserInput } from "./types";
 import { resolveToolSurface } from "./tool-surface";
 import {
   assertSessionHarnessIdentity,
@@ -30,6 +30,8 @@ export type ContinuationContextOptions = {
   onEvent?: (event: AgentLoopEvent) => void;
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
+  takePendingUserInputs?: () => PendingUserInput[];
+  runToolBoundaryCommands?: () => Promise<void>;
 };
 
 export async function loadContinuationContext(

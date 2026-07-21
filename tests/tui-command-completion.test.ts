@@ -159,6 +159,6 @@ describe("completion controller dynamic sources", () => {
     expect(source).toContain("loadedSourceKey() === draft.sourceKey");
     expect(source).toContain('if (name === "tab")');
     expect(source).toContain('if (name === "escape")');
-    expect(source).toContain('options.setStatus("request in flight; draft kept")');
+    expect(source).toContain("options.submitCommand(value)");
   });
 });

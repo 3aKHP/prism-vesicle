@@ -722,6 +722,8 @@ describe("Output Quality Guard runtime", () => {
     const resumeErrors: unknown[] = [];
     const noop = (value: unknown) => value;
     const resumeController = createSessionResumeController({
+      sessionId: () => summary!.sessionId,
+      clearQueuedInputs: () => undefined,
       rootDir: root,
       resolveHarnessRuntime: async () => ({ harness } as any),
       dangerouslySkipPermissions: false,
@@ -1546,10 +1548,12 @@ describe("Output Quality Guard runtime", () => {
       const continuations = createDecisionContinuations({
         rootDir: root,
         busy: () => false,
+        queuedSendAfterInterrupt: () => false,
         pendingQualityDecision: () => pending,
         setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
         setQualitySelected: (value: number) => value,
         setBusy: (value: boolean) => value,
+        setQueuedInputReady: (value: boolean) => value,
         setStatus: (value: string) => value,
         recordActivity: () => undefined,
         setMessages: (value: unknown) => value,
@@ -1613,10 +1617,12 @@ describe("Output Quality Guard runtime", () => {
       const continuations = createDecisionContinuations({
         rootDir: root,
         busy: () => false,
+        queuedSendAfterInterrupt: () => false,
         pendingQualityDecision: () => pending,
         setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
         setQualitySelected: (value: number) => value,
         setBusy: (value: boolean) => value,
+        setQueuedInputReady: (value: boolean) => value,
         setStatus: (value: string) => value,
         recordActivity: () => undefined,
         setMessages: (value: unknown) => value,
@@ -1689,6 +1695,8 @@ describe("Output Quality Guard runtime", () => {
     const harness = harnessRuntime();
     let harnessLoadError: Error | undefined;
     const controllerForResume = createSessionResumeController({
+      sessionId: () => summary!.sessionId,
+      clearQueuedInputs: () => undefined,
       rootDir: root,
       resolveHarnessRuntime: async () => {
         if (harnessLoadError) throw harnessLoadError;
