@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **`vesicle --version` / `-v` and `--help` / `-h`.** A typed startup parser now classifies one invocation into a terminal action (`--version`/`-v`, `--help`/`-h`), a subcommand, or a project launch. `--version` prints the package version baked into the binary at build time; `--help` prints the global usage. Short options bundle (`-vh`), `--` ends option parsing so dash-prefixed paths work, and `--dangerously-skip-permissions` remains a position-agnostic process flag. On source/npm launches Bun's runtime consumes a leading `--`, so use `vesicle launch ./-path` there; the compiled binary preserves it.
 - **Message and command queue.** While the Agent Loop is running, Enter queues ordinary text and image input, shows a bounded mixed FIFO preview above the composer, and clears the draft for another input. Queued messages steer the active loop after its current complete tool round and before the next provider request. Every slash command now declares a required busy-turn behavior in the command registry: safe host-only commands run immediately, artifact reads wait for the current tool round, and configuration, picker, or session commands wait for the Agent Loop. Escape interrupts the current provider or tool operation and processes the next queued input immediately. Empty-draft Up retrieves the latest queued input for editing.
 
 ### Fixed

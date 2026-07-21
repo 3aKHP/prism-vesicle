@@ -140,20 +140,26 @@ describe("parent-owned permission broker", () => {
 });
 
 describe("dangerous CLI override", () => {
-  test("removes the flag regardless of position", () => {
+  test("recognizes the flag in any position as a process-scoped modifier", () => {
     expect(parseCliInvocation(["--dangerously-skip-permissions", "dev"])).toEqual({
-      args: ["dev"],
+      kind: "command",
+      command: "dev",
+      args: [],
       dangerouslySkipPermissions: true,
     });
     expect(parseCliInvocation(["once", "hello", "--dangerously-skip-permissions"])).toEqual({
-      args: ["once", "hello"],
+      kind: "command",
+      command: "once",
+      args: ["hello"],
       dangerouslySkipPermissions: true,
     });
   });
 
   test("defaults to the ordinary permission path", () => {
     expect(parseCliInvocation(["doctor"])).toEqual({
-      args: ["doctor"],
+      kind: "command",
+      command: "doctor",
+      args: [],
       dangerouslySkipPermissions: false,
     });
   });
