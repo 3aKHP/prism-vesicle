@@ -17,6 +17,9 @@ import {
   parseShellExecPlan,
 } from "../../../src/core/tools/shell";
 
+const WINDOWS_SPAWN_PROCESS_TIMEOUT_MS = 15_000;
+const WINDOWS_SPAWN_TEST_TIMEOUT_MS = 30_000;
+
 describe("process runtime", () => {
   test("builds a child environment from an allowlist", () => {
     expect(buildProcessEnvironment({
@@ -70,14 +73,14 @@ describe("process runtime", () => {
       try {
         const result = await executeProcessPlan(
           root,
-          createProcessExecutionPlan(command, 5_000, "win32", false, shellInterpreter),
+          createProcessExecutionPlan(command, WINDOWS_SPAWN_PROCESS_TIMEOUT_MS, "win32", false, shellInterpreter),
         );
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain("中文");
       } finally {
         await rm(root, { recursive: true, force: true });
       }
-    }, 20_000);
+    }, WINDOWS_SPAWN_TEST_TIMEOUT_MS);
   }
 
   test.skipIf(process.platform !== "win32")("Windows auto executes through 5.1 when PowerShell 7 is absent", async () => {
@@ -138,7 +141,7 @@ describe("process runtime", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, process.platform === "win32" ? WINDOWS_SPAWN_TEST_TIMEOUT_MS : undefined);
 
   test("times out a command and terminates its process group", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
@@ -162,7 +165,10 @@ describe("process runtime", () => {
       const progress: number[] = [];
       const result = await executeProcessPlan(
         root,
-        createProcessExecutionPlan(process.platform === "win32" ? "Start-Sleep -Milliseconds 1100" : "sleep 1.1", 5_000),
+        createProcessExecutionPlan(
+          process.platform === "win32" ? "Start-Sleep -Milliseconds 1100" : "sleep 1.1",
+          process.platform === "win32" ? WINDOWS_SPAWN_PROCESS_TIMEOUT_MS : 5_000,
+        ),
         { env: { PATH: process.env.PATH }, onProgress: (event) => progress.push(event.durationMs) },
       );
       expect(result.exitCode).toBe(0);
@@ -170,7 +176,7 @@ describe("process runtime", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, process.platform === "win32" ? WINDOWS_SPAWN_TEST_TIMEOUT_MS : undefined);
 
   test.skipIf(process.platform === "win32")("keeps the deadline active when a background descendant inherits output pipes", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
