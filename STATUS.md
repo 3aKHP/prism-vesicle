@@ -1,17 +1,16 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-alpha.2 development cycle (2026-07-21)._
+_Snapshot: 1.0.0-alpha.3 release candidate (2026-07-21)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Current release: **1.0.0-alpha.2**. The `State` column tracks when each capability first reached users: `released` = in the 1.0.0-alpha.2 GitHub Release or npm package; `develop` = on the `develop` trunk, pending a later release (alpha.3); `deferred` = not yet started (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-alpha.3**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.3 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10@10.0.1-alpha.1`, verified 73-file inventory) | released |
-| Assets | Bundled V10 baseline refresh to `prism-engine-v10@10.1.0-rc.1` | develop |
+| Assets | Bundled V10 Harness (`prism-engine-v10@10.1.0-rc.1`, verified 73-file inventory) | released |
 | Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
 | Providers | Multi-provider registry with generation defaults and capability/limits metadata | released |
@@ -26,10 +25,10 @@ Current release: **1.0.0-alpha.2**. The `State` column tracks when each capabili
 | Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
 | Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | released |
 | Agents | Foreground/background SubAgents with contract-bound Harness delegation | released |
-| Stage | First-party consumer RP bootstrap Engine (`/stage`) | develop |
+| Stage | First-party consumer RP bootstrap Engine (`/stage`) | released |
 | Validators | Module A, Module B v9, runtime packet, and evaluate-report checks | released |
 | Workbench | `/artifact` discovery, preview, validation, and revision | released |
-| Quality | Output Quality Guard: deterministic findings, document metrics, durable decisions (experimental Semantic Judge and rewrite-policy loader are `develop`) | released |
+| Quality | Output Quality Guard: deterministic findings, document metrics, durable decisions, and experimental Semantic Judge/rewrite-policy loader | released |
 | Release | Standalone Windows PE and Linux ELF binaries | released |
 | Release | npm/Bun package with pinned runtime dependencies | released |
 | Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | released |

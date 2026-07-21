@@ -66,6 +66,28 @@ describe("Stage message content", () => {
     expect(normalStageMarkdownSegments(completed).map((segment) => segment.raw).join("")).not.toContain("[!Neural Chain]");
   });
 
+  test("folds blank lines around the HUD without stripping prose indentation", () => {
+    const packetWithBlanks = [
+      "<!--",
+      "[!Neural Chain]",
+      "State: first beat",
+      "-->",
+      "",
+      "",
+      "【Status】",
+      "[Space-Time] night",
+      "[Physical] cold",
+      "[Psychology] Tension: 30",
+      "[Beat] Arrival",
+      "[Impression] familiar",
+      "",
+      "",
+      "    She held the umbrella closer.",
+    ].join("\n");
+    const parsed = parseStageMessageContent(packetWithBlanks, "message-blanks");
+    expect(normalStageMarkdownSegments(parsed).map((segment) => segment.raw).join("")).toBe("    She held the umbrella closer.");
+  });
+
   test("holds an unfinished streaming comment without treating code text as a comment", () => {
     const partial = "Before\n<!-- [!Neural Chain]\nstate";
     const streaming = parseStageMessageContent(partial, "message-5", true);
