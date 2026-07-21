@@ -89,6 +89,8 @@ jobs:
             VESICLE_CONFIG_DIR="$PWD/config" ../release/prism-vesicle assets materialize assets/prompts/engines/etl.md --global
             VESICLE_CONFIG_DIR="$PWD/config" ../release/prism-vesicle prompt shape --engine etl
           )
+      - name: Binary fail-closed smoke
+        run: bun run smoke:binary
       - name: Stage versioned Linux artifacts
         env:
           VERSION: ${{ needs.checks.outputs.version }}
@@ -142,6 +144,8 @@ jobs:
           } finally {
             Pop-Location
           }
+      - name: Binary fail-closed smoke
+        run: bun run smoke:binary
       - name: Install pinned Inno Setup
         shell: pwsh
         run: choco install innosetup --version=6.7.1 --no-progress -y
