@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { GeminiGenerateContentAdapter, toGeminiGenerateContentBody } from "../src/providers/gemini-generate-content/adapter";
 import type { VesicleRequest } from "../src/providers/shared/types";
+import { sseFromBlocks } from "./support/providers/sse";
 
 const originalFetch = globalThis.fetch;
 
@@ -283,7 +284,7 @@ describe("Gemini generateContent adapter", () => {
       expect(JSON.parse(String(init.body))).toMatchObject({
         contents: [{ role: "user", parts: [{ text: "hello" }] }],
       });
-      return new Response(rawSse([
+      return new Response(sseFromBlocks([
         'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"think","thought":true,"thoughtSignature":"thought-sig"}]}}]}',
         'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hello"}]}}]}',
         'data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_1","name":"read_file","args":{"path":"workspace/a.md"}},"thoughtSignature":"call-sig"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":3000,"candidatesTokenCount":500,"totalTokenCount":3500,"cachedContentTokenCount":1000,"thoughtsTokenCount":120}}',
@@ -382,7 +383,7 @@ describe("Gemini generateContent adapter", () => {
   });
 
   test("deduplicates cumulative stream parts", async () => {
-    globalThis.fetch = (async () => new Response(rawSse([
+    globalThis.fetch = (async () => new Response(sseFromBlocks([
       'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hello"}]}}]}',
       'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"hello"},{"text":" world"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":2,"totalTokenCount":4}}',
     ]), {
@@ -456,12 +457,3 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   return result;
 }
 
-function rawSse(blocks: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    start(controller) {
-      for (const block of blocks) controller.enqueue(encoder.encode(`${block}\n\n`));
-      controller.close();
-    },
-  });
-}

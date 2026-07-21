@@ -6,6 +6,7 @@ import { OpenAIChatCompatibleAdapter } from "../src/providers/openai-chat/adapte
 import { toChatCompletionBody } from "../src/providers/openai-chat/request";
 import { readChatCompletionStream } from "../src/providers/openai-chat/stream";
 import type { VesicleRequest } from "../src/providers/shared/types";
+import { bytesFromChunks } from "./support/providers/sse";
 
 const originalFetch = globalThis.fetch;
 const testDir = fileURLToPath(new URL(".", import.meta.url));
@@ -124,7 +125,7 @@ describe("Provider backend errors", () => {
   });
 
   test("uses a structured malformed-response error for bad SSE JSON", async () => {
-    const response = new Response(rawSse(["data: {not-json}\n\n", "data: [DONE]\n\n"]));
+    const response = new Response(bytesFromChunks(["data: {not-json}\n\n", "data: [DONE]\n\n"]));
 
     await expect(collect(readSseResponse(response, "deepseek"))).rejects.toMatchObject({
       name: "ProviderError",
@@ -209,7 +210,7 @@ describe("OpenAI-compatible response parsing", () => {
 
 describe("SSE parsing", () => {
   test("reads CRLF, comments, multiline data, and chunk boundaries", async () => {
-    const body = chunkedSse([
+    const body = bytesFromChunks([
       ": keepalive\r\n",
       "data: {\"id\":\"chatcmpl-crlf\",\"choices\":[{\"delta\":{\"content\":\r\n",
       "data: \"ok\"},\"finish_reason\":\"stop\"}]}\r\n\r\n",
@@ -228,7 +229,7 @@ describe("SSE parsing", () => {
 
 describe("Chat Completions stream integration", () => {
   test("emits content deltas and a final complete event", async () => {
-    const response = new Response(rawSse([
+    const response = new Response(bytesFromChunks([
       "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"content\":\"hel\"}}]}\n\n",
       "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"reasoning_content\":\"think\"}}]}\n\n",
       "data: {\"id\":\"chatcmpl-stream\",\"choices\":[{\"delta\":{\"content\":\"lo\"},\"finish_reason\":\"stop\"}]}\n\n",
@@ -255,7 +256,7 @@ describe("Chat Completions stream integration", () => {
   });
 
   test("accumulates streamed tool call deltas into the final response", async () => {
-    const response = new Response(rawSse([
+    const response = new Response(bytesFromChunks([
       "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-read\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\"}}]}}]}\n\n",
       "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"read_file\",\"arguments\":\"\\\"workspace/a.md\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
       "data: [DONE]\n\n",
@@ -281,7 +282,7 @@ describe("Chat Completions stream integration", () => {
   });
 
   test("uses the latest streamed tool call function name instead of concatenating", async () => {
-    const response = new Response(rawSse([
+    const response = new Response(bytesFromChunks([
       "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-read\",\"type\":\"function\",\"function\":{\"name\":\"stale_name\",\"arguments\":\"{}\"}}]}}]}\n\n",
       "data: {\"id\":\"chatcmpl-tools\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"read_file\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
       "data: [DONE]\n\n",
@@ -385,16 +386,3 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   return result;
 }
 
-function chunkedSse(chunks: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    start(controller) {
-      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
-      controller.close();
-    },
-  });
-}
-
-function rawSse(lines: string[]): ReadableStream<Uint8Array> {
-  return chunkedSse(lines);
-}

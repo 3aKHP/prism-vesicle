@@ -7,6 +7,7 @@ import { AgentManager } from "../src/core/agents/manager";
 import { AgentStore, legacyAgentHandle } from "../src/core/agents/store";
 import type { AgentRunContext, AgentSpec } from "../src/core/agents/types";
 import { createSessionStore, loadSessionSnapshot } from "../src/core/session/store";
+import { eventually } from "./support/async/eventually";
 
 describe("SubAgent manager", () => {
   test("runs children concurrently up to the configured slot count", async () => {
@@ -471,14 +472,3 @@ async function waitForAbort({ signal }: AgentRunContext): Promise<never> {
   });
 }
 
-async function eventually(assertion: () => void): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    try {
-      assertion();
-      return;
-    } catch {
-      await Bun.sleep(5);
-    }
-  }
-  assertion();
-}

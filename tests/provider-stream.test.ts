@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { OpenAIChatCompatibleAdapter } from "../src/providers/openai-chat/adapter";
 import type { ProviderStreamEvent, VesicleRequest } from "../src/providers/shared/types";
+import { bytesFromChunks } from "./support/providers/sse";
 
 const originalFetch = globalThis.fetch;
 
@@ -135,7 +136,7 @@ describe("OpenAI-compatible streaming adapter", () => {
   });
 
   test("reports malformed SSE payloads with a provider-stream error", async () => {
-    globalThis.fetch = (async () => new Response(rawSse([
+    globalThis.fetch = (async () => new Response(bytesFromChunks([
       "data: {not-json}\n\n",
       "data: [DONE]\n\n",
     ]))) as unknown as typeof fetch;
@@ -235,15 +236,6 @@ async function collect(events: AsyncIterable<ProviderStreamEvent>): Promise<Prov
 function sse(chunks: unknown[], options: { done?: boolean } = {}): ReadableStream<Uint8Array> {
   const lines = chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`);
   if (options.done !== false) lines.push("data: [DONE]\n\n");
-  return rawSse(lines);
+  return bytesFromChunks(lines);
 }
 
-function rawSse(lines: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    start(controller) {
-      for (const line of lines) controller.enqueue(encoder.encode(line));
-      controller.close();
-    },
-  });
-}

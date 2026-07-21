@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { AnthropicMessagesAdapter } from "../src/providers/anthropic-messages/adapter";
 import { toAnthropicMessagesBody } from "../src/providers/anthropic-messages/request";
 import type { VesicleRequest } from "../src/providers/shared/types";
+import { sseFromBlocks } from "./support/providers/sse";
 
 const originalFetch = globalThis.fetch;
 
@@ -231,7 +232,7 @@ describe("Anthropic Messages adapter", () => {
     globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
       expect(JSON.parse(String(init.body))).toMatchObject({ stream: true });
       expect(new Headers(init.headers).get("accept")).toBe("application/json");
-      return new Response(rawSse([
+      return new Response(sseFromBlocks([
         'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_stream","model":"claude-test","usage":{"input_tokens":1100,"cache_read_input_tokens":500}}}',
         'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}',
         'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"think"}}',
@@ -291,7 +292,7 @@ describe("Anthropic Messages adapter", () => {
   });
 
   test("rejects streams that end before message_stop", async () => {
-    globalThis.fetch = (async () => new Response(rawSse([
+    globalThis.fetch = (async () => new Response(sseFromBlocks([
       'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_stream"}}',
     ]))) as unknown as typeof fetch;
 
@@ -311,7 +312,7 @@ describe("Anthropic Messages adapter", () => {
   });
 
   test("reconstructs indexed thinking and tool blocks in block order", async () => {
-    globalThis.fetch = (async () => new Response(rawSse([
+    globalThis.fetch = (async () => new Response(sseFromBlocks([
       'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_indexed","model":"claude-test"}}',
       'event: content_block_start\ndata: {"type":"content_block_start","index":3,"content_block":{"type":"tool_use","id":"toolu_second","name":"second_tool","input":{}}}',
       'event: content_block_delta\ndata: {"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\\"order\\":2}"}}',
@@ -350,7 +351,7 @@ describe("Anthropic Messages adapter", () => {
   });
 
   test("streams redacted thinking blocks into the final response", async () => {
-    globalThis.fetch = (async () => new Response(rawSse([
+    globalThis.fetch = (async () => new Response(sseFromBlocks([
       'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_redacted","model":"claude-test"}}',
       'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"redacted_thinking","data":"opaque"}}',
       'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}',
@@ -407,12 +408,3 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   return result;
 }
 
-function rawSse(blocks: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    start(controller) {
-      for (const block of blocks) controller.enqueue(encoder.encode(`${block}\n\n`));
-      controller.close();
-    },
-  });
-}
