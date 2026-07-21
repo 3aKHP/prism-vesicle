@@ -91,7 +91,13 @@ prism-vesicle/
 ├── dev/
 │   ├── docs/             # Ignored local working notes, decisions, and archive
 │   └── drafts/           # Ignored local dogfood and miscellaneous material
-└── tests/                # Bun tests
+└── tests/
+    ├── unit/             # Pure-logic tests by domain (cli, core, providers, quality, tui)
+    ├── component/        # OpenTUI testRender component tests (setup, tui)
+    ├── integration/      # Multi-module integration with tmp fs / fetch stubs
+    ├── contract/         # Architecture, release, and prompt static contracts
+    ├── acceptance/       # Opt-in real-provider gate (.acceptance.ts, not auto-discovered)
+    └── support/          # Shared test infrastructure (async, providers)
 ```
 
 ## Tool Surface
@@ -223,7 +229,7 @@ bun run doctor
 bun run build:installer:stage
 ```
 
-The `./tests/e2e-gate.acceptance.ts` suite runs against a real provider only when `BUN_E2E_REAL_PROVIDER=1` is set, and it is excluded from `bun test` default discovery so the deterministic suite never reports an unexecuted real-provider run as passing; run that opt-in command as a recorded dogfood acceptance before a public tag. Tavily-backed web tools are enabled by setting `TAVILY_API_KEY` in the same user-level `.env` file or process environment. MCP tools are enabled by copying [`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) beside `providers.yaml`, setting `enabled: true`, and adding the referenced header variables to the sibling `.env`.
+The `./tests/acceptance/provider/e2e-gate.acceptance.ts` suite runs against a real provider only when `BUN_E2E_REAL_PROVIDER=1` is set, and it is excluded from `bun test` default discovery so the deterministic suite never reports an unexecuted real-provider run as passing; run that opt-in command as a recorded dogfood acceptance before a public tag. Tavily-backed web tools are enabled by setting `TAVILY_API_KEY` in the same user-level `.env` file or process environment. MCP tools are enabled by copying [`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) beside `providers.yaml`, setting `enabled: true`, and adding the referenced header variables to the sibling `.env`.
 
 Native Windows CI installs pinned Inno Setup, builds the versioned guided installer, performs a silent per-user install plus a second upgrade install, removes simulated legacy executable/wrapper/Start Menu launchers, verifies the native `vesicle.exe` command and Explorer directory actions, runs standalone runtime diagnostics from a separate project directory, silently uninstalls, and proves that user configuration and project sentinels survive while the exact PATH entry and Explorer integration are removed. Release, tag, and signing workflow live in [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
 
