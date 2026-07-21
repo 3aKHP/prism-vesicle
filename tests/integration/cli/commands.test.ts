@@ -137,4 +137,13 @@ describe("CLI source journey: non-interactive commands", () => {
       expect(result.stderr).toContain("Unknown option: --bogus");
     });
   });
+
+  test("top-level parsing leaves command-owned terminators to the command", async () => {
+    await withTempProject("vesicle-cli-command-terminator-", async (projectDir, configDir) => {
+      const result = await runCli(["prompt", "shape", "--", "--engine"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unknown argument: --");
+      expect(result.stderr).not.toContain("Usage: vesicle [flags] -- [project-directory]");
+    });
+  });
 });

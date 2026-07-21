@@ -145,6 +145,13 @@ describe("CLI invocation parser", () => {
       });
     });
 
+    test("multiple launch operands after -- use the terminator usage error", () => {
+      expect(parseCliInvocation(["--", "foo", "bar"])).toEqual({
+        kind: "error",
+        message: "Usage: vesicle [flags] -- [project-directory]",
+      });
+    });
+
     test("a positional both before and after -- is an ambiguous usage error", () => {
       expect(parseCliInvocation(["foo", "--", "bar"])).toEqual({
         kind: "error",
@@ -252,6 +259,36 @@ describe("CLI invocation parser", () => {
         kind: "command",
         command: "launch",
         args: ["./-v"],
+        dangerouslySkipPermissions: false,
+      });
+    });
+
+    test("a known command before -- owns the remaining argv", () => {
+      expect(parseCliInvocation(["prompt", "shape", "--", "--engine"])).toEqual({
+        kind: "command",
+        command: "prompt",
+        args: ["shape", "--", "--engine"],
+        dangerouslySkipPermissions: false,
+      });
+      expect(parseCliInvocation(["once", "--", "hello"])).toEqual({
+        kind: "command",
+        command: "once",
+        args: ["--", "hello"],
+        dangerouslySkipPermissions: false,
+      });
+    });
+
+    test("the dangerous flag is stripped from command args only before command --", () => {
+      expect(parseCliInvocation(["once", "hello", "--dangerously-skip-permissions"])).toEqual({
+        kind: "command",
+        command: "once",
+        args: ["hello"],
+        dangerouslySkipPermissions: true,
+      });
+      expect(parseCliInvocation(["once", "--", "--dangerously-skip-permissions"])).toEqual({
+        kind: "command",
+        command: "once",
+        args: ["--", "--dangerously-skip-permissions"],
         dangerouslySkipPermissions: false,
       });
     });

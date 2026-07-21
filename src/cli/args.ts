@@ -45,6 +45,55 @@ const KNOWN_COMMANDS = new Set([
 
 const error = (message: string): ParsedCliInvocation => ({ kind: "error", message });
 
+function terminalActionError(version: boolean): ParsedCliInvocation {
+  return error(
+    version
+      ? "`vesicle --version` takes no other arguments"
+      : "`vesicle --help` takes no other arguments",
+  );
+}
+
+function launchAfterTerminator(
+  after: string[],
+  dangerouslySkipPermissions: boolean,
+  version: boolean,
+  help: boolean,
+  resume: boolean,
+): ParsedCliInvocation {
+  if (version || help) return terminalActionError(version);
+  if (after.length > 1) {
+    return error("Usage: vesicle [flags] -- [project-directory]");
+  }
+  return {
+    kind: "launch",
+    projectPath: after[0] ?? null,
+    dangerouslySkipPermissions,
+    resume,
+  };
+}
+
+function stripCommandProcessFlags(
+  args: string[],
+  dangerouslySkipPermissions: boolean,
+): { args: string[]; dangerouslySkipPermissions: boolean } {
+  const stripped: string[] = [];
+  let commandOptionsEnded = false;
+  let dangerous = dangerouslySkipPermissions;
+  for (const token of args) {
+    if (token === "--") {
+      commandOptionsEnded = true;
+      stripped.push(token);
+      continue;
+    }
+    if (!commandOptionsEnded && token === DANGEROUS_FLAG) {
+      dangerous = true;
+      continue;
+    }
+    stripped.push(token);
+  }
+  return { args: stripped, dangerouslySkipPermissions: dangerous };
+}
+
 /**
  * Parse Vesicle's top-level startup grammar.
  *
@@ -64,33 +113,31 @@ const error = (message: string): ParsedCliInvocation => ({ kind: "error", messag
  * `vesicle -- --version` launches a project literally named `--version`.
  */
 export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
-  // `--` ends top-level option parsing. Only the slice before it is scanned for
-  // flags and the known-command shortcut; after it every token is a path.
-  const terminator = argv.indexOf("--");
-  const hasTerminator = terminator >= 0;
-  const before = hasTerminator ? argv.slice(0, terminator) : argv;
-  const after = hasTerminator ? argv.slice(terminator + 1) : [];
-
-  // The dangerous flag is process-scoped and position-agnostic, but only before
-  // the terminator: after `--` it is an ordinary positional token (see
-  // `vesicle -- --dangerously-skip-permissions` in the design contract).
   let dangerouslySkipPermissions = false;
-  const tokens: string[] = [];
-  for (const token of before) {
-    if (token === DANGEROUS_FLAG) {
-      dangerouslySkipPermissions = true;
-      continue;
-    }
-    tokens.push(token);
-  }
-
-  // Scan leading global options until the first positional token.
   let version = false;
   let help = false;
   let resume = false;
+
+  // Scan top-level options until the first positional token. A top-level `--`
+  // before that positional switches to launch-operand parsing; after a known
+  // command is recognized, later `--` tokens belong to that command.
   let i = 0;
-  while (i < tokens.length) {
-    const token = tokens[i];
+  while (i < argv.length) {
+    const token = argv[i];
+    if (token === DANGEROUS_FLAG) {
+      dangerouslySkipPermissions = true;
+      i++;
+      continue;
+    }
+    if (token === "--") {
+      return launchAfterTerminator(
+        argv.slice(i + 1),
+        dangerouslySkipPermissions,
+        version,
+        help,
+        resume,
+      );
+    }
     if (token === "--version") {
       version = true;
       i++;
@@ -126,39 +173,41 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
 
   // Terminal global actions reject any other token and any launch modifier.
   if (version || help) {
-    if (dangerouslySkipPermissions || resume || i < tokens.length || after.length > 0) {
-      return error(
-        version
-          ? "`vesicle --version` takes no other arguments"
-          : "`vesicle --help` takes no other arguments",
-      );
+    if (dangerouslySkipPermissions || resume || i < argv.length) {
+      return terminalActionError(version);
     }
     return version ? { kind: "version" } : { kind: "help" };
   }
 
-  const prePositionals = tokens.slice(i);
+  const first = argv[i];
 
-  // A known command recognized before the terminator owns its remaining argv
-  // (including any later `--`, which the subcommand may interpret itself).
+  // A known command recognized before a top-level terminator owns its remaining
+  // argv, including any later `--`, which the subcommand may interpret itself.
   // `--resume` is a launch modifier and does not apply to subcommands.
-  if (!hasTerminator && prePositionals.length > 0 && KNOWN_COMMANDS.has(prePositionals[0])) {
+  if (first && KNOWN_COMMANDS.has(first)) {
     if (resume) {
       return error("`--resume`/`-r` only applies to launching the TUI");
     }
+    const command = stripCommandProcessFlags(argv.slice(i + 1), dangerouslySkipPermissions);
     return {
       kind: "command",
-      command: prePositionals[0],
-      args: prePositionals.slice(1),
-      dangerouslySkipPermissions,
+      command: first,
+      args: command.args,
+      dangerouslySkipPermissions: command.dangerouslySkipPermissions,
     };
   }
 
-  // Launch path. With a terminator, only the post-terminator tokens are the
-  // path; any pre-terminator positional here is an ambiguous mixed invocation.
-  if (hasTerminator && prePositionals.length > 0) {
-    return error("Usage: vesicle [flags] -- [project-directory]");
+  const positionals: string[] = [];
+  for (const token of argv.slice(i)) {
+    if (token === "--") {
+      return error("Usage: vesicle [flags] -- [project-directory]");
+    }
+    if (token === DANGEROUS_FLAG) {
+      dangerouslySkipPermissions = true;
+      continue;
+    }
+    positionals.push(token);
   }
-  const positionals = hasTerminator ? after : prePositionals;
   if (positionals.length > 1) {
     return error(`Unknown command or project directory: ${positionals[0]}`);
   }
