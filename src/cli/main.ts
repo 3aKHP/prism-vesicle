@@ -23,6 +23,7 @@ const USAGE = `Usage:
 Flags:
   -v, --version                    print the Prism Vesicle version and exit
   -h, --help                       print this usage and exit
+  -r, --resume                     open the session picker on startup
       --dangerously-skip-permissions  skip approval prompts for this process only
 
 Commands:
@@ -37,20 +38,24 @@ async function configureTreeSitterRuntime(): Promise<void> {
   configureTreeSitterWorkerPath();
 }
 
-async function launchProject(projectDirectory: string, dangerouslySkipPermissions: boolean): Promise<void> {
+async function launchProject(projectDirectory: string, dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
   const { launchVesicleInProject } = await import("./launch");
-  const args = dangerouslySkipPermissions ? ["--dangerously-skip-permissions"] : [];
+  // Forward the process-scoped flags to the spawned child so a project-dir
+  // launch preserves them: the child re-parses its own argv.
+  const args: string[] = [];
+  if (dangerouslySkipPermissions) args.push("--dangerously-skip-permissions");
+  if (resume) args.push("--resume");
   process.exitCode = await launchVesicleInProject(projectDirectory, isCompiledBinary, args);
 }
 
-async function launchProjectArgument(input: string, dangerouslySkipPermissions: boolean): Promise<void> {
+async function launchProjectArgument(input: string, dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
   const { resolveProjectDirectory } = await import("./project-target");
-  await launchProject(await resolveProjectDirectory(input), dangerouslySkipPermissions);
+  await launchProject(await resolveProjectDirectory(input), dangerouslySkipPermissions, resume);
 }
 
-async function launchProjectArgumentOrReport(input: string, dangerouslySkipPermissions: boolean): Promise<void> {
+async function launchProjectArgumentOrReport(input: string, dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
   try {
-    await launchProjectArgument(input, dangerouslySkipPermissions);
+    await launchProjectArgument(input, dangerouslySkipPermissions, resume);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
@@ -63,16 +68,16 @@ async function runSetupFlow(dangerouslySkipPermissions: boolean): Promise<void> 
   }
   const { runGuidedSetup } = await import("../setup");
   const result = await runGuidedSetup();
-  if (result.launch && result.projectDirectory) await launchProject(result.projectDirectory, dangerouslySkipPermissions);
+  if (result.launch && result.projectDirectory) await launchProject(result.projectDirectory, dangerouslySkipPermissions, false);
 }
 
-async function startTui(dangerouslySkipPermissions: boolean): Promise<void> {
+async function startTui(dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
   if (!isCompiledBinary) {
     await import("@opentui/solid/preload");
   }
   await configureTreeSitterRuntime();
   const { runTui } = await import("../tui");
-  await runTui({ dangerouslySkipPermissions });
+  await runTui({ dangerouslySkipPermissions, resume });
 }
 
 const parsed = parseCliInvocation(process.argv.slice(2));
@@ -95,9 +100,9 @@ switch (parsed.kind) {
     // A null path is the bare `vesicle` / `vesicle --` form: start the TUI in
     // the invocation cwd, in process. An explicit path spawns into that dir.
     if (parsed.projectPath === null) {
-      await startTui(parsed.dangerouslySkipPermissions);
+      await startTui(parsed.dangerouslySkipPermissions, parsed.resume);
     } else {
-      await launchProjectArgumentOrReport(parsed.projectPath, parsed.dangerouslySkipPermissions);
+      await launchProjectArgumentOrReport(parsed.projectPath, parsed.dangerouslySkipPermissions, parsed.resume);
     }
     break;
   case "command": {
@@ -225,11 +230,11 @@ switch (parsed.kind) {
           process.exitCode = 1;
           break;
         }
-        await launchProjectArgumentOrReport(args[0] ?? ".", dangerouslySkipPermissions);
+        await launchProjectArgumentOrReport(args[0] ?? ".", dangerouslySkipPermissions, false);
         break;
       }
       case "dev": {
-        await startTui(dangerouslySkipPermissions);
+        await startTui(dangerouslySkipPermissions, false);
         break;
       }
       default:

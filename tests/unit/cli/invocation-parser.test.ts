@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { parseCliInvocation } from "../../../src/cli/args";
 
 /**
- * The typed startup-grammar parser (issue #49 Phase 1). The oracle is the
- * classified `ParsedCliInvocation` result, not the previous switch statement.
- * Cases mirror the contract in dev/docs/working/CLI_INVOCATION_PARSER_DESIGN.md
- * plus bundled short options and the phase-1 non-support of `--resume`.
+ * The typed startup-grammar parser (issues #49 Phase 1 + Phase 2). The oracle
+ * is the classified `ParsedCliInvocation` result, not the previous switch
+ * statement. Cases mirror the contract in
+ * dev/docs/working/CLI_INVOCATION_PARSER_DESIGN.md plus bundled short options.
  */
 describe("CLI invocation parser", () => {
   describe("terminal global actions", () => {
@@ -55,6 +55,13 @@ describe("CLI invocation parser", () => {
         message: "Unknown option: -x",
       });
     });
+
+    test("-rv bundles resume into a version terminal error", () => {
+      expect(parseCliInvocation(["-rv"])).toEqual({
+        kind: "error",
+        message: "`vesicle --version` takes no other arguments",
+      });
+    });
   });
 
   describe("default launch", () => {
@@ -63,6 +70,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: null,
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
 
@@ -71,6 +79,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: null,
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
 
@@ -79,11 +88,13 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: ".",
         dangerouslySkipPermissions: false,
+        resume: false,
       });
       expect(parseCliInvocation(["novel-project"])).toEqual({
         kind: "launch",
         projectPath: "novel-project",
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
   });
@@ -94,6 +105,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: "-here/is/the/path",
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
 
@@ -102,6 +114,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: "--version",
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
 
@@ -110,6 +123,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: "doctor",
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
 
@@ -118,6 +132,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: "--dangerously-skip-permissions",
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
 
@@ -126,6 +141,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: "-here",
         dangerouslySkipPermissions: true,
+        resume: false,
       });
     });
 
@@ -143,6 +159,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: ".",
         dangerouslySkipPermissions: true,
+        resume: false,
       });
     });
 
@@ -151,6 +168,65 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: ".",
         dangerouslySkipPermissions: true,
+        resume: false,
+      });
+    });
+  });
+
+  describe("resume launch modifier", () => {
+    test("--resume opens the session picker on a bare launch", () => {
+      expect(parseCliInvocation(["--resume"])).toEqual({
+        kind: "launch",
+        projectPath: null,
+        dangerouslySkipPermissions: false,
+        resume: true,
+      });
+    });
+
+    test("-r is the resume short flag", () => {
+      expect(parseCliInvocation(["-r"])).toEqual({
+        kind: "launch",
+        projectPath: null,
+        dangerouslySkipPermissions: false,
+        resume: true,
+      });
+    });
+
+    test("--resume combines with a project path", () => {
+      expect(parseCliInvocation(["--resume", "."])).toEqual({
+        kind: "launch",
+        projectPath: ".",
+        dangerouslySkipPermissions: false,
+        resume: true,
+      });
+      expect(parseCliInvocation(["-r", "path/to/project"])).toEqual({
+        kind: "launch",
+        projectPath: "path/to/project",
+        dangerouslySkipPermissions: false,
+        resume: true,
+      });
+    });
+
+    test("--resume combines with the dangerous flag", () => {
+      expect(parseCliInvocation(["--dangerously-skip-permissions", "--resume"])).toEqual({
+        kind: "launch",
+        projectPath: null,
+        dangerouslySkipPermissions: true,
+        resume: true,
+      });
+    });
+
+    test("--resume with a terminal action is a usage error", () => {
+      expect(parseCliInvocation(["--resume", "--version"])).toEqual({
+        kind: "error",
+        message: "`vesicle --version` takes no other arguments",
+      });
+    });
+
+    test("--resume with a subcommand is a usage error", () => {
+      expect(parseCliInvocation(["--resume", "doctor"])).toEqual({
+        kind: "error",
+        message: "`--resume`/`-r` only applies to launching the TUI",
       });
     });
   });
@@ -185,6 +261,7 @@ describe("CLI invocation parser", () => {
         kind: "launch",
         projectPath: "doctor",
         dangerouslySkipPermissions: false,
+        resume: false,
       });
     });
   });
@@ -201,13 +278,6 @@ describe("CLI invocation parser", () => {
       expect(parseCliInvocation(["frobnicate", "extra"])).toEqual({
         kind: "error",
         message: "Unknown command or project directory: frobnicate",
-      });
-    });
-
-    test("resume is not supported in phase 1", () => {
-      expect(parseCliInvocation(["--resume"])).toEqual({
-        kind: "error",
-        message: "Unknown option: --resume",
       });
     });
   });

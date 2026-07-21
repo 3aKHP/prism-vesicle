@@ -16,6 +16,9 @@ export type ParsedCliInvocation =
       // split between in-process TUI startup and project-dir spawning.
       projectPath: string | null;
       dangerouslySkipPermissions: boolean;
+      // Open the session picker on startup (equivalent to `/resume` with no
+      // argument). Only meaningful for launch; never set for commands.
+      resume: boolean;
     }
   | {
       kind: "command";
@@ -51,7 +54,8 @@ const error = (message: string): ParsedCliInvocation => ({ kind: "error", messag
  *   vesicle <command> [args...]   -> subcommand dispatch
  *   vesicle --version | -v        -> print version and exit 0
  *   vesicle --help | -h           -> print usage and exit 0
- *   vesicle -vh                   -> bundled boolean short options
+ *   vesicle --resume | -r [path]  -> launch and open the session picker
+ *   vesicle -vhr                  -> bundled boolean short options
  *   --dangerously-skip-permissions -> process-scoped, accepted anywhere before `--`
  *
  * Short options are always boolean and never take a value; options that need a
@@ -83,6 +87,7 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
   // Scan leading global options until the first positional token.
   let version = false;
   let help = false;
+  let resume = false;
   let i = 0;
   while (i < tokens.length) {
     const token = tokens[i];
@@ -96,15 +101,21 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
       i++;
       continue;
     }
+    if (token === "--resume") {
+      resume = true;
+      i++;
+      continue;
+    }
     if (token.startsWith("--")) {
       return error(`Unknown option: ${token}`);
     }
     if (token.length > 1 && token.startsWith("-")) {
-      // Bundled boolean short options, e.g. `-vh`. Each character must be a
+      // Bundled boolean short options, e.g. `-vhr`. Each character must be a
       // known boolean short option; Vesicle short options never take a value.
       for (const flag of token.slice(1)) {
         if (flag === "v") version = true;
         else if (flag === "h") help = true;
+        else if (flag === "r") resume = true;
         else return error(`Unknown option: -${flag}`);
       }
       i++;
@@ -113,9 +124,9 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
     break; // first positional (or a lone "-")
   }
 
-  // Terminal global actions reject any other token and the dangerous modifier.
+  // Terminal global actions reject any other token and any launch modifier.
   if (version || help) {
-    if (dangerouslySkipPermissions || i < tokens.length || after.length > 0) {
+    if (dangerouslySkipPermissions || resume || i < tokens.length || after.length > 0) {
       return error(
         version
           ? "`vesicle --version` takes no other arguments"
@@ -129,7 +140,11 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
 
   // A known command recognized before the terminator owns its remaining argv
   // (including any later `--`, which the subcommand may interpret itself).
+  // `--resume` is a launch modifier and does not apply to subcommands.
   if (!hasTerminator && prePositionals.length > 0 && KNOWN_COMMANDS.has(prePositionals[0])) {
+    if (resume) {
+      return error("`--resume`/`-r` only applies to launching the TUI");
+    }
     return {
       kind: "command",
       command: prePositionals[0],
@@ -152,5 +167,6 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
     kind: "launch",
     projectPath: positionals[0] ?? null,
     dangerouslySkipPermissions,
+    resume,
   };
 }

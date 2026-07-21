@@ -61,6 +61,7 @@ import { routeCommandSubmission } from "./command-scheduler";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
+  initialResume?: boolean;
 };
 
 export {
@@ -724,6 +725,18 @@ export function App(props: AppProps = {}) {
     });
     void listSessions().then((sessions) => {
       setResumableSessions(sessions);
+      // `--resume`/`-r` routes to the same host-owned picker as `/resume` with
+      // no argument: show the list, or report no sessions. Opening the picker
+      // is state-only and never starts a provider turn on its own.
+      if (props.initialResume) {
+        if (sessions.length > 0) {
+          setSessionPicker({ sessions, selected: 0 });
+          setStatus("choose a session to resume");
+        } else {
+          setMessages((prev) => [...prev, { role: "system", content: "No existing sessions found." }]);
+        }
+        return;
+      }
       if (sessions.length > 0) {
         setMessages((prev) => [
           ...prev,
