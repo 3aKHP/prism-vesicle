@@ -179,7 +179,7 @@ bun run doctor
 | `bun run lint` | Run the pinned Biome correctness checks without formatting files |
 | `bun run typecheck` | Validate TypeScript without emitting files |
 | `bun test` | Run the deterministic test suite |
-| `BUN_E2E_REAL_PROVIDER=1 bun test ./tests/acceptance/provider/e2e-gate.acceptance.ts` | Run the opt-in real-provider gate acceptance test |
+| `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` | Run the opt-in real-provider acceptance lane (connectivity smoke + strict ETL gate); skips, not passes, when the env or credentials are missing |
 | `bun run pack:check` | Verify the npm publish allowlist |
 | `bun run pack:smoke` | Smoke-test the packed npm distribution |
 | `bun run build:exe` | Build standalone Windows and Linux executables |

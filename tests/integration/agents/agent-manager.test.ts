@@ -471,4 +471,3 @@ async function waitForAbort({ signal }: AgentRunContext): Promise<never> {
     signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   });
 }
-

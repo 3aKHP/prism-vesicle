@@ -51,7 +51,7 @@
     "test:integration": "bun test tests/integration",
     "test:contract": "bun test tests/contract",
     "test:deterministic": "bun test tests/unit tests/component tests/integration tests/contract",
-    "test:acceptance:provider": "bun test ./tests/acceptance/provider/e2e-gate.acceptance.ts",
+    "test:acceptance:provider": "bun test ./tests/acceptance/provider/provider-connectivity.acceptance.ts ./tests/acceptance/provider/e2e-gate.acceptance.ts",
     "pack:check": "bun run scripts/check-npm-pack.ts",
     "pack:smoke": "bun run scripts/smoke-npm-package.ts",
     "build:exe": "bun run scripts/build-exe.ts",

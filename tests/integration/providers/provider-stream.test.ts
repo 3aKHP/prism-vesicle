@@ -238,4 +238,3 @@ function sse(chunks: unknown[], options: { done?: boolean } = {}): ReadableStrea
   if (options.done !== false) lines.push("data: [DONE]\n\n");
   return bytesFromChunks(lines);
 }
-

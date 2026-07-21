@@ -179,7 +179,7 @@ bun run doctor
 | `bun run lint` | 运行固定版本的 Biome 正确性检查，不格式化文件 |
 | `bun run typecheck` | 验证 TypeScript，但不生成文件 |
 | `bun test` | 运行确定性测试套件 |
-| `BUN_E2E_REAL_PROVIDER=1 bun test ./tests/acceptance/provider/e2e-gate.acceptance.ts` | 运行可选的真实供应商确认门验收测试 |
+| `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` | 运行可选的真实供应商验收通道(连通性 smoke + 严格 ETL 确认门);缺少环境变量或凭据时记为 skip 而非 pass |
 | `bun run pack:check` | 验证 npm 发布白名单 |
 | `bun run pack:smoke` | 对打包后的 npm 分发执行冒烟测试 |
 | `bun run build:exe` | 构建 Windows 和 Linux 独立可执行文件 |

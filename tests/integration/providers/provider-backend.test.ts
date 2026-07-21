@@ -385,4 +385,3 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   for await (const event of events) result.push(event);
   return result;
 }
-
