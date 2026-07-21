@@ -234,8 +234,7 @@ describe("agent loop sessions", () => {
     });
   });
 
-  test("pauses shell_exec for MOMENTUM and continues after exact allow-once approval", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("pauses shell_exec for MOMENTUM and continues after exact allow-once approval", async () => {
     const rootDir = await createPromptRoot();
     let requests = 0;
     globalThis.fetch = (async () => {
@@ -285,8 +284,7 @@ describe("agent loop sessions", () => {
     expect(records.some((record) => (record.metadata?.processEvent as { kind?: string } | undefined)?.kind === "process_exec")).toBe(true);
   });
 
-  test("does not execute a resumed shell permission after the capability is disabled", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("does not execute a resumed shell permission after the capability is disabled", async () => {
     const rootDir = await createPromptRoot();
     globalThis.fetch = (async () => Response.json({
       id: "chat-permission-disabled",
@@ -328,8 +326,7 @@ describe("agent loop sessions", () => {
       .toContain("no longer in the current Engine's effective tool surface");
   });
 
-  test("rejects a persisted shell plan that no longer matches its approval hash", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("rejects a persisted shell plan that no longer matches its approval hash", async () => {
     const rootDir = await createPromptRoot();
     globalThis.fetch = (async () => Response.json({
       id: "chat-permission-tamper",
@@ -363,8 +360,7 @@ describe("agent loop sessions", () => {
     expect(await Bun.file(join(rootDir, "workspace", "should-not-exist")).exists()).toBe(false);
   });
 
-  test("keeps a durable tool result resolved when the provider continuation fails", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("keeps a durable tool result resolved when the provider continuation fails", async () => {
     const rootDir = await createPromptRoot();
     globalThis.fetch = (async () => Response.json({
       id: "chat-permission-provider-failure",
@@ -393,8 +389,7 @@ describe("agent loop sessions", () => {
     expect(recovered.messages.find((message) => message.toolCallId === paused.request.toolCallId)?.toolOk).toBe(true);
   });
 
-  test("keeps a durable tool result resolved when cancellation reaches the provider continuation", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("keeps a durable tool result resolved when cancellation reaches the provider continuation", async () => {
     const rootDir = await createPromptRoot();
     globalThis.fetch = (async () => Response.json({
       id: "chat-permission-provider-abort",
@@ -431,8 +426,7 @@ describe("agent loop sessions", () => {
     expect(recovered.messages.find((message) => message.toolCallId === paused.request.toolCallId)?.toolOk).toBe(true);
   });
 
-  test("YOLO auto-runs shell_exec while MANUAL pauses read tools", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("YOLO auto-runs shell_exec while MANUAL pauses read tools", async () => {
     const yoloRoot = await createPromptRoot();
     let yoloRequests = 0;
     globalThis.fetch = (async () => {
@@ -470,8 +464,7 @@ describe("agent loop sessions", () => {
     if (manual.kind === "needs_permission") expect(manual.request.permissionClass).toBe("observe");
   });
 
-  test("YOLO cannot execute shell_exec when the capability is disabled", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("YOLO cannot execute shell_exec when the capability is disabled", async () => {
     const rootDir = await createPromptRoot();
     let requests = 0;
     globalThis.fetch = (async () => {

@@ -144,8 +144,7 @@ describe("shell profiles", () => {
     expect(definition.function.description).toContain("Do not use && or ||");
   });
 
-  test("Linux exposes /bin/sh for auto or posix-sh and rejects Windows-only profiles", () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("Linux exposes /bin/sh for auto or posix-sh and rejects Windows-only profiles", () => {
     const engine = {
       id: "etl",
       displayName: "test",

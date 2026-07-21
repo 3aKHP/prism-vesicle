@@ -98,8 +98,7 @@ describe("prompt audit tool surface", () => {
     expect(stage).toEqual({ modelVisible: [] });
   });
 
-  test("prompt audit omits unavailable launches but keeps background controls", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("prompt audit omits unavailable launches but keeps background controls", async () => {
     const env = { ...process.env, VESICLE_MCP_FILE: join(rootDir, ".missing-test-mcp.yaml") };
     const tools = await getEffectivePromptToolNames(
       await loadEngineProfile("runtime"),

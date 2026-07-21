@@ -81,32 +81,23 @@ describe("release workflow contract", () => {
       ),
     );
 
-    expect(uses.filter((action) => action.startsWith("actions/checkout@"))).toEqual([
-      "actions/checkout@v7",
-      "actions/checkout@v7",
-      "actions/checkout@v7",
-      "actions/checkout@v7",
-      "actions/checkout@v7",
-    ]);
-    expect(uses.filter((action) => action.startsWith("actions/upload-artifact@"))).toEqual([
-      "actions/upload-artifact@v7",
-      "actions/upload-artifact@v7",
-    ]);
-    expect(uses.filter((action) => action.startsWith("actions/download-artifact@"))).toEqual([
-      "actions/download-artifact@v8",
-    ]);
-    expect(uses.filter((action) => action.startsWith("actions/setup-node@"))).toEqual([
-      "actions/setup-node@v7",
-    ]);
-    expect(uses.filter((action) => action.startsWith("oven-sh/setup-bun@"))).toEqual([
-      "oven-sh/setup-bun@v2",
-      "oven-sh/setup-bun@v2",
-      "oven-sh/setup-bun@v2",
-      "oven-sh/setup-bun@v2",
-    ]);
-    expect(uses.filter((action) => action.startsWith("softprops/action-gh-release@"))).toEqual([
-      "softprops/action-gh-release@v3",
-    ]);
+    // Every pinned action family must resolve to the Node 24-compatible
+    // major. We assert "all occurrences match the required version" rather
+    // than an exact occurrence count, so adding or reordering a job does not
+    // turn a valid workflow into a contract failure.
+    const requiredActions: Record<string, string> = {
+      "actions/checkout@": "actions/checkout@v7",
+      "actions/upload-artifact@": "actions/upload-artifact@v7",
+      "actions/download-artifact@": "actions/download-artifact@v8",
+      "actions/setup-node@": "actions/setup-node@v7",
+      "oven-sh/setup-bun@": "oven-sh/setup-bun@v2",
+      "softprops/action-gh-release@": "softprops/action-gh-release@v3",
+    };
+    for (const [prefix, required] of Object.entries(requiredActions)) {
+      const matched = uses.filter((action) => action.startsWith(prefix));
+      expect(matched.length).toBeGreaterThan(0);
+      expect(matched.every((action) => action === required)).toBe(true);
+    }
 
     const publish = workflows[1];
     const downloadArtifact = publish?.jobs["github-release"]?.steps?.find(

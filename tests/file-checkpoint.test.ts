@@ -106,8 +106,7 @@ describe("file checkpoints", () => {
     await expect(stat(join(rootDir, "workspace", "generated"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  test("detects and restores directory permission changes", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("detects and restores directory permission changes", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-directory-mode-"));
     const directory = join(rootDir, "workspace", "part_01");
     await mkdir(directory, { recursive: true, mode: 0o755 });

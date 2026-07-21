@@ -65,8 +65,7 @@ describe("process runtime", () => {
     ["cmd", "echo 中文"],
     ["git-bash", "printf '中文'"],
   ] as const) {
-    test(`runs Windows ${shellInterpreter} with UTF-8 output`, async () => {
-      if (process.platform !== "win32") return;
+    test.skipIf(process.platform !== "win32")(`runs Windows ${shellInterpreter} with UTF-8 output`, async () => {
       const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
       try {
         const result = await executeProcessPlan(
@@ -81,8 +80,7 @@ describe("process runtime", () => {
     }, 20_000);
   }
 
-  test("Windows auto executes through 5.1 when PowerShell 7 is absent", async () => {
-    if (process.platform !== "win32") return;
+  test.skipIf(process.platform !== "win32")("Windows auto executes through 5.1 when PowerShell 7 is absent", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
     const previousPath = process.env.PATH;
     const previousProgramFiles = process.env.ProgramFiles;
@@ -174,8 +172,7 @@ describe("process runtime", () => {
     }
   });
 
-  test("keeps the deadline active when a background descendant inherits output pipes", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("keeps the deadline active when a background descendant inherits output pipes", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
     try {
       const started = performance.now();

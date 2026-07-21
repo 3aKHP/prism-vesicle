@@ -846,8 +846,7 @@ describe("Output Quality Guard runtime", () => {
     expect(crashed.pendingQualityRewrite).toBeUndefined();
   });
 
-  test("persists an auto-approved mutation before a sibling permission pause", async () => {
-    if (process.platform === "win32") return;
+  test.skipIf(process.platform === "win32")("persists an auto-approved mutation before a sibling permission pause", async () => {
     const root = await runtimeRoot("runtime", ["runtime-turn"]);
     globalThis.fetch = (async () => providerTools("mixed-auto-and-shell", [
       {

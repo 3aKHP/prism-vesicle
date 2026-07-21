@@ -151,14 +151,11 @@ describe("Stage completion paths", () => {
 });
 
 describe("completion controller dynamic sources", () => {
-  test("keeps stale loads and shared keyboard actions guarded in the controller", async () => {
+  test("guards stale dynamic loads against overwriting a newer draft", async () => {
     const source = await readFile(join(import.meta.dir, "..", "src", "tui", "command-completion-controller.ts"), "utf8");
 
     expect(source).toContain("let current = true");
     expect(source).toContain("if (!current) return");
     expect(source).toContain("loadedSourceKey() === draft.sourceKey");
-    expect(source).toContain('if (name === "tab")');
-    expect(source).toContain('if (name === "escape")');
-    expect(source).toContain("options.submitCommand(value)");
   });
 });

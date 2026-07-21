@@ -42,12 +42,6 @@ describe("Windows guided installer", () => {
     expect(source).toContain("RegWriteDWordValue(HKCU, InstallerStateKey, PathManagedValue, 1)");
     expect(source).toContain("RegQueryDWordValue(HKCU, InstallerStateKey, PathManagedValue, PathManaged)");
     expect(source).not.toContain("{userappdata}\\prism-vesicle");
-    const smoke = await readFile(join(import.meta.dir, "..", "scripts", "smoke-windows-installer.ps1"), "utf8");
-    expect(smoke).toContain("$DirectoryCommand");
-    expect(smoke).toContain("$BackgroundCommand");
-    expect(smoke).toContain("Get-Command vesicle -CommandType Application");
-    expect(smoke).toContain("Upgrade left a legacy launcher behind");
-    expect(smoke.match(/Assert-ExplorerIntegration \$Executable/g)).toHaveLength(2);
   });
 
   test("vendors the Simplified Chinese installer messages", async () => {

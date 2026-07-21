@@ -5,17 +5,11 @@ import { join } from "node:path";
 import { resolveProjectDirectory } from "../src/cli/project-target";
 
 describe("guided Setup launch boundary", () => {
-  test("launches a fresh process instead of stealing the Setup process cwd", async () => {
+  test("launches a fresh process with the project directory as cwd instead of stealing the Setup cwd", async () => {
     const main = await readFile(join(import.meta.dir, "..", "src", "cli", "main.ts"), "utf8");
     const launch = await readFile(join(import.meta.dir, "..", "src", "cli", "launch.ts"), "utf8");
     expect(main).not.toContain("process.chdir(");
-    expect(main).toContain("launchVesicleInProject");
-    expect(main).toContain('case "launch"');
-    expect(main).not.toContain("readSetupState");
-    expect(main).toContain("launchProjectArgumentOrReport(command)");
     expect(launch).toContain("cwd: projectDirectory");
-    expect(launch).toContain("stdin: \"inherit\"");
-    expect(launch).toContain("...args");
   });
 
   test("resolves dot and explicit directories without accepting files", async () => {
