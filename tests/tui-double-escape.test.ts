@@ -18,12 +18,12 @@ describe("double escape timing", () => {
   });
 
   test("matches the Claude Code prompt-state matrix", () => {
-    const escape = new PromptEscapeController();
-    expect(escape.press({ busy: true, draft: "", hasSession: true }, 0)).toBe("interrupt");
-    expect(escape.press({ busy: false, draft: "draft", hasSession: true }, 1_000)).toBe("arm-clear");
-    expect(escape.press({ busy: false, draft: "draft", hasSession: true }, 1_500)).toBe("clear");
-    expect(escape.press({ busy: false, draft: "", hasSession: false }, 2_000)).toBe("noop");
-    expect(escape.press({ busy: false, draft: "", hasSession: true }, 3_000)).toBe("arm-rewind");
-    expect(escape.press({ busy: false, draft: "", hasSession: true }, 3_500)).toBe("rewind");
+    const escapeController = new PromptEscapeController();
+    expect(escapeController.press({ busy: true, draft: "", hasSession: true }, 0)).toBe("interrupt");
+    expect(escapeController.press({ busy: false, draft: "draft", hasSession: true }, 1_000)).toBe("arm-clear");
+    expect(escapeController.press({ busy: false, draft: "draft", hasSession: true }, 1_500)).toBe("clear");
+    expect(escapeController.press({ busy: false, draft: "", hasSession: false }, 2_000)).toBe("noop");
+    expect(escapeController.press({ busy: false, draft: "", hasSession: true }, 3_000)).toBe("arm-rewind");
+    expect(escapeController.press({ busy: false, draft: "", hasSession: true }, 3_500)).toBe("rewind");
   });
 });

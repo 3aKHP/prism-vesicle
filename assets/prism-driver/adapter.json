@@ -1,7 +1,7 @@
 {
   "schema": "prism-host-adapter/v1",
   "id": "vesicle-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "targetHost": "Prism Vesicle",
   "capabilities": [
     "prism-driver/v1",
@@ -91,6 +91,7 @@
     "prompt.engine.weaver": "assets/prompts/engines/weaver.md",
     "prompt.engine.weaver-orch": "assets/prompts/engines/weaver-orch.md",
     "prompt.engine.dyad": "assets/prompts/engines/dyad.md",
+    "prompt.engine.stage": "assets/prompts/engines/stage.md",
     "prompt.agent.scene-writer": "assets/prompts/agents/scene-writer.md",
     "prompt.agent.continuity-editor": "assets/prompts/agents/continuity-editor.md",
     "prompt.agent.chapter-reviewer": "assets/prompts/agents/chapter-reviewer.md",
@@ -106,7 +107,8 @@
     "template.persona.immersive": "assets/templates/tpl_persona_prompt_immersive.md",
     "template.persona.compatible": "assets/templates/tpl_persona_prompt_compatible.md",
     "template.outline": "assets/templates/tpl_outline.md",
-    "template.story-bible": "assets/templates/tpl_story_bible.md"
+    "template.story-bible": "assets/templates/tpl_story_bible.md",
+    "template.stage-context": "assets/templates/tpl_stage_context.md"
   },
   "interactionBindings": {
     "etl.blueprint": {
@@ -147,67 +149,43 @@
     "etl": {
       "profileId": "etl",
       "basePrompts": [
-        "assets/prompts/shared/vesicle-base.md"
-      ],
-      "hostContracts": [
-        "config.load",
-        "prompt.load",
-        "session.write"
+        "assets/prompts/host/authoring.md"
       ]
     },
     "runtime": {
       "profileId": "runtime",
       "basePrompts": [
-        "assets/prompts/shared/vesicle-base.md"
-      ],
-      "hostContracts": [
-        "config.load",
-        "prompt.load",
-        "session.write"
+        "assets/prompts/host/runtime.md"
       ]
     },
     "evaluate": {
       "profileId": "evaluate",
       "basePrompts": [
-        "assets/prompts/shared/vesicle-base.md"
-      ],
-      "hostContracts": [
-        "config.load",
-        "prompt.load",
-        "session.write"
+        "assets/prompts/host/review.md"
       ]
     },
     "weaver": {
       "profileId": "weaver",
       "basePrompts": [
-        "assets/prompts/shared/vesicle-base.md"
-      ],
-      "hostContracts": [
-        "config.load",
-        "prompt.load",
-        "session.write"
+        "assets/prompts/host/writing.md"
       ]
     },
     "weaver-orch": {
       "profileId": "weaver-orch",
       "basePrompts": [
-        "assets/prompts/shared/vesicle-base.md"
-      ],
-      "hostContracts": [
-        "config.load",
-        "prompt.load",
-        "session.write"
+        "assets/prompts/host/writing.md"
       ]
     },
     "dyad": {
       "profileId": "dyad",
       "basePrompts": [
-        "assets/prompts/shared/vesicle-base.md"
-      ],
-      "hostContracts": [
-        "config.load",
-        "prompt.load",
-        "session.write"
+        "assets/prompts/host/runtime.md"
+      ]
+    },
+    "stage": {
+      "profileId": "stage",
+      "basePrompts": [
+        "assets/prompts/host/consumer-stage.md"
       ]
     }
   },
@@ -215,19 +193,19 @@
     "scene-writer": {
       "profileId": "scene-writer",
       "basePrompts": [
-        "assets/prompts/agents/base.md"
+        "assets/prompts/host/writing.md"
       ]
     },
     "continuity-editor": {
       "profileId": "continuity-editor",
       "basePrompts": [
-        "assets/prompts/agents/base.md"
+        "assets/prompts/host/writing.md"
       ]
     },
     "chapter-reviewer": {
       "profileId": "chapter-reviewer",
       "basePrompts": [
-        "assets/prompts/agents/base.md"
+        "assets/prompts/host/review.md"
       ]
     }
   }

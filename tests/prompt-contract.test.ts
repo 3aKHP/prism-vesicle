@@ -1,50 +1,48 @@
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { loadEngineProfile } from "../src/core/engine/profile";
+import { loadAgentProfile } from "../src/core/agents/profile";
+import { resolveChildTools } from "../src/core/agents/child-runner";
+import { agentToolDefinitions } from "../src/core/agents/tools";
+import { resolveToolSurface } from "../src/core/agent-loop/tool-surface";
+import { engineIds, loadEngineProfile } from "../src/core/engine/profile";
 import { getEffectivePromptToolNames } from "../src/cli/commands/prompt-dump";
+import { createEmptyMcpRegistry } from "../src/mcp/registry";
 import { createAssetResolver } from "../src/core/runtime/assets";
 
 const rootDir = process.cwd();
 const assets = createAssetResolver(rootDir);
 
 describe("prompt interaction contracts", () => {
-  test("base prompt describes the current Vesicle interaction contract", async () => {
-    const base = await readAsset("assets/prompts/shared/vesicle-base.md");
-
-    expect(base).toContain("Current Interaction Contract");
-    expect(base).toContain("ask_user_question");
-    expect(base).toContain("request_engine_switch");
-    expect(base).toContain("request_confirmation");
-    expect(base).toContain("web captures may be created or edited under `source_materials/`");
-    expect(base).toContain("`web_search` for source discovery");
-    expect(base).toContain("`web_research` when the user needs a cited synthesis");
-    expect(base).toContain("`mcp_<prefix>_<tool>`");
-    expect(base).toContain("short handle such as `explore-1`");
-    expect(base).toContain("`runInBackground: true`");
-    expect(base).toContain("`shell_output`");
-    expect(base).toContain("`shell_stop`");
-    expect(base).not.toContain("M0 Interaction");
-    expect(base).not.toContain("after M0");
-  });
-
-  test("runtime prompt binds its declared turn stop gate to request_confirmation", async () => {
+  test("profiles declare runtime interactions while compiled prompts stay host-neutral", async () => {
     const runtimeProfile = await loadEngineProfile("runtime");
     const runtimePrompt = await readAsset("assets/prompts/engines/runtime.md");
 
     expect(runtimeProfile.stopGates).toContain("runtime-turn");
-    expect(runtimePrompt).toContain("request_confirmation");
-    expect(runtimePrompt).toContain('"runtime-turn"');
+    expect(runtimePrompt).toContain("hal://interaction/runtime.turn");
+    expect(runtimePrompt).not.toContain("request_confirmation");
+    expect(runtimePrompt).not.toContain("Host Adapter Binding");
   });
 
-  test("choice checkpoints use ask_user_question when no stop gate is declared", async () => {
+  test("choice checkpoints remain declarative in compiled prompts", async () => {
     for (const engine of ["dyad", "weaver", "weaver-orch"] as const) {
       const profile = await loadEngineProfile(engine);
       const prompt = await readAsset(`assets/prompts/engines/${engine}.md`);
 
       expect(profile.stopGates).toEqual([]);
-      expect(prompt).toContain("ask_user_question");
-      expect(prompt).not.toContain("request_confirmation");
+      expect(prompt).toContain("hal://interaction/");
+      expect(prompt).not.toContain("ask_user_question");
+      expect(prompt).not.toContain("Host Adapter Binding");
     }
+  });
+
+  test("Stage retains the compact Phase II prose and anti-AI constraints", async () => {
+    const stagePrompt = await readAsset("assets/prompts/engines/stage.md");
+
+    expect(stagePrompt).toContain("## 反 AI 味约束");
+    expect(stagePrompt).toContain("不是……而是……");
+    expect(stagePrompt).toContain("空气中弥漫着");
+    expect(stagePrompt).toContain("<!--[!Neural Chain]-->` 内部可使用结构术语");
+    expect(stagePrompt).toContain("有首 beat 时");
   });
 
   test("assets do not expose mismatched RooCode-era tool names", async () => {
@@ -57,19 +55,47 @@ describe("prompt interaction contracts", () => {
 });
 
 describe("prompt audit tool surface", () => {
+  test("capability snapshots match the actual Engine and Agent tool surfaces", async () => {
+    const env = { ...process.env, VESICLE_MCP_FILE: join(rootDir, ".missing-test-mcp.yaml") };
+    const genericHostTools = agentToolDefinitions.map((definition) => definition.function.name);
+
+    for (const engine of engineIds) {
+      const profile = await loadEngineProfile(engine);
+      const actual = await resolveToolSurface(profile, true, false, "auto", { env });
+      const reported = await getEffectivePromptToolNames(profile, { env });
+      const names = actual.definitions.map((definition) => definition.function.name);
+
+      expect(reported.modelVisible).toEqual(names);
+      if (engine === "stage") {
+        expect(names).toEqual([]);
+      } else {
+        expect(names).toContain("ask_user_question");
+        expect(names).toContain("request_engine_switch");
+        for (const tool of genericHostTools) expect(names).toContain(tool);
+      }
+    }
+
+    for (const agent of ["scene-writer", "continuity-editor", "chapter-reviewer"] as const) {
+      const profile = await loadAgentProfile(agent);
+      const tools = resolveChildTools(profile.tools, [], createEmptyMcpRegistry(), true);
+      expect(tools.map((definition) => definition.function.name)).toEqual(profile.tools);
+    }
+  });
+
   test("prompt dump reports runtime-added model-visible tools", async () => {
     const env = { ...process.env, VESICLE_MCP_FILE: join(rootDir, ".missing-test-mcp.yaml") };
     const runtime = await getEffectivePromptToolNames(await loadEngineProfile("runtime"), { env });
     const dyad = await getEffectivePromptToolNames(await loadEngineProfile("dyad"), { env });
+    const stage = await getEffectivePromptToolNames(await loadEngineProfile("stage"), { env }, true, "auto");
 
     expect(runtime.modelVisible).toContain("request_confirmation");
     expect(runtime.modelVisible).toContain("ask_user_question");
     expect(runtime.modelVisible).toContain("request_engine_switch");
-    expect(runtime.hostContracts).toEqual(["config.load", "prompt.load", "session.write"]);
 
     expect(dyad.modelVisible).not.toContain("request_confirmation");
     expect(dyad.modelVisible).toContain("ask_user_question");
     expect(dyad.modelVisible).toContain("request_engine_switch");
+    expect(stage).toEqual({ modelVisible: [] });
   });
 
   test("prompt audit omits unavailable launches but keeps background controls", async () => {

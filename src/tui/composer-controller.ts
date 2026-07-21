@@ -1,6 +1,8 @@
-import { createEffect, createMemo, createSignal, type Accessor, type Setter } from "solid-js";
+import { createMemo, createSignal, type Accessor, type Setter } from "solid-js";
 import type { ModelCapabilities } from "../config/env";
 import type { ProviderRegistry, ProviderSelection } from "../config/providers";
+import type { ArtifactEntry } from "../core/artifacts/workbench";
+import type { SessionSummary } from "../core/session/store";
 import { ingestImageBytes } from "../core/attachments/store";
 import type { VesicleImageAttachment } from "../providers/shared/types";
 import { readImageFromClipboard } from "./clipboard";
@@ -14,7 +16,7 @@ import {
 } from "./composer";
 import type { PromptHistoryEntry } from "./composer-history";
 import { composerVisualLineCount } from "./composer-layout";
-import type { ActivityEntry, AgentCardState, Message, OptionItem } from "./types";
+import type { ActivityEntry, AgentCardState, Message } from "./types";
 import type { TuiKeyEvent } from "./decision-interaction";
 import { PromptEscapeController } from "./prompt-escape";
 import { createModelPickerController } from "./model-picker-controller";
@@ -24,11 +26,14 @@ export type ComposerControllerOptions = {
   rootDir: string;
   terminalWidth: Accessor<number>;
   providerRegistry: Accessor<ProviderRegistry | null>;
+  activeProvider: Accessor<string>;
   ensureProviderRegistry: () => Promise<ProviderRegistry>;
   applyProviderSelection: (selection: Partial<ProviderSelection>) => Promise<ProviderSelection>;
   persistProviderSwitch: (selection: ProviderSelection) => Promise<void>;
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
+  refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  listSessions: () => Promise<SessionSummary[]>;
   busy: Accessor<boolean>;
   activeModelCapabilities: Accessor<ModelCapabilities | undefined>;
   status: Accessor<string>;
@@ -52,12 +57,16 @@ export function createComposerController(options: ComposerControllerOptions) {
   const promptEscape = new PromptEscapeController();
   const modelPickerController = createModelPickerController(options);
   const commandCompletionController = createCommandCompletionController({
+    rootDir: options.rootDir,
     inputValue,
     applyComposerState: applyState,
     clearComposer: clear,
     setInputImages,
     setHistoryIndex,
     providerRegistry: options.providerRegistry,
+    activeProvider: options.activeProvider,
+    refreshArtifacts: options.refreshArtifacts,
+    listSessions: options.listSessions,
     agentCards: options.agentCards,
     sessionId: options.sessionId,
     busy: options.busy,
@@ -66,16 +75,14 @@ export function createComposerController(options: ComposerControllerOptions) {
   });
 
   const {
-    agentArgumentDraft,
+    commandArgumentDraft,
     commandArgumentItems,
     commandArgumentMenuOpen,
     commandArgumentSelected,
     commandMenuItems,
     commandMenuOpen,
     commandMenuSelected,
-    fixedArgumentDraft,
     handleKey: handleCommandCompletionKey,
-    modelArgumentDraft,
   } = commandCompletionController;
   const composerInputWidth = createMemo(() => Math.max(8, options.terminalWidth() - 4));
   const inputVisualLines = createMemo(() => composerVisualLineCount(inputValue(), composerInputWidth()));
@@ -216,7 +223,7 @@ export function createComposerController(options: ComposerControllerOptions) {
 
   return {
     ...modelPickerController,
-    agentArgumentDraft,
+    commandArgumentDraft,
     applyState,
     clear,
     commandArgumentItems,
@@ -227,7 +234,6 @@ export function createComposerController(options: ComposerControllerOptions) {
     commandMenuSelected,
     composerInputWidth,
     composerPopupOpen,
-    fixedArgumentDraft,
     handleEscape,
     handleKey,
     historyIndex,
@@ -237,7 +243,6 @@ export function createComposerController(options: ComposerControllerOptions) {
     inputNeedsExpandedBottom,
     inputValue,
     insertPastedText,
-    modelArgumentDraft,
     pasteClipboardImage,
     promptHistory,
     recordHistory,

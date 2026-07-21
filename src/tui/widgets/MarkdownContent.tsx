@@ -7,7 +7,7 @@ type MarkdownRenderer = "markdown" | "plain";
 let loggedMarkdownMode = false;
 
 export function markdownRendererMode(
-  platform: NodeJS.Platform = process.platform,
+  _platform: NodeJS.Platform = process.platform,
   env: Record<string, string | undefined> = process.env,
 ): MarkdownRenderer {
   const requested = env.VESICLE_MARKDOWN_RENDERER?.trim().toLowerCase();

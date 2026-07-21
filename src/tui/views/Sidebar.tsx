@@ -34,7 +34,9 @@ export function Sidebar(props: {
   sessionPath: string;
   mcp?: SidebarMcpState;
   artifacts: { path: string }[];
+  qualityWarningPaths?: ReadonlySet<string>;
   selectedArtifactPath?: string;
+  focusedArtifactPath?: string;
   agents?: AgentCardState[];
   processes?: BackgroundProcessState[];
   currentSessionId?: string;
@@ -80,11 +82,12 @@ export function Sidebar(props: {
                     {(artifact) => {
                       const index = () => props.artifacts.indexOf(artifact) + 1;
                       const selected = () => artifact.path === props.selectedArtifactPath;
+                      const focused = () => artifact.path === props.focusedArtifactPath;
                       return (
                         <PanelLine
-                          content={artifactSidebarLine(artifact.path, root, index(), props.width - 4)}
-                          fg={selected() ? palette.brand : palette.textSecondary}
-                          attributes={selected() ? 1 : 0}
+                          content={artifactSidebarLine(artifact.path, root, index(), props.width - 4, props.qualityWarningPaths?.has(artifact.path) === true)}
+                          fg={focused() ? palette.brand : selected() ? palette.brandDim : props.qualityWarningPaths?.has(artifact.path) ? palette.warn : palette.textSecondary}
+                          attributes={focused() || selected() ? 1 : 0}
                         />
                       );
                     }}
@@ -176,8 +179,8 @@ function artifactsInRoot(artifacts: { path: string }[], root: string): { path: s
   return artifacts.filter((artifact) => artifact.path.startsWith(`${root}/`));
 }
 
-export function artifactSidebarLine(path: string, root: string, index: number, width: number): string {
+export function artifactSidebarLine(path: string, root: string, index: number, width: number, qualityWarning = false): string {
   const relativePath = path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
-  const prefix = `${index}. `;
+  const prefix = `${qualityWarning ? "! " : ""}${index}. `;
   return `${prefix}${truncateMiddle(relativePath, Math.max(8, width - prefix.length))}`;
 }

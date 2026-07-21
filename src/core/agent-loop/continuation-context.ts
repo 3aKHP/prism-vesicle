@@ -1,5 +1,6 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
+import { loadExperimentalQualityProfile } from "../../config/quality";
 import { createProvider } from "../../providers";
 import type { VesicleRequest } from "../../providers/shared/types";
 import type { EngineId } from "../engine/profile";
@@ -45,6 +46,7 @@ export async function loadContinuationContext(
     : undefined;
   const assets = options.assets ?? projectHarness?.assets;
   const harness = options.harness ?? projectHarness?.harness;
+  const experimentalQuality = await loadExperimentalQualityProfile(harness?.quality);
   const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
   assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
   const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir, assets ? { resolver: assets } : {});
@@ -71,6 +73,7 @@ export async function loadContinuationContext(
     session,
     harness,
     assets,
+    experimentalQuality,
   };
 }
 

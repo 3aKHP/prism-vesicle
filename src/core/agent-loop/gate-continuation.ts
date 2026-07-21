@@ -76,6 +76,7 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
+    experimentalQuality: context.experimentalQuality,
   });
 }
 

@@ -1,3 +1,4 @@
+import packageJson from "../../package.json";
 import type { McpServerConfig, McpToolCallResult, McpRawTool } from "./types";
 import { formatMcpToolResult, isRecord, McpError } from "./types";
 
@@ -24,7 +25,7 @@ export class McpStreamableHttpClient {
     const result = await this.request("initialize", {
       protocolVersion: this.config.protocolVersion,
       capabilities: {},
-      clientInfo: { name: "Prism Vesicle", version: "0.1.0" },
+      clientInfo: { name: "Prism Vesicle", version: packageJson.version },
     });
     this.serverInfo = isRecord(result.serverInfo) ? result.serverInfo : {};
     await this.notify("notifications/initialized", {});

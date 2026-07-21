@@ -5,9 +5,9 @@ import type { EngineId } from "../core/engine/profile";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import type { ConversationRewind } from "../core/rewind/service";
 import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
-import type { ComposerElement, ComposerState } from "./composer";
+import type { ComposerState } from "./composer";
 import { composerElementsForImages } from "./composer-history";
-import type { PendingEngineSwitchState, PendingGateState, PendingPermissionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
+import type { PendingEngineSwitchState, PendingGateState, PendingPermissionState, PendingQualityDecisionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
 import { displayTranscriptFromSnapshot, vesicleMessagesFromResumed } from "./session-presenter";
 import { latestTurnUsage, sumSessionUsage, type TokenUsageSummary } from "./telemetry";
 import type { ActivityEntry, AgentCardState, Message, SessionPickerState } from "./types";
@@ -29,6 +29,8 @@ export type SessionActionsControllerOptions = {
   setPendingUserQuestion: Setter<PendingUserQuestionState | null>;
   pendingPermission: Accessor<PendingPermissionState | null>;
   setPendingPermission: Setter<PendingPermissionState | null>;
+  pendingQualityDecision: Accessor<PendingQualityDecisionState | null>;
+  setPendingQualityDecision: Setter<PendingQualityDecisionState | null>;
   pendingChildPermission: Accessor<unknown | null>;
   agentCards: Accessor<AgentCardState[]>;
   setConversation: Setter<VesicleMessage[]>;
@@ -93,7 +95,7 @@ export function createSessionActionsController(options: SessionActionsController
   async function compactSession(instructions?: string): Promise<{ summary: string; messagesSummarized: number }> {
     const id = options.sessionId();
     if (!id) throw new Error("No active session to compact.");
-    if (hasPendingInteraction()) throw new Error("Resolve the pending gate, engine switch, question, or permission before compacting.");
+    if (hasPendingInteraction()) throw new Error("Resolve the pending gate, engine switch, question, permission, or quality decision before compacting.");
     if (!options.providerConfigReady()) await options.loadProviderConfig();
     options.setBusy(true);
     options.setStatus("compacting conversation");
@@ -159,10 +161,11 @@ export function createSessionActionsController(options: SessionActionsController
     options.setPendingEngineSwitch(null);
     options.setPendingUserQuestion(null);
     options.setPendingPermission(null);
+    options.setPendingQualityDecision(null);
   }
 
   function hasPendingInteraction(): boolean {
-    return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingChildPermission());
+    return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingQualityDecision() || options.pendingChildPermission());
   }
 
   return { applyConversationRewind, compactSession, handleSessionPickerKey, resetRewindState };

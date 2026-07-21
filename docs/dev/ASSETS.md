@@ -6,22 +6,21 @@ Prism Vesicle ships one verified V10 Harness baseline and a small, host-owned ex
 
 ```text
 harness-manifest.json   # exact prism-harness-pack/v1 Release manifest
-assets/                 # exact 47-file V10 Harness inventory
+assets/                 # exact 73-file V10 Harness inventory
 host-assets/            # 12 Vesicle-owned host extension files
 ```
 
-The current bundled Harness is `prism-engine-v10@10.0.1-alpha.1`, sourced from Neural Narratology Release `harness-20260714-1` at commit `1aeb8b9acef4522889e5ba22728f8711390997b6`. The manifest SHA-256 is `15624186f8e55d2f107432c417a21a5a57d8116ff35c2dffe716f58e3e9eedc2`.
+The current bundled Harness is `prism-engine-v10@10.1.0-rc.1`, sourced from Neural Narratology Release `harness-20260720-3` at commit `90f65c952bd5c84da9d1c5a22fbe87c3c583a70a`. The manifest SHA-256 is `a6f5f8eb096f6296794868a37ee46d2458600b827921a4b6cb8048c0603a1934`.
 
 `assets/` must match the manifest inventory and hashes exactly. Do not add Vesicle notes, host-only profiles, or local experiments to that directory. Update the bundled baseline from a published Harness Release and verify the complete inventory rather than copying selected files from another checkout.
 
 ## Host Extension Layer
 
-`host-assets/` supplies only an exact host whitelist:
+`host-assets/` supplies only an exact host whitelist for generic Vesicle Agents:
 
-- the externally declared `assets/prompts/shared/vesicle-base.md` and `assets/prompts/agents/base.md` prompts;
-- profiles and prompts for the generic `explore`, `general`, `plan`, `research`, and `reviewer` SubAgents.
+- profiles and prompts for the generic `explore`, `general`, `plan`, `research`, and `reviewer` SubAgents, including their common base prompts.
 
-The three V10 workflow Agents (`scene-writer`, `continuity-editor`, and `chapter-reviewer`) belong to the Harness Pack and its Driver Contract. The five generic Agents remain ordinary Vesicle host extensions: they may execute concurrently and are not rebound as Harness delegations. No arbitrary project or user Agent receives that exemption.
+The rc.1 Harness owns all prompt sections declared by its Engine and workflow-Agent profiles, including `assets/prompts/host/`; its `externalHostAssets` list is empty. The three V10 workflow Agents (`scene-writer`, `continuity-editor`, and `chapter-reviewer`) belong to the Harness Pack and its Driver Contract. The five generic Agents remain ordinary Vesicle host extensions: they may execute concurrently and are not rebound as Harness delegations. No arbitrary project or user Agent receives that exemption.
 
 ## Resolution And Selection
 
@@ -48,3 +47,12 @@ bun run pack:check
 ```
 
 The runtime asset archive and npm package must contain `harness-manifest.json`, `assets/`, and `host-assets/` together.
+
+## Static Prompt Asset Ledger
+
+`assets/prompt-context-ledger.json` is a raw, static Harness prompt-asset ledger. Its 24,000-character static asset limit is verified when a Harness is activated, but it is not a provider context-window limit and never blocks a request. Runtime injections and conversation history are deliberately excluded.
+
+For Stage, `/stage` appends the frozen Module A source to the system message
+and sends the frozen Module B opening as assistant history. Those user-supplied
+values are intentionally outside the static asset ledger; their length belongs
+to provider/context management, not Harness asset review.

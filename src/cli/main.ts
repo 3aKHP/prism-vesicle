@@ -105,6 +105,11 @@ switch (command) {
       console.log(result.assistantContent);
       console.log(`\n[permission:${result.request.toolName}] This turn needs user approval; the 'once' subcommand is non-interactive.`);
       console.log(`Session: ${result.sessionPath}`);
+    } else if (result.kind === "needs_quality_decision") {
+      console.log(result.assistantContent);
+      console.log(`\n[quality:${result.decision.reason}] The current version still has ${result.decision.findingCount} blocking finding${result.decision.findingCount === 1 ? "" : "s"}.`);
+      console.log("Resume this session in the interactive TUI to revise again, use the current version, or stop.");
+      console.log(`Session: ${result.sessionPath}`);
     } else {
       console.log(result.response.content);
       console.log(`\nSession: ${result.sessionPath}`);
@@ -122,6 +127,21 @@ switch (command) {
     } else {
       console.error("Usage: vesicle prompt <dump|shape> --engine <id>");
       process.exit(1);
+    }
+    break;
+  }
+  case "quality": {
+    if (invocation.args[1] !== "benchmark") {
+      console.error("Usage: vesicle quality benchmark --plan <path> --corpus <path> --output <jsonl> --report <json> --allow-live");
+      process.exitCode = 1;
+      break;
+    }
+    try {
+      const { runQualityBenchmarkCommand } = await import("./commands/quality-benchmark");
+      await runQualityBenchmarkCommand(invocation.args.slice(2));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
     }
     break;
   }
@@ -171,6 +191,6 @@ switch (command) {
       break;
     }
     console.error(`Unknown command or project directory: ${command}`);
-    console.error("Commands: setup, launch, doctor, once, prompt, debug, assets, dev");
+    console.error("Commands: setup, launch, doctor, once, prompt, quality, debug, assets, dev");
     process.exitCode = 1;
 }

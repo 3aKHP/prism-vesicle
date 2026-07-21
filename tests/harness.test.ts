@@ -36,12 +36,17 @@ describe("Harness Pack foundation", () => {
       expect(runtime?.selection).toBe("bundled");
       expect(runtime?.lock).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.1",
-        manifestSha256: "15624186f8e55d2f107432c417a21a5a57d8116ff35c2dffe716f58e3e9eedc2",
+        packVersion: "10.1.0-rc.1",
+        adapterVersion: "1.1.0",
+        manifestSha256: "a6f5f8eb096f6296794868a37ee46d2458600b827921a4b6cb8048c0603a1934",
       });
-      expect(runtime?.pack.assetCount).toBe(47);
+      expect(runtime?.pack.assetCount).toBe(73);
+      expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-detector/document-metrics@1");
+      expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-judge/anti-ai-flavor@1");
+      expect(runtime?.harness.quality?.judge?.rules).toHaveLength(21);
+      expect(runtime?.harness.quality?.semanticRewritePolicy).toBeUndefined();
       expect((await runtime!.assets.resolveFile("assets/engines/etl.profile.yaml")).source).toBe("bundled");
-      expect((await runtime!.assets.resolveFile("assets/prompts/shared/vesicle-base.md")).source).toBe("host");
+      expect((await runtime!.assets.resolveFile("assets/prompts/host/authoring.md")).source).toBe("bundled");
       expect((await listAgentProfiles(project, runtime!.assets)).map((profile) => profile.id)).toEqual([
         "chapter-reviewer",
         "continuity-editor",
@@ -67,9 +72,65 @@ describe("Harness Pack foundation", () => {
       await cp(join(import.meta.dir, "..", "host-assets"), hostAssetsDirectory, { recursive: true });
       await cp(join(import.meta.dir, "..", "harness-manifest.json"), manifestPath);
       const layout = { rootDirectory: root, manifestPath, assetsDirectory, hostAssetsDirectory };
-      expect((await verifyBundledHarnessPack(layout)).assetCount).toBe(47);
+      expect((await verifyBundledHarnessPack(layout)).assetCount).toBe(Object.keys(JSON.parse(await readFile(manifestPath, "utf8")).assets).length);
       await writeFile(join(assetsDirectory, "prompts", "engines", "etl.md"), "tampered", "utf8");
       await expect(verifyBundledHarnessPack(layout)).rejects.toThrow("hash mismatch");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects a semantically stale V10.1 prompt context ledger", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-bundled-ledger-"));
+    const assetsDirectory = join(root, "assets");
+    const hostAssetsDirectory = join(root, "host-assets");
+    const manifestPath = join(root, "harness-manifest.json");
+    try {
+      await cp(join(import.meta.dir, "..", "assets"), assetsDirectory, { recursive: true });
+      await cp(join(import.meta.dir, "..", "host-assets"), hostAssetsDirectory, { recursive: true });
+      await cp(join(import.meta.dir, "..", "harness-manifest.json"), manifestPath);
+      const ledgerPath = join(assetsDirectory, "prompt-context-ledger.json");
+      const ledger = JSON.parse(await readFile(ledgerPath, "utf8")) as {
+        engines: Record<string, { sections: Array<{ characters: number }> }>;
+      };
+      ledger.engines.stage!.sections[0]!.characters += 1;
+      await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as HarnessManifest;
+      manifest.assets["assets/prompt-context-ledger.json"] = createHash("sha256")
+        .update(await readFile(ledgerPath))
+        .digest("hex");
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+      await expect(verifyBundledHarnessPack({ rootDirectory: root, manifestPath, assetsDirectory, hostAssetsDirectory }))
+        .rejects.toThrow("static prompt asset ledger Engine stage section 1 count does not match its asset");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("requires the V10.1 ledger to declare a static-asset-only measurement scope", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-bundled-ledger-scope-"));
+    const assetsDirectory = join(root, "assets");
+    const hostAssetsDirectory = join(root, "host-assets");
+    const manifestPath = join(root, "harness-manifest.json");
+    try {
+      await cp(join(import.meta.dir, "..", "assets"), assetsDirectory, { recursive: true });
+      await cp(join(import.meta.dir, "..", "host-assets"), hostAssetsDirectory, { recursive: true });
+      await cp(join(import.meta.dir, "..", "harness-manifest.json"), manifestPath);
+      const ledgerPath = join(assetsDirectory, "prompt-context-ledger.json");
+      const ledger = JSON.parse(await readFile(ledgerPath, "utf8")) as { measurement: { enforcement: string } };
+      ledger.measurement.enforcement = "review-only";
+      await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as HarnessManifest;
+      manifest.assets["assets/prompt-context-ledger.json"] = createHash("sha256")
+        .update(await readFile(ledgerPath))
+        .digest("hex");
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+      await expect(verifyBundledHarnessPack({ rootDirectory: root, manifestPath, assetsDirectory, hostAssetsDirectory }))
+        .rejects.toThrow("static prompt asset ledger measurement must exclude runtime context and enforce only the static asset limit");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -80,7 +141,7 @@ describe("Harness Pack foundation", () => {
     try {
       const verified = await verifyHarnessPack(fixture.pack, fixture.options);
       expect(verified.manifest.id).toBe("fixture-harness");
-      expect(verified.assetCount).toBe(16);
+      expect(verified.assetCount).toBe(18);
       expect(verified.compatibility).toEqual({
         compatible: true,
         unsupportedCapabilities: [],
@@ -96,6 +157,7 @@ describe("Harness Pack foundation", () => {
 
   test("reports unsupported capabilities without weakening integrity checks", async () => {
     expect(Object.isFrozen(supportedHarnessCapabilities)).toBe(true);
+    expect(supportedHarnessCapabilities).toContain("quality-policy/semantic-rewrite@1");
     expect(() => (supportedHarnessCapabilities as string[]).push("future-capability@1")).toThrow();
 
     const fixture = await createHarnessFixture({
@@ -304,7 +366,7 @@ describe("Harness Pack foundation", () => {
       expect(bundled?.selection).toBe("bundled");
       expect(bundled?.lock).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.1",
+        packVersion: "10.1.0-rc.1",
       });
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
@@ -440,11 +502,11 @@ describe("Harness Pack foundation", () => {
 
       const first = await runPrompt({ input: "start", engine: "etl", rootDir: project });
       expect(first.kind).toBe("complete");
-      expect(first.profile.protocolVersion).toBe("v10.0-tempered-voice");
+      expect(first.profile.protocolVersion).toBe("v10.1-prompt-assembly");
       const snapshot = await loadSessionSnapshot(project, first.sessionId);
       expect(snapshot.harness).toMatchObject({
         packId: "prism-engine-v10",
-        packVersion: "10.0.1-alpha.1",
+        packVersion: "10.1.0-rc.1",
       });
       expect(snapshot.assets?.files.some((file) => file.source === "bundled")).toBe(true);
       expect(snapshot.assets?.files.some((file) => file.source === "host")).toBe(true);
@@ -459,7 +521,21 @@ describe("Harness Pack foundation", () => {
       expect(resumed.kind).toBe("complete");
 
       let runtimeRequests = 0;
-      globalThis.fetch = (async () => {
+      let judgeRequests = 0;
+      globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { messages?: Array<{ content?: string }> };
+        if (body.messages?.[0]?.content?.includes("quality-judge-result/v1")) {
+          judgeRequests += 1;
+          return Response.json({
+            id: `bundled-judge-${judgeRequests}`,
+            choices: [{ message: { content: JSON.stringify({
+              schema: "quality-judge-result/v1",
+              verdict: "pass",
+              confidence: 0.9,
+              findings: [],
+            }) } }],
+          });
+        }
         runtimeRequests += 1;
         return Response.json({
           id: `bundled-runtime-${runtimeRequests}`,
@@ -473,8 +549,10 @@ describe("Harness Pack foundation", () => {
       const guarded = await runPrompt({ input: "write", engine: "runtime", rootDir: project });
       expect(guarded.kind).toBe("complete");
       expect(runtimeRequests).toBe(2);
+      expect(judgeRequests).toBe(0);
       const guardedSnapshot = await loadSessionSnapshot(project, guarded.sessionId);
       expect(guardedSnapshot.qualityEvents.map((event) => event.decision)).toEqual(["rewrite", "pass"]);
+      expect(guardedSnapshot.qualityEvents.at(-1)?.judgeStatus).toBeUndefined();
 
       const legacy = await createSessionStore(project, "legacy-v9-session");
       await legacy.append({ role: "system", content: "legacy V9 prompt" });

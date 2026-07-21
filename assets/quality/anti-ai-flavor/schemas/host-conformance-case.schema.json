@@ -5,17 +5,32 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "schema",
     "name",
     "candidateType",
+    "language",
+    "targetType",
     "text",
-    "expectedRuleIds"
+    "expectedRuleIds",
+    "provenance"
   ],
   "properties": {
+    "schema": {
+      "const": "quality-host-conformance-case/v1"
+    },
     "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "candidateType": {
       "type": "string",
       "minLength": 1
     },
-    "candidateType": {
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetType": {
       "type": "string",
       "minLength": 1
     },
@@ -50,6 +65,153 @@
         "minLength": 1
       },
       "uniqueItems": true
+    },
+    "expectedMetrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ruleId",
+          "signal",
+          "value",
+          "threshold",
+          "tolerance"
+        ],
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "signal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "number"
+          },
+          "threshold": {
+            "type": "number"
+          },
+          "tolerance": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "license",
+        "redistribution",
+        "privacy"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1
+        },
+        "redistribution": {
+          "enum": [
+            "public",
+            "metadata-only",
+            "restricted"
+          ]
+        },
+        "privacy": {
+          "enum": [
+            "not-applicable",
+            "deidentified",
+            "contains-private-data"
+          ]
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deidentificationNotes": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "privacy": {
+                "const": "contains-private-data"
+              }
+            },
+            "required": [
+              "privacy"
+            ]
+          }
+        },
+        "required": [
+          "provenance"
+        ]
+      },
+      "then": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "redistribution": {
+                "enum": [
+                  "metadata-only",
+                  "restricted"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "privacy": {
+                "const": "deidentified"
+              }
+            },
+            "required": [
+              "privacy"
+            ]
+          }
+        },
+        "required": [
+          "provenance"
+        ]
+      },
+      "then": {
+        "properties": {
+          "provenance": {
+            "required": [
+              "deidentificationNotes"
+            ]
+          }
+        }
+      }
+    }
+  ]
 }

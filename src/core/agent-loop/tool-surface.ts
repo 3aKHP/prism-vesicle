@@ -1,4 +1,4 @@
-import { createMcpRegistryForEngine, type McpRegistry } from "../../mcp/registry";
+import { createEmptyMcpRegistry, createMcpRegistryForEngine, type McpRegistry, type McpRegistryOptions } from "../../mcp/registry";
 import { agentToolDefinitions } from "../agents/tools";
 import type { EngineProfile } from "../engine/profile";
 import { engineSwitchToolDefinition } from "../engine/switch";
@@ -20,8 +20,11 @@ export async function resolveToolSurface(
   visionEnabled: boolean,
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
+  mcpOptions: McpRegistryOptions = {},
 ): Promise<ToolSurface> {
-  const mcp = await createMcpRegistryForEngine(profile.id);
+  const mcp = profile.id === "stage"
+    ? createEmptyMcpRegistry()
+    : await createMcpRegistryForEngine(profile.id, mcpOptions);
   const shellProfile = shellExecEnabled ? resolveShellProfile(shellInterpreter) : undefined;
   const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled, shellInterpreter);
   const shellTools = shellExecEnabled
@@ -33,9 +36,11 @@ export async function resolveToolSurface(
   return {
     definitions: [
       ...builtIns,
-      ...shellTools.filter((tool) => !builtIns.some((candidate) => candidate.function.name === tool.function.name)),
-      ...mcp.definitions,
-      ...agentToolDefinitions,
+      ...(profile.id === "stage"
+        ? []
+        : shellTools.filter((tool) => !builtIns.some((candidate) => candidate.function.name === tool.function.name))),
+      ...(profile.id === "stage" ? [] : mcp.definitions),
+      ...(profile.id === "stage" ? [] : agentToolDefinitions),
     ],
     mcp,
   };
@@ -47,6 +52,11 @@ export function resolveBuiltInTools(
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
 ): ToolDefinition[] {
+  // Stage bootstrap supplies all context itself. Its published profile is
+  // empty, and this explicit guard keeps that player-facing boundary intact
+  // even if a future profile is malformed or otherwise untrusted.
+  if (profile.id === "stage") return [];
+
   const shellProfile = shellExecEnabled ? resolveShellProfile(shellInterpreter) : undefined;
   const byName = new Map(hostToolDefinitions.map((definition) => [
     definition.function.name,

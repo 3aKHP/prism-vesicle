@@ -28,6 +28,11 @@ import {
 import { loadHarnessManifest } from "./manifest";
 import type { HarnessManifest, VerifiedHarnessPack } from "./types";
 
+const staticPromptAssetLedgerPath = "assets/prompt-context-ledger.json";
+const staticPromptAssetLedgerSchema = "prism-static-prompt-asset-ledger/v1";
+const v101ProtocolVersion = "v10.1-prompt-assembly";
+const v101AgentIds = ["chapter-reviewer", "continuity-editor", "scene-writer"] as const;
+
 export type HarnessVerificationOptions = {
   env?: NodeJS.ProcessEnv;
   bundledDirectory?: string;
@@ -114,6 +119,7 @@ function unsupportedQualityPolicyBindings(manifest: HarnessManifest): string[] {
     weaver: new Set(["off", "observe"]),
     "weaver-orch": new Set(["off", "observe"]),
     dyad: new Set(["off", "observe"]),
+    stage: new Set(["off", "observe"]),
   };
   const agentModes: Record<string, Set<string>> = {
     "scene-writer": new Set(["off", "observe"]),
@@ -399,12 +405,14 @@ async function verifyProfiles(
     },
   });
 
+  const engineProfiles = new Map<string, Awaited<ReturnType<typeof loadEngineProfile>>>();
   for (const engine of engineIds) {
     const expectedPath = `assets/engines/${engine}.profile.yaml`;
     if (manifest.profileBindings[engine] !== expectedPath) {
       throw new Error(`Harness engine binding ${engine} must use ${expectedPath}.`);
     }
     const profile = await loadEngineProfile(engine, root, resolver);
+    engineProfiles.set(engine, profile);
     if (!sameList(profile.systemPrompt, manifest.promptBindings[engine])) {
       throw new Error(`Harness prompt binding drift for engine ${engine}.`);
     }
@@ -413,12 +421,14 @@ async function verifyProfiles(
   }
 
   const hostToolNames = new Set(hostToolDefinitions.map((tool) => tool.function.name));
+  const agentProfiles = new Map<string, Awaited<ReturnType<typeof loadAgentProfile>>>();
   for (const agentId of Object.keys(manifest.agentProfileBindings)) {
     const expectedPath = `assets/agents/${agentId}.agent.yaml`;
     if (manifest.agentProfileBindings[agentId] !== expectedPath) {
       throw new Error(`Harness Agent binding ${agentId} must use ${expectedPath}.`);
     }
     const profile = await loadAgentProfile(agentId, root, resolver);
+    agentProfiles.set(agentId, profile);
     if (!sameList(profile.systemPrompt, manifest.agentPromptBindings[agentId])) {
       throw new Error(`Harness prompt binding drift for Agent ${agentId}.`);
     }
@@ -429,6 +439,134 @@ async function verifyProfiles(
     // runtime-local MCP and parent-only tool names are not valid dependencies.
     assertChildToolDeclaration(profile.tools, hostToolNames);
   }
+
+  if ([...engineProfiles.values()].some((profile) => profile.protocolVersion === v101ProtocolVersion)) {
+    await verifyStaticPromptAssetLedger(manifest, resolver, engineProfiles, agentProfiles);
+  }
+}
+
+async function verifyStaticPromptAssetLedger(
+  manifest: HarnessManifest,
+  resolver: AssetResolver,
+  engineProfiles: ReadonlyMap<string, Awaited<ReturnType<typeof loadEngineProfile>>>,
+  agentProfiles: ReadonlyMap<string, Awaited<ReturnType<typeof loadAgentProfile>>>,
+): Promise<void> {
+  const source = await resolver.readText(staticPromptAssetLedgerPath).catch(() => {
+    throw new Error(`Harness ${v101ProtocolVersion} requires ${staticPromptAssetLedgerPath}.`);
+  });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch (error) {
+    throw new Error(`Harness static prompt asset ledger is not valid JSON: ${errorMessage(error)}`);
+  }
+  const ledger = readEmbeddedObject(parsed, "Harness static prompt asset ledger");
+  assertExactObjectKeys(ledger, ["schema", "measurement", "engines", "agents"], "Harness static prompt asset ledger");
+  if (ledger.schema !== staticPromptAssetLedgerSchema) {
+    throw new Error("Harness static prompt asset ledger has an unsupported schema.");
+  }
+  verifyStaticAssetMeasurement(ledger.measurement);
+  const engines = readEmbeddedObject(ledger.engines, "Harness static prompt asset ledger engines");
+  const agents = readEmbeddedObject(ledger.agents, "Harness static prompt asset ledger agents");
+  assertExactKeys("static prompt asset ledger Engine entries", engines, engineIds);
+  assertExactKeys("static prompt asset ledger Agent entries", agents, v101AgentIds);
+  assertExactKeys("Agent profile bindings", manifest.agentProfileBindings, v101AgentIds);
+
+  const budgets = new Set<number>();
+  for (const engine of engineIds) {
+    const profile = engineProfiles.get(engine);
+    if (!profile) throw new Error(`Harness static prompt asset ledger cannot resolve Engine ${engine}.`);
+    budgets.add(await verifyStaticPromptAssetLedgerEntry(
+      `Engine ${engine}`,
+      engines[engine],
+      profile.systemPrompt,
+      resolver,
+    ));
+  }
+  for (const agent of v101AgentIds) {
+    const profile = agentProfiles.get(agent);
+    if (!profile) throw new Error(`Harness static prompt asset ledger cannot resolve Agent ${agent}.`);
+    budgets.add(await verifyStaticPromptAssetLedgerEntry(
+      `Agent ${agent}`,
+      agents[agent],
+      profile.systemPrompt,
+      resolver,
+    ));
+  }
+  if (budgets.size !== 1) throw new Error("Harness static prompt asset ledger must use one shared character budget.");
+}
+
+function verifyStaticAssetMeasurement(value: unknown): void {
+  const measurement = readEmbeddedObject(value, "Harness static prompt asset ledger measurement");
+  assertExactObjectKeys(
+    measurement,
+    ["scope", "excludes", "enforcement"],
+    "Harness static prompt asset ledger measurement",
+  );
+  if (measurement.scope !== "raw-static-harness-prompt-assets"
+    || measurement.enforcement !== "static-asset-limit"
+    || !Array.isArray(measurement.excludes)
+    || measurement.excludes.length !== 2
+    || measurement.excludes[0] !== "runtime-injected system content"
+    || measurement.excludes[1] !== "conversation history") {
+    throw new Error("Harness static prompt asset ledger measurement must exclude runtime context and enforce only the static asset limit.");
+  }
+}
+
+async function verifyStaticPromptAssetLedgerEntry(
+  label: string,
+  value: unknown,
+  expectedPaths: readonly string[],
+  resolver: AssetResolver,
+): Promise<number> {
+  const entry = readEmbeddedObject(value, `Harness static prompt asset ledger ${label}`);
+  assertExactObjectKeys(
+    entry,
+    ["budgetCharacters", "usedCharacters", "remainingCharacters", "usedBytes", "sections"],
+    `Harness static prompt asset ledger ${label}`,
+  );
+  const budgetCharacters = readStaticAssetLedgerInteger(entry.budgetCharacters, `${label} budgetCharacters`);
+  const usedCharacters = readStaticAssetLedgerInteger(entry.usedCharacters, `${label} usedCharacters`);
+  const remainingCharacters = readStaticAssetLedgerInteger(entry.remainingCharacters, `${label} remainingCharacters`);
+  const usedBytes = readStaticAssetLedgerInteger(entry.usedBytes, `${label} usedBytes`);
+  if (budgetCharacters < 1) throw new Error(`Harness static prompt asset ledger ${label} budgetCharacters must be positive.`);
+  if (usedCharacters > budgetCharacters || remainingCharacters !== budgetCharacters - usedCharacters) {
+    throw new Error(`Harness static prompt asset ledger ${label} has an invalid character budget.`);
+  }
+  const sections = entry.sections;
+  if (!Array.isArray(sections) || sections.length !== expectedPaths.length) {
+    throw new Error(`Harness static prompt asset ledger ${label} sections do not match the profile binding.`);
+  }
+
+  let actualCharacters = 0;
+  let actualBytes = 0;
+  for (const [index, path] of expectedPaths.entries()) {
+    const section = readEmbeddedObject(sections[index], `Harness static prompt asset ledger ${label} section ${index + 1}`);
+    assertExactObjectKeys(section, ["path", "characters", "bytes"], `Harness static prompt asset ledger ${label} section ${index + 1}`);
+    if (readEmbeddedString(section.path, `Harness static prompt asset ledger ${label} section ${index + 1} path`) !== path) {
+      throw new Error(`Harness static prompt asset ledger ${label} section ${index + 1} path does not match the profile binding.`);
+    }
+    const text = await resolver.readText(path);
+    const characters = [...text].length;
+    const bytes = Buffer.byteLength(text, "utf8");
+    if (readStaticAssetLedgerInteger(section.characters, `${label} section ${index + 1} characters`) !== characters
+      || readStaticAssetLedgerInteger(section.bytes, `${label} section ${index + 1} bytes`) !== bytes) {
+      throw new Error(`Harness static prompt asset ledger ${label} section ${index + 1} count does not match its asset.`);
+    }
+    actualCharacters += characters;
+    actualBytes += bytes;
+  }
+  if (usedCharacters !== actualCharacters || usedBytes !== actualBytes) {
+    throw new Error(`Harness static prompt asset ledger ${label} total does not match its sections.`);
+  }
+  return budgetCharacters;
+}
+
+function readStaticAssetLedgerInteger(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Harness static prompt asset ledger ${label} must be a non-negative integer.`);
+  }
+  return value;
 }
 
 function defaultHostAssetDirectories(options: HarnessVerificationOptions): string[] {
@@ -481,6 +619,14 @@ function assertExactKeys(label: string, value: Record<string, unknown>, expected
 
 function sameList(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function assertExactObjectKeys(value: Record<string, unknown>, expected: readonly string[], label: string): void {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  if (!sameList(actual, sortedExpected)) {
+    throw new Error(`${label} fields must be exactly: ${sortedExpected.join(", ")}.`);
+  }
 }
 
 function sha256(value: string | Uint8Array): string {

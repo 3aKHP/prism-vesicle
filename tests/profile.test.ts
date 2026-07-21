@@ -10,7 +10,13 @@ describe("engine profile loader", () => {
       const profile = await loadEngineProfile(id);
       expect(profile.id).toBe(id);
       expect(profile.systemPrompt.length).toBeGreaterThanOrEqual(1);
-      expect(profile.defaultTools).toContain("write_file");
+      if (id === "stage") {
+        expect(profile.defaultTools).toEqual([]);
+        expect(profile.stopGates).toEqual([]);
+        expect(profile.validators).toEqual(["runtime-packet"]);
+      } else {
+        expect(profile.defaultTools).toContain("write_file");
+      }
     }
   });
 
@@ -19,7 +25,7 @@ describe("engine profile loader", () => {
     expect(etl.stopGates).toContain("blueprint-confirmation");
     expect(etl.stopGates).toContain("phase-confirmation");
     expect(etl.displayName).toBe("Prism ETL Engine");
-    expect(etl.protocolVersion).toBe("v10.0-tempered-voice");
+    expect(etl.protocolVersion).toBe("v10.1-prompt-assembly");
   });
 
   test("runtime profile declares the runtime-turn stop gate", async () => {

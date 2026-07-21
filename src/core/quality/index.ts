@@ -1,10 +1,10 @@
 export { evaluateQualityCandidate, normalizeCandidate } from "./detector";
 export {
   evaluateBoundQuality,
+  evaluateBoundQualityTargets,
   isQualityBoundary,
   maxQualityRewriteAttempts,
   qualityCandidateParts,
-  qualityCandidateTypeForProducer,
   qualityModeForAgent,
   qualityModeForEngine,
   qualityMutationParts,
@@ -13,19 +13,89 @@ export {
   recordQualityEvent,
   shouldBufferQualityOutput,
 } from "./guard";
-export { loadQualityRuntime, parseDetectorRules, parseRulePackManifest } from "./loader";
+export {
+  durableQualityTargets,
+  hydrateQualityTargets,
+  isQualityArtifactMutationCall,
+  maxQualityArtifactBytes,
+  qualityArtifactTargetFromResult,
+  qualityCandidateTypeForProducer,
+  readQualityArtifactTargets,
+  upsertDurableQualityTarget,
+  upsertQualityArtifactTarget,
+} from "./targets";
+export {
+  loadQualityRuntime,
+  parseDetectorRules,
+  parseJudgeRules,
+  parseRulePackManifest,
+  parseSemanticRewritePolicy,
+} from "./loader";
+export { evaluateSemanticRewritePolicy } from "./policy";
+export {
+  defaultQualityJudgeTimeoutMs,
+  maxQualityJudgeCodeUnits,
+  maxQualityJudgeOutputTokens,
+  observeBoundQualityWithJudge,
+  parseQualityJudgeResponse,
+  runQualityJudge,
+} from "./judge";
+export {
+  qualityBenchmarkReport,
+  readBenchmarkEvaluations,
+  runQualityBenchmark,
+} from "./benchmark";
 export type {
   QualityCandidate,
+  QualityArtifactOperation,
+  QualityArtifactTarget,
+  QualityArtifactReadResult,
   QualityCandidateType,
+  QualityAction,
+  QualityAssessment,
   QualityDecision,
+  QualityDecisionCandidate,
+  QualityDecisionPoint,
+  QualityDecisionRequest,
   DurableQualityState,
+  DurableQualityArtifactTarget,
   QualityDetectorRule,
   QualityEvaluation,
+  ExperimentalQualityProfileSnapshot,
   QualityEvent,
+  QualityEventTarget,
   QualityFinding,
+  QualityFindingSummary,
+  QualityJudgeContract,
+  QualityJudgeRule,
+  QualityJudgeStatus,
+  QualityOutcome,
   QualityProtectedRange,
+  QualityResolution,
   QualityRewriteState,
   QualityRulePackManifest,
   QualityRuntimeContext,
+  QualitySemanticRewriteModelScope,
+  QualitySemanticRewritePolicy,
+  QualityWarning,
+  QualityWarningReason,
+  QualityTargetWarningReason,
+  QualityWarningTarget,
 } from "./types";
 export type { BoundQualityEvaluation } from "./guard";
+export type { QualityJudgeParsedResult, QualityJudgeRunResult } from "./judge";
+export type { QualitySemanticRewritePolicyEvaluation } from "./policy";
+export type {
+  QualityBenchmarkCase,
+  QualityBenchmarkEvaluation,
+  QualityBenchmarkIdentity,
+  QualityBenchmarkMetric,
+  QualityBenchmarkMetricName,
+  QualityBenchmarkModel,
+  QualityBenchmarkModelReport,
+  QualityBenchmarkPolicy,
+  QualityBenchmarkPricing,
+  QualityBenchmarkReport,
+  QualityBenchmarkRunResult,
+  RunQualityBenchmarkOptions,
+} from "./benchmark";

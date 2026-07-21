@@ -235,11 +235,34 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
       case "quality_status": {
         const status = event.phase === "checking" ? "checking prose quality"
           : event.phase === "rewriting" ? `rewriting prose ${event.attempt} of 2`
-            : event.phase === "exhausted" ? "quality rewrite exhausted"
-              : event.phase === "observed" ? `quality observed · ${event.findingCount} finding${event.findingCount === 1 ? "" : "s"}`
-                : "prose quality accepted";
+          : event.phase === "exhausted" ? "quality rewrite exhausted"
+            : event.phase === "inconclusive" ? "style quality check incomplete · current version unconfirmed"
+              : event.phase === "observed" ? `observed style issues · ${event.findingCount} finding${event.findingCount === 1 ? "" : "s"}`
+                : event.phase === "findings" ? `quality checked · ${event.findingCount} non-blocking finding${event.findingCount === 1 ? "" : "s"}`
+                  : "quality checked · no blocking rules matched";
         options.setStatus(status);
         if (event.phase === "rewriting") options.markTurnSawResponse();
+        const visibleFindings = event.findings ?? [];
+        if (event.phase === "observed" && visibleFindings.length > 0) {
+          options.setMessages((current) => [...current, {
+            role: "system",
+            content: [
+              `Observed ${event.findingCount} style issue${event.findingCount === 1 ? "" : "s"}:`,
+              ...visibleFindings.map((finding) => {
+                const target = finding.targetPath ? ` (${finding.targetPath})` : "";
+                const evidence = finding.evidence.replace(/\s+/g, " ").trim();
+                return `- ${finding.title}${target}: “${evidence}”`;
+              }),
+            ].join("\n"),
+          }]);
+        }
+        if (event.phase === "inconclusive") {
+          const reasons = (event.warningReasons ?? []).map(qualityWarningReasonText);
+          options.setMessages((current) => [...current, {
+            role: "system",
+            content: `Style quality check incomplete${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}. The current version is unconfirmed.`,
+          }]);
+        }
         recordActivity({ kind: "validation", text: status });
         return;
       }
@@ -285,4 +308,15 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
     handleBackgroundProcessEvent,
     recordActivity,
   };
+}
+
+function qualityWarningReasonText(reason: NonNullable<Extract<AgentLoopEvent, { type: "quality_status" }>["warningReasons"]>[number]): string {
+  switch (reason) {
+    case "judge-invalid": return "the style review returned an invalid result";
+    case "judge-timeout": return "the style review timed out";
+    case "judge-unavailable": return "the style review provider was unavailable";
+    case "target-oversize": return "the target exceeds the review size limit";
+    case "target-unreadable": return "the target could not be read";
+    case "detector-budget-exhausted": return "the deterministic review exceeded its work limit";
+  }
 }

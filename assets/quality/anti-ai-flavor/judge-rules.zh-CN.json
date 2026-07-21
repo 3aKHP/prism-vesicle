@@ -1,0 +1,322 @@
+{
+  "schema": "judge-rules/v1",
+  "module": "anti-ai-flavor",
+  "language": "zh-CN",
+  "rules": [
+    {
+      "id": "zh-f0-air-thick-with",
+      "title": "「空气中弥漫着」环境套话",
+      "severity": "tier1",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f0-meaningless-filler",
+      "title": "无意义装饰短句",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f0-essay-register-connectors",
+      "title": "论说文语域连接词渗入叙事",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-not-x-but-y",
+      "title": "「不是……而是……」对比句式",
+      "severity": "tier1",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-pov-leak",
+      "title": "视角滑出角色本体,作者代读者划重点",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-obscure-simile",
+      "title": "晦涩比喻",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-simile-explains-not-embodies",
+      "title": "比喻停留在解释,而非身体化的物理过程",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-scenery-not-sensation",
+      "title": "写画面而非身体感受",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-scenery-block-no-reaction",
+      "title": "大段景物描写不跟人物反应",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-written-dialogue",
+      "title": "对话书面化,缺口语特征",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-dialogue-static-no-body",
+      "title": "对话是纯信息交换,人物没有身体动作",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-narrator-summarizes",
+      "title": "叙述者替角色总结,而非让声音直出",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-split-action-explanation",
+      "title": "动作、情绪、背景拆成三句话分别交代",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-info-dump-paragraph",
+      "title": "独立成段的背景解释,而非从角色思绪里漏出来",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-narrator-filler-before-quote",
+      "title": "引号前的旁白式停顿(\"她顿了一下,然后说——\")",
+      "severity": "tier1",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-metaphor-stacking",
+      "title": "比喻堆砌,辞藻铺满舞台",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-dialogue-format-flat",
+      "title": "对话格式单一,不随场景调度",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f3-fragment-no-subject",
+      "title": "单独成段短句缺主语",
+      "severity": "tier3",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f3-mechanical-plot-compliance",
+      "title": "角色机械服从情节安排,缺乏自主反应判断",
+      "severity": "tier3",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f3-passive-compliant-character",
+      "title": "角色被动服从,没有自己的历史与抵抗",
+      "severity": "tier3",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f3-padding-without-escalation",
+      "title": "无效情节 / 过渡填充,节奏慢却空洞",
+      "severity": "tier3",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    }
+  ]
+}

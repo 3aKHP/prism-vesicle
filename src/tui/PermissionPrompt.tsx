@@ -1,9 +1,14 @@
+import { For } from "solid-js";
 import type { PermissionRequest } from "../core/permissions";
 import type { GateFocusTarget } from "./GatePrompt";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 import { processShellDisplay } from "../core/process/runtime";
-import { truncateLine } from "./format";
+import { displayWidth, truncateLine, visibleDisplayLines } from "./format";
+
+export const permissionPanelHeight = 14;
+const permissionContentRows = permissionPanelHeight - 2;
+const hostAuthorityWarning = "This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
 
 export type PermissionPromptProps = {
   request: PermissionRequest;
@@ -24,6 +29,24 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       return props.request.arguments;
     }
   };
+  const contentWidth = () => Math.max(20, props.width - 4);
+  const flexibleLineBudget = () => Math.max(2, permissionContentRows
+    - 5
+    - (props.request.executionPlan?.executablePath ? 1 : 0)
+    - (props.feedbackMode === "reject" ? 2 : 0));
+  const warningLines = () => dangerous()
+    ? visibleDisplayLines(hostAuthorityWarning, contentWidth(), flexibleLineBudget() - 1)
+    : [];
+  const detailLineBudget = () => Math.max(1, flexibleLineBudget() - warningLines().length);
+  const detailLines = () => visibleDisplayLines(detail(), contentWidth(), detailLineBudget());
+  const title = () => {
+    const full = dangerous() ? "Permission required · HOST COMMAND" : "Permission required";
+    return displayWidth(full) <= contentWidth() ? full : "Permission · HOST COMMAND";
+  };
+  const hint = () => {
+    const full = "↑/↓ choose · Enter confirm · Tab feedback · Esc reject";
+    return displayWidth(full) <= contentWidth() ? full : "↑/↓ · Enter · Tab · Esc reject";
+  };
   return (
     <box
       border
@@ -31,31 +54,31 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       paddingX={1}
       flexDirection="column"
       width={props.width}
+      height="100%"
     >
       <text
-        content={dangerous() ? "Permission required · HOST COMMAND" : "Permission required"}
+        content={title()}
         fg={dangerous() ? palette.error : palette.gateAccent}
+        wrapMode="none"
       />
-      <text content={`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}${props.request.executionPlan ? ` · ${processShellDisplay(props.request.executionPlan)}` : ""}`} fg={palette.textDim} />
+      <text content={truncateLine(`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}${props.request.executionPlan ? ` · ${processShellDisplay(props.request.executionPlan)}` : ""}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
       {props.request.executionPlan?.executablePath ? (
-        <text content={truncateLine(`Interpreter: ${props.request.executionPlan.executablePath}`, Math.max(20, props.width - 4))} fg={palette.textDim} wrapMode="none" />
+        <text content={truncateLine(`Interpreter: ${props.request.executionPlan.executablePath}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
       ) : null}
-      {dangerous() ? (
-        <text content="This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind." fg={palette.error} />
-      ) : null}
-      <text content={detail()} fg={palette.textPrimary} wrapMode="word" />
-      <text content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} />
-      <text content={`${props.focused === "reject" ? "›" : " "} Reject`} fg={props.focused === "reject" ? palette.error : palette.textDim} />
+      <For each={warningLines()}>{(line) => <text content={line} fg={palette.error} wrapMode="none" />}</For>
+      <For each={detailLines()}>{(line) => <text content={line || " "} fg={palette.textPrimary} wrapMode="none" />}</For>
+      <text content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} wrapMode="none" />
+      <text content={`${props.focused === "reject" ? "›" : " "} Reject`} fg={props.focused === "reject" ? palette.error : palette.textDim} wrapMode="none" />
       {props.feedbackMode === "reject" ? (
         <PromptComposer
           value={props.feedback}
           cursor={props.feedbackCursor}
           placeholder="Optional feedback for the model"
-          width={Math.max(20, props.width - 4)}
+          width={contentWidth()}
           maxLines={2}
         />
       ) : null}
-      <text content="↑/↓ choose · Enter confirm · Tab feedback · Esc reject" fg={palette.textDim} />
+      <text content={hint()} fg={palette.textDim} wrapMode="none" />
     </box>
   );
 }

@@ -91,6 +91,8 @@ the integration trunk for subsequent internal iteration.
 
 ### Normal Change
 
+Run `bun run hooks:install` once per checkout so the tracked pre-push hook enforces `bun run lint` before remote updates.
+
 1. Align scope: state what changes, files likely touched, risks, and validation.
 2. Decide whether the Rapid Development Exception allows direct `develop`
    work. Otherwise branch from `develop`.
@@ -98,6 +100,7 @@ the integration trunk for subsequent internal iteration.
 4. Run local verification:
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -123,13 +126,13 @@ Use the smallest verification set that proves the change:
 | Change type | Minimum verification |
 |-------------|----------------------|
 | docs only | targeted docs grep and, when cheap, `bun run typecheck` |
-| small code | `bun run typecheck` plus focused tests |
-| provider/session/tool/gate/TUI runtime | `bun run typecheck`, relevant tests, `bun run doctor` |
-| release or `main` snapshot | `bun run typecheck`, `bun test`, `bun run doctor`, and real TUI/provider smoke when practical |
+| small code | `bun run lint`, `bun run typecheck`, plus focused tests |
+| provider/session/tool/gate/TUI runtime | `bun run lint`, `bun run typecheck`, relevant tests, `bun run doctor` |
+| release or `main` snapshot | `bun run lint`, `bun run typecheck`, `bun test`, `bun run doctor`, and real TUI/provider smoke when practical |
 
 ## CI/CD State Machine
 
-CI/CD has two entry points and one shared implementation. A version-tag push is the publication authorization; normal releases do not require an Actions-page dispatch or GitHub Environment approval. If SignPath Authenticode is enabled, its required per-request human signing approval remains a separate external trust gate.
+CI/CD has two entry points and one shared implementation. A version-tag push is the publication authorization; normal releases do not require an Actions-page dispatch or GitHub Environment approval. If Windows signing is enabled, its required per-request human signing approval remains a separate external trust gate.
 
 | Entry point | Trigger | Source | Retention | External side effects |
 |-------------|---------|--------|-----------|-----------------------|
@@ -139,9 +142,11 @@ CI/CD has two entry points and one shared implementation. A version-tag push is 
 
 The reusable workflow is the single owner of the release gates:
 
+- Bun 1.3.14 for project installation, tests, packaging, and standalone builds
+- Node 24 runtime lines for GitHub-maintained JavaScript Actions, `oven-sh/setup-bun`, and the GitHub Release Action; npm Trusted Publishing also installs Node 24 explicitly
 - frozen Bun install
 - package-version validation
-- typecheck, deterministic tests, dependency audit, npm allowlist check, and clean npm consumer smoke
+- Biome lint, typecheck, deterministic tests, dependency audit, npm allowlist check, and clean npm consumer smoke
 - Linux ELF build and empty-project release-shape smoke
 - Windows PE build, focused Windows runtime tests, and empty-project release-shape smoke
 - pinned Inno Setup build, silent install, upgrade, runtime, and uninstall smoke
@@ -159,15 +164,15 @@ The empty-project smoke runs `debug markdown-runtime`, `assets status`, asset ma
 6. The tag workflow rejects a lightweight tag, a tag/version mismatch, or a tag whose commit is outside the remote `main` history. If validation succeeds, it reruns every shared gate, uploads the versioned artifacts, creates the GitHub Release and checksums, then publishes npm through Trusted Publishing.
 7. Verify the public GitHub assets, checksums, npm version/dist-tag, bin launcher, provenance attestation, and a clean installed invocation before announcing the release.
 
-For `1.0.0-alpha.2`, the complete normal publication command sequence after the release PR is merged is:
+The complete normal publication command sequence after the release PR is merged is (substitute the intended `<version>`, e.g. `1.0.0-alpha.3`):
 
 ```bash
 git switch main
 git pull --ff-only origin main
 test "$(git branch --show-current)" = "main"
-test "$(bun -e 'console.log((await Bun.file("package.json").json()).version)')" = "1.0.0-alpha.2"
-git tag -a v1.0.0-alpha.2 -m "Prism Vesicle v1.0.0-alpha.2"
-git push origin v1.0.0-alpha.2
+test "$(bun -e 'console.log((await Bun.file("package.json").json()).version)')" = "<version>"
+git tag -a "v<version>" -m "Prism Vesicle v<version>"
+git push origin "v<version>"
 ```
 
 The push is sufficient to start publication. Git cannot inspect Actions or registry state, so use the read-only CLI checks below when you want to observe and verify the result without opening a browser:
@@ -175,23 +180,23 @@ The push is sufficient to start publication. Git cannot inspect Actions or regis
 ```bash
 gh run list --workflow release.yml --limit 5
 gh run watch <run-id> --exit-status
-gh release view v1.0.0-alpha.2 --json tagName,isPrerelease,assets
-npm view prism-vesicle@1.0.0-alpha.2 version dist-tags bin --json
+gh release view "v<version>" --json tagName,isPrerelease,assets
+npm view "prism-vesicle@<version>" version dist-tags bin --json
 ```
 
 Do not tag `develop` or a release branch. After publication, forward-sync the released `main` commit back to `develop` through the normal reviewed branch flow when the histories differ.
 
 ### Code Signing Readiness
 
-The public [Code Signing Policy](../../CODE_SIGNING_POLICY.md) defines the intended Windows signing scope, maintainer roles, user verification, and incident handling. The [Privacy Policy](../../PRIVACY.md) documents the local and external-service data behavior required for public distribution. The SignPath Foundation application was submitted on 2026-07-15, but approval and Authenticode CI integration remain pending.
+The public [Code Signing Policy](../../CODE_SIGNING_POLICY.md) defines the intended Windows signing scope, maintainer roles, user verification, and incident handling. The [Privacy Policy](../../PRIVACY.md) documents the local and external-service data behavior required for public distribution. Windows signing is deferred until a viable signing provider is in place, with no version deadline.
 
-`1.0.0-alpha.2` is an explicit unsigned exception for the small, informed alpha test group. Its generated GitHub Release notes must prepend a bilingual warning that identifies both Windows artifacts as unsigned, links the code-signing policy, points to `SHA256SUMS.txt`, and tells users not to disable Windows security globally. While this exception is active, release metadata validation pins the only publishable package version to exactly `1.0.0-alpha.2`; every later version requires a reviewed workflow change that either integrates signing or records another explicit alpha decision. This exception ends no later than `1.0.0-beta.1`; a release candidate must reuse a signing path already exercised during beta rather than introducing signing for the first time.
+Until a signing provider is in place, every release is an explicitly disclosed unsigned release for the informed alpha test group. The generated GitHub Release notes prepend a bilingual warning that identifies both Windows artifacts as unsigned, links the code-signing policy, points to `SHA256SUMS.txt`, and tells users not to disable Windows security globally. Release metadata validation authorizes publication through an annotated `v<version>` tag whose commit is on the `main` history and whose version matches `package.json`; it does not pin individual versions, so each new release is a normal tag push rather than a workflow edit. There is no version deadline for adding signing; whenever it is taken up, a release candidate must reuse a signing path already exercised during earlier releases rather than introducing signing for the first time.
 
-After SignPath acceptance, tag push remains the maintainer's command-line publication authorization, but every production signing request must also be manually inspected and approved in SignPath. The signing implementation must sign and verify the portable PE before installer staging, enable and verify the generated signed uninstaller, then sign and verify the final installer. A failed or unapproved signing request must block publication of the affected Windows artifact; it must never silently fall back to an unsigned file.
+If signing is taken up later, tag push remains the maintainer's command-line publication authorization, but every production signing request must also be manually inspected and approved through the signing provider. The signing implementation must sign and verify the portable PE before installer staging, enable and verify the generated signed uninstaller, then sign and verify the final installer. A failed or unapproved signing request must block publication of the affected Windows artifact; it must never silently fall back to an unsigned file.
 
 ### First-Time Bootstrap
 
-The tag-triggered workflow must exist on `main` before the release tag is pushed. The first release-readiness PR installs this control plane and validates it through PR CI; merging that PR does not publish anything. Do not push `v1.0.0-alpha.2` until this workflow and the release content are both present on the accepted `main` commit.
+The tag-triggered workflow must exist on `main` before the release tag is pushed. The first release-readiness PR installs this control plane and validates it through PR CI; merging that PR does not publish anything. Do not push the release tag until this workflow and the release content are both present on the accepted `main` commit.
 
 ### Required GitHub Settings
 
@@ -287,6 +292,7 @@ Return:
 
 ## Test Plan
 
+- [ ] `bun run lint`
 - [ ] `bun run typecheck`
 - [ ] `bun test`
 - [ ] `bun run doctor`

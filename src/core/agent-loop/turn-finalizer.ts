@@ -3,6 +3,7 @@ import type { EngineProfile } from "../engine/profile";
 import type { SessionStore } from "../session/store";
 import { resolveValidators, runValidators } from "../validators/registry";
 import type { AgentLoopEvent, RunPromptResult, ValidatorOutcome } from "./types";
+import type { QualityOutcome } from "../quality";
 
 export async function finalizeTurn(options: {
   response: VesicleResponse;
@@ -11,8 +12,10 @@ export async function finalizeTurn(options: {
   profile: EngineProfile;
   model: string;
   onEvent?: (event: AgentLoopEvent) => void;
+  quality?: { outcome: QualityOutcome; findingCount: number };
 }): Promise<RunPromptResult> {
   const { response } = options;
+  let assistantRecordUuid: string | undefined;
   if ((response.toolCalls?.length ?? 0) === 0) {
     options.messages.push({
       role: "assistant",
@@ -20,7 +23,7 @@ export async function finalizeTurn(options: {
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
       ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
     });
-    await options.session.append({
+    const record = await options.session.append({
       role: "assistant",
       content: response.content,
       metadata: {
@@ -32,6 +35,7 @@ export async function finalizeTurn(options: {
         ...(response.usage ? { usage: response.usage } : {}),
       },
     });
+    assistantRecordUuid = record.uuid;
   }
 
   const validation = await validateResponse(options);
@@ -42,6 +46,8 @@ export async function finalizeTurn(options: {
     response,
     profile: options.profile,
     validation,
+    ...(options.quality ? { quality: options.quality } : {}),
+    ...(assistantRecordUuid ? { assistantRecordUuid } : {}),
     messages: options.messages,
   };
 }

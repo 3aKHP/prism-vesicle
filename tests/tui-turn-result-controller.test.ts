@@ -37,10 +37,37 @@ describe("TUI turn result controller", () => {
       { role: "system", content: "Permission pending: read_file." },
     ]);
   });
+
+  test("projects an exhausted quality result into a dedicated decision without delivering the candidate", () => {
+    const harness = createHarness();
+    harness.handle(qualityDecisionResult());
+    expect(harness.pendingQuality()).toMatchObject({
+      engine: "runtime",
+      decision: { reason: "exhausted", findingCount: 1 },
+    });
+    expect(harness.messages()).toEqual([
+      { role: "system", content: "Automatic quality revision is exhausted. The current version still has 1 blocking finding." },
+    ]);
+  });
+
+  test("keeps clean, advisory, and inconclusive completion statuses distinct", () => {
+    const expected = [
+      ["clean", 0, "complete; no blocking quality rules matched"],
+      ["findings", 2, "complete with 2 observed style issues"],
+      ["inconclusive", 0, "complete; quality check incomplete"],
+    ] as const;
+    for (const [outcome, findingCount, status] of expected) {
+      const harness = createHarness();
+      harness.handle(completeQualityResult(outcome, findingCount));
+      expect(harness.status()).toBe(status);
+    }
+  });
 });
 
 function createHarness(lastDisplayedContent: string | null = null) {
   let messages: Message[] = [];
+  let pendingQuality: unknown;
+  let status = "";
   const noop = () => undefined;
   const controller = createTurnResultController({
     activeEngine: () => "etl",
@@ -50,6 +77,7 @@ function createHarness(lastDisplayedContent: string | null = null) {
     lastDisplayedToolAssistantContent: () => lastDisplayedContent,
     publishTurnUsage: noop,
     refreshArtifacts: async () => [],
+    refreshQualityWarnings: async () => [],
     setConversation: noop,
     setGateFeedbackMode: noop,
     setGateFocus: noop,
@@ -62,16 +90,57 @@ function createHarness(lastDisplayedContent: string | null = null) {
     setPendingEngineSwitch: noop,
     setPendingGate: noop,
     setPendingPermission: noop,
+    setPendingQualityDecision: (value) => { pendingQuality = value; return value; },
     setPendingUserQuestion: noop,
     setQuestionSelected: noop,
+    setQualitySelected: noop,
     setSessionId: noop,
     setSessionPath: noop,
     setSessionPicker: noop,
-    setStatus: noop,
+    setStatus: (value) => {
+      status = typeof value === "function" ? value(status) : value;
+      return status;
+    },
   });
   return {
     handle: controller.handleResult,
     messages: () => messages,
+    pendingQuality: () => pendingQuality,
+    status: () => status,
+  };
+}
+
+function completeQualityResult(
+  outcome: "clean" | "findings" | "inconclusive",
+  findingCount: number,
+): RunPromptResult {
+  return {
+    kind: "complete",
+    sessionId: "session-quality",
+    sessionPath: ".vesicle/sessions/session-quality.jsonl",
+    profile: permissionResult("").profile,
+    response: { id: "quality-complete", content: "done" },
+    quality: { outcome, findingCount },
+    messages: [],
+  };
+}
+
+function qualityDecisionResult(): RunPromptResult {
+  return {
+    kind: "needs_quality_decision",
+    sessionId: "session-quality",
+    sessionPath: ".vesicle/sessions/session-quality.jsonl",
+    profile: { ...permissionResult("").profile, id: "runtime", displayName: "Runtime" },
+    decision: {
+      id: "quality-warning-1",
+      reason: "exhausted",
+      producer: "runtime",
+      findingCount: 1,
+      targets: [{ id: "artifact:workspace/a.md", path: "workspace/a.md", findingIds: ["zh-f0"] }],
+      canRetry: true,
+    },
+    assistantContent: "not delivered",
+    messages: [],
   };
 }
 

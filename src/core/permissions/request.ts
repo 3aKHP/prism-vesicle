@@ -75,5 +75,28 @@ function validQualityState(value: unknown): boolean {
     && Array.isArray(state.rejectedHashes)
     && state.rejectedHashes.every((hash) => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash))
     && Array.isArray(state.candidateParts)
-    && state.candidateParts.every((part) => typeof part === "string");
+    && state.candidateParts.every((part) => typeof part === "string")
+    && (state.targets === undefined || validQualityTargets(state.targets));
+}
+
+function validQualityTargets(value: unknown): boolean {
+  return Array.isArray(value) && value.every((target) => {
+    if (!target || typeof target !== "object" || Array.isArray(target)) return false;
+    const item = target as Record<string, unknown>;
+    return typeof item.id === "string"
+      && item.id === `artifact:${item.path}`
+      && item.kind === "artifact-post-image"
+      && typeof item.candidateType === "string"
+      && typeof item.path === "string"
+      && ["create", "write", "replace", "append"].includes(String(item.operation))
+      && Array.isArray(item.mutationCallIds)
+      && item.mutationCallIds.length > 0
+      && item.mutationCallIds.every((id) => typeof id === "string" && id.length > 0)
+      && typeof item.postImageHash === "string"
+      && /^[a-f0-9]{64}$/.test(item.postImageHash)
+      && typeof item.bytes === "number"
+      && item.bytes >= 0
+      && Array.isArray(item.rejectedHashes)
+      && item.rejectedHashes.every((hash) => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash));
+  });
 }

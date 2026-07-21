@@ -4,14 +4,16 @@ import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
 import { engineAccent, palette } from "./theme";
-import { listSessions } from "../core/session/store";
+import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
+import type { QualityWarning } from "../core/quality";
 import { resolveTuiLayout } from "./layout";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
+import { yoloPanelHeight } from "./YoloPrompt";
 import { builtinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
 import type { CommandContext } from "./commands/types";
@@ -50,6 +52,10 @@ import { createSessionActionsController } from "./session-actions-controller";
 import { createSessionPreferencesController } from "./session-preferences-controller";
 import { createAgentCommand } from "./agent-command";
 import { useInputRouting } from "./input-routing";
+import { createQualityPickerController } from "./quality-picker-controller";
+import { startStageSession } from "../core/stage/bootstrap";
+import { artifactFocusAction, artifactFocusPath, initialArtifactFocusPath } from "./artifact-focus";
+import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -116,15 +122,17 @@ export function App(props: AppProps = {}) {
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
-  const [output, setOutput] = createSignal("");
+  const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [restoringSession, setRestoringSession] = createSignal(false);
-  const [resumableSessions, setResumableSessions] = createSignal<SessionSummary[]>([]);
+  const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
+  const [qualityWarnings, setQualityWarnings] = createSignal<QualityWarning[]>([]);
   const [selectedArtifact, setSelectedArtifact] = createSignal<SelectedArtifact | null>(null);
-  const [activity, setActivity] = createSignal<ActivityEntry[]>([
+  const [focusedArtifactPath, setFocusedArtifactPath] = createSignal<string | null>(null);
+  const [, setActivity] = createSignal<ActivityEntry[]>([
     { kind: "system", text: "Activity will show provider requests, tool calls, gates, and validation." },
   ]);
   const [agentCards, setAgentCards] = createSignal<AgentCardState[]>([]);
@@ -144,8 +152,10 @@ export function App(props: AppProps = {}) {
   } = usageController;
   const [lastDisplayedToolAssistantContent, setLastDisplayedToolAssistantContent] = createSignal<string | null>(null);
   const turnCancellation = new TurnCancellation();
+  let handleStageMessageKey: ((key: import("./decision-interaction").TuiKeyEvent) => boolean) | undefined;
 
   let turnController!: ReturnType<typeof createTurnController>;
+  let resumeSession!: ReturnType<typeof createSessionResumeController>["resumeSession"];
   let sessionPreferences!: ReturnType<typeof createSessionPreferencesController>;
   const decisionController = createDecisionController({
     busy,
@@ -158,6 +168,7 @@ export function App(props: AppProps = {}) {
     submitGate: (resolution) => { void turnController.submitGateResolution(resolution); },
     submitQuestionOption: (selectedIndex) => { void turnController.submitUserQuestionAnswer(selectedIndex); },
     submitQuestionFreeform: (value) => turnController.submitUserQuestionFreeform(value),
+    submitQualityDecision: (resolution) => { void turnController.submitQualityDecision(resolution); },
     applyPermissionMode: (mode) => sessionPreferences.applyPermissionMode(mode),
   });
   const {
@@ -173,15 +184,18 @@ export function App(props: AppProps = {}) {
     handleGateKey,
     handlePaste: handleDecisionPaste,
     handleQuestionKey,
+    handleQualityKey,
     handleYoloKey,
     pendingChildPermission,
     pendingEngineSwitch,
     pendingGate,
     pendingPermission,
+    pendingQualityDecision,
     pendingUserQuestion,
     questionFreeformCursor,
     questionFreeformText,
     questionSelected,
+    qualitySelected,
     setGateFeedback,
     setGateFeedbackCursor,
     setGateFeedbackKillBuffer,
@@ -191,11 +205,13 @@ export function App(props: AppProps = {}) {
     setPendingEngineSwitch,
     setPendingGate,
     setPendingPermission,
+    setPendingQualityDecision,
     setPendingUserQuestion,
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
     setQuestionFreeformText,
     setQuestionSelected,
+    setQualitySelected,
     setYoloConfirmStage,
     yoloConfirmStage,
   } = decisionController;
@@ -298,11 +314,14 @@ export function App(props: AppProps = {}) {
     rootDir: process.cwd(),
     terminalWidth: () => dimensions().width,
     providerRegistry,
+    activeProvider,
     ensureProviderRegistry,
     applyProviderSelection,
     persistProviderSwitch,
     agentCards,
     sessionId,
+    refreshArtifacts,
+    listSessions,
     busy,
     activeModelCapabilities,
     status,
@@ -315,10 +334,10 @@ export function App(props: AppProps = {}) {
     openRewind: rewindController.open,
   });
   const {
-    agentArgumentDraft,
     applyState: applyComposerState,
     clear: clearComposer,
     commandArgumentItems,
+    commandArgumentDraft,
     commandArgumentMenuOpen,
     commandArgumentSelected,
     commandMenuItems,
@@ -326,18 +345,13 @@ export function App(props: AppProps = {}) {
     commandMenuSelected,
     composerInputWidth,
     composerPopupOpen,
-    fixedArgumentDraft,
     handleEscape: handleEscapeAtPrompt,
     handleKey: handleComposerKey,
     handleModelPickerKey,
-    historyIndex,
     inputCursor,
-    inputElements,
-    inputImages,
     inputNeedsExpandedBottom,
     inputValue,
     insertPastedText: insertComposerPaste,
-    modelArgumentDraft,
     modelPicker,
     modelPickerItems,
     modelPickerTitle,
@@ -348,6 +362,20 @@ export function App(props: AppProps = {}) {
     setInputImages,
     setPromptHistory,
   } = composerController;
+  const qualityPickerController = createQualityPickerController({
+    providerRegistry,
+    ensureProviderRegistry,
+    setStatus,
+    setMessages,
+    reportError: (error) => turnController.reportError(error),
+  });
+  const {
+    qualityPicker,
+    qualityPickerItems,
+    qualityPickerTitle,
+    handleQualityPickerKey,
+    openQualityPicker,
+  } = qualityPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
   onCleanup(() => {
     unsubscribeProcesses();
@@ -402,9 +430,12 @@ export function App(props: AppProps = {}) {
     setPendingUserQuestion,
     pendingPermission,
     setPendingPermission,
+    pendingQualityDecision,
+    setPendingQualityDecision,
     pendingChildPermission,
     setQuestionSelected,
     questionSelected,
+    setQualitySelected,
     questionFreeformText,
     clearQuestionFreeform,
     setGateFocus,
@@ -421,6 +452,12 @@ export function App(props: AppProps = {}) {
     recordIndependentAgentUsage,
     recordActivity,
     refreshArtifacts,
+    refreshQualityWarnings,
+    resumeQualitySession: async (targetSessionId) => {
+      const target = (await listSessions(process.cwd())).find((session) => session.sessionId === targetSessionId);
+      if (!target) throw new Error(`Session not found: ${targetSessionId}`);
+      await resumeSession(target);
+    },
     compactSession: (instructions) => sessionActions.compactSession(instructions),
     executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
     recordPromptHistory,
@@ -440,6 +477,7 @@ export function App(props: AppProps = {}) {
       && !pendingEngineSwitch()
       && !pendingUserQuestion()
       && !pendingPermission()
+      && !pendingQualityDecision()
       && !pendingChildPermission(),
   });
   agentManager = new AgentManager(agentStore, runChildAgent, {
@@ -462,7 +500,7 @@ export function App(props: AppProps = {}) {
     scheduler: continuationScheduler,
     reportError,
   });
-  const { resumeSession } = createSessionResumeController({
+  ({ resumeSession } = createSessionResumeController({
     rootDir: process.cwd(),
     dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
     permissionSettingsReady,
@@ -495,6 +533,9 @@ export function App(props: AppProps = {}) {
     setPendingEngineSwitch,
     setPendingUserQuestion,
     setPendingPermission,
+    setPendingQualityDecision,
+    setQualitySelected,
+    setQualityWarnings,
     setGateFocus,
     setGateFeedbackMode,
     setGateFeedback,
@@ -504,7 +545,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformText,
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
-  });
+  }));
   sessionActions = createSessionActionsController({
     rootDir: process.cwd(),
     sessionId,
@@ -522,6 +563,8 @@ export function App(props: AppProps = {}) {
     setPendingUserQuestion,
     pendingPermission,
     setPendingPermission,
+    pendingQualityDecision,
+    setPendingQualityDecision,
     pendingChildPermission,
     agentCards,
     setConversation,
@@ -554,19 +597,36 @@ export function App(props: AppProps = {}) {
   } = sessionActions;
   createEffect(() => {
     const id = sessionId();
-    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingChildPermission();
+    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
     if (id && ready) void continuationScheduler.notify(id).catch(reportError);
   });
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
-    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || inputNeedsExpandedBottom(),
-    decisionPanelMinHeight(),
+    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
+    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
+    yoloConfirmStage()
+      ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
+      : decisionPanelMinHeight(),
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
+  createEffect(() => {
+    if (focusedArtifactPath() && !layout().showSidebar) setFocusedArtifactPath(null);
+  });
+  const qualityWarningPaths = createMemo(() => new Set(qualityWarnings().flatMap((warning) =>
+    warning.targets.flatMap((target) => target.path ? [target.path] : [])
+  )));
+  const gateWithQualityWarning = createMemo(() => {
+    const gate = activeGateRequest();
+    if (!gate || qualityWarnings().length === 0) return gate;
+    const count = qualityWarnings().reduce((total, warning) => total + warning.targets.length, 0);
+    return {
+      ...gate,
+      summary: `Quality warning: ${count} target${count === 1 ? "" : "s"} remain unconfirmed.\n\n${gate.summary}`,
+    };
+  });
   const composerPopupMaxRows = createMemo(() => Math.min(8, Math.max(1, layout().bottomHeight - 4)));
 
   // On mount, detect existing sessions so the welcome line can offer resume.
@@ -609,6 +669,8 @@ export function App(props: AppProps = {}) {
     handleRewindKey: rewindController.handleKey,
     modelPicker,
     handleModelPickerKey,
+    qualityPicker,
+    handleQualityPickerKey,
     sessionPicker,
     handleSessionPickerKey,
     yoloConfirmStage,
@@ -616,6 +678,8 @@ export function App(props: AppProps = {}) {
     activePermissionRequest,
     pendingUserQuestion,
     handleQuestionKey,
+    pendingQualityDecision,
+    handleQualityKey,
     activeGateRequest,
     handleGateKey,
     pasteClipboardImage,
@@ -623,6 +687,10 @@ export function App(props: AppProps = {}) {
     handlePromptEscape: handleEscapeAtPrompt,
     handleDecisionPaste,
     insertComposerPaste,
+    handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
+    artifactFocusActive: () => focusedArtifactPath() !== null,
+    enterArtifactFocus,
+    handleArtifactFocusKey,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -689,14 +757,90 @@ export function App(props: AppProps = {}) {
     openRewindPicker: rewindController.open,
     resetRewindState,
     agentCommand,
+    startStage: async (characterPath, scenarioPath, commandEcho) => {
+      const started = await startStageSession({
+        rootDir: process.cwd(),
+        characterPath,
+        scenarioPath,
+        provider: activeProvider(),
+        providerId: activeProvider(),
+        model: activeModel(),
+        permissionMode: permissionMode(),
+        reasoningTier: thinkingTier(),
+      });
+      setSessionId(started.sessionId);
+      setSessionPath(started.sessionPath);
+      setActiveEngine("stage");
+      setConversation(started.messages);
+      setOutput(started.opening);
+      setLastTurnUsage(undefined);
+      setSessionUsage({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: 0 });
+      setNextSessionParent(null);
+      setPendingGate(null);
+      setPendingEngineSwitch(null);
+      setPendingUserQuestion(null);
+      setPendingPermission(null);
+      setPendingQualityDecision(null);
+      setMessages([
+        { role: "user", content: commandEcho },
+        ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
+        { id: started.openingRecordUuid, role: "assistant", content: started.opening, kind: "stage-bootstrap-opening", engine: "stage" },
+      ]);
+      setStatus("Stage session ready");
+      recordActivity({ kind: "system", text: `started Stage session ${started.sessionId}` });
+    },
     openModelPicker,
+    openQualityPicker,
   };
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
     const entries = await scanArtifacts(process.cwd());
     setArtifacts(entries);
     setSelectedArtifact((selected) => selected && entries.some((entry) => entry.path === selected.path) ? selected : null);
+    setFocusedArtifactPath((path) => entries.some((entry) => entry.path === path) ? path : null);
     return entries;
+  }
+
+  function enterArtifactFocus(): boolean {
+    if (!layout().showSidebar || busy()) return false;
+    const path = initialArtifactFocusPath(artifacts(), selectedArtifact()?.path);
+    if (!path) return false;
+    setFocusedArtifactPath(path);
+    return true;
+  }
+
+  function handleArtifactFocusKey(key: import("./decision-interaction").TuiKeyEvent): boolean {
+    const action = artifactFocusAction(key);
+    if (action === "exit") {
+      setFocusedArtifactPath(null);
+      return true;
+    }
+    if (action === "previous" || action === "next") {
+      setFocusedArtifactPath((path) => artifactFocusPath(artifacts(), path, action === "previous" ? -1 : 1));
+      return true;
+    }
+    if (action === "preview") {
+      const path = focusedArtifactPath();
+      const index = artifacts().findIndex((artifact) => artifact.path === path);
+      if (index >= 0 && !busy()) {
+        setFocusedArtifactPath(null);
+        void turnController.submitPrompt(`/artifact ${index + 1}`);
+      }
+      return true;
+    }
+    return true;
+  }
+
+  async function refreshQualityWarnings(targetSessionId = sessionId()): Promise<QualityWarning[]> {
+    if (!targetSessionId) {
+      setQualityWarnings([]);
+      return [];
+    }
+    const snapshot = await loadSessionSnapshot(process.cwd(), targetSessionId, {
+      synthesizeDanglingToolResults: false,
+    });
+    setQualityWarnings(snapshot.qualityWarnings);
+    return snapshot.qualityWarnings;
   }
 
   return (
@@ -706,11 +850,21 @@ export function App(props: AppProps = {}) {
           content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
           fg={engineAccent(activeEngine())}
           attributes={1}
+          wrapMode="none"
         />
         <Show when={permissionMode() === "YOLO"} fallback={<box width={0} />}>
-          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} />
+          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} wrapMode="none" />
         </Show>
       </box>
+
+      <Show when={focusedArtifactPath()} fallback={<box height={0} />}>
+        {(path) => <ArtifactFocusPreview
+          path={path()}
+          index={Math.max(0, artifacts().findIndex((artifact) => artifact.path === path()))}
+          total={artifacts().length}
+          width={layout().width}
+        />}
+      </Show>
 
       <box flexDirection="row" flexGrow={1}>
         <Show when={layout().showSidebar} fallback={<box width={0} />}>
@@ -721,7 +875,9 @@ export function App(props: AppProps = {}) {
             sessionPath={sessionPath()}
             mcp={mcpStatus()}
             artifacts={artifacts()}
+            qualityWarningPaths={qualityWarningPaths()}
             selectedArtifactPath={selectedArtifact()?.path}
+            focusedArtifactPath={focusedArtifactPath() ?? undefined}
             agents={agentCards()}
             processes={backgroundProcesses()}
             currentSessionId={sessionId()}
@@ -736,6 +892,10 @@ export function App(props: AppProps = {}) {
           reasoningMode={reasoningDisplayMode()}
           contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
           agents={agentCards()}
+          activeEngine={activeEngine()}
+          sessionId={sessionId()}
+          onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
+          registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
         />
 
         {/* The former right-hand Activity / Artifacts pane was removed in the
@@ -749,9 +909,11 @@ export function App(props: AppProps = {}) {
         yoloStage={yoloConfirmStage()}
         permissionRequest={activePermissionRequest()}
         question={pendingUserQuestion()}
-        gate={activeGateRequest()}
+        quality={pendingQualityDecision()}
+        gate={gateWithQualityWarning()}
         rewind={rewindPicker()}
         session={sessionPicker()}
+        qualityPicker={qualityPicker()}
         model={modelPicker()}
         gateFocus={gateFocus()}
         gateFeedbackMode={gateFeedbackMode()}
@@ -759,19 +921,20 @@ export function App(props: AppProps = {}) {
         gateFeedbackCursor={gateFeedbackCursor()}
         engineSwitchPending={Boolean(pendingEngineSwitch())}
         questionSelected={questionSelected()}
+        qualitySelected={qualitySelected()}
         questionFreeformText={questionFreeformText()}
         questionFreeformCursor={questionFreeformCursor()}
         modelItems={modelPickerItems()}
         modelTitle={modelPickerTitle()}
+        qualityPickerItems={qualityPickerItems()}
+        qualityPickerTitle={qualityPickerTitle()}
         commandMenuOpen={commandMenuOpen()}
         commandItems={commandMenuItems()}
         commandSelected={commandMenuSelected()}
         commandArgumentMenuOpen={commandArgumentMenuOpen()}
         commandArgumentItems={commandArgumentItems()}
         commandArgumentSelected={commandArgumentSelected()}
-        modelArgumentDraft={modelArgumentDraft()}
-        fixedArgumentDraft={fixedArgumentDraft()}
-        agentArgumentDraft={agentArgumentDraft()}
+        commandArgumentDraft={commandArgumentDraft()}
         composerPopupMaxRows={composerPopupMaxRows()}
         composerPopupOpen={composerPopupOpen()}
         inputNeedsExpandedBottom={inputNeedsExpandedBottom()}
@@ -785,6 +948,7 @@ export function App(props: AppProps = {}) {
         <text
           content={footerLine(activeProvider(), activeModel(), providerHasApiKey(), layout().width, lastTurnUsage(), sessionUsage(), activeModelLimits())}
           fg={palette.textMuted}
+          wrapMode="none"
         />
       </box>
     </box>

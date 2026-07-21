@@ -4,7 +4,7 @@
 
 Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It starts from a verified bundled V10 Harness, can select a project-pinned managed Harness Pack, connects the active runtime to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
 
-> **Alpha status:** `1.0.0-alpha.2` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [Windows-first user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
+> **Alpha status:** `1.0.0-alpha.3` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 
 New to terminals, API keys, or model providers? Start with the [step-by-step user manual](./docs/user/en/README.md) before following the condensed setup below.
 
@@ -14,7 +14,7 @@ New to terminals, API keys, or model providers? Start with the [step-by-step use
 
 Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub prerelease and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, and choose a safe permission preset without manual configuration-file editing. Project selection is optional and applies only to the one-time launch immediately after Setup; Vesicle never stores one global project directory.
 
-The Windows executable and installer for `1.0.0-alpha.2` are intentionally not Authenticode-signed while the SignPath Foundation application is pending. This exception is limited to the informed alpha test group; download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
+The Windows executable and installer for `1.0.0-alpha.3` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
 The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
@@ -30,28 +30,28 @@ The npm and source-development paths below require [Bun](https://bun.sh/) 1.3.14
 Install the package and verify that its bundled ETL profile is available:
 
 ```bash
-npm install prism-vesicle
-bunx vesicle prompt shape --engine etl
+npm install -g prism-vesicle
+vesicle prompt shape --engine etl
 ```
 
-The package includes the complete read-only `prism-engine-v10@10.0.1-alpha.1` runtime baseline. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. A restricted host layer supplies the Vesicle base prompts and five generic SubAgents.
+The package includes the complete read-only `prism-engine-v10@10.1.0-rc.1` runtime baseline. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
 
 Inspect the active layers and the source of the effective manifest:
 
 ```bash
-bunx vesicle assets status
+vesicle assets status
 ```
 
 Copy only one file or directory into the current project for editing:
 
 ```bash
-bunx vesicle assets materialize assets/prompts/engines/etl.md
+vesicle assets materialize assets/prompts/engines/etl.md
 ```
 
 Add `--global` to make that override apply to every project for the current user. The existing command below still creates a full project snapshot, but sparse overrides are preferred because untouched files continue to receive packaged updates:
 
 ```bash
-bunx vesicle assets init
+vesicle assets init
 ```
 
 Asset initialization and materialization refuse to overwrite existing files.
@@ -59,13 +59,13 @@ Asset initialization and materialization refuse to overwrite existing files.
 An advanced project can verify and install an already-extracted Harness Release, then pin it explicitly:
 
 ```bash
-bunx vesicle assets verify /path/to/extracted-pack
-bunx vesicle assets install /path/to/extracted-pack
-bunx vesicle assets use <pack-id>@<version>
-bunx vesicle assets status
+vesicle assets verify /path/to/extracted-pack
+vesicle assets install /path/to/extracted-pack
+vesicle assets use <pack-id>@<version>
+vesicle assets status
 ```
 
-The project lock is `.vesicle/assets.lock.json`. Vesicle reverifies the installed pack on start and resume, and blocks sessions whose recorded Harness identity differs. `bunx vesicle assets rollback` removes the project selection and restores the bundled V10 baseline. Sessions created before the V10 baseline migration have no Harness identity and must be replaced with a new session. Archive extraction, online discovery, and automatic updates are not part of this offline flow.
+The project lock is `.vesicle/assets.lock.json`. Vesicle reverifies the installed pack on start and resume, and blocks provider continuation when the recorded Harness identity differs. A pending Output Quality Guard decision can still be opened to use or stop the current version locally, but revision remains unavailable until the exact recorded identity is restored. `vesicle assets rollback` removes the project selection and restores the bundled V10 baseline. Sessions created before the V10 baseline migration have no Harness identity and must be replaced with a new session. Archive extraction, online discovery, and automatic updates are not part of this offline flow.
 
 ### Source checkout
 
@@ -119,8 +119,8 @@ After editing the provider registry and sibling `.env`, verify the effective set
 
 ```bash
 # npm installation
-bunx vesicle doctor
-bunx vesicle
+vesicle doctor
+vesicle
 
 # source checkout
 bun run doctor
@@ -135,6 +135,7 @@ Useful commands:
 |---|---|
 | `/model` | Pick a configured provider and model |
 | `/engine [id]` | Inspect or switch the active Prism engine |
+| `/stage <character-card-path> <scenario-card-path>` | Start the consumer Stage engine with frozen Module A/B cards |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | Control provider thinking effort |
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display |
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Inspect or change tool approval behavior |
@@ -151,9 +152,11 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 ## What Vesicle Supports
 
 - Profile-driven Prism engines whose prompts, tools, validators, and stop gates resolve through project/user overrides over a managed Harness or bundled recovery baseline.
+- A consumer-grade Stage engine that freezes supplied Module A/B cards into a prose-first narrative bootstrap with no model-visible tools or gates. Quality enforcement defaults to observe; only an explicitly enabled host quality configuration can trigger an experimental bounded rewrite.
 - Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
+- A target-aware Output Quality Guard that checks current Runtime artifact post-images, persists findings and warnings, restores exhausted or interrupted revisions with explicit revise-again, use-current, and stop choices, and offers a default-off experimental Semantic Judge selected from the user's configured provider models.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
 - Four coarse tool approval modes plus an opt-in non-interactive `shell_exec` process runtime with host-owned PowerShell, CMD, Git Bash, and POSIX shell profiles, exact interpreter-bound plan approval, filtered environment, bounded UTF-8 live output, timeout, process-tree cleanup, foreground/background execution, durable `shell-N` task state, completion notification, and explicit output/stop controls.
 - Foreground and background SubAgents with parallel execution, three V10 Driver-contract workflow Agents, five generic host Agents (`explore`, `general`, `plan`, `research`, and `reviewer`), custom Agent Profiles subject to the active Harness contract, dedicated live Agent cards, durable completion delivery, and parent continuation without polling.
@@ -164,6 +167,7 @@ See [`STATUS.md`](./STATUS.md) for the authoritative implementation inventory, t
 ## Development
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -172,6 +176,7 @@ bun run doctor
 | Script | Purpose |
 |---|---|
 | `bun run dev` | Run the TUI from source |
+| `bun run lint` | Run the pinned Biome correctness checks without formatting files |
 | `bun run typecheck` | Validate TypeScript without emitting files |
 | `bun test` | Run the deterministic test suite |
 | `BUN_E2E_REAL_PROVIDER=1 bun test tests/e2e-gate.test.ts` | Run the opt-in real-provider gate acceptance test |
@@ -184,13 +189,15 @@ bun run doctor
 
 `vesicle debug markdown-runtime` verifies the standalone OpenTUI worker and syntax runtime without opening the TUI. `vesicle prompt dump --engine <id>` prints the complete model-visible system prompt; `vesicle prompt shape --engine <id>` prints only its composed structure.
 
-Pull requests and `develop` pushes call one reusable Linux/Windows release build, including npm consumer validation and a silent guided-installer install/upgrade/uninstall smoke. A release is authorized from the command line by pushing a protected annotated `v<package version>` tag on the accepted `main` commit. The tag workflow reruns the same gates, creates the GitHub Release and checksums, and publishes npm with provenance; no normal Actions-page dispatch or GitHub Environment approval is required. Future SignPath signing approval remains a separate manual trust gate. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the exact commands, GitHub settings, and recovery rules.
+The developer-only `vesicle quality benchmark` command runs an explicitly authorized, budget-capped Semantic Judge measurement against the active verified Harness. It remains separate from Runtime policy and requires `--allow-live`; see [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) before using it.
+
+Pull requests and `develop` pushes call one reusable Linux/Windows release build, including npm consumer validation and a silent guided-installer install/upgrade/uninstall smoke. A release is authorized from the command line by pushing a protected annotated `v<package version>` tag on the accepted `main` commit. The tag workflow reruns the same gates, creates the GitHub Release and checksums, and publishes npm with provenance; no normal Actions-page dispatch or GitHub Environment approval is required. Windows signing is deferred and is not part of this publication path. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) for the exact commands, GitHub settings, and recovery rules.
 
 ## Documentation
 
 | Document | Responsibility |
 |---|---|
-| [`docs/user/en/`](./docs/user/en/README.md) | Ordered Windows-first user manual from computer basics through advanced operation |
+| [`docs/user/en/`](./docs/user/en/README.md) | User manual (start pages, tutorials, reference); Simplified Chinese canonical, English mirror |
 | [`STATUS.md`](./STATUS.md) | Current implementation, tool surface, verification, and known limits |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Released and unreleased user-visible changes |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Contributor setup, repository boundaries, and documentation style |
@@ -199,6 +206,7 @@ Pull requests and `develop` pushes call one reusable Linux/Windows release build
 | [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Architecture and runtime boundaries |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, review, release, and documentation sweep |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled V10 inventory, host extension layer, lineage, and update rules |
+| [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | Developer-only Semantic Judge measurement, caps, resume, and evidence boundary |
 
 Repository-local AI collaborator instructions live in [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md).
 

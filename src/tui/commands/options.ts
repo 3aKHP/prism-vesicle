@@ -1,6 +1,6 @@
 import type { ProviderRegistry } from "../../config/providers";
 import { renderModelDetails } from "./render";
-import type { AgentArgumentDraft, FixedArgumentDraft, ModelArgumentDraft } from "./argument-completion";
+import type { CommandArgumentCompletion } from "./types";
 import type { OptionItem } from "../types";
 
 export function providerOptionItems(registry: ProviderRegistry): OptionItem[] {
@@ -22,12 +22,7 @@ export function modelOptionItems(registry: ProviderRegistry, providerId: string)
 }
 
 export function commandArgumentHint(
-  modelDraft: ModelArgumentDraft | null,
-  fixedDraft: FixedArgumentDraft | null,
-  agentDraft: AgentArgumentDraft | null,
+  draft: CommandArgumentCompletion | null,
 ): string {
-  const scope = modelDraft
-    ? modelDraft.stage === "provider" ? "providers" : `models · ${modelDraft.providerId}`
-    : fixedDraft?.command ?? (agentDraft ? agentDraft.stage === "stop" ? "running agents" : "agents" : "arguments");
-  return `${scope} · ↑/↓ choose · Tab complete · Enter select`;
+  return `${draft?.hint ?? "arguments"} · ↑/↓ choose · Tab complete · Enter select`;
 }

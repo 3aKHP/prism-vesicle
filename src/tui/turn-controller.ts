@@ -1,39 +1,13 @@
-import type { Accessor, Setter } from "solid-js";
-import type { ProviderSelection } from "../config/providers";
-import {
-  resolveEngineSwitch,
-  resolveGate,
-  resolvePermission,
-  resolveUserQuestion,
-  runPrompt,
-  type EngineSwitchConfirmedResult,
-  type RunPromptResult,
-} from "../core/agent-loop/run";
-import type { AgentManager } from "../core/agents/manager";
+import { runPrompt } from "../core/agent-loop/run";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
-import type { EngineId } from "../core/engine/profile";
-import type { GateResolution } from "../core/gate/types";
-import type { PermissionMode, PermissionResolution, ToolPermissionBroker } from "../core/permissions";
 import { loadSessionSnapshot } from "../core/session/store";
-import type { UserQuestionAnswer } from "../core/user-question/types";
-import { listRewindPoints, rewindConversation, type ConversationRewind } from "../core/rewind/service";
-import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
-import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
-import { renderValidationNotice } from "./commands/render";
-import type { ComposerElement, ComposerState } from "./composer";
+import { listRewindPoints, rewindConversation } from "../core/rewind/service";
+import type { VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
+import type { ComposerElement } from "./composer";
 import { sameInboxIds } from "./agent-delivery";
 import { setAgentDeliveryState } from "./agent-view";
-import {
-  displayUserQuestionAnswer,
-  type PendingEngineSwitchState,
-  type PendingGateState,
-  type PendingPermissionState,
-  type PendingUserQuestionState,
-} from "./decision-interaction";
-import { displayTranscriptFromSnapshot, vesicleMessagesFromResumed } from "./session-presenter";
 import { combineIndependentUsage } from "./telemetry";
-import type { ActivityEntry, AgentCardState, Message, SessionPickerState } from "./types";
 import { createTurnResultController } from "./turn-result-controller";
 import { createDecisionContinuations } from "./decision-continuations";
 
@@ -258,7 +232,7 @@ export function createTurnController(options: TurnControllerOptions) {
   }
 
   function hasPendingInteraction(): boolean {
-    return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingChildPermission());
+    return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingQualityDecision() || options.pendingChildPermission());
   }
 
   return {

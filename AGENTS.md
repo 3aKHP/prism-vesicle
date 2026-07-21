@@ -19,7 +19,7 @@ workflow, or documentation change, also read:
   independent CR expectations, and documentation sweep.
 - `CONTRIBUTING.md`: Conventional Commits, public repo boundary, local runtime, provider config location, documentation style, and PR checklist.
 - `README.md`: project entry point, installation, first run, concise capability overview, and documentation navigation.
-- `docs/user/en/README.md`: canonical ordered user-manual curriculum; pair user-facing chapter changes with the matching `docs/user/zh-CN/` file.
+- `docs/user/zh-CN/README.md`: canonical user-manual entry point; pair user-manual changes with the matching `docs/user/en/` page.
 
 Read `CHANGELOG.md` before any user-visible behavior, config, runtime contract,
 tool surface, TUI, prompt, or documentation-status change.
@@ -29,17 +29,8 @@ Read asset-specific docs when touching assets:
 - `docs/dev/ASSETS.md`: bundled V10 inventory, host extension layer, lineage, and update rules.
 - `docs/examples/providers.yaml`: canonical provider registry shape.
 - `docs/examples/provider.env.example`: user-level provider secret file shape.
-- `dev/docs/working/PLAN-Prism-Vesicle-architecture.md`: older architecture
-  plan; useful context, but current code plus `STATUS.md` and `docs/dev/*` are
-  authoritative when they differ.
 
-If a task touches architecture, provider behavior, TUI interaction, session
-semantics, or command UX, look for existing implementation patterns before
-inventing a new one. The ignored local `dev/docs/` area may contain private
-reference-project notes and local paths. When present, start with
-`dev/docs/REFERENCE_PROJECTS.md` to find the local reference project locations;
-use those notes when available, but do not copy local absolute paths or private
-machine details into public docs.
+If a task touches architecture, provider behavior, TUI interaction, session semantics, or command UX, look for existing implementation patterns before inventing a new one. The ignored local `dev/docs/` area may contain private reference-project notes and local paths. When present, start with `dev/docs/REFERENCE_PROJECTS.md` to find the local reference project locations; use its working/decision/archive routes when available, but do not copy local absolute paths or private machine details into public docs. Archived local plans are historical context, never current authority.
 
 ## Documentation Map
 
@@ -48,10 +39,12 @@ Use the docs by responsibility:
 | File | Authority |
 |------|-----------|
 | `README.md` | Project entry point, installation, first run, feature overview, and doc navigation |
-| `docs/user/` | Ordered beginner-to-advanced user manuals; English canonical, Simplified Chinese mirrored |
+| `docs/user/` | Channel-funnelled user manuals (start pages, tutorials, reference); Simplified Chinese canonical, English mirrored |
 | `STATUS.md` | Current implemented state, limits, tool surface, verification |
 | `CHANGELOG.md` | User-visible and notable unreleased changes |
 | `CONTRIBUTING.md` | Contributor workflow, repo boundary, provider setup, and documentation style |
+| `CODE_SIGNING_POLICY.md` | Windows signing scope, approval, verification, and incident handling |
+| `PRIVACY.md` | Local data, external-service transfers, uninstall behavior, and deletion |
 | `docs/dev/STYLE.md` | Code architecture and runtime boundaries |
 | `docs/dev/WORKFLOW.md` | Branching, PRs, hotfixes, independent CR |
 | `AGENTS.md` / `CLAUDE.md` | AI collaborator startup and coordination |
@@ -61,7 +54,7 @@ same branch. Do not leave documentation drift for a later pass.
 
 Follow the Markdown conventions in `CONTRIBUTING.md`: prose uses natural line wrapping rather than fixed-column hard wraps.
 
-`README.md` and `CONTRIBUTING.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, mirror every changed `docs/user/en/` chapter to the same relative path under `docs/user/zh-CN/`.
+`README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
 
 ## Branch And PR Rules
 
@@ -96,6 +89,7 @@ before merge.
 - Standard verification:
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
@@ -171,13 +165,29 @@ These are non-negotiable boundaries; see `docs/dev/STYLE.md` for detail.
 Choose verification proportional to risk. For most changes, run:
 
 ```bash
+bun run lint
 bun run typecheck
 bun test
 bun run doctor
 ```
 
-For provider, gate, TUI, or artifact behavior, add or update focused tests.
-When practical, also run a real TUI or provider smoke.
+### Test Value Discipline
+
+Do not add tests merely because code changed. A test is justified when it protects a user-visible behavior, a security or durability boundary, an external contract, or a plausible regression that is not already covered at the appropriate level. Verification is required; new test code is not an automatic deliverable.
+
+Before adding or substantially adapting a test, identify the behavior or contract it protects and a realistic defect that would make it fail. Prefer an oracle derived from product requirements, protocol specifications, persisted artifacts, or externally observable results rather than from the implementation under test.
+
+- Features and fixes normally need focused regression coverage when they introduce or correct observable behavior.
+- Refactors need new characterization tests only when existing coverage cannot protect a risky boundary. Mechanical moves with adequate coverage should reuse that coverage.
+- Chores, documentation, formatting, metadata updates, dependency maintenance, and mechanical renames do not receive new tests by default. Add one only when the change alters an executable workflow, package/release shape, compatibility boundary, or another concrete contract.
+- Prefer extending the narrowest existing test over creating another file or duplicating setup.
+- Do not test local variable names, statement order, source snippets, or a constant merely restated by the assertion unless that text or value is itself a stable external or architecture contract.
+- Do not write mocks that only echo the test fixture and then assert the echo. Do not inspect a smoke-test script merely to prove that the script contains checks when CI already executes those checks.
+- Conditional or unavailable coverage must be reported as skipped or unavailable, not returned from early and counted as passing.
+- If adapting brittle tests becomes a large part of an otherwise small change, stop and reassess whether the tests protect behavior or only the previous implementation. Replace, narrow, merge, or remove low-value tests instead of changing correct production code to satisfy them.
+- Test counts are not a quality target. Removing redundant, tautological, implementation-locked, or superseded tests is acceptable when meaningful coverage is preserved or improved.
+
+For provider, gate, TUI, session, tool, validator, or artifact behavior, add or update focused tests only when the change creates a real coverage need under the rules above. When practical and proportionate, also run a real TUI, provider, package, binary, or installer smoke at the boundary actually affected.
 
 Before finishing behavior/config/docs changes, run a targeted stale-term pass.
 Examples:

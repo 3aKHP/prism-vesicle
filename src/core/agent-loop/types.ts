@@ -11,6 +11,8 @@ import type { UserQuestionRequest } from "../user-question/types";
 import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
 import type { ValidationResult } from "../validators/registry";
+import type { QualityDecisionRequest, QualityFindingSummary, QualityOutcome, QualityTargetWarningReason } from "../quality";
+import type { ExperimentalQualityProfile } from "../../config/quality";
 
 export type RunPromptOptions = {
   input: string;
@@ -31,6 +33,7 @@ export type RunPromptOptions = {
   permissionBroker?: ToolPermissionBroker;
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
+  experimentalQuality?: ExperimentalQualityProfile;
 };
 
 export type AgentLoopEvent =
@@ -57,9 +60,11 @@ export type AgentLoopEvent =
   | { type: "user_question_pending"; header: string }
   | {
       type: "quality_status";
-      phase: "checking" | "rewriting" | "accepted" | "observed" | "exhausted";
+      phase: "checking" | "rewriting" | "clean" | "findings" | "inconclusive" | "observed" | "exhausted";
       attempt: number;
       findingCount: number;
+      findings?: Array<QualityFindingSummary & { targetPath?: string }>;
+      warningReasons?: QualityTargetWarningReason[];
     }
   | { type: "validation"; ok: boolean };
 
@@ -81,6 +86,9 @@ export type RunPromptResult =
       response: VesicleResponse;
       profile: EngineProfile;
       validation?: ValidatorOutcome;
+      quality?: { outcome: QualityOutcome; findingCount: number };
+      /** Durable assistant record ID when the response did not contain tools. */
+      assistantRecordUuid?: string;
       messages: VesicleMessage[];
     }
   | {
@@ -115,6 +123,15 @@ export type RunPromptResult =
       messages: VesicleMessage[];
     }
   | {
+      kind: "needs_quality_decision";
+      sessionId: string;
+      sessionPath: string;
+      profile: EngineProfile;
+      decision: QualityDecisionRequest;
+      assistantContent: string;
+      messages: VesicleMessage[];
+    }
+  | {
       kind: "needs_permission";
       sessionId: string;
       sessionPath: string;
@@ -125,6 +142,16 @@ export type RunPromptResult =
       assistantContent: string;
       messages: VesicleMessage[];
     };
+
+export type QualityDecisionResolution = "retry" | "accept" | "stop";
+
+export type QualityResolvedResult = {
+  kind: "quality_resolved";
+  sessionId: string;
+  resolution: Exclude<QualityDecisionResolution, "retry">;
+};
+
+export type ResolveQualityDecisionResult = RunPromptResult | QualityResolvedResult;
 
 export type EngineSwitchConfirmedResult = {
   kind: "engine_switched";

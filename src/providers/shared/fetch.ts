@@ -75,7 +75,9 @@ export async function fetchProvider(
 function withAttemptHeaders(init: RequestInit, attemptHeaders?: HeadersInit): RequestInit {
   if (!attemptHeaders) return init;
   const headers = new Headers(init.headers);
-  new Headers(attemptHeaders).forEach((value, key) => headers.set(key, value));
+  new Headers(attemptHeaders).forEach((value, key) => {
+    headers.set(key, value);
+  });
   return { ...init, headers };
 }
 

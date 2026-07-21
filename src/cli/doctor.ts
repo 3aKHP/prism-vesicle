@@ -1,4 +1,5 @@
-import { inspectProviderConfig, loadUserConfigEnvironment } from "../config/providers";
+import { inspectProviderConfig, loadConfigForSelection, loadUserConfigEnvironment } from "../config/providers";
+import { loadExperimentalQualitySettings } from "../config/quality";
 import { inspectMcpConfig } from "../mcp/registry";
 import { inspectAssets } from "./assets";
 import { loadPermissionSettings } from "../config/permissions";
@@ -11,6 +12,18 @@ export async function runDoctor(): Promise<void> {
   const assets = await inspectAssets();
   const permissions = await loadPermissionSettings();
   const shell = resolveShellProfile(permissions.shellInterpreter);
+  let qualityStatus: string;
+  try {
+    const quality = await loadExperimentalQualitySettings();
+    if (quality.mode === "off") {
+      qualityStatus = `experimental off (${quality.path})`;
+    } else {
+      const judge = await loadConfigForSelection({ provider: quality.providerAlias, model: quality.modelId });
+      qualityStatus = `experimental ${quality.mode} ${quality.providerAlias}/${quality.modelId}; ${judge.apiKey ? "API key available" : "API key missing"}; ${quality.judgeTimeoutMs} ms (${quality.path})`;
+    }
+  } catch (error) {
+    qualityStatus = `experimental configuration invalid: ${error instanceof Error ? error.message : String(error)}`;
+  }
   const bunVersion = Bun.version;
 
   console.log("Prism Vesicle Doctor");
@@ -28,6 +41,7 @@ export async function runDoctor(): Promise<void> {
   console.log(`MCP config: ${mcp.configured ? (mcp.enabled ? "enabled" : "disabled") : "not configured"} (${mcp.path})`);
   console.log(`MCP env: ${mcp.hasEnvFile ? "file" : "missing"} (${mcp.envPath})`);
   console.log(`Permissions: ${permissions.defaultMode}${permissions.exists ? "" : " (defaults)"} (${permissions.path})`);
+  console.log(`Semantic Judge: ${qualityStatus}`);
   console.log(`Shell exec: ${permissions.shellExec ? "enabled; permission mode applies" : "disabled"}; interpreter ${
     shell ? `${shell.displayName} (${shell.executablePath})` : `${permissions.shellInterpreter} unavailable`
   }`);

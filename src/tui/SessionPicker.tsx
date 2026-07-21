@@ -1,6 +1,7 @@
 import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { SessionSummary } from "../core/session/store";
+import { truncateLine } from "./format";
 import { palette } from "./theme";
 
 export type SessionPickerProps = {
@@ -15,8 +16,8 @@ export function SessionPicker(props: SessionPickerProps) {
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
-        <text content="Resume Session" fg={palette.brand} attributes={TextAttributes.BOLD} />
-        <text content="  ↑/↓ choose · Enter resume · Esc close" fg={palette.textDim} />
+        <text content="Resume Session" fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <text content="  ↑/↓ choose · Enter resume · Esc close" fg={palette.textDim} wrapMode="none" />
       </box>
       <For each={visible()}>
         {(entry) => (
@@ -26,6 +27,7 @@ export function SessionPicker(props: SessionPickerProps) {
               fg={entry.index === props.selected ? palette.textPrimary : palette.textSecondary}
               attributes={entry.index === props.selected ? TextAttributes.BOLD : TextAttributes.NONE}
               width="100%"
+              wrapMode="none"
             />
           </box>
         )}
@@ -47,14 +49,11 @@ export function sessionPickerLine(session: SessionSummary, index: number, select
   const pendingEngine = session.pendingEngineSwitch ? ` [engine:${session.pendingEngineSwitch.targetEngine}]` : "";
   const pendingQuestion = session.pendingUserQuestion ? ` [question:${session.pendingUserQuestion.header}]` : "";
   const pendingPermission = session.pendingPermission ? ` [permission:${session.pendingPermission.tool}]` : "";
+  const pendingQuality = session.pendingQuality
+    ? ` [quality:${session.pendingQuality.state === "interrupted" ? "interrupted" : "decision"}]`
+    : "";
   const id = session.sessionId.slice(0, 24);
-  const head = `${marker}${index + 1}. ${id}${pending}${pendingEngine}${pendingQuestion}${pendingPermission}`;
+  const head = `${marker}${index + 1}. ${id}${pending}${pendingEngine}${pendingQuestion}${pendingPermission}${pendingQuality}`;
   const detail = `${session.preview} (${session.recordCount} records)`;
   return truncateLine(`${head}  ${detail}`, width);
-}
-
-function truncateLine(value: string, width: number): string {
-  const limit = Math.max(8, width);
-  if (value.length <= limit) return value;
-  return `${value.slice(0, limit - 3)}...`;
 }

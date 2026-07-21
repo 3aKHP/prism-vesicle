@@ -1,14 +1,11 @@
 id: evaluate
 displayName: Prism Evaluate Engine
-protocolVersion: v10.0-tempered-voice
+protocolVersion: v10.1-prompt-assembly
 systemPrompt:
-  - assets/prompts/shared/vesicle-base.md
-  - assets/quality/anti-ai-flavor/judge-rubric.zh-CN.md
+  - assets/prompts/host/review.md
+  - assets/quality/anti-ai-flavor/review-brief.zh-CN.md
   - assets/prompts/engines/evaluate.md
 defaultTools:
-  - config.load
-  - prompt.load
-  - session.write
   - stat_path
   - list_files
   - list_directory

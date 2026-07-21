@@ -151,6 +151,7 @@ const ENGINE_ACCENTS: Record<string, string> = {
   weaver: "#fb923c",
   "weaver-orch": "#f43f5e",
   dyad: "#e879f9",
+  stage: "#e6d4a7",
 };
 
 export function engineAccent(engine: string): string {
@@ -167,6 +168,7 @@ const ENGINE_DISPLAY_NAMES: Record<string, string> = {
   weaver: "Weaver",
   "weaver-orch": "Weaver-Orch",
   dyad: "Dyad",
+  stage: "Stage",
 };
 
 /** Capitalised short label for an engine id; falls back to the id itself. */

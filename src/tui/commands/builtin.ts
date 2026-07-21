@@ -7,6 +7,11 @@ import { engineIds } from "../../core/engine/profile";
 import type { EngineId } from "../../core/engine/profile";
 import { createManualEngineTransition } from "../../core/engine/transition";
 import type { ProviderSelection } from "../../config/providers";
+import { loadConfigForSelection } from "../../config/providers";
+import {
+  loadExperimentalQualitySettings,
+  writeExperimentalQualitySettings,
+} from "../../config/quality";
 import type { Command } from "./types";
 import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
@@ -17,6 +22,17 @@ import {
   resolveSessionTarget,
 } from "./dispatch";
 import {
+  agentsCommandCompletion,
+  artifactCommandCompletion,
+  engineCommandCompletion,
+  fixedCommandCompletion,
+  modelCommandCompletion,
+  qualityCommandCompletion,
+  resumeCommandCompletion,
+  splitTokens,
+  stageCommandCompletion,
+} from "./argument-completion";
+import {
   renderArtifactList,
   renderValidationNotice,
   renderEngineList,
@@ -26,12 +42,14 @@ const HELP_TEXT = [
   "Commands:",
   "  /model [provider] [model]  switch provider/model (no args = pick)",
   "  /engine [id] [--summary [notes]] list or switch the Prism engine",
+  "  /stage <character-card-path> <scenario-card-path> start a new Stage narrative session",
   "  /compact [notes]  summarize this session and replace old context",
   "  /context          show current context window usage",
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
+  "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
   "  /artifact [n|path] list or preview generated artifacts",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
@@ -42,6 +60,22 @@ const HELP_TEXT = [
 ].join("\n");
 
 export const builtinCommands: Command[] = [
+  {
+    name: "stage",
+    description: "Start a new Stage narrative session from two cards",
+    usage: "/stage <character-card-path> <scenario-card-path>",
+    completion: stageCommandCompletion,
+    async run(ctx, args, raw) {
+      const parts = splitTokens(args).values;
+      if (parts.length !== 2) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /stage <character-card-path> <scenario-card-path>. Paths are project-relative and must be under an approved readable root." }]);
+        return;
+      }
+      if (!ctx.startStage) throw new Error("Stage startup is unavailable in this command context.");
+      await ctx.startStage(parts[0]!, parts[1]!, raw);
+    },
+  },
+
   {
     name: "help",
     description: "Show available commands",
@@ -55,9 +89,67 @@ export const builtinCommands: Command[] = [
   },
 
   {
+    name: "quality",
+    description: "Show or configure the experimental Semantic Judge",
+    usage: "/quality [off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]",
+    completion: qualityCommandCompletion,
+    async run(ctx, args, raw) {
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      const parts = args.split(/\s+/).filter(Boolean);
+      if (parts.length === 0) {
+        await ctx.openQualityPicker();
+        return;
+      }
+      if (parts[0] === "status" && parts.length === 1) {
+        const settings = await loadExperimentalQualitySettings();
+        ctx.setMessages((prev) => [...prev, { role: "system", content: renderQualitySettings(settings) }]);
+        return;
+      }
+      if (parts[0] === "off" && parts.length === 1) {
+        await writeExperimentalQualitySettings({ mode: "off" });
+        ctx.setStatus("experimental Semantic Judge off");
+        ctx.recordActivity({ kind: "system", text: "experimental Semantic Judge disabled" });
+        ctx.setMessages((prev) => [...prev, { role: "system", content: "Experimental Semantic Judge is off. Future turns make no Judge request." }]);
+        return;
+      }
+      const confirm = parts[0] === "confirm";
+      const offset = confirm ? 1 : 0;
+      const mode = parts[offset];
+      const providerAlias = parts[offset + 1];
+      const modelId = parts[offset + 2];
+      const timeoutRaw = parts[offset + 3];
+      if ((mode !== "observe" && mode !== "rewrite") || !providerAlias || !modelId || parts.length > offset + 4) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: "Usage: /quality [status|off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]." }]);
+        return;
+      }
+      const judgeTimeoutMs = timeoutRaw ? Number(timeoutRaw) : 15_000;
+      if (!Number.isInteger(judgeTimeoutMs)) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: "Judge timeout must be an integer number of milliseconds." }]);
+        return;
+      }
+      try {
+        await ctx.ensureProviderRegistry();
+        const config = await loadConfigForSelection({ provider: providerAlias, model: modelId });
+        if (!config.apiKey) throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
+        if (mode === "rewrite" && !confirm) {
+          ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental rewrite will send eligible narrative prose to ${providerAlias}/${modelId} and may request up to two original-Engine revisions. Confirm with /quality confirm rewrite ${providerAlias} ${modelId} ${judgeTimeoutMs}.` }]);
+          return;
+        }
+        await writeExperimentalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs });
+        ctx.setStatus(`experimental Semantic Judge ${mode}`);
+        ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge ${mode} ${providerAlias}/${modelId}` });
+        ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge ${mode} is set to ${providerAlias}/${modelId} (${judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
+      } catch (error) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+      }
+    },
+  },
+
+  {
     name: "permissions",
     description: "Show or change the tool approval mode",
     usage: "/permissions [MANUAL|INERTIA|MOMENTUM|YOLO]",
+    completion: fixedCommandCompletion("permissions"),
     async run(ctx, args, raw) {
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
       if (!args) {
@@ -80,6 +172,7 @@ export const builtinCommands: Command[] = [
     name: "agents",
     description: "List Agent Profiles and current SubAgents",
     usage: "/agents [handle|stop <handle>|retry]",
+    completion: agentsCommandCompletion,
     async run(ctx, args, raw) {
       const result = await ctx.agentCommand(args);
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: result }]);
@@ -90,6 +183,7 @@ export const builtinCommands: Command[] = [
     name: "engine",
     description: "List or switch the Prism engine for future turns",
     usage: "/engine [id]",
+    completion: engineCommandCompletion,
     async run(ctx, args, raw) {
       if (!args) {
         ctx.setMessages((prev) => [
@@ -107,6 +201,10 @@ export const builtinCommands: Command[] = [
           { role: "user", content: raw },
           { role: "system", content: `Unknown engine "${args}". Available: ${engineIds.join(", ")}. Use /engine <id> [--summary [instructions]].` },
         ]);
+        return;
+      }
+      if (engine === "stage") {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Stage requires /stage <character-card-path> <scenario-card-path> so its frozen bootstrap context is recorded before the first player action." }]);
         return;
       }
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
@@ -164,6 +262,7 @@ export const builtinCommands: Command[] = [
     name: "model",
     description: "Switch provider/model (no args opens a picker)",
     usage: "/model [provider] [model]",
+    completion: modelCommandCompletion,
     async run(ctx, args, raw) {
       const parts = args.split(/\s+/).filter(Boolean);
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
@@ -197,6 +296,7 @@ export const builtinCommands: Command[] = [
     name: "effort",
     description: "Set provider thinking effort",
     usage: "/effort off|low|medium|high|xhigh|max|auto",
+    completion: fixedCommandCompletion("effort"),
     async run(ctx, args, raw) {
       if (!args) {
         ctx.setMessages((prev) => [
@@ -231,6 +331,7 @@ export const builtinCommands: Command[] = [
     name: "reasoning",
     description: "Set reasoning display mode",
     usage: "/reasoning hidden|collapsed|expanded",
+    completion: fixedCommandCompletion("reasoning"),
     async run(ctx, args, raw) {
       if (!args) {
         ctx.setMessages((prev) => [
@@ -257,6 +358,7 @@ export const builtinCommands: Command[] = [
     name: "artifact",
     description: "List artifacts or preview one in the message stream",
     usage: "/artifact [n|path]",
+    completion: artifactCommandCompletion("artifact"),
     async run(ctx, args, raw) {
       const entries = args ? (ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts()) : await ctx.refreshArtifacts();
       if (!args) {
@@ -288,6 +390,7 @@ export const builtinCommands: Command[] = [
     name: "validate",
     description: "Validate an artifact file",
     usage: "/validate <n|path>",
+    completion: artifactCommandCompletion("validate"),
     async run(ctx, args, raw) {
       const entries = ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts();
       const artifact = resolveArtifactTarget(entries, args);
@@ -316,6 +419,8 @@ export const builtinCommands: Command[] = [
     async run(ctx, _args, raw) {
       ctx.resetRewindState();
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      const resetStage = ctx.activeEngine() === "stage";
+      if (resetStage) ctx.setActiveEngine("etl");
       ctx.setSessionId(undefined);
       ctx.setSessionPath("no session yet");
       ctx.setConversation([]);
@@ -326,7 +431,12 @@ export const builtinCommands: Command[] = [
       ctx.setPendingEngineSwitch(null);
       ctx.setPendingUserQuestion(null);
       ctx.setStatus("fresh session");
-      ctx.setMessages((prev) => [...prev, { role: "system", content: "Started a fresh session. Type a prompt to begin." }]);
+      ctx.setMessages((prev) => [...prev, {
+        role: "system",
+        content: resetStage
+          ? "Started a fresh session with ETL. Start another Stage narrative with /stage <character-card-path> <scenario-card-path>."
+          : "Started a fresh session. Type a prompt to begin.",
+      }]);
     },
   },
 
@@ -334,6 +444,7 @@ export const builtinCommands: Command[] = [
     name: "resume",
     description: "Resume a saved session",
     usage: "/resume [n|id]",
+    completion: resumeCommandCompletion,
     async run(ctx, args, raw) {
       const sessions = await ctx.listSessions();
       ctx.setResumableSessions(sessions);
@@ -356,6 +467,11 @@ export const builtinCommands: Command[] = [
     },
   },
 ];
+
+function renderQualitySettings(settings: Awaited<ReturnType<typeof loadExperimentalQualitySettings>>): string {
+  if (settings.mode === "off") return "Experimental Semantic Judge: off. Future turns make no Judge request.";
+  return `Experimental Semantic Judge: ${settings.mode} with ${settings.providerAlias}/${settings.modelId} (${settings.judgeTimeoutMs} ms). It is not calibrated production policy.`;
+}
 
 function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
   const limits = ctx.activeModelLimits();

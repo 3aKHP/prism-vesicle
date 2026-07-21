@@ -7,25 +7,37 @@ hard to fool.
 ## Layering
 
 ```text
-cli/            # command dispatch only
-tui/            # OpenTUI rendering and keyboard interaction
-config/         # environment loading and config inspection
-setup/          # guided onboarding, discovery, validated config transactions
-core/engine/    # engine profile YAML loading
-core/artifacts/ # artifact discovery, preview bounds, validation selection
-core/prompt/    # prompt asset loading and composition
-core/session/   # durable session persistence + resume helpers
-core/tools/     # host tool contracts and execution
-mcp/            # external MCP tool discovery and execution
-core/gate/      # request_confirmation tool + GateRequest types
-core/agent-loop/# provider requests, tool loop, gate pause/resume
-core/agents/    # Agent profiles, child lifecycle, concurrency, inbox delivery
-core/harness/   # Harness manifest verification, compatibility, immutable install
-core/validators/# Module A/B v9 schema checks + registry
-providers/      # protocol adapters only
-assets/         # exact bundled V10 Harness manifest inventory
-host-assets/    # restricted Vesicle prompts and generic Agent extensions
-harness-manifest.json # bundled V10 Harness identity and hashes
+cli/  # command dispatch only
+tui/  # OpenTUI rendering and keyboard interaction
+config/  # environment loading and config inspection
+setup/  # guided onboarding, discovery, validated config transactions
+core/agent-loop/  # provider requests, tool loop, gate pause/resume
+core/agents/  # Agent profiles, child lifecycle, concurrency, inbox delivery
+core/artifacts/  # artifact discovery, preview bounds, validation selection
+core/attachments/  # clipboard image content-addressed store
+core/checkpoints/  # per-turn file snapshots, diff stats, restore
+core/compact/  # context compaction service
+core/engine/  # engine profile YAML loading
+core/gate/  # request_confirmation tool + GateRequest types
+core/harness/  # Harness manifest verification, compatibility, immutable install
+core/permissions/  # Tool Permission Runtime broker and policy
+core/process/  # bounded Process Runtime and shell profiles
+core/prompt/  # prompt asset loading and composition
+core/quality/  # Output Quality Guard host runtime
+core/rewind/  # conversation rewind and partial summarization
+core/runtime/  # engine and runtime asset resolution helpers
+core/session/  # durable session persistence + resume helpers
+core/stage/  # Stage consumer bootstrap
+core/tools/  # host tool contracts and execution
+core/user-question/  # ask_user_question host question types
+core/validators/  # Module A/B v9 schema checks + registry
+mcp/  # external MCP tool discovery and execution
+providers/  # protocol adapters only
+skills/  # future controlled skill bundle surface
+types/  # shared host types
+assets/  # exact bundled V10 Harness manifest inventory
+host-assets/  # restricted Vesicle prompts and generic Agent extensions
+harness-manifest.json  # bundled V10 Harness identity and hashes
 ```
 
 Allowed dependency direction:
@@ -326,7 +338,8 @@ Prompts are runtime assets, not hardcoded source literals.
 - Contract-bound delegation is a Driver Adapter over the generic SubAgent runtime. Resolve a unique delegation from the active parent Engine and requested Agent Profile, then bind mode, purpose, and retry limit from the verified Driver Contract. Model arguments may provide the self-contained `prompt` and a display label but must not widen those bindings. Harness delegations are sequential within one parent session; transient failures consume the declared retry budget, while exhaustion creates the Contract-declared, append-only, resumable user decision point. A user-authorized extra retry must persist its intent before resolving that decision; if restart cannot restore the same verified Harness context, session resume blocks instead of silently dropping or replaying the retry.
 - Delegation failures use the Driver ABI categories `unsupported`, `invalid_request`, `denied`, `not_found`, `conflict`, `transient`, and `failed`. Persist the delegation id, Agent Profile, mode, attempt history, category, and terminal result in session metadata. Cancellation is terminal and does not consume or silently restart a retry.
 - `core/quality` owns the host Output Quality Guard. Load Rule Pack and Detector assets only from a verified Harness directory, check their inner artifact hashes and published schema contracts, normalize CRLF/CR to LF plus Unicode NFC, and preserve normalized-candidate UTF-16 offsets while masking fenced code, blockquotes, HTML comments, Prism HUD and host-provided protected ranges. Unknown matcher, metric, preprocessing, schema, or binding semantics fail closed; the first host does not claim `strict` mode.
-- Harness `qualityBindings` and `agentQualityBindings` are delivery policy, not permissions or Validators. Runtime `rewrite` buffers prose, keeps rejected candidates out of the displayed transcript, returns structured findings to the same Engine, allows at most two rewrites, and stops on a repeated candidate hash. Quality feedback, pending state, pack/rule identity and bounded events must persist before another provider request so cancellation or restart cannot silently bypass the Guard.
+- Harness `qualityBindings` and `agentQualityBindings` are delivery policy, not permissions or Validators. Artifact targets come only from successful create/write/replace/append `FileToolEvent` records, are keyed by normalized project-relative path, and are evaluated from the complete current UTF-8 post-image through the same writable-path and symlink guards as file tools. A later successful mutation supersedes the same target without clearing its rejected hash history; clean prose or another clean path cannot resolve a blocking target. Runtime `rewrite` buffers prose, keeps rejected candidates out of the displayed transcript, returns target-specific structured findings to the same Engine, allows at most two shared rewrite rounds, and stops when a blocking target repeats its post-image hash. Quality feedback, per-target pending state, pack/rule identity and bounded events must persist before another provider request so permission pauses, cancellation, or restart cannot silently bypass the Guard.
+- Quality assessment, policy outcome, and host action are separate durable concepts. New `QualityEvent` records retain the legacy decision projection while adding the policy version, outcome/action, and bounded per-target finding summaries. Exhaustion is a `needs_quality_decision` pause backed by append-only warning, retry-intent, and resolution records; it must not be overwritten by ordinary completion or a simultaneous gate. Retry permits exactly one user-authorized provider continuation under the same Engine, Harness, manifest, and Rule Pack identity. Accept and stop do not call the provider, retain target warnings, and restore any lower-priority gate or question. Cancellation or provider failure leaves the same decision recoverable. Unreadable, non-UTF-8, and over-budget post-images are inconclusive warnings rather than clean results, and only an explicit user resolution or a later clean assessment of the same target may close a warning.
 - `observe` records deterministic findings without blocking Dyad, Weaver, Weaver-Orch or Scene Writer. Scene Writer observation runs in the child session before terminal delivery to the parent. `analyze` bindings for Evaluate and Chapter Reviewer describe their own audit role and are excluded from recursive Guard enforcement; a future model-visible analysis tool is a separate capability.
 - Explicit tool allowlists in released Harness Agent Profiles may reference only Vesicle built-in host tools, so packs remain portable across projects. Runtime-local MCP or parent-provided tools are not valid explicit pack dependencies; wildcard inheritance remains subject to the runtime child-tool scope.
 - `/permissions` is the only ask/allow/deny layer for model-visible tool calls. Harness and HAL declare capabilities and map operations; they must not duplicate permission prompts or require a second per-delegation path-authorization system. Agent Profiles narrow the effective tool surface, while Tool Runtime continues to enforce path, symlink, concurrency, timeout, environment, and process invariants independently of permission mode.
@@ -334,7 +347,7 @@ Prompts are runtime assets, not hardcoded source literals.
 - The bundled V10 Harness is a first-class verified Pack selected automatically when no project lock exists. Its root `harness-manifest.json` and exact `assets/` inventory must be verified before runtime construction; project/user overrides are excluded from that integrity check.
 - A selected managed Harness is one complete baseline, not another sparse fallback layer. Project and user overrides may remain above it, but a missing pack file must not fall through to the bundled Pack unless the manifest declares that exact logical path in `externalHostAssets`. Removing a project lock returns to the whole bundled V10 baseline.
 - The three Harness workflow Agents remain Driver-contract Agents. Only the exact five generic host Agent ids may use the ordinary concurrent SubAgent path while a Harness is active. Arbitrary project/user Agent Profiles must not use the host exemption and must fail closed when the Driver Contract does not declare a matching delegation.
-- Project locks and initial session host metadata persist pack id/version, source commit, manifest hash, and Adapter identity. Every start and resume reverifies the active bundled or managed Pack and requires exact session/project identity; missing, malformed, tampered, rolled-back, or switched identities block continuation instead of silently changing Harness content. Sessions created before bundled V10 activation intentionally fail this identity check and require a new session.
+- Project locks and initial session host metadata persist pack id/version, source commit, manifest hash, and Adapter identity. Every start and resume reverifies the active bundled or managed Pack and requires exact session/project identity; missing, malformed, tampered, rolled-back, or switched identities block provider continuation instead of silently changing Harness content. A persisted quality decision may still be opened under identity drift so the user can accept or stop locally, but retry remains disabled until the exact recorded Harness and Rule Pack identity is restored. Sessions created before bundled V10 activation intentionally fail this identity check and require a new session.
 
 ## Session Semantics
 
@@ -363,7 +376,7 @@ Prompts are runtime assets, not hardcoded source literals.
   metadata on the session tool record. Callers may use this for artifact
   audit/ledger views without parsing natural-language tool result text.
   In `fileEvent`, `bytes` means the resulting or observed file size, and for
-  `delete_file` it means the deleted file size. `append_file` may also report
+  `delete_file` it means the deleted file size. Successful create/write/replace/append results also include the SHA-256 of the complete resulting file. `append_file` may also report
   `deltaBytes`; `list_files` and `list_directory` report `entryCount`; `grep_files` reports
   `matches`.
 - User-selected reasoning tiers should be persisted as session metadata so
@@ -385,8 +398,7 @@ Prompts are runtime assets, not hardcoded source literals.
   after the retained system root instead of deleting old records. Resume should
   pass summaries back to providers, while the TUI renders them as host/system
   notices and rewind/user-turn accounting skips them as authored prompts.
-- Session lists should mark unresolved gates so the user can distinguish a
-  normal transcript from a workflow waiting for confirmation.
+- Session lists should mark unresolved gates and interrupted or exhausted quality decisions so the user can distinguish a normal transcript from a workflow waiting for confirmation or quality recovery.
 - Long-running turns should emit host-visible activity events before and after
   provider requests, tool calls, gate pauses, and validation. Provider
   streaming should emit assistant deltas as they arrive while still
@@ -446,6 +458,9 @@ Prompts are runtime assets, not hardcoded source literals.
   the shared argument-completion popup instead of requiring memorized input.
   Keep completion values sourced from the runtime enum where one exists, and
   preserve parser aliases while completing to canonical values.
+- See [`COMMAND_COMPLETION.md`](./COMMAND_COMPLETION.md) for the command-owned
+  registration contract, dynamic candidate rules, and required regression
+  coverage for slash-command argument completion.
 - Main prompt editing should go through Vesicle's host-owned composer layer,
   not directly through OpenTUI's single-line `<input>`. Keep the core keyboard
   semantics aligned with Claude Code's prompt input model: ordinary editing

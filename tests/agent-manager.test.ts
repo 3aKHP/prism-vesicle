@@ -27,7 +27,9 @@ describe("SubAgent manager", () => {
       await eventually(() => expect(peak).toBe(2));
       releases.shift()?.();
       await eventually(() => expect(releases.length).toBe(2));
-      releases.splice(0).forEach((release) => release());
+      releases.splice(0).forEach((release) => {
+        release();
+      });
       const results = await Promise.all(agents.map((agent) => agent.completion));
       expect(results.every((result) => result.status === "completed")).toBe(true);
       expect(peak).toBe(2);

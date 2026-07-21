@@ -2,9 +2,11 @@ import type { Accessor, Setter } from "solid-js";
 import type { ProviderSelection } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import { inspectEngineAssetDrift } from "../core/runtime/engine-assets";
+import { stageSourceDrift } from "../core/stage/bootstrap";
 import { loadSessionSnapshot } from "../core/session/store";
 import { createSessionStore } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSnapshot, SessionSummary } from "../core/session/store";
+import type { QualityWarning } from "../core/quality";
 import type { AgentStore } from "../core/agents/store";
 import type { ProcessManager } from "../core/process/manager";
 import { processEventFromTask } from "../core/tools/shell";
@@ -16,6 +18,7 @@ import type {
   PendingEngineSwitchState,
   PendingGateState,
   PendingPermissionState,
+  PendingQualityDecisionState,
   PendingUserQuestionState,
 } from "./decision-interaction";
 import {
@@ -27,17 +30,20 @@ import {
 import { latestTurnUsage, sumSessionUsage, type TokenUsageSummary } from "./telemetry";
 import type { AgentCardState, Message, SessionPickerState } from "./types";
 import { appendHarnessDelegationDecision } from "../core/agent-loop/delegation-decision";
+import { refreshQualityDecisionArtifacts } from "../core/agent-loop/run";
 import {
   assertSessionHarnessIdentity,
   requireProjectHarnessRuntime,
   resolveProjectHarnessRuntime,
 } from "../core/harness";
+import { pendingQualityDecisionFromSnapshot } from "./quality-decision-state";
 
 type InteractionState = {
   setPendingGate: Setter<PendingGateState | null>;
   setPendingEngineSwitch: Setter<PendingEngineSwitchState | null>;
   setPendingUserQuestion: Setter<PendingUserQuestionState | null>;
   setPendingPermission: Setter<PendingPermissionState | null>;
+  setPendingQualityDecision: Setter<PendingQualityDecisionState | null>;
   setGateFocus: Setter<GateFocusTarget>;
   setGateFeedbackMode: Setter<GateFocusTarget | null>;
   setGateFeedback: Setter<string>;
@@ -76,6 +82,8 @@ export type SessionResumeControllerOptions = InteractionState & {
   setReasoningDisplayMode: Setter<ReasoningDisplayMode>;
   setStatus: Setter<string>;
   setMessages: Setter<Message[]>;
+  setQualityWarnings: Setter<QualityWarning[]>;
+  setQualitySelected: Setter<number>;
   setAssetDriftKey: (key: string) => void;
   refreshArtifacts: () => Promise<unknown>;
   reportError: (error: unknown) => void;
@@ -89,10 +97,32 @@ export function createSessionResumeController(options: SessionResumeControllerOp
       let snapshot = await loadSessionSnapshot(options.rootDir, target.sessionId, {
         synthesizeDanglingToolResults: false,
       });
-      const projectHarness = requireProjectHarnessRuntime(await (
-        options.resolveHarnessRuntime ?? resolveProjectHarnessRuntime
-      )(options.rootDir));
-      assertSessionHarnessIdentity(snapshot.harness, projectHarness.harness.identity);
+      let qualityBlockedReason: string | undefined;
+      let projectHarness: ReturnType<typeof requireProjectHarnessRuntime> | undefined;
+      try {
+        projectHarness = requireProjectHarnessRuntime(await (
+          options.resolveHarnessRuntime ?? resolveProjectHarnessRuntime
+        )(options.rootDir));
+      } catch (error) {
+        if (!snapshot.pendingQualityDecision && !snapshot.pendingQualityRewrite) throw error;
+        qualityBlockedReason = qualityUnavailableMessage(snapshot, error);
+      }
+      if (projectHarness) {
+        try {
+          assertSessionHarnessIdentity(snapshot.harness, projectHarness.harness.identity);
+        } catch (error) {
+          if (!snapshot.pendingQualityDecision && !snapshot.pendingQualityRewrite) throw error;
+          qualityBlockedReason = qualityIdentityMessage(snapshot);
+        }
+        qualityBlockedReason ??= qualityRuleIdentityMessage(snapshot, projectHarness.harness.quality);
+        if (!qualityBlockedReason && snapshot.pendingQualityDecision && projectHarness.harness.quality) {
+          snapshot = await refreshQualityDecisionArtifacts(
+            options.rootDir,
+            target.sessionId,
+            projectHarness.harness.quality,
+          );
+        }
+      }
       if (snapshot.pendingDelegationDecisionRecovery) {
         await appendHarnessDelegationDecision({
           decision: snapshot.pendingDelegationDecisionRecovery,
@@ -110,18 +140,12 @@ export function createSessionResumeController(options: SessionResumeControllerOp
           + "Resume is blocked until the verified managed Harness context can restore that retry.",
         );
       }
-      if (snapshot.pendingQualityRewrite && !snapshot.pendingPermission) {
-        throw new Error(
-          `Session has an Output Quality Guard continuation pending for ${snapshot.pendingQualityRewrite.producer}. `
-          + "Resume is blocked until the same verified managed Harness context continues that rewrite.",
-        );
-      }
       await hydrateLiveProcessEvents(snapshot, target.sessionId);
       const resumedMessages = vesicleMessagesFromResumed(snapshot.messages);
       const restoredCards = await restoreAgentCards(target.sessionId);
       applyBaseSnapshot(target, snapshot, resumedMessages);
-      const hostMessages = await buildHostMessages(target, snapshot, commandEcho);
-      restorePendingInteraction(target, snapshot, resumedMessages, hostMessages);
+      const hostMessages = await buildHostMessages(target, snapshot, commandEcho, !projectHarness);
+      restorePendingInteraction(target, snapshot, resumedMessages, hostMessages, qualityBlockedReason);
       options.setMessages([...displayTranscriptFromSnapshot(snapshot.messages, restoredCards), ...hostMessages]);
       await options.refreshArtifacts();
     } catch (error) {
@@ -160,7 +184,13 @@ export function createSessionResumeController(options: SessionResumeControllerOp
     options.setConversation(messages);
     options.setLastTurnUsage(latestTurnUsage(snapshot.messages));
     options.setSessionUsage(sumSessionUsage(snapshot.messages));
-    options.setOutput(snapshot.pendingGate?.assistantContent ?? snapshot.pendingEngineSwitch?.assistantContent ?? snapshot.pendingUserQuestion?.assistantContent ?? "");
+    options.setOutput(snapshot.pendingQualityDecision?.candidate.content
+      ?? snapshot.pendingQualityRewrite?.candidate?.content
+      ?? snapshot.pendingGate?.assistantContent
+      ?? snapshot.pendingEngineSwitch?.assistantContent
+      ?? snapshot.pendingUserQuestion?.assistantContent
+      ?? "");
+    options.setQualityWarnings(snapshot.qualityWarnings);
     options.setSessionPicker(null);
   }
 
@@ -168,13 +198,30 @@ export function createSessionResumeController(options: SessionResumeControllerOp
     target: SessionSummary,
     snapshot: SessionSnapshot,
     commandEcho?: string,
+    skipAssetDrift = false,
   ): Promise<Message[]> {
     const restoredEngine = snapshot.engine ?? "etl";
     const hostMessages: Message[] = [];
     if (commandEcho) hostMessages.push({ role: "user", content: commandEcho });
     hostMessages.push({ role: "system", content: `Restored engine ${restoredEngine} from session.` });
+    if (snapshot.qualityWarnings.length > 0) {
+      const targets = snapshot.qualityWarnings.reduce((count, warning) => count + warning.targets.length, 0);
+      hostMessages.push({
+        role: "system",
+        content: `${targets} quality warning target${targets === 1 ? " remains" : "s remain"}; the current version is not confirmed clean.`,
+      });
+    }
     restorePermissionMode(snapshot, hostMessages);
-    await reportAssetDrift(target.sessionId, snapshot, restoredEngine, hostMessages);
+    if (!skipAssetDrift) await reportAssetDrift(target.sessionId, snapshot, restoredEngine, hostMessages);
+    if (restoredEngine === "stage" && snapshot.stageBootstrap) {
+      const changed = await stageSourceDrift(options.rootDir, snapshot.stageBootstrap);
+      if (changed.length > 0) {
+        hostMessages.push({
+          role: "system",
+          content: `Stage card source changed since this session began: ${changed.join(", ")}. The saved character and scene context remains active.`,
+        });
+      }
+    }
     await restoreProvider(snapshot, hostMessages);
     if (snapshot.reasoningTier) {
       options.setThinkingTier(snapshot.reasoningTier);
@@ -234,11 +281,26 @@ export function createSessionResumeController(options: SessionResumeControllerOp
     snapshot: SessionSnapshot,
     messages: VesicleMessage[],
     hostMessages: Message[],
+    qualityBlockedReason?: string,
   ): void {
     const engine = snapshot.engine ?? "etl";
     resetInteractionDrafts();
     if (snapshot.pendingPermission) {
       restorePendingPermission(target, snapshot, messages, engine, hostMessages);
+    } else if (snapshot.pendingQualityDecision || snapshot.pendingQualityRewrite) {
+      const pending = pendingQualityDecisionFromSnapshot(snapshot, qualityBlockedReason);
+      if (!pending) throw new Error("Pending Output Quality Guard state could not be restored.");
+      options.setPendingQualityDecision(pending);
+      options.setQualitySelected(pending.decision.canRetry ? 0 : 1);
+      options.setStatus(pending.decision.canRetry
+        ? `quality decision pending: ${pending.decision.findingCount} finding${pending.decision.findingCount === 1 ? "" : "s"}`
+        : "quality retry blocked by Harness identity drift");
+      hostMessages.push({
+        role: "system",
+        content: pending.decision.canRetry
+          ? "Resumed an interrupted Output Quality Guard revision. Choose whether to revise again, use the current version, or stop."
+          : pending.decision.blockedReason!,
+      });
     } else if (snapshot.pendingGate) {
       options.setPendingGate({
         kind: "needs_user",
@@ -251,7 +313,9 @@ export function createSessionResumeController(options: SessionResumeControllerOp
         messages,
       });
       options.setGateFocus("confirm");
-      options.setStatus(`gate pending: ${snapshot.pendingGate.gate.gate}`);
+      options.setStatus(snapshot.qualityWarnings.length > 0
+        ? `gate pending: ${snapshot.pendingGate.gate.gate} · quality warning`
+        : `gate pending: ${snapshot.pendingGate.gate.gate}`);
       hostMessages.push({ role: "system", content: `Resumed pending gate ${snapshot.pendingGate.gate.gate}. Use the gate controls below to continue.` });
     } else if (snapshot.pendingEngineSwitch) {
       options.setPendingEngineSwitch({
@@ -316,6 +380,7 @@ export function createSessionResumeController(options: SessionResumeControllerOp
     options.setPendingEngineSwitch(null);
     options.setPendingUserQuestion(null);
     options.setPendingPermission(null);
+    options.setPendingQualityDecision(null);
     options.setQuestionSelected(0);
     options.setQuestionFreeformText("");
     options.setQuestionFreeformCursor(0);
@@ -327,4 +392,34 @@ export function createSessionResumeController(options: SessionResumeControllerOp
   }
 
   return { resumeSession };
+}
+
+function qualityIdentityMessage(snapshot: SessionSnapshot): string {
+  const pending = snapshot.pendingQualityDecision?.qualityState ?? snapshot.pendingQualityRewrite;
+  return pending
+    ? `Quality retry requires Harness ${pending.packId}@${pending.packVersion} and Rule Pack ${pending.ruleVersion}. The active verified Harness identity differs; use the current version or stop, or restore the required Harness before retrying.`
+    : "Quality retry is blocked because the active verified Harness identity differs.";
+}
+
+function qualityUnavailableMessage(snapshot: SessionSnapshot, error: unknown): string {
+  const pending = snapshot.pendingQualityDecision?.qualityState ?? snapshot.pendingQualityRewrite;
+  const detail = error instanceof Error ? error.message : String(error);
+  return pending
+    ? `Quality retry requires Harness ${pending.packId}@${pending.packVersion} and Rule Pack ${pending.ruleVersion}, but that verified Harness cannot be loaded (${detail}). Use the current version or stop, or restore the required Harness before retrying.`
+    : `Quality retry is unavailable because the recorded verified Harness cannot be loaded (${detail}).`;
+}
+
+function qualityRuleIdentityMessage(
+  snapshot: SessionSnapshot,
+  quality: import("../core/quality").QualityRuntimeContext | undefined,
+): string | undefined {
+  const pending = snapshot.pendingQualityDecision?.qualityState ?? snapshot.pendingQualityRewrite;
+  if (!pending) return undefined;
+  if (quality
+    && quality.packId === pending.packId
+    && quality.packVersion === pending.packVersion
+    && quality.manifestSha256 === pending.manifestSha256
+    && quality.ruleManifest.version === pending.ruleVersion
+    && quality.ruleManifest.sourceHash === pending.ruleSourceHash) return undefined;
+  return qualityIdentityMessage(snapshot);
 }

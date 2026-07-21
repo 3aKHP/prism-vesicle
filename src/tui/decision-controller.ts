@@ -15,12 +15,14 @@ import {
   type GateFocusTarget,
 } from "./GatePrompt";
 import { questionComposerIsActive, questionPanelMinHeight } from "./QuestionPrompt";
+import { permissionPanelHeight } from "./PermissionPrompt";
 import {
   engineSwitchGateRequest,
   permissionResolutionFromGate,
   type PendingEngineSwitchState,
   type PendingGateState,
   type PendingPermissionState,
+  type PendingQualityDecisionState,
   type PendingUserQuestionState,
   type TuiKeyEvent,
 } from "./decision-interaction";
@@ -36,6 +38,7 @@ export type DecisionControllerOptions = {
   submitGate: (resolution: GateResolution) => void;
   submitQuestionOption: (selectedIndex: number) => void;
   submitQuestionFreeform: (value: unknown) => void;
+  submitQualityDecision: (resolution: "retry" | "accept" | "stop") => void;
   applyPermissionMode: (mode: PermissionMode) => Promise<void>;
 };
 
@@ -44,9 +47,11 @@ export function createDecisionController(options: DecisionControllerOptions) {
   const [pendingEngineSwitch, setPendingEngineSwitch] = createSignal<PendingEngineSwitchState | null>(null);
   const [pendingUserQuestion, setPendingUserQuestion] = createSignal<PendingUserQuestionState | null>(null);
   const [pendingPermission, setPendingPermission] = createSignal<PendingPermissionState | null>(null);
+  const [pendingQualityDecision, setPendingQualityDecision] = createSignal<PendingQualityDecisionState | null>(null);
   const [pendingChildPermission, setPendingChildPermission] = createSignal<PermissionRequest | null>(null);
   const [yoloConfirmStage, setYoloConfirmStage] = createSignal<1 | 2 | null>(null);
   const [questionSelected, setQuestionSelected] = createSignal(0);
+  const [qualitySelected, setQualitySelected] = createSignal(0);
   const [questionFreeformText, setQuestionFreeformText] = createSignal("");
   const [questionFreeformCursor, setQuestionFreeformCursor] = createSignal(0);
   const [questionFreeformKillBuffer, setQuestionFreeformKillBuffer] = createSignal<string | undefined>();
@@ -65,10 +70,36 @@ export function createDecisionController(options: DecisionControllerOptions) {
   const activePermissionRequest = createMemo(() => pendingPermission()?.request ?? pendingChildPermission() ?? undefined);
   const decisionPanelMinHeight = createMemo(() => {
     const pending = pendingUserQuestion();
+    if (pendingQualityDecision()) return 8;
     if (pendingEngineSwitch()) return 10;
-    if (activePermissionRequest()) return 10;
+    if (activePermissionRequest()) return permissionPanelHeight;
     return pending ? questionPanelMinHeight(pending.question, questionSelected()) : 9;
   });
+
+  function handleQualityKey(key: TuiKeyEvent): boolean {
+    const pending = pendingQualityDecision();
+    if (!pending || options.busy()) return false;
+    if (key.name === "up" || (key.ctrl && key.name === "p")) {
+      setQualitySelected((current) => (current + 2) % 3);
+      return true;
+    }
+    if (key.name === "down" || (key.ctrl && key.name === "n")) {
+      setQualitySelected((current) => (current + 1) % 3);
+      return true;
+    }
+    if (key.name === "escape") {
+      options.setStatus("quality decision remains pending");
+      return true;
+    }
+    if (key.name !== "return" && key.name !== "enter") return false;
+    const resolution = (["retry", "accept", "stop"] as const)[qualitySelected()]!;
+    if (resolution === "retry" && !pending.decision.canRetry) {
+      options.setStatus(pending.decision.blockedReason ?? "quality retry is unavailable under the active Harness identity");
+      return true;
+    }
+    options.submitQualityDecision(resolution);
+    return true;
+  }
 
   function handleGateKey(key: TuiKeyEvent): boolean {
     if (options.busy() && !pendingChildPermission()) return false;
@@ -252,6 +283,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
     gateFeedbackMode,
     gateFocus,
     handleGateKey,
+    handleQualityKey,
     handlePaste,
     handleQuestionKey,
     handleYoloKey,
@@ -259,10 +291,12 @@ export function createDecisionController(options: DecisionControllerOptions) {
     pendingEngineSwitch,
     pendingGate,
     pendingPermission,
+    pendingQualityDecision,
     pendingUserQuestion,
     questionFreeformCursor,
     questionFreeformText,
     questionSelected,
+    qualitySelected,
     setGateFeedback,
     setGateFeedbackCursor,
     setGateFeedbackKillBuffer,
@@ -272,11 +306,13 @@ export function createDecisionController(options: DecisionControllerOptions) {
     setPendingEngineSwitch,
     setPendingGate,
     setPendingPermission,
+    setPendingQualityDecision,
     setPendingUserQuestion,
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
     setQuestionFreeformText,
     setQuestionSelected,
+    setQualitySelected,
     setYoloConfirmStage,
     yoloConfirmStage,
   };
