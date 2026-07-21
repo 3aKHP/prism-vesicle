@@ -4,7 +4,7 @@ English | [简体中文](../../zh-CN/advanced/README.md)
 
 This section covers capabilities that the tutorials and reference do not expand on. Best read after the [tutorials](../tutorials/README.md).
 
-> **Status convention:** each page opens with 🟢 Implemented / 🟡 Experimental, reflecting maturity at the develop snapshot (`2026-07-21`). Experimental features may stabilize over releases — **[`STATUS.md`](../../../../STATUS.md) is the authoritative current state**; the markers here may lag. When a feature graduates, update the table on this page and the status line on its page.
+> **Status convention:** each page opens with 🟢 Implemented / 🟡 Experimental, reflecting maturity in `1.0.0-alpha.3`. Experimental features may stabilize over releases — **[`STATUS.md`](../../../../STATUS.md) is the authoritative current state**; the markers here may lag. When a feature graduates, update the table on this page and the status line on its page.
 
 ## Feature overview
 

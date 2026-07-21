@@ -2,7 +2,7 @@
 
 English | [简体中文](../../zh-CN/advanced/stage.md)
 
-> **Status (develop snapshot, 2026-07-21):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.0.0-alpha.3`):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 Stage is Prism's **consumer-side** collaborative fiction engine: feed it a character card (Module A) and a scenario card (Module B) and it opens a third-person continuous narrative session — your messages are your character's actions, and it narrates the response.
 

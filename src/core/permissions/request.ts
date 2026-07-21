@@ -90,7 +90,8 @@ function validQualityTargets(value: unknown): boolean {
       && typeof item.path === "string"
       && ["create", "write", "replace", "append"].includes(String(item.operation))
       && Array.isArray(item.mutationCallIds)
-      && item.mutationCallIds.every((id) => typeof id === "string")
+      && item.mutationCallIds.length > 0
+      && item.mutationCallIds.every((id) => typeof id === "string" && id.length > 0)
       && typeof item.postImageHash === "string"
       && /^[a-f0-9]{64}$/.test(item.postImageHash)
       && typeof item.bytes === "number"

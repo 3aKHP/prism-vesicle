@@ -27,7 +27,7 @@ Match the computed hash against the line for that file in `SHA256SUMS.txt`; a ma
 
 Windows executables can carry an Authenticode signature. **A checksum is not a signature** — a hash detects changes after download but cannot prove who published the file.
 
-**Current status (`1.0.0-alpha.2`)**: the Windows executable and installer are **intentionally unsigned**. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. So:
+**Current status (`1.0.0-alpha.3`)**: the Windows executable and installer are **intentionally unsigned**. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. So:
 
 - Download only from the [official GitHub Releases](https://github.com/3aKHP/prism-vesicle/releases);
 - Always verify against `SHA256SUMS.txt` as shown above;
