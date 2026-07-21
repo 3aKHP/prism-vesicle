@@ -21,7 +21,9 @@ import { join } from "node:path";
 
 export {};
 
-const REPO_ROOT = process.cwd();
+// Resolve from this module's location so the script works regardless of the
+// invocation cwd (e.g. `bun run smoke:binary` from anywhere, not just root).
+const REPO_ROOT = join(import.meta.dir, "..");
 const BINARY_PATH =
   process.env.VESICLE_BIN ??
   join(REPO_ROOT, process.platform === "win32" ? "prism-vesicle.exe" : "prism-vesicle");

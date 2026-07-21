@@ -8,6 +8,14 @@ import { INSTALLER_PAYLOAD, stageWindowsInstaller } from "../../../scripts/stage
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
+// Scope: these guard the Inno Setup source (.iss) and the staged payload —
+// the stable installer shape. The PowerShell smoke
+// (scripts/smoke-windows-installer.ps1) is NOT source-asserted here; it is
+// exercised for real by the release-lane installer smoke in CI. Asserting its
+// text was a redundant test-of-the-test (removed in the test-layer refactor);
+// .ps1 structural breakage is therefore caught at release time, not per-PR,
+// by design.
+
 describe("Windows guided installer", () => {
   test("declares a stable per-user lifecycle and the complete runtime payload", async () => {
     const source = await readFile(join(import.meta.dir, "..", "..", "..", "installer", "PrismVesicle.iss"), "utf8");
