@@ -36,6 +36,10 @@ describe("SideQuestionOverlay", () => {
     expect(frame).toContain("Main: running tools");
     expect(frame).toContain("what is the current phase?");
     expect(frame).toContain("blueprint drafting");
+    // Usage renders as a distinct dimmed chrome line, never as model output
+    // appended to the answer (no underscore-wrapped "_tokens" prose).
+    expect(frame).toContain("side tokens ↑120 ↓40");
+    expect(frame).not.toContain("_tokens");
     // Footer hint row stays present and stable.
     expect(frame).toContain("Esc close");
     expect(frame).toContain("c copy");
