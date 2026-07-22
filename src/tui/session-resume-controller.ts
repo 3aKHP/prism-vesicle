@@ -89,6 +89,7 @@ export type SessionResumeControllerOptions = InteractionState & {
   refreshArtifacts: () => Promise<unknown>;
   reportError: (error: unknown) => void;
   clearQueuedInputs: () => void;
+  onSessionActive?: (sessionId: string) => void;
 };
 
 export function createSessionResumeController(options: SessionResumeControllerOptions) {
@@ -151,6 +152,9 @@ export function createSessionResumeController(options: SessionResumeControllerOp
       restorePendingInteraction(target, snapshot, resumedMessages, hostMessages, qualityBlockedReason);
       options.setMessages([...displayTranscriptFromSnapshot(snapshot.messages, restoredCards), ...hostMessages]);
       await options.refreshArtifacts();
+      // Fire after provider, reasoning, and engine state are fully restored so a
+      // side-question snapshot rebuild observes the resumed settings.
+      options.onSessionActive?.(target.sessionId);
     } catch (error) {
       options.reportError(error);
     } finally {
