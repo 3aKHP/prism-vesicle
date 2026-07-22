@@ -58,7 +58,7 @@ After a complete tool round, queued messages are added to the active conversatio
 
 ## `/btw` side questions
 
-`/btw` asks a one-shot, tool-free question about the current conversation without interrupting the active turn. It copies the frozen context boundary published before each main provider request, so it never observes a half-written tool round; the answer comes from an independent side request to the active session's provider/model and streams into a temporary overlay while the main turn keeps running underneath.
+`/btw` asks a one-shot, tool-free question about the current conversation without interrupting the active turn. It copies the frozen context boundary published before each main provider request, so it never observes a half-written tool round; but the parent Engine prompt, conversation, and tool results are placed inside one user message as **reference material**, with the dedicated side prompt as the only system instruction — parent workflow intent, tool protocol, and reasoning state never become active side instructions. The answer comes from an independent side request to the active session's provider/model (declaring no tools) and streams into a temporary overlay while the main turn keeps running underneath.
 
 | Key | Purpose |
 |---|---|

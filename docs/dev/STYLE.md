@@ -450,14 +450,24 @@ Prompts are runtime assets, not hardcoded source literals.
   conversation. It is `immediate` because it copies the immutable
   `SideQuestionContextSnapshot` published before each main provider request
   (never a half-written tool round) and sends one no-tools request through a
-  side-specific AbortController independent of the main turn. Side exchanges
-  are in-memory only: they must never enter session JSONL, the main
-  `conversation()` value, the visible transcript, checkpoints, validators,
-  gates, permissions, or tool execution, and must not cancel or fail the main
-  Agent Loop. The side overlay is visual priority only — a gate, permission, or
-  question the main loop raises while it is open stays pending and appears on
-  dismissal. Bare `/btw` reopens the latest in-memory exchange for the current
-  session; with no prior exchange it returns to the composer with a usage hint.
+  side-specific AbortController independent of the main turn. The request has
+  exactly one system authority — the dedicated `assets/prompts/shared/side-question.md`
+  — and one user message: a host-rendered reference packet that quotes the
+  parent Engine prompt, the conversation, and tool results verbatim as inert
+  reference data (`src/core/side-question/reference.ts`). Parent workflow
+  intent, tool protocol (`toolCalls`/`toolCallId`/tool-role messages),
+  reasoning, and thinking blocks never become active side instructions or
+  provider protocol fields; inherited images stay reference-only in the
+  snapshot and materialize on the single user packet for vision models. No
+  tools are declared, and any structured tool call in the response (including
+  mixed text-plus-tool) fails the exchange. Side exchanges are in-memory only:
+  they must never enter session JSONL, the main `conversation()` value, the
+  visible transcript, checkpoints, validators, gates, permissions, or tool
+  execution, and must not cancel or fail the main Agent Loop. The side overlay
+  is visual priority only — a gate, permission, or question the main loop
+  raises while it is open stays pending and appears on dismissal. Bare `/btw`
+  reopens the latest in-memory exchange for the current session; with no prior
+  exchange it returns to the composer with a usage hint.
 - Escape uses an 800ms double-press window: empty input opens rewind, non-empty
   input saves and clears the draft, and an in-flight request is aborted. Active
   modal panels consume Escape before the prompt-level handler.
