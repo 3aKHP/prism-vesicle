@@ -51,8 +51,16 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
   const readySessions = new Set<string>();
   const [overlay, setOverlay] = createSignal<SideQuestionOverlayState | null>(null);
   const [exchangeVersions, setExchangeVersions] = createSignal(0);
-  const [scrollOffset, setScrollOffset] = createSignal(0);
+  let answerScroller: ((delta: number) => void) | undefined;
   let sideController: AbortController | null = null;
+
+  /** The overlay registers its scrollbox scroll driver here so ↑/↓ scroll. */
+  function registerAnswerScroller(scroll: (delta: number) => void): () => void {
+    answerScroller = scroll;
+    return () => {
+      if (answerScroller === scroll) answerScroller = undefined;
+    };
+  }
 
   function captureSnapshot(snapshot: SideQuestionContextSnapshot): void {
     readySessions.add(snapshot.sessionId);
@@ -130,7 +138,7 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
     if (!trimmed) {
       const prior = sessionExchanges(id);
       if (prior.length > 0) {
-        resetScrollFor(prior.length - 1);
+
         setOverlay({ sessionId: id, exchangeIndex: prior.length - 1 });
       } else {
         options.setStatus("Usage: /btw <question>");
@@ -154,7 +162,7 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
     exchanges.set(id, list);
     bumpExchangeVersion();
     const index = list.length - 1;
-    resetScrollFor(index);
+
     setOverlay({ sessionId: id, exchangeIndex: index });
     void runSideRequest(id, exchange);
   }
@@ -229,10 +237,6 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
     setExchangeVersions((value) => value + 1);
   }
 
-  function resetScrollFor(_index: number): void {
-    setScrollOffset(0);
-  }
-
   function close(): void {
     abortSide();
     setOverlay(null);
@@ -274,10 +278,10 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
         close();
         return true;
       case "up":
-        setScrollOffset((offset) => Math.max(0, offset - 1));
+        answerScroller?.(-1);
         return true;
       case "down":
-        setScrollOffset((offset) => offset + 1);
+        answerScroller?.(1);
         return true;
       case "left":
         navigate(state, -1);
@@ -299,7 +303,7 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
   function navigate(state: SideQuestionOverlayState, delta: number): void {
     const list = sessionExchanges(state.sessionId);
     const next = Math.max(0, Math.min(list.length - 1, state.exchangeIndex + delta));
-    resetScrollFor(next);
+
     setOverlay({ sessionId: state.sessionId, exchangeIndex: next });
   }
 
@@ -317,7 +321,7 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
   return {
     overlay,
     setOverlay,
-    scrollOffset,
+    registerAnswerScroller,
     sessionExchanges,
     currentExchange,
     exchangeVersions,

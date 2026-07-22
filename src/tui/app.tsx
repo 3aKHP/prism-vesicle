@@ -989,9 +989,9 @@ export function App(props: AppProps = {}) {
               index={state.exchangeIndex}
               total={sideQuestionController.sessionExchanges(state.sessionId).length}
               mainStatus={sideQuestionController.mainStatusText()}
-              scrollOffset={sideQuestionController.scrollOffset()}
               width={layout().width}
               height={Math.max(6, dimensions().height - 3 - layout().footerHeight)}
+              registerScroller={sideQuestionController.registerAnswerScroller}
             />
           )}
         </Show>
