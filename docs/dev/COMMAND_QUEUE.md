@@ -39,6 +39,7 @@ Artifact preview and validation use the tool-round boundary so they observe a co
 | Commands | Busy behavior |
 |---|---|
 | `/help`, `/context`, `/reasoning` | immediate |
+| `/btw` | immediate |
 | `/engine`, `/effort`, `/permissions` without arguments | immediate |
 | `/quality status` | immediate |
 | `/agents` list, inspect, or stop | immediate |
@@ -46,6 +47,8 @@ Artifact preview and validation use the tool-round boundary so they observe a co
 | `/model`, `/compact`, `/stage`, `/new`, `/resume`, `/rewind` | queue at Agent Loop boundary |
 | engine, effort, permission, and quality mutations | queue at Agent Loop boundary |
 | `/agents retry` | queue at Agent Loop boundary |
+
+`/btw` is `immediate` even though it makes a provider request: it copies the frozen context snapshot already published before each main provider request, sends one tool-free request through a side-specific AbortController that is independent of the main turn, and never mutates the active loop, session, transcript, or queue. Its overlay is visual priority only; a gate or permission the main loop raises while the overlay is open stays pending and appears when the overlay closes.
 
 ## Queue And Execution Rules
 

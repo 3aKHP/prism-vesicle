@@ -14,6 +14,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/rewind` (alias `/checkpoint`) | Rewind to a step in this session, optionally restoring files |
 | `/compact [instructions]` | Compact the current session into a summary and continue, saving context |
 | `/context` | Show current context usage and window occupancy |
+| `/btw <question>` | Ask a temporary side question about the current conversation without interrupting the turn; no args reopens the latest answer |
 
 ## Model and engine
 
@@ -54,3 +55,18 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | Ctrl+Q | Exit Vesicle |
 
 After a complete tool round, queued messages are added to the active conversation before its next provider request. If the loop completes without another tool boundary, the next queued input is processed immediately. Slash commands declare their own busy-turn behavior: `/help`, `/context`, `/reasoning`, read-only settings forms, and `/agents` inspection or stop run immediately; `/artifact` and `/validate` wait for the current tool round; configuration changes, pickers, session commands, `/compact`, and `/agents retry` wait for the Agent Loop. A picker pauses the remaining queue, and switching or resetting the session clears it.
+
+## `/btw` side questions
+
+`/btw` asks a one-shot, tool-free question about the current conversation without interrupting the active turn. It copies the frozen context boundary published before each main provider request, so it never observes a half-written tool round; the answer comes from an independent side request to the active session's provider/model and streams into a temporary overlay while the main turn keeps running underneath.
+
+| Key | Purpose |
+|---|---|
+| Esc / Space / Enter (complete/error) | Close the overlay and return to the main surface |
+| Esc (loading) | Cancel only the side request and close, leaving the main turn running |
+| ↑ / ↓ | Scroll the current answer |
+| ← / → | Move between this session's side exchanges |
+| c | Copy the current answer's raw Markdown |
+| x | Clear all of this session's side exchanges and close |
+
+Side exchanges live only in process memory: they never enter session JSONL, the main conversation record, checkpoints, validators, gates, permissions, or tool execution, and do not survive a process restart.

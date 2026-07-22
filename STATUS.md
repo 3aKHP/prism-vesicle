@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-alpha.3 release candidate (2026-07-21)._
+_Snapshot: 1.0.0-alpha.3 released baseline plus unreleased `develop` changes (2026-07-22)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-alpha.3**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.3 GitHub Release and npm package once the accepted candidate is tagged; `unreleased` = implemented on `develop` but not yet included in a public release; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Current public release: **1.0.0-alpha.3**. The `State` column tracks the public contract and subsequent development: `released` = included in the 1.0.0-alpha.3 GitHub Release and npm package; `unreleased` = implemented on `develop` but not yet included in a public release; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
@@ -18,6 +18,7 @@ Release candidate: **1.0.0-alpha.3**. The `State` column tracks the candidate's 
 | Providers | Thinking-effort controls and reasoning-block visibility | released |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
 | TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | unreleased |
+| TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | unreleased |
 | TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
