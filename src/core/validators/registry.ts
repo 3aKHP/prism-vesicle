@@ -50,29 +50,36 @@ const CHARACTER_KEYS = ["archetype", "age_gender", "inventory"];
 const SCENARIO_KEYS = ["scenario_name", "world_state", "beat_map"];
 
 /**
- * Parse a leading `---` frontmatter block into its top-level keys and the body
- * that follows the closing fence. Returns null when there is no real
- * frontmatter — including a `---` that is just a Markdown horizontal rule with
- * no closing fence, or a block with no closing fence at all.
+ * Leniently parse a leading `---` frontmatter block into its top-level keys and
+ * the body that follows. Used for CLASSIFICATION (the `applies` predicates), so
+ * it deliberately does not require a closing `---` fence: a card whose keys are
+ * present but whose closing fence is missing must still be recognized, so the
+ * validator gets to run and report the malformation. The strict closing-fence
+ * requirement lives in `splitFrontmatter` (index.ts), which the validators use
+ * to decide whether the frontmatter is well-formed.
+ *
+ * Non-card content is rejected by the `keys.size === 0` guard in the predicates:
+ * a `---` Markdown horizontal rule over prose yields no `key:` lines.
  */
 function parseFrontmatter(content: string): { keys: Set<string>; body: string } | null {
   const trimmed = content.trimStart();
   if (!trimmed.startsWith("---")) return null;
   const lines = trimmed.split(/\r?\n/);
   const keys = new Set<string>();
-  let closed = false;
-  let index = 1;
-  for (; index < lines.length; index++) {
+  let closeIndex = -1;
+  for (let index = 1; index < lines.length; index++) {
     const line = lines[index].trim();
     if (line === "---") {
-      closed = true;
+      closeIndex = index;
       break;
     }
     const colon = line.indexOf(":");
     if (colon > 0) keys.add(line.slice(0, colon).trim());
   }
-  if (!closed) return null;
-  return { keys, body: lines.slice(index + 1).join("\n") };
+  // With no closing fence, treat the whole post-`---` region as the body so
+  // body-section signals (e.g. Module A sections) still work for classification.
+  const bodyStart = closeIndex === -1 ? 1 : closeIndex + 1;
+  return { keys, body: lines.slice(bodyStart).join("\n") };
 }
 
 /**
@@ -98,6 +105,13 @@ function isCharacterCard(content: string): boolean {
  * Recognize a Module B scenario card by shape: any scenario-family frontmatter
  * key. A card missing `scenario_name` but carrying `world_state`/`beat_map`
  * still matches.
+ *
+ * Unlike `isCharacterCard`, there is no body-section fallback: a Module B
+ * card's distinctive structure is its frontmatter (`beat_map`/`world_state`),
+ * whereas Module A's is its seven named body sections. A scenario card missing
+ * all three family keys is not recognized; that is an extreme malformation that
+ * is unlikely in practice, and a body heuristic (HTML-comment markers) would
+ * risk re-admitting non-card content.
  */
 function isScenarioCard(content: string): boolean {
   const fm = parseFrontmatter(content);

@@ -394,6 +394,24 @@ u
     expect(applies("scenario-card", leadingRuleReport)).toBe(false);
   });
 
+  test("a card with keys but a missing closing fence is still recognized (then flagged malformed)", () => {
+    // Lenient classification: no closing `---`, but the keys are present. The
+    // card must still match so the validator runs and reports the malformation
+    // rather than silently passing.
+    const unclosed = `---
+name: x
+archetype: observer
+age_gender: f
+inventory: tool
+
+## Visual Cortex
+appearance`;
+    expect(applies("character-card", unclosed)).toBe(true);
+    const result = validateContent(["character-card", "scenario-card"], unclosed);
+    expect(result?.results[0]?.result.ok).toBe(false);
+    expect(result?.results[0]?.result.errors.some((e: string) => e.includes("frontmatter is missing or malformed"))).toBe(true);
+  });
+
   test("a Module A card missing archetype is still recognized (shape, not field)", () => {
     const missingArchetype = characterCard.replace("archetype: 观测者\n", "");
     // age_gender / inventory still mark it as a character card.
