@@ -106,13 +106,16 @@ export async function resolveSideQuestionSnapshot(options: {
   reasoningTier?: ReasoningTier;
 }): Promise<SideQuestionContextSnapshot | undefined> {
   const config = await loadConfigForSelection(options.providerSelection);
-  const projectHarness = await resolveProjectHarnessRuntime(options.rootDir)
-    .then((runtime) => (runtime ? requireProjectHarnessRuntime(runtime) : undefined))
-    .catch(() => undefined);
+  // Mirror bootstrapTurn's strict harness resolution. An invalid lock or failed
+  // Pack verification must propagate rather than be silently swallowed and fall
+  // back to the bundled baseline, which would quote an Engine prompt
+  // inconsistent with the session's Harness. Both callers wrap this call with
+  // .catch(() => undefined) so a failure degrades to "not started".
+  const projectHarness = requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(options.rootDir));
   const engineAssets = await loadEngineAssetRuntime(
     options.engine,
     options.rootDir,
-    projectHarness?.assets ? { resolver: projectHarness.assets } : {},
+    { resolver: projectHarness.assets },
   );
   const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, {
     synthesizeDanglingToolResults: false,
