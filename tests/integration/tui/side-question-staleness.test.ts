@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createSignal } from "solid-js";
+import { KeyEvent } from "@opentui/core";
 import { runPrompt } from "../../../src/core/agent-loop/run";
 import { createSideQuestionController } from "../../../src/tui/side-question-controller";
 import { resolveSideQuestionSnapshot } from "../../../src/core/side-question/service";
@@ -9,6 +10,13 @@ import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState }
 
 beforeEach(configureTestProviderEnv);
 afterEach(restoreAgentLoopTestState);
+
+function key(name: string) {
+  return new KeyEvent({
+    name, ctrl: false, meta: false, shift: false, option: false,
+    sequence: "", number: false, raw: "", eventType: "press", source: "raw",
+  });
+}
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -140,5 +148,58 @@ describe("side question snapshot freshness after host actions", () => {
     const replayed = sideBody!.messages!.filter((message) => message.role === "user").map((message) => String(message.content));
     expect(replayed.some((content) => content.includes("only this remains"))).toBe(true);
     expect(replayed.some((content) => content.includes("first prompt"))).toBe(false);
+  });
+
+  test("Escape during snapshot resolution cancels the side request before it starts", async () => {
+    await configureTestProviderEnv({ models: ["      - test-model", "      - other-model"] });
+    const rootDir = await createPromptRoot();
+    globalThis.fetch = (async () => Response.json({ id: "turn", choices: [{ message: { content: "ok" } }] })) as unknown as typeof fetch;
+    let captured: SideQuestionContextSnapshot | undefined;
+    const result = await runPrompt({
+      input: "hi",
+      rootDir,
+      permission: { mode: "MOMENTUM" },
+      onProviderContextSnapshot: (snapshot) => { captured = snapshot; },
+    });
+    if (result.kind !== "complete") throw new Error("expected complete turn");
+
+    // Switching the model forces resolveEffectiveSnapshot onto the rebuild
+    // path (config + harness + engine-asset + session reads), which spans many
+    // async ticks — a real window for Escape to land during the await.
+    const [providerSel, setProviderSel] = createSignal({ provider: "test", model: "test-model" });
+    let sideFetchCalled = false;
+    globalThis.fetch = (async () => {
+      sideFetchCalled = true;
+      return new Response(sseFromBlocks([
+        'data: {"id":"s","choices":[{"delta":{"content":"a"}}]}',
+        'data: {"id":"s","choices":[{"delta":{},"finish_reason":"stop"}]}',
+        "data: [DONE]",
+      ]), { headers: { "content-type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+
+    const controller = createSideQuestionController({
+      rootDir,
+      sessionId: createSignal<string | undefined>(result.sessionId)[0],
+      conversation: createSignal([])[0],
+      activeEngine: createSignal<"etl">("etl")[0],
+      activeProviderSelection: providerSel,
+      activeReasoningTier: createSignal(undefined)[0],
+      mainStatus: createSignal("")[0],
+      mainActive: createSignal(false)[0],
+      setStatus: createSignal("")[1],
+      copyText: async () => true,
+    });
+    controller.captureSnapshot(captured!);
+    setProviderSel({ provider: "test", model: "other-model" });
+
+    await controller.openSideQuestion("follow-up");
+    // Escape lands during the rebuild await, before the side fetch starts.
+    controller.handleKey(key("escape"));
+    await waitFor(
+      () => controller.sessionExchanges(result.sessionId).at(-1)?.phase,
+      (phase) => phase === "cancelled" || phase === "complete" || phase === "error",
+    );
+    expect(controller.sessionExchanges(result.sessionId).at(-1)?.phase).toBe("cancelled");
+    expect(sideFetchCalled).toBe(false);
   });
 });

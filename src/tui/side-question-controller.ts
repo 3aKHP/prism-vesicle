@@ -160,13 +160,23 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
   }
 
   async function runSideRequest(sessionId: string, exchange: SideQuestionExchange): Promise<void> {
+    // Create and register the controller before the first await so Escape
+    // during snapshot resolution can abort the in-flight request. Otherwise the
+    // await (config/engine/session reads) would complete and the side request
+    // would proceed after the overlay had already been dismissed.
+    const controller = new AbortController();
+    sideController = controller;
     const snapshot = await resolveEffectiveSnapshot(sessionId);
+    if (controller.signal.aborted) {
+      mutateExchange(sessionId, exchange.id, { phase: "cancelled" });
+      if (sideController === controller) sideController = null;
+      return;
+    }
     if (!snapshot) {
+      if (sideController === controller) sideController = null;
       mutateExchange(sessionId, exchange.id, { phase: "error", error: NOT_STARTED_MESSAGE });
       return;
     }
-    const controller = new AbortController();
-    sideController = controller;
     try {
       const result = await askSideQuestion({
         rootDir: options.rootDir,
