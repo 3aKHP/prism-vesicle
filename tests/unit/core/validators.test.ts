@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { validateCharacterCard, validateScenarioCard, validateRuntimePacket, validateEvaluateReport, validateM0Output } from "../../../src/core/validators";
+import { resolveValidators, validateContent, applicableValidators } from "../../../src/core/validators/registry";
 
 describe("validateM0Output (legacy stub, kept for non-artifact turns)", () => {
   test("passes on non-empty content", () => {
@@ -293,3 +294,138 @@ beat_map:
 - **Immediate goal:** 想确认她的真实感受
 -->
 `;
+
+describe("validator applies discrimination (registry)", () => {
+  const validators = resolveValidators(["character-card", "scenario-card"]);
+  const applies = (name: string, content: string) =>
+    validators.find((v) => v.name === name)!.applies(content);
+
+  const characterCard = `---
+name: 谬因
+archetype: 观测者
+age_gender: 女
+inventory: 终端
+---
+
+## Visual Cortex
+appearance
+## Biography
+bio
+## Cognitive Stack
+### Invariant
+- a
+- b
+## Instinct Protocol
+x
+## Persona Topology
+### Invariant Axes
+- a
+- b
+### Variant Axes
+- a
+- b
+- c
+### Boundary Conditions
+- **Hard limit:** none
+## Narrative Engine
+voice
+## World Context
+world
+`;
+
+  const scenarioCard = `---
+scenario_name: 助理的第一天
+world_state: "office"
+beat_map:
+  - label: A
+    tension_target: 20
+    variant_config: x
+    pivot_condition: y
+  - label: B
+    tension_target: 10
+    variant_config: x
+    pivot_condition: y
+  - label: C
+    tension_target: 30
+    variant_config: x
+    pivot_condition: y
+---
+
+opening paragraph
+
+<!--
+## Scene Premise
+s
+## Neural State
+n
+## User Role
+u
+-->
+`;
+
+  // A Markdown report that starts with a `---` horizontal rule — the
+  // regression source: it must not trigger either card validator.
+  const leadingRuleReport = `---
+
+## 核查结果报告
+
+我通过工具核实了角色信息。
+
+---
+
+### 基本信息
+| 项目 | 素材 |
+|---|---|
+| 代号 | 谬因 |
+`;
+
+  test("a character card applies only to character-card", () => {
+    expect(applies("character-card", characterCard)).toBe(true);
+    expect(applies("scenario-card", characterCard)).toBe(false);
+  });
+
+  test("a scenario card applies only to scenario-card", () => {
+    expect(applies("scenario-card", scenarioCard)).toBe(true);
+    expect(applies("character-card", scenarioCard)).toBe(false);
+  });
+
+  test("a leading `---` report applies to neither card validator", () => {
+    expect(applies("character-card", leadingRuleReport)).toBe(false);
+    expect(applies("scenario-card", leadingRuleReport)).toBe(false);
+  });
+
+  test("a Module A card missing archetype is still recognized (shape, not field)", () => {
+    const missingArchetype = characterCard.replace("archetype: 观测者\n", "");
+    // age_gender / inventory still mark it as a character card.
+    expect(applies("character-card", missingArchetype)).toBe(true);
+    expect(applies("scenario-card", missingArchetype)).toBe(false);
+  });
+
+  test("a Module B card missing scenario_name is still recognized via world_state/beat_map", () => {
+    const missingScenarioName = scenarioCard.replace("scenario_name: 助理的第一天\n", "");
+    expect(applies("scenario-card", missingScenarioName)).toBe(true);
+    expect(applies("character-card", missingScenarioName)).toBe(false);
+  });
+
+  test("the wired validateContent path runs only applying validators (no cross-noise)", () => {
+    // validateContent is the single wired path used by both turn-finalizer
+    // auto-validation and /validate, so this exercises the real
+    // resolve+filter+run rather than mirroring the filter locally.
+    const runFor = (content: string) => {
+      const result = validateContent(["character-card", "scenario-card"], content);
+      return result
+        ? { ran: result.results.map((entry) => entry.name), ok: result.ok }
+        : { ran: [] as string[], ok: true };
+    };
+    expect(runFor(characterCard)).toEqual({ ran: ["character-card"], ok: true });
+    expect(runFor(scenarioCard)).toEqual({ ran: ["scenario-card"], ok: true });
+    // The report triggers no validator at all.
+    expect(runFor(leadingRuleReport).ran).toEqual([]);
+  });
+
+  test("applicableValidators returns the matched names only", () => {
+    expect(applicableValidators(["character-card", "scenario-card"], characterCard)).toEqual(["character-card"]);
+    expect(applicableValidators(["character-card", "scenario-card"], scenarioCard)).toEqual(["scenario-card"]);
+    expect(applicableValidators(["character-card", "scenario-card"], leadingRuleReport)).toEqual([]);
+  });
+});
