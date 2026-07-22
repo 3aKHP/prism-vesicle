@@ -1,7 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { executeFileTool } from "../tools";
-import { resolveValidators, runValidators } from "../validators/registry";
+import { validateContent } from "../validators/registry";
 import type { ValidationResult } from "../validators/registry";
 import { artifactRootIndex, artifactRoots } from "./roots";
 
@@ -95,29 +95,7 @@ async function scanArtifactDir(rootDir: string, dir: string, entries: ArtifactEn
 }
 
 function validateArtifactContent(content: string): ArtifactValidation | undefined {
-  const names = selectArtifactValidators(content);
-  if (names.length === 0) return undefined;
-  return runValidators(resolveValidators(names), content);
-}
-
-function selectArtifactValidators(content: string): string[] {
-  const keys = frontmatterKeys(content);
-  if (keys.size === 0) return [];
-  if (keys.has("scenario_name")) return ["scenario-card"];
-  if (keys.has("name") && keys.has("archetype")) return ["character-card"];
-  return ["character-card", "scenario-card"];
-}
-
-function frontmatterKeys(content: string): Set<string> {
-  const trimmed = content.trimStart();
-  if (!trimmed.startsWith("---")) return new Set();
-  const lines = trimmed.split(/\r?\n/);
-  const keys = new Set<string>();
-  for (let index = 1; index < lines.length; index++) {
-    const line = lines[index].trim();
-    if (line === "---") break;
-    const colon = line.indexOf(":");
-    if (colon > 0) keys.add(line.slice(0, colon).trim());
-  }
-  return keys;
+  // Same shape-based classification + filter as turn-finalizer auto-validation,
+  // so /validate and auto-validation never drift in which validators they run.
+  return validateContent(["character-card", "scenario-card"], content);
 }

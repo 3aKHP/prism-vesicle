@@ -23,15 +23,86 @@ type ValidatorEntry = {
 };
 
 const registry: Record<string, ValidatorEntry> = {
-  "character-card": { applies: isFrontmatterArtifact, run: validateCharacterCard },
-  "scenario-card": { applies: isFrontmatterArtifact, run: validateScenarioCard },
+  "character-card": { applies: isCharacterCard, run: validateCharacterCard },
+  "scenario-card": { applies: isScenarioCard, run: validateScenarioCard },
   "runtime-packet": { applies: isRuntimePacket, run: validateRuntimePacket },
   "evaluate-report": { applies: isEvaluateReport, run: validateEvaluateReport },
 };
 
-function isFrontmatterArtifact(content: string): boolean {
-  // ETL cards carry YAML frontmatter; ordinary phase-transition prose does not.
-  return content.trimStart().startsWith("---");
+/**
+ * Module A body section headers (schema_character §3). Used only to recognize
+ * character-card shape; the validator itself checks all seven are present.
+ */
+const MODULE_A_SECTIONS = [
+  "## Visual Cortex",
+  "## Biography",
+  "## Cognitive Stack",
+  "## Instinct Protocol",
+  "## Persona Topology",
+  "## Narrative Engine",
+  "## World Context",
+];
+
+// Frontmatter key families that identify each card type. `name` is intentionally
+// excluded from the character family (it is generic); a name-only card needs a
+// Module A body section to be recognized as a character card.
+const CHARACTER_KEYS = ["archetype", "age_gender", "inventory"];
+const SCENARIO_KEYS = ["scenario_name", "world_state", "beat_map"];
+
+/**
+ * Parse a leading `---` frontmatter block into its top-level keys and the body
+ * that follows the closing fence. Returns null when there is no real
+ * frontmatter — including a `---` that is just a Markdown horizontal rule with
+ * no closing fence, or a block with no closing fence at all.
+ */
+function parseFrontmatter(content: string): { keys: Set<string>; body: string } | null {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith("---")) return null;
+  const lines = trimmed.split(/\r?\n/);
+  const keys = new Set<string>();
+  let closed = false;
+  let index = 1;
+  for (; index < lines.length; index++) {
+    const line = lines[index].trim();
+    if (line === "---") {
+      closed = true;
+      break;
+    }
+    const colon = line.indexOf(":");
+    if (colon > 0) keys.add(line.slice(0, colon).trim());
+  }
+  if (!closed) return null;
+  return { keys, body: lines.slice(index + 1).join("\n") };
+}
+
+/**
+ * Top-level YAML keys from a leading frontmatter block (empty for content with
+ * no real frontmatter, e.g. a `---`-led report).
+ */
+export function frontmatterKeys(content: string): Set<string> {
+  return parseFrontmatter(content)?.keys ?? new Set();
+}
+
+/**
+ * Recognize a Module A character card by shape, not by any single field the
+ * validator is meant to diagnose: any character-family frontmatter key OR any
+ * Module A body section suffices. So a card missing `archetype` still matches.
+ */
+function isCharacterCard(content: string): boolean {
+  const fm = parseFrontmatter(content);
+  if (!fm || fm.keys.size === 0) return false;
+  return CHARACTER_KEYS.some((key) => fm.keys.has(key)) || MODULE_A_SECTIONS.some((section) => fm.body.includes(section));
+}
+
+/**
+ * Recognize a Module B scenario card by shape: any scenario-family frontmatter
+ * key. A card missing `scenario_name` but carrying `world_state`/`beat_map`
+ * still matches.
+ */
+function isScenarioCard(content: string): boolean {
+  const fm = parseFrontmatter(content);
+  if (!fm || fm.keys.size === 0) return false;
+  return SCENARIO_KEYS.some((key) => fm.keys.has(key));
 }
 
 function isRuntimePacket(content: string): boolean {
@@ -82,6 +153,32 @@ export function runValidators(
     ok: results.every((entry) => entry.result.ok),
     results,
   };
+}
+
+/**
+ * The validator names whose `applies` predicate matches the content. Both the
+ * turn-finalizer (auto-validation) and the artifact workbench (/validate) go
+ * through this so the two paths cannot drift in which validators they run.
+ */
+export function applicableValidators(names: string[], content: string): string[] {
+  return resolveValidators(names)
+    .filter((validator) => validator.applies(content))
+    .map((validator) => validator.name);
+}
+
+/**
+ * Resolve, filter to applying validators, and run them in one step. Returns
+ * undefined when no validator applies (so a `---`-led report or prose triggers
+ * nothing). This is the single wired path used by both turn-finalizer and
+ * workbench validation.
+ */
+export function validateContent(
+  names: string[],
+  content: string,
+): { ok: boolean; results: Array<{ name: string; result: ValidationResult }> } | undefined {
+  const applying = resolveValidators(names).filter((validator) => validator.applies(content));
+  if (applying.length === 0) return undefined;
+  return runValidators(applying, content);
 }
 
 export const knownValidatorNames: readonly ValidatorName[] = Object.keys(registry) as ValidatorName[];
