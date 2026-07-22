@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Module A/B validator false positives on non-card content.** The card validators' applicability test treated any assistant response starting with `---` (a Markdown horizontal rule) as a YAML-frontmatter artifact, so a plain report or phase-transition note was validated as both a character card and a scenario card and surfaced a full batch of spurious "missing section / missing field" findings. Card applicability now recognizes real frontmatter by key family and Module A body sections, so a `---`-led report triggers no card validator. The turn-finalizer and `/validate` now run only the validators whose `applies` predicate matches (a character card is no longer cross-validated as a scenario card and vice versa) through one shared path, and classification no longer depends on the very fields a validator is meant to diagnose (a card missing `archetype` or `scenario_name` is still recognized).
 - **Assets CLI errors** now exit with a concise user-facing message instead of leaking a Bun stack trace when Harness manifest or argument validation fails.
 
 ## [1.0.0-alpha.3] - 2026-07-21
