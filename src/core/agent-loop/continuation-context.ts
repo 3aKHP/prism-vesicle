@@ -13,6 +13,7 @@ import type { AssetResolver } from "../runtime/assets";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import { mergeGeneration } from "./generation";
 import type { AgentLoopEvent, PendingUserInput } from "./types";
+import type { SideQuestionContextSnapshot } from "../side-question/types";
 import { resolveToolSurface } from "./tool-surface";
 import {
   assertSessionHarnessIdentity,
@@ -28,6 +29,7 @@ export type ContinuationContextOptions = {
   generation?: VesicleRequest["generation"];
   permission?: PermissionRuntimeOptions;
   onEvent?: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
   takePendingUserInputs?: () => PendingUserInput[];

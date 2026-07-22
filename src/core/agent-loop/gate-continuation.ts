@@ -71,6 +71,7 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     checkpoint: await FileCheckpointManager.resumeLatest(context.rootDir, context.session),
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: options.agentManager,
     permission: context.permission,
     permissionBroker: options.permissionBroker,

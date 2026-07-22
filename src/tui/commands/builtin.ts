@@ -53,6 +53,7 @@ const HELP_TEXT = [
   "  /artifact [n|path] list or preview generated artifacts",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
+  "  /btw <question>   ask a temporary side question without interrupting the turn",
   "  /resume           list sessions",
   "  /resume <n|id>    resume a session",
   "  /new              start a fresh session",
@@ -78,6 +79,16 @@ export const builtinCommands: Command[] = [
       }
       if (!ctx.startStage) throw new Error("Stage startup is unavailable in this command context.");
       await ctx.startStage(parts[0]!, parts[1]!, raw);
+    },
+  },
+
+  {
+    name: "btw",
+    busyBehavior: immediate,
+    description: "Ask a temporary question about the current conversation",
+    usage: "/btw <question>",
+    async run(ctx, args) {
+      await ctx.openSideQuestion(args);
     },
   },
 

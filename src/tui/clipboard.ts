@@ -8,10 +8,12 @@ import type { CliRenderer } from "@opentui/core";
 export async function copySelectionToClipboard(renderer: CliRenderer): Promise<boolean> {
   const selectedText = renderer.getSelection()?.getSelectedText();
   if (!selectedText) return false;
+  return copyTextToClipboard(renderer, selectedText);
+}
 
-  const copiedViaTerminal = renderer.copyToClipboardOSC52(selectedText);
-  const copiedViaPlatform = await copyTextWithPlatformClipboard(selectedText);
-
+export async function copyTextToClipboard(renderer: CliRenderer, text: string): Promise<boolean> {
+  const copiedViaTerminal = renderer.copyToClipboardOSC52(text);
+  const copiedViaPlatform = await copyTextWithPlatformClipboard(text);
   return copiedViaTerminal || copiedViaPlatform;
 }
 

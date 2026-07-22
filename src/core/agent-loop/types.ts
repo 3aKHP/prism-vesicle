@@ -1,5 +1,6 @@
 import type { ProviderSelection } from "../../config/providers";
 import type { ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { SideQuestionContextSnapshot } from "../side-question/types";
 import type { AgentManager } from "../agents/manager";
 import type { AgentRuntimeEvent } from "../agents/types";
 import type { EngineId, EngineProfile } from "../engine/profile";
@@ -28,6 +29,7 @@ export type RunPromptOptions = {
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
   agentManager?: AgentManager;
   permission?: PermissionRuntimeOptions;
   permissionBroker?: ToolPermissionBroker;

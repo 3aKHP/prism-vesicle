@@ -7,6 +7,7 @@ import type { EngineId } from "../core/engine/profile";
 import type { PermissionMode, ToolPermissionBroker } from "../core/permissions";
 import type { ShellInterpreterPreference } from "../core/process/shell-profile";
 import type { ConversationRewind } from "../core/rewind/service";
+import type { SideQuestionContextSnapshot } from "../core/side-question/types";
 import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerElement, ComposerState } from "./composer";
 import type { PromptHistoryEntry } from "./composer-history";
@@ -83,6 +84,7 @@ export type TurnControllerOptions = {
   permissionBroker: ToolPermissionBroker;
   runCancellable: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<{ kind: "complete"; value: T } | { kind: "interrupted" }>;
   handleAgentEvent: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
   beginUsageTurn: () => void;
   publishTurnUsage: () => void;
   recordIndependentAgentUsage: (usage: NonNullable<AgentInboxEntry["usage"]>) => void;
@@ -147,6 +149,7 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
   | "setStatus"
   | "refreshQualityWarnings"
   | "resumeQualitySession"
+  | "onProviderContextSnapshot"
 > & {
   handleResult: (result: RunPromptResult) => void;
   handleInterruptedTurn: () => void;

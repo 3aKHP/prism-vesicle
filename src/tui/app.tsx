@@ -58,6 +58,9 @@ import { artifactFocusAction, artifactFocusPath, initialArtifactFocusPath } from
 import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
+import { createSideQuestionController } from "./side-question-controller";
+import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
+import { copyTextToClipboard } from "./clipboard";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -412,11 +415,27 @@ export function App(props: AppProps = {}) {
   onCleanup(() => {
     unsubscribeProcesses();
     void processManager.shutdown();
+    sideQuestionController.dispose();
   });
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
   const pausedAgentDeliveries = new Set<string>();
   let agentManager!: AgentManager;
+  const mainActive = () => busy()
+    || Boolean(pendingGate() || pendingEngineSwitch() || pendingUserQuestion()
+      || pendingPermission() || pendingQualityDecision() || pendingChildPermission());
+  const sideQuestionController = createSideQuestionController({
+    rootDir: process.cwd(),
+    sessionId,
+    conversation,
+    activeEngine,
+    activeProviderSelection,
+    activeReasoningTier: thinkingTier,
+    mainStatus: status,
+    mainActive,
+    setStatus,
+    copyText: (text) => copyTextToClipboard(renderer, text),
+  });
   turnController = createTurnController({
     rootDir: process.cwd(),
     dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
@@ -482,6 +501,7 @@ export function App(props: AppProps = {}) {
     permissionBroker,
     runCancellable: (operation) => turnCancellation.run(operation),
     handleAgentEvent,
+    onProviderContextSnapshot: sideQuestionController.captureSnapshot,
     beginUsageTurn,
     publishTurnUsage,
     recordIndependentAgentUsage,
@@ -586,6 +606,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
     clearQueuedInputs,
+    onSessionActive: (id) => { void sideQuestionController.rebuildForResume(id).catch(reportError); },
   }));
   sessionActions = createSessionActionsController({
     rootDir: process.cwd(),
@@ -775,6 +796,8 @@ export function App(props: AppProps = {}) {
     handleDecisionPaste,
     insertComposerPaste,
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
+    sideQuestionOverlay: sideQuestionController.overlay,
+    handleSideQuestionKey: sideQuestionController.handleKey,
     artifactFocusActive: () => focusedArtifactPath() !== null,
     enterArtifactFocus,
     handleArtifactFocusKey,
@@ -882,6 +905,7 @@ export function App(props: AppProps = {}) {
     },
     openModelPicker,
     openQualityPicker,
+    openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
   };
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
@@ -958,7 +982,21 @@ export function App(props: AppProps = {}) {
       </Show>
 
       <box flexDirection="row" flexGrow={1}>
-        <Show when={layout().showSidebar} fallback={<box width={0} />}>
+        <Show when={sideQuestionController.overlay()} keyed fallback={<box width={0} />}>
+          {(state) => (
+            <SideQuestionOverlay
+              exchange={sideQuestionController.currentExchange()}
+              index={state.exchangeIndex}
+              total={sideQuestionController.sessionExchanges(state.sessionId).length}
+              mainStatus={sideQuestionController.mainStatusText()}
+              width={layout().width}
+              height={Math.max(6, dimensions().height - 3 - layout().footerHeight)}
+              registerScroller={sideQuestionController.registerAnswerScroller}
+            />
+          )}
+        </Show>
+
+        <Show when={!sideQuestionController.overlay() && layout().showSidebar} fallback={<box width={0} />}>
           <Sidebar
             status={status()}
             thinkingTier={thinkingTier()}
@@ -976,18 +1014,20 @@ export function App(props: AppProps = {}) {
           />
         </Show>
 
-        <MessageStream
-          messages={messages()}
-          streamingReasoning={streamingReasoning()}
-          streamingAssistant={streamingAssistant()}
-          reasoningMode={reasoningDisplayMode()}
-          contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
-          agents={agentCards()}
-          activeEngine={activeEngine()}
-          sessionId={sessionId()}
-          onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
-          registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
-        />
+        <Show when={!sideQuestionController.overlay()} fallback={<box width={0} />}>
+          <MessageStream
+            messages={messages()}
+            streamingReasoning={streamingReasoning()}
+            streamingAssistant={streamingAssistant()}
+            reasoningMode={reasoningDisplayMode()}
+            contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
+            agents={agentCards()}
+            activeEngine={activeEngine()}
+            sessionId={sessionId()}
+            onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
+            registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
+          />
+        </Show>
 
         {/* The former right-hand Activity / Artifacts pane was removed in the
             TUI rewrite. Agent-loop activity and artifact detail now fold into
@@ -995,7 +1035,8 @@ export function App(props: AppProps = {}) {
             Workspace sidebar holds the persistent artifact list. */}
       </box>
 
-      <BottomSurface
+      <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>
+        <BottomSurface
         layout={layout()}
         yoloStage={yoloConfirmStage()}
         permissionRequest={activePermissionRequest()}
@@ -1036,6 +1077,7 @@ export function App(props: AppProps = {}) {
         queuedInputs={queuedInputs()}
         providerConfigReady={providerConfigReady()}
       />
+      </Show>
       <box height={layout().footerHeight} paddingLeft={1}>
         <text
           content={footerLine(activeProvider(), activeModel(), providerHasApiKey(), layout().width, lastTurnUsage(), sessionUsage(), activeModelLimits())}

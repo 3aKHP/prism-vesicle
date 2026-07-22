@@ -129,6 +129,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     checkpoint,
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager,
     permission,
     permissionBroker: options.permissionBroker,
