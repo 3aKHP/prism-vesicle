@@ -70,6 +70,7 @@ export const bundledHostAssetPaths = [
   "assets/prompts/agents/research.md",
   "assets/prompts/agents/reviewer.md",
   "assets/prompts/shared/vesicle-base.md",
+  "assets/prompts/shared/side-question.md",
 ] as const;
 
 export const bundledHostAgentIds = ["explore", "general", "plan", "research", "reviewer"] as const;

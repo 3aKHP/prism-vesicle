@@ -157,6 +157,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     checkpoint,
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: manager,
     permission: context.permission,
     permissionBroker: options.permissionBroker,

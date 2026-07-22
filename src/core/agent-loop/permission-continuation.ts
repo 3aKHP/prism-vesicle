@@ -193,6 +193,7 @@ async function continuePermissionSequence(
     checkpoint: context.checkpoint,
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: context.agentManager,
     permission: context.permission,
     permissionBroker: options.permissionBroker,

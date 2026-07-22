@@ -1,16 +1,21 @@
 import type { ProviderAdapter, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { materializeMessageImages } from "../attachments/store";
+import type { EngineId } from "../engine/profile";
+import type { ProviderSelection } from "../../config/providers";
 import type { SessionStore } from "../session/store";
 import type { ToolDefinition } from "../tools";
 import type { ProcessManager } from "../process/manager";
 import type { AgentLoopEvent } from "./types";
 import { renderBackgroundProcessNotifications } from "./background-process";
+import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "../side-question/types";
 
 type ProviderRoundOptions = {
   rootDir: string;
   provider: ProviderAdapter;
   providerId: string;
   model: string;
+  engine: EngineId;
+  providerSelection: ProviderSelection;
   visionEnabled: boolean;
   systemPrompt: string;
   tools: ToolDefinition[];
@@ -22,6 +27,7 @@ type ProviderRoundOptions = {
   bufferAssistant?: boolean;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
 };
 
 export async function completeProviderRound(options: ProviderRoundOptions): Promise<VesicleResponse> {
@@ -35,6 +41,21 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
       metadata: { kind: "background-process-results", taskIds: backgroundNotifications.map((task) => task.taskId) },
     });
   }
+
+  // Publish the immutable side-question context boundary immediately before
+  // materializing images and sending the request. At this point `messages`
+  // holds the exact logical history for the next main provider request, with
+  // every prior tool call matched by its tool result, so `/btw` never observes
+  // a half-written tool round. The clone drops base64 image bytes.
+  options.onProviderContextSnapshot?.({
+    sessionId: options.session.sessionId,
+    engine: options.engine,
+    providerSelection: options.providerSelection,
+    ...(options.generation ? { generation: options.generation } : {}),
+    visionEnabled: options.visionEnabled,
+    systemPrompt: options.systemPrompt,
+    messages: cloneSideQuestionMessages(options.messages),
+  });
 
   options.onEvent?.({ type: "provider_request", iteration: options.iteration });
   const messages = await prepareProviderMessages(options.rootDir, options.messages, options.visionEnabled);

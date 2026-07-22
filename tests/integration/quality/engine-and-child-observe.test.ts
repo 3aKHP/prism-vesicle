@@ -143,6 +143,8 @@ describe("quality: engine and child observe", () => {
       provider,
       providerId: "fixture",
       model: "fixture",
+      engine: "etl",
+      providerSelection: { provider: "fixture", model: "fixture" },
       visionEnabled: false,
       systemPrompt: "system",
       tools: [],

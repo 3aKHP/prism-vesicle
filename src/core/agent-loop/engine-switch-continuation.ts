@@ -84,6 +84,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     checkpoint: await FileCheckpointManager.resumeLatest(continuation.rootDir, session),
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: options.agentManager,
     permission: continuation.permission,
     permissionBroker: options.permissionBroker,

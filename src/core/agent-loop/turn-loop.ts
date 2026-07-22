@@ -63,6 +63,7 @@ export type RunLoopArgs = {
   checkpoint?: FileCheckpointManager;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: import("../side-question/types").SideQuestionContextSnapshot) => void;
   agentManager?: AgentManager;
   permission?: PermissionRuntimeOptions;
   permissionBroker?: ToolPermissionBroker;
@@ -128,6 +129,8 @@ async function advanceRound(
     provider: args.provider,
     providerId: args.config.providerId,
     model: args.config.model,
+    engine: args.profile.id,
+    providerSelection: { provider: args.config.providerId, model: args.config.model },
     visionEnabled: args.config.capabilities?.vision === true,
     systemPrompt: args.systemPrompt,
     tools: args.tools,
@@ -139,6 +142,7 @@ async function advanceRound(
     bufferAssistant: shouldBufferQualityOutput(qualityModeForEngine(args.harness?.quality, args.profile.id)),
     signal: args.signal,
     onEvent: args.onEvent,
+    onProviderContextSnapshot: args.onProviderContextSnapshot,
   });
   const toolCalls = response.toolCalls ?? [];
   if (toolCalls.length === 0) runtime.quality.proseParts.push(...qualityCandidateParts(response));

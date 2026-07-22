@@ -27,6 +27,7 @@ for (const required of [
   "harness-manifest.json",
   "assets/engines/etl.profile.yaml",
   "host-assets/prompts/shared/vesicle-base.md",
+  "host-assets/prompts/shared/side-question.md",
 ]) {
   if (!paths.includes(required)) throw new Error(`npm package is missing required runtime file: ${required}`);
 }
