@@ -1,8 +1,9 @@
-// `/btw` side-question provider service: one tool-free streaming completion
-// over a frozen copy of the current conversation context. The service owns no
-// session, tool, gate, validator, or persistence surface — it sends exactly
-// one provider request and returns the text. See
-// `dev/docs/working/BTW_COMMAND_IMPLEMENTATION_GUIDE.md` for the contract.
+// `/btw` side-question provider service: one tool-free streaming completion.
+// The request has exactly one system authority (the side-question prompt) and
+// one user message — a host-rendered reference packet that quotes the parent
+// Engine prompt, conversation, and tool results as inert reference data. The
+// service owns no session, tool, gate, validator, or persistence surface. See
+// `dev/docs/working/BTW_SINGLE_SYSTEM_REFERENCE_PROJECTION_GUIDE.md`.
 
 import { loadConfigForSelection } from "../../config/providers";
 import type { ProviderSelection } from "../../config/providers";
@@ -12,10 +13,11 @@ import { mergeGeneration } from "../agent-loop/generation";
 import { resolveProjectHarnessRuntime, requireProjectHarnessRuntime } from "../harness/activation";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { loadSessionSnapshot, type ResumedMessage } from "../session/store";
-import type { ReasoningTier, ResponseUsage, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ReasoningTier, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { materializeMessageImages } from "../attachments/store";
 import { createAssetResolver } from "../runtime/assets";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "./types";
+import { projectSideQuestionReference } from "./reference";
 
 const SIDE_QUESTION_PROMPT_PATH = "assets/prompts/shared/side-question.md";
 
@@ -30,13 +32,14 @@ export async function askSideQuestion(options: {
   const config = await loadConfigForSelection(context.providerSelection);
   const provider = createProvider(config);
   const sidePrompt = await loadSideQuestionPrompt(options.rootDir);
-  const messages = await buildSideMessages(options.rootDir, context);
+  const projection = projectSideQuestionReference(context, options.question);
+  const images = context.visionEnabled ? await materializeReferenceImages(options.rootDir, projection.images) : [];
 
   const request: VesicleRequest = {
     id: `${context.sessionId}:btw:${crypto.randomUUID()}`,
     model: { provider: config.providerId, model: config.model },
-    system: [context.systemPrompt, sidePrompt],
-    messages: [...messages, { role: "user", content: options.question }],
+    system: [sidePrompt],
+    messages: [{ role: "user", content: projection.content, ...(images.length > 0 ? { images } : {}) }],
     ...(context.generation ? { generation: context.generation } : {}),
     signal: options.signal,
   };
@@ -45,8 +48,12 @@ export async function askSideQuestion(options: {
     ? await streamSideResponse(provider, request, options.onDelta)
     : await provider.complete(request);
 
-  // A tool-call-only or empty response is an error: `/btw` never enters a tool
-  // loop and must produce one text answer.
+  // `/btw` declares no tools and must never execute one. Reject any structured
+  // tool call (including a mixed text-plus-tool response) before the empty-text
+  // check so a provider that returns both is still treated as a failure.
+  if (response.toolCalls?.length) {
+    throw new Error("The side question attempted to call a tool.");
+  }
   if (!response.content.trim()) {
     throw new Error("The side question did not return a text answer.");
   }
@@ -58,25 +65,13 @@ async function loadSideQuestionPrompt(rootDir: string): Promise<string> {
   return (await resolver.readText(SIDE_QUESTION_PROMPT_PATH)).trim();
 }
 
-async function buildSideMessages(
+async function materializeReferenceImages(
   rootDir: string,
-  context: SideQuestionContextSnapshot,
-): Promise<VesicleMessage[]> {
-  if (!context.visionEnabled) {
-    // Non-vision models never receive images; drop any references defensively.
-    return context.messages.map((message) => {
-      if (!message.images || message.images.length === 0) return message;
-      const { images: _images, ...withoutImages } = message;
-      return withoutImages;
-    });
-  }
-  return Promise.all(
-    context.messages.map(async (message) => {
-      if (!message.images || message.images.length === 0) return message;
-      const images = await materializeMessageImages(rootDir, message.images);
-      return { ...message, ...(images ? { images } : {}) };
-    }),
-  );
+  images: VesicleImageAttachment[],
+): Promise<VesicleImageAttachment[]> {
+  if (images.length === 0) return [];
+  const materialized = await materializeMessageImages(rootDir, images);
+  return materialized ?? [];
 }
 
 async function streamSideResponse(
@@ -123,9 +118,9 @@ export async function resolveSideQuestionSnapshot(options: {
     synthesizeDanglingToolResults: false,
   }).catch(() => undefined);
   if (!snapshot) return undefined;
-  let systemPrompt = engineAssets.systemPrompt;
+  let engineSystemPrompt = engineAssets.systemPrompt;
   if (options.engine === "stage" && snapshot.stageBootstrap) {
-    systemPrompt = `${systemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
+    engineSystemPrompt = `${engineSystemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
   }
   // Merge model generation defaults with the active reasoning tier, matching
   // bootstrapTurn() so resumed side context keeps temperature/maxTokens.
@@ -136,7 +131,7 @@ export async function resolveSideQuestionSnapshot(options: {
     providerSelection: { provider: config.providerId, model: config.model },
     ...(generation ? { generation } : {}),
     visionEnabled: config.capabilities?.vision === true,
-    systemPrompt,
+    engineSystemPrompt,
     messages: cloneSideQuestionMessages(snapshot.messages.map(toVesicleMessage)),
   };
 }

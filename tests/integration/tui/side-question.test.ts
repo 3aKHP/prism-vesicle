@@ -36,7 +36,7 @@ function snapshot(): SideQuestionContextSnapshot {
     engine: "etl",
     providerSelection: { provider: "test", model: "test-model" },
     visionEnabled: false,
-    systemPrompt: "system",
+    engineSystemPrompt: "system",
     messages: [{ role: "user", content: "hi" }, { role: "assistant", content: "hello" }],
   };
 }
@@ -104,7 +104,7 @@ describe("side question controller", () => {
       engine: "etl",
       providerSelection: { provider: "test", model: "test-model" },
       visionEnabled: true,
-      systemPrompt: "system",
+      engineSystemPrompt: "system",
       messages: [{ role: "user", content: "look" }],
     });
 

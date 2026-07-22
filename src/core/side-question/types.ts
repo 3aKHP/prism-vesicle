@@ -14,7 +14,12 @@ export type SideQuestionContextSnapshot = {
   providerSelection: ProviderSelection;
   generation?: VesicleRequest["generation"];
   visionEnabled: boolean;
-  systemPrompt: string;
+  /**
+   * The parent Engine's system prompt (incl. frozen Stage bootstrap context).
+   * Reference data only: it is quoted inside the side request's user packet,
+   * never serialized as a side system message.
+   */
+  engineSystemPrompt: string;
   messages: VesicleMessage[];
 };
 

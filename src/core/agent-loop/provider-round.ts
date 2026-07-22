@@ -53,7 +53,7 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
     providerSelection: options.providerSelection,
     ...(options.generation ? { generation: options.generation } : {}),
     visionEnabled: options.visionEnabled,
-    systemPrompt: options.systemPrompt,
+    engineSystemPrompt: options.systemPrompt,
     messages: cloneSideQuestionMessages(options.messages),
   });
 
