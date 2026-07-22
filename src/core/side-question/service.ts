@@ -97,8 +97,11 @@ async function streamSideResponse(
  * Reconstruct a provider-valid side-question snapshot for a resumed session,
  * mirroring `bootstrapTurn`'s pure Engine asset resolution and frozen Stage
  * bootstrap context without persisting a user record or creating a checkpoint.
- * Returns `undefined` when the session cannot be read, so `/btw` falls back to
- * its "available after the session starts" message instead of erroring.
+ *
+ * Returns `undefined` only when the session record cannot be read; provider
+ * config, harness, or engine-asset load failures propagate. Both callers wrap
+ * the call with `.catch(() => undefined)` so a load failure degrades to
+ * "available after the session starts" rather than crashing the TUI.
  */
 export async function resolveSideQuestionSnapshot(options: {
   rootDir: string;
