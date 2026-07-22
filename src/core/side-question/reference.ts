@@ -117,9 +117,13 @@ function renderMessage(
     case "tool": {
       const name = (message.toolCallId && toolCallNames.get(message.toolCallId)) ?? "tool";
       const content = message.content;
+      const markers = imageMarkers(message.images, imageNumbers, visionEnabled);
       // Keep the tool result as a labeled reference fact even when empty, so the
-      // tool round is visibly complete; empty ones collapse to the label.
-      return content.trim() ? `[TOOL RESULT: ${name}]\n${content}` : `[TOOL RESULT: ${name}]`;
+      // tool round is visibly complete; attach image markers so a result such as
+      // view_image is tied to its evidence in the transcript.
+      const header = `[TOOL RESULT: ${name}]`;
+      const body = content.trim() ? `${header}\n${content}` : header;
+      return markers.length > 0 ? `${body}\n${markers.join("\n")}` : body;
     }
     case "system": {
       // Host/system notices (compact boundaries, asset drift) stay as reference.

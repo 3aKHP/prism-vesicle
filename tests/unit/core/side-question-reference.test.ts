@@ -120,4 +120,27 @@ describe("side question reference projection", () => {
     expect(firstB).toBeGreaterThan(firstA);
     expect(secondA).toBeGreaterThan(firstB);
   });
+
+  test("attaches image markers to the tool result that carried them", () => {
+    const context: SideQuestionContextSnapshot = {
+      sessionId: "side-session",
+      engine: "etl",
+      providerSelection: { provider: "test", model: "test-model" },
+      visionEnabled: true,
+      engineSystemPrompt: "ENGINE PROMPT",
+      messages: [
+        { role: "user", content: "show me the screenshot" },
+        { role: "assistant", content: "", toolCalls: [{ id: "call-img", name: "view_image", arguments: '{"path":"shot.png"}' }] },
+        { role: "tool", toolCallId: "call-img", content: "image attached", images: [image("img-shot", "shot.png")] },
+      ],
+    };
+    const { content, images } = projectSideQuestionReference(context, "what is in it?");
+    expect(images.map((entry) => entry.id)).toEqual(["img-shot"]);
+    const toolBlock = content.indexOf("[TOOL RESULT: view_image]");
+    const marker = content.indexOf("[IMAGE #1: shot.png]");
+    expect(toolBlock).toBeGreaterThan(-1);
+    // The marker follows its tool-result block so the model can tie them together.
+    expect(marker).toBeGreaterThan(toolBlock);
+    expect(content.indexOf("\n", marker)).toBeGreaterThan(marker);
+  });
 });
