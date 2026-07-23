@@ -55,4 +55,56 @@ describe("init scanner", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("caps files per root and reports the remainder", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-init-scan-filecap-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      for (let i = 0; i < 70; i++) {
+        await writeFile(join(root, "workspace", `f${i}.md`), `file ${i}`, "utf8");
+      }
+      const digest = await scanProject(root);
+      // MAX_FILES_PER_ROOT (60) caps the listing; the overflow is reported.
+      expect(digest).toContain("more file");
+      const listed = digest.match(/- workspace\/f\d+\.md/g) ?? [];
+      expect(listed.length).toBeLessThanOrEqual(60);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("caps the total digest byte size", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-init-scan-bytecap-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      // 40 files with >240-byte heads would exceed 8 KiB without the cap.
+      for (let i = 0; i < 40; i++) {
+        await writeFile(join(root, "workspace", `big${i}.md`), `${"word ".repeat(80)}${i}`, "utf8");
+      }
+      const digest = await scanProject(root);
+      expect(digest.length).toBeLessThanOrEqual(8 * 1024);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("never reads project-root config or .vesicle state (path confinement)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-init-scan-canary-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      await writeFile(join(root, "workspace", "card.md"), "CARD-MARKER", "utf8");
+      // Canary files OUTSIDE the writable roots that must never reach the digest.
+      await writeFile(join(root, "providers.yaml"), "SECRET-PROVIDER-KEY\n", "utf8");
+      await writeFile(join(root, ".env"), "SECRET-ENV-KEY\n", "utf8");
+      await mkdir(join(root, ".vesicle"), { recursive: true });
+      await writeFile(join(root, ".vesicle", "state.json"), "SECRET-STATE\n", "utf8");
+      const digest = await scanProject(root);
+      expect(digest).toContain("CARD-MARKER");
+      expect(digest).not.toContain("SECRET-PROVIDER-KEY");
+      expect(digest).not.toContain("SECRET-ENV-KEY");
+      expect(digest).not.toContain("SECRET-STATE");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

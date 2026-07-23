@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateProjectInstructions } from "../../../src/core/init";
+import { loadInstructionTarget } from "../../../src/core/instructions";
 import { configureTestProviderEnv, restoreAgentLoopTestState } from "../agent-loop/fixtures/agent-loop";
 
 const originalFetch = globalThis.fetch;
@@ -67,6 +69,63 @@ describe("/init generateProjectInstructions", () => {
     try {
       await generateProjectInstructions({ rootDir: project, notes: "prefer terse output" });
       expect(capturedBody).toContain("prefer terse output");
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  test("writes a file the Persistent Instructions loader accepts", async () => {
+    const project = await mkdtemp(join(tmpdir(), "vesicle-init-pi-roundtrip-"));
+    try {
+      stubProviderContent("# Project guide\nUse the runtime engine for play.");
+      await generateProjectInstructions({ rootDir: project });
+      const loaded = await loadInstructionTarget({ scope: "project", engine: "all" }, project);
+      expect(loaded.kind).toBe("file");
+      if (loaded.kind !== "file") throw new Error("expected file");
+      expect(loaded.file.empty).toBe(false);
+      expect(loaded.file.content).toContain("runtime engine");
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  test("strips a wrapping code fence from the provider response", async () => {
+    const project = await mkdtemp(join(tmpdir(), "vesicle-init-fence-"));
+    try {
+      stubProviderContent("```markdown\n# Real guide\nUse runtime.\n```");
+      await generateProjectInstructions({ rootDir: project });
+      const written = await readFile(join(project, "VESICLE.md"), "utf8");
+      expect(written).toContain("# Real guide");
+      expect(written).not.toContain("```");
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects an empty response without creating or overwriting VESICLE.md", async () => {
+    const fresh = await mkdtemp(join(tmpdir(), "vesicle-init-empty-fresh-"));
+    const existing = await mkdtemp(join(tmpdir(), "vesicle-init-empty-existing-"));
+    try {
+      stubProviderContent("   ");
+      await expect(generateProjectInstructions({ rootDir: fresh })).rejects.toThrow(/empty|did not include/i);
+      expect(existsSync(join(fresh, "VESICLE.md"))).toBe(false);
+
+      await writeFile(join(existing, "VESICLE.md"), "PREEXISTING", "utf8");
+      stubProviderContent("");
+      await expect(generateProjectInstructions({ rootDir: existing })).rejects.toThrow(/empty|did not include/i);
+      expect(await readFile(join(existing, "VESICLE.md"), "utf8")).toBe("PREEXISTING");
+      expect(existsSync(join(existing, ".vesicle", "init-backups", "VESICLE.md.previous"))).toBe(false);
+    } finally {
+      await Promise.all([fresh, existing].map((dir) => rm(dir, { recursive: true, force: true })));
+    }
+  });
+
+  test("rejects output exceeding the 32 KiB Persistent Instruction budget", async () => {
+    const project = await mkdtemp(join(tmpdir(), "vesicle-init-budget-"));
+    try {
+      stubProviderContent(`${"x".repeat(33_000)}`);
+      await expect(generateProjectInstructions({ rootDir: project })).rejects.toThrow(/budget/);
+      expect(existsSync(join(project, "VESICLE.md"))).toBe(false);
     } finally {
       await rm(project, { recursive: true, force: true });
     }

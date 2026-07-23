@@ -56,7 +56,7 @@
 | Alt+V | 粘贴剪贴板图片(仅视觉模型接收) |
 | Ctrl+Q | 退出 Vesicle |
 
-当前完整工具轮次结束后，队列消息会在下一次供应商请求前加入当前对话。如果 Agent Loop 没有经过下一个工具边界便已结束，下一条队列输入会被立即处理。Slash 命令各自声明忙碌时的行为：`/help`、`/context`、`/reasoning`、只读设置形式，以及 `/agents` 查看或停止会立即执行；`/artifact` 和 `/validate` 等待当前工具轮次；配置变更、选择器、会话命令、`/compact` 和 `/agents retry` 等待 Agent Loop。选择器打开时会暂停剩余队列，切换或重置会话时会清空队列。
+当前完整工具轮次结束后，队列消息会在下一次供应商请求前加入当前对话。如果 Agent Loop 没有经过下一个工具边界便已结束，下一条队列输入会被立即处理。Slash 命令各自声明忙碌时的行为：`/help`、`/context`、`/reasoning`、只读设置形式，以及 `/agents` 查看或停止会立即执行；`/artifact` 和 `/validate` 等待当前工具轮次；配置变更、选择器、会话命令、`/compact`、`/init` 和 `/agents retry` 等待 Agent Loop。选择器打开时会暂停剩余队列，切换或重置会话时会清空队列。
 
 ## `/btw` 旁支问题
 

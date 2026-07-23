@@ -118,7 +118,6 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
   | "clearGateFeedback"
   | "clearQuestionFreeform"
   | "compactSession"
-  | "initProject"
   | "handleAgentEvent"
   | "pendingChildPermission"
   | "pendingEngineSwitch"

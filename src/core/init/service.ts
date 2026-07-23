@@ -5,7 +5,9 @@ import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
 import type { VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import { engineIds } from "../engine/profile";
 import { requireProjectHarnessRuntime, resolveProjectHarnessRuntime } from "../harness/activation";
+import { INSTRUCTION_COMBINED_BUDGET_BYTES, instructionFilePath, instructionLogicalName } from "../instructions";
 import { scanProject } from "./scanner";
 
 export type GenerateProjectInstructionsOptions = {
@@ -22,6 +24,10 @@ export type GeneratedInstructions = {
   overwritten: boolean;
   /** Project-relative backup path when an existing file was replaced. */
   backupPath?: string;
+  /** A prior `.previous` backup at the backup path was replaced by this run. */
+  backupReplacedPrior?: boolean;
+  /** Engine ids whose project-scope `VESICLE.<engine>.md` masks this general file. */
+  maskedByEngineOverrides?: string[];
 };
 
 export const INIT_PROMPT_LOGICAL_PATH = "assets/prompts/shared/init-project.md";
@@ -33,6 +39,12 @@ export const INIT_PROMPT_LOGICAL_PATH = "assets/prompts/shared/init-project.md";
  * next top-level turn, when Persistent Instructions re-resolve from disk. An
  * existing `VESICLE.md` is backed up under `.vesicle/init-backups/` before being
  * replaced, never silently overwritten.
+ *
+ * The path is resolved through the Persistent Instructions resolver so /init and
+ * PI can never drift on the target filename. Provider output is sanitized (one
+ * outer code fence stripped) so a mis-formatted response cannot pollute every
+ * future session's system prompt, and the result is rejected if it would exceed
+ * the Persistent Instruction budget (which would otherwise be silently dropped).
  */
 export async function generateProjectInstructions(
   options: GenerateProjectInstructionsOptions,
@@ -55,20 +67,54 @@ export async function generateProjectInstructions(
     signal: options.signal,
   });
 
-  const content = response.content.trim();
+  const content = formatInitContent(response.content);
   if (!content) throw new Error("The provider returned an empty response; VESICLE.md was not written.");
 
-  return writeProjectInstructions(options.rootDir, content);
+  const fileBytes = Buffer.byteLength(`${content}\n`, "utf8");
+  if (fileBytes > INSTRUCTION_COMBINED_BUDGET_BYTES) {
+    throw new Error(
+      `The generated VESICLE.md is ${fileBytes} bytes, exceeding the ${INSTRUCTION_COMBINED_BUDGET_BYTES}-byte Persistent Instruction budget, so Persistent Instructions would not load it. The model was too verbose — re-run /init, or narrow the project scan or notes.`,
+    );
+  }
+
+  const target = instructionFilePath({ scope: "project", engine: "all" }, options.rootDir);
+  const maskedByEngineOverrides = detectProjectEngineOverrides(options.rootDir);
+  return writeProjectInstructions(target, content, options.rootDir, maskedByEngineOverrides);
 }
 
-async function writeProjectInstructions(rootDir: string, content: string): Promise<GeneratedInstructions> {
-  const target = join(rootDir, "VESICLE.md");
+/**
+ * Trim and strip one outer ```lang ... ``` fence. Some providers wrap output in
+ * a code fence despite the prompt instruction; since Persistent Instructions
+ * inject this file verbatim into every future system prompt, an unstripped fence
+ * would silently pollute every session. Mirrors compact's defensive formatter.
+ */
+function formatInitContent(content: string): string {
+  const trimmed = content.trim();
+  const lines = trimmed.split("\n");
+  if (lines.length >= 2 && /^```[a-zA-Z0-9]*$/.test(lines[0]!) && lines[lines.length - 1]!.trim() === "```") {
+    return lines.slice(1, -1).join("\n").trim();
+  }
+  return trimmed;
+}
+
+function detectProjectEngineOverrides(rootDir: string): string[] {
+  return engineIds.filter((engine) => existsSync(join(rootDir, instructionLogicalName(engine))));
+}
+
+async function writeProjectInstructions(
+  target: string,
+  content: string,
+  rootDir: string,
+  maskedByEngineOverrides: string[],
+): Promise<GeneratedInstructions> {
   const overwritten = existsSync(target);
   let backupPath: string | undefined;
+  let backupReplacedPrior = false;
   if (overwritten) {
     const backupDir = join(rootDir, ".vesicle", "init-backups");
     await mkdir(backupDir, { recursive: true });
     backupPath = join(backupDir, "VESICLE.md.previous");
+    backupReplacedPrior = existsSync(backupPath);
     // Copy (not rename) so a failed write leaves the original in place.
     await copyFile(target, backupPath);
   }
@@ -77,6 +123,8 @@ async function writeProjectInstructions(rootDir: string, content: string): Promi
     path: "VESICLE.md",
     overwritten,
     ...(backupPath ? { backupPath: relativeBackupPath(backupPath, rootDir) } : {}),
+    ...(backupReplacedPrior ? { backupReplacedPrior: true } : {}),
+    ...(maskedByEngineOverrides.length ? { maskedByEngineOverrides } : {}),
   };
 }
 

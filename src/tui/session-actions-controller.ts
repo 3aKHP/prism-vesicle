@@ -150,9 +150,17 @@ export function createSessionActionsController(options: SessionActionsController
       if (outcome.kind === "interrupted") throw new Error("/init canceled.");
       const result = outcome.value;
       const backup = result.backupPath ? ` The previous version was backed up to ${result.backupPath}.` : "";
+      const priorWarn = result.backupReplacedPrior ? " That backup path already held an earlier backup, which it replaced." : "";
+      const overrides = result.maskedByEngineOverrides ?? [];
+      const masked = overrides.length
+        ? ` Engine-specific override file(s) (${overrides.map((engine) => `VESICLE.${engine}.md`).join(", ")}) take precedence for those engines, so this general file is masked there.`
+        : "";
+      const effect = overrides.length
+        ? "It takes effect on the next turn for engines without an override"
+        : "It takes effect on the next turn";
       options.setMessages((previous) => [...previous, {
         role: "system",
-        content: `Generated ${result.path} from the project scan.${backup} It takes effect on the next turn — review and edit it as needed.`,
+        content: `Generated ${result.path} from the project scan.${backup}${priorWarn} ${effect} — review and edit it as needed.${masked}`,
       }]);
       options.setStatus("VESICLE.md generated");
       options.recordActivity({ kind: "system", text: `VESICLE.md generated${result.overwritten ? " (replaced existing)" : ""}` });

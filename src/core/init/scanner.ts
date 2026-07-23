@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { writableProjectRoots } from "../artifacts/roots";
+import { instructionFilePath } from "../instructions";
 
 /**
  * `/init` runs host-side, so it scans the project directly rather than through
@@ -28,7 +29,7 @@ export async function scanProject(rootDir: string): Promise<string> {
     return true;
   };
 
-  const vesiclePath = join(rootDir, "VESICLE.md");
+  const vesiclePath = instructionFilePath({ scope: "project", engine: "all" }, rootDir);
   if (existsSync(vesiclePath)) {
     push("Note: a VESICLE.md already exists at the project root and will be replaced (the host backs up the previous version).");
   }
@@ -84,7 +85,8 @@ async function walkRoot(
 }
 
 async function readHead(path: string): Promise<string | undefined> {
-  const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
+  const dotIndex = path.lastIndexOf(".");
+  const ext = dotIndex >= 0 ? path.slice(dotIndex).toLowerCase() : "";
   if (!TEXT_EXTENSIONS.has(ext)) return undefined;
   const info = await stat(path).catch(() => undefined);
   if (!info || info.size > HEAD_FILE_MAX_BYTES) return undefined;
