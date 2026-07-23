@@ -1,5 +1,7 @@
 import { AgentStore } from "./store";
 import { normalizeHarnessAdapterError } from "../harness/driver";
+import { AgentHandleAllocator } from "./handle-allocator";
+import { PathOwnershipTable } from "./path-ownership";
 import type {
   AgentMetadata,
   AgentInvocationContext,
@@ -17,7 +19,6 @@ type ActiveAgent = {
   controller: AbortController;
   completion: Promise<AgentTerminalResult>;
   messages: string[];
-  ownedPaths: Set<string>;
 };
 
 export type SpawnedAgent = {
@@ -29,9 +30,8 @@ export type SpawnedAgent = {
 export class AgentManager {
   private readonly active = new Map<string, ActiveAgent>();
   private readonly waiters: Array<() => void> = [];
-  private readonly writeOwners = new Map<string, string>();
-  private readonly handleInitializers = new Map<string, Promise<number>>();
-  private readonly nextHandleOrdinals = new Map<string, number>();
+  private readonly handleAllocator: AgentHandleAllocator;
+  private readonly pathOwnership: PathOwnershipTable;
   private runningCount = 0;
   private readonly delegationRunning = new Set<string>();
   private readonly delegationWaiters = new Map<string, Array<() => void>>();
@@ -47,6 +47,10 @@ export class AgentManager {
     if (!Number.isInteger(this.maxConcurrent) || this.maxConcurrent < 1) {
       throw new Error("SubAgent maxConcurrent must be a positive integer.");
     }
+    this.handleAllocator = new AgentHandleAllocator(store);
+    this.pathOwnership = new PathOwnershipTable((ownerId) => ownerId.startsWith("host:")
+      ? "the parent Engine"
+      : this.active.get(ownerId)?.metadata.handle ?? "another SubAgent");
   }
 
   get maxConcurrent(): number {
@@ -55,7 +59,7 @@ export class AgentManager {
 
   async spawn(spec: AgentSpec, invocation?: AgentInvocationContext): Promise<SpawnedAgent> {
     const runId = `run_${crypto.randomUUID()}`;
-    const handle = await this.allocateHandle(spec.parentSessionId, spec.profileId);
+    const handle = await this.handleAllocator.allocate(spec.parentSessionId, spec.profileId);
     const now = new Date().toISOString();
     const metadata: AgentMetadata = {
       ...spec,
@@ -75,7 +79,7 @@ export class AgentManager {
       else invocation.parentSignal.addEventListener("abort", abortFromParent, { once: true });
     }
     const completion = this.execute(metadata, controller, invocation);
-    this.active.set(runId, { metadata, controller, completion, messages: [], ownedPaths: new Set() });
+    this.active.set(runId, { metadata, controller, completion, messages: [] });
     const cleanup = () => {
       invocation?.parentSignal?.removeEventListener("abort", abortFromParent);
       this.active.delete(runId);
@@ -115,14 +119,11 @@ export class AgentManager {
   }
 
   async claimHostMutation(ownerId: string, paths: string[]): Promise<void> {
-    this.claimPaths(`host:${ownerId}`, paths);
+    this.pathOwnership.claim(`host:${ownerId}`, paths);
   }
 
   releaseHostMutations(ownerId: string): void {
-    const owner = `host:${ownerId}`;
-    for (const [path, current] of this.writeOwners) {
-      if (current === owner) this.writeOwners.delete(path);
-    }
+    this.pathOwnership.release(`host:${ownerId}`);
   }
 
   private async execute(
@@ -306,35 +307,11 @@ export class AgentManager {
   private async claimMutation(runId: string, handle: string, paths: string[]): Promise<void> {
     const active = this.active.get(runId);
     if (!active) throw new Error(`SubAgent is no longer active: ${handle}.`);
-    this.claimPaths(runId, paths);
-    for (const path of paths) active.ownedPaths.add(path);
-  }
-
-  private claimPaths(ownerId: string, paths: string[]): void {
-    const unique = [...new Set(paths)].sort();
-    const conflict = unique.flatMap((requestedPath) =>
-      [...this.writeOwners.entries()]
-        .filter(([ownedPath, owner]) => owner !== ownerId && pathsOverlap(requestedPath, ownedPath))
-        .map(([ownedPath, owner]) => ({ requestedPath, ownedPath, owner })),
-    )[0];
-    if (conflict) {
-      const ownerLabel = conflict.owner.startsWith("host:")
-        ? "the parent Engine"
-        : this.active.get(conflict.owner)?.metadata.handle ?? "another SubAgent";
-      throw new Error(`Concurrent Agent write conflict on "${conflict.requestedPath}"; overlapping path "${conflict.ownedPath}" is owned by ${ownerLabel}.`);
-    }
-    for (const path of unique) {
-      this.writeOwners.set(path, ownerId);
-    }
+    this.pathOwnership.claim(runId, paths);
   }
 
   private releaseMutations(runId: string): void {
-    const active = this.active.get(runId);
-    if (!active) return;
-    for (const path of active.ownedPaths) {
-      if (this.writeOwners.get(path) === runId) this.writeOwners.delete(path);
-    }
-    active.ownedPaths.clear();
+    this.pathOwnership.release(runId);
   }
 
   private async finish(metadata: AgentMetadata, result: AgentTerminalResult): Promise<void> {
@@ -359,19 +336,6 @@ export class AgentManager {
     return [...this.active.values()].find((entry) => entry.metadata.handle === reference
       && entry.metadata.parentSessionId === parentSessionId
       && (!controllableOnly || isControllable(entry.metadata)));
-  }
-
-  private async allocateHandle(parentSessionId: string, profileId: string): Promise<string> {
-    const key = `${parentSessionId}\u0000${profileId}`;
-    let initializer = this.handleInitializers.get(key);
-    if (!initializer) {
-      initializer = this.store.nextHandleOrdinal(parentSessionId, profileId);
-      this.handleInitializers.set(key, initializer);
-    }
-    const initial = await initializer;
-    const ordinal = this.nextHandleOrdinals.get(key) ?? initial;
-    this.nextHandleOrdinals.set(key, ordinal + 1);
-    return `${profileId}-${ordinal}`;
   }
 
   private async acquire(signal: AbortSignal): Promise<void> {
@@ -460,8 +424,4 @@ function isAbortError(error: unknown): boolean {
 
 function isControllable(metadata: AgentMetadata): boolean {
   return metadata.status === "created" || metadata.status === "running";
-}
-
-function pathsOverlap(left: string, right: string): boolean {
-  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
 }
