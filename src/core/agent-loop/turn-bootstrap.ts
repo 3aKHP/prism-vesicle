@@ -4,6 +4,9 @@ import { createProvider } from "../../providers";
 import type { VesicleMessage } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
 import { FileCheckpointManager } from "../checkpoints/file-history";
+import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
+import { composeInstructionBlocks } from "../instructions";
+import { freezeInstructionBlocks } from "./instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { createSessionStore } from "../session/store";
@@ -41,7 +44,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     : await loadExperimentalQualityProfile(harness?.quality);
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir, assets ? { resolver: assets } : {});
   const { profile } = engineAssets;
-  let systemPrompt = engineAssets.systemPrompt;
+  const instructional = await composeSystemPromptWithInstructions(engine, engineAssets.systemPrompt, rootDir);
+  let systemPrompt = instructional.systemPrompt;
   const toolSurface = await resolveToolSurface(
     profile,
     config.capabilities?.vision === true,
@@ -86,10 +90,20 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
           stopGates: profile.stopGates,
         },
         assets: engineAssets.assets,
+        instructions: selectionToRecord(instructional.selection),
         ...(harness?.identity ? { harness: harness.identity } : {}),
       },
     });
   }
+
+  // Emit the complete diagnostic state, including an empty state, so clients
+  // can re-notify if a previously fixed target becomes invalid again.
+  options.onEvent?.({
+    type: "instruction_warning",
+    sessionId: session.sessionId,
+    engine,
+    diagnostics: instructional.selection.diagnostics,
+  });
 
   const userRecord = options.prePersistedInputUuid
     ? { uuid: options.prePersistedInputUuid }
@@ -109,6 +123,9 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const checkpoint = new FileCheckpointManager(rootDir, session, userRecord.uuid);
   await checkpoint.createSnapshot();
   options.onSessionReady?.(session.sessionId, session.sessionPath);
+  // Freeze only after bootstrap's fallible persistence work is complete. From
+  // here, runLoop owns cleanup on completion or failure, while pauses retain it.
+  freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
   const messages: VesicleMessage[] = options.messages ?? [{
     role: "user",
     content: options.input,

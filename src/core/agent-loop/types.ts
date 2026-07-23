@@ -12,6 +12,7 @@ import type { UserQuestionRequest } from "../user-question/types";
 import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
 import type { ValidationResult } from "../validators/registry";
+import type { InstructionDiagnostic } from "../instructions";
 import type { QualityDecisionRequest, QualityFindingSummary, QualityOutcome, QualityTargetWarningReason } from "../quality";
 import type { ExperimentalQualityProfile } from "../../config/quality";
 
@@ -49,6 +50,12 @@ export type PendingUserInput = {
 export type AgentLoopEvent =
   | AgentRuntimeEvent
   | { type: "asset_drift"; fingerprint: string; changedPaths: string[] }
+  | {
+      type: "instruction_warning";
+      sessionId: string;
+      engine: EngineId;
+      diagnostics: InstructionDiagnostic[];
+    }
   | { type: "provider_request"; iteration: number }
   | { type: "assistant_delta"; delta: string }
   | { type: "assistant_reasoning_delta"; delta: string }

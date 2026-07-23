@@ -1,6 +1,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { resolveQualityDecision, runPrompt, } from "../../../src/core/agent-loop/run";
+import { readFrozenInstructionBlocks } from "../../../src/core/agent-loop/instruction-context";
 import { listSessions, loadSessionSnapshot } from "../../../src/core/session/store";
 import { harnessRuntime, restoreQualityTestState, runtimeRoot } from "./fixtures/quality-runtime";
 
@@ -128,6 +129,7 @@ describe("quality: rewrite lifecycle", () => {
         harness: harnessRuntime(),
       });
       expect(first.kind).toBe("needs_quality_decision");
+      expect(readFrozenInstructionBlocks(first.sessionId)).toBeDefined();
       const beforeResolution = requests;
       const settled = await resolveQualityDecision({
         engine: "runtime",
@@ -136,6 +138,7 @@ describe("quality: rewrite lifecycle", () => {
         resolution,
       });
       expect(settled).toEqual({ kind: "quality_resolved", sessionId: first.sessionId, resolution });
+      expect(readFrozenInstructionBlocks(first.sessionId)).toBeUndefined();
       expect(requests).toBe(beforeResolution);
       const snapshot = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
       expect(snapshot.pendingQualityDecision).toBeUndefined();

@@ -157,6 +157,7 @@ bun run dev
 - 面向消费者的 Stage 引擎：将提供的 Module A/B 卡片冻结为以叙述为先的叙事引导，不暴露模型可见的工具或确认门。质量强制默认为 observe；只有显式启用的宿主质量配置可触发实验性的有界 rewrite。
 - 支持流式输出的 OpenAI-compatible、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
+- 持久化指令：项目根目录与供应商配置目录旁的 `VESICLE.md` / `VESICLE.<engine>.md`，每会话自动加载进系统 prompt，支持用户级 + 项目级双作用域与引擎专属替换，让可复用的子工作流与规范跨会话保留而无需重述。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
 - 面向实际 target 的 Output Quality Guard：检查当前 Runtime 制品的 post-image，持久保存 finding 与 warning，并为耗尽或中断的修订恢复“再次修订”“使用当前版本”和“停止”三种明确选择；还提供默认关闭、从用户已配置供应商模型中选择的实验性 Semantic Judge。
 - 可选的 Tavily Web 研究、Streamable HTTP MCP 工具，以及面向声明视觉能力模型的多模态图像输入。

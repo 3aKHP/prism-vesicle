@@ -12,6 +12,7 @@ import { loadContinuationContext } from "./continuation-context";
 import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { AgentManager } from "../agents/manager";
+import { clearFrozenInstructionBlocks } from "./instruction-context";
 
 type ResolveEngineSwitchOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];
@@ -123,6 +124,7 @@ async function recordConfirmedSwitch(
     metadata: { kind: ENGINE_HANDOFF_KIND, engine: options.request.targetEngine, transition },
   });
   messages.push({ role: "user", content: handoffPacket });
+  clearFrozenInstructionBlocks(session.sessionId);
   return {
     kind: "engine_switched",
     sessionId: session.sessionId,
