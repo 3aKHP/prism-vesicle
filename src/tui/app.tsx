@@ -514,6 +514,7 @@ export function App(props: AppProps = {}) {
       await resumeSession(target);
     },
     compactSession: (instructions) => sessionActions.compactSession(instructions),
+    initProject: (notes) => sessionActions.initProject(notes),
     executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
     recordPromptHistory,
     applyComposerState,
@@ -654,6 +655,7 @@ export function App(props: AppProps = {}) {
   });
   const {
     compactSession,
+    initProject,
     handleSessionPickerKey,
     resetRewindState,
   } = sessionActions;
@@ -867,6 +869,7 @@ export function App(props: AppProps = {}) {
     listSessions,
     resumeSession,
     compactSession,
+    initProject,
     openRewindPicker: rewindController.open,
     resetRewindState,
     agentCommand,
