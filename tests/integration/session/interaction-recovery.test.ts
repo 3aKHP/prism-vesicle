@@ -164,4 +164,29 @@ describe("session: interaction recovery", () => {
     expect(snapshot.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
 
+  test("does not revive an older dangling interaction past the latest assistant turn", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-stale-interaction-"));
+    const sessionId = "2026-04-01T00-00-00-000Z-stale";
+    const store = await createSessionStore(rootDir, sessionId);
+
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "draft a blueprint" });
+    await store.append({
+      role: "assistant",
+      content: "Review this blueprint.",
+      metadata: {
+        toolCalls: [{
+          id: "call-old-gate",
+          name: "request_confirmation",
+          arguments: JSON.stringify({ gate: "blueprint-confirmation", summary: "Old request" }),
+        }],
+      },
+    });
+    await store.append({ role: "user", content: "Continue without that request." });
+    await store.append({ role: "assistant", content: "Continued." });
+
+    expect((await listSessions(rootDir))[0]?.pendingGate).toBeUndefined();
+    expect((await loadSessionSnapshot(rootDir, sessionId)).pendingGate).toBeUndefined();
+  });
+
 });
