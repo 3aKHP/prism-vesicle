@@ -102,6 +102,30 @@ describe("instruction resolution algebra", () => {
       expect(userIndex).toBeLessThan(projectIndex);
     });
   });
+
+  test("a present-but-invalid Engine target suppresses general fallback for that scope", async () => {
+    await withRoot(async ({ project, config }) => {
+      await writeFile(join(config, instructionLogicalName("all")), "user general rules", "utf8");
+      await writeFile(join(config, instructionLogicalName("etl")), Buffer.from([0xff, 0xfe, 0x00]));
+      const selection = await resolveEffectiveSelection("etl", project, ENV(config));
+      // The invalid ETL override suppresses fallback: the scope contributes
+      // nothing, not the valid general file.
+      expect(selection.user).toBeUndefined();
+      expect(composeInstructionBlocks(selection)).toBe("");
+      expect(selection.diagnostics.some((d) => d.kind === "invalid-utf8" && d.scope === "user")).toBe(true);
+      // The same scope's general file still applies under a different engine.
+      const runtime = await resolveEffectiveSelection("runtime", project, ENV(config));
+      expect(runtime.user?.content).toBe("user general rules");
+    });
+  });
+
+  test("instruction content is rendered byte-exact without trailing-whitespace trimming", async () => {
+    await withRoot(async ({ project, config }) => {
+      await writeFile(join(project, instructionLogicalName("all")), "rule with trailing space   \n\n", "utf8");
+      const selection = await resolveEffectiveSelection("etl", project, ENV(config));
+      expect(composeInstructionBlocks(selection)).toContain("rule with trailing space   ");
+    });
+  });
 });
 
 describe("instruction validation and budget", () => {
@@ -123,27 +147,22 @@ describe("instruction validation and budget", () => {
     });
   });
 
-  test("a project symlink target is rejected", async () => {
+  test.skipIf(process.platform === "win32")("a project symlink target is rejected", async () => {
     await withRoot(async ({ project, config }) => {
       const target = join(config, "elsewhere.txt");
       await writeFile(target, "host file outside project", "utf8");
-      await symlink(target, join(project, instructionLogicalName("all"))).catch((error) => {
-        // Symlink creation is unsupported on this filesystem; skip the assertion.
-        throw new Error(`symlink unsupported: ${error}`);
-      });
+      await symlink(target, join(project, instructionLogicalName("all")));
       const selection = await resolveEffectiveSelection("etl", project, ENV(config));
       expect(selection.project).toBeUndefined();
       expect(selection.diagnostics.some((d) => d.kind === "linked-project-target")).toBe(true);
     });
   });
 
-  test("a user-scope symlink target is skipped with a diagnostic", async () => {
+  test.skipIf(process.platform === "win32")("a user-scope symlink target is skipped with a diagnostic", async () => {
     await withRoot(async ({ project, config }) => {
       const target = join(project, "elsewhere.txt");
       await writeFile(target, "host file", "utf8");
-      await symlink(target, join(config, instructionLogicalName("all"))).catch((error) => {
-        throw new Error(`symlink unsupported: ${error}`);
-      });
+      await symlink(target, join(config, instructionLogicalName("all")));
       const selection = await resolveEffectiveSelection("etl", project, ENV(config));
       expect(selection.user).toBeUndefined();
       expect(selection.diagnostics.some((d) => d.kind === "linked-user-target")).toBe(true);

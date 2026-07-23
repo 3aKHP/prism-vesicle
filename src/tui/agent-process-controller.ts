@@ -278,6 +278,16 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
       case "validation":
         recordActivity({ kind: "validation", text: event.ok ? "validation passed" : "validation found issues" });
         return;
+      case "instruction_warning": {
+        const count = event.diagnostics.length;
+        const lines = event.diagnostics.map((diagnostic) => `- ${diagnostic.logicalName} [${diagnostic.scope}] ${diagnostic.kind}: ${diagnostic.message}`);
+        options.setMessages((current) => [...current, {
+          role: "system",
+          content: [`Persistent instruction ${count === 1 ? "file was" : "files were"} skipped and not loaded into the system prompt:`, ...lines].join("\n"),
+        }]);
+        recordActivity({ kind: "system", text: `${count} instruction diagnostic${count === 1 ? "" : "s"}` });
+        return;
+      }
       default:
         return;
     }

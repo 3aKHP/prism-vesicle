@@ -4,7 +4,7 @@ import { resolveAllowedPath, toProjectPath } from "../tools/file/path-policy";
 import { listDirectoryEntries } from "../tools/file/query-operations";
 import { writableProjectRoots } from "../artifacts/roots";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
-import { composeSystemPromptWithInstructions } from "../instructions";
+import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { createSessionStore } from "../session/store";
 import { requireProjectHarnessRuntime, resolveProjectHarnessRuntime } from "../harness/activation";
 import type { PermissionMode } from "../permissions";
@@ -109,6 +109,7 @@ export async function startStageSession(options: StartStageSessionOptions): Prom
           stopGates: [],
         },
         assets: engineAssets.assets,
+        instructions: selectionToRecord(instructional.selection),
         harness: projectHarness.harness.identity,
         stageBootstrap: bootstrap,
       },

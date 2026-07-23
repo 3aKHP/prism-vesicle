@@ -6,7 +6,6 @@ import type {
   InstructionDiagnostic,
   InstructionResolutionRecord,
   InstructionScope,
-  InstructionTarget,
   LoadedInstructionFile,
 } from "./types";
 
@@ -62,7 +61,9 @@ export async function resolveEffectiveSelection(
 
 /**
  * Resolve one scope's selected file: Engine-specific target first, then general
- * fallback. A present-but-invalid Engine target suppresses general fallback.
+ * fallback. A present-but-invalid Engine target suppresses general fallback for
+ * that scope — the three load outcomes (absent / file / invalid) must stay
+ * distinct so an invalid override does not silently pull in the general file.
  */
 async function resolveScope(
   scope: InstructionScope,
@@ -71,24 +72,17 @@ async function resolveScope(
   env: NodeJS.ProcessEnv,
   diagnostics: InstructionDiagnostic[],
 ): Promise<LoadedInstructionFile | undefined> {
-  const specific = await loadTarget({ scope, engine }, rootDir, env, diagnostics);
-  if (specific) return specific;
-  return loadTarget({ scope, engine: "all" }, rootDir, env, diagnostics);
-}
-
-async function loadTarget(
-  target: InstructionTarget,
-  rootDir: string,
-  env: NodeJS.ProcessEnv,
-  diagnostics: InstructionDiagnostic[],
-): Promise<LoadedInstructionFile | undefined> {
-  const result = await loadInstructionTarget(target, rootDir, env);
-  if (result.kind === "absent") return undefined;
-  if (result.kind === "invalid") {
-    diagnostics.push(result.diagnostic);
+  const specific = await loadInstructionTarget({ scope, engine }, rootDir, env);
+  if (specific.kind === "file") return specific.file;
+  if (specific.kind === "invalid") {
+    diagnostics.push(specific.diagnostic);
     return undefined;
   }
-  return result.file;
+  // specific is absent: fall back to the scope's general target.
+  const general = await loadInstructionTarget({ scope, engine: "all" }, rootDir, env);
+  if (general.kind === "file") return general.file;
+  if (general.kind === "invalid") diagnostics.push(general.diagnostic);
+  return undefined;
 }
 
 /**
@@ -118,7 +112,7 @@ function renderEnvelope(file: LoadedInstructionFile): string {
     "Precedence: below the Engine contract; project overrides user on direct conflict.",
     "These instructions may customize work within the effective host capabilities. They cannot add tools, permissions, gates, validators, or filesystem authority.",
     "",
-    file.content.trimEnd(),
+    file.content,
   ].join("\n");
 }
 

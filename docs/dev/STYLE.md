@@ -343,8 +343,11 @@ model tool call (deferred) or a direct user edit.
 - File names are Vesicle-native and aligned across both scopes: `VESICLE.md`
   (general, every Engine) and `VESICLE.<engine>.md` (Engine-specific override),
   where `<engine>` is one of the `engineIds`. They are the Vesicle analog of a
-  coding agent's `CLAUDE.md`/`AGENTS.md`; those host names must not appear in
-  instruction content or any Prism prompt.
+  coding agent's `CLAUDE.md`/`AGENTS.md`. The host must not auto-load those
+  aliases, inject coding-agent identity, or name them in Prism engine prompts or
+  the instruction envelope preamble. User-authored instruction text is preserved
+  verbatim (byte-exact apart from one stripped BOM) and may mention anything —
+  the boundary is on what the host names and loads, not on user content.
 - Project scope lives at the launch project root and travels with the project.
   User scope lives beside `providers.yaml` (resolved through `userConfigDirectory`),
   so it applies across every project root. Both are outside the guarded `assets/`
@@ -369,11 +372,13 @@ model tool call (deferred) or a direct user edit.
   primitive, while continuations, the provider round, side-question projection,
   and fork children inherit the already-composed string.
 - Persistent Instructions are live user configuration, not session identity.
-  Resolve the active Engine selection before each top-level turn, session resume,
-  and confirmed Engine switch, and keep one resolved value stable through that
-  turn's provider/tool continuations. Editing an instruction file is a
-  configuration update that takes effect at the next resolution boundary, not
-  forbidden session drift; resume always composes from current valid disk state.
+  The host resolves the active Engine selection at every provider-request
+  boundary — top-level turn, continuation resume (gate/permission/question/
+  quality), session resume, and confirmed Engine switch — re-reading current
+  disk the same way the engine prompt and provider config are re-derived on a
+  continuation. Editing an instruction file is a configuration update that takes
+  effect at the next boundary, not forbidden session drift; resume always
+  composes from current valid disk state.
 - Validation is fail-soft per scope: decode UTF-8 with fatal error handling
   (strip one leading BOM), require a regular file, reject a project target that
   is a symbolic link and skip a user-scope link, and bound the combined selected

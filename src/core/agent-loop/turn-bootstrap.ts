@@ -67,9 +67,6 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   );
 
   if (isNewSession) {
-    const hasInstructions = Boolean(instructional.selection.user)
-      || Boolean(instructional.selection.project)
-      || instructional.selection.diagnostics.length > 0;
     await session.append({
       role: "system",
       content: systemPrompt,
@@ -91,10 +88,17 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
           stopGates: profile.stopGates,
         },
         assets: engineAssets.assets,
-        ...(hasInstructions ? { instructions: selectionToRecord(instructional.selection) } : {}),
+        instructions: selectionToRecord(instructional.selection),
         ...(harness?.identity ? { harness: harness.identity } : {}),
       },
     });
+  }
+
+  // Surface instruction diagnostics (invalid, linked, or oversized selected
+  // scopes) as a visible warning so the user learns why a rule was not loaded
+  // without having to run /instructions.
+  if (instructional.selection.diagnostics.length > 0) {
+    options.onEvent?.({ type: "instruction_warning", diagnostics: instructional.selection.diagnostics });
   }
 
   const userRecord = options.prePersistedInputUuid

@@ -56,9 +56,11 @@ export async function loadContinuationContext(
   assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
   const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir, assets ? { resolver: assets } : {});
   const { profile } = engineAssets;
-  const systemPrompt = (
-    await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, rootDir)
-  ).systemPrompt;
+  const instructional = await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, rootDir);
+  const systemPrompt = instructional.systemPrompt;
+  if (instructional.selection.diagnostics.length > 0) {
+    options.onEvent?.({ type: "instruction_warning", diagnostics: instructional.selection.diagnostics });
+  }
   if (behavior.emitAssetDrift !== false) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   }
