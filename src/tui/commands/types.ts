@@ -127,6 +127,7 @@ export type CommandContext = {
   listSessions: () => Promise<SessionSummary[]>;
   resumeSession: (target: SessionSummary, commandEcho?: string) => Promise<void>;
   compactSession: (instructions?: string) => Promise<{ summary: string; messagesSummarized: number }>;
+  initProject: (notes?: string) => Promise<{ path: string; overwritten: boolean }>;
   openRewindPicker: () => Promise<void>;
   resetRewindState: () => void;
   agentCommand: (args: string) => Promise<string>;
