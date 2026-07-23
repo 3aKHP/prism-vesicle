@@ -1,5 +1,6 @@
 import { AgentStore } from "./store";
 import { normalizeHarnessAdapterError } from "../harness/driver";
+import { AgentExecutionScheduler, type AgentExecutionLease } from "./execution-scheduler";
 import { AgentHandleAllocator } from "./handle-allocator";
 import { PathOwnershipTable } from "./path-ownership";
 import type {
@@ -29,12 +30,9 @@ export type SpawnedAgent = {
 
 export class AgentManager {
   private readonly active = new Map<string, ActiveAgent>();
-  private readonly waiters: Array<() => void> = [];
+  private readonly executionScheduler: AgentExecutionScheduler;
   private readonly handleAllocator: AgentHandleAllocator;
   private readonly pathOwnership: PathOwnershipTable;
-  private runningCount = 0;
-  private readonly delegationRunning = new Set<string>();
-  private readonly delegationWaiters = new Map<string, Array<() => void>>();
 
   constructor(
     private readonly store: AgentStore,
@@ -44,9 +42,7 @@ export class AgentManager {
       onEvent?: (event: AgentRuntimeEvent) => void;
     } = {},
   ) {
-    if (!Number.isInteger(this.maxConcurrent) || this.maxConcurrent < 1) {
-      throw new Error("SubAgent maxConcurrent must be a positive integer.");
-    }
+    this.executionScheduler = new AgentExecutionScheduler(this.maxConcurrent);
     this.handleAllocator = new AgentHandleAllocator(store);
     this.pathOwnership = new PathOwnershipTable();
   }
@@ -130,16 +126,13 @@ export class AgentManager {
     invocation?: AgentInvocationContext,
   ): Promise<AgentTerminalResult> {
     let metadata = initial;
-    let acquired = false;
-    let delegationAcquired = false;
+    let executionLease: AgentExecutionLease | undefined;
     let executionStarted = false;
     try {
-      if (metadata.delegation) {
-        await this.acquireDelegation(metadata.parentSessionId, controller.signal);
-        delegationAcquired = true;
-      }
-      await this.acquire(controller.signal);
-      acquired = true;
+      executionLease = await this.executionScheduler.acquire(
+        controller.signal,
+        metadata.delegation ? metadata.parentSessionId : undefined,
+      );
       metadata = { ...metadata, status: "running", updatedAt: new Date().toISOString() };
       await this.store.save(metadata);
       this.updateActive(metadata);
@@ -297,8 +290,7 @@ export class AgentManager {
       return result;
     } finally {
       this.releaseMutations(metadata.runId);
-      if (acquired) this.release();
-      if (delegationAcquired) this.releaseDelegation(metadata.parentSessionId);
+      executionLease?.release();
     }
   }
 
@@ -336,64 +328,6 @@ export class AgentManager {
       && (!controllableOnly || isControllable(entry.metadata)));
   }
 
-  private async acquire(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) throw signal.reason;
-    if (this.runningCount < this.maxConcurrent) {
-      this.runningCount += 1;
-      return;
-    }
-    await new Promise<void>((resolve, reject) => {
-      const resume = () => {
-        signal.removeEventListener("abort", abort);
-        this.runningCount += 1;
-        resolve();
-      };
-      const abort = () => {
-        const index = this.waiters.indexOf(resume);
-        if (index >= 0) this.waiters.splice(index, 1);
-        reject(signal.reason);
-      };
-      this.waiters.push(resume);
-      signal.addEventListener("abort", abort, { once: true });
-    });
-  }
-
-  private release(): void {
-    this.runningCount = Math.max(0, this.runningCount - 1);
-    this.waiters.shift()?.();
-  }
-
-  private async acquireDelegation(parentSessionId: string, signal: AbortSignal): Promise<void> {
-    if (signal.aborted) throw signal.reason;
-    if (!this.delegationRunning.has(parentSessionId)) {
-      this.delegationRunning.add(parentSessionId);
-      return;
-    }
-    await new Promise<void>((resolve, reject) => {
-      const resume = () => {
-        signal.removeEventListener("abort", abort);
-        resolve();
-      };
-      const abort = () => {
-        const queue = this.delegationWaiters.get(parentSessionId) ?? [];
-        const index = queue.indexOf(resume);
-        if (index >= 0) queue.splice(index, 1);
-        reject(signal.reason);
-      };
-      const queue = this.delegationWaiters.get(parentSessionId) ?? [];
-      queue.push(resume);
-      this.delegationWaiters.set(parentSessionId, queue);
-      signal.addEventListener("abort", abort, { once: true });
-    });
-  }
-
-  private releaseDelegation(parentSessionId: string): void {
-    const queue = this.delegationWaiters.get(parentSessionId);
-    const next = queue?.shift();
-    if (queue?.length === 0) this.delegationWaiters.delete(parentSessionId);
-    if (next) next();
-    else this.delegationRunning.delete(parentSessionId);
-  }
 }
 
 function terminalFromMetadata(metadata: AgentMetadata | undefined): AgentTerminalResult | undefined {
