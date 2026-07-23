@@ -8,6 +8,7 @@ import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
 import { composeSystemPromptWithInstructions } from "../instructions";
+import { readFrozenInstructionBlocks } from "./instruction-context";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
 import type { AssetFingerprint } from "../runtime/assets";
 import type { AssetResolver } from "../runtime/assets";
@@ -56,10 +57,20 @@ export async function loadContinuationContext(
   assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
   const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir, assets ? { resolver: assets } : {});
   const { profile } = engineAssets;
-  const instructional = await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, rootDir);
-  const systemPrompt = instructional.systemPrompt;
-  if (instructional.selection.diagnostics.length > 0) {
-    options.onEvent?.({ type: "instruction_warning", diagnostics: instructional.selection.diagnostics });
+  // Reuse the turn's frozen instruction blocks when an in-process continuation
+  // resumes, so one turn observes one stable instruction set. The cache is
+  // absent only after a process restart, which is a resume boundary that should
+  // re-read current disk.
+  const frozenBlocks = readFrozenInstructionBlocks(options.sessionId);
+  let systemPrompt: string;
+  if (frozenBlocks !== undefined) {
+    systemPrompt = frozenBlocks.length > 0 ? `${engineAssets.systemPrompt}\n\n${frozenBlocks}` : engineAssets.systemPrompt;
+  } else {
+    const instructional = await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, rootDir);
+    systemPrompt = instructional.systemPrompt;
+    if (instructional.selection.diagnostics.length > 0) {
+      options.onEvent?.({ type: "instruction_warning", diagnostics: instructional.selection.diagnostics });
+    }
   }
   if (behavior.emitAssetDrift !== false) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);

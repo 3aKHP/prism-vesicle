@@ -5,6 +5,8 @@ import type { VesicleMessage } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
+import { composeInstructionBlocks } from "../instructions";
+import { freezeInstructionBlocks } from "./instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { createSessionStore } from "../session/store";
@@ -65,6 +67,11 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     options.sessionId,
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
+
+  // Freeze this turn's instruction blocks so in-process continuations reuse
+  // them instead of re-reading disk mid-turn. A restart loses the cache, so a
+  // resumed continuation re-reads current disk (a resume boundary).
+  freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
 
   if (isNewSession) {
     await session.append({

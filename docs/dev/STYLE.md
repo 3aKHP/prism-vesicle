@@ -372,13 +372,16 @@ model tool call (deferred) or a direct user edit.
   primitive, while continuations, the provider round, side-question projection,
   and fork children inherit the already-composed string.
 - Persistent Instructions are live user configuration, not session identity.
-  The host resolves the active Engine selection at every provider-request
-  boundary — top-level turn, continuation resume (gate/permission/question/
-  quality), session resume, and confirmed Engine switch — re-reading current
-  disk the same way the engine prompt and provider config are re-derived on a
-  continuation. Editing an instruction file is a configuration update that takes
-  effect at the next boundary, not forbidden session drift; resume always
-  composes from current valid disk state.
+  The host resolves the active Engine selection from current disk when a
+  top-level turn begins, when a session is resumed after a process restart, and
+  on a confirmed Engine switch. Within a single turn the selection is frozen:
+  an in-process continuation (gate/permission/question/quality) reuses the
+  turn-start instruction blocks instead of re-reading disk, so a tool call
+  decided under one instruction set never continues under another after a
+  mid-turn pause. The frozen snapshot is in-process only; a Vesicle restart
+  loses it, so a resumed continuation re-reads current disk, and a new top-level
+  turn re-resolves and overwrites it. Editing an instruction file is a
+  configuration update that takes effect on the next turn, never mid-turn.
 - Validation is fail-soft per scope: decode UTF-8 with fatal error handling
   (strip one leading BOM), require a regular file, reject a project target that
   is a symbolic link and skip a user-scope link, and bound the combined selected

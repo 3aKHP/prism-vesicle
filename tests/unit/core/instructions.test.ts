@@ -14,6 +14,24 @@ import { instructionLogicalName } from "../../../src/core/instructions";
 
 const ENV = (config: string): { VESICLE_CONFIG_DIR: string } => ({ VESICLE_CONFIG_DIR: config });
 
+// Probe once at module load whether the host can actually create a symbolic
+// link. The symlink-rejection contract is skipped only when creation genuinely
+// fails (e.g. unprivileged Windows), not blanket-skipped by platform, so a
+// Windows host with developer mode still runs the real assertion.
+const symlinkSupported = await (async (): Promise<boolean> => {
+  const dir = await mkdtemp(join(tmpdir(), "vesicle-symlink-probe-"));
+  try {
+    const target = join(dir, "target");
+    await writeFile(target, "x", "utf8");
+    await symlink(target, join(dir, "link"));
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+})();
+
 async function withRoot(work: (root: { project: string; config: string }) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-instructions-"));
   const project = join(root, "project");
@@ -147,7 +165,7 @@ describe("instruction validation and budget", () => {
     });
   });
 
-  test.skipIf(process.platform === "win32")("a project symlink target is rejected", async () => {
+  test.skipIf(!symlinkSupported)("a project symlink target is rejected", async () => {
     await withRoot(async ({ project, config }) => {
       const target = join(config, "elsewhere.txt");
       await writeFile(target, "host file outside project", "utf8");
@@ -158,7 +176,7 @@ describe("instruction validation and budget", () => {
     });
   });
 
-  test.skipIf(process.platform === "win32")("a user-scope symlink target is skipped with a diagnostic", async () => {
+  test.skipIf(!symlinkSupported)("a user-scope symlink target is skipped with a diagnostic", async () => {
     await withRoot(async ({ project, config }) => {
       const target = join(project, "elsewhere.txt");
       await writeFile(target, "host file", "utf8");

@@ -18,6 +18,7 @@ import { executeToolRound } from "./tool-round-executor";
 import { failedToolResult, recordToolResult } from "./tool-result-recorder";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
+import { clearFrozenInstructionBlocks } from "./instruction-context";
 import type { AgentLoopEvent, PendingUserInput, RunPromptResult } from "./types";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
@@ -108,6 +109,10 @@ export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   }
 
   if (!response) throw new Error("Provider did not return a response.");
+  // The turn completed: drop its frozen instruction snapshot. A paused turn
+  // keeps its snapshot so an in-process continuation can resume under the same
+  // instruction set.
+  clearFrozenInstructionBlocks(args.session.sessionId);
   return finalizeTurn({
     response,
     messages: args.messages,
