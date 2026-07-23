@@ -2,7 +2,7 @@
 
 English | [简体中文](../../zh-CN/advanced/subagents.md)
 
-> **Status (as of `1.0.0-alpha.2`):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.0.0-alpha.4`):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 A SubAgent is a **child runtime**: the main engine delegates a self-contained task to a specialized Agent Profile, either waiting for the result (foreground) or running it asynchronously (background). Multiple `spawn_agent` calls in one response run **in parallel**.
 

@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/shell-exec.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.2`):** 🟢 已实现。这是一个拥有宿主用户权限的**非沙箱**能力,默认关闭。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.0.0-alpha.4`):** 🟢 已实现。这是一个拥有宿主用户权限的**非沙箱**能力,默认关闭。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 >
 > 基础用法(四档权限、`permissions.yaml` 的 `shellExec` 开关、路径守卫)见 [权限与安全模型](../reference/permissions-and-security.md);本页是操作者深潜。
 

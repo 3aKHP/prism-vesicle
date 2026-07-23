@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-alpha.3 released baseline plus unreleased `develop` changes (2026-07-23)._
+_Snapshot: 1.0.0-alpha.4 release candidate (2026-07-24)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Current public release: **1.0.0-alpha.3**. The `State` column tracks the public contract and subsequent development: `released` = included in the 1.0.0-alpha.3 GitHub Release and npm package; `unreleased` = implemented on `develop` but not yet included in a public release; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-alpha.4**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.4 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
@@ -17,11 +17,11 @@ Current public release: **1.0.0-alpha.3**. The `State` column tracks the public 
 | Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | released |
 | Providers | Thinking-effort controls and reasoning-block visibility | released |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
-| TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | unreleased |
-| TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | unreleased |
-| Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | unreleased |
-| Instructions | `/init [--force] [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); refuses an existing file unless `--force` explicitly backs it up and replaces it | unreleased |
-| Instructions | `read_instructions` / `update_instructions` tools (non-Stage Engines): enum-target read/write/delete of Persistent Instructions with optimistic concurrency, atomic write, previous-state backup, and 32 KiB budget validation | unreleased |
+| TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | released |
+| TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | released |
+| Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | released |
+| Instructions | `/init [--force] [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); refuses an existing file unless `--force` explicitly backs it up and replaces it | released |
+| Instructions | `read_instructions` / `update_instructions` tools (non-Stage Engines): enum-target read/write/delete of Persistent Instructions with optimistic concurrency, atomic write, previous-state backup, and 32 KiB budget validation | released |
 | TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
@@ -116,6 +116,8 @@ Model-visible tools and their write scope. Path-guard rules, write roots, and th
 | `grep_files` | Read-only |
 | `read_file` | Read-only, with optional line ranges |
 | `view_image` | Read-only, guarded image attachment (vision-capable models only) |
+| `read_instructions` | Read-only access to one fixed user/project Persistent Instruction target (non-Stage Engines) |
+| `update_instructions` | Fixed user/project Persistent Instruction target; permission-routed host-config mutation outside writable roots (non-Stage Engines) |
 | `create_file` | Writable roots (no overwrite) |
 | `create_directory` | Below writable roots; fixed roots protected |
 | `write_file` | Writable roots (full overwrite) |
