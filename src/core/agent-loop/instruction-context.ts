@@ -25,7 +25,7 @@ export function readFrozenInstructionBlocks(sessionId: string): string | undefin
   return frozenInstructionBlocks.get(sessionId);
 }
 
-/** Drop the frozen snapshot once the turn has completed (success path). */
+/** Drop the frozen snapshot once the turn reaches any terminal path. */
 export function clearFrozenInstructionBlocks(sessionId: string): void {
   frozenInstructionBlocks.delete(sessionId);
 }

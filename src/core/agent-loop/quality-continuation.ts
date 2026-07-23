@@ -29,6 +29,7 @@ import type {
   ResolveQualityDecisionResult,
   RunPromptResult,
 } from "./types";
+import { clearFrozenInstructionBlocks } from "./instruction-context";
 
 type ResumeQualityRewriteOptions = ContinuationContextOptions & {
   permissionBroker?: ToolPermissionBroker;
@@ -113,6 +114,7 @@ export async function resolveQualityDecision(
   const point = snapshot.pendingQualityDecision;
   const rewrite = snapshot.pendingQualityRewrite;
   if (!point && !rewrite && activeQuality) {
+    clearFrozenInstructionBlocks(options.sessionId);
     return { kind: "quality_resolved", sessionId: options.sessionId, resolution: options.resolution === "stop" ? "stop" : "accept" };
   }
   if (!point && !rewrite) throw new Error("Session does not have a pending Output Quality Guard decision.");
@@ -127,6 +129,7 @@ export async function resolveQualityDecision(
   } else {
     await settleInterruptedQualityRewrite(rootDir, options.sessionId, snapshot, options.resolution);
   }
+  clearFrozenInstructionBlocks(options.sessionId);
   return { kind: "quality_resolved", sessionId: options.sessionId, resolution: options.resolution };
 }
 

@@ -68,11 +68,6 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
 
-  // Freeze this turn's instruction blocks so in-process continuations reuse
-  // them instead of re-reading disk mid-turn. A restart loses the cache, so a
-  // resumed continuation re-reads current disk (a resume boundary).
-  freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
-
   if (isNewSession) {
     await session.append({
       role: "system",
@@ -101,12 +96,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     });
   }
 
-  // Surface instruction diagnostics (invalid, linked, or oversized selected
-  // scopes) as a visible warning so the user learns why a rule was not loaded
-  // without having to run /instructions.
-  if (instructional.selection.diagnostics.length > 0) {
-    options.onEvent?.({ type: "instruction_warning", diagnostics: instructional.selection.diagnostics });
-  }
+  // Emit the complete diagnostic state, including an empty state, so clients
+  // can re-notify if a previously fixed target becomes invalid again.
+  options.onEvent?.({
+    type: "instruction_warning",
+    sessionId: session.sessionId,
+    engine,
+    diagnostics: instructional.selection.diagnostics,
+  });
 
   const userRecord = options.prePersistedInputUuid
     ? { uuid: options.prePersistedInputUuid }
@@ -126,6 +123,9 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const checkpoint = new FileCheckpointManager(rootDir, session, userRecord.uuid);
   await checkpoint.createSnapshot();
   options.onSessionReady?.(session.sessionId, session.sessionPath);
+  // Freeze only after bootstrap's fallible persistence work is complete. From
+  // here, runLoop owns cleanup on completion or failure, while pauses retain it.
+  freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
   const messages: VesicleMessage[] = options.messages ?? [{
     role: "user",
     content: options.input,

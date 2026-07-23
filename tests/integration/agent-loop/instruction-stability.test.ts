@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveUserQuestion, runPrompt } from "../../../src/core/agent-loop/run";
-import { clearFrozenInstructionBlocks } from "../../../src/core/agent-loop/instruction-context";
+import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../../../src/core/agent-loop/instruction-context";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);
@@ -93,5 +93,83 @@ describe("persistent instructions are frozen within a turn", () => {
 
     expect(provider.round2Body()).toContain("EDITED-RULE");
     expect(provider.round2Body()).not.toContain("ORIGINAL-RULE");
+  });
+
+  test("a restarted continuation freezes the reloaded instructions across a second pause", async () => {
+    const instructionFile = join(userConfigDir(), "VESICLE.md");
+    await writeFile(instructionFile, "ORIGINAL-RULE", "utf8");
+    const rootDir = await createPromptRoot();
+    const requestBodies: string[] = [];
+    let callCount = 0;
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      callCount += 1;
+      if (typeof init.body === "string") requestBodies.push(init.body);
+      if (callCount <= 2) {
+        return Response.json({
+          id: `round-${callCount}`,
+          choices: [{
+            finish_reason: "tool_calls",
+            message: {
+              content: "I need one choice.",
+              tool_calls: [{
+                id: `call-q-${callCount}`,
+                type: "function",
+                function: { name: "ask_user_question", arguments: QUESTION_ARGS },
+              }],
+            },
+          }],
+        });
+      }
+      return Response.json({ id: "round-3", choices: [{ message: { content: "done" } }] });
+    }) as unknown as typeof fetch;
+
+    const firstPause = await runPrompt({ input: "continue", rootDir, messages: [{ role: "user", content: "continue" }] });
+    if (firstPause.kind !== "needs_user_question") throw new Error(`expected needs_user_question, got ${firstPause.kind}`);
+    await writeFile(instructionFile, "RESTART-RULE", "utf8");
+    clearFrozenInstructionBlocks(firstPause.sessionId);
+    const secondPause = await resolveUserQuestion({
+      engine: "etl",
+      rootDir,
+      sessionId: firstPause.sessionId,
+      messages: firstPause.messages,
+      toolCallId: firstPause.toolCallId,
+      question: firstPause.question,
+      answer: { selectedIndex: 0, label: "Narrow", description: "Minimum change." },
+    });
+    if (secondPause.kind !== "needs_user_question") throw new Error(`expected needs_user_question, got ${secondPause.kind}`);
+
+    await writeFile(instructionFile, "LATER-EDIT", "utf8");
+    const completed = await resolveUserQuestion({
+      engine: "etl",
+      rootDir,
+      sessionId: secondPause.sessionId,
+      messages: secondPause.messages,
+      toolCallId: secondPause.toolCallId,
+      question: secondPause.question,
+      answer: { selectedIndex: 0, label: "Narrow", description: "Minimum change." },
+    });
+
+    expect(completed.kind).toBe("complete");
+    expect(requestBodies[1]).toContain("RESTART-RULE");
+    expect(requestBodies[2]).toContain("RESTART-RULE");
+    expect(requestBodies[2]).not.toContain("LATER-EDIT");
+  });
+
+  test("a provider failure clears the turn's frozen instructions", async () => {
+    const rootDir = await createPromptRoot();
+    let sessionId: string | undefined;
+    globalThis.fetch = (async () => {
+      throw new Error("provider unavailable");
+    }) as unknown as typeof fetch;
+
+    await expect(runPrompt({
+      input: "fail",
+      rootDir,
+      messages: [{ role: "user", content: "fail" }],
+      onSessionReady: (id) => { sessionId = id; },
+    })).rejects.toThrow("provider unavailable");
+
+    expect(sessionId).toBeDefined();
+    expect(readFrozenInstructionBlocks(sessionId!)).toBeUndefined();
   });
 });

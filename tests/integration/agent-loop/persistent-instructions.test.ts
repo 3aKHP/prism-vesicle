@@ -67,8 +67,10 @@ describe("persistent instructions reach the provider system authority", () => {
 
   test("no instruction files leaves the engine prompt unchanged", async () => {
     const rootDir = await createPromptRoot();
-    const { snapshot } = await runOneTurn(rootDir);
+    const events: AgentLoopEvent[] = [];
+    const { snapshot, sessionId } = await runOneTurn(rootDir, (event) => events.push(event));
     expect(snapshot.engineSystemPrompt).toBe("base\n\netl");
+    expect(events).toContainEqual({ type: "instruction_warning", sessionId, engine: "etl", diagnostics: [] });
   });
 
   test("a new session records the instruction resolution in the system record metadata", async () => {
@@ -89,9 +91,10 @@ describe("persistent instructions reach the provider system authority", () => {
     await writeFile(join(userConfigDir(), "VESICLE.md"), Buffer.from([0xff, 0xfe, 0x00]));
     const rootDir = await createPromptRoot();
     const events: AgentLoopEvent[] = [];
-    await runOneTurn(rootDir, (event) => events.push(event));
+    const result = await runOneTurn(rootDir, (event) => events.push(event));
     const warning = events.find((event): event is Extract<AgentLoopEvent, { type: "instruction_warning" }> => event.type === "instruction_warning");
     expect(warning).toBeDefined();
+    expect(warning).toMatchObject({ sessionId: result.sessionId, engine: "etl" });
     expect(warning?.diagnostics.some((d) => d.kind === "invalid-utf8")).toBe(true);
   });
 });

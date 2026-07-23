@@ -50,7 +50,12 @@ export type PendingUserInput = {
 export type AgentLoopEvent =
   | AgentRuntimeEvent
   | { type: "asset_drift"; fingerprint: string; changedPaths: string[] }
-  | { type: "instruction_warning"; diagnostics: InstructionDiagnostic[] }
+  | {
+      type: "instruction_warning";
+      sessionId: string;
+      engine: EngineId;
+      diagnostics: InstructionDiagnostic[];
+    }
   | { type: "provider_request"; iteration: number }
   | { type: "assistant_delta"; delta: string }
   | { type: "assistant_reasoning_delta"; delta: string }

@@ -7,8 +7,8 @@ import type { EngineId } from "../engine/profile";
 import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
-import { composeSystemPromptWithInstructions } from "../instructions";
-import { readFrozenInstructionBlocks } from "./instruction-context";
+import { composeInstructionBlocks, composeSystemPromptWithInstructions } from "../instructions";
+import { freezeInstructionBlocks, readFrozenInstructionBlocks } from "./instruction-context";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
 import type { AssetFingerprint } from "../runtime/assets";
 import type { AssetResolver } from "../runtime/assets";
@@ -68,9 +68,13 @@ export async function loadContinuationContext(
   } else {
     const instructional = await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, rootDir);
     systemPrompt = instructional.systemPrompt;
-    if (instructional.selection.diagnostics.length > 0) {
-      options.onEvent?.({ type: "instruction_warning", diagnostics: instructional.selection.diagnostics });
-    }
+    freezeInstructionBlocks(options.sessionId, composeInstructionBlocks(instructional.selection));
+    options.onEvent?.({
+      type: "instruction_warning",
+      sessionId: options.sessionId,
+      engine: options.engine,
+      diagnostics: instructional.selection.diagnostics,
+    });
   }
   if (behavior.emitAssetDrift !== false) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);

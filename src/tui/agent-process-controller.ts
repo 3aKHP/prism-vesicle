@@ -32,9 +32,9 @@ export type AgentProcessControllerOptions = {
 
 export function createAgentProcessController(options: AgentProcessControllerOptions) {
   let formingToolName: string | undefined;
-  // Last instruction-warning fingerprint already shown as a transcript notice,
-  // so a persistent invalid file does not re-notify on every turn.
-  let lastInstructionWarningKey: string | undefined;
+  // Track diagnostic state per session and Engine. Empty states are retained so
+  // a target that is fixed and later breaks in the same way re-notifies.
+  const instructionWarningFingerprints = new Map<string, string>();
 
   function recordActivity(entry: ActivityEntry): void {
     options.setActivity((previous) => [...previous, entry].slice(-60));
@@ -283,9 +283,11 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
         recordActivity({ kind: "validation", text: event.ok ? "validation passed" : "validation found issues" });
         return;
       case "instruction_warning": {
-        const key = `${options.sessionId() ?? ""}:${instructionWarningFingerprint(event.diagnostics)}`;
-        if (lastInstructionWarningKey === key) return;
-        lastInstructionWarningKey = key;
+        const key = `${event.sessionId}:${event.engine}`;
+        const fingerprint = instructionWarningFingerprint(event.diagnostics);
+        if (instructionWarningFingerprints.get(key) === fingerprint) return;
+        instructionWarningFingerprints.set(key, fingerprint);
+        if (event.diagnostics.length === 0) return;
         const count = event.diagnostics.length;
         const lines = event.diagnostics.map((diagnostic) => `- ${diagnostic.logicalName} [${diagnostic.scope}] ${diagnostic.kind}: ${diagnostic.message}`);
         options.setMessages((current) => [...current, {
@@ -340,7 +342,13 @@ function qualityWarningReasonText(reason: NonNullable<Extract<AgentLoopEvent, { 
 
 function instructionWarningFingerprint(diagnostics: InstructionDiagnostic[]): string {
   return diagnostics
-    .map((diagnostic) => `${diagnostic.scope}:${diagnostic.logicalName}:${diagnostic.kind}`)
+    .map((diagnostic) => JSON.stringify([
+      diagnostic.scope,
+      diagnostic.engine,
+      diagnostic.logicalName,
+      diagnostic.kind,
+      diagnostic.message,
+    ]))
     .sort()
     .join("|");
 }

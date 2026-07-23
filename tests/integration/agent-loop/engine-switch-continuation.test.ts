@@ -1,6 +1,7 @@
 import { readFile, } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveEngineSwitch, runPrompt } from "../../../src/core/agent-loop/run";
+import { readFrozenInstructionBlocks } from "../../../src/core/agent-loop/instruction-context";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);
@@ -96,6 +97,7 @@ describe("agent loop: engine switch continuation", () => {
       messages: [{ role: "user", content: "continue workflow" }],
     });
     if (paused.kind !== "needs_engine_switch") throw new Error("expected needs_engine_switch");
+    expect(readFrozenInstructionBlocks(paused.sessionId)).toBeDefined();
 
     const resolved = await resolveEngineSwitch({
       engine: "etl",
@@ -116,6 +118,7 @@ describe("agent loop: engine switch continuation", () => {
     expect(resolved.messages.at(-1)).toMatchObject({ role: "user" });
     expect(resolved.messages.at(-1)?.content).toContain("[engine_handoff]");
     expect(resolved.messages.at(-1)?.content).toContain("Character and scenario cards are available.");
+    expect(readFrozenInstructionBlocks(paused.sessionId)).toBeUndefined();
 
     const jsonl = await readFile(resolved.sessionPath, "utf8");
     const records = jsonl.trim().split("\n").map((line) => JSON.parse(line));

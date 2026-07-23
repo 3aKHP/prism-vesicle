@@ -88,6 +88,15 @@ type LoopRuntime = {
 };
 
 export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
+  try {
+    return await runLoopInternal(args);
+  } catch (error) {
+    clearFrozenInstructionBlocks(args.session.sessionId);
+    throw error;
+  }
+}
+
+async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
   const runtime = createLoopRuntime(args);
   let response: VesicleResponse | undefined;
   let consecutiveFailures = 0;
