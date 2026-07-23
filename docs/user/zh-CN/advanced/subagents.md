@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/subagents.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.2`):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.0.0-alpha.4`):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 SubAgent 是一个**子运行时**:主引擎把一块自包含的任务委派给一个专门的 Agent Profile 去跑,前台等结果或后台异步进行。多个 `spawn_agent` 在同一回合里**并行**启动。
 

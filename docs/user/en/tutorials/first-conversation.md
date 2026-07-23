@@ -74,4 +74,4 @@ Commands start with `/` in the input box; typing `/` opens a candidate menu (↑
 - [ ] You confirmed or rejected at a gate.
 - [ ] You ran `/context` to see usage.
 
-You now have the rhythm of "turn + gate". Next, build a full card in [First character card](./first-character-card.md).
+You now have the rhythm of "turn + gate". Next, learn how to [keep working during a turn](./work-while-running.md), then build a full card.
