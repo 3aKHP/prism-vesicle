@@ -43,7 +43,6 @@ test("startup coordinates recovery and opens the requested resume picker", async
   });
 
   await controller.start();
-  await Promise.resolve();
 
   expect(calls.sort()).toEqual(["artifacts", "mcp", "provider"]);
   expect(notified).toEqual(["parent-background"]);
@@ -55,6 +54,69 @@ test("startup coordinates recovery and opens the requested resume picker", async
   expect(status).toBe("choose a session to resume");
   expect(providerReady).toBe(true);
   expect(errors).toHaveLength(1);
+});
+
+test("startup loads normal permissions and reports resumable sessions", async () => {
+  const session: SessionSummary = {
+    sessionId: "session-2",
+    startedAt: "2026-07-24T00:00:00.000Z",
+    updatedAt: "2026-07-24T00:01:00.000Z",
+    recordCount: 1,
+    preview: "resume me",
+  };
+  const calls: string[] = [];
+  let messages: Message[] = [];
+  let picker: SessionPickerState | null = null;
+  const controller = createStartupController({
+    dangerouslySkipPermissions: false,
+    initialResume: false,
+    refreshArtifacts: async () => undefined,
+    recoverInterruptedAgents: async () => [],
+    notifyContinuation: async () => undefined,
+    refreshMcpStatus: async () => undefined,
+    loadPermissionSettings: async () => { calls.push("permissions"); },
+    loadProviderConfig: async () => undefined,
+    setProviderConfigReady: () => undefined,
+    listSessions: async () => [session],
+    setResumableSessions: () => undefined,
+    setSessionPicker: (state) => { picker = state; },
+    setMessages: (value) => { messages = typeof value === "function" ? value(messages) : value; },
+    setStatus: () => undefined,
+    reportError: (error) => { throw error; },
+  });
+
+  await controller.start();
+
+  expect(calls).toEqual(["permissions"]);
+  expect(picker).toBeNull();
+  expect(messages.map((message) => message.content)).toEqual([
+    "Found 1 existing session. Type /resume to list and continue one, or just type a new prompt to start fresh.",
+  ]);
+});
+
+test("startup reports an empty explicit resume request", async () => {
+  let messages: Message[] = [];
+  const controller = createStartupController({
+    dangerouslySkipPermissions: true,
+    initialResume: true,
+    refreshArtifacts: async () => undefined,
+    recoverInterruptedAgents: async () => [],
+    notifyContinuation: async () => undefined,
+    refreshMcpStatus: async () => undefined,
+    loadPermissionSettings: async () => undefined,
+    loadProviderConfig: async () => undefined,
+    setProviderConfigReady: () => undefined,
+    listSessions: async () => [],
+    setResumableSessions: () => undefined,
+    setSessionPicker: () => undefined,
+    setMessages: (value) => { messages = typeof value === "function" ? value(messages) : value; },
+    setStatus: () => undefined,
+    reportError: (error) => { throw error; },
+  });
+
+  await controller.start();
+
+  expect(messages.map((message) => message.content)).toEqual(["No existing sessions found."]);
 });
 
 function recoveredAgent(mode: "background" | "foreground", parentSessionId: string): AgentMetadata {

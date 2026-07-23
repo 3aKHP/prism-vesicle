@@ -41,9 +41,9 @@ export function createStartupController(options: StartupControllerOptions) {
         role: "system",
         content: `Recovered ${recovered.length} interrupted SubAgent${recovered.length === 1 ? "" : "s"}; foreground tool calls were closed and background failures will be delivered when their parent sessions resume.`,
       }]);
-      for (const agent of recovered.filter((entry) => entry.mode === "background")) {
-        void options.notifyContinuation(agent.parentSessionId).catch(options.reportError);
-      }
+      await Promise.all(recovered
+        .filter((entry) => entry.mode === "background")
+        .map((agent) => options.notifyContinuation(agent.parentSessionId).catch(options.reportError)));
     } catch (error) {
       options.reportError(error);
     }

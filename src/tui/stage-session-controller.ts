@@ -32,13 +32,6 @@ type StageSessionControllerOptions = {
   startSession?: (options: StartStageSessionOptions) => Promise<StartedStageSession>;
 };
 
-const emptyUsage: TokenUsageSummary = {
-  inputTokens: 0,
-  outputTokens: 0,
-  cachedInputTokens: 0,
-  contextInputTokens: 0,
-};
-
 export function createStageSessionController(options: StageSessionControllerOptions) {
   async function start(characterPath: string, scenarioPath: string, commandEcho: string): Promise<void> {
     const provider = options.activeProvider();
@@ -63,7 +56,7 @@ export function createStageSessionController(options: StageSessionControllerOpti
     options.setConversation(started.messages);
     options.setOutput(started.opening);
     options.setLastTurnUsage(undefined);
-    options.setSessionUsage(emptyUsage);
+    options.setSessionUsage({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: 0 });
     options.setNextSessionParent(null);
     options.setPendingGate(null);
     options.setPendingEngineSwitch(null);
