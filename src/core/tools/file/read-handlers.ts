@@ -2,7 +2,8 @@ import { stat, readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { ingestImageBytes, ingestImageFile } from "../../attachments/store";
 import { normalizeAssetPath, type AssetResolver } from "../../runtime/assets";
-import type { FileToolEvent, ToolCall, ToolResult } from "../types";
+import type { ToolCall, ToolResult } from "../types";
+import { fileTextByteLength, parseFileToolArgs, successfulFileToolResult } from "./handler-contract";
 import { assertDirectory } from "./mutation-operations";
 import { isAssetPath, readableFileRoots, resolveAllowedPath, toProjectPath } from "./path-policy";
 import { grepAssetFiles, grepFiles, listDirectoryEntries, listFiles, sliceLines } from "./query-operations";
@@ -14,10 +15,10 @@ export async function executeFileReadOperation(
 ): Promise<ToolResult> {
   switch (call.name) {
     case "stat_path": {
-      const args = parseArgs<{ path: string }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string }>(call.arguments);
       if (isAssetPath(args.path)) {
         const info = await assets.stat(args.path);
-        return ok(call, JSON.stringify({
+        return successfulFileToolResult(call, JSON.stringify({
           path: info.logicalPath,
           type: info.type,
           size: info.size,
@@ -32,7 +33,7 @@ export async function executeFileReadOperation(
       }
       const resolved = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
       const info = await stat(resolved);
-      return ok(call, JSON.stringify({
+      return successfulFileToolResult(call, JSON.stringify({
         path: toProjectPath(rootDir, resolved),
         type: info.isDirectory() ? "directory" : info.isFile() ? "file" : "other",
         size: info.size,
@@ -47,11 +48,11 @@ export async function executeFileReadOperation(
     }
 
     case "list_files": {
-      const args = parseArgs<{ path: string; recursive?: boolean }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; recursive?: boolean }>(call.arguments);
       if (isAssetPath(args.path)) {
         const logicalPath = normalizeAssetPath(args.path, { allowRoot: true });
         const entries = await assets.listFiles(logicalPath, Boolean(args.recursive));
-        return ok(call, entries.join("\n") || "(empty)", {
+        return successfulFileToolResult(call, entries.join("\n") || "(empty)", {
           kind: "file_operation",
           operation: "list",
           path: logicalPath,
@@ -61,7 +62,7 @@ export async function executeFileReadOperation(
       }
       const dir = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
       const entries = await listFiles(dir, Boolean(args.recursive));
-      return ok(call, entries.map((entry) => toProjectPath(rootDir, entry)).join("\n") || "(empty)", {
+      return successfulFileToolResult(call, entries.map((entry) => toProjectPath(rootDir, entry)).join("\n") || "(empty)", {
         kind: "file_operation",
         operation: "list",
         path: toProjectPath(rootDir, dir),
@@ -71,14 +72,14 @@ export async function executeFileReadOperation(
     }
 
     case "list_directory": {
-      const args = parseArgs<{ path: string; recursive?: boolean }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; recursive?: boolean }>(call.arguments);
       if (isAssetPath(args.path)) {
         throw new Error("list_directory does not support the layered assets namespace; use list_files for assets.");
       }
       const dir = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
       await assertDirectory(dir);
       const result = await listDirectoryEntries(rootDir, dir, Boolean(args.recursive));
-      return ok(call, JSON.stringify(result), {
+      return successfulFileToolResult(call, JSON.stringify(result), {
         kind: "file_operation",
         operation: "list_directory",
         path: toProjectPath(rootDir, dir),
@@ -89,7 +90,7 @@ export async function executeFileReadOperation(
     }
 
     case "grep_files": {
-      const args = parseArgs<{
+      const args = parseFileToolArgs<{
         path: string;
         pattern: string;
         regex?: boolean;
@@ -105,7 +106,7 @@ export async function executeFileReadOperation(
       const eventPath = assetRequest
         ? normalizeAssetPath(args.path, { allowRoot: true })
         : toProjectPath(rootDir, resolved!);
-      return ok(call, JSON.stringify(result), {
+      return successfulFileToolResult(call, JSON.stringify(result), {
         kind: "file_operation",
         operation: "grep",
         path: eventPath,
@@ -116,33 +117,33 @@ export async function executeFileReadOperation(
     }
 
     case "read_file": {
-      const args = parseArgs<{ path: string; startLine?: number; endLine?: number }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; startLine?: number; endLine?: number }>(call.arguments);
       if (isAssetPath(args.path)) {
         const resolved = await assets.resolveFile(args.path);
         const content = sliceLines(await assets.readText(resolved.logicalPath), args.startLine, args.endLine);
-        return ok(call, content, {
+        return successfulFileToolResult(call, content, {
           kind: "file_operation",
           operation: "read",
           path: resolved.logicalPath,
           changed: false,
-          bytes: textByteLength(content),
+          bytes: fileTextByteLength(content),
           lines: content ? content.split(/\r?\n/).length : 0,
         });
       }
       const filePath = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
       const content = sliceLines(await readFile(filePath, "utf8"), args.startLine, args.endLine);
-      return ok(call, content, {
+      return successfulFileToolResult(call, content, {
         kind: "file_operation",
         operation: "read",
         path: toProjectPath(rootDir, filePath),
         changed: false,
-        bytes: textByteLength(content),
+        bytes: fileTextByteLength(content),
         lines: content ? content.split(/\r?\n/).length : 0,
       });
     }
 
     case "view_image": {
-      const args = parseArgs<{ path: string; detail?: "auto" | "high" | "original" }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; detail?: "auto" | "high" | "original" }>(call.arguments);
       if (args.detail && !["auto", "high", "original"].includes(args.detail)) {
         throw new Error("view_image.detail must be auto, high, or original.");
       }
@@ -162,7 +163,7 @@ export async function executeFileReadOperation(
           detail: args.detail ?? "auto",
         });
       return {
-        ...ok(call, `Viewed ${projectPath}`, {
+        ...successfulFileToolResult(call, `Viewed ${projectPath}`, {
           kind: "file_operation",
           operation: "view",
           path: projectPath,
@@ -176,16 +177,4 @@ export async function executeFileReadOperation(
     default:
       throw new Error(`Unknown read/query tool: ${call.name}`);
   }
-}
-
-function parseArgs<T>(raw: string): T {
-  return JSON.parse(raw || "{}") as T;
-}
-
-function textByteLength(value: string): number {
-  return new TextEncoder().encode(value).length;
-}
-
-function ok(call: ToolCall, content: string, fileEvent?: FileToolEvent): ToolResult {
-  return { callId: call.id, name: call.name, ok: true, content, ...(fileEvent ? { fileEvent } : {}) };
 }

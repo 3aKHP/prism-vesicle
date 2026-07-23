@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { TextDecoder } from "node:util";
 import type { AssetResolver } from "../../runtime/assets";
 import type { FileToolEvent, FileToolExecutionOptions, ToolCall, ToolResult } from "../types";
+import { fileTextByteLength, parseFileToolArgs, successfulFileToolResult } from "./handler-contract";
 import {
   assertDirectory,
   assertFile,
@@ -28,16 +29,16 @@ export async function executeFileMutationOperation(
 ): Promise<ToolResult> {
   switch (call.name) {
     case "create_file": {
-      const args = parseArgs<{ path: string; content: string }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; content: string }>(call.arguments);
       const filePath = await resolveAllowedPath(rootDir, args.path, writableFileRoots);
       await options.beforeMutation?.(await mutationPathsForTarget(rootDir, filePath));
       await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, args.content, { encoding: "utf8", flag: "wx" });
-      return ok(call, `Created ${toProjectPath(rootDir, filePath)}`, changedFileEvent("create", rootDir, filePath, args.content));
+      return successfulFileToolResult(call, `Created ${toProjectPath(rootDir, filePath)}`, changedFileEvent("create", rootDir, filePath, args.content));
     }
 
     case "create_directory": {
-      const args = parseArgs<{ path: string; recursive?: boolean }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; recursive?: boolean }>(call.arguments);
       const directoryPath = await resolveAllowedPath(rootDir, args.path, writableFileRoots);
       assertMutableDirectoryPath(rootDir, directoryPath);
       await assertMissing(directoryPath, "Directory already exists.");
@@ -47,7 +48,7 @@ export async function executeFileMutationOperation(
         : [toProjectPath(rootDir, directoryPath)];
       await options.beforeMutation?.(mutationPaths);
       await mkdir(directoryPath, { recursive });
-      return ok(call, `Created directory ${toProjectPath(rootDir, directoryPath)}`, {
+      return successfulFileToolResult(call, `Created directory ${toProjectPath(rootDir, directoryPath)}`, {
         kind: "file_operation",
         operation: "create_directory",
         path: toProjectPath(rootDir, directoryPath),
@@ -56,16 +57,16 @@ export async function executeFileMutationOperation(
     }
 
     case "write_file": {
-      const args = parseArgs<{ path: string; content: string }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; content: string }>(call.arguments);
       const filePath = await resolveAllowedPath(rootDir, args.path, writableFileRoots);
       await options.beforeMutation?.(await mutationPathsForTarget(rootDir, filePath));
       await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, args.content, "utf8");
-      return ok(call, `Wrote ${toProjectPath(rootDir, filePath)}`, changedFileEvent("write", rootDir, filePath, args.content));
+      return successfulFileToolResult(call, `Wrote ${toProjectPath(rootDir, filePath)}`, changedFileEvent("write", rootDir, filePath, args.content));
     }
 
     case "replace_in_file": {
-      const args = parseArgs<{ path: string; oldText: string; newText: string; replaceAll?: boolean }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; oldText: string; newText: string; replaceAll?: boolean }>(call.arguments);
       const filePath = await resolveAllowedPath(rootDir, args.path, writableFileRoots);
       const original = await readFile(filePath, "utf8");
       if (!args.oldText) throw new Error("oldText must not be empty.");
@@ -80,7 +81,7 @@ export async function executeFileMutationOperation(
       const next = original.split(args.oldText).join(args.newText);
       await writeFile(filePath, next, "utf8");
       const matchLines = collectMatchLines(original, args.oldText);
-      return ok(call, `Replaced ${args.replaceAll ? count : 1} occurrence(s) in ${toProjectPath(rootDir, filePath)}`, {
+      return successfulFileToolResult(call, `Replaced ${args.replaceAll ? count : 1} occurrence(s) in ${toProjectPath(rootDir, filePath)}`, {
         ...changedFileEvent("replace", rootDir, filePath, next),
         occurrences: args.replaceAll ? count : 1,
         ...(matchLines.length > 0 ? { matchLines } : {}),
@@ -88,7 +89,7 @@ export async function executeFileMutationOperation(
     }
 
     case "append_file": {
-      const args = parseArgs<{ path: string; content: string; createIfMissing?: boolean }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; content: string; createIfMissing?: boolean }>(call.arguments);
       const filePath = await resolveAllowedPath(rootDir, args.path, writableFileRoots);
       if (!args.createIfMissing) await assertFile(filePath);
       const mutationPaths = args.createIfMissing
@@ -98,24 +99,24 @@ export async function executeFileMutationOperation(
       await mkdir(dirname(filePath), { recursive: true });
       await appendFile(filePath, args.content, { encoding: "utf8", flag: "a" });
       const appended = await readFile(filePath);
-      return ok(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`, {
+      return successfulFileToolResult(call, `Appended ${args.content.length} char(s) to ${toProjectPath(rootDir, filePath)}`, {
         kind: "file_operation",
         operation: "append",
         path: toProjectPath(rootDir, filePath),
         changed: true,
         bytes: appended.byteLength,
         sha256: sha256(appended),
-        deltaBytes: textByteLength(args.content),
+        deltaBytes: fileTextByteLength(args.content),
       });
     }
 
     case "delete_file": {
-      const args = parseArgs<{ path: string }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string }>(call.arguments);
       const filePath = await resolveAllowedPath(rootDir, args.path, writableFileRoots);
       const deleted = await assertFile(filePath);
       await options.beforeMutation?.([toProjectPath(rootDir, filePath)]);
       await unlink(filePath);
-      return ok(call, `Deleted ${toProjectPath(rootDir, filePath)}`, {
+      return successfulFileToolResult(call, `Deleted ${toProjectPath(rootDir, filePath)}`, {
         kind: "file_operation",
         operation: "delete",
         path: toProjectPath(rootDir, filePath),
@@ -125,7 +126,7 @@ export async function executeFileMutationOperation(
     }
 
     case "copy_file": {
-      const args = parseArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
+      const args = parseFileToolArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
       const sourceAsset = isAssetPath(args.sourcePath) ? await assets.resolveFile(args.sourcePath) : undefined;
       const sourcePath = sourceAsset?.absolutePath ?? await resolveAllowedPath(rootDir, args.sourcePath, readableFileRoots);
       const logicalSourcePath = sourceAsset?.logicalPath ?? toProjectPath(rootDir, sourcePath);
@@ -136,7 +137,7 @@ export async function executeFileMutationOperation(
       await prepareTarget(targetPath, Boolean(args.overwrite));
       if (assetBytes) await writeFile(targetPath, assetBytes);
       else await copyFile(sourcePath, targetPath);
-      return ok(call, `Copied ${logicalSourcePath} to ${toProjectPath(rootDir, targetPath)}`, {
+      return successfulFileToolResult(call, `Copied ${logicalSourcePath} to ${toProjectPath(rootDir, targetPath)}`, {
         kind: "file_operation",
         operation: "copy",
         sourcePath: logicalSourcePath,
@@ -147,7 +148,7 @@ export async function executeFileMutationOperation(
     }
 
     case "move_file": {
-      const args = parseArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
+      const args = parseFileToolArgs<{ sourcePath: string; targetPath: string; overwrite?: boolean }>(call.arguments);
       const sourcePath = await resolveAllowedPath(rootDir, args.sourcePath, writableFileRoots);
       const targetPath = await resolveAllowedPath(rootDir, args.targetPath, writableFileRoots);
       const source = await assertFile(sourcePath);
@@ -157,7 +158,7 @@ export async function executeFileMutationOperation(
       ]);
       await prepareTarget(targetPath, Boolean(args.overwrite));
       await rename(sourcePath, targetPath);
-      return ok(call, `Moved ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
+      return successfulFileToolResult(call, `Moved ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
         kind: "file_operation",
         operation: "move",
         sourcePath: toProjectPath(rootDir, sourcePath),
@@ -168,7 +169,7 @@ export async function executeFileMutationOperation(
     }
 
     case "move_directory": {
-      const args = parseArgs<{ sourcePath: string; targetPath: string }>(call.arguments);
+      const args = parseFileToolArgs<{ sourcePath: string; targetPath: string }>(call.arguments);
       const sourcePath = await resolveAllowedPath(rootDir, args.sourcePath, writableFileRoots);
       const targetPath = await resolveAllowedPath(rootDir, args.targetPath, writableFileRoots);
       assertMutableDirectoryPath(rootDir, sourcePath);
@@ -181,7 +182,7 @@ export async function executeFileMutationOperation(
         toProjectPath(rootDir, targetPath),
       ]);
       await rename(sourcePath, targetPath);
-      return ok(call, `Moved directory ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
+      return successfulFileToolResult(call, `Moved directory ${toProjectPath(rootDir, sourcePath)} to ${toProjectPath(rootDir, targetPath)}`, {
         kind: "file_operation",
         operation: "move_directory",
         sourcePath: toProjectPath(rootDir, sourcePath),
@@ -191,7 +192,7 @@ export async function executeFileMutationOperation(
     }
 
     case "delete_directory": {
-      const args = parseArgs<{ path: string }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string }>(call.arguments);
       const directoryPath = await resolveAllowedPath(rootDir, args.path, writableFileRoots);
       assertMutableDirectoryPath(rootDir, directoryPath);
       await assertDirectory(directoryPath);
@@ -199,7 +200,7 @@ export async function executeFileMutationOperation(
       if (entries.length > 0) throw new Error("Directory is not empty. Delete its contents first.");
       await options.beforeMutation?.([toProjectPath(rootDir, directoryPath)]);
       await rmdir(directoryPath);
-      return ok(call, `Deleted directory ${toProjectPath(rootDir, directoryPath)}`, {
+      return successfulFileToolResult(call, `Deleted directory ${toProjectPath(rootDir, directoryPath)}`, {
         kind: "file_operation",
         operation: "delete_directory",
         path: toProjectPath(rootDir, directoryPath),
@@ -241,21 +242,13 @@ function changedFileEvent(
     operation,
     path: toProjectPath(rootDir, filePath),
     changed: true,
-    bytes: textByteLength(content),
+    bytes: fileTextByteLength(content),
     sha256: sha256(content),
   };
 }
 
-function parseArgs<T>(raw: string): T {
-  return JSON.parse(raw || "{}") as T;
-}
-
 function sha256(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function textByteLength(value: string): number {
-  return new TextEncoder().encode(value).length;
 }
 
 function countOccurrences(content: string, needle: string): number {
@@ -278,8 +271,4 @@ function collectMatchLines(content: string, needle: string): number[] {
     lines.push(content.slice(0, index).split("\n").length);
     from = index + needle.length;
   }
-}
-
-function ok(call: ToolCall, content: string, fileEvent?: FileToolEvent): ToolResult {
-  return { callId: call.id, name: call.name, ok: true, content, ...(fileEvent ? { fileEvent } : {}) };
 }
