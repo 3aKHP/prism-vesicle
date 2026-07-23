@@ -53,13 +53,14 @@ import { createSessionPreferencesController } from "./session-preferences-contro
 import { createAgentCommand } from "./agent-command";
 import { useInputRouting } from "./input-routing";
 import { createQualityPickerController } from "./quality-picker-controller";
-import { startStageSession } from "../core/stage/bootstrap";
 import { artifactFocusAction, artifactFocusPath, initialArtifactFocusPath } from "./artifact-focus";
 import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
 import { createSideQuestionController } from "./side-question-controller";
 import { createQueuedWorkController } from "./queued-work-controller";
+import { createStageSessionController } from "./stage-session-controller";
+import { createStartupController } from "./startup-controller";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { copyTextToClipboard } from "./clipboard";
 
@@ -533,7 +534,6 @@ export function App(props: AppProps = {}) {
       await resumeSession(target);
     },
     compactSession: (instructions) => sessionActions.compactSession(instructions),
-    initProject: (notes) => sessionActions.initProject(notes),
     executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
     recordPromptHistory,
     applyComposerState,
@@ -675,6 +675,47 @@ export function App(props: AppProps = {}) {
     handleSessionPickerKey,
     resetRewindState,
   } = sessionActions;
+  const startupController = createStartupController({
+    dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
+    initialResume: props.initialResume === true,
+    refreshArtifacts,
+    recoverInterruptedAgents: () => agentStore.recoverInterrupted(),
+    notifyContinuation: (id) => continuationScheduler.notify(id),
+    refreshMcpStatus,
+    loadPermissionSettings: loadPermissionSettingsOnce,
+    loadProviderConfig: loadProviderConfigOnce,
+    setProviderConfigReady,
+    listSessions,
+    setResumableSessions,
+    setSessionPicker,
+    setMessages,
+    setStatus,
+    reportError,
+  });
+  const stageSessionController = createStageSessionController({
+    rootDir: process.cwd(),
+    activeProvider,
+    activeModel,
+    permissionMode,
+    reasoningTier: thinkingTier,
+    clearQueuedInputs,
+    setSessionId,
+    setSessionPath,
+    setActiveEngine,
+    setConversation,
+    setOutput,
+    setLastTurnUsage,
+    setSessionUsage,
+    setNextSessionParent,
+    setPendingGate,
+    setPendingEngineSwitch,
+    setPendingUserQuestion,
+    setPendingPermission,
+    setPendingQualityDecision,
+    setMessages,
+    setStatus,
+    recordActivity,
+  });
   createEffect(() => {
     const id = sessionId();
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
@@ -709,49 +750,8 @@ export function App(props: AppProps = {}) {
   });
   const composerPopupMaxRows = createMemo(() => Math.min(8, Math.max(1, layout().bottomHeight - 4)));
 
-  // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
-    void refreshArtifacts();
-    void agentStore.recoverInterrupted().then((recovered) => {
-      if (recovered.length === 0) return;
-      setMessages((current) => [...current, {
-        role: "system",
-        content: `Recovered ${recovered.length} interrupted SubAgent${recovered.length === 1 ? "" : "s"}; foreground tool calls were closed and background failures will be delivered when their parent sessions resume.`,
-      }]);
-      for (const agent of recovered.filter((entry) => entry.mode === "background")) {
-        void continuationScheduler.notify(agent.parentSessionId).catch(reportError);
-      }
-    }).catch(reportError);
-    void refreshMcpStatus().catch(reportError);
-    if (!props.dangerouslySkipPermissions) void loadPermissionSettingsOnce().catch(reportError);
-    void loadProviderConfigOnce().catch((error) => {
-      setProviderConfigReady(true);
-      reportError(error);
-    });
-    void listSessions().then((sessions) => {
-      setResumableSessions(sessions);
-      // `--resume`/`-r` routes to the same host-owned picker as `/resume` with
-      // no argument: show the list, or report no sessions. Opening the picker
-      // is state-only and never starts a provider turn on its own.
-      if (props.initialResume) {
-        if (sessions.length > 0) {
-          setSessionPicker({ sessions, selected: 0 });
-          setStatus("choose a session to resume");
-        } else {
-          setMessages((prev) => [...prev, { role: "system", content: "No existing sessions found." }]);
-        }
-        return;
-      }
-      if (sessions.length > 0) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "system",
-            content: `Found ${sessions.length} existing session${sessions.length > 1 ? "s" : ""}. Type /resume to list and continue one, or just type a new prompt to start fresh.`,
-          },
-        ]);
-      }
-    });
+    void startupController.start();
   });
 
   useInputRouting({
@@ -855,39 +855,7 @@ export function App(props: AppProps = {}) {
     openRewindPicker: rewindController.open,
     resetRewindState,
     agentCommand,
-    startStage: async (characterPath, scenarioPath, commandEcho) => {
-      const started = await startStageSession({
-        rootDir: process.cwd(),
-        characterPath,
-        scenarioPath,
-        provider: activeProvider(),
-        providerId: activeProvider(),
-        model: activeModel(),
-        permissionMode: permissionMode(),
-        reasoningTier: thinkingTier(),
-      });
-      clearQueuedInputs();
-      setSessionId(started.sessionId);
-      setSessionPath(started.sessionPath);
-      setActiveEngine("stage");
-      setConversation(started.messages);
-      setOutput(started.opening);
-      setLastTurnUsage(undefined);
-      setSessionUsage({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: 0 });
-      setNextSessionParent(null);
-      setPendingGate(null);
-      setPendingEngineSwitch(null);
-      setPendingUserQuestion(null);
-      setPendingPermission(null);
-      setPendingQualityDecision(null);
-      setMessages([
-        { role: "user", content: commandEcho },
-        ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
-        { id: started.openingRecordUuid, role: "assistant", content: started.opening, kind: "stage-bootstrap-opening", engine: "stage" },
-      ]);
-      setStatus("Stage session ready");
-      recordActivity({ kind: "system", text: `started Stage session ${started.sessionId}` });
-    },
+    startStage: stageSessionController.start,
     openModelPicker,
     openQualityPicker,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),

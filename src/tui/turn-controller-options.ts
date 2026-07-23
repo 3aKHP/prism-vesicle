@@ -90,7 +90,6 @@ export type TurnControllerOptions = {
   refreshQualityWarnings: (sessionId?: string) => Promise<unknown>;
   resumeQualitySession: (sessionId: string) => Promise<void>;
   compactSession: (instructions?: string) => Promise<{ summary: string; messagesSummarized: number }>;
-  initProject: (notes?: string) => Promise<{ path: string; overwritten: boolean }>;
   executeLocalCommand: (prompt: string) => Promise<void>;
   recordPromptHistory: (value: string, elements: ComposerElement[], images: VesicleImageAttachment[]) => void;
   applyComposerState: (state: ComposerState) => void;
