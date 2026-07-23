@@ -112,10 +112,15 @@ describe("update_instructions write/delete", () => {
     await withRoots(async (root) => {
       const wrote = await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "all", action: "write", content: "first", summary: "seed" }), { rootDir: root.project, env: root.env, activeEngine: "etl", sessionId: "s1" });
       expect(wrote.ok).toBe(true);
+      expect(wrote.content).toContain("/rewind does not restore Persistent Instructions");
+      expect(wrote.content).toContain("project-VESICLE.md.previous.json");
+      expect(wrote.content).toContain("delete the newly created VESICLE.md");
       expect(await readFile(join(root.project, "VESICLE.md"), "utf8")).toContain("first");
 
       const overwrote = await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "all", action: "write", content: "second", summary: "revise" }), { rootDir: root.project, env: root.env, sessionId: "s1" });
       expect(overwrote.ok).toBe(true);
+      expect(overwrote.content).toContain(".vesicle/instruction-backups/project-VESICLE.md.previous");
+      expect(overwrote.content).toContain("copy");
       expect(await readFile(join(root.project, "VESICLE.md"), "utf8")).toContain("second");
       const backup = join(root.project, ".vesicle", "instruction-backups", "project-VESICLE.md.previous");
       expect(existsSync(backup)).toBe(true);

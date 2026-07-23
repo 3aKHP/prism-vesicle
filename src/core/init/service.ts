@@ -1,6 +1,7 @@
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, rename, unlink, writeFile } from "node:fs/promises";
+import { existsSync, lstatSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
@@ -12,6 +13,8 @@ import { scanProject } from "./scanner";
 
 export type GenerateProjectInstructionsOptions = {
   rootDir: string;
+  /** Explicitly allow replacing an existing project-scope VESICLE.md. */
+  force?: boolean;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
   notes?: string;
@@ -37,8 +40,8 @@ export const INIT_PROMPT_LOGICAL_PATH = "assets/prompts/shared/init-project.md";
  * host init prompt, and write a project-scope `VESICLE.md`. The file is written
  * host-side (outside the model-visible writable roots) and takes effect on the
  * next top-level turn, when Persistent Instructions re-resolve from disk. An
- * existing `VESICLE.md` is backed up under `.vesicle/init-backups/` before being
- * replaced, never silently overwritten.
+ * existing `VESICLE.md` is refused unless `force` is explicit, then backed up
+ * under `.vesicle/init-backups/` before being replaced.
  *
  * The path is resolved through the Persistent Instructions resolver so /init and
  * PI can never drift on the target filename. Provider output is sanitized (one
@@ -49,6 +52,9 @@ export const INIT_PROMPT_LOGICAL_PATH = "assets/prompts/shared/init-project.md";
 export async function generateProjectInstructions(
   options: GenerateProjectInstructionsOptions,
 ): Promise<GeneratedInstructions> {
+  const target = instructionFilePath({ scope: "project", engine: "all" }, options.rootDir);
+  refuseExistingTarget(target, options.force === true);
+
   const config = await loadConfigForSelection(options.providerSelection);
   const provider = createProvider(config);
   const harness = requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(options.rootDir));
@@ -77,9 +83,30 @@ export async function generateProjectInstructions(
     );
   }
 
-  const target = instructionFilePath({ scope: "project", engine: "all" }, options.rootDir);
   const maskedByEngineOverrides = detectProjectEngineOverrides(options.rootDir);
-  return writeProjectInstructions(target, content, options.rootDir, maskedByEngineOverrides);
+  return writeProjectInstructions(target, content, options.rootDir, maskedByEngineOverrides, options.force === true);
+}
+
+function refuseExistingTarget(target: string, force: boolean): void {
+  const targetInfo = lstatTarget(target);
+  if (!targetInfo) return;
+  if (!force) {
+    throw new Error(
+      "VESICLE.md already exists. Use /init --force to regenerate it; the current file will be backed up to .vesicle/init-backups/VESICLE.md.previous.",
+    );
+  }
+  if (!targetInfo.isFile()) {
+    throw new Error("VESICLE.md exists but is not a regular file. /init --force refuses linked or non-file targets.");
+  }
+}
+
+function lstatTarget(target: string): ReturnType<typeof lstatSync> | null {
+  try {
+    return lstatSync(target);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 /**
@@ -106,19 +133,34 @@ async function writeProjectInstructions(
   content: string,
   rootDir: string,
   maskedByEngineOverrides: string[],
+  force: boolean,
 ): Promise<GeneratedInstructions> {
-  const overwritten = existsSync(target);
+  const overwritten = force && lstatTarget(target) !== null;
   let backupPath: string | undefined;
   let backupReplacedPrior = false;
   if (overwritten) {
+    refuseExistingTarget(target, true);
     const backupDir = join(rootDir, ".vesicle", "init-backups");
-    await mkdir(backupDir, { recursive: true });
+    const previousContent = await readStableRegularFile(target);
+    await ensureBackupDirectory(rootDir, backupDir);
     backupPath = join(backupDir, "VESICLE.md.previous");
-    backupReplacedPrior = existsSync(backupPath);
-    // Copy (not rename) so a failed write leaves the original in place.
-    await copyFile(target, backupPath);
+    backupReplacedPrior = lstatTarget(backupPath) !== null;
+    await atomicWrite(backupPath, previousContent);
   }
-  await writeFile(target, `${content}\n`, "utf8");
+  try {
+    if (force) {
+      await atomicWrite(target, `${content}\n`);
+    } else {
+      await writeFile(target, `${content}\n`, { encoding: "utf8", flag: "wx" });
+    }
+  } catch (error) {
+    if (!force && error && typeof error === "object" && "code" in error && error.code === "EEXIST") {
+      throw new Error(
+        "VESICLE.md was created while /init was generating its draft. Nothing was overwritten; review the current file, or use /init --force to replace it with a backup.",
+      );
+    }
+    throw error;
+  }
   return {
     path: "VESICLE.md",
     overwritten,
@@ -126,6 +168,47 @@ async function writeProjectInstructions(
     ...(backupReplacedPrior ? { backupReplacedPrior: true } : {}),
     ...(maskedByEngineOverrides.length ? { maskedByEngineOverrides } : {}),
   };
+}
+
+async function readStableRegularFile(path: string): Promise<Buffer> {
+  const handle = await open(path, "r");
+  try {
+    const opened = await handle.stat();
+    const current = lstatTarget(path);
+    if (!opened.isFile() || !current?.isFile() || opened.dev !== current.dev || opened.ino !== current.ino) {
+      throw new Error("VESICLE.md changed or became linked while /init --force was preparing its backup; nothing was replaced.");
+    }
+    const content = await handle.readFile();
+    const afterRead = lstatTarget(path);
+    if (!afterRead?.isFile() || opened.dev !== afterRead.dev || opened.ino !== afterRead.ino) {
+      throw new Error("VESICLE.md changed or became linked while /init --force was preparing its backup; nothing was replaced.");
+    }
+    return content;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function ensureBackupDirectory(rootDir: string, backupDir: string): Promise<void> {
+  const stateDir = join(rootDir, ".vesicle");
+  for (const path of [stateDir, backupDir]) {
+    const current = lstatTarget(path);
+    if (current && !current.isDirectory()) {
+      throw new Error("The /init backup directory is linked or is not a directory; refusing to write a backup.");
+    }
+    if (!current) await mkdir(path);
+  }
+}
+
+async function atomicWrite(path: string, content: string | Uint8Array): Promise<void> {
+  const temp = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temp, content, { flag: "wx", mode: 0o644 });
+    await rename(temp, path);
+  } catch (error) {
+    await unlink(temp).catch(() => undefined);
+    throw error;
+  }
 }
 
 function relativeBackupPath(absoluteBackupPath: string, rootDir: string): string {

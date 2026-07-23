@@ -109,7 +109,9 @@ MCP_CLUSTER_TOKEN=
 
 解析规则:**同一作用域内引擎专属文件替换通用文件;跨作用域时用户级在前、项目级在后,直接冲突时以项目级为准。** 引擎专属文件只要存在就替换通用文件(空文件 = 显式的空覆盖,会抑制通用文件回退)。这些指令只能自定义当前引擎工作流内的行为,**不能**新增工具、权限、门控、校验器或文件系统权限——能力边界仍由宿主独立强制。
 
-指令追加在引擎 prompt 之后作为宿主上下文(引擎契约仍是唯一的系统权威),在顶层回合开始时从当前磁盘读取;**一个回合内指令是冻结的**——你在一个回合暂停期间(比如等待审批工具时)的编辑要等下一个回合才生效,不会中途切换。无效、被链接或超界的指令会被跳过并给出告警,不阻断回合;用户级 + 项目级合计上限 32 KiB。用 `/instructions` 查看当前引擎生效的指令,或 `vesicle prompt shape --engine <id>` 在命令行检查。用 `/init` 可根据项目扫描自动生成 `VESICLE.md` 初稿,再手动修订。模型也可以用 `read_instructions` / `update_instructions` 工具读取或修改这些指令(非 Stage 引擎;`update_instructions` 按当前权限模式走审批、原子写入并自动备份,改动在本回合下一次 provider 请求生效)。
+指令追加在引擎 prompt 之后作为宿主上下文(引擎契约仍是唯一的系统权威),在顶层回合开始时从当前磁盘读取;**一个回合内指令是冻结的**——你在一个回合暂停期间(比如等待审批工具时)的编辑要等下一个回合才生效,不会中途切换。无效、被链接或超界的指令会被跳过并给出告警,不阻断回合;用户级 + 项目级合计上限 32 KiB。用 `/instructions` 查看当前引擎生效的指令,或 `vesicle prompt shape --engine <id>` 在命令行检查。用 `/init` 可根据项目扫描自动生成 `VESICLE.md` 初稿,再手动修订;如果项目根目录已经有 `VESICLE.md`,普通 `/init` 会在调用供应商前拒绝,只有 `/init --force [说明]` 才会把旧文件备份到 `.vesicle/init-backups/VESICLE.md.previous` 后替换。模型也可以用 `read_instructions` / `update_instructions` 工具读取或修改这些指令(非 Stage 引擎;`update_instructions` 按当前权限模式走审批、原子写入并自动备份,改动在本回合下一次 provider 请求生效)。
+
+持久化指令属于宿主配置,不属于受保护制品。`/rewind` 和双击 Esc 即使把包含 `update_instructions` 的对话回退掉,也**不会**还原磁盘上的 `VESICLE.md` / `VESICLE.<engine>.md`;因此对话里可能不再显示该工具调用,而新指令仍然生效。每次成功修改后,工具结果会报告唯一的上一状态备份:项目级位于 `.vesicle/instruction-backups/<scope>-<文件名>.previous`,用户级位于配置目录的 `instruction-backups/`;首次创建只有对应的 `.previous.json` 记录“原先不存在”。当前恢复只能手工完成:有 `.previous` 时将它复制回目标文件,首次创建则删除新目标。再次修改会替换这份单一备份。
 
 
 ## 路径优先级速记

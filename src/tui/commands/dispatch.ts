@@ -77,6 +77,22 @@ export function parseReasoningDisplayMode(value: string): ReasoningDisplayMode |
   return null;
 }
 
+export type InitCommandArgs = { force: boolean; notes?: string } | { error: string };
+
+export function parseInitCommandArgs(value: string): InitCommandArgs {
+  const trimmed = value.trim();
+  if (!trimmed) return { force: false };
+  const [first, ...rest] = trimmed.split(/\s+/);
+  if (first === "--force") {
+    const notes = rest.join(" ").trim();
+    return { force: true, ...(notes ? { notes } : {}) };
+  }
+  if (first?.startsWith("--")) {
+    return { error: `Unknown /init option: ${first}. Usage: /init [--force] [notes].` };
+  }
+  return { force: false, notes: trimmed };
+}
+
 export function resolveArtifactTarget(entries: ArtifactEntry[], arg: string): ArtifactEntry | null {
   const trimmed = arg.trim();
   if (!trimmed) return entries[0] ?? null;

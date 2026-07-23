@@ -2,9 +2,26 @@ import { describe, expect, test } from "bun:test";
 import { executeQueuedCommands, routeCommandSubmission } from "../../../src/tui/command-scheduler";
 import type { QueuedCommand } from "../../../src/tui/input-queue";
 import { builtinCommands } from "../../../src/tui/commands/builtin";
-import { resolveCommandBusyBehavior, resolveCommandInvocation } from "../../../src/tui/commands/dispatch";
+import {
+  parseInitCommandArgs,
+  resolveCommandBusyBehavior,
+  resolveCommandInvocation,
+} from "../../../src/tui/commands/dispatch";
 
 describe("TUI command scheduler", () => {
+  test("parses /init notes and requires an explicit leading --force option", () => {
+    expect(parseInitCommandArgs("")).toEqual({ force: false });
+    expect(parseInitCommandArgs("project notes")).toEqual({ force: false, notes: "project notes" });
+    expect(parseInitCommandArgs("--force")).toEqual({ force: true });
+    expect(parseInitCommandArgs("--force refresh conventions")).toEqual({
+      force: true,
+      notes: "refresh conventions",
+    });
+    expect(parseInitCommandArgs("--replace")).toEqual({
+      error: "Unknown /init option: --replace. Usage: /init [--force] [notes].",
+    });
+  });
+
   test("maps built-in command invocations to their declared busy behavior", () => {
     const expected = [
       ["/stage workspace/a.md workspace/b.md", { kind: "queue", boundary: "agent-loop" }],

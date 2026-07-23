@@ -53,7 +53,7 @@ export const updateInstructionsToolDefinition: ToolDefinition = {
   function: {
     name: "update_instructions",
     description:
-      "Write or delete one Persistent Instruction target (scope=user|project, engine=all|<engine>). Replaces or removes the whole target file; an empty content string is an explicit empty override. Optional ifMatchSha256 ('absent' or a 64-hex hash) guards concurrent edits; omit it for an intentional overwrite. The summary is a one-line human reason. Use this only for explicit, user-requested persistent workflow management — not to change host capabilities or modify ordinary play.",
+      "Write or delete one Persistent Instruction target (scope=user|project, engine=all|<engine>). Replaces or removes the whole target file; an empty content string is an explicit empty override. Optional ifMatchSha256 ('absent' or a 64-hex hash) guards concurrent edits; omit it for an intentional overwrite. A successful mutation records one previous state under instruction-backups, but /rewind does not restore Persistent Instructions; recovery from that backup is manual. The summary is a one-line human reason. Use this only for explicit, user-requested persistent workflow management — not to change host capabilities or modify ordinary play.",
     parameters: {
       type: "object",
       properties: {
@@ -151,11 +151,12 @@ export async function executeUpdateInstructionsTool(call: ToolCall, options: Ins
       : activeAffected
         ? " It takes effect on the next provider round."
         : " It applies when the affected engine next becomes active.";
+    const recovery = outcome.changed ? renderManualRecovery(target, outcome.event.beforeSha256 !== null) : "";
     return {
       callId: call.id,
       name: call.name,
       ok: true,
-      content: `${args.action === "write" ? "Wrote" : "Deleted"} ${outcome.event.logicalName} [${target.scope}] — ${outcome.changed ? "applied" : "no change (already absent)"}${outcome.event.afterSha256 ? ` (sha256 ${outcome.event.afterSha256.slice(0, 8)}, ${outcome.event.bytes} bytes)` : ""}.${affected}${effect}`,
+      content: `${args.action === "write" ? "Wrote" : "Deleted"} ${outcome.event.logicalName} [${target.scope}] — ${outcome.changed ? "applied" : "no change (already absent)"}${outcome.event.afterSha256 ? ` (sha256 ${outcome.event.afterSha256.slice(0, 8)}, ${outcome.event.bytes} bytes)` : ""}.${affected}${effect}${recovery}`,
       instructionEvent: outcome.event,
     };
   } catch (error) {
@@ -165,6 +166,18 @@ export async function executeUpdateInstructionsTool(call: ToolCall, options: Ins
     }
     throw error;
   }
+}
+
+function renderManualRecovery(target: InstructionTarget, hadPreviousFile: boolean): string {
+  const logical = target.engine === "all" ? "VESICLE.md" : `VESICLE.${target.engine}.md`;
+  const backupRoot = target.scope === "project"
+    ? ".vesicle/instruction-backups"
+    : "the user config directory's instruction-backups";
+  const backupBase = `${backupRoot}/${target.scope}-${logical}.previous`;
+  const action = hadPreviousFile
+    ? `copy ${backupBase} back to ${logical}`
+    : `delete the newly created ${logical}; the prior absent state is recorded in ${backupBase}.json`;
+  return ` /rewind does not restore Persistent Instructions; to recover manually, ${action}.`;
 }
 
 async function isSelectedForActiveEngine(

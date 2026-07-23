@@ -20,7 +20,7 @@ Current public release: **1.0.0-alpha.3**. The `State` column tracks the public 
 | TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | unreleased |
 | TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | unreleased |
 | Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | unreleased |
-| Instructions | `/init [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); backs up an existing file before replacing | unreleased |
+| Instructions | `/init [--force] [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); refuses an existing file unless `--force` explicitly backs it up and replaces it | unreleased |
 | Instructions | `read_instructions` / `update_instructions` tools (non-Stage Engines): enum-target read/write/delete of Persistent Instructions with optimistic concurrency, atomic write, previous-state backup, and 32 KiB budget validation | unreleased |
 | TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
@@ -173,6 +173,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 - Directory tools intentionally omit recursive deletion and directory-tree copying. Models must delete contents explicitly before `delete_directory`; `move_directory` never overwrites an existing target.
 - Rewind file checkpoints track only mutations performed through Vesicle's guarded filesystem tools, including nested directory topology. Files or directories changed only by the user, an external process, or `shell_exec` are outside that ledger and are not independently discovered as rewind targets.
+- Persistent Instruction targets are host configuration outside the guarded writable roots, so `/rewind` and double-Esc do not restore changes made by `update_instructions`. Rewinding the conversation can therefore remove the visible tool call while leaving the instruction file changed on disk. The tool reports the single `.previous` backup location after each mutation; recovery is manual until a dedicated restore command exists.
 
 ### Providers & Streaming
 
@@ -219,7 +220,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Persistent Instructions
 
 - Persistent Instructions are model context, not capability enforcement: they can customize workflow, tone, ordering, artifacts, and user-defined specs within the active Engine, but cannot change the tool surface, permission mode, path roots, stop gates, validators, Harness identity, or provider configuration. A conflict with the Engine contract is ignored in favor of the Engine contract.
-- Instruction files are user-authored with a text editor or via the `read_instructions` / `update_instructions` model tools (non-Stage Engines). `update_instructions` is a `mutate` tool routed through the Tool Permission Runtime (MANUAL/INERTIA pause via the standard permission request; MOMENTUM/YOLO execute); it uses a fixed `{ scope, engine }` enum target, atomic write, optimistic concurrency (`ifMatchSha256`), a single previous-state backup, and a 32 KiB budget check across affected Engines. A successful update refreshes the in-turn frozen snapshot so it applies on the next provider round. A custom unified-diff permission preview and per-turn change-detection audit records remain deferred.
+- Instruction files are user-authored with a text editor, `/init`, or the `read_instructions` / `update_instructions` model tools (non-Stage Engines). `/init` refuses to replace an existing project `VESICLE.md` unless the user supplies `--force`, which stores the previous file under `.vesicle/init-backups/`. `update_instructions` is a `mutate` tool routed through the Tool Permission Runtime (MANUAL/INERTIA pause via the standard permission request; MOMENTUM/YOLO execute); it uses a fixed `{ scope, engine }` enum target, atomic write, optimistic concurrency (`ifMatchSha256`), a single previous-state backup, and a 32 KiB budget check across affected Engines. A successful update refreshes the in-turn frozen snapshot so it applies on the next provider round. A custom unified-diff permission preview, automatic backup restore, and per-turn change-detection audit records remain deferred.
 - Instruction target files are resolved by a fixed enum `{ scope, engine }` and never by an arbitrary path. They live outside the guarded `assets/` namespace and the writable artifact roots, so they do not perturb the Harness integrity fingerprint or widen the model-visible write surface.
 
 ### Other

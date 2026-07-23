@@ -408,10 +408,20 @@ model tool call or a direct user edit.
   plus the other scope would exceed the 32 KiB budget for an Engine it affects.
   It routes through the existing Tool Permission Runtime as an ordinary
   `mutate` (MANUAL/INERTIA pause, MOMENTUM/YOLO execute) — never a second
-  approval system. A successful update is the one mid-turn reason to recompose:
+  approval system. These host-configuration writes are deliberately outside the
+  guarded file-checkpoint ledger: `/rewind` may remove their tool records from
+  the conversation but never restores the target file. The tool result must name
+  the single previous-state backup and identify recovery as manual. A successful
+  update is the one mid-turn reason to recompose:
   it refreshes the in-turn frozen instruction snapshot so the next provider round
   of the same turn observes the new content. The tools are for explicit,
   user-requested persistent workflow management, not autonomous self-modification.
+- `/init` is the direct host action for drafting the general project target. It
+  must refuse an existing `VESICLE.md` before calling a provider unless the user
+  supplies `--force`; the forced path backs up the existing file under
+  `.vesicle/init-backups/`. A non-forced write must also fail if the target
+  appears while the provider request is in flight, so a long generation cannot
+  race an external edit into an overwrite.
 
 ## Managed Harness Packs
 

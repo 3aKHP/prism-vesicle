@@ -16,6 +16,7 @@ import type { Command } from "./types";
 import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
   parseEngineId,
+  parseInitCommandArgs,
   parseReasoningDisplayMode,
   parseEffortTier,
   resolveArtifactTarget,
@@ -46,7 +47,7 @@ const HELP_TEXT = [
   "  /engine [id] [--summary [notes]] list or switch the Prism engine",
   "  /stage <character-card-path> <scenario-card-path> start a new Stage narrative session",
   "  /compact [notes]  summarize this session and replace old context",
-  "  /init [notes]     scan the project and generate a VESICLE.md of persistent instructions",
+  "  /init [--force] [notes] scan the project and generate a VESICLE.md of persistent instructions",
   "  /context          show current context window usage",
   "  /instructions     show active Persistent Instructions for this engine",
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
@@ -287,10 +288,15 @@ export const builtinCommands: Command[] = [
     name: "init",
     busyBehavior: afterAgentLoop,
     description: "Scan the project and generate a VESICLE.md of persistent instructions",
-    usage: "/init [notes]",
+    usage: "/init [--force] [notes]",
     async run(ctx, args, raw) {
+      const parsed = parseInitCommandArgs(args);
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
-      await ctx.initProject(args);
+      if ("error" in parsed) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: parsed.error }]);
+        return;
+      }
+      await ctx.initProject(parsed);
     },
   },
 

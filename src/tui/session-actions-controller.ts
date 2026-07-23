@@ -133,7 +133,7 @@ export function createSessionActionsController(options: SessionActionsController
     }
   }
 
-  async function initProject(notes?: string): Promise<{ path: string; overwritten: boolean }> {
+  async function initProject(initOptions: { notes?: string; force?: boolean } = {}): Promise<{ path: string; overwritten: boolean }> {
     if (hasPendingInteraction()) throw new Error("Resolve the pending gate, engine switch, question, permission, or quality decision before running /init.");
     if (!options.providerConfigReady()) await options.loadProviderConfig();
     options.setBusy(true);
@@ -144,7 +144,8 @@ export function createSessionActionsController(options: SessionActionsController
         rootDir: options.rootDir,
         providerSelection: options.activeProviderSelection(),
         generation: options.activeGeneration(),
-        notes,
+        notes: initOptions.notes,
+        force: initOptions.force,
         signal,
       }));
       if (outcome.kind === "interrupted") throw new Error("/init canceled.");
