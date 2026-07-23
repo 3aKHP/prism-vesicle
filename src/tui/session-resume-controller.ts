@@ -69,6 +69,7 @@ export type SessionResumeControllerOptions = InteractionState & {
   setPermissionMode: Setter<PermissionMode>;
   applyProviderSelection: (selection: Partial<ProviderSelection>) => Promise<ProviderSelection>;
   setRestoringSession: Setter<boolean>;
+  sessionId: Accessor<string | undefined>;
   setSessionId: Setter<string | undefined>;
   setNextSessionParent: Setter<{ uuid: string | null } | null>;
   setSessionPath: Setter<string>;
@@ -87,6 +88,8 @@ export type SessionResumeControllerOptions = InteractionState & {
   setAssetDriftKey: (key: string) => void;
   refreshArtifacts: () => Promise<unknown>;
   reportError: (error: unknown) => void;
+  clearQueuedInputs: () => void;
+  onSessionActive?: (sessionId: string) => void;
 };
 
 export function createSessionResumeController(options: SessionResumeControllerOptions) {
@@ -143,11 +146,15 @@ export function createSessionResumeController(options: SessionResumeControllerOp
       await hydrateLiveProcessEvents(snapshot, target.sessionId);
       const resumedMessages = vesicleMessagesFromResumed(snapshot.messages);
       const restoredCards = await restoreAgentCards(target.sessionId);
+      if (options.sessionId() !== target.sessionId) options.clearQueuedInputs();
       applyBaseSnapshot(target, snapshot, resumedMessages);
       const hostMessages = await buildHostMessages(target, snapshot, commandEcho, !projectHarness);
       restorePendingInteraction(target, snapshot, resumedMessages, hostMessages, qualityBlockedReason);
       options.setMessages([...displayTranscriptFromSnapshot(snapshot.messages, restoredCards), ...hostMessages]);
       await options.refreshArtifacts();
+      // Fire after provider, reasoning, and engine state are fully restored so a
+      // side-question snapshot rebuild observes the resumed settings.
+      options.onSessionActive?.(target.sessionId);
     } catch (error) {
       options.reportError(error);
     } finally {

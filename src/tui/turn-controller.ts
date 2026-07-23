@@ -90,6 +90,7 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setHistoryIndex(null);
     options.setSessionPicker(null);
     options.setLastDisplayedToolAssistantContent(null);
+    options.queuedWork.prepareTurn();
     options.setBusy(true);
     options.setStatus("sending request");
     options.recordActivity({ kind: "provider", text: "sending provider request" });
@@ -112,11 +113,19 @@ export function createTurnController(options: TurnControllerOptions) {
         permission: permissionContext(),
         signal,
         onEvent: options.handleAgentEvent,
+        onProviderContextSnapshot: options.onProviderContextSnapshot,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
+        onSessionReady: (sessionId, sessionPath) => {
+          options.setSessionId(sessionId);
+          options.setSessionPath(sessionPath);
+        },
       }));
       if (outcome.kind === "interrupted") {
-        if (!activeTurnSawResponse) await restoreInterruptedPrompt(originalValue, images, elements);
+        const queuedInterruption = await options.queuedWork.handleInterruption(options.sessionId());
+        if (!queuedInterruption && !activeTurnSawResponse) await restoreInterruptedPrompt(originalValue, images, elements);
         handleInterruptedTurn();
       } else {
         handleResult(outcome.value);
@@ -131,6 +140,7 @@ export function createTurnController(options: TurnControllerOptions) {
 
   async function deliverAgentResults(parentSessionId: string, entries: AgentInboxEntry[], packet: string): Promise<void> {
     if (options.sessionId() !== parentSessionId || options.busy() || hasPendingInteraction()) throw new AgentDeliveryDeferred();
+    options.queuedWork.prepareTurn();
     options.setBusy(true);
     try {
       beginAgentDelivery(entries);
@@ -153,12 +163,16 @@ export function createTurnController(options: TurnControllerOptions) {
         permission: permissionContext(),
         signal,
         onEvent: options.handleAgentEvent,
+        onProviderContextSnapshot: options.onProviderContextSnapshot,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
+        await options.queuedWork.handleInterruption(parentSessionId);
         handleInterruptedTurn();
-        throw new Error("SubAgent result delivery was interrupted.");
+        throw new AgentDeliveryDeferred();
       }
       handleResult(outcome.value);
       options.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrated", "result integrated"));
@@ -194,6 +208,7 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setOutput(message);
     options.setStreamingAssistant("");
     options.setStreamingReasoning("");
+    options.queuedWork.block();
     options.recordActivity({ kind: "system", text: `error: ${message}` });
     options.setMessages((previous) => [...previous, { role: "assistant", content: `Error: ${message}` }]);
   }
@@ -218,8 +233,10 @@ export function createTurnController(options: TurnControllerOptions) {
     if (!point) return;
     await options.applyConversationRewind(await rewindConversation(options.rootDir, id, point));
     options.setPromptHistory((previous) => previous.at(-1)?.value === prompt ? previous.slice(0, -1) : previous);
-    options.applyComposerState({ value: prompt, cursor: prompt.length, elements: elements.map((element) => ({ ...element })) });
-    options.setInputImages(images.map((image) => ({ ...image })));
+    if (options.composerValue().length === 0) {
+      options.applyComposerState({ value: prompt, cursor: prompt.length, elements: elements.map((element) => ({ ...element })) });
+      options.setInputImages(images.map((image) => ({ ...image })));
+    }
   }
 
   function permissionContext() {

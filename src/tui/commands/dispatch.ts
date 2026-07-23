@@ -9,7 +9,7 @@ import { reasoningTiers } from "../../providers/shared/types";
 import type { ReasoningTier } from "../../providers/shared/types";
 import type { ReasoningDisplayMode, SessionSummary } from "../../core/session/store";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
-import type { Command, CommandContext } from "./types";
+import type { Command, CommandBusyBehavior, CommandContext } from "./types";
 
 /** Split "/engine runtime extra" into { name: "engine", args: "runtime extra" }. */
 export function parseSlashInput(raw: string): { name: string; args: string } {
@@ -22,13 +22,28 @@ export function resolveCommand(name: string, commands: readonly Command[]): Comm
   return commands.find((cmd) => cmd.name === name || cmd.aliases?.includes(name)) ?? null;
 }
 
+export type CommandInvocation = {
+  raw: string;
+  name: string;
+  args: string;
+  command: Command | null;
+};
+
+export function resolveCommandInvocation(raw: string, commands: readonly Command[]): CommandInvocation {
+  const { name, args } = parseSlashInput(raw);
+  return { raw, name, args, command: resolveCommand(name, commands) };
+}
+
+export function resolveCommandBusyBehavior(command: Command, args: string): CommandBusyBehavior {
+  return typeof command.busyBehavior === "function" ? command.busyBehavior(args) : command.busyBehavior;
+}
+
 /**
  * Parse + resolve + run. Unknown commands echo a host notice, mirroring the
  * old handleCommand tail.
  */
 export async function executeCommand(raw: string, ctx: CommandContext, commands: readonly Command[]): Promise<void> {
-  const { name, args } = parseSlashInput(raw);
-  const command = resolveCommand(name, commands);
+  const { name, args, command } = resolveCommandInvocation(raw, commands);
   if (!command) {
     const label = name || "(empty)";
     ctx.setMessages((prev) => [
@@ -60,6 +75,22 @@ export function parseReasoningDisplayMode(value: string): ReasoningDisplayMode |
   if (normalized === "collapse" || normalized === "collapsed" || normalized === "fold" || normalized === "preview") return "collapsed";
   if (normalized === "expand" || normalized === "expanded" || normalized === "show" || normalized === "on") return "expanded";
   return null;
+}
+
+export type InitCommandArgs = { force: boolean; notes?: string } | { error: string };
+
+export function parseInitCommandArgs(value: string): InitCommandArgs {
+  const trimmed = value.trim();
+  if (!trimmed) return { force: false };
+  const [first, ...rest] = trimmed.split(/\s+/);
+  if (first === "--force") {
+    const notes = rest.join(" ").trim();
+    return { force: true, ...(notes ? { notes } : {}) };
+  }
+  if (first?.startsWith("--")) {
+    return { error: `Unknown /init option: ${first}. Usage: /init [--force] [notes].` };
+  }
+  return { force: false, notes: trimmed };
 }
 
 export function resolveArtifactTarget(entries: ArtifactEntry[], arg: string): ArtifactEntry | null {

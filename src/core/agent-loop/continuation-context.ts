@@ -7,12 +7,15 @@ import type { EngineId } from "../engine/profile";
 import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
+import { composeInstructionBlocks, composeSystemPromptWithInstructions } from "../instructions";
+import { freezeInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
 import type { AssetFingerprint } from "../runtime/assets";
 import type { AssetResolver } from "../runtime/assets";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import { mergeGeneration } from "./generation";
-import type { AgentLoopEvent } from "./types";
+import type { AgentLoopEvent, PendingUserInput } from "./types";
+import type { SideQuestionContextSnapshot } from "../side-question/types";
 import { resolveToolSurface } from "./tool-surface";
 import {
   assertSessionHarnessIdentity,
@@ -28,8 +31,11 @@ export type ContinuationContextOptions = {
   generation?: VesicleRequest["generation"];
   permission?: PermissionRuntimeOptions;
   onEvent?: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
+  takePendingUserInputs?: () => PendingUserInput[];
+  runToolBoundaryCommands?: () => Promise<void>;
 };
 
 export async function loadContinuationContext(
@@ -50,7 +56,26 @@ export async function loadContinuationContext(
   const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
   assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
   const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir, assets ? { resolver: assets } : {});
-  const { profile, systemPrompt } = engineAssets;
+  const { profile } = engineAssets;
+  // Reuse the turn's frozen instruction blocks when an in-process continuation
+  // resumes, so one turn observes one stable instruction set. The cache is
+  // absent only after a process restart, which is a resume boundary that should
+  // re-read current disk.
+  const frozenBlocks = readFrozenInstructionBlocks(options.sessionId);
+  let systemPrompt: string;
+  if (frozenBlocks !== undefined) {
+    systemPrompt = frozenBlocks.length > 0 ? `${engineAssets.systemPrompt}\n\n${frozenBlocks}` : engineAssets.systemPrompt;
+  } else {
+    const instructional = await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, rootDir);
+    systemPrompt = instructional.systemPrompt;
+    freezeInstructionBlocks(options.sessionId, composeInstructionBlocks(instructional.selection));
+    options.onEvent?.({
+      type: "instruction_warning",
+      sessionId: options.sessionId,
+      engine: options.engine,
+      diagnostics: instructional.selection.diagnostics,
+    });
+  }
   if (behavior.emitAssetDrift !== false) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   }
@@ -69,6 +94,7 @@ export async function loadContinuationContext(
     provider,
     profile,
     systemPrompt,
+    enginePrompt: engineAssets.systemPrompt,
     toolSurface,
     session,
     harness,

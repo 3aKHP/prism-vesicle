@@ -7,12 +7,14 @@ import type { EngineId } from "../core/engine/profile";
 import type { PermissionMode, ToolPermissionBroker } from "../core/permissions";
 import type { ShellInterpreterPreference } from "../core/process/shell-profile";
 import type { ConversationRewind } from "../core/rewind/service";
+import type { SideQuestionContextSnapshot } from "../core/side-question/types";
 import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerElement, ComposerState } from "./composer";
 import type { PromptHistoryEntry } from "./composer-history";
 import type { GateFocusTarget } from "./GatePrompt";
 import type { PendingEngineSwitchState, PendingGateState, PendingPermissionState, PendingQualityDecisionState, PendingUserQuestionState } from "./decision-interaction";
 import type { ActivityEntry, AgentCardState, Message, SessionPickerState } from "./types";
+import type { QueuedWorkController } from "./queued-work-controller";
 
 type GenerationSelection = { reasoningTier: ReasoningTier } | undefined;
 
@@ -21,6 +23,7 @@ export type TurnControllerOptions = {
   dangerouslySkipPermissions: boolean;
   busy: Accessor<boolean>;
   setBusy: Setter<boolean>;
+  queuedWork: QueuedWorkController;
   providerConfigReady: Accessor<boolean>;
   setProviderConfigReady: Setter<boolean>;
   loadProviderConfig: () => Promise<void>;
@@ -78,6 +81,7 @@ export type TurnControllerOptions = {
   permissionBroker: ToolPermissionBroker;
   runCancellable: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<{ kind: "complete"; value: T } | { kind: "interrupted" }>;
   handleAgentEvent: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
   beginUsageTurn: () => void;
   publishTurnUsage: () => void;
   recordIndependentAgentUsage: (usage: NonNullable<AgentInboxEntry["usage"]>) => void;
@@ -89,6 +93,7 @@ export type TurnControllerOptions = {
   executeLocalCommand: (prompt: string) => Promise<void>;
   recordPromptHistory: (value: string, elements: ComposerElement[], images: VesicleImageAttachment[]) => void;
   applyComposerState: (state: ComposerState) => void;
+  composerValue: Accessor<string>;
   setInputImages: Setter<VesicleImageAttachment[]>;
   setHistoryIndex: Setter<number | null>;
   setPromptHistory: Setter<PromptHistoryEntry[]>;
@@ -119,6 +124,7 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
   | "recordActivity"
   | "rootDir"
   | "runCancellable"
+  | "queuedWork"
   | "setActiveEngine"
   | "setBusy"
   | "setConversation"
@@ -136,6 +142,7 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
   | "setStatus"
   | "refreshQualityWarnings"
   | "resumeQualitySession"
+  | "onProviderContextSnapshot"
 > & {
   handleResult: (result: RunPromptResult) => void;
   handleInterruptedTurn: () => void;

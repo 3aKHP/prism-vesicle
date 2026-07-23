@@ -219,7 +219,7 @@ Repository rules and Environment protection are live GitHub state, not YAML. Aud
 - If a transient failure happens after the tag push, use the CLI to find and rerun the existing workflow: `gh run list --workflow release.yml`, then `gh run rerun <run-id> --failed`. This exceptional recovery needs `gh` because Git cannot truthfully push the same immutable tag twice. The npm job skips an exact version that is already present, and the GitHub Release job updates the release for the same tag.
 - Never move, delete, or recreate a tag after any registry has accepted that version. Repair forward with a new prerelease version when published bytes or metadata are wrong.
 
-The real-provider gate acceptance test is intentionally opt-in because it is model-output dependent: run `BUN_E2E_REAL_PROVIDER=1 bun test tests/e2e-gate.test.ts` from the trusted dogfood environment and record the result before creating a public tag. It validates a real provider without making ordinary CI depend on provider credentials, model determinism, or unapproved API spend.
+The real-provider acceptance lane is intentionally opt-in because it is model-output dependent: run `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` from the trusted dogfood environment and record the result before creating a public tag. The lane runs a connectivity smoke and a strict ETL gate; the strict gate fails (rather than tolerates) any deviation from the blueprint/phase-confirmation protocol, and both suites skip with a documented reason when the env var or credentials are missing. It validates a real provider without making ordinary CI depend on provider credentials, model determinism, or unapproved API spend.
 
 ### Hotfix
 

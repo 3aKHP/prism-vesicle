@@ -4,7 +4,7 @@
 
 Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It starts from a verified bundled V10 Harness, can select a project-pinned managed Harness Pack, connects the active runtime to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
 
-> **Alpha status:** `1.0.0-alpha.3` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
+> **Alpha status:** `1.0.0-alpha.4` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 
 New to terminals, API keys, or model providers? Start with the [step-by-step user manual](./docs/user/en/README.md) before following the condensed setup below.
 
@@ -14,7 +14,7 @@ New to terminals, API keys, or model providers? Start with the [step-by-step use
 
 Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub prerelease and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, and choose a safe permission preset without manual configuration-file editing. Project selection is optional and applies only to the one-time launch immediately after Setup; Vesicle never stores one global project directory.
 
-The Windows executable and installer for `1.0.0-alpha.3` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
+The Windows executable and installer for `1.0.0-alpha.4` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
 The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
@@ -127,6 +127,8 @@ bun run doctor
 bun run dev
 ```
 
+Run `vesicle --version` (or `-v`) to print the installed version, or `vesicle --help` for the global usage summary.
+
 Generated files are limited to guarded project roots. Research material belongs under `source_materials/`; final artifacts belong under `workspace/`, `novels/`, `reports/`, or `test_runs/`. Models may organize these roots into nested directories, inspect directory entries, move or rename directory trees, and delete empty directories; fixed roots and symbolic-link traversal remain protected. File and directory changes made through Vesicle tools participate in rewind checkpoints under `.vesicle/file-history/`.
 
 Useful commands:
@@ -147,7 +149,7 @@ Useful commands:
 | `/context` | Inspect token totals and configured context limits |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry paused delivery for SubAgents using short handles such as `explore-1` |
 
-The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escape cancels an active provider request; with an empty composer, double Escape opens rewind. Vision-capable models can receive a clipboard image through Alt+V, with Ctrl+Alt+V accepted when reported by WSL terminals.
+The main composer uses Enter to submit and Ctrl+Enter to insert a newline. While the Agent Loop is running, Enter queues ordinary messages; after the current complete tool round, Vesicle injects them before the next provider request. Slash commands use command-owned scheduling: safe host-only commands run immediately, artifact reads wait for the tool round, and configuration, picker, or session commands wait for the Agent Loop. The mixed queue is shown above the composer, and Up with an empty draft retrieves its latest item for editing. Escape interrupts the current provider or tool operation and immediately processes the next queued input; with an empty composer, double Escape opens rewind. Vision-capable models can receive a clipboard image through Alt+V, with Ctrl+Alt+V accepted when reported by WSL terminals.
 
 ## What Vesicle Supports
 
@@ -155,6 +157,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. Escap
 - A consumer-grade Stage engine that freezes supplied Module A/B cards into a prose-first narrative bootstrap with no model-visible tools or gates. Quality enforcement defaults to observe; only an explicitly enabled host quality configuration can trigger an experimental bounded rewrite.
 - Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
+- Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and engine-specific replacement, so reusable sub-workflows and specs survive new sessions without re-stating them.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
 - A target-aware Output Quality Guard that checks current Runtime artifact post-images, persists findings and warnings, restores exhausted or interrupted revisions with explicit revise-again, use-current, and stop choices, and offers a default-off experimental Semantic Judge selected from the user's configured provider models.
 - Optional Tavily web research, Streamable HTTP MCP tools, and multimodal image input for models that declare vision support.
@@ -179,7 +182,7 @@ bun run doctor
 | `bun run lint` | Run the pinned Biome correctness checks without formatting files |
 | `bun run typecheck` | Validate TypeScript without emitting files |
 | `bun test` | Run the deterministic test suite |
-| `BUN_E2E_REAL_PROVIDER=1 bun test tests/e2e-gate.test.ts` | Run the opt-in real-provider gate acceptance test |
+| `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` | Run the opt-in real-provider acceptance lane (connectivity smoke + strict ETL gate); skips, not passes, when the env or credentials are missing |
 | `bun run pack:check` | Verify the npm publish allowlist |
 | `bun run pack:smoke` | Smoke-test the packed npm distribution |
 | `bun run build:exe` | Build standalone Windows and Linux executables |

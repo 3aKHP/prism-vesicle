@@ -27,6 +27,7 @@ core/quality/  # Output Quality Guard host runtime
 core/rewind/  # conversation rewind and partial summarization
 core/runtime/  # engine and runtime asset resolution helpers
 core/session/  # durable session persistence + resume helpers
+core/side-question/  # `/btw` tool-free side question snapshot + service
 core/stage/  # Stage consumer bootstrap
 core/tools/  # host tool contracts and execution
 core/user-question/  # ask_user_question host question types
@@ -330,6 +331,98 @@ Prompts are runtime assets, not hardcoded source literals.
 - Session roots record a content-only fingerprint of the effective merged asset tree. Resume and active continuation warn when that fingerprint changes, while keeping prompt text, user content, absolute paths, and secrets out of drift metadata.
 - Sparse overrides are the recommended editing contract. Full snapshots remain available for compatibility but can mask future packaged updates. Version 1 intentionally has no deletion tombstones.
 
+## Persistent Instructions
+
+Persistent Instructions are user-authored Markdown that customizes an Engine's
+workflow and survives new sessions. The host loads them into the system prompt
+automatically; the user never has to ask the model to write a spec to a file
+and remind it to read it next session. This is model context, not automatic
+memory: the host never infers, summarizes, or writes instructions without a
+model tool call or a direct user edit.
+
+- File names are Vesicle-native and aligned across both scopes: `VESICLE.md`
+  (general, every Engine) and `VESICLE.<engine>.md` (Engine-specific override),
+  where `<engine>` is one of the `engineIds`. They are the Vesicle analog of a
+  coding agent's `CLAUDE.md`/`AGENTS.md`. The host must not auto-load those
+  aliases, inject coding-agent identity, or name them in Prism engine prompts or
+  the instruction envelope preamble. User-authored instruction text is preserved
+  verbatim (byte-exact apart from one stripped BOM) and may mention anything —
+  the boundary is on what the host names and loads, not on user content.
+- Project scope lives at the launch project root and travels with the project.
+  User scope lives beside `providers.yaml` (resolved through `userConfigDirectory`),
+  so it applies across every project root. Both are outside the guarded `assets/`
+  namespace and the writable artifact roots; instruction resolution must not be
+  routed through `core/tools/file/path-policy.ts` or the asset resolver, and must
+  not perturb the Harness asset fingerprint.
+- Resolution is **replacement within a scope, composition across scopes**. Within
+  one scope, an Engine-specific target fully replaces that scope's general target;
+  file existence — not nonempty content — controls replacement, so an empty Engine
+  file is an intentional empty override that suppresses general fallback. If an
+  Engine-specific file is present but invalid, fallback to the general file is
+  suppressed for that scope. Across scopes, the selected user file is followed by
+  the selected project file; project content has higher precedence on a direct
+  conflict. Neither can override the Engine contract or host runtime.
+- Instructions are appended after the byte-identical Engine prompt as ordered host
+  context, never as a second system authority. A fixed host preamble frames each
+  block with its scope, target, precedence, and the capability boundary. The
+  Engine prompt stays first so provider prefix caching keeps the stable Harness
+  prefix; Stage character context follows Persistent Instructions. Every
+  system-prompt construction site — turn bootstrap, continuation context, Stage
+  bootstrap, `/compact`, and the `/btw` snapshot resolver — composes through one
+  primitive, while continuations, the provider round, side-question projection,
+  and fork children inherit the already-composed string.
+- Persistent Instructions are live user configuration, not session identity.
+  The host resolves the active Engine selection from current disk when a
+  top-level turn begins, when a session is resumed after a process restart, and
+  on a confirmed Engine switch. Within a single turn the selection is frozen:
+  an in-process continuation (gate/permission/question/quality) reuses the
+  turn-start instruction blocks instead of re-reading disk, so a tool call
+  decided under one instruction set never continues under another after a
+  mid-turn pause. The frozen snapshot is in-process only; a Vesicle restart
+  loses it, so a resumed continuation re-reads current disk, and a new top-level
+  turn re-resolves and overwrites it. Editing an instruction file is a
+  configuration update that takes effect on the next turn, never mid-turn.
+- Validation is fail-soft per scope: decode UTF-8 with fatal error handling
+  (strip one leading BOM), require a regular file, reject a project target that
+  is a symbolic link and skip a user-scope link, and bound the combined selected
+  content to 32 KiB. An invalid, linked, or oversized scope is skipped with a
+  diagnostic while the rest of the turn continues; content is never truncated and
+  the turn is never blocked by optional instruction state. Never log instruction
+  contents; diagnostics and session audit use target, bytes, and hash only.
+- Targets are identified by a fixed enum `{ scope, engine }` and never by an
+  arbitrary path. Instruction text cannot widen the effective tool surface,
+  permission mode, path roots, stop gates, validators, Harness identity, or
+  provider configuration; the tool runtime enforces capabilities independently.
+- `read_instructions` and `update_instructions` are the model-visible surface for
+  Persistent Instructions, available on every Engine except Stage (Stage stays
+  strictly tool-less — its consumer-RP role does not benefit from
+  self-management of host configuration). `read_instructions` is an observation;
+  `update_instructions` is a mutation. They resolve only the fixed `{ scope,
+  engine }` target — never an arbitrary path — so they are a bounded host
+  exception that writes outside the model-visible writable roots, not a widened
+  filesystem surface. `update_instructions` writes atomically (temp + rename),
+  keeps one recoverable previous-state backup per target under
+  `.vesicle/instruction-backups/` (project) or beside `providers.yaml` (user),
+  honors optional `ifMatchSha256` optimistic concurrency (`"absent"` or a 64-hex
+  hash; a stale value never overwrites), and rejects any write whose new content
+  plus the other scope would exceed the 32 KiB budget for an Engine it affects.
+  It routes through the existing Tool Permission Runtime as an ordinary
+  `mutate` (MANUAL/INERTIA pause, MOMENTUM/YOLO execute) — never a second
+  approval system. These host-configuration writes are deliberately outside the
+  guarded file-checkpoint ledger: `/rewind` may remove their tool records from
+  the conversation but never restores the target file. The tool result must name
+  the single previous-state backup and identify recovery as manual. A successful
+  update is the one mid-turn reason to recompose:
+  it refreshes the in-turn frozen instruction snapshot so the next provider round
+  of the same turn observes the new content. The tools are for explicit,
+  user-requested persistent workflow management, not autonomous self-modification.
+- `/init` is the direct host action for drafting the general project target. It
+  must refuse an existing `VESICLE.md` before calling a provider unless the user
+  supplies `--force`; the forced path backs up the existing file under
+  `.vesicle/init-backups/`. A non-forced write must also fail if the target
+  appears while the provider request is in flight, so a long generation cannot
+  race an external edit into an overwrite.
+
 ## Managed Harness Packs
 
 - Neural Narratology Harness Packs are independently versioned runtime products. Vesicle must consume a released pack or explicit local pack directory; runtime code and tests must not read a sibling checkout, follow cross-repository symlinks, or embed local source paths.
@@ -445,6 +538,28 @@ Prompts are runtime assets, not hardcoded source literals.
   may call the provider, but it must not expose tools to the summarization
   request. Keep optional custom instructions as plain text appended to the
   compaction prompt.
+- `/btw <question>` is a one-shot, tool-free side question over the current
+  conversation. It is `immediate` because it copies the immutable
+  `SideQuestionContextSnapshot` published before each main provider request
+  (never a half-written tool round) and sends one no-tools request through a
+  side-specific AbortController independent of the main turn. The request has
+  exactly one system authority — the dedicated `assets/prompts/shared/side-question.md`
+  — and one user message: a host-rendered reference packet that quotes the
+  parent Engine prompt, the conversation, and tool results verbatim as inert
+  reference data (`src/core/side-question/reference.ts`). Parent workflow
+  intent, tool protocol (`toolCalls`/`toolCallId`/tool-role messages),
+  reasoning, and thinking blocks never become active side instructions or
+  provider protocol fields; inherited images stay reference-only in the
+  snapshot and materialize on the single user packet for vision models. No
+  tools are declared, and any structured tool call in the response (including
+  mixed text-plus-tool) fails the exchange. Side exchanges are in-memory only:
+  they must never enter session JSONL, the main `conversation()` value, the
+  visible transcript, checkpoints, validators, gates, permissions, or tool
+  execution, and must not cancel or fail the main Agent Loop. The side overlay
+  is visual priority only — a gate, permission, or question the main loop
+  raises while it is open stays pending and appears on dismissal. Bare `/btw`
+  reopens the latest in-memory exchange for the current session; with no prior
+  exchange it returns to the composer with a usage hint.
 - Escape uses an 800ms double-press window: empty input opens rewind, non-empty
   input saves and clears the draft, and an in-flight request is aborted. Active
   modal panels consume Escape before the prompt-level handler.

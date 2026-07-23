@@ -21,6 +21,7 @@ import type { TuiKeyEvent } from "./decision-interaction";
 import { PromptEscapeController } from "./prompt-escape";
 import { createModelPickerController } from "./model-picker-controller";
 import { createCommandCompletionController } from "./command-completion-controller";
+import { composerStateFromQueuedInput, type InputQueue } from "./input-queue";
 
 export type ComposerControllerOptions = {
   rootDir: string;
@@ -41,6 +42,8 @@ export type ComposerControllerOptions = {
   setMessages: Setter<Message[]>;
   recordActivity: (entry: ActivityEntry) => void;
   reportError: (error: unknown) => void;
+  inputQueue: InputQueue;
+  submitCommand: (value: string) => boolean;
   submitPrompt: (value: string, images?: VesicleImageAttachment[], elements?: ComposerElement[]) => Promise<void>;
   abortTurn: () => boolean;
   openRewind: () => Promise<void>;
@@ -69,9 +72,7 @@ export function createComposerController(options: ComposerControllerOptions) {
     listSessions: options.listSessions,
     agentCards: options.agentCards,
     sessionId: options.sessionId,
-    busy: options.busy,
-    setStatus: options.setStatus,
-    submitPrompt: (value) => options.submitPrompt(value),
+    submitCommand: options.submitCommand,
   });
 
   const {
@@ -87,7 +88,7 @@ export function createComposerController(options: ComposerControllerOptions) {
   const composerInputWidth = createMemo(() => Math.max(8, options.terminalWidth() - 4));
   const inputVisualLines = createMemo(() => composerVisualLineCount(inputValue(), composerInputWidth()));
   const composerPopupOpen = createMemo(() => commandMenuOpen() || commandArgumentMenuOpen());
-  const inputNeedsExpandedBottom = createMemo(() => composerPopupOpen() || inputVisualLines() > 1);
+  const inputNeedsExpandedBottom = createMemo(() => composerPopupOpen() || inputVisualLines() > 1 || options.inputQueue.items().length > 0);
 
   function currentState(): ComposerState {
     return {
@@ -117,7 +118,8 @@ export function createComposerController(options: ComposerControllerOptions) {
     applyState(result.state);
     if (result.action?.type === "submit") submitComposerAction(result.action.value, result.action.elements ?? []);
     else if (result.action?.type === "history_up") {
-      if (!options.busy()) recallHistory(-1);
+      if (options.busy()) recallLastQueuedMessage();
+      else recallHistory(-1);
     } else if (result.action?.type === "history_down") {
       if (historyIndex() !== null && !options.busy()) recallHistory(1);
     } else {
@@ -127,18 +129,41 @@ export function createComposerController(options: ComposerControllerOptions) {
   }
 
   function submitComposerAction(value: string, elements: ComposerElement[]): void {
-    if (options.busy()) {
-      options.setStatus("request in flight; draft kept");
-      return;
-    }
     if (value.trim().length === 0) return;
     const images = imagesForElements(elements);
+    if (images.length === 0 && value.trimStart().startsWith("/")) {
+      if (options.submitCommand(value.trim())) {
+        clear();
+        setHistoryIndex(null);
+      }
+      return;
+    }
     if (images.length > 0 && options.activeModelCapabilities()?.vision !== true) {
       options.setStatus("current model does not declare vision support; draft kept");
       return;
     }
+    if (options.busy()) {
+      const count = options.inputQueue.enqueueMessage({ value, elements, images });
+      clear();
+      setHistoryIndex(null);
+      options.setStatus(`message queued (${count})`);
+      options.recordActivity({ kind: "system", text: `queued user message (${count})` });
+      return;
+    }
     clear();
     void options.submitPrompt(value, images, elements);
+  }
+
+  function recallLastQueuedMessage(): void {
+    if (inputValue().trim().length > 0 || inputImages().length > 0) return;
+    const item = options.inputQueue.takeLast();
+    if (!item) return;
+    applyState(composerStateFromQueuedInput(item));
+    setInputImages(item.kind === "message" ? item.images.map((image) => ({ ...image })) : []);
+    setHistoryIndex(null);
+    options.setStatus(options.inputQueue.items().length > 0
+      ? `editing queued input; ${options.inputQueue.items().length} still queued`
+      : "editing queued input");
   }
 
   function recallHistory(direction: -1 | 1): void {
@@ -245,7 +270,9 @@ export function createComposerController(options: ComposerControllerOptions) {
     insertPastedText,
     pasteClipboardImage,
     promptHistory,
+    queuedInputs: options.inputQueue.items,
     recordHistory,
+    clearQueuedInputs: options.inputQueue.clear,
     setHistoryIndex,
     setInputImages,
     setPromptHistory,

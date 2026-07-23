@@ -62,6 +62,7 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     config: context.config,
     provider: context.provider,
     systemPrompt: context.systemPrompt,
+    enginePrompt: context.enginePrompt,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
     messages,
@@ -71,12 +72,16 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     checkpoint: await FileCheckpointManager.resumeLatest(context.rootDir, context.session),
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: options.agentManager,
     permission: context.permission,
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
     experimentalQuality: context.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 

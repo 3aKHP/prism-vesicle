@@ -53,12 +53,20 @@ import { createSessionPreferencesController } from "./session-preferences-contro
 import { createAgentCommand } from "./agent-command";
 import { useInputRouting } from "./input-routing";
 import { createQualityPickerController } from "./quality-picker-controller";
-import { startStageSession } from "../core/stage/bootstrap";
 import { artifactFocusAction, artifactFocusPath, initialArtifactFocusPath } from "./artifact-focus";
 import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
+import { createInputQueue } from "./input-queue";
+import { routeCommandSubmission } from "./command-scheduler";
+import { createSideQuestionController } from "./side-question-controller";
+import { createQueuedWorkController } from "./queued-work-controller";
+import { createStageSessionController } from "./stage-session-controller";
+import { createStartupController } from "./startup-controller";
+import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
+import { copyTextToClipboard } from "./clipboard";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
+  initialResume?: boolean;
 };
 
 export {
@@ -124,6 +132,7 @@ export function App(props: AppProps = {}) {
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
   const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const inputQueue = createInputQueue();
   const [restoringSession, setRestoringSession] = createSignal(false);
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
@@ -310,6 +319,20 @@ export function App(props: AppProps = {}) {
     applyConversation: (result) => sessionActions.applyConversationRewind(result),
   });
   const rewindPicker = rewindController.state;
+  function submitCommand(raw: string): boolean {
+    return routeCommandSubmission(raw, busy(), builtinCommands, {
+      execute: (value) => {
+        void executeCommand(value, commandContext, builtinCommands).catch((error) => turnController.reportError(error));
+      },
+      enqueue: (command) => {
+        const count = inputQueue.enqueueCommand(command);
+        setStatus(`command queued (${count})`);
+        recordActivity({ kind: "system", text: `queued command ${command.commandName} (${count})` });
+        return count;
+      },
+      reject: setStatus,
+    });
+  }
   const composerController = createComposerController({
     rootDir: process.cwd(),
     terminalWidth: () => dimensions().width,
@@ -329,8 +352,14 @@ export function App(props: AppProps = {}) {
     setMessages,
     recordActivity,
     reportError: (error) => turnController.reportError(error),
+    inputQueue,
+    submitCommand,
     submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
-    abortTurn: () => turnCancellation.abort(),
+    abortTurn: () => {
+      const aborted = turnCancellation.abort();
+      if (aborted) queuedWork.markInterruptRequested();
+      return aborted;
+    },
     openRewind: rewindController.open,
   });
   const {
@@ -357,7 +386,9 @@ export function App(props: AppProps = {}) {
     modelPickerTitle,
     openModelPicker,
     pasteClipboardImage,
+    queuedInputs,
     recordHistory: recordPromptHistory,
+    clearQueuedInputs,
     setHistoryIndex,
     setInputImages,
     setPromptHistory,
@@ -380,16 +411,59 @@ export function App(props: AppProps = {}) {
   onCleanup(() => {
     unsubscribeProcesses();
     void processManager.shutdown();
+    sideQuestionController.dispose();
   });
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
   const pausedAgentDeliveries = new Set<string>();
   let agentManager!: AgentManager;
+  const mainActive = () => busy()
+    || Boolean(pendingGate() || pendingEngineSwitch() || pendingUserQuestion()
+      || pendingPermission() || pendingQualityDecision() || pendingChildPermission());
+  const sideQuestionController = createSideQuestionController({
+    rootDir: process.cwd(),
+    sessionId,
+    conversation,
+    activeEngine,
+    activeProviderSelection,
+    activeReasoningTier: thinkingTier,
+    mainStatus: status,
+    mainActive,
+    setStatus,
+    copyText: (text) => copyTextToClipboard(renderer, text),
+  });
+  const queuedWork = createQueuedWorkController({
+    rootDir: process.cwd(),
+    inputQueue,
+    canDrain: () => !restoringSession()
+      && !busy()
+      && !pendingGate()
+      && !pendingEngineSwitch()
+      && !pendingUserQuestion()
+      && !pendingPermission()
+      && !pendingQualityDecision()
+      && !pendingChildPermission()
+      && !rewindPicker()
+      && !sessionPicker()
+      && !modelPicker()
+      && !qualityPicker()
+      && !yoloConfirmStage(),
+    agentCards,
+    setConversation,
+    setMessages,
+    setStatus,
+    recordActivity,
+    recordPromptHistory,
+    submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
+    executeLocalCommand: (raw) => executeCommand(raw, commandContext, builtinCommands),
+    reportError: (error) => turnController.reportError(error),
+  });
   turnController = createTurnController({
     rootDir: process.cwd(),
     dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
     busy,
     setBusy,
+    queuedWork,
     providerConfigReady,
     setProviderConfigReady,
     loadProviderConfig: loadProviderConfigOnce,
@@ -447,6 +521,7 @@ export function App(props: AppProps = {}) {
     permissionBroker,
     runCancellable: (operation) => turnCancellation.run(operation),
     handleAgentEvent,
+    onProviderContextSnapshot: sideQuestionController.captureSnapshot,
     beginUsageTurn,
     publishTurnUsage,
     recordIndependentAgentUsage,
@@ -462,6 +537,7 @@ export function App(props: AppProps = {}) {
     executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
     recordPromptHistory,
     applyComposerState,
+    composerValue: inputValue,
     setInputImages,
     setHistoryIndex,
     setPromptHistory,
@@ -513,6 +589,7 @@ export function App(props: AppProps = {}) {
     setPermissionMode,
     applyProviderSelection,
     setRestoringSession,
+    sessionId,
     setSessionId,
     setNextSessionParent,
     setSessionPath,
@@ -545,6 +622,8 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformText,
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
+    clearQueuedInputs,
+    onSessionActive: (id) => { void sideQuestionController.rebuildForResume(id).catch(reportError); },
   }));
   sessionActions = createSessionActionsController({
     rootDir: process.cwd(),
@@ -592,9 +671,51 @@ export function App(props: AppProps = {}) {
   });
   const {
     compactSession,
+    initProject,
     handleSessionPickerKey,
     resetRewindState,
   } = sessionActions;
+  const startupController = createStartupController({
+    dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
+    initialResume: props.initialResume === true,
+    refreshArtifacts,
+    recoverInterruptedAgents: () => agentStore.recoverInterrupted(),
+    notifyContinuation: (id) => continuationScheduler.notify(id),
+    refreshMcpStatus,
+    loadPermissionSettings: loadPermissionSettingsOnce,
+    loadProviderConfig: loadProviderConfigOnce,
+    setProviderConfigReady,
+    listSessions,
+    setResumableSessions,
+    setSessionPicker,
+    setMessages,
+    setStatus,
+    reportError,
+  });
+  const stageSessionController = createStageSessionController({
+    rootDir: process.cwd(),
+    activeProvider,
+    activeModel,
+    permissionMode,
+    reasoningTier: thinkingTier,
+    clearQueuedInputs,
+    setSessionId,
+    setSessionPath,
+    setActiveEngine,
+    setConversation,
+    setOutput,
+    setLastTurnUsage,
+    setSessionUsage,
+    setNextSessionParent,
+    setPendingGate,
+    setPendingEngineSwitch,
+    setPendingUserQuestion,
+    setPendingPermission,
+    setPendingQualityDecision,
+    setMessages,
+    setStatus,
+    recordActivity,
+  });
   createEffect(() => {
     const id = sessionId();
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
@@ -629,37 +750,8 @@ export function App(props: AppProps = {}) {
   });
   const composerPopupMaxRows = createMemo(() => Math.min(8, Math.max(1, layout().bottomHeight - 4)));
 
-  // On mount, detect existing sessions so the welcome line can offer resume.
   onMount(() => {
-    void refreshArtifacts();
-    void agentStore.recoverInterrupted().then((recovered) => {
-      if (recovered.length === 0) return;
-      setMessages((current) => [...current, {
-        role: "system",
-        content: `Recovered ${recovered.length} interrupted SubAgent${recovered.length === 1 ? "" : "s"}; foreground tool calls were closed and background failures will be delivered when their parent sessions resume.`,
-      }]);
-      for (const agent of recovered.filter((entry) => entry.mode === "background")) {
-        void continuationScheduler.notify(agent.parentSessionId).catch(reportError);
-      }
-    }).catch(reportError);
-    void refreshMcpStatus().catch(reportError);
-    if (!props.dangerouslySkipPermissions) void loadPermissionSettingsOnce().catch(reportError);
-    void loadProviderConfigOnce().catch((error) => {
-      setProviderConfigReady(true);
-      reportError(error);
-    });
-    void listSessions().then((sessions) => {
-      setResumableSessions(sessions);
-      if (sessions.length > 0) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "system",
-            content: `Found ${sessions.length} existing session${sessions.length > 1 ? "s" : ""}. Type /resume to list and continue one, or just type a new prompt to start fresh.`,
-          },
-        ]);
-      }
-    });
+    void startupController.start();
   });
 
   useInputRouting({
@@ -688,6 +780,8 @@ export function App(props: AppProps = {}) {
     handleDecisionPaste,
     insertComposerPaste,
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
+    sideQuestionOverlay: sideQuestionController.overlay,
+    handleSideQuestionKey: sideQuestionController.handleKey,
     artifactFocusActive: () => focusedArtifactPath() !== null,
     enterArtifactFocus,
     handleArtifactFocusKey,
@@ -738,7 +832,10 @@ export function App(props: AppProps = {}) {
     setSelectedArtifact,
     setStatus,
     recordActivity,
-    setSessionId,
+    setSessionId: (value) => {
+      if (typeof value !== "function" && value === undefined) clearQueuedInputs();
+      return setSessionId(value);
+    },
     setSessionPath,
     setConversation,
     setOutput,
@@ -754,43 +851,14 @@ export function App(props: AppProps = {}) {
     listSessions,
     resumeSession,
     compactSession,
+    initProject,
     openRewindPicker: rewindController.open,
     resetRewindState,
     agentCommand,
-    startStage: async (characterPath, scenarioPath, commandEcho) => {
-      const started = await startStageSession({
-        rootDir: process.cwd(),
-        characterPath,
-        scenarioPath,
-        provider: activeProvider(),
-        providerId: activeProvider(),
-        model: activeModel(),
-        permissionMode: permissionMode(),
-        reasoningTier: thinkingTier(),
-      });
-      setSessionId(started.sessionId);
-      setSessionPath(started.sessionPath);
-      setActiveEngine("stage");
-      setConversation(started.messages);
-      setOutput(started.opening);
-      setLastTurnUsage(undefined);
-      setSessionUsage({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: 0 });
-      setNextSessionParent(null);
-      setPendingGate(null);
-      setPendingEngineSwitch(null);
-      setPendingUserQuestion(null);
-      setPendingPermission(null);
-      setPendingQualityDecision(null);
-      setMessages([
-        { role: "user", content: commandEcho },
-        ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
-        { id: started.openingRecordUuid, role: "assistant", content: started.opening, kind: "stage-bootstrap-opening", engine: "stage" },
-      ]);
-      setStatus("Stage session ready");
-      recordActivity({ kind: "system", text: `started Stage session ${started.sessionId}` });
-    },
+    startStage: stageSessionController.start,
     openModelPicker,
     openQualityPicker,
+    openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
   };
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
@@ -867,7 +935,21 @@ export function App(props: AppProps = {}) {
       </Show>
 
       <box flexDirection="row" flexGrow={1}>
-        <Show when={layout().showSidebar} fallback={<box width={0} />}>
+        <Show when={sideQuestionController.overlay()} keyed fallback={<box width={0} />}>
+          {(state) => (
+            <SideQuestionOverlay
+              exchange={sideQuestionController.currentExchange()}
+              index={state.exchangeIndex}
+              total={sideQuestionController.sessionExchanges(state.sessionId).length}
+              mainStatus={sideQuestionController.mainStatusText()}
+              width={layout().width}
+              height={Math.max(6, dimensions().height - 3 - layout().footerHeight)}
+              registerScroller={sideQuestionController.registerAnswerScroller}
+            />
+          )}
+        </Show>
+
+        <Show when={!sideQuestionController.overlay() && layout().showSidebar} fallback={<box width={0} />}>
           <Sidebar
             status={status()}
             thinkingTier={thinkingTier()}
@@ -885,18 +967,20 @@ export function App(props: AppProps = {}) {
           />
         </Show>
 
-        <MessageStream
-          messages={messages()}
-          streamingReasoning={streamingReasoning()}
-          streamingAssistant={streamingAssistant()}
-          reasoningMode={reasoningDisplayMode()}
-          contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
-          agents={agentCards()}
-          activeEngine={activeEngine()}
-          sessionId={sessionId()}
-          onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
-          registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
-        />
+        <Show when={!sideQuestionController.overlay()} fallback={<box width={0} />}>
+          <MessageStream
+            messages={messages()}
+            streamingReasoning={streamingReasoning()}
+            streamingAssistant={streamingAssistant()}
+            reasoningMode={reasoningDisplayMode()}
+            contentWidth={layout().width - (layout().showSidebar ? layout().leftPanelWidth : 0) - 12}
+            agents={agentCards()}
+            activeEngine={activeEngine()}
+            sessionId={sessionId()}
+            onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
+            registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
+          />
+        </Show>
 
         {/* The former right-hand Activity / Artifacts pane was removed in the
             TUI rewrite. Agent-loop activity and artifact detail now fold into
@@ -904,7 +988,8 @@ export function App(props: AppProps = {}) {
             Workspace sidebar holds the persistent artifact list. */}
       </box>
 
-      <BottomSurface
+      <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>
+        <BottomSurface
         layout={layout()}
         yoloStage={yoloConfirmStage()}
         permissionRequest={activePermissionRequest()}
@@ -942,8 +1027,10 @@ export function App(props: AppProps = {}) {
         inputCursor={inputCursor()}
         inputWidth={composerInputWidth()}
         busy={busy()}
+        queuedInputs={queuedInputs()}
         providerConfigReady={providerConfigReady()}
       />
+      </Show>
       <box height={layout().footerHeight} paddingLeft={1}>
         <text
           content={footerLine(activeProvider(), activeModel(), providerHasApiKey(), layout().width, lastTurnUsage(), sessionUsage(), activeModelLimits())}

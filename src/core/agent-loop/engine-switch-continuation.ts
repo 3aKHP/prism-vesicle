@@ -12,6 +12,7 @@ import { loadContinuationContext } from "./continuation-context";
 import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { AgentManager } from "../agents/manager";
+import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
 
 type ResolveEngineSwitchOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];
@@ -75,6 +76,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     config: continuation.config,
     provider: continuation.provider,
     systemPrompt: continuation.systemPrompt,
+    enginePrompt: continuation.enginePrompt,
     tools: continuation.toolSurface.definitions,
     mcpRegistry: continuation.toolSurface.mcp,
     messages,
@@ -84,12 +86,16 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     checkpoint: await FileCheckpointManager.resumeLatest(continuation.rootDir, session),
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: options.agentManager,
     permission: continuation.permission,
     permissionBroker: options.permissionBroker,
     harness: continuation.harness,
     assets: continuation.assets,
     experimentalQuality: continuation.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 
@@ -119,6 +125,7 @@ async function recordConfirmedSwitch(
     metadata: { kind: ENGINE_HANDOFF_KIND, engine: options.request.targetEngine, transition },
   });
   messages.push({ role: "user", content: handoffPacket });
+  clearFrozenInstructionBlocks(session.sessionId);
   return {
     kind: "engine_switched",
     sessionId: session.sessionId,

@@ -15,6 +15,16 @@ Sessions belong to the project and follow the project directory; a different mac
 
 ## Resume an old session
 
+Before entering Vesicle, you can open the session picker directly from the project directory:
+
+```bash
+vesicle --resume .
+```
+
+The short form is `vesicle -r .`. No provider request starts before you select a session.
+
+When Vesicle is already open, enter:
+
 ```
 /resume
 ```
@@ -60,7 +70,8 @@ Switching engines can also compact on the way: `/engine <id> --summary`.
 ## Checklist
 
 - [ ] You resumed an old session with `/resume`.
+- [ ] You know that `vesicle --resume .` opens the session picker at startup.
 - [ ] You rewound to a step with `/rewind` and resent a prompt.
 - [ ] You know what `.vesicle/sessions/` and `.vesicle/file-history/` each store.
 
-Next: [Permissions and the host shell](./permissions-and-shell.md).
+Next: [Set up Persistent Instructions](./persistent-instructions.md).

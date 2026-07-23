@@ -148,6 +148,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     config: context.config,
     provider: context.provider,
     systemPrompt: context.systemPrompt,
+    enginePrompt: context.enginePrompt,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
     messages,
@@ -157,12 +158,16 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     checkpoint,
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: manager,
     permission: context.permission,
     permissionBroker: options.permissionBroker,
     harness: context.harness,
     assets: context.assets,
     experimentalQuality: context.experimentalQuality,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 

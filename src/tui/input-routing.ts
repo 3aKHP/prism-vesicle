@@ -34,6 +34,8 @@ export type InputRoutingOptions = {
   handleDecisionPaste: (text: string) => boolean;
   insertComposerPaste: (text: string) => void;
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
+  sideQuestionOverlay?: Accessor<unknown>;
+  handleSideQuestionKey?: (key: TuiKeyEvent) => boolean;
   artifactFocusActive?: Accessor<boolean>;
   enterArtifactFocus?: () => boolean;
   handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
@@ -76,6 +78,10 @@ export function useInputRouting(options: InputRoutingOptions): void {
     }
     if (key.ctrl && key.name === "q") {
       process.nextTick(() => options.renderer.destroy());
+      return;
+    }
+    if (options.sideQuestionOverlay?.() && options.handleSideQuestionKey) {
+      if (options.handleSideQuestionKey(key)) consumeKey(key);
       return;
     }
     const mode = bottomSurfaceMode();

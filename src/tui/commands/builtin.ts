@@ -16,6 +16,7 @@ import type { Command } from "./types";
 import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
   parseEngineId,
+  parseInitCommandArgs,
   parseReasoningDisplayMode,
   parseEffortTier,
   resolveArtifactTarget,
@@ -37,6 +38,8 @@ import {
   renderValidationNotice,
   renderEngineList,
 } from "./render";
+import { INSTRUCTION_COMBINED_BUDGET_BYTES, resolveEffectiveSelection } from "../../core/instructions";
+import type { EffectiveInstructionSelection } from "../../core/instructions";
 
 const HELP_TEXT = [
   "Commands:",
@@ -44,7 +47,9 @@ const HELP_TEXT = [
   "  /engine [id] [--summary [notes]] list or switch the Prism engine",
   "  /stage <character-card-path> <scenario-card-path> start a new Stage narrative session",
   "  /compact [notes]  summarize this session and replace old context",
+  "  /init [--force] [notes] scan the project and generate a VESICLE.md of persistent instructions",
   "  /context          show current context window usage",
+  "  /instructions     show active Persistent Instructions for this engine",
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
@@ -53,15 +58,21 @@ const HELP_TEXT = [
   "  /artifact [n|path] list or preview generated artifacts",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
+  "  /btw <question>   ask a temporary side question without interrupting the turn",
   "  /resume           list sessions",
   "  /resume <n|id>    resume a session",
   "  /new              start a fresh session",
   "  /help             show this help",
 ].join("\n");
 
+const immediate = { kind: "immediate" } as const;
+const afterToolRound = { kind: "queue", boundary: "tool-round" } as const;
+const afterAgentLoop = { kind: "queue", boundary: "agent-loop" } as const;
+
 export const builtinCommands: Command[] = [
   {
     name: "stage",
+    busyBehavior: afterAgentLoop,
     description: "Start a new Stage narrative session from two cards",
     usage: "/stage <character-card-path> <scenario-card-path>",
     completion: stageCommandCompletion,
@@ -77,7 +88,18 @@ export const builtinCommands: Command[] = [
   },
 
   {
+    name: "btw",
+    busyBehavior: immediate,
+    description: "Ask a temporary question about the current conversation",
+    usage: "/btw <question>",
+    async run(ctx, args) {
+      await ctx.openSideQuestion(args);
+    },
+  },
+
+  {
     name: "help",
+    busyBehavior: immediate,
     description: "Show available commands",
     async run(ctx, _args, raw) {
       ctx.setMessages((prev) => [
@@ -90,6 +112,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "quality",
+    busyBehavior: (args) => args.trim() === "status" ? immediate : afterAgentLoop,
     description: "Show or configure the experimental Semantic Judge",
     usage: "/quality [off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]",
     completion: qualityCommandCompletion,
@@ -146,7 +169,20 @@ export const builtinCommands: Command[] = [
   },
 
   {
+    name: "instructions",
+    busyBehavior: () => immediate,
+    description: "Show the active Persistent Instructions for this engine",
+    usage: "/instructions",
+    async run(ctx, _args, raw) {
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      const selection = await resolveEffectiveSelection(ctx.activeEngine(), process.cwd());
+      ctx.setMessages((prev) => [...prev, { role: "system", content: renderInstructionsNotice(selection) }]);
+    },
+  },
+
+  {
     name: "permissions",
+    busyBehavior: (args) => args ? afterAgentLoop : immediate,
     description: "Show or change the tool approval mode",
     usage: "/permissions [MANUAL|INERTIA|MOMENTUM|YOLO]",
     completion: fixedCommandCompletion("permissions"),
@@ -170,6 +206,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "agents",
+    busyBehavior: (args) => args.trim() === "retry" ? afterAgentLoop : immediate,
     description: "List Agent Profiles and current SubAgents",
     usage: "/agents [handle|stop <handle>|retry]",
     completion: agentsCommandCompletion,
@@ -181,6 +218,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "engine",
+    busyBehavior: (args) => args ? afterAgentLoop : immediate,
     description: "List or switch the Prism engine for future turns",
     usage: "/engine [id]",
     completion: engineCommandCompletion,
@@ -233,6 +271,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "compact",
+    busyBehavior: afterAgentLoop,
     description: "Summarize this session and replace old provider context",
     usage: "/compact [summary instructions]",
     async run(ctx, args, raw) {
@@ -246,7 +285,24 @@ export const builtinCommands: Command[] = [
   },
 
   {
+    name: "init",
+    busyBehavior: afterAgentLoop,
+    description: "Scan the project and generate a VESICLE.md of persistent instructions",
+    usage: "/init [--force] [notes]",
+    async run(ctx, args, raw) {
+      const parsed = parseInitCommandArgs(args);
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      if ("error" in parsed) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: parsed.error }]);
+        return;
+      }
+      await ctx.initProject(parsed);
+    },
+  },
+
+  {
     name: "context",
+    busyBehavior: immediate,
     description: "Show current context window usage",
     usage: "/context",
     async run(ctx, _args, raw) {
@@ -260,6 +316,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "model",
+    busyBehavior: afterAgentLoop,
     description: "Switch provider/model (no args opens a picker)",
     usage: "/model [provider] [model]",
     completion: modelCommandCompletion,
@@ -294,6 +351,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "effort",
+    busyBehavior: (args) => args ? afterAgentLoop : immediate,
     description: "Set provider thinking effort",
     usage: "/effort off|low|medium|high|xhigh|max|auto",
     completion: fixedCommandCompletion("effort"),
@@ -329,6 +387,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "reasoning",
+    busyBehavior: immediate,
     description: "Set reasoning display mode",
     usage: "/reasoning hidden|collapsed|expanded",
     completion: fixedCommandCompletion("reasoning"),
@@ -356,11 +415,12 @@ export const builtinCommands: Command[] = [
 
   {
     name: "artifact",
+    busyBehavior: afterToolRound,
     description: "List artifacts or preview one in the message stream",
     usage: "/artifact [n|path]",
     completion: artifactCommandCompletion("artifact"),
     async run(ctx, args, raw) {
-      const entries = args ? (ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts()) : await ctx.refreshArtifacts();
+      const entries = await ctx.refreshArtifacts();
       if (!args) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: renderArtifactList(entries) }]);
         return;
@@ -388,11 +448,12 @@ export const builtinCommands: Command[] = [
 
   {
     name: "validate",
+    busyBehavior: afterToolRound,
     description: "Validate an artifact file",
     usage: "/validate <n|path>",
     completion: artifactCommandCompletion("validate"),
     async run(ctx, args, raw) {
-      const entries = ctx.artifacts().length > 0 ? ctx.artifacts() : await ctx.refreshArtifacts();
+      const entries = await ctx.refreshArtifacts();
       const artifact = resolveArtifactTarget(entries, args);
       if (!artifact) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `No artifact matches "${args || "(empty)"}". Use /artifact to list.` }]);
@@ -406,6 +467,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "rewind",
+    busyBehavior: afterAgentLoop,
     aliases: ["checkpoint"],
     description: "Restore code and/or conversation to an earlier point",
     async run(ctx) {
@@ -415,6 +477,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "new",
+    busyBehavior: afterAgentLoop,
     description: "Start a fresh session",
     async run(ctx, _args, raw) {
       ctx.resetRewindState();
@@ -442,6 +505,7 @@ export const builtinCommands: Command[] = [
 
   {
     name: "resume",
+    busyBehavior: afterAgentLoop,
     description: "Resume a saved session",
     usage: "/resume [n|id]",
     completion: resumeCommandCompletion,
@@ -526,6 +590,29 @@ function formatPercent(used: number, total: number): string {
   if (total <= 0) return "n/a";
   const percent = (used / total) * 100;
   return percent < 1 && percent > 0 ? "<1%" : `${Math.round(percent)}%`;
+}
+
+function renderInstructionsNotice(selection: EffectiveInstructionSelection): string {
+  const lines: string[] = [`Persistent Instructions for engine "${selection.engine}":`];
+  const files = [selection.user, selection.project].filter((file): file is NonNullable<typeof file> => Boolean(file));
+  if (files.length === 0 && selection.diagnostics.length === 0) {
+    lines.push("  No instruction files are active for this engine.");
+    lines.push(`  Locations: VESICLE.md / VESICLE.<engine>.md at the project root (project scope)`);
+    lines.push(`  and beside providers.yaml (user scope; applies across project roots).`);
+    return lines.join("\n");
+  }
+  for (const file of files) {
+    const scope = file.target.scope;
+    const override = file.target.engine !== "all" ? ` (replaces ${scope} general; engine override ${file.target.engine})` : "";
+    const empty = file.empty ? " [empty override — contributes no content]" : "";
+    lines.push(`  - ${file.logicalName} [${scope}]${override}${empty} — ${file.bytes} bytes (sha256 ${file.sha256.slice(0, 8)})`);
+  }
+  lines.push(`  Combined budget: ${selection.combinedBytes} / ${INSTRUCTION_COMBINED_BUDGET_BYTES} bytes`);
+  for (const diagnostic of selection.diagnostics) {
+    lines.push(`  ! ${diagnostic.logicalName} [${diagnostic.scope}] ${diagnostic.kind}: ${diagnostic.message}`);
+  }
+  lines.push("  Instructions customize work within host capabilities; they cannot add tools, permissions, gates, validators, or filesystem authority.");
+  return lines.join("\n");
 }
 
 function parseEngineSwitchArgs(args: string): { engine: EngineId; summary: boolean; summaryInstructions?: string } | undefined {

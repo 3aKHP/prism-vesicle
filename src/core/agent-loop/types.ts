@@ -1,5 +1,6 @@
 import type { ProviderSelection } from "../../config/providers";
 import type { ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { SideQuestionContextSnapshot } from "../side-question/types";
 import type { AgentManager } from "../agents/manager";
 import type { AgentRuntimeEvent } from "../agents/types";
 import type { EngineId, EngineProfile } from "../engine/profile";
@@ -11,6 +12,7 @@ import type { UserQuestionRequest } from "../user-question/types";
 import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
 import type { ValidationResult } from "../validators/registry";
+import type { InstructionDiagnostic } from "../instructions";
 import type { QualityDecisionRequest, QualityFindingSummary, QualityOutcome, QualityTargetWarningReason } from "../quality";
 import type { ExperimentalQualityProfile } from "../../config/quality";
 
@@ -28,17 +30,32 @@ export type RunPromptOptions = {
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
   agentManager?: AgentManager;
   permission?: PermissionRuntimeOptions;
   permissionBroker?: ToolPermissionBroker;
   harness?: HarnessRuntimeContext;
   assets?: AssetResolver;
   experimentalQuality?: ExperimentalQualityProfile;
+  takePendingUserInputs?: () => PendingUserInput[];
+  runToolBoundaryCommands?: () => Promise<void>;
+  onSessionReady?: (sessionId: string, sessionPath: string) => void;
+};
+
+export type PendingUserInput = {
+  content: string;
+  images?: VesicleImageAttachment[];
 };
 
 export type AgentLoopEvent =
   | AgentRuntimeEvent
   | { type: "asset_drift"; fingerprint: string; changedPaths: string[] }
+  | {
+      type: "instruction_warning";
+      sessionId: string;
+      engine: EngineId;
+      diagnostics: InstructionDiagnostic[];
+    }
   | { type: "provider_request"; iteration: number }
   | { type: "assistant_delta"; delta: string }
   | { type: "assistant_reasoning_delta"; delta: string }
@@ -52,7 +69,7 @@ export type AgentLoopEvent =
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
-  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; images?: VesicleImageAttachment[] }
+  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; instructionEvent?: import("../instructions/types").InstructionToolEvent; images?: VesicleImageAttachment[] }
   | { type: "process_update"; callId: string; processEvent: ProcessToolEvent }
   | { type: "permission_pending"; request: PermissionRequest }
   | { type: "gate_pending"; gate: string }

@@ -3,6 +3,7 @@ import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
 import type { VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
+import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionRecord, type SessionSnapshot } from "../session/store";
 
@@ -186,7 +187,10 @@ async function generateSummary(options: {
   const config = await loadConfigForSelection(options.providerSelection);
   const provider = createProvider(config);
   const profile = await loadEngineProfile(options.engine, options.rootDir);
-  const systemPrompt = composeSystemPrompt(await loadPromptBundle(profile, options.rootDir));
+  const enginePrompt = composeSystemPrompt(await loadPromptBundle(profile, options.rootDir));
+  const systemPrompt = (
+    await composeSystemPromptWithInstructions(options.engine, enginePrompt, options.rootDir)
+  ).systemPrompt;
   const request: VesicleRequest = {
     id: options.sessionId,
     model: { provider: config.providerId, model: config.model },

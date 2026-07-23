@@ -1,5 +1,8 @@
 import { AgentStore } from "./store";
 import { normalizeHarnessAdapterError } from "../harness/driver";
+import { AgentExecutionScheduler, type AgentExecutionLease } from "./execution-scheduler";
+import { AgentHandleAllocator } from "./handle-allocator";
+import { PathOwnershipTable } from "./path-ownership";
 import type {
   AgentMetadata,
   AgentInvocationContext,
@@ -17,7 +20,6 @@ type ActiveAgent = {
   controller: AbortController;
   completion: Promise<AgentTerminalResult>;
   messages: string[];
-  ownedPaths: Set<string>;
 };
 
 export type SpawnedAgent = {
@@ -28,13 +30,9 @@ export type SpawnedAgent = {
 
 export class AgentManager {
   private readonly active = new Map<string, ActiveAgent>();
-  private readonly waiters: Array<() => void> = [];
-  private readonly writeOwners = new Map<string, string>();
-  private readonly handleInitializers = new Map<string, Promise<number>>();
-  private readonly nextHandleOrdinals = new Map<string, number>();
-  private runningCount = 0;
-  private readonly delegationRunning = new Set<string>();
-  private readonly delegationWaiters = new Map<string, Array<() => void>>();
+  private readonly executionScheduler: AgentExecutionScheduler;
+  private readonly handleAllocator: AgentHandleAllocator;
+  private readonly pathOwnership: PathOwnershipTable;
 
   constructor(
     private readonly store: AgentStore,
@@ -44,9 +42,9 @@ export class AgentManager {
       onEvent?: (event: AgentRuntimeEvent) => void;
     } = {},
   ) {
-    if (!Number.isInteger(this.maxConcurrent) || this.maxConcurrent < 1) {
-      throw new Error("SubAgent maxConcurrent must be a positive integer.");
-    }
+    this.executionScheduler = new AgentExecutionScheduler(this.maxConcurrent);
+    this.handleAllocator = new AgentHandleAllocator(store);
+    this.pathOwnership = new PathOwnershipTable();
   }
 
   get maxConcurrent(): number {
@@ -55,7 +53,7 @@ export class AgentManager {
 
   async spawn(spec: AgentSpec, invocation?: AgentInvocationContext): Promise<SpawnedAgent> {
     const runId = `run_${crypto.randomUUID()}`;
-    const handle = await this.allocateHandle(spec.parentSessionId, spec.profileId);
+    const handle = await this.handleAllocator.allocate(spec.parentSessionId, spec.profileId);
     const now = new Date().toISOString();
     const metadata: AgentMetadata = {
       ...spec,
@@ -75,7 +73,7 @@ export class AgentManager {
       else invocation.parentSignal.addEventListener("abort", abortFromParent, { once: true });
     }
     const completion = this.execute(metadata, controller, invocation);
-    this.active.set(runId, { metadata, controller, completion, messages: [], ownedPaths: new Set() });
+    this.active.set(runId, { metadata, controller, completion, messages: [] });
     const cleanup = () => {
       invocation?.parentSignal?.removeEventListener("abort", abortFromParent);
       this.active.delete(runId);
@@ -115,14 +113,11 @@ export class AgentManager {
   }
 
   async claimHostMutation(ownerId: string, paths: string[]): Promise<void> {
-    this.claimPaths(`host:${ownerId}`, paths);
+    this.pathOwnership.claim(`host:${ownerId}`, "the parent Engine", paths);
   }
 
   releaseHostMutations(ownerId: string): void {
-    const owner = `host:${ownerId}`;
-    for (const [path, current] of this.writeOwners) {
-      if (current === owner) this.writeOwners.delete(path);
-    }
+    this.pathOwnership.release(`host:${ownerId}`);
   }
 
   private async execute(
@@ -131,16 +126,13 @@ export class AgentManager {
     invocation?: AgentInvocationContext,
   ): Promise<AgentTerminalResult> {
     let metadata = initial;
-    let acquired = false;
-    let delegationAcquired = false;
+    let executionLease: AgentExecutionLease | undefined;
     let executionStarted = false;
     try {
-      if (metadata.delegation) {
-        await this.acquireDelegation(metadata.parentSessionId, controller.signal);
-        delegationAcquired = true;
-      }
-      await this.acquire(controller.signal);
-      acquired = true;
+      executionLease = await this.executionScheduler.acquire(
+        controller.signal,
+        metadata.delegation ? metadata.parentSessionId : undefined,
+      );
       metadata = { ...metadata, status: "running", updatedAt: new Date().toISOString() };
       await this.store.save(metadata);
       this.updateActive(metadata);
@@ -298,43 +290,18 @@ export class AgentManager {
       return result;
     } finally {
       this.releaseMutations(metadata.runId);
-      if (acquired) this.release();
-      if (delegationAcquired) this.releaseDelegation(metadata.parentSessionId);
+      executionLease?.release();
     }
   }
 
   private async claimMutation(runId: string, handle: string, paths: string[]): Promise<void> {
     const active = this.active.get(runId);
     if (!active) throw new Error(`SubAgent is no longer active: ${handle}.`);
-    this.claimPaths(runId, paths);
-    for (const path of paths) active.ownedPaths.add(path);
-  }
-
-  private claimPaths(ownerId: string, paths: string[]): void {
-    const unique = [...new Set(paths)].sort();
-    const conflict = unique.flatMap((requestedPath) =>
-      [...this.writeOwners.entries()]
-        .filter(([ownedPath, owner]) => owner !== ownerId && pathsOverlap(requestedPath, ownedPath))
-        .map(([ownedPath, owner]) => ({ requestedPath, ownedPath, owner })),
-    )[0];
-    if (conflict) {
-      const ownerLabel = conflict.owner.startsWith("host:")
-        ? "the parent Engine"
-        : this.active.get(conflict.owner)?.metadata.handle ?? "another SubAgent";
-      throw new Error(`Concurrent Agent write conflict on "${conflict.requestedPath}"; overlapping path "${conflict.ownedPath}" is owned by ${ownerLabel}.`);
-    }
-    for (const path of unique) {
-      this.writeOwners.set(path, ownerId);
-    }
+    this.pathOwnership.claim(runId, handle, paths);
   }
 
   private releaseMutations(runId: string): void {
-    const active = this.active.get(runId);
-    if (!active) return;
-    for (const path of active.ownedPaths) {
-      if (this.writeOwners.get(path) === runId) this.writeOwners.delete(path);
-    }
-    active.ownedPaths.clear();
+    this.pathOwnership.release(runId);
   }
 
   private async finish(metadata: AgentMetadata, result: AgentTerminalResult): Promise<void> {
@@ -361,77 +328,6 @@ export class AgentManager {
       && (!controllableOnly || isControllable(entry.metadata)));
   }
 
-  private async allocateHandle(parentSessionId: string, profileId: string): Promise<string> {
-    const key = `${parentSessionId}\u0000${profileId}`;
-    let initializer = this.handleInitializers.get(key);
-    if (!initializer) {
-      initializer = this.store.nextHandleOrdinal(parentSessionId, profileId);
-      this.handleInitializers.set(key, initializer);
-    }
-    const initial = await initializer;
-    const ordinal = this.nextHandleOrdinals.get(key) ?? initial;
-    this.nextHandleOrdinals.set(key, ordinal + 1);
-    return `${profileId}-${ordinal}`;
-  }
-
-  private async acquire(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) throw signal.reason;
-    if (this.runningCount < this.maxConcurrent) {
-      this.runningCount += 1;
-      return;
-    }
-    await new Promise<void>((resolve, reject) => {
-      const resume = () => {
-        signal.removeEventListener("abort", abort);
-        this.runningCount += 1;
-        resolve();
-      };
-      const abort = () => {
-        const index = this.waiters.indexOf(resume);
-        if (index >= 0) this.waiters.splice(index, 1);
-        reject(signal.reason);
-      };
-      this.waiters.push(resume);
-      signal.addEventListener("abort", abort, { once: true });
-    });
-  }
-
-  private release(): void {
-    this.runningCount = Math.max(0, this.runningCount - 1);
-    this.waiters.shift()?.();
-  }
-
-  private async acquireDelegation(parentSessionId: string, signal: AbortSignal): Promise<void> {
-    if (signal.aborted) throw signal.reason;
-    if (!this.delegationRunning.has(parentSessionId)) {
-      this.delegationRunning.add(parentSessionId);
-      return;
-    }
-    await new Promise<void>((resolve, reject) => {
-      const resume = () => {
-        signal.removeEventListener("abort", abort);
-        resolve();
-      };
-      const abort = () => {
-        const queue = this.delegationWaiters.get(parentSessionId) ?? [];
-        const index = queue.indexOf(resume);
-        if (index >= 0) queue.splice(index, 1);
-        reject(signal.reason);
-      };
-      const queue = this.delegationWaiters.get(parentSessionId) ?? [];
-      queue.push(resume);
-      this.delegationWaiters.set(parentSessionId, queue);
-      signal.addEventListener("abort", abort, { once: true });
-    });
-  }
-
-  private releaseDelegation(parentSessionId: string): void {
-    const queue = this.delegationWaiters.get(parentSessionId);
-    const next = queue?.shift();
-    if (queue?.length === 0) this.delegationWaiters.delete(parentSessionId);
-    if (next) next();
-    else this.delegationRunning.delete(parentSessionId);
-  }
 }
 
 function terminalFromMetadata(metadata: AgentMetadata | undefined): AgentTerminalResult | undefined {
@@ -460,8 +356,4 @@ function isAbortError(error: unknown): boolean {
 
 function isControllable(metadata: AgentMetadata): boolean {
   return metadata.status === "created" || metadata.status === "running";
-}
-
-function pathsOverlap(left: string, right: string): boolean {
-  return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
 }

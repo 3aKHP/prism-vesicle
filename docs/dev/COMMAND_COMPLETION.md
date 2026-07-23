@@ -6,6 +6,8 @@ This document defines the extension contract for slash-command argument completi
 
 Command execution remains in `commands/builtin.ts`. A command that has completable arguments declares an optional `completion` property beside its `name`, `usage`, and `run` handler. The completion property owns only the editable command grammar and how a selected candidate rebuilds the composer draft.
 
+Every command also declares its busy-turn scheduling behavior in the same registry entry. See [Command Queue](./COMMAND_QUEUE.md). Completion must not infer or override that behavior.
+
 The shared controller in `command-completion-controller.ts` owns popup rendering state, filtering, selection, keyboard handling, async loading, and stale-result protection. It must not gain command-name branches. Do not infer completion behavior by parsing `usage`; `usage` is display metadata, not an executable grammar.
 
 The public types are in `commands/types.ts`:
@@ -94,14 +96,14 @@ The shared popup owns Up/Down, Ctrl+P/Ctrl+N, Tab, Enter, and Escape. A command 
 - Tab applies the selected canonical draft without executing the command.
 - Enter applies an incomplete draft, or executes when the current draft already equals the selected terminal draft.
 - Escape clears the composer through the shared controller.
-- A busy turn keeps the draft and reports the existing request-in-flight status instead of executing a local command.
+- Enter submits the completed command through its registered busy-turn behavior. Immediate commands run while the Agent Loop continues; deferred commands enter the shared composer queue; rejected commands keep their draft.
 - Empty candidate lists remain a valid open popup state with a neutral selection.
 
 Keep `/model` behavior compatible: the first visible stage remains provider-first, selecting a provider appends a space for provider-scoped model completion, and a single argument that is not a provider id may complete to a model of the active provider.
 
 ## Tests And Verification
 
-Add or extend tests in `tests/tui-command-completion.test.ts` and the command-specific test file. Cover the command registration, each finite or dynamic stage, canonical draft construction, active-provider/provider-scoped model paths where applicable, empty results, and guarded project-relative paths.
+Add or extend tests in `tests/unit/tui/tui-command-completion.test.ts` and the command-specific test file. Cover the command registration, each finite or dynamic stage, canonical draft construction, active-provider/provider-scoped model paths where applicable, empty results, and guarded project-relative paths.
 
 The current OpenTUI/Solid test runtime does not replay all client-side effects reliably. Keep focused pure resolver tests for grammar and source behavior, and use a narrow static guard for controller cancellation/keyboard invariants when a client effect cannot be exercised. Do not replace a feasible behavioral test with a static source assertion.
 

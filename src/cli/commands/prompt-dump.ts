@@ -3,6 +3,8 @@ import type { EngineId, EngineProfile } from "../../core/engine/profile";
 import { engineIds } from "../../core/engine/profile";
 import type { PromptBundle } from "../../core/prompt/loader";
 import { composeSystemPrompt, loadPromptBundle } from "../../core/prompt/loader";
+import { INSTRUCTION_COMBINED_BUDGET_BYTES, composeSystemPromptWithInstructions } from "../../core/instructions";
+import type { EffectiveInstructionSelection } from "../../core/instructions";
 import type { McpRegistryOptions } from "../../mcp/registry";
 import { loadPermissionSettings } from "../../config/permissions";
 import { resolveToolSurface } from "../../core/agent-loop/tool-surface";
@@ -35,15 +37,19 @@ export async function runPromptDump(args: string[]): Promise<void> {
   const harness = await resolveProjectHarnessRuntime(rootDir);
   const profile = await loadEngineProfile(engine, rootDir, harness?.assets);
   const bundle = await loadPromptBundle(profile, rootDir, harness?.assets);
-  const systemPrompt = composeSystemPrompt(bundle);
+  const enginePrompt = composeSystemPrompt(bundle);
+  // Prompt shape/dump is not session-aware: it resolves current-disk Persistent
+  // Instructions the way a new session launched now would.
+  const instructional = await composeSystemPromptWithInstructions(engine, enginePrompt, rootDir);
+  const systemPrompt = instructional.systemPrompt;
   const permissions = await loadPermissionSettings();
 
   if (shapeOnly) {
-    await printShape(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
+    await printShape(profile, bundle, systemPrompt, instructional.selection, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
     return;
   }
 
-  await printFullDump(profile, bundle, systemPrompt, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
+  await printFullDump(profile, bundle, systemPrompt, instructional.selection, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
 }
 
 type ParsedArgs = { ok: true; value: { engine: EngineId; shapeOnly: boolean } } | { ok: false; error: string };
@@ -107,6 +113,7 @@ async function printShape(
   profile: EngineProfile,
   bundle: PromptBundle,
   systemPrompt: string,
+  instructions: EffectiveInstructionSelection,
   shellExecEnabled: boolean,
   shellInterpreter: ShellInterpreterPreference,
   assets?: AssetResolver,
@@ -120,6 +127,7 @@ async function printShape(
   for (const section of bundle.sections) {
     console.log(`  - ${section.path} [${section.source}] (${[...section.text].length} chars, ${Buffer.byteLength(section.text, "utf8")} bytes)`);
   }
+  printInstructionShape(instructions);
   const ledger = assets ? await loadStaticAssetLedger(assets, profile.id) : undefined;
   printStaticAssetLedger(profile.id, ledger);
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
@@ -132,6 +140,7 @@ async function printFullDump(
   profile: EngineProfile,
   bundle: PromptBundle,
   systemPrompt: string,
+  instructions: EffectiveInstructionSelection,
   shellExecEnabled: boolean,
   shellInterpreter: ShellInterpreterPreference,
   assets?: AssetResolver,
@@ -149,6 +158,7 @@ async function printFullDump(
   for (const section of bundle.sections) {
     console.log(`--- ${section.path} [${section.source}] (${[...section.text].length} chars, ${Buffer.byteLength(section.text, "utf8")} bytes) ---`);
   }
+  printInstructionShape(instructions);
   const ledger = assets ? await loadStaticAssetLedger(assets, profile.id) : undefined;
   printStaticAssetLedger(profile.id, ledger);
   console.log("");
@@ -156,6 +166,24 @@ async function printFullDump(
   console.log(systemPrompt);
   console.log("");
   console.log("=== End (length: " + [...systemPrompt].length + " chars) ===");
+}
+
+function printInstructionShape(instructions: EffectiveInstructionSelection): void {
+  const files = [instructions.user, instructions.project].filter((file): file is NonNullable<typeof file> => Boolean(file));
+  console.log("Persistent instructions:");
+  if (files.length === 0 && instructions.diagnostics.length === 0) {
+    console.log("  (none)");
+    return;
+  }
+  for (const file of files) {
+    const override = file.target.engine !== "all" ? `, engine override ${file.target.engine}` : "";
+    const empty = file.empty ? ", empty override" : "";
+    console.log(`  - ${file.logicalName} [${file.target.scope}${override}] (${file.bytes} bytes${empty}, sha256 ${file.sha256.slice(0, 8)})`);
+  }
+  console.log(`Persistent instruction budget: ${instructions.combinedBytes} / ${INSTRUCTION_COMBINED_BUDGET_BYTES} bytes`);
+  for (const diagnostic of instructions.diagnostics) {
+    console.log(`  ! ${diagnostic.logicalName} [${diagnostic.scope}]: ${diagnostic.kind} — ${diagnostic.message}`);
+  }
 }
 
 type StaticAssetLedgerEntry = { budgetCharacters: number; remainingCharacters: number };

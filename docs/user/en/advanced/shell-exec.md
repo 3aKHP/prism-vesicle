@@ -2,7 +2,7 @@
 
 English | [简体中文](../../zh-CN/advanced/shell-exec.md)
 
-> **Status (as of `1.0.0-alpha.2`):** 🟢 Implemented. This is a **non-sandboxed** capability with host-user authority, off by default. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.0.0-alpha.4`):** 🟢 Implemented. This is a **non-sandboxed** capability with host-user authority, off by default. Maturity per [`STATUS.md`](../../../../STATUS.md).
 >
 > The basics (four permission modes, the `shellExec` switch in `permissions.yaml`, path guards) are in [Permissions and security model](../reference/permissions-and-security.md); this page is the operator deep dive.
 

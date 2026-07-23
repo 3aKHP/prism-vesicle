@@ -1,6 +1,7 @@
 import type { Accessor, Setter } from "solid-js";
 import type { ProviderSelection } from "../config/providers";
 import { compactConversation } from "../core/compact/service";
+import { generateProjectInstructions } from "../core/init";
 import type { EngineId } from "../core/engine/profile";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import type { ConversationRewind } from "../core/rewind/service";
@@ -132,6 +133,44 @@ export function createSessionActionsController(options: SessionActionsController
     }
   }
 
+  async function initProject(initOptions: { notes?: string; force?: boolean } = {}): Promise<{ path: string; overwritten: boolean }> {
+    if (hasPendingInteraction()) throw new Error("Resolve the pending gate, engine switch, question, permission, or quality decision before running /init.");
+    if (!options.providerConfigReady()) await options.loadProviderConfig();
+    options.setBusy(true);
+    options.setStatus("initializing project");
+    options.recordActivity({ kind: "provider", text: "generating VESICLE.md" });
+    try {
+      const outcome = await options.runCancellable((signal) => generateProjectInstructions({
+        rootDir: options.rootDir,
+        providerSelection: options.activeProviderSelection(),
+        generation: options.activeGeneration(),
+        notes: initOptions.notes,
+        force: initOptions.force,
+        signal,
+      }));
+      if (outcome.kind === "interrupted") throw new Error("/init canceled.");
+      const result = outcome.value;
+      const backup = result.backupPath ? ` The previous version was backed up to ${result.backupPath}.` : "";
+      const priorWarn = result.backupReplacedPrior ? " That backup path already held an earlier backup, which it replaced." : "";
+      const overrides = result.maskedByEngineOverrides ?? [];
+      const masked = overrides.length
+        ? ` Engine-specific override file(s) (${overrides.map((engine) => `VESICLE.${engine}.md`).join(", ")}) take precedence for those engines, so this general file is masked there.`
+        : "";
+      const effect = overrides.length
+        ? "It takes effect on the next turn for engines without an override"
+        : "It takes effect on the next turn";
+      options.setMessages((previous) => [...previous, {
+        role: "system",
+        content: `Generated ${result.path} from the project scan.${backup}${priorWarn} ${effect} — review and edit it as needed.${masked}`,
+      }]);
+      options.setStatus("VESICLE.md generated");
+      options.recordActivity({ kind: "system", text: `VESICLE.md generated${result.overwritten ? " (replaced existing)" : ""}` });
+      return { path: result.path, overwritten: result.overwritten };
+    } finally {
+      options.setBusy(false);
+    }
+  }
+
   function handleSessionPickerKey(key: TuiKeyEvent): boolean {
     const picker = options.sessionPicker();
     if (!picker) return false;
@@ -168,5 +207,5 @@ export function createSessionActionsController(options: SessionActionsController
     return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingQualityDecision() || options.pendingChildPermission());
   }
 
-  return { applyConversationRewind, compactSession, handleSessionPickerKey, resetRewindState };
+  return { applyConversationRewind, compactSession, initProject, handleSessionPickerKey, resetRewindState };
 }

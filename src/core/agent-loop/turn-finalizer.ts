@@ -1,7 +1,7 @@
 import type { VesicleMessage, VesicleResponse } from "../../providers/shared/types";
 import type { EngineProfile } from "../engine/profile";
 import type { SessionStore } from "../session/store";
-import { resolveValidators, runValidators } from "../validators/registry";
+import { validateContent } from "../validators/registry";
 import type { AgentLoopEvent, RunPromptResult, ValidatorOutcome } from "./types";
 import type { QualityOutcome } from "../quality";
 
@@ -59,10 +59,12 @@ async function validateResponse(options: {
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<ValidatorOutcome | undefined> {
   if (options.profile.validators.length === 0) return undefined;
-  const validators = resolveValidators(options.profile.validators);
-  if (!validators.some((validator) => validator.applies(options.response.content))) return undefined;
-
-  const validation = runValidators(validators, options.response.content);
+  // Run only the validators whose `applies` predicate matches this content.
+  // validateContent filters by applies, so a character card is not also run
+  // through the scenario validator (and vice versa), and a `---`-led report or
+  // ordinary prose triggers nothing.
+  const validation = validateContent(options.profile.validators, options.response.content);
+  if (!validation) return undefined;
   await options.session.append({
     role: "system",
     content: summariseValidation(validation),

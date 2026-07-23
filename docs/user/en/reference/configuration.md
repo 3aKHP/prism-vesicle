@@ -25,6 +25,7 @@ Files in that directory:
 | `permissions.yaml` | No | Tool-approval default and the `shell_exec` switch (see [permissions](./permissions-and-security.md)) |
 | `quality.yaml` | No | Experimental Semantic Judge |
 | `assets/` | No | User-level asset overrides |
+| `VESICLE.md` / `VESICLE.<engine>.md` | No | Persistent Instructions (user-level, applies across all projects; see below) |
 
 > Do not rely on a project-root `.env`. If an old one remains, move its values into the user directory above and remove it.
 
@@ -96,6 +97,22 @@ MCP_CLUSTER_TOKEN=
 ## mcp.yaml (optional)
 
 Start from [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml). Each server can set `transport` (streamable-http), `url`, `timeoutSeconds`, `toolPrefix`, `headers` (supports `${ENV_VAR}` expansion from `.env`), `includeTools`/`excludeTools` filters, and `enabledEngines` (which engines can use it). A present `mcp.yaml` defaults to enabled; secrets go in `.env`.
+
+## Persistent Instructions (optional)
+
+If you keep re-stating the same sub-workflow or specification under an engine, write it into a Persistent Instructions file — the host loads it into the system prompt automatically at the start of every session, so you no longer have to ask the model to write a spec to a file and remind it to read it next session.
+
+Two scopes, same file names: `VESICLE.md` (general, every engine) and `VESICLE.<engine>.md` (engine-specific override, where `<engine>` is `etl`, `runtime`, `stage`, etc.).
+
+- **Project scope**: at the project root (for example `VESICLE.md`, `VESICLE.runtime.md`); travels with the project and may be committed.
+- **User scope**: in the config directory above (beside `providers.yaml`); **applies across every project root**, so you do not have to copy files between working folders.
+
+Resolution: **within one scope an engine-specific file replaces the general file; across scopes the user file is followed by the project file, and the project file wins on a direct conflict.** A present engine-specific file always replaces the general one (an empty file is an explicit empty override that suppresses fallback to the general file). Instructions may only customize behavior within the active engine's workflow — they **cannot** add tools, permissions, gates, validators, or filesystem authority; capability boundaries stay host-enforced.
+
+Instructions are appended after the engine prompt as host context (the engine contract remains the single system authority) and are read from current disk when a top-level turn begins; within one turn the selection is frozen, so an edit you make while a turn is paused (for example during a tool approval) takes effect on the next turn rather than mid-turn. An invalid, linked, or oversized instruction file is skipped with a warning rather than blocking the turn; the combined user + project content is capped at 32 KiB. Inspect the active selection with `/instructions`, or run `vesicle prompt shape --engine <id>` from the command line. Run `/init` to draft a `VESICLE.md` from a project scan, then edit it by hand. If the project root already contains `VESICLE.md`, ordinary `/init` refuses before calling the provider; only `/init --force [notes]` backs the old file up to `.vesicle/init-backups/VESICLE.md.previous` and replaces it. The model can also read or update these instructions with the `read_instructions` / `update_instructions` tools (non-Stage engines; `update_instructions` goes through the active permission mode with atomic write and an automatic backup, and takes effect on the next provider round of the same turn).
+
+Persistent Instructions are host configuration, not guarded artifacts. `/rewind` and double-Esc do **not** restore an on-disk `VESICLE.md` / `VESICLE.<engine>.md` changed by `update_instructions`, even if the rewind removes that tool call from the conversation; the changed instruction remains active. After each successful mutation the tool result reports the single previous-state backup: project scope uses `.vesicle/instruction-backups/<scope>-<filename>.previous`, while user scope uses `instruction-backups/` in the config directory; a first creation has only the matching `.previous.json` recording that the target was absent. Recovery is currently manual: copy `.previous` back over the target, or delete a first-created target. A later mutation replaces this one backup.
+
 
 ## Path resolution order, in short
 

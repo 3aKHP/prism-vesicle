@@ -1,4 +1,4 @@
-import { Match, Switch } from "solid-js";
+import { For, Match, Switch } from "solid-js";
 import type { GateRequest } from "../../core/gate/types";
 import type { PermissionRequest } from "../../core/permissions";
 import type { ResponsiveTuiLayout } from "../layout";
@@ -18,6 +18,8 @@ import type { PendingQualityDecisionState } from "../decision-interaction";
 import { QualityDecisionPrompt } from "../QualityDecisionPrompt";
 import { palette } from "../theme";
 import type { OptionItem, RewindPickerState, SessionPickerState } from "../types";
+import { queuedInputText, type QueuedInput } from "../input-queue";
+import { truncateLine } from "../format";
 import { ArgumentMenu } from "../widgets/ArgumentMenu";
 import { CommandMenu } from "../widgets/CommandMenu";
 import { OptionPicker } from "../widgets/OptionPicker";
@@ -100,11 +102,17 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   inputCursor: number;
   inputWidth: number;
   busy: boolean;
+  queuedInputs: QueuedInput[];
   providerConfigReady: boolean;
 };
 
 export function BottomSurface(props: BottomSurfaceProps) {
   const mode = () => resolveBottomSurfaceMode(props);
+  const queuedRows = () => queuedInputPreviewRows(
+    props.queuedInputs,
+    props.layout.width - 4,
+    props.composerPopupOpen ? 0 : Math.min(4, Math.max(1, props.layout.bottomHeight - 3)),
+  );
   return (
     <Switch>
       <Match when={mode().kind === "yolo" && mode() as Extract<BottomSurfaceMode, { kind: "yolo" }> }>
@@ -241,15 +249,34 @@ export function BottomSurface(props: BottomSurfaceProps) {
               </box>
             </Match>
           </Switch>
+          <For each={queuedRows()}>
+            {(row, index) => <text content={row} fg={index() === 0 ? palette.brand : palette.textDim} wrapMode="none" />}
+          </For>
           <PromptComposer
             value={props.inputValue}
             cursor={props.inputCursor}
-            placeholder={props.busy ? "Request in flight..." : !props.providerConfigReady ? "Loading provider config..." : "Type prompt, Enter send, Ctrl+Enter newline, /help commands"}
+            placeholder={props.busy ? "Type input, Enter queue, Up edit last" : !props.providerConfigReady ? "Loading provider config..." : "Type prompt, Enter send, Ctrl+Enter newline, /help commands"}
             width={props.inputWidth}
-            maxLines={Math.max(1, props.layout.bottomHeight - (props.composerPopupOpen ? props.composerPopupMaxRows + 3 : 2))}
+            maxLines={Math.max(1, props.layout.bottomHeight - queuedRows().length - (props.composerPopupOpen ? props.composerPopupMaxRows + 3 : 2))}
           />
         </box>
       </Match>
     </Switch>
   );
+}
+
+export function queuedInputPreviewRows(items: QueuedInput[], width: number, maxRows: number): string[] {
+  if (items.length === 0 || maxRows <= 0) return [];
+  const rows = [truncateLine(`Queued ${items.length} · Up edits last`, width)];
+  const previewBudget = Math.max(0, maxRows - 1);
+  if (previewBudget === 0) return rows;
+  const visibleCount = Math.min(items.length, previewBudget);
+  for (let index = 0; index < visibleCount; index += 1) {
+    const item = items[index]!;
+    rows.push(truncateLine(`${index + 1}. ${queuedInputText(item).replace(/\s+/g, " ").trim()}`, width));
+  }
+  if (items.length > visibleCount) {
+    rows[rows.length - 1] = truncateLine(`... +${items.length - visibleCount + 1} more queued`, width);
+  }
+  return rows;
 }

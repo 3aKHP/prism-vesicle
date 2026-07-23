@@ -184,6 +184,7 @@ async function continuePermissionSequence(
     config: context.config,
     provider: context.provider,
     systemPrompt: context.systemPrompt,
+    enginePrompt: context.enginePrompt,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
     messages,
@@ -193,6 +194,7 @@ async function continuePermissionSequence(
     checkpoint: context.checkpoint,
     signal: options.signal,
     onEvent: options.onEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
     agentManager: context.agentManager,
     permission: context.permission,
     permissionBroker: options.permissionBroker,
@@ -206,6 +208,9 @@ async function continuePermissionSequence(
       targets: hydrateQualityTargets(state.qualityState.targets ?? []),
       experimentalJudge: state.qualityState.experimentalJudge,
     } : undefined,
+    takePendingUserInputs: options.takePendingUserInputs,
+    runToolBoundaryCommands: options.runToolBoundaryCommands,
+    injectPendingBeforeFirstProvider: true,
   });
 }
 
@@ -284,6 +289,7 @@ async function executeApprovedEntry(
         signal: options.signal,
         processManager: getProcessManager(context.rootDir),
         parentSessionId: context.session.sessionId,
+        activeEngine: context.profile.id,
         shellInterpreter: context.permission.shellInterpreter,
         processExecutionPlan: call.name === "shell_exec" ? entry.request.executionPlan : undefined,
         onProcessProgress: (processEvent) => options.onEvent?.({ type: "process_update", callId: call.id, processEvent }),

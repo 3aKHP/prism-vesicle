@@ -2,6 +2,8 @@ export const unsupportedChildToolNames = new Set([
   "request_confirmation",
   "request_engine_switch",
   "ask_user_question",
+  "read_instructions",
+  "update_instructions",
   "spawn_agent",
   "list_agents",
   "send_message",
