@@ -37,13 +37,14 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
     let conversation: VesicleMessage[] = [{ role: "user", content: "start" }];
     let messages: unknown[] = [];
     let agentCards: unknown[] = [];
+    const submittedPrompts: string[] = [];
     const pausedAgentDeliveries = new Set<string>();
     const inputQueue = createInputQueue();
     inputQueue.enqueueMessage({ value: "continue", elements: [], images: [] });
     const queuedWork = createQueuedWorkController({
       rootDir: root,
       inputQueue,
-      canDrain: () => false,
+      canDrain: () => !busy,
       agentCards: () => agentCards as any,
       setConversation: (value: VesicleMessage[] | ((current: VesicleMessage[]) => VesicleMessage[])) => {
         conversation = typeof value === "function" ? value(conversation) : value;
@@ -56,7 +57,7 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
       setStatus: (value) => typeof value === "function" ? value("") : value,
       recordActivity: () => undefined,
       recordPromptHistory: () => undefined,
-      submitPrompt: async () => undefined,
+      submitPrompt: async (value) => { submittedPrompts.push(value); },
       executeLocalCommand: async () => undefined,
       reportError: () => undefined,
     });
@@ -107,6 +108,9 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
 
     expect(conversation.map((message) => message.content)).toEqual(["start", packet]);
     expect(inputQueue.items()).toHaveLength(1);
+    expect(queuedWork.drainIfReady()).toBe(true);
+    expect(submittedPrompts).toEqual(["continue"]);
+    expect(inputQueue.items()).toEqual([]);
     expect(pausedAgentDeliveries.has("parent")).toBe(true);
   } finally {
     await rm(root, { recursive: true, force: true });
