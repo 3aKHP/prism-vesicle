@@ -331,6 +331,61 @@ Prompts are runtime assets, not hardcoded source literals.
 - Session roots record a content-only fingerprint of the effective merged asset tree. Resume and active continuation warn when that fingerprint changes, while keeping prompt text, user content, absolute paths, and secrets out of drift metadata.
 - Sparse overrides are the recommended editing contract. Full snapshots remain available for compatibility but can mask future packaged updates. Version 1 intentionally has no deletion tombstones.
 
+## Persistent Instructions
+
+Persistent Instructions are user-authored Markdown that customizes an Engine's
+workflow and survives new sessions. The host loads them into the system prompt
+automatically; the user never has to ask the model to write a spec to a file
+and remind it to read it next session. This is model context, not automatic
+memory: the host never infers, summarizes, or writes instructions without a
+model tool call (deferred) or a direct user edit.
+
+- File names are Vesicle-native and aligned across both scopes: `VESICLE.md`
+  (general, every Engine) and `VESICLE.<engine>.md` (Engine-specific override),
+  where `<engine>` is one of the `engineIds`. They are the Vesicle analog of a
+  coding agent's `CLAUDE.md`/`AGENTS.md`; those host names must not appear in
+  instruction content or any Prism prompt.
+- Project scope lives at the launch project root and travels with the project.
+  User scope lives beside `providers.yaml` (resolved through `userConfigDirectory`),
+  so it applies across every project root. Both are outside the guarded `assets/`
+  namespace and the writable artifact roots; instruction resolution must not be
+  routed through `core/tools/file/path-policy.ts` or the asset resolver, and must
+  not perturb the Harness asset fingerprint.
+- Resolution is **replacement within a scope, composition across scopes**. Within
+  one scope, an Engine-specific target fully replaces that scope's general target;
+  file existence — not nonempty content — controls replacement, so an empty Engine
+  file is an intentional empty override that suppresses general fallback. If an
+  Engine-specific file is present but invalid, fallback to the general file is
+  suppressed for that scope. Across scopes, the selected user file is followed by
+  the selected project file; project content has higher precedence on a direct
+  conflict. Neither can override the Engine contract or host runtime.
+- Instructions are appended after the byte-identical Engine prompt as ordered host
+  context, never as a second system authority. A fixed host preamble frames each
+  block with its scope, target, precedence, and the capability boundary. The
+  Engine prompt stays first so provider prefix caching keeps the stable Harness
+  prefix; Stage character context follows Persistent Instructions. Every
+  system-prompt construction site — turn bootstrap, continuation context, Stage
+  bootstrap, `/compact`, and the `/btw` snapshot resolver — composes through one
+  primitive, while continuations, the provider round, side-question projection,
+  and fork children inherit the already-composed string.
+- Persistent Instructions are live user configuration, not session identity.
+  Resolve the active Engine selection before each top-level turn, session resume,
+  and confirmed Engine switch, and keep one resolved value stable through that
+  turn's provider/tool continuations. Editing an instruction file is a
+  configuration update that takes effect at the next resolution boundary, not
+  forbidden session drift; resume always composes from current valid disk state.
+- Validation is fail-soft per scope: decode UTF-8 with fatal error handling
+  (strip one leading BOM), require a regular file, reject a project target that
+  is a symbolic link and skip a user-scope link, and bound the combined selected
+  content to 32 KiB. An invalid, linked, or oversized scope is skipped with a
+  diagnostic while the rest of the turn continues; content is never truncated and
+  the turn is never blocked by optional instruction state. Never log instruction
+  contents; diagnostics and session audit use target, bytes, and hash only.
+- Targets are identified by a fixed enum `{ scope, engine }` and never by an
+  arbitrary path. Instruction text cannot widen the effective tool surface,
+  permission mode, path roots, stop gates, validators, Harness identity, or
+  provider configuration; the tool runtime enforces capabilities independently.
+
 ## Managed Harness Packs
 
 - Neural Narratology Harness Packs are independently versioned runtime products. Vesicle must consume a released pack or explicit local pack directory; runtime code and tests must not read a sibling checkout, follow cross-repository symlinks, or embed local source paths.

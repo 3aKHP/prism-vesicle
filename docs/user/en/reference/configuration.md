@@ -25,6 +25,7 @@ Files in that directory:
 | `permissions.yaml` | No | Tool-approval default and the `shell_exec` switch (see [permissions](./permissions-and-security.md)) |
 | `quality.yaml` | No | Experimental Semantic Judge |
 | `assets/` | No | User-level asset overrides |
+| `VESICLE.md` / `VESICLE.<engine>.md` | No | Persistent Instructions (user-level, applies across all projects; see below) |
 
 > Do not rely on a project-root `.env`. If an old one remains, move its values into the user directory above and remove it.
 
@@ -96,6 +97,21 @@ MCP_CLUSTER_TOKEN=
 ## mcp.yaml (optional)
 
 Start from [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml). Each server can set `transport` (streamable-http), `url`, `timeoutSeconds`, `toolPrefix`, `headers` (supports `${ENV_VAR}` expansion from `.env`), `includeTools`/`excludeTools` filters, and `enabledEngines` (which engines can use it). A present `mcp.yaml` defaults to enabled; secrets go in `.env`.
+
+## Persistent Instructions (optional)
+
+If you keep re-stating the same sub-workflow or specification under an engine, write it into a Persistent Instructions file — the host loads it into the system prompt automatically at the start of every session, so you no longer have to ask the model to write a spec to a file and remind it to read it next session.
+
+Two scopes, same file names: `VESICLE.md` (general, every engine) and `VESICLE.<engine>.md` (engine-specific override, where `<engine>` is `etl`, `runtime`, `stage`, etc.).
+
+- **Project scope**: at the project root (for example `VESICLE.md`, `VESICLE.runtime.md`); travels with the project and may be committed.
+- **User scope**: in the config directory above (beside `providers.yaml`); **applies across every project root**, so you do not have to copy files between working folders.
+
+Resolution: **within one scope an engine-specific file replaces the general file; across scopes the user file is followed by the project file, and the project file wins on a direct conflict.** A present engine-specific file always replaces the general one (an empty file is an explicit empty override that suppresses fallback to the general file). Instructions may only customize behavior within the active engine's workflow — they **cannot** add tools, permissions, gates, validators, or filesystem authority; capability boundaries stay host-enforced.
+
+Instructions are appended after the engine prompt as host context (the engine contract remains the single system authority) and are re-resolved from current disk on every top-level turn, session resume, and engine switch. An invalid, linked, or oversized instruction file is skipped with a warning rather than blocking the turn; the combined user + project content is capped at 32 KiB. Inspect the active selection with `/instructions`, or run `vesicle prompt shape --engine <id>` from the command line.
+
+> Instruction files are authored with a text editor today; model-visible read/write tools (`read_instructions` / `update_instructions`) are deferred to a later release.
 
 ## Path resolution order, in short
 
