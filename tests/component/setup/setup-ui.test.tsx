@@ -14,6 +14,8 @@ import {
   setupReviewBackIndex,
   setupUsesCompactHeight,
 } from "../../../src/setup/app";
+import { createInitialSetupState, type SetupState } from "../../../src/setup/setup-state";
+import { SetupView } from "../../../src/setup/setup-views";
 
 describe("guided Setup UI", () => {
   test("renders a friendly no-YAML welcome screen", async () => {
@@ -100,6 +102,29 @@ describe("guided Setup UI", () => {
     expect(frame).toContain("Skip the one-time launch");
     expect(frame).toContain("Back");
     expect(frame.split("\n")).toHaveLength(25);
+  });
+
+  test("renders input and bounded multi-select page families", async () => {
+    const models = Array.from({ length: 12 }, (_, index) => `model-${String(index).padStart(2, "0")}`);
+    const inputState: SetupState = { ...createInitialSetupState(), step: "base-url" };
+    const input = await testRender(() => <SetupView state={inputState} width={80} height={24} />, { width: 80, height: 24 });
+    await input.flush();
+    expect(input.captureCharFrame()).toContain("OpenAI-compatible Base URL");
+    input.renderer.destroy();
+
+    const modelState: SetupState = {
+      ...createInitialSetupState(),
+      step: "models",
+      models,
+      selectedModels: [models[9]!],
+      selectedIndex: 9,
+    };
+    const multi = await testRender(() => <SetupView state={modelState} width={80} height={24} />, { width: 80, height: 24 });
+    await multi.flush();
+    const frame = multi.captureCharFrame();
+    multi.renderer.destroy();
+    expect(frame).toContain("model-09");
+    expect(frame).not.toContain("model-00");
   });
 
   test("offers explicit Back actions and resets review navigation to a valid project choice", () => {
