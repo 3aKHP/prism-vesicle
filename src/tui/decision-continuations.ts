@@ -19,7 +19,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
       return;
     }
     options.setBusy(true);
-    options.setQueuedInputReady(false);
+    options.queuedWork.block();
     options.setPendingQualityDecision(null);
     options.setStatus(resolution === "retry" ? "starting user-authorized quality revision" : `recording quality decision: ${resolution}`);
     options.recordActivity({ kind: "validation", text: `quality decision: ${resolution}` });
@@ -44,14 +44,13 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         onProviderContextSnapshot: options.onProviderContextSnapshot,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
-        takePendingUserInputs: options.takePendingUserInputs,
-        runToolBoundaryCommands: options.runToolBoundaryCommands,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       });
       if (resolution === "retry") {
         const outcome = await options.runCancellable((signal) => execute(signal));
         if (outcome.kind === "interrupted") {
-          if (options.queuedSendAfterInterrupt()) await reconcileInterruptedForQueuedInput(pending.sessionId);
-          else await reconcileQualityDecision(pending);
+          if (!await options.queuedWork.handleInterruption(pending.sessionId)) await reconcileQualityDecision(pending);
           options.handleInterruptedTurn();
         } else if (outcome.value.kind === "quality_resolved") {
           await applyQualityResolution(outcome.value.sessionId);
@@ -74,7 +73,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
   async function applyQualityResolution(sessionId: string): Promise<void> {
     await options.refreshQualityWarnings(sessionId);
     await options.resumeQualitySession(sessionId);
-    options.setQueuedInputReady(true);
+    options.queuedWork.release();
   }
 
   async function reconcileQualityDecision(pending: PendingQualityDecisionState): Promise<void> {
@@ -93,7 +92,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
     const pending = options.pendingPermission();
     if (!pending || options.busy()) return;
     options.setBusy(true);
-    options.setQueuedInputReady(false);
+    options.queuedWork.block();
     options.setStatus(`resolving permission: ${resolution.decision}`);
     options.recordActivity({ kind: "tool", text: `${resolution.decision} ${pending.request.toolName}` });
     options.setPendingPermission(null);
@@ -117,12 +116,11 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         onProviderContextSnapshot: options.onProviderContextSnapshot,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
-        takePendingUserInputs: options.takePendingUserInputs,
-        runToolBoundaryCommands: options.runToolBoundaryCommands,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
-        if (options.queuedSendAfterInterrupt()) await reconcileInterruptedForQueuedInput(pending.sessionId);
-        else await reconcilePermissionAfterContinuationFailure(pending);
+        if (!await options.queuedWork.handleInterruption(pending.sessionId)) await reconcilePermissionAfterContinuationFailure(pending);
         options.handleInterruptedTurn();
       } else options.handleResult(outcome.value);
     } catch (error) {
@@ -178,12 +176,11 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         onProviderContextSnapshot: options.onProviderContextSnapshot,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
-        takePendingUserInputs: options.takePendingUserInputs,
-        runToolBoundaryCommands: options.runToolBoundaryCommands,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
-        if (options.queuedSendAfterInterrupt()) await reconcileInterruptedForQueuedInput(gate.sessionId);
-        else options.setPendingGate(gate);
+        if (!await options.queuedWork.handleInterruption(gate.sessionId)) options.setPendingGate(gate);
         options.handleInterruptedTurn();
       } else options.handleResult(outcome.value);
     } catch (error) {
@@ -196,7 +193,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
 
   function beginGateResolution(gateName: string, resolution: GateResolution): void {
     options.setBusy(true);
-    options.setQueuedInputReady(false);
+    options.queuedWork.block();
     options.setStatus(`resolving gate: ${resolution.decision}`);
     options.recordActivity({ kind: "gate", text: `resolving ${gateName} as ${resolution.decision}` });
     options.setPendingGate(null);
@@ -235,12 +232,11 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         onProviderContextSnapshot: options.onProviderContextSnapshot,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
-        takePendingUserInputs: options.takePendingUserInputs,
-        runToolBoundaryCommands: options.runToolBoundaryCommands,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
-        if (options.queuedSendAfterInterrupt()) await reconcileInterruptedForQueuedInput(pending.sessionId);
-        else options.setPendingEngineSwitch(pending);
+        if (!await options.queuedWork.handleInterruption(pending.sessionId)) options.setPendingEngineSwitch(pending);
         options.handleInterruptedTurn();
         return;
       }
@@ -258,7 +254,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
 
   function beginEngineSwitchResolution(pending: PendingEngineSwitchState, resolution: GateResolution, summarize: boolean): void {
     options.setBusy(true);
-    options.setQueuedInputReady(false);
+    options.queuedWork.block();
     options.setStatus(summarize ? "resolving engine switch with summary" : `resolving engine switch: ${resolution.decision}`);
     options.recordActivity({ kind: "gate", text: `resolving engine switch to ${pending.request.targetEngine} as ${summarize ? "confirm-summary" : resolution.decision}` });
     options.setPendingEngineSwitch(null);
@@ -284,7 +280,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
     } else {
       options.setMessages((previous) => [...previous, { role: "system", content: `Engine switched to ${result.engine}. Future turns will use that profile.` }]);
     }
-    options.setQueuedInputReady(true);
+    options.queuedWork.release();
   }
 
   async function submitUserQuestionAnswer(selectedIndex: number): Promise<void> {
@@ -334,7 +330,7 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
     let recoveryState: "restored" | "resolved" | "blocked" = "resolved";
     let recoveryStatus: string | undefined;
     options.setBusy(true);
-    options.setQueuedInputReady(false);
+    options.queuedWork.block();
     options.setStatus(`answering question: ${pending.question.header}`);
     options.recordActivity({ kind: "gate", text: `answering question ${pending.question.header}: ${answer.kind === "freeform" ? "Other" : answer.label}` });
     options.setPendingUserQuestion(null);
@@ -359,13 +355,11 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         onProviderContextSnapshot: options.onProviderContextSnapshot,
         agentManager: options.agentManager(),
         permissionBroker: options.permissionBroker,
-        takePendingUserInputs: options.takePendingUserInputs,
-        runToolBoundaryCommands: options.runToolBoundaryCommands,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
-        if (options.queuedSendAfterInterrupt()) {
-          await reconcileInterruptedForQueuedInput(pending.sessionId);
-        } else {
+        if (!await options.queuedWork.handleInterruption(pending.sessionId)) {
           ({ state: recoveryState, status: recoveryStatus } = await reconcileUserQuestionAfterContinuationFailure(pending, selectedIndex));
         }
         options.handleInterruptedTurn();
@@ -417,12 +411,6 @@ export function createDecisionContinuations(options: DecisionContinuationOptions
         status: "Unable to verify Harness delegation recovery; restart Vesicle and resume this session",
       };
     }
-  }
-
-  async function reconcileInterruptedForQueuedInput(sessionId: string): Promise<void> {
-    const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: true });
-    options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
-    options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
   }
 
   return {

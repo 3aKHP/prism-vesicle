@@ -273,12 +273,8 @@ export function createComposerController(options: ComposerControllerOptions) {
     queuedInputs: options.inputQueue.items,
     recordHistory,
     clearQueuedInputs: options.inputQueue.clear,
-    restoreNextQueuedInput: options.inputQueue.restoreNext,
     setHistoryIndex,
     setInputImages,
     setPromptHistory,
-    takeQueuedMessages: options.inputQueue.takeMessages,
-    takeNextQueuedInput: options.inputQueue.takeNext,
-    takeToolBoundaryCommands: options.inputQueue.takeToolBoundaryCommands,
   };
 }
