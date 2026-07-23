@@ -7,6 +7,8 @@ import type { AgentInboxEntry } from "../../../src/core/agents/types";
 import { createSessionStore } from "../../../src/core/session/store";
 import type { VesicleMessage } from "../../../src/providers/shared/types";
 import { createTurnController } from "../../../src/tui/turn-controller";
+import { createInputQueue } from "../../../src/tui/input-queue";
+import { createQueuedWorkController } from "../../../src/tui/queued-work-controller";
 
 test("interrupted SubAgent delivery rebuilds durable conversation before releasing queued input", async () => {
   const root = await mkdtemp(join(tmpdir(), "vesicle-tui-agent-delivery-"));
@@ -32,12 +34,32 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
       state: "delivered",
     };
     let busy = false;
-    let queuedReady = false;
-    let queuedAfterInterrupt = false;
     let conversation: VesicleMessage[] = [{ role: "user", content: "start" }];
     let messages: unknown[] = [];
     let agentCards: unknown[] = [];
     const pausedAgentDeliveries = new Set<string>();
+    const inputQueue = createInputQueue();
+    inputQueue.enqueueMessage({ value: "continue", elements: [], images: [] });
+    const queuedWork = createQueuedWorkController({
+      rootDir: root,
+      inputQueue,
+      canDrain: () => false,
+      agentCards: () => agentCards as any,
+      setConversation: (value: VesicleMessage[] | ((current: VesicleMessage[]) => VesicleMessage[])) => {
+        conversation = typeof value === "function" ? value(conversation) : value;
+        return conversation;
+      },
+      setMessages: (value: any) => {
+        messages = typeof value === "function" ? value(messages) : value;
+        return messages;
+      },
+      setStatus: (value) => typeof value === "function" ? value("") : value,
+      recordActivity: () => undefined,
+      recordPromptHistory: () => undefined,
+      submitPrompt: async () => undefined,
+      executeLocalCommand: async () => undefined,
+      reportError: () => undefined,
+    });
     const controller = createTurnController({
       rootDir: root,
       busy: () => busy,
@@ -45,15 +67,7 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
         busy = typeof value === "function" ? value(busy) : value;
         return busy;
       },
-      setQueuedInputReady: (value: boolean | ((current: boolean) => boolean)) => {
-        queuedReady = typeof value === "function" ? value(queuedReady) : value;
-        return queuedReady;
-      },
-      queuedSendAfterInterrupt: () => queuedAfterInterrupt,
-      setQueuedSendAfterInterrupt: (value: boolean | ((current: boolean) => boolean)) => {
-        queuedAfterInterrupt = typeof value === "function" ? value(queuedAfterInterrupt) : value;
-        return queuedAfterInterrupt;
-      },
+      queuedWork,
       sessionId: () => "parent",
       conversation: () => conversation,
       setConversation: (value: VesicleMessage[] | ((current: VesicleMessage[]) => VesicleMessage[])) => {
@@ -78,7 +92,7 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
       pendingChildPermission: () => null,
       pausedAgentDeliveries,
       runCancellable: async () => {
-        queuedAfterInterrupt = true;
+        queuedWork.markInterruptRequested();
         return { kind: "interrupted" as const };
       },
       beginUsageTurn: () => undefined,
@@ -92,8 +106,7 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
     await expect(controller.deliverAgentResults("parent", [entry], packet)).rejects.toBeInstanceOf(AgentDeliveryDeferred);
 
     expect(conversation.map((message) => message.content)).toEqual(["start", packet]);
-    expect(queuedReady).toBe(true);
-    expect(queuedAfterInterrupt).toBe(false);
+    expect(inputQueue.items()).toHaveLength(1);
     expect(pausedAgentDeliveries.has("parent")).toBe(true);
   } finally {
     await rm(root, { recursive: true, force: true });

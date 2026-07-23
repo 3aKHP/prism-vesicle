@@ -59,6 +59,7 @@ import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
 import { createSideQuestionController } from "./side-question-controller";
+import { createQueuedWorkController } from "./queued-work-controller";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { copyTextToClipboard } from "./clipboard";
 
@@ -130,8 +131,6 @@ export function App(props: AppProps = {}) {
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
   const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
-  const [queuedInputReady, setQueuedInputReady] = createSignal(false);
-  const [queuedSendAfterInterrupt, setQueuedSendAfterInterrupt] = createSignal(false);
   const inputQueue = createInputQueue();
   const [restoringSession, setRestoringSession] = createSignal(false);
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
@@ -357,7 +356,7 @@ export function App(props: AppProps = {}) {
     submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
     abortTurn: () => {
       const aborted = turnCancellation.abort();
-      if (aborted) setQueuedSendAfterInterrupt(inputQueue.items().length > 0);
+      if (aborted) queuedWork.markInterruptRequested();
       return aborted;
     },
     openRewind: rewindController.open,
@@ -389,13 +388,9 @@ export function App(props: AppProps = {}) {
     queuedInputs,
     recordHistory: recordPromptHistory,
     clearQueuedInputs,
-    restoreNextQueuedInput,
     setHistoryIndex,
     setInputImages,
     setPromptHistory,
-    takeQueuedMessages,
-    takeNextQueuedInput,
-    takeToolBoundaryCommands,
   } = composerController;
   const qualityPickerController = createQualityPickerController({
     providerRegistry,
@@ -436,14 +431,38 @@ export function App(props: AppProps = {}) {
     setStatus,
     copyText: (text) => copyTextToClipboard(renderer, text),
   });
+  const queuedWork = createQueuedWorkController({
+    rootDir: process.cwd(),
+    inputQueue,
+    canDrain: () => !restoringSession()
+      && !busy()
+      && !pendingGate()
+      && !pendingEngineSwitch()
+      && !pendingUserQuestion()
+      && !pendingPermission()
+      && !pendingQualityDecision()
+      && !pendingChildPermission()
+      && !rewindPicker()
+      && !sessionPicker()
+      && !modelPicker()
+      && !qualityPicker()
+      && !yoloConfirmStage(),
+    agentCards,
+    setConversation,
+    setMessages,
+    setStatus,
+    recordActivity,
+    recordPromptHistory,
+    submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
+    executeLocalCommand: (raw) => executeCommand(raw, commandContext, builtinCommands),
+    reportError: (error) => turnController.reportError(error),
+  });
   turnController = createTurnController({
     rootDir: process.cwd(),
     dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
     busy,
     setBusy,
-    setQueuedInputReady,
-    queuedSendAfterInterrupt,
-    setQueuedSendAfterInterrupt,
+    queuedWork,
     providerConfigReady,
     setProviderConfigReady,
     loadProviderConfig: loadProviderConfigOnce,
@@ -522,9 +541,6 @@ export function App(props: AppProps = {}) {
     setInputImages,
     setHistoryIndex,
     setPromptHistory,
-    takeQueuedMessages,
-    takeToolBoundaryCommands,
-    restoreNextQueuedInput,
     applyConversationRewind: (result) => sessionActions.applyConversationRewind(result),
   });
   const { reportError } = turnController;
@@ -659,40 +675,6 @@ export function App(props: AppProps = {}) {
     handleSessionPickerKey,
     resetRewindState,
   } = sessionActions;
-  createEffect(() => {
-    const ready = queuedInputReady()
-      && !restoringSession()
-      && !busy()
-      && !pendingGate()
-      && !pendingEngineSwitch()
-      && !pendingUserQuestion()
-      && !pendingPermission()
-      && !pendingQualityDecision()
-      && !pendingChildPermission()
-      && !rewindPicker()
-      && !sessionPicker()
-      && !modelPicker()
-      && !qualityPicker()
-      && !yoloConfirmStage();
-    if (!ready || queuedInputs().length === 0) return;
-    const next = takeNextQueuedInput();
-    if (!next) return;
-    setQueuedInputReady(false);
-    if (next.kind === "message") {
-      void turnController.submitPrompt(next.value, next.images, next.elements).catch((error) => {
-        restoreNextQueuedInput(next);
-        reportError(error);
-      });
-      return;
-    }
-    void executeCommand(next.raw, commandContext, builtinCommands).then(
-      () => setQueuedInputReady(true),
-      (error) => {
-        reportError(error);
-        setQueuedInputReady(true);
-      },
-    );
-  });
   createEffect(() => {
     const id = sessionId();
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();

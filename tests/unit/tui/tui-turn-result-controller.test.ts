@@ -108,10 +108,10 @@ function createHarness(lastDisplayedContent: string | null = null) {
     setSessionId: noop,
     setSessionPath: noop,
     setSessionPicker: noop,
-    setQueuedInputReady: (value) => {
-      queuedInputReady = typeof value === "function" ? value(queuedInputReady) : value;
-      return queuedInputReady;
-    },
+    queuedWork: {
+      block: () => { queuedInputReady = false; },
+      release: () => { queuedInputReady = true; },
+    } as any,
     setStatus: (value) => {
       status = typeof value === "function" ? value(status) : value;
       return status;

@@ -14,8 +14,7 @@ import type { PromptHistoryEntry } from "./composer-history";
 import type { GateFocusTarget } from "./GatePrompt";
 import type { PendingEngineSwitchState, PendingGateState, PendingPermissionState, PendingQualityDecisionState, PendingUserQuestionState } from "./decision-interaction";
 import type { ActivityEntry, AgentCardState, Message, SessionPickerState } from "./types";
-import type { QueuedCommand, QueuedInput, QueuedUserMessage } from "./input-queue";
-import type { PendingUserInput } from "../core/agent-loop/types";
+import type { QueuedWorkController } from "./queued-work-controller";
 
 type GenerationSelection = { reasoningTier: ReasoningTier } | undefined;
 
@@ -24,9 +23,7 @@ export type TurnControllerOptions = {
   dangerouslySkipPermissions: boolean;
   busy: Accessor<boolean>;
   setBusy: Setter<boolean>;
-  setQueuedInputReady: Setter<boolean>;
-  queuedSendAfterInterrupt: Accessor<boolean>;
-  setQueuedSendAfterInterrupt: Setter<boolean>;
+  queuedWork: QueuedWorkController;
   providerConfigReady: Accessor<boolean>;
   setProviderConfigReady: Setter<boolean>;
   loadProviderConfig: () => Promise<void>;
@@ -101,9 +98,6 @@ export type TurnControllerOptions = {
   setInputImages: Setter<VesicleImageAttachment[]>;
   setHistoryIndex: Setter<number | null>;
   setPromptHistory: Setter<PromptHistoryEntry[]>;
-  takeQueuedMessages: () => QueuedUserMessage[];
-  takeToolBoundaryCommands: () => QueuedCommand[];
-  restoreNextQueuedInput: (item: QueuedInput) => void;
   applyConversationRewind: (result: ConversationRewind) => Promise<void>;
 };
 
@@ -131,10 +125,9 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
   | "recordActivity"
   | "rootDir"
   | "runCancellable"
-  | "queuedSendAfterInterrupt"
+  | "queuedWork"
   | "setActiveEngine"
   | "setBusy"
-  | "setQueuedInputReady"
   | "setConversation"
   | "setGateFeedbackMode"
   | "setMessages"
@@ -161,7 +154,5 @@ export type DecisionContinuationOptions = Pick<TurnControllerOptions,
     shellInterpreter: ShellInterpreterPreference;
   };
   reportError: (error: unknown) => void;
-  takePendingUserInputs: () => PendingUserInput[];
-  runToolBoundaryCommands: () => Promise<void>;
   resolveQualityDecision?: typeof import("../core/agent-loop/run").resolveQualityDecision;
 };
