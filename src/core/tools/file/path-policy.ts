@@ -1,5 +1,9 @@
 import { lstat, realpath } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
+import { writableProjectRoots } from "../../artifacts/roots";
+
+export const readableFileRoots = ["assets", ...writableProjectRoots] as const;
+export const writableFileRoots = [...writableProjectRoots] as const;
 
 /** The single project-relative path policy for model-visible file tools. */
 export async function resolveAllowedPath(rootDir: string, requestedPath: string, roots: readonly string[]): Promise<string> {
