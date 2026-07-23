@@ -82,6 +82,11 @@ export async function executeReadInstructionsTool(call: ToolCall, options: Instr
   const target = { scope: args.scope, engine: args.engine };
   const load = await loadInstructionTarget(target, options.rootDir, env);
   const logicalName = instructionLogicalName(target.engine);
+
+  if (load.kind === "invalid") {
+    return failure(call, `${logicalName} [${target.scope}] exists but is not a valid instruction file (${load.diagnostic.kind}); it cannot be read or updated until fixed.`);
+  }
+
   const selectedForActiveEngine = await isSelectedForActiveEngine(target, options, env);
 
   if (load.kind === "file") {

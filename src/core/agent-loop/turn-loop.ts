@@ -119,6 +119,12 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
 
   if (args.injectPendingBeforeFirstProvider) await processInputBoundary(args, runtime);
 
+  // Recompose from the frozen instruction snapshot before the first round. This
+  // matters for a MANUAL/INERTIA resume: the approved update_instructions ran
+  // (refreshing the snapshot) AFTER the continuation context was built, so the
+  // first provider round of the resumed loop must pick up the new instructions.
+  refreshLiveSystemPrompt(args);
+
   for (let iteration = 0; iteration < maxToolIterations; iteration++) {
     const round = await advanceRound(args, runtime, iteration);
     response = round.response;

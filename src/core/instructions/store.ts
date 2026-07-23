@@ -114,8 +114,10 @@ export async function updateInstructionTarget(
   // mutation if backup creation fails guarantees a restorable prior version.
   if (currentFile) {
     await backupPreviousState(target, path, currentFile.sha256, currentFile.bytes, rootDir, env);
-  } else if (target.scope === "user") {
-    await mkdir(userConfigDirectory(env), { recursive: true });
+  } else {
+    // First creation: record that the prior state was absent so a future restore
+    // could undo the create. Also ensures the backup directory exists.
+    await recordAbsentPrior(target, rootDir, env);
   }
 
   if (action === "write") {
@@ -228,6 +230,15 @@ async function backupPreviousState(
   // once its matching payload is in place.
   await atomicWrite(payloadPath, content, target.scope);
   await atomicWrite(metaPath, JSON.stringify({ target, priorState, sha256, bytes }), target.scope);
+}
+
+async function recordAbsentPrior(target: InstructionTarget, rootDir: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const backupDir = instructionBackupDir(target.scope, rootDir, env);
+  await mkdir(backupDir, { recursive: true });
+  const metaPath = join(backupDir, `${backupPayloadName(target)}.previous.json`);
+  // No payload for an absent prior; the metadata records that the target did not
+  // exist, so a future restore could undo the create by deleting the file.
+  await atomicWrite(metaPath, JSON.stringify({ target, priorState: "absent", sha256: null, bytes: 0 }), target.scope);
 }
 
 function instructionBackupDir(scope: InstructionTarget["scope"], rootDir: string, env: NodeJS.ProcessEnv): string {

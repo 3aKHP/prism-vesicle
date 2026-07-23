@@ -96,6 +96,15 @@ describe("read_instructions", () => {
       expect(override.content).toContain("selectedForActiveEngine=true");
     });
   });
+
+  test("reports an invalid target as a failure, not as absent", async () => {
+    await withRoots(async (root) => {
+      await writeFile(join(root.project, "VESICLE.md"), Buffer.from([0xff, 0xfe, 0x00]));
+      const result = await executeReadInstructionsTool(call("read_instructions", { scope: "project", engine: "all" }), { rootDir: root.project, env: root.env });
+      expect(result.ok).toBe(false);
+      expect(result.content).toContain("not a valid instruction file");
+    });
+  });
 });
 
 describe("update_instructions write/delete", () => {
@@ -236,6 +245,16 @@ describe("update_instructions write/delete", () => {
       const result = await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "all", action: "write", content: "x", summary: "via link" }), { rootDir: root.project, env: root.env });
       expect(result.ok).toBe(false);
       expect(result.content).toContain("symbolic link");
+    });
+  });
+
+  test("records an absent prior-state backup on first create", async () => {
+    await withRoots(async (root) => {
+      await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "all", action: "write", content: "first", summary: "create" }), { rootDir: root.project, env: root.env });
+      const metaPath = join(root.project, ".vesicle", "instruction-backups", "project-VESICLE.md.previous.json");
+      expect(existsSync(metaPath)).toBe(true);
+      const meta = JSON.parse(await readFile(metaPath, "utf8"));
+      expect(meta.priorState).toBe("absent");
     });
   });
 });
