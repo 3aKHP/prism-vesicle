@@ -158,7 +158,7 @@ describe("TUI reactivity static guard", () => {
   });
 
   test("permission errors consult durable session state before restoring the modal", async () => {
-    const source = await readFile(join(import.meta.dir, "..", "..", "..", "src", "tui", "decision-continuations.ts"), "utf8");
+    const source = await readFile(join(import.meta.dir, "..", "..", "..", "src", "tui", "permission-continuation.ts"), "utf8");
     const handler = source.match(/async function submitPermissionResolution[\s\S]*?function submitChildPermissionResolution/)?.[0] ?? "";
     expect(handler.match(/reconcilePermissionAfterContinuationFailure\(pending\)/g)).toHaveLength(2);
     expect(handler).toContain("loadSessionSnapshot(options.rootDir, pending.sessionId");
