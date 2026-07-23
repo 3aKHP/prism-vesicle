@@ -19,6 +19,7 @@ const observeTools = new Set([
   "list_agents",
   "wait_agent",
   "shell_output",
+  "read_instructions",
 ]);
 
 const interactionTools = new Set([

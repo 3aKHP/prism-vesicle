@@ -12,7 +12,7 @@ import { loadContinuationContext } from "./continuation-context";
 import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { AgentManager } from "../agents/manager";
-import { clearFrozenInstructionBlocks } from "./instruction-context";
+import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
 
 type ResolveEngineSwitchOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];
@@ -76,6 +76,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     config: continuation.config,
     provider: continuation.provider,
     systemPrompt: continuation.systemPrompt,
+    enginePrompt: continuation.enginePrompt,
     tools: continuation.toolSurface.definitions,
     mcpRegistry: continuation.toolSurface.mcp,
     messages,

@@ -62,6 +62,7 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     config: context.config,
     provider: context.provider,
     systemPrompt: context.systemPrompt,
+    enginePrompt: context.enginePrompt,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
     messages,

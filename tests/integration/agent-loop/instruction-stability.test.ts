@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { resolveUserQuestion, runPrompt } from "../../../src/core/agent-loop/run";
-import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../../../src/core/agent-loop/instruction-context";
+import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../../../src/core/instructions/instruction-context";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);

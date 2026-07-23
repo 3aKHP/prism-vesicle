@@ -8,7 +8,7 @@ import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
 import { composeInstructionBlocks, composeSystemPromptWithInstructions } from "../instructions";
-import { freezeInstructionBlocks, readFrozenInstructionBlocks } from "./instruction-context";
+import { freezeInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
 import type { AssetFingerprint } from "../runtime/assets";
 import type { AssetResolver } from "../runtime/assets";
@@ -94,6 +94,7 @@ export async function loadContinuationContext(
     provider,
     profile,
     systemPrompt,
+    enginePrompt: engineAssets.systemPrompt,
     toolSurface,
     session,
     harness,

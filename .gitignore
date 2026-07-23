@@ -16,6 +16,10 @@ coverage/
 .env.*
 !.env.example
 
+# Persistent Instructions: local dogfood VESICLE.md at the repo root.
+# Root-anchored so legitimate examples/fixtures under subdirs are unaffected.
+/VESICLE.md
+
 # Runtime state
 .vesicle/
 logs/

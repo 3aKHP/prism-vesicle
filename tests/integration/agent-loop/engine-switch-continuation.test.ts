@@ -1,7 +1,7 @@
 import { readFile, } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveEngineSwitch, runPrompt } from "../../../src/core/agent-loop/run";
-import { readFrozenInstructionBlocks } from "../../../src/core/agent-loop/instruction-context";
+import { readFrozenInstructionBlocks } from "../../../src/core/instructions/instruction-context";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);

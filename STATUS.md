@@ -21,6 +21,7 @@ Current public release: **1.0.0-alpha.3**. The `State` column tracks the public 
 | TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | unreleased |
 | Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | unreleased |
 | Instructions | `/init [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); backs up an existing file before replacing | unreleased |
+| Instructions | `read_instructions` / `update_instructions` tools (non-Stage Engines): enum-target read/write/delete of Persistent Instructions with optimistic concurrency, atomic write, previous-state backup, and 32 KiB budget validation | unreleased |
 | TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
@@ -218,7 +219,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Persistent Instructions
 
 - Persistent Instructions are model context, not capability enforcement: they can customize workflow, tone, ordering, artifacts, and user-defined specs within the active Engine, but cannot change the tool surface, permission mode, path roots, stop gates, validators, Harness identity, or provider configuration. A conflict with the Engine contract is ignored in favor of the Engine contract.
-- Instruction files are user-authored with a text editor today. Model-visible `read_instructions` / `update_instructions` tools (with Tool Permission Runtime integration, optimistic concurrency, atomic write, and previous-state backup) and per-turn change-detection audit records are deferred to a follow-up; the host already records the session-start instruction resolution in the system-record metadata and re-resolves current disk state on every top-level turn, resume, and Engine switch.
+- Instruction files are user-authored with a text editor or via the `read_instructions` / `update_instructions` model tools (non-Stage Engines). `update_instructions` is a `mutate` tool routed through the Tool Permission Runtime (MANUAL/INERTIA pause via the standard permission request; MOMENTUM/YOLO execute); it uses a fixed `{ scope, engine }` enum target, atomic write, optimistic concurrency (`ifMatchSha256`), a single previous-state backup, and a 32 KiB budget check across affected Engines. A successful update refreshes the in-turn frozen snapshot so it applies on the next provider round. A custom unified-diff permission preview and per-turn change-detection audit records remain deferred.
 - Instruction target files are resolved by a fixed enum `{ scope, engine }` and never by an arbitrary path. They live outside the guarded `assets/` namespace and the writable artifact roots, so they do not perturb the Harness integrity fingerprint or widen the model-visible write surface.
 
 ### Other

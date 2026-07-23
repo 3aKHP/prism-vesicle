@@ -338,7 +338,7 @@ workflow and survives new sessions. The host loads them into the system prompt
 automatically; the user never has to ask the model to write a spec to a file
 and remind it to read it next session. This is model context, not automatic
 memory: the host never infers, summarizes, or writes instructions without a
-model tool call (deferred) or a direct user edit.
+model tool call or a direct user edit.
 
 - File names are Vesicle-native and aligned across both scopes: `VESICLE.md`
   (general, every Engine) and `VESICLE.<engine>.md` (Engine-specific override),
@@ -393,6 +393,25 @@ model tool call (deferred) or a direct user edit.
   arbitrary path. Instruction text cannot widen the effective tool surface,
   permission mode, path roots, stop gates, validators, Harness identity, or
   provider configuration; the tool runtime enforces capabilities independently.
+- `read_instructions` and `update_instructions` are the model-visible surface for
+  Persistent Instructions, available on every Engine except Stage (Stage stays
+  strictly tool-less — its consumer-RP role does not benefit from
+  self-management of host configuration). `read_instructions` is an observation;
+  `update_instructions` is a mutation. They resolve only the fixed `{ scope,
+  engine }` target — never an arbitrary path — so they are a bounded host
+  exception that writes outside the model-visible writable roots, not a widened
+  filesystem surface. `update_instructions` writes atomically (temp + rename),
+  keeps one recoverable previous-state backup per target under
+  `.vesicle/instruction-backups/` (project) or beside `providers.yaml` (user),
+  honors optional `ifMatchSha256` optimistic concurrency (`"absent"` or a 64-hex
+  hash; a stale value never overwrites), and rejects any write whose new content
+  plus the other scope would exceed the 32 KiB budget for an Engine it affects.
+  It routes through the existing Tool Permission Runtime as an ordinary
+  `mutate` (MANUAL/INERTIA pause, MOMENTUM/YOLO execute) — never a second
+  approval system. A successful update is the one mid-turn reason to recompose:
+  it refreshes the in-turn frozen instruction snapshot so the next provider round
+  of the same turn observes the new content. The tools are for explicit,
+  user-requested persistent workflow management, not autonomous self-modification.
 
 ## Managed Harness Packs
 

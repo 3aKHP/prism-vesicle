@@ -1,7 +1,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { resolveQualityDecision, runPrompt, } from "../../../src/core/agent-loop/run";
-import { readFrozenInstructionBlocks } from "../../../src/core/agent-loop/instruction-context";
+import { readFrozenInstructionBlocks } from "../../../src/core/instructions/instruction-context";
 import { listSessions, loadSessionSnapshot } from "../../../src/core/session/store";
 import { harnessRuntime, restoreQualityTestState, runtimeRoot } from "./fixtures/quality-runtime";
 

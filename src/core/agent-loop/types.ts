@@ -69,7 +69,7 @@ export type AgentLoopEvent =
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
-  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; images?: VesicleImageAttachment[] }
+  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; instructionEvent?: import("../instructions/types").InstructionToolEvent; images?: VesicleImageAttachment[] }
   | { type: "process_update"; callId: string; processEvent: ProcessToolEvent }
   | { type: "permission_pending"; request: PermissionRequest }
   | { type: "gate_pending"; gate: string }

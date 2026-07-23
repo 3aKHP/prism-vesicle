@@ -36,6 +36,7 @@ export async function recordToolResult(options: RecordToolResultOptions): Promis
       ...(result.webEvent ? { webEvent: result.webEvent } : {}),
       ...(result.mcpEvent ? { mcpEvent: result.mcpEvent } : {}),
       ...(result.processEvent ? { processEvent: result.processEvent } : {}),
+      ...(result.instructionEvent ? { instructionEvent: result.instructionEvent } : {}),
       ...(result.images ? { images: persistedImageAttachments(result.images) } : {}),
       ...(options.metadata ?? {}),
     },
@@ -62,6 +63,7 @@ export function emitToolResultEvent(
     ...(result.webEvent ? { webEvent: result.webEvent } : {}),
     ...(result.mcpEvent ? { mcpEvent: result.mcpEvent } : {}),
     ...(result.processEvent ? { processEvent: result.processEvent } : {}),
+    ...(result.instructionEvent ? { instructionEvent: result.instructionEvent } : {}),
     ...(result.images ? { images: result.images } : {}),
   });
 }
