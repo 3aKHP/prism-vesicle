@@ -48,9 +48,7 @@ export class AgentManager {
       throw new Error("SubAgent maxConcurrent must be a positive integer.");
     }
     this.handleAllocator = new AgentHandleAllocator(store);
-    this.pathOwnership = new PathOwnershipTable((ownerId) => ownerId.startsWith("host:")
-      ? "the parent Engine"
-      : this.active.get(ownerId)?.metadata.handle ?? "another SubAgent");
+    this.pathOwnership = new PathOwnershipTable();
   }
 
   get maxConcurrent(): number {
@@ -119,7 +117,7 @@ export class AgentManager {
   }
 
   async claimHostMutation(ownerId: string, paths: string[]): Promise<void> {
-    this.pathOwnership.claim(`host:${ownerId}`, paths);
+    this.pathOwnership.claim(`host:${ownerId}`, "the parent Engine", paths);
   }
 
   releaseHostMutations(ownerId: string): void {
@@ -307,7 +305,7 @@ export class AgentManager {
   private async claimMutation(runId: string, handle: string, paths: string[]): Promise<void> {
     const active = this.active.get(runId);
     if (!active) throw new Error(`SubAgent is no longer active: ${handle}.`);
-    this.pathOwnership.claim(runId, paths);
+    this.pathOwnership.claim(runId, handle, paths);
   }
 
   private releaseMutations(runId: string): void {
