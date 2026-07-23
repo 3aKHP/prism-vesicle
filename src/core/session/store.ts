@@ -1,20 +1,16 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseGateRequest } from "../gate/types";
 import type { GateRequest } from "../gate/types";
 import type { EngineId } from "../engine/profile";
-import { parseEngineSwitchRequest } from "../engine/switch";
 import type { EngineSwitchRequest } from "../engine/switch";
 import type { ProviderSelection } from "../../config/providers";
-import { parseUserQuestionRequest } from "../user-question/types";
 import type { UserQuestionRequest } from "../user-question/types";
 import type { ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { AssetFingerprint } from "../runtime/assets";
-import { parsePermissionRequest } from "../permissions";
 import type { PermissionMode, PermissionRequest } from "../permissions";
-import { parseHarnessDelegationDecision, type HarnessDelegationDecision } from "../harness/driver";
+import type { HarnessDelegationDecision } from "../harness/driver";
 import {
   type DurableQualityArtifactTarget,
   type QualityDecisionCandidate,
@@ -29,11 +25,13 @@ import { buildActiveSessionBranch, normalizeSessionRecords, type ResumedToolCall
 import { projectSessionHistory } from "./history-projector";
 import { repairProviderHistory } from "./provider-history-repair";
 import { findPendingQualityDecision, findPendingQualityRewrite, findQualityEvents, findQualityWarnings } from "./quality-recovery";
+import { recoverSessionInteractions, type PendingDelegationRetry } from "./interaction-recovery";
 
 export { buildActiveSessionBranch } from "./record-model";
 export type { SessionRecord, SessionRole } from "./record-model";
 export { createSessionStore } from "./append-store";
 export type { SessionStore } from "./append-store";
+export type { PendingDelegationRetry } from "./interaction-recovery";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -79,15 +77,6 @@ export type SessionSummary = {
     producer: EngineId;
     findingCount: number;
   };
-};
-
-export type PendingDelegationRetry = {
-  intentId: string;
-  interactionId: string;
-  failedRunId: string;
-  delegationId: string;
-  attempt: number;
-  retryCallId: string;
 };
 
 export type PendingQualityRewrite = {
@@ -150,12 +139,14 @@ export async function listSessions(
       }
     }
     if (!firstRecord || !lastRecord) continue;
-    const pendingGate = findPendingGate(records);
-    const pendingEngineSwitch = findPendingEngineSwitch(records);
-    const pendingUserQuestion = findPendingUserQuestion(records);
-    const pendingPermission = findPendingPermission(records);
-    const pendingDelegationRetry = findPendingDelegationRetry(records);
-    const pendingDelegationDecisionRecovery = findPendingDelegationDecisionRecovery(records);
+    const {
+      pendingGate,
+      pendingEngineSwitch,
+      pendingUserQuestion,
+      pendingPermission,
+      pendingDelegationRetry,
+      pendingDelegationDecisionRecovery,
+    } = recoverSessionInteractions(records);
     const pendingQualityDecision = findPendingQualityDecision(records);
     const pendingQualityRewrite = findPendingQualityRewrite(records);
     summaries.push({
@@ -314,12 +305,14 @@ export async function loadSessionSnapshot(
   const projection = projectSessionHistory(records);
   const messages = projection.messages;
 
-  const pendingGate = findPendingGate(records);
-  const pendingEngineSwitch = findPendingEngineSwitch(records);
-  const pendingUserQuestion = findPendingUserQuestion(records);
-  const pendingPermission = findPendingPermission(records);
-  const pendingDelegationRetry = findPendingDelegationRetry(records);
-  const pendingDelegationDecisionRecovery = findPendingDelegationDecisionRecovery(records);
+  const {
+    pendingGate,
+    pendingEngineSwitch,
+    pendingUserQuestion,
+    pendingPermission,
+    pendingDelegationRetry,
+    pendingDelegationDecisionRecovery,
+  } = recoverSessionInteractions(records);
   const qualityEvents = findQualityEvents(records);
   const pendingQualityRewrite = findPendingQualityRewrite(records);
   const pendingQualityDecision = findPendingQualityDecision(records);
@@ -390,183 +383,4 @@ export async function loadSessionSnapshot(
     ...(pendingQualityRewrite ? { pendingQualityRewrite } : {}),
     ...(pendingQualityDecision ? { pendingQualityDecision } : {}),
   };
-}
-
-function findPendingDelegationDecisionRecovery(records: SessionRecord[]): HarnessDelegationDecision | undefined {
-  const persisted = new Map<string, HarnessDelegationDecision>();
-  const restored = new Set<string>();
-  for (const record of records) {
-    if (record.role === "tool" && record.metadata?.delegationDecision) {
-      try {
-        const decision = parseHarnessDelegationDecision(record.metadata.delegationDecision);
-        persisted.set(decision.failed.runId, decision);
-      } catch {
-        // Invalid host metadata cannot be restored as an executable decision.
-      }
-    }
-    if (record.role === "assistant" && record.metadata?.kind === "delegation-decision-point") {
-      try {
-        restored.add(parseHarnessDelegationDecision(record.metadata.decision).failed.runId);
-      } catch {
-        // The malformed decision point remains unusable and does not mask recovery.
-      }
-    }
-  }
-  return [...persisted.values()].reverse().find((decision) => !restored.has(decision.failed.runId));
-}
-
-function findPendingDelegationRetry(records: SessionRecord[]): PendingDelegationRetry | undefined {
-  const intents = new Map<string, PendingDelegationRetry>();
-  const authorized = new Set<string>();
-  const answeredToolCallIds = new Set(records.flatMap((record) =>
-    record.role === "tool" && typeof record.metadata?.toolCallId === "string"
-      ? [record.metadata.toolCallId]
-      : []
-  ));
-  for (const record of records) {
-    if (record.metadata?.kind === "delegation-retry-intent") {
-      const intent = parsePendingDelegationRetry(record.metadata.retryIntent);
-      if (intent) intents.set(intent.intentId, intent);
-    }
-    const retryIntentId = record.metadata?.retryIntentId;
-    if (typeof retryIntentId !== "string") continue;
-    if (record.metadata?.kind === "delegation-decision-resolution" && record.metadata.optionId === "retry") {
-      authorized.add(retryIntentId);
-    }
-  }
-  return [...intents.values()].reverse().find((intent) =>
-    authorized.has(intent.intentId) && !answeredToolCallIds.has(intent.retryCallId)
-  );
-}
-
-function parsePendingDelegationRetry(value: unknown): PendingDelegationRetry | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const source = value as Record<string, unknown>;
-  if (typeof source.id !== "string"
-    || typeof source.interactionId !== "string"
-    || typeof source.failedRunId !== "string"
-    || typeof source.delegationId !== "string"
-    || !Number.isInteger(source.attempt)
-    || Number(source.attempt) < 1
-    || typeof source.retryCallId !== "string") return undefined;
-  return {
-    intentId: source.id,
-    interactionId: source.interactionId,
-    failedRunId: source.failedRunId,
-    delegationId: source.delegationId,
-    attempt: Number(source.attempt),
-    retryCallId: source.retryCallId,
-  };
-}
-
-function findPendingGate(records: SessionRecord[]): { gate: GateRequest; toolCallId: string; assistantContent: string } | undefined {
-  const answeredToolCallIds = new Set<string>();
-  for (const record of records) {
-    if (record.role === "tool") {
-      const toolCallId = record.metadata?.toolCallId;
-      if (typeof toolCallId === "string") answeredToolCallIds.add(toolCallId);
-    }
-  }
-
-  for (let index = records.length - 1; index >= 0; index--) {
-    const record = records[index];
-    if (record.role !== "assistant") continue;
-    const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
-    const gateCall = toolCalls?.find((call) => call.name === "request_confirmation" && !answeredToolCallIds.has(call.id));
-    if (!gateCall) return undefined;
-    try {
-      return {
-        gate: parseGateRequest(gateCall),
-        toolCallId: gateCall.id,
-        assistantContent: record.content,
-      };
-    } catch {
-      return undefined;
-    }
-  }
-
-  return undefined;
-}
-
-function findPendingEngineSwitch(records: SessionRecord[]): { request: EngineSwitchRequest; toolCallId: string; assistantContent: string } | undefined {
-  const answeredToolCallIds = new Set<string>();
-  for (const record of records) {
-    if (record.role === "tool") {
-      const toolCallId = record.metadata?.toolCallId;
-      if (typeof toolCallId === "string") answeredToolCallIds.add(toolCallId);
-    }
-  }
-
-  for (let index = records.length - 1; index >= 0; index--) {
-    const record = records[index];
-    if (record.role !== "assistant") continue;
-    const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
-    const switchCall = toolCalls?.find((call) => call.name === "request_engine_switch" && !answeredToolCallIds.has(call.id));
-    if (!switchCall) return undefined;
-    try {
-      return {
-        request: parseEngineSwitchRequest(switchCall),
-        toolCallId: switchCall.id,
-        assistantContent: record.content,
-      };
-    } catch {
-      return undefined;
-    }
-  }
-
-  return undefined;
-}
-
-function findPendingUserQuestion(records: SessionRecord[]): {
-  question: UserQuestionRequest;
-  toolCallId: string;
-  assistantContent: string;
-  delegationDecision?: HarnessDelegationDecision;
-} | undefined {
-  const answeredToolCallIds = new Set<string>();
-  for (const record of records) {
-    if (record.role === "tool") {
-      const toolCallId = record.metadata?.toolCallId;
-      if (typeof toolCallId === "string") answeredToolCallIds.add(toolCallId);
-    }
-  }
-
-  for (let index = records.length - 1; index >= 0; index--) {
-    const record = records[index];
-    if (record.role !== "assistant") continue;
-    const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
-    const questionCall = toolCalls?.find((call) => call.name === "ask_user_question" && !answeredToolCallIds.has(call.id));
-    if (!questionCall) return undefined;
-    try {
-      const delegationDecision = record.metadata?.kind === "delegation-decision-point"
-        ? parseHarnessDelegationDecision(record.metadata.decision)
-        : undefined;
-      return {
-        question: delegationDecision?.question ?? parseUserQuestionRequest(questionCall),
-        toolCallId: questionCall.id,
-        assistantContent: record.content,
-        ...(delegationDecision ? { delegationDecision } : {}),
-      };
-    } catch {
-      return undefined;
-    }
-  }
-
-  return undefined;
-}
-
-function findPendingPermission(records: SessionRecord[]): PermissionRequest | undefined {
-  const resolved = new Set<string>();
-  for (const record of records) {
-    if (record.metadata?.kind !== "permission-resolution") continue;
-    const requestId = record.metadata.requestId;
-    if (typeof requestId === "string") resolved.add(requestId);
-  }
-  for (let index = records.length - 1; index >= 0; index--) {
-    const record = records[index];
-    if (record.metadata?.kind !== "permission-request") continue;
-    const request = parsePermissionRequest(record.metadata.request);
-    if (request && !resolved.has(request.id)) return request;
-  }
-  return undefined;
 }
