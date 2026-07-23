@@ -1,4 +1,4 @@
-import type { ValidationResult } from "./index";
+import type { ValidationResult } from "./types";
 
 const LSYSTEM_TAGS = ["L1", "L2", "L3-A", "L3-B", "L4-A", "L4-B", "L5"];
 

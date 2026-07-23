@@ -1,4 +1,4 @@
-import type { ValidationResult } from "./index";
+import type { ValidationResult } from "./types";
 import { findLeakedLSystemTags, makeValidationResult } from "./document-structure";
 
 const RUNTIME_HUD_MARKERS = ["[Beat]", "[Tension]", "[Char]", "[Scene]", "[Turn]"];

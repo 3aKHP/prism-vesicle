@@ -1,4 +1,4 @@
-import type { ValidationResult } from "./index";
+import type { ValidationResult } from "./types";
 import { findLeakedLSystemTags, makeValidationResult, splitFrontmatter } from "./document-structure";
 
 type Beat = Record<string, string | undefined>;

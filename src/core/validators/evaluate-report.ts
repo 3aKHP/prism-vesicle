@@ -1,4 +1,4 @@
-import type { ValidationResult } from "./index";
+import type { ValidationResult } from "./types";
 import { makeValidationResult } from "./document-structure";
 
 const REPORT_SECTIONS = [

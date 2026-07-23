@@ -1,10 +1,6 @@
-export type ValidationResult = {
-  ok: boolean;
-  warnings: string[];
-  errors: string[];
-};
+import type { ValidationResult } from "./types";
 
-export type ValidatorName = "character-card" | "scenario-card" | "runtime-packet" | "evaluate-report";
+export type { ValidationResult, ValidatorName } from "./types";
 
 export function validateM0Output(content: string): ValidationResult {
   return {
