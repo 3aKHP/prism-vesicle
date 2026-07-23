@@ -94,6 +94,7 @@ export async function loadContinuationContext(
     provider,
     profile,
     systemPrompt,
+    enginePrompt: engineAssets.systemPrompt,
     toolSurface,
     session,
     harness,

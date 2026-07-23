@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { permissionClassForTool } from "../../../src/core/permissions/policy";
@@ -173,9 +173,58 @@ describe("update_instructions write/delete", () => {
     await withRoots(async (root) => {
       const result = await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "all", action: "write", content: "general rules", summary: "seed" }), { rootDir: root.project, env: root.env });
       expect(result.ok).toBe(true);
-      // A general target with no overrides affects every engine that falls back to it.
-      expect(result.content).toContain("Affects:");
-      expect(result.content).toContain("etl");
+      expect(result.instructionEvent?.affectedEngines).toContain("etl");
+    });
+  });
+
+  test("a general-target write excludes engines that have their own override (S1)", async () => {
+    await withRoots(async (root) => {
+      await writeTarget({ scope: "project", engine: "runtime" }, "runtime override", root);
+      const result = await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "all", action: "write", content: "general", summary: "general" }), { rootDir: root.project, env: root.env, activeEngine: "etl" });
+      expect(result.ok).toBe(true);
+      expect(result.instructionEvent?.affectedEngines).not.toContain("runtime");
+      expect(result.instructionEvent?.affectedEngines).toContain("etl");
+    });
+  });
+
+  test("an engine-specific write reports only that engine as affected (S8)", async () => {
+    await withRoots(async (root) => {
+      const result = await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "runtime", action: "write", content: "runtime rule", summary: "runtime" }), { rootDir: root.project, env: root.env });
+      expect(result.ok).toBe(true);
+      expect(result.instructionEvent?.affectedEngines).toEqual(["runtime"]);
+      expect(existsSync(join(root.project, "VESICLE.runtime.md"))).toBe(true);
+    });
+  });
+
+  test("normalizes trailing newlines to exactly one (S2)", async () => {
+    await withRoots(async (root) => {
+      await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "all", action: "write", content: "hello\n\n\n", summary: "normalize" }), { rootDir: root.project, env: root.env });
+      expect(await readFile(join(root.project, "VESICLE.md"), "utf8")).toBe("hello\n");
+    });
+  });
+
+  test("writes a user-scope target to the user config dir (0o600) with backup there (S7)", async () => {
+    await withRoots(async (root) => {
+      const wrote = await executeUpdateInstructionsTool(call("update_instructions", { scope: "user", engine: "all", action: "write", content: "user rule", summary: "user" }), { rootDir: root.project, env: root.env });
+      expect(wrote.ok).toBe(true);
+      const userFile = join(root.config, "VESICLE.md");
+      expect(await readFile(userFile, "utf8")).toContain("user rule");
+      expect((await stat(userFile)).mode & 0o777).toBe(0o600);
+      // Overwrite lands a backup under the user config instruction-backups dir.
+      await executeUpdateInstructionsTool(call("update_instructions", { scope: "user", engine: "all", action: "write", content: "v2", summary: "revise" }), { rootDir: root.project, env: root.env });
+      expect(existsSync(join(root.config, "instruction-backups", "user-VESICLE.md.previous"))).toBe(true);
+    });
+  });
+
+  test("delete rejects when activating the general fallback would oversize the combination (S6)", async () => {
+    await withRoots(async (root) => {
+      await writeTarget({ scope: "project", engine: "all" }, `${"g".repeat(30 * 1024)}`, root);
+      await writeTarget({ scope: "project", engine: "etl" }, "y", root);
+      await writeTarget({ scope: "user", engine: "etl" }, `${"u".repeat(30 * 1024)}`, root);
+      const del = await executeUpdateInstructionsTool(call("update_instructions", { scope: "project", engine: "etl", action: "delete", summary: "remove override" }), { rootDir: root.project, env: root.env, activeEngine: "etl" });
+      expect(del.ok).toBe(false);
+      expect(del.content).toMatch(/oversized|budget/);
+      expect(existsSync(join(root.project, "VESICLE.etl.md"))).toBe(true);
     });
   });
 

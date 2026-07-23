@@ -138,11 +138,19 @@ export async function executeUpdateInstructionsTool(call: ToolCall, options: Ins
       freezeInstructionBlocks(options.sessionId, composeInstructionBlocks(selection));
     }
     const affected = outcome.event.affectedEngines.length > 0 ? ` Affects: ${outcome.event.affectedEngines.join(", ")}.` : "";
+    const activeAffected = outcome.changed && options.activeEngine
+      ? outcome.event.affectedEngines.includes(options.activeEngine)
+      : false;
+    const effect = !outcome.changed
+      ? ""
+      : activeAffected
+        ? " It takes effect on the next provider round."
+        : " It applies when the affected engine next becomes active.";
     return {
       callId: call.id,
       name: call.name,
       ok: true,
-      content: `${args.action === "write" ? "Wrote" : "Deleted"} ${outcome.event.logicalName} [${target.scope}] — ${outcome.changed ? "applied" : "no change (already absent)"}${outcome.event.afterSha256 ? ` (sha256 ${outcome.event.afterSha256.slice(0, 8)}, ${outcome.event.bytes} bytes)` : ""}.${affected} It takes effect on the next provider round.`,
+      content: `${args.action === "write" ? "Wrote" : "Deleted"} ${outcome.event.logicalName} [${target.scope}] — ${outcome.changed ? "applied" : "no change (already absent)"}${outcome.event.afterSha256 ? ` (sha256 ${outcome.event.afterSha256.slice(0, 8)}, ${outcome.event.bytes} bytes)` : ""}.${affected}${effect}`,
       instructionEvent: outcome.event,
     };
   } catch (error) {

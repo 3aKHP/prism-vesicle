@@ -76,6 +76,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     config: continuation.config,
     provider: continuation.provider,
     systemPrompt: continuation.systemPrompt,
+    enginePrompt: continuation.enginePrompt,
     tools: continuation.toolSurface.definitions,
     mcpRegistry: continuation.toolSurface.mcp,
     messages,

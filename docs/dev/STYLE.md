@@ -338,7 +338,7 @@ workflow and survives new sessions. The host loads them into the system prompt
 automatically; the user never has to ask the model to write a spec to a file
 and remind it to read it next session. This is model context, not automatic
 memory: the host never infers, summarizes, or writes instructions without a
-model tool call (deferred) or a direct user edit.
+model tool call or a direct user edit.
 
 - File names are Vesicle-native and aligned across both scopes: `VESICLE.md`
   (general, every Engine) and `VESICLE.<engine>.md` (Engine-specific override),

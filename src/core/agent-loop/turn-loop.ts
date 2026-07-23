@@ -18,7 +18,7 @@ import { executeToolRound } from "./tool-round-executor";
 import { failedToolResult, recordToolResult } from "./tool-result-recorder";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
-import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
+import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
 import type { AgentLoopEvent, PendingUserInput, RunPromptResult } from "./types";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
@@ -55,6 +55,8 @@ export type RunLoopArgs = {
   config: VesicleConfig;
   provider: ReturnType<typeof createProvider>;
   systemPrompt: string;
+  /** Engine prompt without instruction blocks — used to recompose systemPrompt after an in-turn instruction update. */
+  enginePrompt: string;
   tools: ToolDefinition[];
   mcpRegistry: McpRegistry;
   messages: VesicleMessage[];
@@ -96,6 +98,20 @@ export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   }
 }
 
+/**
+ * Recompose the live system prompt from the base engine prompt and the current
+ * frozen instruction snapshot. After an `update_instructions` call refreshes the
+ * snapshot mid-turn, the next provider round picks up the new instructions.
+ * No-op for Stage (it has no instruction tools and must keep its character-context
+ * suffix) and when no snapshot is cached.
+ */
+function refreshLiveSystemPrompt(args: RunLoopArgs): void {
+  if (args.profile.id === "stage") return;
+  const blocks = readFrozenInstructionBlocks(args.session.sessionId);
+  if (blocks === undefined) return;
+  args.systemPrompt = blocks.length > 0 ? `${args.enginePrompt}\n\n${blocks}` : args.enginePrompt;
+}
+
 async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
   const runtime = createLoopRuntime(args);
   let response: VesicleResponse | undefined;
@@ -108,6 +124,11 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     response = round.response;
     if (round.pause) return round.pause;
     if (!round.hadToolCalls) break;
+    // A tool round may have refreshed the in-turn frozen instruction snapshot
+    // (update_instructions). Recompose the live system prompt so the next
+    // provider round observes the new instructions. Stage has no instruction
+    // tools and must keep its frozen character-context suffix, so it is skipped.
+    refreshLiveSystemPrompt(args);
     await processInputBoundary(args, runtime);
 
     consecutiveFailures = round.anyFailed ? consecutiveFailures + 1 : 0;

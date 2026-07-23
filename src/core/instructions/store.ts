@@ -92,8 +92,11 @@ export async function updateInstructionTarget(
     };
   }
 
+  // Normalize to exactly one trailing newline so repeated read-modify-write
+  // cycles do not accumulate blank lines or drift the content hash.
+  const writtenContent = action === "write" ? `${content!.replace(/[\r\n]+$/, "")}\n` : "";
   if (action === "write") {
-    const newBytes = Buffer.byteLength(`${content}\n`, "utf8");
+    const newBytes = Buffer.byteLength(writtenContent, "utf8");
     if (newBytes > INSTRUCTION_COMBINED_BUDGET_BYTES) {
       throw new InstructionUpdateError(
         "oversized",
@@ -116,12 +119,11 @@ export async function updateInstructionTarget(
   }
 
   if (action === "write") {
-    await atomicWrite(path, `${content}\n`, target.scope);
+    await atomicWrite(path, writtenContent, target.scope);
   } else {
     await unlink(path);
   }
 
-  const writtenContent = action === "write" ? `${content}\n` : "";
   return {
     changed: true,
     event: {
@@ -160,7 +162,10 @@ async function affectedEnginesForTarget(
   const affected: EngineId[] = [];
   for (const engine of engineIds) {
     const override = await loadInstructionTarget({ scope: target.scope, engine }, rootDir, env);
-    if (override.kind !== "file") affected.push(engine);
+    // Only an absent override falls back to the general target; a present-but-
+    // invalid override SUPPRESSES fallback (compose.ts resolveScope), so it is
+    // not affected by a general-target write.
+    if (override.kind === "absent") affected.push(engine);
   }
   return affected;
 }
@@ -214,11 +219,11 @@ async function backupPreviousState(
 ): Promise<void> {
   const backupDir = instructionBackupDir(target.scope, rootDir, env);
   await mkdir(backupDir, { recursive: true });
-  const priorState: InstructionBackupState = bytes === 0 ? "empty" : "content";
   const payloadName = backupPayloadName(target);
   const payloadPath = join(backupDir, `${payloadName}.previous`);
   const metaPath = join(backupDir, `${payloadName}.previous.json`);
   const content = await readFile(path, "utf8");
+  const priorState: InstructionBackupState = content.trim().length === 0 ? "empty" : "content";
   // Payload first (temp + rename), then metadata, so the metadata is only valid
   // once its matching payload is in place.
   await atomicWrite(payloadPath, content, target.scope);

@@ -137,6 +137,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     config,
     provider,
     systemPrompt,
+    enginePrompt: engineAssets.systemPrompt,
     tools: toolSurface.definitions,
     mcpRegistry: toolSurface.mcp,
     messages,
