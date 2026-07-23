@@ -1,7 +1,7 @@
 import { writeSetupConfiguration } from "./config-writer";
 import { testMcpServer } from "./mcp-test";
 import { discoverOpenAIModels } from "./model-discovery";
-import type { SetupEffect, SetupEffectResult } from "./setup-state";
+import { setupErrorMessage, type SetupEffect, type SetupEffectResult } from "./setup-state";
 
 export type SetupEffectDependencies = {
   env?: NodeJS.ProcessEnv;
@@ -33,13 +33,9 @@ export async function runSetupEffect(
         };
     }
   } catch (error) {
-    const message = errorMessage(error);
+    const message = setupErrorMessage(error);
     if (effect.kind === "discover-models") return { kind: "discovery-failed", error: message };
     if (effect.kind === "test-mcp") return { kind: "mcp-test-failed", error: message };
     return { kind: "save-failed", error: message };
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message.trim() ? error.message : String(error);
 }

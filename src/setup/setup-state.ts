@@ -36,9 +36,11 @@ export type SetupStep =
   | "complete"
   | "save-error";
 
-export type SetupInputStep = Extract<SetupStep,
-  "base-url" | "api-key" | "add-model" | "tavily-key" | "mcp-name" | "mcp-url" | "mcp-header" | "mcp-secret" | "project"
->;
+export const setupInputSteps = [
+  "base-url", "api-key", "add-model", "tavily-key", "mcp-name", "mcp-url", "mcp-header", "mcp-secret", "project",
+] as const satisfies readonly SetupStep[];
+
+export type SetupInputStep = typeof setupInputSteps[number];
 
 export type SetupCompletion = {
   launch: boolean;
@@ -167,8 +169,8 @@ export function transitionSetup(
 }
 
 function setupSelectionCount(state: SetupState): number {
-  if (state.step === "models") return setupMultiSelectChoices(state.models).length;
-  if (state.step === "mcp-engines") return setupMultiSelectChoices(engineIds).length;
+  if (state.step === "models") return state.models.length + 1;
+  if (state.step === "mcp-engines") return engineIds.length + 1;
   return setupChoiceItems(state).length;
 }
 
@@ -245,7 +247,7 @@ function submitInput(state: SetupState, value: string, env: NodeJS.ProcessEnv): 
         const normalized = normalizeOpenAIBaseUrl(value);
         return unchanged(enterInput({ ...state, baseUrl: normalized }, "api-key", "", `Models will be requested from ${normalized}/models.`));
       } catch (error) {
-        return unchanged({ ...state, status: errorMessage(error) });
+        return unchanged({ ...state, status: setupErrorMessage(error) });
       }
     }
     case "api-key":
@@ -281,7 +283,7 @@ function submitInput(state: SetupState, value: string, env: NodeJS.ProcessEnv): 
           status: "Choose how this MCP server authenticates.",
         });
       } catch (error) {
-        return unchanged({ ...state, status: errorMessage(error) });
+        return unchanged({ ...state, status: setupErrorMessage(error) });
       }
     }
     case "mcp-header":
@@ -579,7 +581,7 @@ export function setupIsBusy(step: SetupStep): boolean {
 }
 
 export function isSetupInputStep(step: SetupStep): step is SetupInputStep {
-  return ["base-url", "api-key", "add-model", "tavily-key", "mcp-name", "mcp-url", "mcp-header", "mcp-secret", "project"].includes(step);
+  return setupInputSteps.some((inputStep) => inputStep === step);
 }
 
 export function isSetupSecretStep(step: SetupStep): boolean {
@@ -613,6 +615,6 @@ function wrapIndex(value: number, length: number): number {
   return ((value % length) + length) % length;
 }
 
-function errorMessage(error: unknown): string {
+export function setupErrorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim() ? error.message : String(error);
 }
