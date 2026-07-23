@@ -12,7 +12,7 @@ import { loadContinuationContext } from "./continuation-context";
 import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { AgentManager } from "../agents/manager";
-import { clearFrozenInstructionBlocks } from "./instruction-context";
+import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
 
 type ResolveEngineSwitchOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];

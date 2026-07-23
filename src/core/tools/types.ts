@@ -140,6 +140,7 @@ export type ToolResult = {
   mcpEvent?: McpToolEvent;
   processEvent?: ProcessToolEvent;
   agentEvent?: AgentToolEvent;
+  instructionEvent?: import("../instructions/types").InstructionToolEvent;
   delegationDecision?: import("../harness/driver").HarnessDelegationDecision;
   images?: import("../../providers/shared/types").VesicleImageAttachment[];
 };

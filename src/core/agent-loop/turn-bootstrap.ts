@@ -6,7 +6,7 @@ import { persistedImageAttachments } from "../attachments/store";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { composeInstructionBlocks } from "../instructions";
-import { freezeInstructionBlocks } from "./instruction-context";
+import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { createSessionStore } from "../session/store";

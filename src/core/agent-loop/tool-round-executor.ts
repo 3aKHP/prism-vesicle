@@ -239,6 +239,7 @@ async function executeHostCall(
         signal: options.signal,
         processManager: options.processManager,
         parentSessionId: options.session.sessionId,
+        activeEngine: options.profile.id,
         shellInterpreter: options.permission.shellInterpreter,
         processExecutionPlan,
         onProcessProgress: (processEvent) => options.onEvent?.({ type: "process_update", callId: call.id, processEvent }),

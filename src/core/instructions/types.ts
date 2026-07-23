@@ -88,3 +88,18 @@ export type InstructionResolutionRecord = {
   files: InstructionResolutionFile[];
   diagnostics: InstructionDiagnostic[];
 };
+
+/** Structured metadata for a read_instructions / update_instructions tool call. */
+export type InstructionToolEvent = {
+  kind: "instruction";
+  operation: "read" | "write" | "delete";
+  target: InstructionTarget;
+  logicalName: string;
+  beforeSha256: string | null;
+  afterSha256: string | null;
+  bytes: number;
+  affectedEngines: EngineId[];
+};
+
+/** A recoverable previous-state snapshot captured before an instruction update. */
+export type InstructionBackupState = "absent" | "empty" | "content";

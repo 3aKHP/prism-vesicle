@@ -1,4 +1,5 @@
 export type {
+  InstructionBackupState,
   InstructionDiagnostic,
   InstructionDiagnosticKind,
   InstructionEngine,
@@ -6,6 +7,7 @@ export type {
   InstructionResolutionRecord,
   InstructionScope,
   InstructionTarget,
+  InstructionToolEvent,
   EffectiveInstructionSelection,
   LoadedInstructionFile,
 } from "./types";
@@ -20,3 +22,14 @@ export {
   resolveEffectiveSelection,
   selectionToRecord,
 } from "./compose";
+export { freezeInstructionBlocks, readFrozenInstructionBlocks, clearFrozenInstructionBlocks } from "./instruction-context";
+export {
+  readInstructionsToolDefinition,
+  updateInstructionsToolDefinition,
+  instructionToolDefinitions,
+  executeReadInstructionsTool,
+  executeUpdateInstructionsTool,
+} from "./tools";
+export type { InstructionToolOptions } from "./tools";
+export { InstructionUpdateError, updateInstructionTarget } from "./store";
+export type { InstructionUpdateOutcome } from "./store";

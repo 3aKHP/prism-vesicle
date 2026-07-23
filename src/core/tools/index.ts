@@ -43,6 +43,8 @@ import type { FileToolExecutionOptions, ProcessToolEvent, ToolCall, ToolDefiniti
 import type { ProcessManager } from "../process/manager";
 import type { ProcessExecutionPlan } from "../permissions";
 import type { ShellInterpreterPreference } from "../process/shell-profile";
+import type { EngineId } from "../engine/profile";
+import { executeReadInstructionsTool, executeUpdateInstructionsTool } from "../instructions/tools";
 import {
   executeShellExecTool,
   executeShellOutputTool,
@@ -216,8 +218,15 @@ export async function executeHostTool(
     onProcessProgress?: (event: ProcessToolEvent) => void;
     shellInterpreter?: ShellInterpreterPreference;
     processExecutionPlan?: ProcessExecutionPlan;
+    activeEngine?: EngineId;
   } = {},
 ): Promise<ToolResult> {
+  if (call.name === "read_instructions") {
+    return executeReadInstructionsTool(call, { rootDir, activeEngine: options.activeEngine, sessionId: options.parentSessionId });
+  }
+  if (call.name === "update_instructions") {
+    return executeUpdateInstructionsTool(call, { rootDir, activeEngine: options.activeEngine, sessionId: options.parentSessionId });
+  }
   if (call.name === "shell_exec") return executeShellExecTool(rootDir, call, {
     signal: options.signal,
     processManager: options.processManager,

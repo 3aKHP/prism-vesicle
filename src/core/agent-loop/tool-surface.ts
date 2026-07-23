@@ -7,6 +7,7 @@ import { createShellExecToolDefinition, hostToolDefinitions } from "../tools";
 import type { ToolDefinition } from "../tools";
 import { resolveShellProfile, type ShellInterpreterPreference } from "../process/shell-profile";
 import { askUserQuestionToolDefinition } from "../user-question/types";
+import { instructionToolDefinitions } from "../instructions";
 
 const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
 
@@ -81,5 +82,8 @@ export function resolveBuiltInTools(
   if (profile.stopGates.length > 0) resolved.push(gateToolDefinition);
   resolved.push(askUserQuestionToolDefinition);
   resolved.push(engineSwitchToolDefinition);
+  // Persistent Instruction controls are universal host tools for every non-Stage
+  // engine. Stage stays strictly tool-less by design.
+  resolved.push(...instructionToolDefinitions);
   return resolved;
 }

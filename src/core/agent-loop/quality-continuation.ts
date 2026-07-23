@@ -29,7 +29,7 @@ import type {
   ResolveQualityDecisionResult,
   RunPromptResult,
 } from "./types";
-import { clearFrozenInstructionBlocks } from "./instruction-context";
+import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
 
 type ResumeQualityRewriteOptions = ContinuationContextOptions & {
   permissionBroker?: ToolPermissionBroker;
