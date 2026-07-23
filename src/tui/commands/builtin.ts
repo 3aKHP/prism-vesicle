@@ -37,6 +37,8 @@ import {
   renderValidationNotice,
   renderEngineList,
 } from "./render";
+import { INSTRUCTION_COMBINED_BUDGET_BYTES, resolveEffectiveSelection } from "../../core/instructions";
+import type { EffectiveInstructionSelection } from "../../core/instructions";
 
 const HELP_TEXT = [
   "Commands:",
@@ -45,6 +47,7 @@ const HELP_TEXT = [
   "  /stage <character-card-path> <scenario-card-path> start a new Stage narrative session",
   "  /compact [notes]  summarize this session and replace old context",
   "  /context          show current context window usage",
+  "  /instructions     show active Persistent Instructions for this engine",
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
@@ -160,6 +163,18 @@ export const builtinCommands: Command[] = [
       } catch (error) {
         ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
       }
+    },
+  },
+
+  {
+    name: "instructions",
+    busyBehavior: () => immediate,
+    description: "Show the active Persistent Instructions for this engine",
+    usage: "/instructions",
+    async run(ctx, _args, raw) {
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+      const selection = await resolveEffectiveSelection(ctx.activeEngine(), process.cwd());
+      ctx.setMessages((prev) => [...prev, { role: "system", content: renderInstructionsNotice(selection) }]);
     },
   },
 
@@ -557,6 +572,29 @@ function formatPercent(used: number, total: number): string {
   if (total <= 0) return "n/a";
   const percent = (used / total) * 100;
   return percent < 1 && percent > 0 ? "<1%" : `${Math.round(percent)}%`;
+}
+
+function renderInstructionsNotice(selection: EffectiveInstructionSelection): string {
+  const lines: string[] = [`Persistent Instructions for engine "${selection.engine}":`];
+  const files = [selection.user, selection.project].filter((file): file is NonNullable<typeof file> => Boolean(file));
+  if (files.length === 0 && selection.diagnostics.length === 0) {
+    lines.push("  No instruction files are active for this engine.");
+    lines.push(`  Locations: VESICLE.md / VESICLE.<engine>.md at the project root (project scope)`);
+    lines.push(`  and beside providers.yaml (user scope; applies across project roots).`);
+    return lines.join("\n");
+  }
+  for (const file of files) {
+    const scope = file.target.scope;
+    const override = file.target.engine !== "all" ? ` (replaces ${scope} general; engine override ${file.target.engine})` : "";
+    const empty = file.empty ? " [empty override — contributes no content]" : "";
+    lines.push(`  - ${file.logicalName} [${scope}]${override}${empty} — ${file.bytes} bytes (sha256 ${file.sha256.slice(0, 8)})`);
+  }
+  lines.push(`  Combined budget: ${selection.combinedBytes} / ${INSTRUCTION_COMBINED_BUDGET_BYTES} bytes`);
+  for (const diagnostic of selection.diagnostics) {
+    lines.push(`  ! ${diagnostic.logicalName} [${diagnostic.scope}] ${diagnostic.kind}: ${diagnostic.message}`);
+  }
+  lines.push("  Instructions customize work within host capabilities; they cannot add tools, permissions, gates, validators, or filesystem authority.");
+  return lines.join("\n");
 }
 
 function parseEngineSwitchArgs(args: string): { engine: EngineId; summary: boolean; summaryInstructions?: string } | undefined {

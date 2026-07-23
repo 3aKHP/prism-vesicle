@@ -4,6 +4,7 @@ import { resolveAllowedPath, toProjectPath } from "../tools/file/path-policy";
 import { listDirectoryEntries } from "../tools/file/query-operations";
 import { writableProjectRoots } from "../artifacts/roots";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
+import { composeSystemPromptWithInstructions } from "../instructions";
 import { createSessionStore } from "../session/store";
 import { requireProjectHarnessRuntime, resolveProjectHarnessRuntime } from "../harness/activation";
 import type { PermissionMode } from "../permissions";
@@ -86,7 +87,8 @@ export async function startStageSession(options: StartStageSessionOptions): Prom
     renderedOpening: rendered.opening,
   };
   const session = await createSessionStore(rootDir);
-  const systemPrompt = `${engineAssets.systemPrompt}\n\n${bootstrap.renderedCharacterContext}`;
+  const instructional = await composeSystemPromptWithInstructions("stage", engineAssets.systemPrompt, rootDir);
+  const systemPrompt = `${instructional.systemPrompt}\n\n${bootstrap.renderedCharacterContext}`;
   const records = await session.appendMany([
     {
       role: "system",

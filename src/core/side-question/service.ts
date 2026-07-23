@@ -12,6 +12,7 @@ import type { EngineId } from "../engine/profile";
 import { mergeGeneration } from "../agent-loop/generation";
 import { resolveProjectHarnessRuntime, requireProjectHarnessRuntime } from "../harness/activation";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
+import { composeSystemPromptWithInstructions } from "../instructions";
 import { loadSessionSnapshot, type ResumedMessage } from "../session/store";
 import type { ReasoningTier, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { materializeMessageImages } from "../attachments/store";
@@ -121,7 +122,9 @@ export async function resolveSideQuestionSnapshot(options: {
     synthesizeDanglingToolResults: false,
   }).catch(() => undefined);
   if (!snapshot) return undefined;
-  let engineSystemPrompt = engineAssets.systemPrompt;
+  let engineSystemPrompt = (
+    await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, options.rootDir)
+  ).systemPrompt;
   if (options.engine === "stage" && snapshot.stageBootstrap) {
     engineSystemPrompt = `${engineSystemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
   }

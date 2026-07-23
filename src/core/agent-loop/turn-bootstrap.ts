@@ -4,6 +4,7 @@ import { createProvider } from "../../providers";
 import type { VesicleMessage } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
 import { FileCheckpointManager } from "../checkpoints/file-history";
+import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { createSessionStore } from "../session/store";
@@ -41,7 +42,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     : await loadExperimentalQualityProfile(harness?.quality);
   const engineAssets = await loadEngineAssetRuntime(engine, rootDir, assets ? { resolver: assets } : {});
   const { profile } = engineAssets;
-  let systemPrompt = engineAssets.systemPrompt;
+  const instructional = await composeSystemPromptWithInstructions(engine, engineAssets.systemPrompt, rootDir);
+  let systemPrompt = instructional.systemPrompt;
   const toolSurface = await resolveToolSurface(
     profile,
     config.capabilities?.vision === true,
@@ -65,6 +67,9 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   );
 
   if (isNewSession) {
+    const hasInstructions = Boolean(instructional.selection.user)
+      || Boolean(instructional.selection.project)
+      || instructional.selection.diagnostics.length > 0;
     await session.append({
       role: "system",
       content: systemPrompt,
@@ -86,6 +91,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
           stopGates: profile.stopGates,
         },
         assets: engineAssets.assets,
+        ...(hasInstructions ? { instructions: selectionToRecord(instructional.selection) } : {}),
         ...(harness?.identity ? { harness: harness.identity } : {}),
       },
     });

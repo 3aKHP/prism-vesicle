@@ -7,6 +7,7 @@ import type { EngineId } from "../engine/profile";
 import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
+import { composeSystemPromptWithInstructions } from "../instructions";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
 import type { AssetFingerprint } from "../runtime/assets";
 import type { AssetResolver } from "../runtime/assets";
@@ -54,7 +55,10 @@ export async function loadContinuationContext(
   const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
   assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
   const engineAssets = await loadEngineAssetRuntime(options.engine, rootDir, assets ? { resolver: assets } : {});
-  const { profile, systemPrompt } = engineAssets;
+  const { profile } = engineAssets;
+  const systemPrompt = (
+    await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, rootDir)
+  ).systemPrompt;
   if (behavior.emitAssetDrift !== false) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   }
