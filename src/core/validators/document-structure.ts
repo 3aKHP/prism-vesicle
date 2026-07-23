@@ -1,5 +1,6 @@
 import type { ValidationResult } from "./types";
 
+/** Internal document primitives for artifact validators; not part of the validators facade. */
 const LSYSTEM_TAGS = ["L1", "L2", "L3-A", "L3-B", "L4-A", "L4-B", "L5"];
 
 export function findLeakedLSystemTags(content: string): string[] {
