@@ -20,6 +20,7 @@ Current public release: **1.0.0-alpha.3**. The `State` column tracks the public 
 | TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | unreleased |
 | TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | unreleased |
 | Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | unreleased |
+| Instructions | `/init [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); backs up an existing file before replacing | unreleased |
 | TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |

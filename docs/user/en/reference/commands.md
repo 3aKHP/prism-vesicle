@@ -13,6 +13,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/resume` | List this project's sessions to resume; `/resume <n\|id>` resumes directly |
 | `/rewind` (alias `/checkpoint`) | Rewind to a step in this session, optionally restoring files |
 | `/compact [instructions]` | Compact the current session into a summary and continue, saving context |
+| `/init [notes]` | Scan the project and draft a project-scope `VESICLE.md` of persistent instructions (backs up an existing file before replacing it) |
 | `/context` | Show current context usage and window occupancy |
 | `/instructions` | Show the Persistent Instructions active for the current engine (files, byte sizes, budget, and warnings) |
 | `/btw <question>` | Ask a temporary side question about the current conversation without interrupting the turn; no args reopens the latest answer |
