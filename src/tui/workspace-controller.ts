@@ -45,6 +45,20 @@ function printableChar(key: TuiKeyEvent): string | null {
   return null;
 }
 
+/**
+ * Vim navigation normalized to arrow keys before dispatch (D4 of the
+ * cc-switch-cli keymap review): handlers only ever see arrows, and the
+ * normalization never runs while a text input owns the keyboard (quick open
+ * is checked before this point; the composer region never reaches it).
+ */
+const VIM_KEY_ALIASES: Record<string, string> = { h: "left", j: "down", k: "up", l: "right" };
+
+function normalizeVimKey(key: TuiKeyEvent): TuiKeyEvent {
+  if (key.ctrl || key.meta || key.option || key.shift) return key;
+  const alias = key.name ? VIM_KEY_ALIASES[key.name] : undefined;
+  return alias ? { ...key, name: alias } : key;
+}
+
 export function createWorkspaceController(rootDir: string = process.cwd()) {
   const [page, setPage] = createSignal<ShellPage>("chat");
   const [focusRegion, setFocusRegion] = createSignal<WorkspaceFocusRegion>("tree");
@@ -175,7 +189,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   async function expandSelected(): Promise<void> {
     const row = rows()[selectedIndex()];
-    if (row?.node.kind === "dir" && !row.expanded) await setDirExpanded(row.node.relPath, true);
+    if (!row) return;
+    if (row.node.kind === "dir") {
+      if (!row.expanded) await setDirExpanded(row.node.relPath, true);
+      return;
+    }
+    // Right on a file row opens it and hands focus to the viewer (D1 of the
+    // cc-switch-cli keymap review): focus follows position, no F6 needed.
+    await openPath(row.node.relPath);
   }
 
   /**
@@ -287,6 +308,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "r": void refresh(); return true;
       case ".": void toggleHidden(); return true;
       case "/": openQuickOpen(); return true;
+      case "q": setFocusRegion("composer"); return true;
       case "escape": setFocusRegion("composer"); return true;
       default: return true; // focused region owns (and swallows) the rest
     }
@@ -295,6 +317,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   function handleEditorKey(key: TuiKeyEvent): boolean {
     switch (key.name) {
       case "escape": setFocusRegion("tree"); return true;
+      case "q": setFocusRegion("tree"); return true;
       case "m": toggleViewMode(); return true;
       case "up": viewerScrollBy?.(-1); return true;
       case "down": viewerScrollBy?.(1); return true;
@@ -313,9 +336,9 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (key.name === "f6") { cycleFocus(key.shift ? -1 : 1); return true; }
     if (quickOpenActive()) return handleQuickOpenKey(key);
     const region = focusRegion();
-    if (region === "editor" && openFile()) return handleEditorKey(key);
+    if (region === "editor" && openFile()) return handleEditorKey(normalizeVimKey(key));
     if (region === "editor") { setFocusRegion("tree"); return true; }
-    if (region === "tree") return handleTreeKey(key);
+    if (region === "tree") return handleTreeKey(normalizeVimKey(key));
     return false; // composer region: fall through to the shared composer
   }
 

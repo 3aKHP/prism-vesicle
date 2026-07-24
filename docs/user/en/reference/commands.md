@@ -68,8 +68,10 @@ The Workspace page has three focus regions: the file tree, the viewer, and the i
 |---|---|
 | Ctrl+P or / (tree focus) | Quick open: subsequence fuzzy match across project files; Enter opens, Esc closes |
 | ↑ / ↓ (tree) | Move the selection |
-| → / Enter (tree) | Expand a directory or open a file |
+| → / Enter (tree) | Expand a directory, or open a file and hand focus to the viewer |
 | ← (tree) | Collapse a directory or move to the parent |
+| h / j / k / l (tree/viewer) | Alias for the arrow keys (inert while a text input is active) |
+| q (tree/viewer) | Alias for Esc — step focus back one level |
 | r (tree) | Refresh the directory |
 | . (tree) | Show/hide dotfiles and noisy directories (`.git`, `node_modules`, `dist`, …) |
 | ↑ / ↓ / PgUp / PgDn / Home / End (viewer) | Scroll |

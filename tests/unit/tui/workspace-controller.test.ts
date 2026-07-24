@@ -124,6 +124,37 @@ describe("workspace controller: keyboard focus model", () => {
     expect(controller.focusRegion()).toBe("editor");
   });
 
+  test("keymap review patches: q aliases escape, hjkl normalize to arrows, right opens files", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget();
+    // hjkl drive the tree selection like arrows (D4)
+    const first = controller.selectedIndex();
+    controller.handleKey(key("j"));
+    expect(controller.selectedIndex()).toBe(first + 1);
+    controller.handleKey(key("k"));
+    expect(controller.selectedIndex()).toBe(first);
+    // quick open still receives literal hjkl as query text
+    controller.handleKey(key("p", { ctrl: true }));
+    controller.handleKey(key("j"));
+    expect(controller.quickQuery()).toBe("j");
+    controller.handleKey(key("escape"));
+
+    // right on a file row opens it in the viewer with editor focus (D1)
+    const fileIndex = controller.rows().findIndex((row) => row.node.relPath === "notes.txt");
+    while (controller.selectedIndex() < fileIndex) controller.handleKey(key("down"));
+    while (controller.selectedIndex() > fileIndex) controller.handleKey(key("up"));
+    controller.handleKey(key("right"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(controller.openFile()?.relPath).toBe("notes.txt");
+    expect(controller.focusRegion()).toBe("editor");
+
+    // q steps focus back exactly like escape (D3): editor -> tree -> composer
+    controller.handleKey(key("q"));
+    expect(controller.focusRegion()).toBe("tree");
+    controller.handleKey(key("q"));
+    expect(controller.focusRegion()).toBe("composer");
+  });
+
   test("hidden toggle and refresh keep the tree usable", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget();
