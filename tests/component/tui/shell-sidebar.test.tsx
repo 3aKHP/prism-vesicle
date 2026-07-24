@@ -14,9 +14,12 @@ describe("tui: shell and sidebar", () => {
     expect(frame).toContain("Prism Vesicle");
     expect(frame).toContain("Workspace");
     expect(frame).toContain("Messages");
+    // M3: sidebar sections carry the restrained ASCII-frame label motif.
+    expect(frame).toContain("┌─ Status");
     expect(frame).not.toContain("Output / Validation");
-    // Initial system notice should render as plain text (not the old role> prefix).
-    expect(frame).toContain("Ready. Enter one Prism");
+    // Empty sessions show the brand hero (M2) instead of the old bare "Ready"
+    // system notice; the splash skips non-interactive renders like this one.
+    expect(frame).toContain("one beam in, the spectrum out");
     expect(frame).not.toContain("system>");
     // Input bar present; provider registry loads asynchronously before the first send.
     expect(frame).toContain("Loading provider config");

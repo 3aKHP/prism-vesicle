@@ -10,6 +10,8 @@ import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench"
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { QualityWarning } from "../core/quality";
 import { resolveTuiLayout } from "./layout";
+import { resolveSplashMode } from "./brand-mark";
+import { Splash } from "./widgets/Splash";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
@@ -117,10 +119,6 @@ export function App(props: AppProps = {}) {
   const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
   const [reasoningDisplayMode, setReasoningDisplayMode] = createSignal<ReasoningDisplayMode>("collapsed");
   const [messages, setMessages] = createSignal<Message[]>([
-    {
-      role: "system",
-      content: "Ready. Enter one Prism prompt and press Enter.",
-    },
     ...(props.dangerouslySkipPermissions ? [{
       role: "system" as const,
       content: "DANGER: --dangerously-skip-permissions enabled YOLO for this process. Tool approvals are bypassed; runtime hard guards remain active.",
@@ -134,6 +132,18 @@ export function App(props: AppProps = {}) {
   const [busy, setBusy] = createSignal(false);
   const inputQueue = createInputQueue();
   const [restoringSession, setRestoringSession] = createSignal(false);
+  // M1 startup splash: the mode is decided once from terminal capabilities and
+  // environment; "skip" (non-interactive terminal) never mounts the overlay.
+  const splashMode = resolveSplashMode({
+    isTty: Boolean(process.stdout.isTTY),
+    rgb: renderer.capabilities?.rgb ?? true,
+    reducedMotion: process.env.VESICLE_REDUCED_MOTION === "1",
+  });
+  const [splashGone, setSplashGone] = createSignal(splashMode === "skip");
+  const [splashForceDone, setSplashForceDone] = createSignal(false);
+  // M2: the empty-session hero shows only while the stream holds no
+  // conversation turns; system notices (e.g. the YOLO warning) render above it.
+  const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system"));
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
@@ -757,6 +767,8 @@ export function App(props: AppProps = {}) {
   useInputRouting({
     renderer,
     setStatus,
+    splashActive: () => !splashGone(),
+    dismissSplash: () => setSplashForceDone(true),
     rewindPicker,
     handleRewindKey: rewindController.handleKey,
     modelPicker,
@@ -977,6 +989,7 @@ export function App(props: AppProps = {}) {
             agents={agentCards()}
             activeEngine={activeEngine()}
             sessionId={sessionId()}
+            showHero={showHero()}
             onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
             registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
           />
@@ -1038,6 +1051,20 @@ export function App(props: AppProps = {}) {
           wrapMode="none"
         />
       </box>
+
+      {/* M1 startup splash: absolute overlay painted above the shell. It owns
+          the only continuous motion in the app and unmounts cleanly once the
+          session surface is ready — nothing persists below the transcript. */}
+      <Show when={!splashGone()} fallback={<box width={0} height={0} />}>
+        <Splash
+          mode={splashMode === "skip" ? "static" : splashMode}
+          ready={providerConfigReady}
+          forceDone={splashForceDone}
+          width={dimensions().width}
+          height={dimensions().height}
+          onGone={() => setSplashGone(true)}
+        />
+      </Show>
     </box>
   );
 }

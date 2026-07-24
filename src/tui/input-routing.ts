@@ -36,6 +36,8 @@ export type InputRoutingOptions = {
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
   sideQuestionOverlay?: Accessor<unknown>;
   handleSideQuestionKey?: (key: TuiKeyEvent) => boolean;
+  splashActive?: Accessor<boolean>;
+  dismissSplash?: () => void;
   artifactFocusActive?: Accessor<boolean>;
   enterArtifactFocus?: () => boolean;
   handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
@@ -78,6 +80,13 @@ export function useInputRouting(options: InputRoutingOptions): void {
     }
     if (key.ctrl && key.name === "q") {
       process.nextTick(() => options.renderer.destroy());
+      return;
+    }
+    // The startup splash swallows all other input: the first keypress ends it
+    // immediately and must not leak into the composer or any panel.
+    if (options.splashActive?.()) {
+      options.dismissSplash?.();
+      consumeKey(key);
       return;
     }
     if (options.sideQuestionOverlay?.() && options.handleSideQuestionKey) {
@@ -147,6 +156,11 @@ export function useInputRouting(options: InputRoutingOptions): void {
   });
 
   usePaste((event) => {
+    if (options.splashActive?.()) {
+      options.dismissSplash?.();
+      event.preventDefault();
+      return;
+    }
     const text = new TextDecoder().decode(event.bytes);
     if (options.handleDecisionPaste(text)) {
       event.preventDefault();

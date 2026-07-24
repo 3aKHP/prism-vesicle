@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **Startup splash and empty-session hero (TUI).** Launch now opens with the ANSI-derived prism-vesicle brand mark and `PRISM VESICLE` wordmark plus a single slow traveling light along the membrane; it fades out once the provider configuration is ready (never blocking startup), ends immediately on the first keypress, and disappears without residue. Empty sessions show a quiet brand hero in the message area — compact mark, tagline, and one entry hint — instead of the bare `Ready.` system notice; the first conversation turn replaces it with the real transcript. The splash degrades by terminal capability: non-interactive terminals skip it, 256-colour terminals get a static quantized frame, and `VESICLE_REDUCED_MOTION=1` freezes the frame with the light stopped. All in-app marks are derived from `brand/prism-vesicle.ascii.txt` and re-rendered from the locked palette; no continuous animation exists anywhere below the splash.
+- **Sidebar ASCII-frame section labels (TUI).** The Workspace sidebar's internal sections (Status, Agents, Shell, Effort, Session, MCP, Artifacts) now use the restrained `┌─ Title ─` framed-label motif instead of bare bold text. The per-message role spectrum lanes and per-engine refraction accents had already been wired into the message stream and header; this completes the static-motif pass with no layout changes.
+
 ## [1.0.0-alpha.4] - 2026-07-24
 
 ### Added

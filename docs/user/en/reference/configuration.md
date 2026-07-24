@@ -15,6 +15,8 @@ All configuration files live in one user directory:
 
 Override with environment variables: `VESICLE_CONFIG_DIR` (the whole directory) or `VESICLE_PROVIDERS_FILE` (just the providers file; its directory is used).
 
+One display variable is unrelated to the config directory: `VESICLE_REDUCED_MOTION=1` freezes the startup splash as a still frame, for motion-sensitive users or low-power terminals.
+
 Files in that directory:
 
 | File | Required | Contents |

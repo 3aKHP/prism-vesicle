@@ -15,6 +15,8 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 
 可用环境变量覆盖:`VESICLE_CONFIG_DIR`(整个目录)或 `VESICLE_PROVIDERS_FILE`(只指定 providers 文件,取其所在目录)。
 
+与配置目录无关的显示环境变量:`VESICLE_REDUCED_MOTION=1` 关闭启动画面的动画(冻结为静帧),适合对动态画面敏感或低性能终端。
+
 该目录下的文件:
 
 | 文件 | 必需 | 内容 |

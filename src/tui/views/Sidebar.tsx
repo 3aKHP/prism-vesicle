@@ -47,29 +47,29 @@ export function Sidebar(props: {
   const processLine = () => processSidebarLines(props.processes ?? [], props.width - 4, props.currentSessionId)[0]!;
   return (
     <box title="Workspace" border borderColor={palette.sectionBorder} width={props.width} padding={1} flexDirection="column">
-      <PanelLine content="Status" fg={palette.brandDim} attributes={1} />
+      <SectionLabel title="Status" />
       <PanelLine content={truncateLine(props.status, props.width - 4)} fg={statusColor(props.status)} attributes={1} />
       <PanelLine content=" " fg={palette.textDim} />
-      <PanelLine content="Agents" fg={palette.brandDim} attributes={1} />
+      <SectionLabel title="Agents" />
       <For each={agentSidebarLines(props.agents ?? [], props.width - 4, props.currentSessionId)}>
         {(line) => <PanelLine content={line.text} fg={line.color} attributes={line.active ? 1 : 0} />}
       </For>
-      <PanelLine content="Shell" fg={palette.brandDim} attributes={1} />
+      <SectionLabel title="Shell" />
       <PanelLine content={processLine().text} fg={processLine().color} attributes={processLine().active ? 1 : 0} />
       <PanelLine content=" " fg={palette.textDim} />
-      <PanelLine content="Effort" fg={palette.brandDim} attributes={1} />
+      <SectionLabel title="Effort" />
       <PanelLine content={truncateLine(`tier: ${props.thinkingTier ?? "auto"}`, props.width - 4)} fg={palette.textPrimary} />
       <PanelLine content={truncateLine(`reasoning: ${reasoningLabel()}`, props.width - 4)} fg={palette.textPrimary} />
       <PanelLine content=" " fg={palette.textDim} />
-      <PanelLine content="Session" fg={palette.brandDim} attributes={1} />
+      <SectionLabel title="Session" />
       <PanelLine content={truncateMiddle(props.sessionPath, props.width - 4)} fg={palette.textPrimary} />
       <PanelLine content=" " fg={palette.textDim} />
-      <PanelLine content="MCP" fg={palette.brandDim} attributes={1} />
+      <SectionLabel title="MCP" />
       <For each={mcpLines()}>
         {(line) => <PanelLine content={line.text} fg={line.ok ? palette.textPrimary : palette.error} />}
       </For>
       <PanelLine content=" " fg={palette.textDim} />
-      <PanelLine content="Artifacts" fg={palette.brandDim} attributes={1} />
+      <SectionLabel title="Artifacts" />
       <scrollbox width="100%" flexGrow={1}>
         <box flexDirection="column">
           <For each={artifactRoots}>
@@ -100,6 +100,15 @@ export function Sidebar(props: {
       </scrollbox>
     </box>
   );
+}
+
+/**
+ * M3 ASCII-frame section label (`┌─ Title ─`), used only for the sidebar's
+ * internal sections — the one panel where the framed-label motif is applied,
+ * per the signature-moments contract's restraint rule.
+ */
+function SectionLabel(props: { title: string }) {
+  return <PanelLine content={`┌─ ${props.title} ─`} fg={palette.brandDim} attributes={1} />;
 }
 
 export function processSidebarLines(processes: BackgroundProcessState[], width: number, currentSessionId?: string): Array<{ text: string; color: string; active: boolean }> {
