@@ -83,6 +83,23 @@ describe("tui: workspace page (B2)", () => {
     expect(controller.isEditing()).toBe(true);
   });
 
+  test("an empty editable file keeps the full editor width while typing", async () => {
+    // Regression: the textarea had no explicit width, so Yoga sized it to its
+    // content — an empty/small file collapsed the editor to a 1-column
+    // viewport and every typed char scrolled the line out of view.
+    await writeFile(join(root, "fresh.txt"), "");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("fresh.txt");
+    const setup = await renderPage(controller);
+    await setup.flush();
+    await setup.mockInput.typeText("abcdefghij");
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    expect(frame).toContain("abcdefghij");
+  });
+
   test("image files show metadata instead of contents", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget("logo.png");
@@ -158,6 +175,39 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("y save");
   });
 
+  test("opening a card surfaces a validation summary in the status line", async () => {
+    await writeFile(join(root, "card.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("card.md");
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    // mira.md-shaped card → character-card validator applies, reports missing
+    // sections. The status line carries a ✗ summary with a `v view` affordance.
+    expect(frame).toContain("✗");
+    expect(frame).toContain("v view");
+  });
+
+  test("`v` opens the findings panel with the validator findings", async () => {
+    await writeFile(join(root, "card.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("card.md");
+    // Walk to the tree and open the findings panel.
+    for (let i = 0; i < 4 && controller.focusRegion() !== "tree"; i += 1) {
+      controller.handleKey({ name: "f6" });
+    }
+    controller.handleKey({ name: "v" });
+    expect(controller.findingsOpen()).toBe(true);
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("findings:");
+    expect(frame).toContain("missing mandatory section");
+    expect(frame).toContain("Enter jump");
+  });
+
   test("quick open panel lists fuzzy matches above the page", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget();
@@ -184,6 +234,35 @@ describe("tui: workspace page (B2)", () => {
     // editor focused: the viewer fills the compact page, tree is hidden
     expect(frame).toContain("workspace/cards/mira.md");
     expect(frame).not.toContain("notes.txt");
+  });
+
+  test("moving up from a long line keeps the short line's start visible", async () => {
+    // Regression for the OpenTUI horizontal-scroll bug: landing the cursor on
+    // a line longer than the viewport scrolls right; moving to a shorter line
+    // left offsetX stale, so the shorter line rendered with its start cut off.
+    // Line 1 is the long line (drives the scroll), line 2 the short victim.
+    await writeFile(join(root, "lines.txt"), `${"x".repeat(80)}\nshort top line\n`);
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("lines.txt");
+    // Narrow viewport so the 80-char line overflows the textarea.
+    const setup = await testRender(() => (
+      <WorkspacePage controller={controller} projectRoot={root} width={50} height={10} treeWidth={20} compact={false} />
+    ), { width: 50, height: 10 });
+    await setup.flush();
+
+    // Walk the cursor right along the long line 1 until the viewport scrolls.
+    for (let i = 0; i < 70; i += 1) await setup.mockInput.pressArrow("right");
+    await setup.flush();
+    // Down to the short line 2; the stale-offset reset is deferred via setTimeout.
+    await setup.mockInput.pressArrow("down");
+    await new Promise((r) => setTimeout(r, 15));
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    // The full short line must be readable — without the fix, the stale offset
+    // hides it entirely (line 2 is only 14 chars, all left of the offset).
+    expect(frame).toContain("short top line");
   });
 
   test("a long document never paints over the shell's bottom surface", async () => {

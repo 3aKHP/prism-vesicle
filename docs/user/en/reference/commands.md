@@ -72,6 +72,12 @@ The Workspace page has three focus regions: the file tree, the viewer / editor, 
 | ↑ / ↓ (tree) | Move the selection |
 | → / Enter (tree) | Expand a directory, or open a file and hand focus to the viewer/editor |
 | ← (tree) | Collapse a directory or move to the parent |
+| a (tree) | Create a file (path input bar; `a/b/c.md` works, parents are created; an existing target is refused, not overwritten) |
+| A (tree, Shift+a) | Create a directory |
+| m / F2 (tree) | Move / rename (input bar prefills the directory prefix; type the new name; an existing target opens an overwrite confirm) |
+| c (tree) | Copy (same rules as `m`) |
+| d (tree) | Delete: `y` deletes (moves to the `.vesicle/trash/` recycle bin); any other key cancels; directories only when empty; unsaved edits are noted in the confirm |
+| v (tree / read-only viewer) | Validate the open file and open the findings panel |
 | h / j / k / l (tree/read-only viewer) | Alias for the arrow keys (inert while a text input is active) |
 | q (tree/read-only viewer) | Alias for Esc — step focus back one level |
 | r (tree) | Refresh the directory; (read-only viewer) re-read the file |
@@ -79,13 +85,15 @@ The Workspace page has three focus regions: the file tree, the viewer / editor, 
 | ↑ / ↓ / PgUp / PgDn / Home / End (read-only viewer) | Scroll |
 | m (Markdown preview) | Switch to the editable source |
 
+Every file-management op stays inside the project root (rejects `..` and absolute paths). Delete is a **recycle bin** (move to `.vesicle/trash/<timestamp>-<name>`), never a permanent removal; the status line shows where it went, and recovery is a manual move back. Renaming or moving a file you are editing rekeys the buffer to the new path (the dirty flag and content survive; the undo stack resets — save first if undo matters). Move or copy onto an existing target opens an "overwrite / cancel" confirm.
+
 ### Editor (editable source focus)
 
 Text and Markdown files under 512 KB / 2000 lines, writable, and not symlinks are editable in source mode; Markdown defaults to preview and `m` enters the source. Each file gets its own editing buffer (up to 8, LRU-evicted, dirty buffers protected), each with its own undo history.
 
 | Key | Purpose |
 |---|---|
-| Ctrl+S | Save (atomic write, project-root-bounded, rejects `..` and absolute paths) |
+| Ctrl+S | Save (atomic write, project-root-bounded, rejects `..` and absolute paths); re-runs validation on save |
 | Ctrl+Shift+S | Save as (type a new path) |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+F | Find: locate as you type, Enter next, Shift+Enter previous, Esc close |
@@ -95,6 +103,12 @@ Text and Markdown files under 512 KB / 2000 lines, writable, and not symlinks ar
 | Esc | With unsaved edits: "save / discard / cancel"; otherwise step back one level |
 
 If the file changed on disk since you opened it (by mtime), saving opens an "overwrite / save as / cancel" confirm — it never silently overwrites. Switching back to the Workspace page stats every open buffer; changed ones are marked `†disk` in the title and can be reloaded with Ctrl+R. Image, binary, symlink, oversized, and read-only files stay in the read-only viewer.
+
+### Validation (findings panel)
+
+Opening a file, saving, or pressing `v` in the tree / read-only viewer runs the **character-card / scenario-card** validators (the same list `/validate` and the turn-finalizer auto-check use). The status line summarises: `✓ validators passed` / `✗ N · ⚠ M · v view` / `no validator matched` (stated explicitly when nothing applies).
+
+The `v` findings panel owns the keyboard: each row is `✗/⚠ + finding text` (unanchored ones marked `(no anchor)`), `↑↓` selects, `Enter` jumps to the finding's line (located by pulling a `## …` section header or frontmatter key out of the message and `indexOf`-ing it; missing-field findings fall back to the frontmatter close), and `Esc` closes. In editable source `v` is an ordinary letter (it goes to the editor), so to validate manually, save first (Ctrl+S auto-validates).
 
 ## `/btw` side questions
 

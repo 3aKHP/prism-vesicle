@@ -3,7 +3,9 @@ import type { BoxRenderable, KeyBinding, ScrollBoxRenderable, TextareaRenderable
 import { palette } from "../theme";
 import { MarkdownContent } from "../widgets/MarkdownContent";
 import type { WorkspaceController, EditorStatusTone } from "../workspace-controller";
+import { resetStaleHorizontalScroll } from "../workspace-controller";
 import type { WorkspaceFileKind } from "../workspace-files";
+import { validationSeverity, validationSummary } from "../workspace-validate";
 
 /**
  * Workspace page (Scope B / #62): the project-file workbench — lazy file tree
@@ -39,6 +41,17 @@ const EDITOR_KEY_BINDINGS: KeyBinding[] = [
   { name: "y", ctrl: true, action: "redo" },
   { name: "_", ctrl: true, action: "undo" },
 ];
+
+/**
+ * Keys that move the cursor to a different line and so can leave a stale
+ * horizontal scroll offset (see `resetStaleHorizontalScroll` in the
+ * controller). Printable keys are excluded — the textarea's own
+ * scroll-while-typing is correct there.
+ */
+const NAVIGATION_KEYS = new Set([
+  "up", "down", "left", "right", "home", "end", "pageup", "pagedown",
+  "enter", "backspace", "delete",
+]);
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -130,7 +143,21 @@ export function WorkspacePage(props: {
   const showTree = () => !props.compact || !(c.focusRegion() === "editor" && c.openFile());
   const showViewer = () => !props.compact || (c.focusRegion() === "editor" && c.openFile());
 
+  const validationSuffix = createMemo(() => {
+    const v = c.validationState();
+    const summary = validationSummary(v);
+    if (!summary) return "";
+    // The `v` key opens the findings panel from the tree and the read-only
+    // viewer; in editable source `v` types, so the "v view" affordance would
+    // be a lie there and is omitted.
+    const region = c.focusRegion();
+    const vReachable = region === "tree" || (region === "editor" && !c.isEditing());
+    const hasFindings = v.state === "result" && (v.findings.some((f) => f.severity === "error") || v.findings.some((f) => f.severity === "warning"));
+    return `  · ${summary}${hasFindings && vReachable ? " · v view" : ""}`;
+  });
+
   const statusLine = createMemo(() => {
+    if (c.findingsOpen()) return "findings — ↑↓ navigate · Enter jump · Esc close";
     if (c.findActive()) {
       const count = c.findMatches().length;
       const idx = count > 0 ? c.findMatchIndex() + 1 : 0;
@@ -138,35 +165,58 @@ export function WorkspacePage(props: {
     }
     if (c.gotoActive()) return `goto line: ${c.gotoDraft() || " "}▌  Enter jump · Esc close`;
     if (c.saveAsActive()) return `save as: ${c.saveAsDraft() || " "}▌  Enter save · Esc close`;
+    const ops = c.opsBar();
+    if (ops) {
+      const verb = ops.kind === "create-file" ? "new file"
+        : ops.kind === "create-dir" ? "new dir"
+        : ops.kind === "move" ? `move ${ops.source} →`
+        : `copy ${ops.source} →`;
+      return `${verb}: ${ops.draft || " "}▌  Enter confirm · Esc close`;
+    }
     const d = c.dialog();
     if (d?.kind === "dirty-confirm") return `${d.path} has unsaved edits — y save · n discard · Esc cancel`;
     if (d?.kind === "overwrite-confirm") return `${d.path} changed on disk — o overwrite · s save as · c cancel`;
     if (d?.kind === "reload-confirm") return `reload ${d.path}? local edits lost — y reload · n cancel`;
+    if (d?.kind === "delete-confirm") {
+      const dirty = c.dirtyPaths().has(d.path);
+      return `delete ${d.path}?${dirty ? " (has unsaved edits)" : ""} — y delete (to trash) · any other key cancels`;
+    }
+    if (d?.kind === "ops-overwrite") {
+      return `${d.path} exists — o overwrite · c cancel`;
+    }
     const region = c.focusRegion();
-    if (region === "tree") return "↑↓ nav · Enter/→ open · r refresh · . hidden · / Ctrl+P find file · F6 focus · q/Esc back";
+    if (region === "tree") {
+      return `↑↓ nav · Enter/→ open · a file · A dir · m/F2 rename · c copy · d delete · r refresh · . hidden · v validate${validationSuffix()}`;
+    }
     const file = c.openFile();
     if (region === "editor" && file) {
-      const note = c.editorStatus() ? `  ${c.editorStatus()}` : "";
+      const note = c.editorStatus() ? `  · ${c.editorStatus()}` : "";
       if (c.isEditing()) {
-        return `${file.relPath} · Ln ${c.cursorLn() + 1}:${c.cursorCol() + 1} · Ctrl+S save · Ctrl+F find · Ctrl+G line · Esc back${note}`;
+        return `${file.relPath} · Ln ${c.cursorLn() + 1}:${c.cursorCol() + 1} · Ctrl+S save · Ctrl+F find · Ctrl+G line · Esc back${note}${validationSuffix()}`;
       }
       const hint = file.kind === "markdown" ? "m edit · " : "";
-      return `${file.relPath} · read-only · ${hint}r reload · Esc back${note}`;
+      return `${file.relPath} · read-only · ${hint}r reload · v validate · Esc back${note}${validationSuffix()}`;
     }
     return "";
   });
 
   /**
-   * Colour tone for the status line. Input bars (find/goto/save-as) stay muted
-   * — they are prompts, not alerts. The three confirm dialogs and any
-   * disk-change notice escalate to amber (potential data loss); failures go
-   * red; save/reload confirmations go emerald. Warn/error also render bold so
-   * a "save before closing?" or "changed on disk" actually reads at a glance.
+   * Colour tone for the status line. Input bars (find/goto/save-as/ops) and the
+   * findings panel stay muted — they are prompts, not alerts. The confirm
+   * dialogs (data-loss or destructive) and disk-change notices escalate to
+   * amber; validation errors go red, warnings amber, a clean pass emerald.
+   * Warn/error also render bold so a "delete?" or "✗ 2" actually reads.
    */
   const statusTone = createMemo<EditorStatusTone>(() => {
-    if (c.findActive() || c.gotoActive() || c.saveAsActive()) return "info";
+    if (c.findingsOpen() || c.findActive() || c.gotoActive() || c.saveAsActive() || c.opsBar()) return "info";
     if (c.dialog()) return "warn";
     if (c.externalChanged().size > 0) return "warn";
+    switch (validationSeverity(c.validationState())) {
+      case 2: return "error";
+      case 1: return "warn";
+      case 0: return "success";
+      default: break;
+    }
     return c.editorStatusTone();
   });
   const statusFg = createMemo(() => {
@@ -325,6 +375,37 @@ export function WorkspacePage(props: {
             <text content="↑↓ select · Enter open · Esc close" fg={palette.textDim} wrapMode="none" />
           </box>
         </Show>
+
+        {/* —— validation findings panel (B4 §5.2) —— */}
+        <Show when={c.findingsOpen()} fallback={<box width={0} height={0} />}>
+          <box
+            position="absolute"
+            left={Math.max(0, Math.floor((props.width - quickOpenWidth(props.width)) / 2))}
+            top={1}
+            width={quickOpenWidth(props.width)}
+            border
+            borderColor={palette.brand}
+            backgroundColor={palette.bg}
+            flexDirection="column"
+            paddingX={1}
+          >
+            <FindingsHeader state={c.validationState()} />
+            <For each={findingsList(c.validationState())}>
+              {(finding, index) => (
+                <text
+                  content={`${finding.severity === "error" ? "✗" : "⚠"} ${finding.text}${finding.anchored ? "" : "  (no anchor)"}`}
+                  fg={index() === c.findingsIndex() ? palette.brand : finding.severity === "error" ? palette.error : palette.warn}
+                  attributes={index() === c.findingsIndex() ? 1 : 0}
+                  wrapMode="none"
+                />
+              )}
+            </For>
+            <Show when={findingsList(c.validationState()).length === 0} fallback={<box height={0} />}>
+              <text content="(nothing to report)" fg={palette.textDim} wrapMode="none" />
+            </Show>
+            <text content="↑↓ navigate · Enter jump · Esc close" fg={palette.textDim} wrapMode="none" />
+          </box>
+        </Show>
       </box>
 
       {/* —— editor status line (D5 low-band hint bar) —— */}
@@ -358,6 +439,21 @@ function EditorBuffer(props: {
   onCleanup(() => {
     if (ta) c.unregisterEditorInstance(props.relPath);
   });
+  // Hidden→visible viewport re-sync. Pool instances mount with
+  // `visible={false}` (Yoga display:none → width clamped to 1, and onResize
+  // is skipped while invisible), so the EditorView keeps its constructor
+  // fallback width (80). OpenTUI does not reliably re-fire onResize when the
+  // node is shown again, which leaves soft-wrap computed against the stale
+  // width — wraps land in the wrong places. Re-sync once the node has been
+  // laid out again (deferred past the visibility change).
+  createEffect(() => {
+    if (!props.active()) return;
+    const ed = ta;
+    if (!ed) return;
+    setTimeout(() => {
+      if (!ed.isDestroyed && ed.width > 1) ed.editorView.setViewportSize(ed.width, ed.height);
+    }, 0);
+  });
   return (
     <box width="100%" flexGrow={1} flexDirection="row" visible={props.active()}>
       <line_number fg={palette.textDim} minWidth={4} paddingRight={1}>
@@ -368,12 +464,26 @@ function EditorBuffer(props: {
           }}
           initialValue={c.editorInitialContent(props.relPath)}
           focused={props.focused()}
-          wrapMode="none"
+          width="100%"
+          height="100%"
+          // Soft wrap (VSCode-style): long lines continue on the next visual
+          // row and the gutter stays blank there — no horizontal scrolling at
+          // all. (The textarea's default scroll margin also starts horizontal
+          // scroll ~20% before the right edge under wrapMode="none", which is
+          // why the old build felt like it scrolled at three-quarter width.)
+          wrapMode="word"
           keyBindings={EDITOR_KEY_BINDINGS}
           onKeyDown={(e) => {
             if (e.name === "tab" && !e.shift) {
               ta?.insertText("  ");
               e.preventDefault();
+              return;
+            }
+            // Defer the horizontal-scroll reset past the textarea's own key
+            // handling (onKeyDown fires before handleKeyPress moves the cursor).
+            if (ta && NAVIGATION_KEYS.has(e.name ?? "")) {
+              const ed = ta;
+              setTimeout(() => resetStaleHorizontalScroll(ed), 0);
             }
           }}
           onContentChange={() => c.markEditorContentChanged(props.relPath)}
@@ -386,4 +496,13 @@ function EditorBuffer(props: {
 
 function quickOpenWidth(pageWidth: number): number {
   return Math.max(30, Math.min(72, Math.floor(pageWidth * 0.6)));
+}
+
+function findingsList(state: import("../workspace-validate").ValidationState): import("../workspace-validate").LocatedFinding[] {
+  return state.state === "result" ? state.findings : [];
+}
+
+function FindingsHeader(props: { state: import("../workspace-validate").ValidationState }) {
+  const summary = () => validationSummary(props.state);
+  return <text content={`findings: ${summary() || "—"}`} fg={palette.textPrimary} wrapMode="none" />;
 }

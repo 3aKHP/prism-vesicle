@@ -41,6 +41,12 @@ function mockEditor(initial: string) {
     gotoLine: (n: number) => { calls.gotoLine.push(n); },
     insertText: (s: string) => { text += s; },
     replaceText: (s: string) => { text = s; calls.replaceText.push(s); },
+    logicalCursor: { row: 0, col: 0, offset: 0 },
+    // editorView stub: offsetX stays 0 so resetStaleHorizontalScroll is a no-op.
+    editorView: {
+      getViewport: () => ({ offsetX: 0, offsetY: 0, width: 80, height: 24 }),
+      setViewport: () => undefined,
+    },
     calls,
     /** Test hook: simulate the user typing — mutates plainText. */
     type: (s: string) => { text = s; },

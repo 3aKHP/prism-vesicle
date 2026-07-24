@@ -10,6 +10,21 @@ import {
   readMtimeMs,
 } from "./workspace-editor";
 import {
+  copyEntry,
+  createDirectory,
+  createFile,
+  entryExists,
+  moveEntry,
+  removeFile,
+  trashEntry,
+} from "./workspace-fileops";
+import {
+  pendingValidation,
+  runValidation,
+  type LocatedFinding,
+  type ValidationState,
+} from "./workspace-validate";
+import {
   buildFileIndex,
   flattenVisibleTree,
   matchFiles,
@@ -57,8 +72,16 @@ export type ViewerScrollEdge = "home" | "end";
  */
 export type EditorStatusTone = "info" | "success" | "warn" | "error";
 
-type EditorDialogKind = "dirty-confirm" | "overwrite-confirm" | "reload-confirm";
-type EditorDialog = { kind: EditorDialogKind; path: string } | null;
+type B3DialogKind = "dirty-confirm" | "overwrite-confirm" | "reload-confirm";
+type EditorDialog =
+  | { kind: B3DialogKind; path: string }
+  | { kind: "delete-confirm"; path: string }
+  | { kind: "ops-overwrite"; path: string; op: "move" | "copy"; source: string }
+  | null;
+
+/** Tree file-management input bar (B4 §5.1): path prompts isomorphic to save-as. */
+type OpsBarKind = "create-file" | "create-dir" | "move" | "copy";
+type OpsBar = { kind: OpsBarKind; draft: string; source: string } | null;
 
 type EditorBufferMeta = {
   savedSnapshot: string;
@@ -105,6 +128,25 @@ function normalizeVimKey(key: TuiKeyEvent): TuiKeyEvent {
  */
 function isCtrl(key: TuiKeyEvent, letter: string): boolean {
   return Boolean(key.ctrl && key.name === letter);
+}
+
+/**
+ * Reset a stale horizontal scroll offset after the cursor lands on a shorter
+ * line. OpenTUI's textarea scrolls right to follow the cursor on a long line
+ * but does not pull the offset back when the cursor moves to a shorter line,
+ * so the shorter line renders with its start cut off. This only resets when
+ * the cursor already fits within the viewport from offset 0, so typing on a
+ * long line is never disturbed. Used after navigation keys (deferred, see
+ * WorkspacePage) and after imperative goto / find jumps.
+ *
+ * Dormant while the editor uses wrapMode="word" (no horizontal scroll, so
+ * offsetX stays 0); kept as the guard for any future return to "none".
+ */
+export function resetStaleHorizontalScroll(ed: TextareaRenderable): void {
+  const vp = ed.editorView.getViewport();
+  if (vp.offsetX > 0 && ed.logicalCursor.col < vp.width) {
+    ed.editorView.setViewport(0, vp.offsetY, vp.width, vp.height, false);
+  }
 }
 
 function isSaveKey(key: TuiKeyEvent): boolean {
@@ -177,6 +219,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   const [saveAsDraft, setSaveAsDraft] = createSignal("");
 
   const [dialog, setDialog] = createSignal<EditorDialog>(null);
+
+  // —— file-management ops bar (B4 §5.1) ——
+  const [opsBar, setOpsBar] = createSignal<OpsBar>(null);
+
+  // —— in-page validation (B4 §5.2) ——
+  const [validationState, setValidationState] = createSignal<ValidationState>(pendingValidation);
+  const [findingsOpen, setFindingsOpen] = createSignal(false);
+  const [findingsIndex, setFindingsIndex] = createSignal(0);
 
   async function recomputeRows(): Promise<void> {
     const version = ++flattenVersion;
@@ -263,6 +313,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setViewMode(preview.kind === "markdown" ? "preview" : "source");
     setFocusRegion("editor");
     status("");
+    setValidationState(runValidation(preview.lines?.join("\n") ?? ""));
     if (isEditablePreview(preview)) {
       await openEditableBuffer(relPath);
     } else {
@@ -407,6 +458,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const preview = await readFilePreview(rootDir, file.relPath);
     if (preview) {
       setOpenFile(preview);
+      setValidationState(runValidation(preview.lines?.join("\n") ?? ""));
       status(`reloaded ${file.relPath}`, "success");
     }
   }
@@ -530,11 +582,18 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     });
     invalidateDirCache(relPath);
     status(`saved ${relPath}`, "success");
+    setValidationState(runValidation(content));
   }
 
   function invalidateDirCache(relPath: string): void {
-    const slash = relPath.lastIndexOf("/");
-    scanCache.delete(slash >= 0 ? relPath.slice(0, slash) : "");
+    // Walk the ancestor chain to the root so a deeply-nested create/move
+    // refreshes every expanded directory on the path (a `mkdir -p a/b/c`
+    // creates a new top-level `a` that the cached root listing would miss).
+    const parts = relPath.split("/");
+    for (let i = parts.length - 1; i >= 1; i -= 1) {
+      scanCache.delete(parts.slice(0, i).join("/"));
+    }
+    scanCache.delete("");
   }
 
   async function commitSaveAs(target: string): Promise<void> {
@@ -666,6 +725,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (offset === undefined) return;
     const length = findQuery().length;
     instance.setSelection(offset, offset + length);
+    resetStaleHorizontalScroll(instance);
   }
 
   function openGoto(): void {
@@ -681,6 +741,218 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     // line shows "save as: ▌" and Enter commits the typed path.
     setSaveAsDraft("");
     setSaveAsActive(true);
+  }
+
+  // —— file management (B4 §5.1) ——
+
+  /** Directory prefix of the current tree selection (dir itself, or a file's parent). */
+  function selectionDirPrefix(): string {
+    const row = rows()[selectedIndex()];
+    if (!row) return "";
+    const rel = row.node.relPath;
+    if (row.node.kind === "dir") return rel.endsWith("/") ? rel : `${rel}/`;
+    const slash = rel.lastIndexOf("/");
+    return slash >= 0 ? rel.slice(0, slash + 1) : "";
+  }
+
+  function openOpsBar(kind: OpsBarKind): void {
+    const row = rows()[selectedIndex()];
+    if (!row) return;
+    const source = row.node.relPath;
+    // create-* and move/copy both prefill the directory part so the user types
+    // the new name in place (B3 save-as taught us a pre-filled full path just
+    // has to be cleared first).
+    setOpsBar({ kind, draft: selectionDirPrefix(), source });
+  }
+
+  function handleOpsBarKey(key: TuiKeyEvent): boolean {
+    const bar = opsBar();
+    if (!bar) return false;
+    if (key.name === "escape") { setOpsBar(null); return true; }
+    if (key.name === "enter") {
+      const draft = bar.draft.trim().replace(/\\/g, "/");
+      setOpsBar(null);
+      if (!draft) { status(`${bar.kind} needs a path`, "error"); return true; }
+      try {
+        assertProjectRelativePath(rootDir, draft);
+      } catch (error) {
+        status(String(error instanceof Error ? error.message : error), "error");
+        return true;
+      }
+      if (bar.kind === "create-file") void execCreateFile(draft);
+      else if (bar.kind === "create-dir") void execCreateDir(draft);
+      else if (bar.kind === "move") void execMove(bar.source, draft, false);
+      else void execCopy(bar.source, draft, false);
+      return true;
+    }
+    if (key.name === "backspace") {
+      setOpsBar((b) => (b ? { ...b, draft: b.draft.slice(0, -1) } : b));
+      return true;
+    }
+    const ch = printableChar(key);
+    if (ch && /[A-Za-z0-9._\-/]/.test(ch)) {
+      setOpsBar((b) => (b ? { ...b, draft: b.draft + ch } : b));
+    }
+    return true;
+  }
+
+  async function execCreateFile(relPath: string): Promise<void> {
+    try {
+      await createFile(rootDir, relPath);
+      status(`created ${relPath}`, "success");
+      await afterTreeMutation(relPath);
+      await openPath(relPath);
+    } catch (error) { status(errMsg(error), "error"); }
+  }
+
+  async function execCreateDir(relPath: string): Promise<void> {
+    try {
+      await createDirectory(rootDir, relPath);
+      status(`created directory ${relPath}`, "success");
+      await afterTreeMutation(relPath);
+      selectRelPath(relPath);
+    } catch (error) { status(errMsg(error), "error"); }
+  }
+
+  async function execMove(source: string, target: string, overwrite: boolean): Promise<void> {
+    if (target === source) { status("move target equals source", "error"); return; }
+    if (!overwrite && await entryExists(rootDir, target)) {
+      setDialog({ kind: "ops-overwrite", path: target, op: "move", source });
+      return;
+    }
+    try {
+      if (overwrite) await removeFile(rootDir, target).catch(() => undefined);
+      await moveEntry(rootDir, source, target);
+      rekeyOpenBuffer(source, target);
+      status(`moved ${source} → ${target}`, "success");
+      await afterTreeMutation2(source, target);
+      selectRelPath(target);
+    } catch (error) { status(errMsg(error), "error"); }
+  }
+
+  async function execCopy(source: string, target: string, overwrite: boolean): Promise<void> {
+    if (target === source) { status("copy target equals source", "error"); return; }
+    if (!overwrite && await entryExists(rootDir, target)) {
+      setDialog({ kind: "ops-overwrite", path: target, op: "copy", source });
+      return;
+    }
+    try {
+      if (overwrite) await removeFile(rootDir, target).catch(() => undefined);
+      await copyEntry(rootDir, source, target);
+      status(`copied ${source} → ${target}`, "success");
+      await afterTreeMutation2(source, target);
+      selectRelPath(target);
+    } catch (error) { status(errMsg(error), "error"); }
+  }
+
+  async function execDelete(relPath: string): Promise<void> {
+    try {
+      // Drop any open editable buffer for this path first (the confirm already
+      // noted unsaved edits); also clear the viewer if it was showing it.
+      if (bufferMeta.has(relPath)) closeBuffer(relPath);
+      if (openFile()?.relPath === relPath) {
+        setOpenFile(null);
+        setActiveEditorPath(null);
+        setFocusRegion("tree");
+        setValidationState(pendingValidation);
+      }
+      const trashPath = await trashEntry(rootDir, relPath);
+      status(`moved ${relPath} → ${trashPath} (trash)`, "success");
+      await afterTreeMutation(relPath);
+    } catch (error) { status(errMsg(error), "error"); }
+  }
+
+  /**
+   * Rekey an open editable buffer from oldPath to newPath (rename/move).
+   * Content and dirty state survive via the captured plainText → initialValue
+   * on remount; the textarea's undo stack does NOT survive the path-keyed
+   * remount (a known B4 limitation — finish editing before renaming if undo
+   * matters). Read-only viewers just refresh via afterTreeMutation.
+   */
+  function rekeyOpenBuffer(oldPath: string, newPath: string): void {
+    if (oldPath === newPath) return;
+    const meta = bufferMeta.get(oldPath);
+    if (!meta) return;
+    const inst = instances.get(oldPath);
+    const currentText = inst?.plainText ?? meta.savedSnapshot;
+    bufferMeta.delete(oldPath);
+    bufferMeta.set(newPath, { ...meta, initialContent: currentText });
+    instances.delete(oldPath);
+    setEditorOrder((order) => order.map((p) => (p === oldPath ? newPath : p)));
+    setActiveEditorPath((p) => (p === oldPath ? newPath : p));
+    setDirtyPaths((set) => rekeySet(set, oldPath, newPath));
+    setExternalChanged((set) => rekeySet(set, oldPath, newPath));
+    const file = openFile();
+    if (file?.relPath === oldPath) setOpenFile({ ...file, relPath: newPath });
+  }
+
+  function rekeySet(set: ReadonlySet<string>, oldPath: string, newPath: string): ReadonlySet<string> {
+    if (!set.has(oldPath)) return set;
+    const next = new Set(set);
+    next.delete(oldPath);
+    next.add(newPath);
+    return next;
+  }
+
+  async function afterTreeMutation(relPath: string): Promise<void> {
+    invalidateDirCache(relPath);
+    await Promise.all([recomputeRows(), rebuildIndex()]);
+  }
+
+  async function afterTreeMutation2(source: string, target: string): Promise<void> {
+    invalidateDirCache(source);
+    invalidateDirCache(target);
+    await Promise.all([recomputeRows(), rebuildIndex()]);
+  }
+
+  /** Move the tree selection to a project-relative path if it is visible. */
+  function selectRelPath(relPath: string): void {
+    const idx = rows().findIndex((row) => row.node.relPath === relPath);
+    if (idx >= 0) setSelectedIndex(idx);
+  }
+
+  function errMsg(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  // —— in-page validation (B4 §5.2) ——
+
+  function openFindings(): void {
+    const file = openFile();
+    if (!file) { status("open a file to validate", "info"); return; }
+    setValidationState(runValidation(file.lines?.join("\n") ?? ""));
+    setFindingsIndex(0);
+    setFindingsOpen(true);
+  }
+
+  function handleFindingsKey(key: TuiKeyEvent): boolean {
+    const state = validationState();
+    const findings = state.state === "result" ? state.findings : [];
+    if (key.name === "escape") { setFindingsOpen(false); return true; }
+    if (findings.length === 0) return true;
+    if (key.name === "up") { setFindingsIndex((i) => Math.max(0, i - 1)); return true; }
+    if (key.name === "down") { setFindingsIndex((i) => Math.min(findings.length - 1, i + 1)); return true; }
+    if (key.name === "enter") {
+      const finding = findings[findingsIndex()];
+      if (finding && finding.line !== null) jumpToFinding(finding);
+      return true;
+    }
+    return true;
+  }
+
+  /** Land the active editable buffer at a finding's line and close the panel. */
+  function jumpToFinding(finding: LocatedFinding): void {
+    const file = openFile();
+    if (!file || !isEditablePreview(file) || finding.line === null) return;
+    if (activeEditorPath() !== file.relPath) setActiveEditorPath(file.relPath);
+    setViewMode("source");
+    setFocusRegion("editor");
+    setFindingsOpen(false);
+    const inst = instances.get(file.relPath);
+    if (inst) {
+      inst.gotoLine(finding.line);
+      resetStaleHorizontalScroll(inst);
+    }
   }
 
   // —— quick open ——
@@ -756,7 +1028,13 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (key.name === "enter") {
       const target = parseInt(gotoDraft(), 10);
       setGotoActive(false);
-      if (Number.isFinite(target) && target >= 1) activeInstance()?.gotoLine(target - 1);
+      if (Number.isFinite(target) && target >= 1) {
+        const inst = activeInstance();
+        if (inst) {
+          inst.gotoLine(target - 1);
+          resetStaleHorizontalScroll(inst);
+        }
+      }
       return true;
     }
     if (key.name === "backspace") {
@@ -818,6 +1096,23 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       if (key.name === "n") { setDialog(null); return true; }
       return true;
     }
+    if (current.kind === "delete-confirm") {
+      // Plan §5.1: "y deletes / anything else cancels".
+      if (key.name === "y") { const p = current.path; setDialog(null); void execDelete(p); return true; }
+      setDialog(null);
+      return true;
+    }
+    if (current.kind === "ops-overwrite") {
+      if (key.name === "o") {
+        const { op, source, path: target } = current;
+        setDialog(null);
+        if (op === "move") void execMove(source, target, true);
+        else void execCopy(source, target, true);
+        return true;
+      }
+      if (key.name === "c") { setDialog(null); return true; }
+      return true;
+    }
     return true;
   }
 
@@ -842,6 +1137,16 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "r": void refresh(); return true;
       case ".": void toggleHidden(); return true;
       case "/": openQuickOpen(); return true;
+      case "a": openOpsBar(key.shift ? "create-dir" : "create-file"); return true;
+      case "m":
+      case "f2": openOpsBar("move"); return true;
+      case "c": openOpsBar("copy"); return true;
+      case "d": {
+        const row = rows()[selectedIndex()];
+        if (row) setDialog({ kind: "delete-confirm", path: row.node.relPath });
+        return true;
+      }
+      case "v": openFindings(); return true;
       case "q": setFocusRegion("composer"); return true;
       case "escape": setFocusRegion("composer"); return true;
       default: return true; // focused region owns (and swallows) the rest
@@ -854,6 +1159,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "q": setFocusRegion("tree"); return true;
       case "r": void reloadViewer(); return true;
       case "m": toggleViewMode(); return true;
+      case "v": openFindings(); return true;
       case "up": viewerScrollBy?.(-1); return true;
       case "down": viewerScrollBy?.(1); return true;
       case "pageup": viewerScrollBy?.(-10); return true;
@@ -900,7 +1206,9 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   function handleKey(key: TuiKeyEvent): boolean {
     if (page() !== "workspace") return false;
     if (quickOpenActive()) return handleQuickOpenKey(key);
+    if (findingsOpen()) return handleFindingsKey(key);
     if (dialog()) return handleDialogKey(key);
+    if (opsBar()) return handleOpsBarKey(key);
     if (findActive()) return handleFindKey(key);
     if (gotoActive()) return handleGotoKey(key);
     if (saveAsActive()) return handleSaveAsKey(key);
@@ -965,6 +1273,13 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     saveAsActive,
     saveAsDraft,
     dialog,
+    // file management (B4)
+    opsBar,
+    // in-page validation (B4)
+    validationState,
+    findingsOpen,
+    findingsIndex,
+    openFindings,
     // quick open
     quickOpenActive,
     quickQuery,
