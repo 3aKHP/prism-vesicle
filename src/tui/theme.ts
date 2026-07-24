@@ -14,32 +14,32 @@ import { SyntaxStyle } from "@opentui/core";
  * transcript, artifact previews, and fenced code blocks stay visually aligned.
  */
 export const sharedSyntaxStyle: SyntaxStyle = SyntaxStyle.fromStyles({
-  default: { fg: "#dde1ea" },
-  conceal: { fg: "#4a5470", dim: true },
-  spell: { fg: "#dde1ea" },
+  default: { fg: "#e3e5e6" },
+  conceal: { fg: "#54585b", dim: true },
+  spell: { fg: "#e3e5e6" },
 
   "markup.heading": { fg: "#10b981", bold: true },
   "markup.heading.1": { fg: "#10b981", bold: true },
   "markup.heading.2": { fg: "#22d3ee", bold: true },
   "markup.heading.3": { fg: "#e8c97a", bold: true },
-  "markup.heading.4": { fg: "#aab2c5", bold: true },
-  "markup.heading.5": { fg: "#aab2c5", bold: true },
-  "markup.heading.6": { fg: "#aab2c5", bold: true },
+  "markup.heading.4": { fg: "#aeb2b4", bold: true },
+  "markup.heading.5": { fg: "#aeb2b4", bold: true },
+  "markup.heading.6": { fg: "#aeb2b4", bold: true },
   "markup.strong": { fg: "#e6d4a7", bold: true },
-  "markup.italic": { fg: "#aab2c5", italic: true },
-  "markup.strikethrough": { fg: "#6b7390", dim: true },
+  "markup.italic": { fg: "#aeb2b4", italic: true },
+  "markup.strikethrough": { fg: "#787c7f", dim: true },
   "markup.raw": { fg: "#e8c97a" },
-  "markup.raw.block": { fg: "#dde1ea" },
+  "markup.raw.block": { fg: "#e3e5e6" },
   "markup.link": { fg: "#67e8f9", underline: true },
   "markup.link.url": { fg: "#67e8f9", underline: true },
   "markup.link.label": { fg: "#67e8f9" },
   "markup.list": { fg: "#10b981", bold: true },
   "markup.list.checked": { fg: "#2dd4bf", bold: true },
-  "markup.list.unchecked": { fg: "#6b7390" },
+  "markup.list.unchecked": { fg: "#787c7f" },
   "markup.quote": { fg: "#a89cd9", italic: true },
   label: { fg: "#a89cd9", bold: true },
 
-  comment: { fg: "#6b7390", italic: true },
+  comment: { fg: "#787c7f", italic: true },
   string: { fg: "#2dd4bf" },
   "string.special": { fg: "#67e8f9" },
   "string.escape": { fg: "#e8c97a" },
@@ -50,10 +50,10 @@ export const sharedSyntaxStyle: SyntaxStyle = SyntaxStyle.fromStyles({
   character: { fg: "#2dd4bf" },
   "character.special": { fg: "#e8c97a" },
 
-  variable: { fg: "#dde1ea" },
+  variable: { fg: "#e3e5e6" },
   "variable.builtin": { fg: "#67e8f9" },
-  "variable.member": { fg: "#aab2c5" },
-  property: { fg: "#aab2c5" },
+  "variable.member": { fg: "#aeb2b4" },
+  property: { fg: "#aeb2b4" },
   function: { fg: "#22d3ee", bold: true },
   "function.call": { fg: "#22d3ee" },
   "function.method": { fg: "#22d3ee" },
@@ -68,9 +68,9 @@ export const sharedSyntaxStyle: SyntaxStyle = SyntaxStyle.fromStyles({
 
   keyword: { fg: "#e879f9", bold: true },
   "keyword.directive": { fg: "#f43f5e", bold: true },
-  operator: { fg: "#aab2c5" },
-  "punctuation.delimiter": { fg: "#6b7390" },
-  "punctuation.bracket": { fg: "#aab2c5" },
+  operator: { fg: "#aeb2b4" },
+  "punctuation.delimiter": { fg: "#787c7f" },
+  "punctuation.bracket": { fg: "#aeb2b4" },
   "punctuation.special": { fg: "#10b981" },
   tag: { fg: "#10b981", bold: true },
 });
@@ -78,53 +78,64 @@ export const sharedSyntaxStyle: SyntaxStyle = SyntaxStyle.fromStyles({
 /**
  * Synaptic Prism — the Prism Vesicle TUI identity.
  *
- * Concept: a deep, cool "neural" surface (the vesicle) refracted by a single
- * emerald accent (the prism). Panels are separated by space and near-invisible
- * borders, reserving saturated colour for state (gates, errors) and for the
- * role spectrum that runs through the message stream. The goal is calm
- * density, not a generic blue chat shell.
+ * Concept: a neutral graphite surface (hue ≈ 200°, chroma ≤ 8% — no warm
+ * cast, which reads dirty at terminal scale; no SaaS blue) refracted by a
+ * single emerald accent (the prism). Panels
+ * are separated by space and near-invisible borders, reserving saturated
+ * colour for state (gates, errors) and for the role spectrum that runs
+ * through the message stream. The goal is calm density, not a generic blue
+ * chat shell.
  *
  * Palette roles:
- *   - Surfaces (bg / panelBorder / sectionBorder): dark, low-contrast; panels
- *     are defined by space, not loud lines.
- *   - Text hierarchy (textPrimary -> textDim): cool-neutral, receding.
+ *   - Surfaces (bg / panelBorder / sectionBorder): neutral graphite,
+ *     low-contrast; panels are defined by space, not loud lines.
+ *   - Text hierarchy (textPrimary -> textDim): warm-neutral, receding.
  *   - Role spectrum (user / assistant / system / tool): cool incoming signal
  *     vs warm narrative vs muted mechanism — replaces the generic chat rainbow.
  *   - Semantic state (error / success / warn / gate*): desaturated signals.
  *   - brand: the one accent (emerald) — focus and identity.
  *   - lane*: dimmed role hues for the per-message left spectrum lane, the
- *     signature element; wired in the layout/component phase.
+ *     signature element; consumed by the message widgets (user / assistant /
+ *     system / tool lanes).
  *
  * This file is the single source of truth for colour. Swap values here to
  * re-theme the whole app without touching JSX — every surface reads palette.*.
  * Values are a first pass; tune live against the running TUI.
  */
 export const palette = {
-  // Surfaces — deep, cool, neural.
-  bg: "#0b0e14",
-  panelBorder: "#222a3a",
-  sectionBorder: "#2b3346",
+  // Surfaces — neutral graphite with a whisper of cool (hue ≈ 200°, chroma
+  // ≤ 8%): no warm cast (warm dark grounds read dirty in a terminal), no
+  // SaaS blue. Panels are defined by space, not loud lines.
+  bg: "#121415",
+  panelBorder: "#272b2d",
+  sectionBorder: "#32373a",
 
-  // Text — cool-neutral hierarchy that recedes into the background.
-  textPrimary: "#dde1ea",
-  textSecondary: "#aab2c5",
-  textMuted: "#6b7390",
-  textDim: "#4a5470",
+  // Text — warm-neutral hierarchy that recedes into the background.
+  textPrimary: "#e3e5e6",
+  textSecondary: "#aeb2b4",
+  textMuted: "#787c7f",
+  textDim: "#54585b",
 
-  // Role spectrum — cool incoming (user) vs warm narrative (assistant) vs
-  // muted mechanism (system / tool).
+  // Role spectrum — cool incoming (user) vs warm paper narrative (assistant)
+  // vs muted mechanism (system / tool). Assistant is deliberately desaturated
+  // paper, not gold: the warm-gold slot belongs to nothing else after the
+  // stage engine moved to violet, and engine identity rides the `▣ Engine`
+  // label anyway.
   user: "#67e8f9",
-  assistant: "#e6d4a7",
-  system: "#a0acc0",
+  assistant: "#ded7c8",
+  system: "#aaaeb1",
   tool: "#a89cd9",
 
   // Semantic state — desaturated so they read as signals, not decoration.
-  error: "#ef4444",
-  success: "#2dd4bf",
-  warn: "#e8c97a",
+  // success is locked emerald-bright ("the brand works"); error is deep alarm
+  // red, kept darker than weaver-orch's rose so alert ≠ engine identity.
+  error: "#dc2626",
+  success: "#34d399",
+  warn: "#d97706",
 
   // Gates keep the one sanctioned loud family: amber (state-meaningful).
-  gateBorder: "#d9923a",
+  // warn shares the locked amber — attention semantics are one family.
+  gateBorder: "#d97706",
   gateAccent: "#e8a94a",
 
   // Brand — the single accent. Emerald (replaces the earlier violet, which
@@ -132,17 +143,19 @@ export const palette = {
   brand: "#10b981",
   brandDim: "#1f9362", // dimmed emerald for structural labels / chrome accents
 
-  // Signature: per-message left spectrum lane (dimmed role hues). Wired in the
-  // layout/component phase; harmless here until consumed.
-  laneUser: "#3d8fe0",
-  laneAssistant: "#c2942f",
-  laneSystem: "#798499",
+  // Signature: per-message left spectrum lane (dimmed role hues). Consumed by
+  // Message.tsx per role and by ArtifactCard.
+  laneUser: "#2b8fa3",
+  laneAssistant: "#9a917c",
+  laneSystem: "#7e8285",
   laneTool: "#6b5fa1",
 } as const;
 
 // Engine accents — the prism refracts into a hue per engine. etl inherits the
-// emerald brand (default engine, unchanged look); the rest spread across the
-// spectrum. Used for engine-scoped chrome (header, future turn markers). The
+// emerald brand (default engine, unchanged look); the five refraction hues are
+// the locked engine spectrum. stage left the warm-gold slot (too close to
+// evaluate's yellow, Δh=5°) for the locked palette's last unused hue: violet
+// (#7c3aed family, brightened one step for dark-background legibility). The
 // per-message spectrum lane stays role-based and engine-independent.
 const ENGINE_ACCENTS: Record<string, string> = {
   etl: "#10b981",
@@ -151,7 +164,7 @@ const ENGINE_ACCENTS: Record<string, string> = {
   weaver: "#fb923c",
   "weaver-orch": "#f43f5e",
   dyad: "#e879f9",
-  stage: "#e6d4a7",
+  stage: "#8b5cf6",
 };
 
 export function engineAccent(engine: string): string {

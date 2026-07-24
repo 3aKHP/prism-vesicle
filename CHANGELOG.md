@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **TUI palette alignment with the locked brand palette.** A colour audit (see `dev/docs/working/VESICLE_DARK_PALETTE_AUDIT.md`) resolved three identity collisions in the dark theme: the assistant role colour was byte-identical to the stage engine accent, the warning sand blended into the assistant/stage/evaluate cluster, and the user spectrum lane used an off-brand SaaS blue. `assistant` is now a desaturated warm paper, `warn` and the gate border use the locked amber, `success` uses locked emerald-bright, `error` is a deeper alarm red distinct from weaver-orch's rose, and the user lane is a dimmed cyan matching its role text. The stage engine accent moved from warm gold to the locked palette's violet family (`#8b5cf6`) — the gold sat only 5° of hue from evaluate's yellow; violet is the last unused locked hue and fits the narrative engine's stage-light identity. The six refraction engine accents are unchanged.
+- **TUI surfaces moved to neutral graphite.** The shell background, borders, and neutral text scale left the legacy cool-blue family for a near-zero-chroma graphite (`#121415` ground, hue ≈ 200° at ≤ 8% chroma) — warm dark grounds read dirty at terminal scale, and the old blue-black read as generic IDE chrome. Syntax-highlight neutrals follow the same scale.
+
 ### Added
 
 - **Startup splash and empty-session hero (TUI).** Launch now opens with the ANSI-derived prism-vesicle brand mark and `PRISM VESICLE` wordmark plus a single slow traveling light along the membrane; it fades out once the provider configuration is ready (never blocking startup), ends immediately on the first keypress, and disappears without residue. Empty sessions show a quiet brand hero in the message area — compact mark, tagline, and one entry hint — instead of the bare `Ready.` system notice; the first conversation turn replaces it with the real transcript. The splash degrades by terminal capability: non-interactive terminals skip it, 256-colour terminals get a static quantized frame, and `VESICLE_REDUCED_MOTION=1` freezes the frame with the light stopped. All in-app marks are derived from `brand/prism-vesicle.ascii.txt` and re-rendered from the locked palette; no continuous animation exists anywhere below the splash.
