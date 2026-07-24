@@ -30,7 +30,7 @@ After the blueprint confirmation, pick **Confirm** at each phase gate, or type "
 
 ## Look at the artifact
 
-Files written to `workspace/` show up in the workspace sidebar. In the input box:
+Files written to `workspace/` show up in the Host sidebar. In the input box:
 
 ```
 /artifact

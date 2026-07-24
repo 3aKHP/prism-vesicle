@@ -46,7 +46,7 @@ export function Sidebar(props: {
   const mcpLines = () => mcpSidebarLines(props.mcp ?? { loading: false, configured: false, enabled: false, servers: [] }, props.width - 4);
   const processLine = () => processSidebarLines(props.processes ?? [], props.width - 4, props.currentSessionId)[0]!;
   return (
-    <box title="Workspace" border borderColor={palette.sectionBorder} width={props.width} padding={1} flexDirection="column">
+    <box title="Host" border borderColor={palette.sectionBorder} width={props.width} padding={1} flexDirection="column">
       <SectionLabel title="Status" />
       <PanelLine content={truncateLine(props.status, props.width - 4)} fg={statusColor(props.status)} attributes={1} />
       <PanelLine content=" " fg={palette.textDim} />

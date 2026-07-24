@@ -36,6 +36,7 @@ import {
   createUsageController,
   footerLine,
   headerLine,
+  workspaceHeaderLine,
   latestTurnUsage,
   sessionUsageTelemetryLine,
   sumSessionUsage,
@@ -60,10 +61,12 @@ import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
 import { createSideQuestionController } from "./side-question-controller";
+import { createWorkspaceController } from "./workspace-controller";
 import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
+import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
 
 export type AppProps = {
@@ -454,6 +457,13 @@ export function App(props: AppProps = {}) {
     setStatus,
     copyText: (text) => copyTextToClipboard(renderer, text),
   });
+  // Two-page shell (Scope B): page state outlives the per-page components.
+  const workspaceController = createWorkspaceController();
+  const workspaceActive = () => workspaceController.activePage() === "workspace";
+  function switchPage(): void {
+    setFocusedArtifactPath(null);
+    workspaceController.togglePage();
+  }
   const queuedWork = createQueuedWorkController({
     rootDir: process.cwd(),
     inputQueue,
@@ -809,6 +819,7 @@ export function App(props: AppProps = {}) {
     artifactFocusActive: () => focusedArtifactPath() !== null,
     enterArtifactFocus,
     handleArtifactFocusKey,
+    togglePage: switchPage,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -883,6 +894,10 @@ export function App(props: AppProps = {}) {
     openModelPicker,
     openQualityPicker,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
+    openWorkspacePage: () => {
+      setFocusedArtifactPath(null);
+      workspaceController.setActivePage("workspace");
+    },
   };
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
@@ -939,8 +954,10 @@ export function App(props: AppProps = {}) {
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
         <text
-          content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
-          fg={engineAccent(activeEngine())}
+          content={workspaceActive()
+            ? workspaceHeaderLine(process.cwd(), layout().width)
+            : headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
+          fg={workspaceActive() ? palette.brand : engineAccent(activeEngine())}
           attributes={1}
           wrapMode="none"
         />
@@ -973,7 +990,7 @@ export function App(props: AppProps = {}) {
           )}
         </Show>
 
-        <Show when={!sideQuestionController.overlay() && layout().showSidebar} fallback={<box width={0} />}>
+        <Show when={!sideQuestionController.overlay() && !workspaceActive() && layout().showSidebar} fallback={<box width={0} />}>
           <Sidebar
             status={status()}
             thinkingTier={thinkingTier()}
@@ -991,7 +1008,7 @@ export function App(props: AppProps = {}) {
           />
         </Show>
 
-        <Show when={!sideQuestionController.overlay()} fallback={<box width={0} />}>
+        <Show when={!sideQuestionController.overlay() && !workspaceActive()} fallback={<box width={0} />}>
           <MessageStream
             messages={messages()}
             streamingReasoning={streamingReasoning()}
@@ -1007,10 +1024,22 @@ export function App(props: AppProps = {}) {
           />
         </Show>
 
+        {/* Workspace page (Scope B / #62): the second top-level surface. The
+            side-question overlay still wins the main row while open; gate and
+            picker surfaces stay shared at the bottom so a turn's safety
+            prompts remain reachable from either page. */}
+        <Show when={!sideQuestionController.overlay() && workspaceActive()} fallback={<box width={0} />}>
+          <WorkspacePage
+            projectRoot={process.cwd()}
+            width={layout().width}
+            height={Math.max(6, dimensions().height - 3 - layout().footerHeight)}
+          />
+        </Show>
+
         {/* The former right-hand Activity / Artifacts pane was removed in the
             TUI rewrite. Agent-loop activity and artifact detail now fold into
             the message stream itself (tool-call rendering, Phase D). The left
-            Workspace sidebar holds the persistent artifact list. */}
+            Host sidebar holds the persistent artifact list. */}
       </box>
 
       <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>

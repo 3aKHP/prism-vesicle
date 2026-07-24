@@ -24,7 +24,7 @@
 - 路径**只能项目内相对**;绝对路径、`..` 上跳、符号链接穿越一律拒绝。
 - 写操作只允许落在这些根下:`source_materials/`、`workspace/`、`novels/`、`reports/`、`test_runs/`。
   - `source_materials/` 存放导入、研究或模型生成的素材;最终产物落在其余四个根。
-- 制品工作台侧栏只索引 `workspace/`、`novels/`、`reports/`、`test_runs/`(不含 `source_materials/`)。
+- Host 侧栏的制品列表只索引 `workspace/`、`novels/`、`reports/`、`test_runs/`(不含 `source_materials/`)。
 - `shell_exec` 是**唯一**的显式例外:它有宿主用户权限,刻意不走路径守卫(见下)。
 
 > 校验器(角色卡 / 情景卡等)是**建议性**信号:它指出结构问题,但不会强行中断你的回合。

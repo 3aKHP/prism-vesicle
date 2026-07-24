@@ -137,6 +137,9 @@ export type CommandContext = {
   openModelPicker: () => Promise<void>;
   openQualityPicker: () => Promise<void>;
   openSideQuestion: (args: string) => Promise<void>;
+
+  // —— shell pages (Scope B two-page model) ——
+  openWorkspacePage: () => void;
 };
 
 export type Command = {

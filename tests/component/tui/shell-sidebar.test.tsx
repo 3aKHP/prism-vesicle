@@ -12,7 +12,7 @@ describe("tui: shell and sidebar", () => {
     setup.renderer.destroy();
 
     expect(frame).toContain("Prism Vesicle");
-    expect(frame).toContain("Workspace");
+    expect(frame).toContain("Host");
     expect(frame).toContain("Messages");
     // M3: sidebar sections carry the restrained ASCII-frame label motif.
     expect(frame).toContain("┌─ Status");
@@ -31,7 +31,7 @@ describe("tui: shell and sidebar", () => {
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
 
-    expect(frame).toContain("Workspace");
+    expect(frame).toContain("Host");
     expect(frame).toContain("Messages");
     // The former right-hand Activity / Artifacts pane was removed in the TUI
     // rewrite; agent-loop detail now folds into the stream. A bottom telemetry

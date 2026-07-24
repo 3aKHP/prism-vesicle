@@ -32,7 +32,7 @@ Children are referenced by **short handle**, like `explore-1` (handles are uniqu
 - **Foreground**: blocks the current turn waiting for the child's result; the TUI stays responsive.
 - **Background**: returns a handle immediately without blocking. Results go into a **durable parent inbox** and are delivered when the parent session is **idle** (debounced and coalesced into a single `<subagent-results>` packet, so several completions do not each interrupt you). So background tasks **usually need no polling** — completion is reported to the conversation on the next turn automatically.
 
-Manage children with `/agents`: `/agents` lists, `/agents <handle>` inspects, `/agents stop <handle>` interrupts, `/agents retry` retries delivery after a child terminated on a provider error. Active/ready background work is visible in the header and workspace sidebar, and each child has a dedicated Agent card that updates in place.
+Manage children with `/agents`: `/agents` lists, `/agents <handle>` inspects, `/agents stop <handle>` interrupts, `/agents retry` retries delivery after a child terminated on a provider error. Active/ready background work is visible in the header and Host sidebar, and each child has a dedicated Agent card that updates in place.
 
 ## Limits (stated plainly)
 

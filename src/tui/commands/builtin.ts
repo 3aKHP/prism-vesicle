@@ -55,6 +55,7 @@ const HELP_TEXT = [
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
   "  /theme [dark|light|auto] show or set the colour theme (auto follows the terminal)",
+  "  /workspace        switch to the Workspace page (Ctrl+O switches pages)",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
   "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
   "  /artifact [n|path] list or preview generated artifacts",
@@ -439,6 +440,22 @@ export const builtinCommands: Command[] = [
       ctx.setStatus(`theme ${mode}`);
       ctx.recordActivity({ kind: "system", text: `theme ${mode}` });
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${mode}${mode === "auto" ? ` (terminal reports ${themeMode()})` : ""}.` }]);
+    },
+  },
+
+  {
+    name: "workspace",
+    busyBehavior: immediate,
+    description: "Switch to the Workspace page (project files)",
+    usage: "/workspace",
+    async run(ctx, _args, raw) {
+      ctx.openWorkspacePage();
+      ctx.setStatus("workspace page");
+      ctx.setMessages((prev) => [
+        ...prev,
+        { role: "user", content: raw },
+        { role: "system", content: "Workspace page open (placeholder — file tree arrives in B2). Ctrl+O switches between Chat and Workspace." },
+      ]);
     },
   },
 

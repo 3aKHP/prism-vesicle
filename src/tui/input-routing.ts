@@ -41,6 +41,7 @@ export type InputRoutingOptions = {
   artifactFocusActive?: Accessor<boolean>;
   enterArtifactFocus?: () => boolean;
   handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
+  togglePage?: () => void;
 };
 
 export function useInputRouting(options: InputRoutingOptions): void {
@@ -122,6 +123,14 @@ export function useInputRouting(options: InputRoutingOptions): void {
         return;
       case "composer":
         break;
+    }
+    // Page switch (Ctrl+O) sits above artifact focus and composer keys so it
+    // works from every non-modal surface; bottom-surface modals above still
+    // own their keys while active.
+    if (key.ctrl && key.name === "o" && options.togglePage) {
+      options.togglePage();
+      consumeKey(key);
+      return;
     }
     if (options.artifactFocusActive?.()) {
       if (options.handleArtifactFocusKey?.(key)) consumeKey(key);
