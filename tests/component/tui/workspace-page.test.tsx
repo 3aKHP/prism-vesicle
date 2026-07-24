@@ -119,4 +119,50 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("workspace/cards/mira.md");
     expect(frame).not.toContain("notes.txt");
   });
+
+  test("a long document never paints over the shell's bottom surface", async () => {
+    // Regression for the B2 overlap bug: the page used an explicit height that
+    // ignored the dynamically sized BottomSurface, so long viewer content
+    // painted over the composer. The page must flex-fill the main row instead.
+    const longLines = Array.from({ length: 100 }, (_, i) => `line ${i + 1} content`);
+    await writeFile(join(root, "long.txt"), longLines.join("\n") + "\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("long.txt");
+    const setup = await testRender(() => (
+      <box flexDirection="column" width="100%" height="100%">
+        <box height={3} border>
+          <text content="HEADER" wrapMode="none" />
+        </box>
+        <box flexDirection="row" flexGrow={1}>
+          <WorkspacePage
+            controller={controller}
+            projectRoot={root}
+            width={100}
+            height={17}
+            treeWidth={30}
+            compact={false}
+          />
+        </box>
+        <box height={3} border>
+          <text content="COMPOSER" wrapMode="none" />
+        </box>
+        <box height={1}>
+          <text content="FOOTER" wrapMode="none" />
+        </box>
+      </box>
+    ), { width: 100, height: 24 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    const rows = frame.split("\n");
+    const composerRow = rows.findIndex((row) => row.includes("COMPOSER"));
+    expect(composerRow).toBeGreaterThan(0);
+    // No document text may appear on or below the composer row, and the
+    // viewer's bottom border must sit directly above the composer box.
+    for (let i = composerRow - 1; i < rows.length; i += 1) {
+      expect(rows[i]).not.toContain("line ");
+    }
+    expect(rows[composerRow - 2]).toContain("└");
+  });
 });

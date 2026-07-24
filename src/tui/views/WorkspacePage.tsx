@@ -1,5 +1,5 @@
-import { createEffect, createMemo, For, onCleanup, Show } from "solid-js";
-import type { ScrollBoxRenderable } from "@opentui/core";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core";
 import { palette } from "../theme";
 import { MarkdownContent } from "../widgets/MarkdownContent";
 import type { WorkspaceController } from "../workspace-controller";
@@ -62,10 +62,24 @@ export function WorkspacePage(props: {
     scrollbox?.scrollTo({ x: 0, y: 0 });
   });
 
+  // —— measured height: the page must fill the main row exactly. The shell's
+  // bottom surface (composer / gate / picker) is dynamically sized, so an
+  // explicit height prop would overflow into it; flex-stretch plus measuring
+  // the tree box keeps the tree window slice inside the painted area. ——
+  const [treeHeight, setTreeHeight] = createSignal(props.height);
+  let treeBox: BoxRenderable | undefined;
+  createEffect(() => {
+    const box = treeBox;
+    if (!box) return;
+    box.onSizeChange = () => setTreeHeight(box.height);
+    setTreeHeight(box.height);
+    onCleanup(() => { box.onSizeChange = undefined; });
+  });
+
   // —— tree window: the visible slice follows the selection ——
   const treeViewport = createMemo(() => {
     const all = c.rows();
-    const capacity = Math.max(1, props.height - 2);
+    const capacity = Math.max(1, treeHeight() - 2);
     const selected = c.selectedIndex();
     const start = Math.max(0, Math.min(selected - Math.floor(capacity / 2), all.length - capacity));
     return { rows: all.slice(start, start + capacity), offset: start };
@@ -94,10 +108,11 @@ export function WorkspacePage(props: {
   const showViewer = () => !props.compact || (c.focusRegion() === "editor" && c.openFile());
 
   return (
-    <box flexDirection="row" width={props.width} height={props.height}>
+    <box flexDirection="row" flexGrow={1} width="100%">
       {/* —— file tree —— */}
       <Show when={showTree()} fallback={<box width={0} />}>
         <box
+          ref={treeBox}
           title={c.loading() ? " Files · loading… " : " Files "}
           border
           borderColor={c.focusRegion() === "tree" ? palette.brand : palette.panelBorder}

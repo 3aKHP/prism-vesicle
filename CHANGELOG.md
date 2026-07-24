@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Workspace page no longer paints over the composer.** The page used an explicit height that ignored the dynamically sized bottom surface (composer / gate / picker), so the bottom rows of a long document overlapped the input box. The page now flex-fills the main row, and the tree window follows the tree panel's measured height.
+
 ### Changed
 
 - **`/artifact` opens artifacts in the Workspace viewer.** Bare `/artifact` jumps to the Workspace page with the latest artifact open; `/artifact <n|path>` resolves the target and opens it there. The message-stream preview card is retired; validation (`/validate`) and revision flows are unchanged.
