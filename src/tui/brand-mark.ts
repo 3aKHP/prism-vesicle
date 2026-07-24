@@ -10,6 +10,8 @@
  * re-derive the ASCII file and refresh these snapshots in the same pass.
  */
 
+import { themeMode } from "./theme";
+
 export const PRIMARY_MARK: readonly string[] = [
   "                      ..:------:..",
   "                  .-====--------====-.",
@@ -48,10 +50,11 @@ export const COMPACT_MARK: readonly string[] = [
 /**
  * Density-ramp tinting from the brand ANSI layer: `%#@` toward bright emerald
  * (beam core / rim hot spots), `=+*` toward deep emerald, `.:-` toward the
- * dark surface family for a faint halo. All values come from the locked
- * palette in `dev/docs/working/PRISM_VESICLE_VISUAL_LANGUAGE.md` §4.
+ * dark surface family for a faint halo. One table per theme mode — the light
+ * table walks the same ramp one step deeper so the mark stays legible on the
+ * off-white ground. Dark values come from the locked palette.
  */
-const CELL_COLORS: Record<string, string> = {
+const DARK_CELL_COLORS: Record<string, string> = {
   "@": "#34d399",
   "#": "#10b981",
   "%": "#10b981",
@@ -63,18 +66,32 @@ const CELL_COLORS: Record<string, string> = {
   ".": "#1c211e",
 };
 
+const LIGHT_CELL_COLORS: Record<string, string> = {
+  "@": "#1d5743",
+  "#": "#266f54",
+  "%": "#266f54",
+  "=": "#43ae81",
+  "+": "#43ae81",
+  "*": "#43ae81",
+  ":": "#e0ded4",
+  "-": "#e0ded4",
+  ".": "#e0ded4",
+};
+
 export type MarkRun = { text: string; fg?: string };
 
 /**
  * Run-length encode a mark into colored spans per row. Runs without an fg are
  * plain background cells (spaces). Row content and order are preserved, so
- * concatenating a row's runs reproduces the source line.
+ * concatenating a row's runs reproduces the source line. Tints follow the
+ * active theme mode.
  */
 export function markRuns(mark: readonly string[]): MarkRun[][] {
+  const cellColors = themeMode() === "light" ? LIGHT_CELL_COLORS : DARK_CELL_COLORS;
   return mark.map((line) => {
     const runs: MarkRun[] = [];
     for (const char of line) {
-      const fg = CELL_COLORS[char];
+      const fg = cellColors[char];
       const last = runs[runs.length - 1];
       if (last && last.fg === fg) {
         last.text += char;

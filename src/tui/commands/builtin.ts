@@ -40,6 +40,7 @@ import {
 } from "./render";
 import { INSTRUCTION_COMBINED_BUDGET_BYTES, resolveEffectiveSelection } from "../../core/instructions";
 import type { EffectiveInstructionSelection } from "../../core/instructions";
+import { setThemePreference, themeMode, themePreference } from "../theme";
 
 const HELP_TEXT = [
   "Commands:",
@@ -53,6 +54,7 @@ const HELP_TEXT = [
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
+  "  /theme [dark|light|auto] show or set the colour theme (auto follows the terminal)",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
   "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
   "  /artifact [n|path] list or preview generated artifacts",
@@ -410,6 +412,33 @@ export const builtinCommands: Command[] = [
       ctx.recordActivity({ kind: "provider", text: `reasoning display ${mode}` });
       await ctx.persistReasoningSwitch(mode);
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Reasoning display set to ${mode}.` }]);
+    },
+  },
+
+  {
+    name: "theme",
+    busyBehavior: immediate,
+    description: "Show or set the colour theme",
+    usage: "/theme dark|light|auto",
+    completion: fixedCommandCompletion("theme"),
+    async run(ctx, args, raw) {
+      if (!args) {
+        ctx.setMessages((prev) => [
+          ...prev,
+          { role: "user", content: raw },
+          { role: "system", content: `Theme: ${themePreference()} (resolved: ${themeMode()}). Use /theme dark|light|auto — auto follows the terminal.` },
+        ]);
+        return;
+      }
+      const mode = args.trim().toLowerCase();
+      if (mode !== "dark" && mode !== "light" && mode !== "auto") {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /theme dark|light|auto" }]);
+        return;
+      }
+      setThemePreference(mode);
+      ctx.setStatus(`theme ${mode}`);
+      ctx.recordActivity({ kind: "system", text: `theme ${mode}` });
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${mode}${mode === "auto" ? ` (terminal reports ${themeMode()})` : ""}.` }]);
     },
   },
 

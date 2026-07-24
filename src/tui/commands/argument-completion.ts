@@ -16,7 +16,7 @@ export type ModelArgumentDraft =
   | { stage: "provider"; query: string }
   | { stage: "model"; providerId: string; query: string };
 
-export type FixedArgumentCommand = "engine" | "effort" | "reasoning" | "permissions";
+export type FixedArgumentCommand = "engine" | "effort" | "reasoning" | "permissions" | "theme";
 
 export type FixedArgumentDraft = {
   command: FixedArgumentCommand;
@@ -85,6 +85,13 @@ export function fixedArgumentOptions(command: FixedArgumentCommand): OptionItem[
       YOLO: "Auto-allow all effective tools · requires two confirmations",
     } as const;
     return permissionModes.map((mode) => ({ id: mode, label: mode, detail: details[mode] }));
+  }
+  if (command === "theme") {
+    return [
+      { id: "dark", label: "dark", detail: "Night mode · graphite ground" },
+      { id: "light", label: "light", detail: "Day mode · locked off-white ground" },
+      { id: "auto", label: "auto", detail: "Follow the terminal's own mode" },
+    ];
   }
   return [
     { id: "hidden", label: "hidden", detail: "Hide reasoning · aliases: hide, off" },
@@ -381,7 +388,7 @@ function quoteArgument(value: string): string {
 }
 
 function isFixedArgumentCommand(value: string): value is FixedArgumentCommand {
-  return value === "engine" || value === "effort" || value === "reasoning" || value === "permissions";
+  return value === "engine" || value === "effort" || value === "reasoning" || value === "permissions" || value === "theme";
 }
 
 function optionScore(query: string, item: OptionItem): number {

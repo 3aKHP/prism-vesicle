@@ -1,6 +1,6 @@
 import { createEffect, createSignal, onCleanup, onMount, Show, type Accessor } from "solid-js";
 import { COMPACT_MARK, PRIMARY_MARK, scaleHex, type SplashMode } from "../brand-mark";
-import { palette } from "../theme";
+import { palette, themeMode } from "../theme";
 import { BrandMark } from "./BrandMark";
 
 /**
@@ -26,8 +26,9 @@ const ORBITS: Record<string, { cx: number; cy: number; rx: number; ry: number }>
   compact: { cx: 12, cy: 4.5, rx: 8, ry: 4 },
 };
 
-const LIGHT_COLOR = "#34d399";
-const WORDMARK_COLOR = "#10b981";
+/** Travelling light core and wordmark follow the active theme's emerald. */
+const lightColor = () => (themeMode() === "light" ? "#43ae81" : "#34d399");
+const wordmarkColor = () => palette.brand;
 
 export function Splash(props: {
   mode: Exclude<SplashMode, "skip">;
@@ -139,9 +140,9 @@ export function Splash(props: {
         <box height={1} />
         <Show
           when={props.width >= 56}
-          fallback={<text content="PRISM VESICLE" fg={scaleHex(WORDMARK_COLOR, fadeFactor())} attributes={1} wrapMode="none" />}
+          fallback={<text content="PRISM VESICLE" fg={scaleHex(wordmarkColor(), fadeFactor())} attributes={1} wrapMode="none" />}
         >
-          <ascii_font text="PRISM VESICLE" font="tiny" color={scaleHex(WORDMARK_COLOR, fadeFactor())} />
+          <ascii_font text="PRISM VESICLE" font="tiny" color={scaleHex(wordmarkColor(), fadeFactor())} />
         </Show>
         <Show when={props.mode !== "static"} fallback={<box width={0} height={0} />}>
           <text
@@ -149,7 +150,7 @@ export function Splash(props: {
             left={lightCell().col}
             top={lightCell().row}
             content="@"
-            fg={scaleHex(LIGHT_COLOR, fadeFactor())}
+            fg={scaleHex(lightColor(), fadeFactor())}
             attributes={1}
             wrapMode="none"
           />
