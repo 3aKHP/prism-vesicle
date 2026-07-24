@@ -62,22 +62,39 @@ After a complete tool round, queued messages are added to the active conversatio
 
 ## Workspace page keys
 
-The Workspace page has three focus regions: the file tree, the viewer, and the input box. `F6` / `Shift+F6` cycle between them (the viewer is skipped when no file is open), and `Esc` steps focus back (viewer → tree → input box). Printable shortcuts only act in their focused region and never collide with the input box.
+The Workspace page has three focus regions: the file tree, the viewer / editor, and the input box. `F6` / `Shift+F6` cycle between them (the viewer is skipped when no file is open), and `Esc` steps focus back (editor → tree → input box; Markdown source has one extra level: source → preview → tree). Printable shortcuts only act in their focused region and never collide with the input box.
+
+### File tree and read-only viewer
 
 | Key | Purpose |
 |---|---|
 | Ctrl+P or / (tree focus) | Quick open: subsequence fuzzy match across project files; Enter opens, Esc closes |
 | ↑ / ↓ (tree) | Move the selection |
-| → / Enter (tree) | Expand a directory, or open a file and hand focus to the viewer |
+| → / Enter (tree) | Expand a directory, or open a file and hand focus to the viewer/editor |
 | ← (tree) | Collapse a directory or move to the parent |
-| h / j / k / l (tree/viewer) | Alias for the arrow keys (inert while a text input is active) |
-| q (tree/viewer) | Alias for Esc — step focus back one level |
-| r (tree) | Refresh the directory |
+| h / j / k / l (tree/read-only viewer) | Alias for the arrow keys (inert while a text input is active) |
+| q (tree/read-only viewer) | Alias for Esc — step focus back one level |
+| r (tree) | Refresh the directory; (read-only viewer) re-read the file |
 | . (tree) | Show/hide dotfiles and noisy directories (`.git`, `node_modules`, `dist`, …) |
-| ↑ / ↓ / PgUp / PgDn / Home / End (viewer) | Scroll |
-| m (viewer) | Toggle Markdown files between source and preview |
+| ↑ / ↓ / PgUp / PgDn / Home / End (read-only viewer) | Scroll |
+| m (Markdown preview) | Switch to the editable source |
 
-The viewer is read-only: text files show numbered source lines, image and binary files show metadata; files over 512 KB or 2000 lines are truncated at the bound. Editing arrives in a later milestone.
+### Editor (editable source focus)
+
+Text and Markdown files under 512 KB / 2000 lines, writable, and not symlinks are editable in source mode; Markdown defaults to preview and `m` enters the source. Each file gets its own editing buffer (up to 8, LRU-evicted, dirty buffers protected), each with its own undo history.
+
+| Key | Purpose |
+|---|---|
+| Ctrl+S | Save (atomic write, project-root-bounded, rejects `..` and absolute paths) |
+| Ctrl+Shift+S | Save as (type a new path) |
+| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Ctrl+F | Find: locate as you type, Enter next, Shift+Enter previous, Esc close |
+| Ctrl+G | Go to line (type a line number) |
+| Ctrl+R | Reload the on-disk version (confirms if there are local edits or the disk changed) |
+| Tab | Insert two spaces of indentation |
+| Esc | With unsaved edits: "save / discard / cancel"; otherwise step back one level |
+
+If the file changed on disk since you opened it (by mtime), saving opens an "overwrite / save as / cancel" confirm — it never silently overwrites. Switching back to the Workspace page stats every open buffer; changed ones are marked `†disk` in the title and can be reloaded with Ctrl+R. Image, binary, symlink, oversized, and read-only files stay in the read-only viewer.
 
 ## `/btw` side questions
 

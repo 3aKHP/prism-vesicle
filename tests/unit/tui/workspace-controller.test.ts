@@ -108,23 +108,33 @@ describe("workspace controller: keyboard focus model", () => {
     expect(controller.focusRegion()).toBe("tree");
   });
 
-  test("editor focus after opening a file: m toggles, escape returns to tree", async () => {
+  test("editable markdown: m is one-way (preview→source); Esc unwinds source→preview→tree", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget();
     await controller.openPath("workspace/cards/mira.md");
     expect(controller.focusRegion()).toBe("editor");
+    expect(controller.viewMode()).toBe("preview");
+    // m in preview enters the editable source
     controller.handleKey(key("m"));
     expect(controller.viewMode()).toBe("source");
-    controller.handleKey(key("m"));
+    expect(controller.isEditing()).toBe(true);
+    // m in editable source falls through to the textarea (B3: m types, D4 text
+    // input exclusion) — it does NOT toggle back to preview
+    expect(controller.handleKey(key("m"))).toBe(false);
+    expect(controller.viewMode()).toBe("source");
+    // Esc unwinds one level: markdown source → preview (still editor region)
+    controller.handleKey(key("escape"));
     expect(controller.viewMode()).toBe("preview");
+    expect(controller.focusRegion()).toBe("editor");
+    // Esc again: preview → tree
     controller.handleKey(key("escape"));
     expect(controller.focusRegion()).toBe("tree");
-    // F6 now includes the editor region
+    // F6 returns to the editor region
     controller.handleKey(key("f6"));
     expect(controller.focusRegion()).toBe("editor");
   });
 
-  test("keymap review patches: q aliases escape, hjkl normalize to arrows, right opens files", async () => {
+  test("keymap review patches: q aliases escape in tree/viewer, hjkl normalize, right opens files", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget();
     // hjkl drive the tree selection like arrows (D4)
@@ -147,9 +157,14 @@ describe("workspace controller: keyboard focus model", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(controller.openFile()?.relPath).toBe("notes.txt");
     expect(controller.focusRegion()).toBe("editor");
+    expect(controller.isEditing()).toBe(true);
 
-    // q steps focus back exactly like escape (D3): editor -> tree -> composer
-    controller.handleKey(key("q"));
+    // notes.txt is an editable source: q falls through to the textarea (D4 —
+    // q/hjkl are inert while text input is active), so focus does not move.
+    expect(controller.handleKey(key("q"))).toBe(false);
+    expect(controller.focusRegion()).toBe("editor");
+    // Esc (clean) returns to the tree; q then aliases Esc at the tree level.
+    controller.handleKey(key("escape"));
     expect(controller.focusRegion()).toBe("tree");
     controller.handleKey(key("q"));
     expect(controller.focusRegion()).toBe("composer");
