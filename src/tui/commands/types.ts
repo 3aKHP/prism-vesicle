@@ -139,7 +139,7 @@ export type CommandContext = {
   openSideQuestion: (args: string) => Promise<void>;
 
   // —— shell pages (Scope B two-page model) ——
-  openWorkspacePage: () => void;
+  openWorkspaceTarget: (relPath?: string) => Promise<"file" | "dir" | null>;
 };
 
 export type Command = {

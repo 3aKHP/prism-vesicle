@@ -28,13 +28,13 @@
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | 控制模型的思考强度;`auto` 恢复供应商默认 |
 | `/reasoning hidden\|collapsed\|expanded` | 控制推理过程的显示(别名 off/preview/on) |
 | `/theme dark\|light\|auto` | 切换界面主题;`auto` 跟随终端明暗模式,仅当前会话生效,不持久化 |
-| `/workspace` | 切到 Workspace 页(项目文件工作台,当前为占位页);`Ctrl+O` 在两页间往返 |
+| `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返 |
 
 ## 制品
 
 | 命令 | 作用 |
 |---|---|
-| `/artifact [n\|path]` | 列出或预览生成的制品 |
+| `/artifact [n\|path]` | 在 Workspace 页的查看器中打开制品;不带参数打开最新一个 |
 | `/validate <n\|path>` | 按编号或路径校验一个制品 |
 
 ## 权限与质量
@@ -59,6 +59,23 @@
 | Ctrl+Q | 退出 Vesicle |
 
 当前完整工具轮次结束后，队列消息会在下一次供应商请求前加入当前对话。如果 Agent Loop 没有经过下一个工具边界便已结束，下一条队列输入会被立即处理。Slash 命令各自声明忙碌时的行为：`/help`、`/context`、`/reasoning`、`/theme`、`/workspace`、只读设置形式，以及 `/agents` 查看或停止会立即执行；`/artifact` 和 `/validate` 等待当前工具轮次；配置变更、选择器、会话命令、`/compact`、`/init` 和 `/agents retry` 等待 Agent Loop。选择器打开时会暂停剩余队列，切换或重置会话时会清空队列。
+
+## Workspace 页按键
+
+Workspace 页有三个焦点区：文件树、查看器、输入框。`F6` / `Shift+F6` 在焦点区间循环(没有打开的文件时跳过查看器),`Esc` 逐级回退(查看器 → 文件树 → 输入框)。可打印快捷键只在对应焦点区生效,不会与输入框冲突。
+
+| 按键 | 作用 |
+|---|---|
+| Ctrl+P 或 /(文件树焦点) | 快速打开:按子序列模糊匹配项目文件,Enter 打开,Esc 关闭 |
+| ↑ / ↓(文件树) | 移动选中 |
+| → / Enter(文件树) | 展开目录或打开文件 |
+| ←(文件树) | 折叠目录或回到父级 |
+| r(文件树) | 刷新目录 |
+| .(文件树) | 显示/隐藏点文件和噪声目录(`.git`、`node_modules`、`dist` 等) |
+| ↑ / ↓ / PgUp / PgDn / Home / End(查看器) | 滚动 |
+| m(查看器) | Markdown 文件在源码与预览之间切换 |
+
+查看器是只读的:文本文件显示带行号的源码,图片和二进制文件显示元信息;超过 512 KB 或 2000 行的文件按界截断。编辑能力在后续里程碑提供。
 
 ## `/btw` 旁支问题
 

@@ -1,8 +1,9 @@
-// Pure render helpers for command output (engine list, model detail, artifact
-// list). Format the system notices local commands push into the transcript.
+// Pure render helpers for command output (engine list, model detail,
+// validation notice). Format the system notices local commands push into
+// the transcript.
 
 import type { ProviderRegistry } from "../../config/providers";
-import type { ArtifactEntry, ArtifactValidation } from "../../core/artifacts/workbench";
+import type { ArtifactValidation } from "../../core/artifacts/workbench";
 import { engineIds } from "../../core/engine/profile";
 import type { EngineId } from "../../core/engine/profile";
 import { engineDisplayName } from "../theme";
@@ -36,17 +37,6 @@ export function renderModelDetails(model: ProviderRegistry["providers"][number][
     .map(([name]) => name);
   if (capabilities.length > 0) details.push(`cap ${capabilities.join("/")}`);
   return details.join(", ");
-}
-
-export function renderArtifactList(entries: ArtifactEntry[]): string {
-  if (entries.length === 0) return "No artifacts found yet.";
-  const lines = ["Artifacts:"];
-  entries.forEach((entry, index) => {
-    lines.push(`${index + 1}. ${entry.path}`);
-  });
-  lines.push("");
-  lines.push("Use /artifact <n|path> to preview or /validate <n|path> to validate.");
-  return lines.join("\n");
 }
 
 export function renderValidationNotice(validation: ArtifactValidation | undefined): string {

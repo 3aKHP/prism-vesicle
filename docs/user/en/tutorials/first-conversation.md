@@ -64,7 +64,7 @@ Commands start with `/` in the input box; typing `/` opens a candidate menu (↑
 
 - `/help` — list all commands.
 - `/context` — current context usage.
-- `/artifact` — list generated artifacts.
+- `/artifact` — open generated artifacts in the Workspace page.
 - `/engine` — show the active engine (ETL by default).
 - Ctrl+Q — exit Vesicle.
 

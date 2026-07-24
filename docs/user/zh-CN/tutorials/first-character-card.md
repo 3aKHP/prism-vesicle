@@ -36,7 +36,7 @@ ETL 把一张角色卡分成几个阶段,每个阶段写文件的一部分,写�
 /artifact
 ```
 
-列出产物(形如 `Artifacts:` 加编号列表);`/artifact 1`(或路径)在对话区预览第一张。
+列出产物并跳到 Workspace 页,在查看器里打开最新一张;`/artifact 1`(或路径)打开指定的那张。文件树里也能直接浏览 `workspace/`。
 
 ## 校验:Module A
 
@@ -103,7 +103,7 @@ inventory: 纸杯、钢笔、旧记者证
 ## 检查点
 
 - [ ] `workspace/` 下有一张角色卡文件。
-- [ ] `/artifact` 能列出它,`/validate` 显示 `Validation passed`(或你已知并接受的警告)。
+- [ ] `/artifact` 能在 Workspace 页打开它,`/validate` 显示 `Validation passed`(或你已知并接受的警告)。
 - [ ] 你至少在一个阶段门上用过"拒绝 + 说明"来返工。
 
 下一篇:基于这张角色卡做一张 [情景卡](./first-scenario-card.md)。

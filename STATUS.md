@@ -20,7 +20,8 @@ Release candidate: **1.0.0-alpha.4**. The `State` column tracks the candidate's 
 | TUI | Startup splash and empty-session hero derived from the brand ANSI mark; truecolour animation degrades to a static frame on 256-colour terminals and freezes under `VESICLE_REDUCED_MOTION=1` | released |
 | TUI | Static motif wiring: per-message role spectrum lanes, per-engine refraction accents, and ASCII-frame sidebar section labels | released |
 | TUI | Day/night theme: light palette with AA-checked accents, terminal auto-detection plus `/theme` and `VESICLE_THEME` overrides | released |
-| TUI | Two-page shell skeleton (Chat / Workspace, `Ctrl+O` and `/workspace`), page-aware header, sidebar renamed to Host; Workspace file tree and editor land in later Scope B milestones | released |
+| TUI | Two-page shell (Chat / Workspace, `Ctrl+O` and `/workspace`), page-aware header, sidebar renamed to Host | released |
+| TUI | Workspace page workbench: file tree (lazy load, hidden-file toggle, refresh), read-only viewer (numbered source, Markdown source/preview, image/binary metadata, 512 KB / 2000-line bounds), `Ctrl+P` fuzzy quick open, three-region `F6` focus model; `/workspace [path]` locates and `/artifact` opens in the viewer. Editing lands in a later Scope B milestone | released |
 | TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | released |
 | TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | released |
 | Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | released |
@@ -36,7 +37,7 @@ Release candidate: **1.0.0-alpha.4**. The `State` column tracks the candidate's 
 | Agents | Foreground/background SubAgents with contract-bound Harness delegation | released |
 | Stage | First-party consumer RP bootstrap Engine (`/stage`) | released |
 | Validators | Module A, Module B v9, runtime packet, and evaluate-report checks | released |
-| Workbench | `/artifact` discovery, preview, validation, and revision | released |
+| Workbench | `/artifact` discovery, Workspace-page preview, validation, and revision | released |
 | Quality | Output Quality Guard: deterministic findings, document metrics, durable decisions, and experimental Semantic Judge/rewrite-policy loader | released |
 | Release | Standalone Windows PE and Linux ELF binaries | released |
 | Release | npm/Bun package with pinned runtime dependencies | released |

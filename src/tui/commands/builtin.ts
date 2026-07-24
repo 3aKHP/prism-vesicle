@@ -34,7 +34,6 @@ import {
   stageCommandCompletion,
 } from "./argument-completion";
 import {
-  renderArtifactList,
   renderValidationNotice,
   renderEngineList,
 } from "./render";
@@ -55,10 +54,10 @@ const HELP_TEXT = [
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
   "  /theme [dark|light|auto] show or set the colour theme (auto follows the terminal)",
-  "  /workspace        switch to the Workspace page (Ctrl+O switches pages)",
+  "  /workspace [path] open the Workspace page, optionally locating a file or directory",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
   "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
-  "  /artifact [n|path] list or preview generated artifacts",
+  "  /artifact [n|path] open artifacts in the Workspace page (no args = latest)",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
   "  /btw <question>   ask a temporary side question without interrupting the turn",
@@ -446,15 +445,22 @@ export const builtinCommands: Command[] = [
   {
     name: "workspace",
     busyBehavior: immediate,
-    description: "Switch to the Workspace page (project files)",
-    usage: "/workspace",
-    async run(ctx, _args, raw) {
-      ctx.openWorkspacePage();
+    description: "Open the Workspace page, optionally locating a file or directory",
+    usage: "/workspace [path]",
+    async run(ctx, args, raw) {
+      const located = await ctx.openWorkspaceTarget(args.trim() || undefined);
       ctx.setStatus("workspace page");
       ctx.setMessages((prev) => [
         ...prev,
         { role: "user", content: raw },
-        { role: "system", content: "Workspace page open (placeholder — file tree arrives in B2). Ctrl+O switches between Chat and Workspace." },
+        {
+          role: "system",
+          content: args.trim()
+            ? located
+              ? `Opened ${args.trim()} in the Workspace page.`
+              : `Workspace page open — "${args.trim()}" was not found in the project.`
+            : "Workspace page open. Ctrl+O switches pages, Ctrl+P quick open, F6 cycles regions.",
+        },
       ]);
     },
   },
@@ -462,32 +468,36 @@ export const builtinCommands: Command[] = [
   {
     name: "artifact",
     busyBehavior: afterToolRound,
-    description: "List artifacts or preview one in the message stream",
+    description: "Open artifacts in the Workspace page (no args = latest)",
     usage: "/artifact [n|path]",
     completion: artifactCommandCompletion("artifact"),
     async run(ctx, args, raw) {
       const entries = await ctx.refreshArtifacts();
       if (!args) {
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: renderArtifactList(entries) }]);
+        const latest = entries[0];
+        await ctx.openWorkspaceTarget(latest?.path);
+        ctx.setMessages((prev) => [
+          ...prev,
+          { role: "user", content: raw },
+          {
+            role: "system",
+            content: latest
+              ? `Opened latest artifact ${latest.path} in the Workspace page.`
+              : "Workspace page open — no artifacts yet.",
+          },
+        ]);
         return;
       }
       const artifact = resolveArtifactTarget(entries, args);
       if (!artifact) {
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `No artifact matches "${args}". Use /artifact to list.` }]);
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `No artifact matches "${args}". Use /artifact to open the latest.` }]);
         return;
       }
-      const selected = await ctx.loadArtifactPreview(artifact);
-      ctx.setSelectedArtifact(selected);
+      await ctx.openWorkspaceTarget(artifact.path);
       ctx.setMessages((prev) => [
         ...prev,
         { role: "user", content: raw },
-        {
-          role: "system",
-          kind: "artifact",
-          content: selected.preview,
-          artifactPath: selected.path,
-          artifactTruncated: selected.truncated,
-        },
+        { role: "system", content: `Opened ${artifact.path} in the Workspace page.` },
       ]);
     },
   },

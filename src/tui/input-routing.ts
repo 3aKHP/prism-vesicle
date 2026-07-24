@@ -42,6 +42,8 @@ export type InputRoutingOptions = {
   enterArtifactFocus?: () => boolean;
   handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
   togglePage?: () => void;
+  workspaceActive?: Accessor<boolean>;
+  handleWorkspaceKey?: (key: TuiKeyEvent) => boolean;
 };
 
 export function useInputRouting(options: InputRoutingOptions): void {
@@ -130,6 +132,12 @@ export function useInputRouting(options: InputRoutingOptions): void {
     if (key.ctrl && key.name === "o" && options.togglePage) {
       options.togglePage();
       consumeKey(key);
+      return;
+    }
+    // The Workspace page owns keys next (tree/viewer/quick-open/focus); its
+    // composer region returns false and falls through to the shared composer.
+    if (options.workspaceActive?.() && options.handleWorkspaceKey) {
+      if (options.handleWorkspaceKey(key)) consumeKey(key);
       return;
     }
     if (options.artifactFocusActive?.()) {

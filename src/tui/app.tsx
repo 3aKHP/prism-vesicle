@@ -820,6 +820,8 @@ export function App(props: AppProps = {}) {
     enterArtifactFocus,
     handleArtifactFocusKey,
     togglePage: switchPage,
+    workspaceActive,
+    handleWorkspaceKey: workspaceController.handleKey,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -894,9 +896,9 @@ export function App(props: AppProps = {}) {
     openModelPicker,
     openQualityPicker,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
-    openWorkspacePage: () => {
+    openWorkspaceTarget: async (relPath?: string) => {
       setFocusedArtifactPath(null);
-      workspaceController.setActivePage("workspace");
+      return workspaceController.openWorkspaceTarget(relPath);
     },
   };
 
@@ -1030,9 +1032,12 @@ export function App(props: AppProps = {}) {
             prompts remain reachable from either page. */}
         <Show when={!sideQuestionController.overlay() && workspaceActive()} fallback={<box width={0} />}>
           <WorkspacePage
+            controller={workspaceController}
             projectRoot={process.cwd()}
             width={layout().width}
             height={Math.max(6, dimensions().height - 3 - layout().footerHeight)}
+            treeWidth={layout().leftPanelWidth}
+            compact={layout().mode === "compact"}
           />
         </Show>
 

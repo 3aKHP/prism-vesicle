@@ -28,13 +28,13 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | Control the model's thinking effort; `auto` restores the provider default |
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display (aliases off/preview/on) |
 | `/theme dark\|light\|auto` | Switch the interface theme; `auto` follows the terminal's own mode, session-scoped and never persisted |
-| `/workspace` | Switch to the Workspace page (project-file workbench, currently a placeholder); `Ctrl+O` toggles between the two pages |
+| `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages |
 
 ## Artifacts
 
 | Command | Purpose |
 |---|---|
-| `/artifact [n\|path]` | List or preview generated artifacts |
+| `/artifact [n\|path]` | Open an artifact in the Workspace page viewer; no args opens the latest one |
 | `/validate <n\|path>` | Validate an artifact by number or path |
 
 ## Permissions and quality
@@ -59,6 +59,23 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | Ctrl+Q | Exit Vesicle |
 
 After a complete tool round, queued messages are added to the active conversation before its next provider request. If the loop completes without another tool boundary, the next queued input is processed immediately. Slash commands declare their own busy-turn behavior: `/help`, `/context`, `/reasoning`, `/theme`, `/workspace`, read-only settings forms, and `/agents` inspection or stop run immediately; `/artifact` and `/validate` wait for the current tool round; configuration changes, pickers, session commands, `/compact`, `/init`, and `/agents retry` wait for the Agent Loop. A picker pauses the remaining queue, and switching or resetting the session clears it.
+
+## Workspace page keys
+
+The Workspace page has three focus regions: the file tree, the viewer, and the input box. `F6` / `Shift+F6` cycle between them (the viewer is skipped when no file is open), and `Esc` steps focus back (viewer → tree → input box). Printable shortcuts only act in their focused region and never collide with the input box.
+
+| Key | Purpose |
+|---|---|
+| Ctrl+P or / (tree focus) | Quick open: subsequence fuzzy match across project files; Enter opens, Esc closes |
+| ↑ / ↓ (tree) | Move the selection |
+| → / Enter (tree) | Expand a directory or open a file |
+| ← (tree) | Collapse a directory or move to the parent |
+| r (tree) | Refresh the directory |
+| . (tree) | Show/hide dotfiles and noisy directories (`.git`, `node_modules`, `dist`, …) |
+| ↑ / ↓ / PgUp / PgDn / Home / End (viewer) | Scroll |
+| m (viewer) | Toggle Markdown files between source and preview |
+
+The viewer is read-only: text files show numbered source lines, image and binary files show metadata; files over 512 KB or 2000 lines are truncated at the bound. Editing arrives in a later milestone.
 
 ## `/btw` side questions
 
