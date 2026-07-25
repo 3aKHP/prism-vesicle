@@ -5,6 +5,7 @@ import packageJson from "../package.json";
 
 export {};
 
+const windowsMetaCharacters = /([()\][%!^"`<>&|;, *?])/g;
 const skipTui = process.platform !== "linux" || process.argv.includes("--skip-tui");
 const packageDir = await mkdtemp(join(tmpdir(), "prism-vesicle-pack-"));
 const globalPrefix = await mkdtemp(join(tmpdir(), "prism-vesicle-global-"));
@@ -270,8 +271,6 @@ function spawnCommand(command: string[]): string[] {
     `"${shellCommand}"`,
   ];
 }
-
-const windowsMetaCharacters = /([()\][%!^"`<>&|;, *?])/g;
 
 function escapeWindowsCommand(value: string): string {
   return value.replace(windowsMetaCharacters, "^$1");
