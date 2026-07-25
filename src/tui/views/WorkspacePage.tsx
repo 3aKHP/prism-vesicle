@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import type { BoxRenderable, KeyBinding, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core";
 import { palette } from "../theme";
@@ -113,7 +113,7 @@ export function WorkspacePage(props: {
   // the tree box keeps the tree window slice inside the painted area. ——
   const [treeHeight, setTreeHeight] = createSignal(props.height);
   let treeBox: BoxRenderable | undefined;
-  createEffect(() => {
+  onMount(() => {
     const box = treeBox;
     if (!box) return;
     box.onSizeChange = () => setTreeHeight(box.height);
@@ -340,6 +340,8 @@ export function WorkspacePage(props: {
                         <text
                           content={file().kind === "image"
                             ? "Image preview is not inline-renderable in the terminal; press Ctrl+X to open in your external editor."
+                            : file().symlink
+                              ? "Symbolic-link targets are not loaded; press Ctrl+X to open in your external editor."
                             : "Binary file — editing is not supported; press Ctrl+X to open in your external editor."}
                           fg={palette.textDim}
                           wrapMode="none"

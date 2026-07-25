@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createWorkspaceController } from "../../../src/tui/workspace-controller";
@@ -252,6 +252,23 @@ describe("workspace editor: dirty-on-close confirm", () => {
     expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("line one\nline two\nSAVED\n");
   });
 
+  test("keys stay owned while dirty-confirm save is in flight", async () => {
+    const controller = createWorkspaceController(root);
+    const inst = await openEditable(controller, "notes.txt");
+    inst.type("line one\nline two\nSAVED\n");
+    controller.markEditorContentChanged("notes.txt");
+    controller.handleKey(key("escape"));
+    controller.handleKey(key("y"));
+
+    // The dialog is dismissed before stat/write completes. A fast Esc used to
+    // reopen dirty-confirm against the same in-flight buffer.
+    expect(controller.handleKey(key("escape"))).toBe(true);
+    expect(controller.dialog()).toBeNull();
+
+    await new Promise((r) => setTimeout(r, 30));
+    expect(controller.activeEditorPath()).toBeNull();
+  });
+
   test("Esc cancels the confirm and keeps editing", async () => {
     const controller = createWorkspaceController(root);
     const inst = await openEditable(controller, "notes.txt");
@@ -468,6 +485,29 @@ describe("workspace editor: external modification detection", () => {
     const fs = await import("node:fs/promises");
     // The buffer content (the opened snapshot, unedited) now wins on disk.
     expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("line one\nline two\n");
+  });
+
+  test("same-mtime inode replacement opens an overwrite confirm", async () => {
+    const path = join(root, "notes.txt");
+    const replacement = join(root, "replacement.txt");
+    const fixed = new Date(1_700_000_000_000);
+    await utimes(path, fixed, fixed);
+
+    const controller = createWorkspaceController(root);
+    await openEditable(controller, "notes.txt");
+
+    await writeFile(replacement, "replacement with preserved timestamp\n");
+    await utimes(replacement, fixed, fixed);
+    const before = await stat(path);
+    const next = await stat(replacement);
+    expect(next.mtimeMs).toBe(before.mtimeMs);
+    expect(next.ino).not.toBe(before.ino);
+    await rm(path);
+    await rename(replacement, path);
+
+    controller.handleKey(key("s", { ctrl: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(controller.dialog()?.kind).toBe("overwrite-confirm");
   });
 
   test("reactivating the page stats open buffers and marks disk-changed ones", async () => {

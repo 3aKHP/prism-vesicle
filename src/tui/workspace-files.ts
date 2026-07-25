@@ -1,6 +1,7 @@
 import { constants, type Dirent, type Stats } from "node:fs";
 import { access, lstat, open, readFile, readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
+import { assertProjectRelativePath } from "./workspace-paths";
 
 /**
  * Filesystem model for the Workspace page (Scope B / #62, milestone B2).
@@ -87,11 +88,13 @@ async function nodeFor(rootDir: string, absPath: string, name: string): Promise<
   }
   const relPath = relative(rootDir, absPath).split("\\").join("/");
   const symlink = stats.isSymbolicLink();
-  let readonly = false;
-  try {
-    await access(absPath, constants.W_OK);
-  } catch {
-    readonly = true;
+  let readonly = symlink;
+  if (!symlink) {
+    try {
+      await access(absPath, constants.W_OK);
+    } catch {
+      readonly = true;
+    }
   }
   if (stats.isDirectory() && !symlink) {
     return { name, relPath, kind: "dir", symlink, readonly };
@@ -240,7 +243,12 @@ export async function readFilePreview(
   rootDir: string,
   relPath: string,
 ): Promise<WorkspaceFilePreview | null> {
-  const abs = join(rootDir, relPath);
+  let abs: string;
+  try {
+    abs = assertProjectRelativePath(rootDir, relPath);
+  } catch {
+    return null;
+  }
   let stats: Stats;
   try {
     stats = await lstat(abs);
@@ -249,21 +257,26 @@ export async function readFilePreview(
   }
   if (!stats.isFile() && !stats.isSymbolicLink()) return null;
   const kind = classifyFile(basename(relPath));
-  let readonly = false;
-  try {
-    await access(abs, constants.W_OK);
-  } catch {
-    readonly = true;
+  const symlink = stats.isSymbolicLink();
+  let readonly = symlink;
+  if (!symlink) {
+    try {
+      await access(abs, constants.W_OK);
+    } catch {
+      readonly = true;
+    }
   }
   const base: WorkspaceFilePreview = {
     kind,
     relPath,
     size: stats.size,
     readonly,
-    symlink: stats.isSymbolicLink(),
+    symlink,
     oversized: stats.size > OVERSIZED_BYTES,
   };
-  if (kind === "image" || kind === "binary") return base;
+  // A symlink is useful tree/viewer metadata, but previewing its bytes would
+  // follow a potentially project-external target. Keep it metadata-only.
+  if (symlink || kind === "image" || kind === "binary") return base;
 
   let content: Buffer;
   try {
@@ -305,7 +318,7 @@ export async function statEntry(
   relPath: string,
 ): Promise<{ kind: "dir" | "file" } | null> {
   try {
-    const stats = await lstat(join(rootDir, relPath));
+    const stats = await lstat(assertProjectRelativePath(rootDir, relPath));
     if (stats.isDirectory()) return { kind: "dir" };
     if (stats.isFile() || stats.isSymbolicLink()) return { kind: "file" };
     return null;
