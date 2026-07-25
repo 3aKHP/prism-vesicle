@@ -1,3 +1,5 @@
+import { createEffect, createSignal } from "solid-js";
+import type { MarkdownRenderable } from "@opentui/core";
 import { prepareMarkdownForDisplay, renderMarkdownPlainText } from "../markdown-display";
 import { debugLog } from "../debug-log";
 import { palette, syntaxStyle } from "../theme";
@@ -29,5 +31,30 @@ export function MarkdownContent(props: { content: string; fg?: string }) {
   if (mode === "plain") {
     return <text content={renderMarkdownPlainText(props.content)} fg={props.fg ?? palette.textPrimary} />;
   }
-  return <markdown content={prepareMarkdownForDisplay(props.content)} syntaxStyle={syntaxStyle()} conceal={true} />;
+
+  const [markdown, setMarkdown] = createSignal<MarkdownRenderable>();
+  let appliedSyntaxStyle: ReturnType<typeof syntaxStyle> | undefined;
+  let appliedForeground: string | undefined;
+  createEffect(() => {
+    const nextSyntaxStyle = syntaxStyle();
+    const nextForeground = props.fg ?? palette.textPrimary;
+    const renderable = markdown();
+    if (!renderable) return;
+    if (appliedSyntaxStyle === nextSyntaxStyle && appliedForeground === nextForeground) return;
+    appliedSyntaxStyle = nextSyntaxStyle;
+    appliedForeground = nextForeground;
+    renderable.syntaxStyle = nextSyntaxStyle;
+    renderable.fg = nextForeground;
+    renderable.refreshStyles();
+  });
+
+  return (
+    <markdown
+      ref={(value: MarkdownRenderable) => { setMarkdown(value); }}
+      content={prepareMarkdownForDisplay(props.content)}
+      syntaxStyle={syntaxStyle()}
+      fg={props.fg ?? palette.textPrimary}
+      conceal={true}
+    />
+  );
 }
