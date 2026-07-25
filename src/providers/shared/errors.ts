@@ -39,12 +39,31 @@ export class ProviderError extends Error {
  */
 const PROVIDER_MESSAGE_MAX_LENGTH = 240;
 
+/**
+ * Unicode format / bidirectional-override code points that are invisible or
+ * directionally active and have no place in a displayed error message:
+ * zero-width and BIDI marks (U+200B-U+200F), directional overrides
+ * (U+202A-U+202E), BIDI isolates (U+2066-U+2069), and the BOM (U+FEFF).
+ * Listed by code point so the source stays pure ASCII and never embeds
+ * direction-override literals (Trojan-Source risk).
+ */
+const UNICODE_FORMAT_CODEPOINTS = new Set([
+  0x200b, 0x200c, 0x200d, 0x200e, 0x200f,
+  0x202a, 0x202b, 0x202c, 0x202d, 0x202e,
+  0x2066, 0x2067, 0x2068, 0x2069,
+  0xfeff,
+]);
+
 export function cleanProviderMessage(raw: string, maxLength = PROVIDER_MESSAGE_MAX_LENGTH): string {
-  const cleaned = raw
+  const stripped = raw
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return cleaned.length <= maxLength ? cleaned : `${cleaned.slice(0, maxLength - 1)}…`;
+    .replace(/\s+/g, " ");
+  const filtered = Array.from(stripped)
+    .filter((char) => !UNICODE_FORMAT_CODEPOINTS.has(char.codePointAt(0) ?? -1))
+    .join("");
+  const trimmed = filtered.trim();
+  const chars = Array.from(trimmed);
+  return chars.length <= maxLength ? trimmed : `${chars.slice(0, maxLength - 1).join("")}…`;
 }
 
 /**

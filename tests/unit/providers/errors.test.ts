@@ -15,6 +15,17 @@ describe("cleanProviderMessage", () => {
     expect(cleanProviderMessage("ok")).toBe("ok");
   });
 
+  it("strips Unicode format and bidirectional-override characters", () => {
+    const raw = String.fromCodePoint(0x61, 0x200b, 0x62, 0x202e, 0x63, 0xfeff);
+    expect(cleanProviderMessage(raw)).toBe("abc");
+  });
+
+  it("truncates on a code-point boundary, never leaving a lone surrogate", () => {
+    const emoji = String.fromCodePoint(0x1f600).repeat(5);
+    const expected = String.fromCodePoint(0x1f600);
+    expect(Array.from(cleanProviderMessage(emoji, 3))).toEqual([expected, expected, "…"]);
+  });
+
   it("truncates overlong messages to the limit with an ellipsis", () => {
     const out = cleanProviderMessage("x".repeat(300), 10);
     expect(out).toBe("xxxxxxxxx…");
@@ -52,6 +63,12 @@ describe("summarizeProviderFailure", () => {
 
   it("classifies 404 as not_found", () => {
     expect(summarizeProviderFailure(new ProviderError("(404)", { kind: "http_error", status: 404 })).category).toBe("not_found");
+  });
+
+  it("classifies an unmapped 4xx (e.g. 400) as unknown and non-retryable", () => {
+    const summary = summarizeProviderFailure(new ProviderError("(400)", { kind: "http_error", status: 400 }));
+    expect(summary.category).toBe("unknown");
+    expect(summary.retryable).toBe(false);
   });
 
   it("classifies 429 as rate_limited and marks it retryable", () => {

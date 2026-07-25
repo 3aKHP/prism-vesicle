@@ -10,7 +10,7 @@ import { setAgentDeliveryState } from "./agent-view";
 import { combineIndependentUsage } from "./telemetry";
 import { createTurnResultController } from "./turn-result-controller";
 import { createDecisionContinuations } from "./decision-continuations";
-import { summarizeProviderFailure } from "../providers/shared/errors";
+import { ProviderError, providerFailureCategoryLabel, summarizeProviderFailure } from "../providers/shared/errors";
 
 export type { TurnControllerOptions } from "./turn-controller-options";
 import type { TurnControllerOptions } from "./turn-controller-options";
@@ -203,12 +203,23 @@ export function createTurnController(options: TurnControllerOptions) {
   }
 
   function reportError(error: unknown): void {
-    const failure = summarizeProviderFailure(error);
-    options.setStatus(`error · ${failure.status ?? failure.category}`);
     options.setStreamingAssistant("");
     options.setStreamingReasoning("");
     options.queuedWork.block();
-    options.recordActivity({ kind: "system", text: `error: ${failure.category}: ${failure.message}` });
+    if (!(error instanceof ProviderError)) {
+      const message = error instanceof Error ? error.message : String(error);
+      options.setStatus("error");
+      options.recordActivity({ kind: "system", text: `error: ${message}` });
+      options.setMessages((previous) => [...previous, { role: "system", content: message }]);
+      return;
+    }
+    const failure = summarizeProviderFailure(error);
+    const title = providerFailureCategoryLabel(failure.category).title;
+    const statusParts = ["error"];
+    if (failure.providerId) statusParts.push(failure.providerId);
+    statusParts.push(String(failure.status ?? title));
+    options.setStatus(statusParts.join(" · "));
+    options.recordActivity({ kind: "system", text: `error: ${title}: ${failure.message}` });
     options.setMessages((previous) => [...previous, {
       role: "system",
       kind: "provider-failure",

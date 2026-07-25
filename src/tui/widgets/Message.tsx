@@ -198,7 +198,6 @@ function ProviderFailureCard(props: {
     const parts = ["⨂", label().title];
     if (props.failure?.status) parts.push(`HTTP ${props.failure.status}`);
     if (props.failure?.providerId) parts.push(props.failure.providerId);
-    if (props.failure?.retryable) parts.push("retryable");
     return truncateLine(parts.join(" · "), props.width);
   };
   return (
