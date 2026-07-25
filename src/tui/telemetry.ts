@@ -67,6 +67,10 @@ export function headerLine(engine: EngineId, width: number, agents?: string, pro
   return truncateLine(content, Math.max(20, width - 4));
 }
 
+export function workspaceHeaderLine(rootDir: string, width: number): string {
+  return truncateLine(`Prism Vesicle · Workspace · ${rootDir}`, Math.max(20, width - 4));
+}
+
 export function backgroundProcessActivitySummary(processes: BackgroundProcessState[]): string | undefined {
   const running = processes.filter((process) => process.status === "running").length;
   return running > 0 ? `${running} running` : undefined;

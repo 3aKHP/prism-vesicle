@@ -4,6 +4,7 @@ import { useRenderer } from "@opentui/solid";
 import { palette } from "../theme";
 import { Message } from "../widgets/Message";
 import { ReasoningBlock } from "../widgets/ReasoningBlock";
+import { EmptyHero } from "./EmptyHero";
 import type { AgentCardState, Message as StreamMessage } from "../types";
 import type { TuiKeyEvent } from "../decision-interaction";
 import { parseStageMessageContent, type StageMessageContent } from "../stage-message-content";
@@ -23,6 +24,7 @@ export function MessageStream(props: {
   agents: AgentCardState[];
   activeEngine?: string;
   sessionId?: string;
+  showHero?: boolean;
   onStageViewChange?: (id: string, source: boolean) => void;
   registerStageKeyHandler?: (handler: (key: TuiKeyEvent) => boolean) => void;
 }) {
@@ -131,51 +133,58 @@ export function MessageStream(props: {
   props.registerStageKeyHandler?.(handleStageMessageKey);
   onCleanup(() => props.registerStageKeyHandler?.(() => false));
 
-  return (
-    <box title="Messages" border borderColor={palette.sectionBorder} flexGrow={1} padding={1}>
-      <scrollbox
-        ref={scrollbox}
-        width="100%"
-        height="100%"
-        stickyScroll
-        stickyStart="bottom"
-        onMouseDown={(event) => { pointerStartMessageId = stageMessageAt(event.y); pointerDragged = false; }}
-        onMouseDrag={() => { pointerDragged = true; }}
-        onMouseUp={(event) => {
-          const messageId = stageMessageAt(event.y);
-          if (!pointerStartMessageId || pointerStartMessageId !== messageId || pointerDragged || event.isDragging || event.defaultPrevented || renderer.hasSelection || event.button !== 0) return;
-          toggleStageMessage(messageId);
-        }}
-      >
-        <box flexDirection="column">
-          <For each={props.messages}>{(message, index) => {
-            const id = messageId(message, index());
-            return <StageStreamMessage
-              message={{ ...message, id }}
+  const stream = (
+    <scrollbox
+      ref={scrollbox}
+      width="100%"
+      height="100%"
+      stickyScroll
+      stickyStart="bottom"
+      onMouseDown={(event) => { pointerStartMessageId = stageMessageAt(event.y); pointerDragged = false; }}
+      onMouseDrag={() => { pointerDragged = true; }}
+      onMouseUp={(event) => {
+        const messageId = stageMessageAt(event.y);
+        if (!pointerStartMessageId || pointerStartMessageId !== messageId || pointerDragged || event.isDragging || event.defaultPrevented || renderer.hasSelection || event.button !== 0) return;
+        toggleStageMessage(messageId);
+      }}
+    >
+      <box flexDirection="column">
+        <For each={props.messages}>{(message, index) => {
+          const id = messageId(message, index());
+          return <StageStreamMessage
+            message={{ ...message, id }}
+            reasoningMode={props.reasoningMode}
+            width={props.contentWidth}
+            agent={message.agentRunId ? props.agents.find((agent) => agent.runId === message.agentRunId) : undefined}
+            expanded={() => message.stageSource === true}
+            parsed={stageMessageMetadata().parsedById.get(id)}
+            onToggle={() => toggleStageMessage(id)}
+          />;
+        }}</For>
+        <Show when={props.streamingReasoning.trim().length > 0 && props.reasoningMode !== "hidden"} fallback={<box height={0} />}>
+          <ReasoningBlock content={props.streamingReasoning} streaming={true} mode={props.reasoningMode} width={props.contentWidth} />
+        </Show>
+        <Show when={props.streamingAssistant.trim().length > 0} fallback={<box height={0} />}>
+          <box flexDirection="column">
+            <text content="━━━━━━━━ assistant streaming" fg={palette.assistant} attributes={1} />
+            <Message
+              message={{ id: `stream:${props.sessionId ?? "new"}`, role: "assistant", content: props.streamingAssistant, ...(props.activeEngine === "stage" ? { engine: "stage" as const } : {}) }}
               reasoningMode={props.reasoningMode}
               width={props.contentWidth}
-              agent={message.agentRunId ? props.agents.find((agent) => agent.runId === message.agentRunId) : undefined}
-              expanded={() => message.stageSource === true}
-              parsed={stageMessageMetadata().parsedById.get(id)}
-              onToggle={() => toggleStageMessage(id)}
-            />;
-          }}</For>
-          <Show when={props.streamingReasoning.trim().length > 0 && props.reasoningMode !== "hidden"} fallback={<box height={0} />}>
-            <ReasoningBlock content={props.streamingReasoning} streaming={true} mode={props.reasoningMode} width={props.contentWidth} />
-          </Show>
-          <Show when={props.streamingAssistant.trim().length > 0} fallback={<box height={0} />}>
-            <box flexDirection="column">
-              <text content="━━━━━━━━ assistant streaming" fg={palette.assistant} attributes={1} />
-              <Message
-                message={{ id: `stream:${props.sessionId ?? "new"}`, role: "assistant", content: props.streamingAssistant, ...(props.activeEngine === "stage" ? { engine: "stage" as const } : {}) }}
-                reasoningMode={props.reasoningMode}
-                width={props.contentWidth}
-                streaming
-              />
-            </box>
-          </Show>
-        </box>
-      </scrollbox>
+              streaming
+            />
+          </box>
+        </Show>
+      </box>
+    </scrollbox>
+  );
+
+  return (
+    <box title="Messages" border borderColor={palette.sectionBorder} flexGrow={1} padding={1}>
+      <Show
+        when={!props.showHero}
+        fallback={<EmptyHero notices={props.messages.filter((message) => message.role === "system").map((message) => message.content)} />}
+      >{stream}</Show>
     </box>
   );
 }

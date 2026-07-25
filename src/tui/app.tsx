@@ -3,13 +3,15 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
-import { engineAccent, palette } from "./theme";
+import { engineAccent, palette, reportTerminalThemeMode, setThemePreference } from "./theme";
 import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { QualityWarning } from "../core/quality";
 import { resolveTuiLayout } from "./layout";
+import { resolveSplashMode } from "./brand-mark";
+import { Splash } from "./widgets/Splash";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
@@ -34,6 +36,7 @@ import {
   createUsageController,
   footerLine,
   headerLine,
+  workspaceHeaderLine,
   latestTurnUsage,
   sessionUsageTelemetryLine,
   sumSessionUsage,
@@ -58,10 +61,12 @@ import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
 import { createSideQuestionController } from "./side-question-controller";
+import { createWorkspaceController } from "./workspace-controller";
 import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
+import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
 
 export type AppProps = {
@@ -117,10 +122,6 @@ export function App(props: AppProps = {}) {
   const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
   const [reasoningDisplayMode, setReasoningDisplayMode] = createSignal<ReasoningDisplayMode>("collapsed");
   const [messages, setMessages] = createSignal<Message[]>([
-    {
-      role: "system",
-      content: "Ready. Enter one Prism prompt and press Enter.",
-    },
     ...(props.dangerouslySkipPermissions ? [{
       role: "system" as const,
       content: "DANGER: --dangerously-skip-permissions enabled YOLO for this process. Tool approvals are bypassed; runtime hard guards remain active.",
@@ -134,6 +135,30 @@ export function App(props: AppProps = {}) {
   const [busy, setBusy] = createSignal(false);
   const inputQueue = createInputQueue();
   const [restoringSession, setRestoringSession] = createSignal(false);
+  // M1 startup splash: the mode is decided once from terminal capabilities and
+  // environment; "skip" (non-interactive terminal) never mounts the overlay.
+  const splashMode = resolveSplashMode({
+    isTty: Boolean(process.stdout.isTTY),
+    rgb: renderer.capabilities?.rgb ?? true,
+    reducedMotion: process.env.VESICLE_REDUCED_MOTION === "1",
+  });
+  const [splashGone, setSplashGone] = createSignal(splashMode === "skip");
+  const [splashForceDone, setSplashForceDone] = createSignal(false);
+  // M2: the empty-session hero shows only while the stream holds no
+  // conversation turns; system notices (e.g. the YOLO warning) render above it.
+  const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system"));
+
+  // Day/night theme: the env preference wins at startup; otherwise follow the
+  // terminal's own mode (eager report, async detection, then live events).
+  // The shell re-renders reactively whenever the resolved mode changes.
+  const requestedTheme = process.env.VESICLE_THEME?.trim().toLowerCase();
+  setThemePreference(requestedTheme === "dark" || requestedTheme === "light" ? requestedTheme : "auto");
+  const reportedTheme = renderer.themeMode;
+  if (reportedTheme) reportTerminalThemeMode(reportedTheme);
+  void renderer.waitForThemeMode(500).then((detected) => {
+    if (detected) reportTerminalThemeMode(detected);
+  });
+  renderer.on("theme_mode", reportTerminalThemeMode);
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
@@ -432,6 +457,13 @@ export function App(props: AppProps = {}) {
     setStatus,
     copyText: (text) => copyTextToClipboard(renderer, text),
   });
+  // Two-page shell (Scope B): page state outlives the per-page components.
+  const workspaceController = createWorkspaceController();
+  const workspaceActive = () => workspaceController.activePage() === "workspace";
+  function switchPage(): void {
+    setFocusedArtifactPath(null);
+    workspaceController.togglePage();
+  }
   const queuedWork = createQueuedWorkController({
     rootDir: process.cwd(),
     inputQueue,
@@ -757,6 +789,8 @@ export function App(props: AppProps = {}) {
   useInputRouting({
     renderer,
     setStatus,
+    splashActive: () => !splashGone(),
+    dismissSplash: () => setSplashForceDone(true),
     rewindPicker,
     handleRewindKey: rewindController.handleKey,
     modelPicker,
@@ -785,6 +819,9 @@ export function App(props: AppProps = {}) {
     artifactFocusActive: () => focusedArtifactPath() !== null,
     enterArtifactFocus,
     handleArtifactFocusKey,
+    togglePage: switchPage,
+    workspaceActive,
+    handleWorkspaceKey: workspaceController.handleKey,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -859,6 +896,10 @@ export function App(props: AppProps = {}) {
     openModelPicker,
     openQualityPicker,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
+    openWorkspaceTarget: async (relPath?: string) => {
+      setFocusedArtifactPath(null);
+      return workspaceController.openWorkspaceTarget(relPath);
+    },
   };
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
@@ -915,8 +956,10 @@ export function App(props: AppProps = {}) {
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
         <text
-          content={headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
-          fg={engineAccent(activeEngine())}
+          content={workspaceActive()
+            ? workspaceHeaderLine(process.cwd(), layout().width)
+            : headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
+          fg={workspaceActive() ? palette.brand : engineAccent(activeEngine())}
           attributes={1}
           wrapMode="none"
         />
@@ -949,7 +992,7 @@ export function App(props: AppProps = {}) {
           )}
         </Show>
 
-        <Show when={!sideQuestionController.overlay() && layout().showSidebar} fallback={<box width={0} />}>
+        <Show when={!sideQuestionController.overlay() && !workspaceActive() && layout().showSidebar} fallback={<box width={0} />}>
           <Sidebar
             status={status()}
             thinkingTier={thinkingTier()}
@@ -967,7 +1010,7 @@ export function App(props: AppProps = {}) {
           />
         </Show>
 
-        <Show when={!sideQuestionController.overlay()} fallback={<box width={0} />}>
+        <Show when={!sideQuestionController.overlay() && !workspaceActive()} fallback={<box width={0} />}>
           <MessageStream
             messages={messages()}
             streamingReasoning={streamingReasoning()}
@@ -977,15 +1020,31 @@ export function App(props: AppProps = {}) {
             agents={agentCards()}
             activeEngine={activeEngine()}
             sessionId={sessionId()}
+            showHero={showHero()}
             onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
             registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
+          />
+        </Show>
+
+        {/* Workspace page (Scope B / #62): the second top-level surface. The
+            side-question overlay still wins the main row while open; gate and
+            picker surfaces stay shared at the bottom so a turn's safety
+            prompts remain reachable from either page. */}
+        <Show when={!sideQuestionController.overlay() && workspaceActive()} fallback={<box width={0} />}>
+          <WorkspacePage
+            controller={workspaceController}
+            projectRoot={process.cwd()}
+            width={layout().width}
+            height={Math.max(6, dimensions().height - 3 - layout().footerHeight)}
+            treeWidth={layout().leftPanelWidth}
+            compact={layout().mode === "compact"}
           />
         </Show>
 
         {/* The former right-hand Activity / Artifacts pane was removed in the
             TUI rewrite. Agent-loop activity and artifact detail now fold into
             the message stream itself (tool-call rendering, Phase D). The left
-            Workspace sidebar holds the persistent artifact list. */}
+            Host sidebar holds the persistent artifact list. */}
       </box>
 
       <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>
@@ -1038,6 +1097,20 @@ export function App(props: AppProps = {}) {
           wrapMode="none"
         />
       </box>
+
+      {/* M1 startup splash: absolute overlay painted above the shell. It owns
+          the only continuous motion in the app and unmounts cleanly once the
+          session surface is ready — nothing persists below the transcript. */}
+      <Show when={!splashGone()} fallback={<box width={0} height={0} />}>
+        <Splash
+          mode={splashMode === "skip" ? "static" : splashMode}
+          ready={providerConfigReady}
+          forceDone={splashForceDone}
+          width={dimensions().width}
+          height={dimensions().height}
+          onGone={() => setSplashGone(true)}
+        />
+      </Show>
     </box>
   );
 }

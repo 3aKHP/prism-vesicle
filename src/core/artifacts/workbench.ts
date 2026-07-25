@@ -19,6 +19,14 @@ export type ArtifactValidation = {
   results: Array<{ name: string; result: ValidationResult }>;
 };
 
+/**
+ * The validator names the workbench runs over artifact content. Exported so
+ * the Workspace page's in-page validation (B4) runs the exact same list —
+ * `turn-finalizer` auto-validation, `/validate`, and the Workspace `v` key all
+ * share this constant and cannot drift into a third list.
+ */
+export const ARTIFACT_VALIDATOR_NAMES = ["character-card", "scenario-card"] as const;
+
 export type ArtifactPreview = ArtifactEntry & {
   preview: string;
   truncated: boolean;
@@ -97,5 +105,5 @@ async function scanArtifactDir(rootDir: string, dir: string, entries: ArtifactEn
 function validateArtifactContent(content: string): ArtifactValidation | undefined {
   // Same shape-based classification + filter as turn-finalizer auto-validation,
   // so /validate and auto-validation never drift in which validators they run.
-  return validateContent(["character-card", "scenario-card"], content);
+  return validateContent([...ARTIFACT_VALIDATOR_NAMES], content);
 }

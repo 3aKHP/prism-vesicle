@@ -64,7 +64,7 @@ Agent Loop 运行时仍可继续输入普通消息或命令。按回车后，需
 
 - `/help` —— 列出全部命令。
 - `/context` —— 当前上下文用量。
-- `/artifact` —— 列出已生成的产物。
+- `/artifact` —— 在 Workspace 页打开已生成的产物。
 - `/engine` —— 查看当前引擎(默认是 ETL)。
 - Ctrl+Q —— 退出 Vesicle。
 
