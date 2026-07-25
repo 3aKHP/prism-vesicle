@@ -5,17 +5,16 @@
     "": {
       "name": "prism-vesicle",
       "dependencies": {
-        "@eslint-community/regexpp": "4.12.2",
         "@opentui/core": "0.4.3",
-        "@opentui/keymap": "0.4.3",
-        "@opentui/solid": "0.4.3",
-        "diff": "9.0.0",
-        "solid-js": "1.9.14",
         "web-tree-sitter": "0.25.10",
       },
       "devDependencies": {
         "@biomejs/biome": "2.5.4",
+        "@eslint-community/regexpp": "4.12.2",
+        "@opentui/solid": "0.4.3",
         "@types/bun": "1.3.14",
+        "diff": "9.0.0",
+        "solid-js": "1.9.12",
         "typescript": "6.0.3",
       },
     },
@@ -128,8 +127,6 @@
     "@opentui/core-win32-arm64": ["@opentui/core-win32-arm64@0.4.3", "https://registry.npmmirror.com/@opentui/core-win32-arm64/-/core-win32-arm64-0.4.3.tgz", { "os": "win32", "cpu": "arm64" }, "sha512-Mx2zuOjrhm/z2SDS6RExIyjP/SnN/8QhhagxURUw0jQi/NssGSeAllu1cBAFFnhobJL5QLTE4FU4CRhUK9svgg=="],
 
     "@opentui/core-win32-x64": ["@opentui/core-win32-x64@0.4.3", "https://registry.npmmirror.com/@opentui/core-win32-x64/-/core-win32-x64-0.4.3.tgz", { "os": "win32", "cpu": "x64" }, "sha512-NuoqvWKGXaYnmlqvu7Gg2lLI6yVMnS9OfWBvxp+7Q+McSgHFSTQmYBXaPpvQ8HikpQXE1nCeMPtuSG4PdZHe2w=="],
-
-    "@opentui/keymap": ["@opentui/keymap@0.4.3", "https://registry.npmmirror.com/@opentui/keymap/-/keymap-0.4.3.tgz", { "dependencies": { "@opentui/core": "0.4.3" }, "peerDependencies": { "@opentui/react": "0.4.3", "@opentui/solid": "0.4.3", "react": ">=19.2.0", "solid-js": "1.9.12" }, "optionalPeers": ["@opentui/react", "@opentui/solid", "react", "solid-js"] }, "sha512-sinX0pyQBRrEvo89PSSUbSUDIYpL3xWo81VEfec58VFoVRB5FG48/deAtvRTQfJ8w1kgbzN8hzdOXdSm61zBmw=="],
 
     "@opentui/solid": ["@opentui/solid@0.4.3", "https://registry.npmmirror.com/@opentui/solid/-/solid-0.4.3.tgz", { "dependencies": { "@babel/core": "7.28.0", "@babel/preset-typescript": "7.27.1", "@opentui/core": "0.4.3", "babel-plugin-module-resolver": "5.0.2", "babel-preset-solid": "1.9.12", "entities": "7.0.1", "s-js": "^0.4.9" }, "peerDependencies": { "solid-js": "1.9.12" } }, "sha512-RcV0+S8HMdXOASyr7HmJUBuTUIaFPzAxMDa44VftS5C2JUgrmAuWo0Njv1q3TWRB1owjHnyKhEfWGKq7A82wxw=="],
 
@@ -247,7 +244,7 @@
 
     "seroval-plugins": ["seroval-plugins@1.5.4", "https://registry.npmmirror.com/seroval-plugins/-/seroval-plugins-1.5.4.tgz", { "peerDependencies": { "seroval": "^1.0" } }, "sha512-S0xQPhUTefAhNvNWFg0c1J8qJArHt5KdtJ/cFAofo06KD1MVSeFWyl4iiu+ApDIuw0WhjpOfCdgConOfAnLgkw=="],
 
-    "solid-js": ["solid-js@1.9.14", "https://registry.npmmirror.com/solid-js/-/solid-js-1.9.14.tgz", { "dependencies": { "csstype": "^3.1.0", "seroval": "~1.5.4", "seroval-plugins": "~1.5.4" } }, "sha512-sAEXC0Kk0S1EDg+8ysEWJDbYhA3RRoEjwuySUGlKIemeo0I5YZfOyumNjNs9Sv3y2nmhD+0rW66ag2HsMuQiGQ=="],
+    "solid-js": ["solid-js@1.9.12", "", { "dependencies": { "csstype": "^3.1.0", "seroval": "~1.5.0", "seroval-plugins": "~1.5.0" } }, "sha512-QzKaSJq2/iDrWR1As6MHZQ8fQkdOBf8GReYb7L5iKwMGceg7HxDcaOHk0at66tNgn9U2U7dXo8ZZpLIAmGMzgw=="],
 
     "string-width": ["string-width@7.2.0", "https://registry.npmmirror.com/string-width/-/string-width-7.2.0.tgz", { "dependencies": { "emoji-regex": "^10.3.0", "get-east-asian-width": "^1.0.0", "strip-ansi": "^7.1.0" } }, "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ=="],
 

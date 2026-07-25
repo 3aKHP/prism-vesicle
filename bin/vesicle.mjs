@@ -1,2 +1,2 @@
 #!/usr/bin/env bun
-import "../src/cli/main.ts";
+import "../dist/npm/vesicle.mjs";
