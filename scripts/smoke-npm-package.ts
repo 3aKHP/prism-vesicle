@@ -240,7 +240,7 @@ function debugStartupCwd(debugLog: string): string | undefined {
       const detail = JSON.parse(line.slice(markerIndex + marker.length)) as { cwd?: unknown };
       if (typeof detail.cwd === "string") return detail.cwd;
     } catch {
-      return undefined;
+      continue;
     }
   }
   return undefined;
