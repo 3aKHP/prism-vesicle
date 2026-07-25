@@ -11,6 +11,8 @@ import { useRenderer } from "@opentui/solid";
 import type { AgentCardState } from "../types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import { parseStageMessageContent, type StageMessageContent as ParsedStageMessageContent } from "../stage-message-content";
+import { truncateLine } from "../format";
+import { providerFailureCategoryLabel, type ProviderFailureCategory } from "../../providers/shared/errors";
 
 type MessageLike = {
   stageSource?: boolean;
@@ -30,6 +32,7 @@ type MessageLike = {
   engine?: string;
   model?: string;
   images?: VesicleImageAttachment[];
+  failure?: { category: ProviderFailureCategory; status?: number; providerId?: string; retryable: boolean };
 };
 
 /**
@@ -53,6 +56,14 @@ export function Message(props: {
   streaming?: boolean;
 }) {
   const renderer = useRenderer();
+
+  if (props.message.kind === "provider-failure") {
+    return <ProviderFailureCard
+      content={props.message.content}
+      failure={props.message.failure}
+      width={props.width}
+    />;
+  }
 
   if (props.message.kind === "agent" && props.agent) {
     return <AgentCard agent={props.agent} width={props.width} />;
@@ -170,6 +181,34 @@ export function Message(props: {
         <box flexDirection="column" paddingX={1} flexGrow={1}>
           <text content={props.message.role} fg={color} attributes={1} />
           <text content={props.message.content} fg={palette.textPrimary} />
+        </box>
+      </box>
+      <text content=" " fg={palette.textDim} />
+    </box>
+  );
+}
+
+function ProviderFailureCard(props: {
+  content: string;
+  failure?: { category: ProviderFailureCategory; status?: number; providerId?: string; retryable: boolean };
+  width: number;
+}) {
+  const label = () => providerFailureCategoryLabel(props.failure?.category ?? "unknown");
+  const header = () => {
+    const parts = ["⨂", label().title];
+    if (props.failure?.status) parts.push(`HTTP ${props.failure.status}`);
+    if (props.failure?.providerId) parts.push(props.failure.providerId);
+    if (props.failure?.retryable) parts.push("retryable");
+    return truncateLine(parts.join(" · "), props.width);
+  };
+  return (
+    <box flexDirection="column">
+      <box flexDirection="row">
+        <box width={1} backgroundColor={palette.error} />
+        <box flexDirection="column" border borderColor={palette.error} paddingX={1} flexGrow={1}>
+          <text content={header()} fg={palette.error} attributes={1} wrapMode="none" />
+          {label().hint ? <text content={label().hint} fg={palette.warn} wrapMode="word" /> : null}
+          <text content={props.content} fg={palette.textPrimary} wrapMode="word" />
         </box>
       </box>
       <text content=" " fg={palette.textDim} />

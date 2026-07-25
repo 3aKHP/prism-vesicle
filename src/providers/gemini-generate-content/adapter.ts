@@ -26,6 +26,7 @@ export class GeminiGenerateContentAdapter implements ProviderAdapter {
     }, {
       providerId: this.config.providerId,
       signal: request.signal,
+      onRetry: request.onRetry,
     });
     const body = await response.json().catch(() => undefined) as GeminiResponse | undefined;
     if (!response.ok) {
@@ -51,6 +52,7 @@ export class GeminiGenerateContentAdapter implements ProviderAdapter {
     }, {
       providerId: this.config.providerId,
       signal: request.signal,
+      onRetry: request.onRetry,
     });
     if (!response.ok) {
       const body = await response.json().catch(() => undefined) as GeminiResponse | undefined;

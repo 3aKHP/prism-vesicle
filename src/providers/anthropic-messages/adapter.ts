@@ -47,6 +47,7 @@ export class AnthropicMessagesAdapter implements ProviderAdapter {
       providerId: this.config.providerId,
       signal: request.signal,
       attemptHeaders: (retryCount) => ({ "x-stainless-retry-count": String(retryCount) }),
+      onRetry: request.onRetry,
     });
   }
 

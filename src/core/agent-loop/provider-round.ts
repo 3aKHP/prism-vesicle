@@ -67,6 +67,14 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
     tools: options.tools,
     generation: options.generation,
     signal: options.signal,
+    onRetry: options.onEvent ? (info) => options.onEvent?.({
+      type: "provider_retry",
+      attempt: info.attempt,
+      maxRetries: info.maxRetries,
+      delayMs: info.delayMs,
+      ...(info.status !== undefined ? { status: info.status } : {}),
+      iteration: options.iteration,
+    }) : undefined,
   }, options.onEvent, options.bufferAssistant === true);
 
   return response;

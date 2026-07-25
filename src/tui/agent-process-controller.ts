@@ -126,6 +126,10 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
         options.setStatus("sending request");
         recordActivity({ kind: "provider", text: `provider request #${event.iteration + 1}` });
         return true;
+      case "provider_retry":
+        options.setStatus(`retrying · attempt ${event.attempt}/${event.maxRetries}${event.status ? ` · HTTP ${event.status}` : ""}`);
+        recordActivity({ kind: "provider", text: `provider retry ${event.attempt}/${event.maxRetries}${event.status ? ` (${event.status})` : ""}` });
+        return true;
       case "assistant_delta":
         options.setStreamingAssistant((previous) => `${previous}${event.delta}`);
         options.setStatus("generating response");

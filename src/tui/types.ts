@@ -10,6 +10,7 @@ import type { RewindPoint } from "../core/rewind/service";
 import type { VesicleImageAttachment } from "../providers/shared/types";
 import type { AgentExecutionMode } from "../core/agents/profile";
 import type { ResponseUsage } from "../providers/shared/types";
+import type { ProviderFailureCategory } from "../providers/shared/errors";
 
 export type Role = "user" | "assistant" | "system" | "tool";
 
@@ -19,7 +20,7 @@ export type Message = {
   stageSource?: boolean;
   role: Role;
   content: string;
-  kind?: "reasoning" | "artifact" | "agent" | "stage-bootstrap-opening";
+  kind?: "reasoning" | "artifact" | "agent" | "stage-bootstrap-opening" | "provider-failure";
   agentRunId?: string;
   artifactPath?: string;
   artifactTruncated?: boolean;
@@ -35,6 +36,16 @@ export type Message = {
   engine?: EngineId;
   model?: string;
   images?: VesicleImageAttachment[];
+  /** Structured provider-failure metadata for `kind: "provider-failure"` messages. */
+  failure?: ProviderFailureMeta;
+};
+
+/** Carries the structured provider-failure classification to the renderer. */
+export type ProviderFailureMeta = {
+  category: ProviderFailureCategory;
+  status?: number;
+  providerId?: string;
+  retryable: boolean;
 };
 
 export type AgentCardStatus = "queued" | "running" | "ready" | "integrating" | "integrated" | "completed" | "failed" | "cancelled";
