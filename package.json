@@ -1,6 +1,6 @@
 {
   "name": "prism-vesicle",
-  "version": "1.0.0-alpha.5",
+  "version": "1.0.0-alpha.6",
   "description": "Bun terminal host for Prism Engine prompt workflows.",
   "license": "MIT",
   "repository": {
@@ -33,8 +33,8 @@
     "assets/",
     "host-assets/",
     "harness-manifest.json",
-    "bin/",
-    "src/"
+    "bin/vesicle.mjs",
+    "dist/npm/vesicle.mjs"
   ],
   "bin": {
     "vesicle": "./bin/vesicle.mjs"
@@ -52,6 +52,8 @@
     "test:contract": "bun test tests/contract",
     "test:deterministic": "bun test tests/unit tests/component tests/integration tests/contract",
     "test:acceptance:provider": "bun test ./tests/acceptance/provider/provider-connectivity.acceptance.ts ./tests/acceptance/provider/e2e-gate.acceptance.ts",
+    "prepack": "bun run build:npm",
+    "build:npm": "bun run scripts/build-npm-package.ts",
     "pack:check": "bun run scripts/check-npm-pack.ts",
     "pack:smoke": "bun run scripts/smoke-npm-package.ts",
     "smoke:binary": "bun run scripts/smoke-binary.ts",
@@ -61,17 +63,16 @@
     "build:installer": "bun run scripts/build-installer.ts"
   },
   "dependencies": {
-    "@eslint-community/regexpp": "4.12.2",
     "@opentui/core": "0.4.3",
-    "@opentui/keymap": "0.4.3",
-    "@opentui/solid": "0.4.3",
-    "diff": "9.0.0",
-    "solid-js": "1.9.14",
     "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.4",
+    "@eslint-community/regexpp": "4.12.2",
+    "@opentui/solid": "0.4.3",
     "@types/bun": "1.3.14",
+    "diff": "9.0.0",
+    "solid-js": "1.9.12",
     "typescript": "6.0.3"
   }
 }
