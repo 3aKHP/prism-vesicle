@@ -72,6 +72,7 @@ import { copyTextToClipboard } from "./clipboard";
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
   initialResume?: boolean;
+  bootstrapOnly?: boolean;
 };
 
 export {
@@ -90,6 +91,9 @@ export type { TokenUsageSummary };
 export function App(props: AppProps = {}) {
   initDebugLogging();
   const renderer = useRenderer();
+  onMount(() => {
+    if (props.bootstrapOnly) process.nextTick(() => renderer.destroy());
+  });
   const dimensions = useTerminalDimensions();
   const providerState = createProviderState(props.dangerouslySkipPermissions === true);
   const {

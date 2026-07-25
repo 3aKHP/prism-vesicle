@@ -4,6 +4,7 @@ import { isCompiledBinaryRuntime } from "./runtime";
 import { parseCliInvocation } from "./args";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
+declare const VESICLE_NPM_BUNDLE: boolean | undefined;
 
 // Bun's compiled single-file executable reports Bun.main from the bundled
 // virtual root. Keep the invocation cwd unchanged: it is the project root for
@@ -13,6 +14,15 @@ const compiledMarker = typeof VESICLE_COMPILED_BINARY === "boolean"
   ? VESICLE_COMPILED_BINARY
   : undefined;
 const isCompiledBinary = isCompiledBinaryRuntime(compiledMarker, Bun.main);
+const isNpmBundle = typeof VESICLE_NPM_BUNDLE === "boolean" && VESICLE_NPM_BUNDLE;
+
+async function loadOpenTuiPreload(): Promise<void> {
+  // Keep this specifier indirect so package builds can compile the TUI without
+  // bundling OpenTUI's runtime Babel transform. Source runs still load it
+  // before importing any TSX module.
+  const preloadModule = ["@opentui/solid", "preload"].join("/");
+  await import(preloadModule);
+}
 
 const USAGE = `Usage:
   vesicle [project-directory]
@@ -63,8 +73,8 @@ async function launchProjectArgumentOrReport(input: string, dangerouslySkipPermi
 }
 
 async function runSetupFlow(dangerouslySkipPermissions: boolean): Promise<void> {
-  if (!isCompiledBinary) {
-    await import("@opentui/solid/preload");
+  if (!isCompiledBinary && !isNpmBundle) {
+    await loadOpenTuiPreload();
   }
   const { runGuidedSetup } = await import("../setup");
   const result = await runGuidedSetup();
@@ -72,8 +82,8 @@ async function runSetupFlow(dangerouslySkipPermissions: boolean): Promise<void> 
 }
 
 async function startTui(dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
-  if (!isCompiledBinary) {
-    await import("@opentui/solid/preload");
+  if (!isCompiledBinary && !isNpmBundle) {
+    await loadOpenTuiPreload();
   }
   await configureTreeSitterRuntime();
   const { runTui } = await import("../tui");
@@ -199,11 +209,17 @@ switch (parsed.kind) {
         break;
       }
       case "debug": {
-        if (args[0] !== "markdown-runtime") {
-          console.error("Usage: vesicle debug markdown-runtime");
+        if (args[0] !== "markdown-runtime" && args[0] !== "tui-bootstrap") {
+          console.error("Usage: vesicle debug <markdown-runtime|tui-bootstrap>");
           process.exit(1);
         }
         await configureTreeSitterRuntime();
+        if (args[0] === "tui-bootstrap") {
+          if (!isCompiledBinary && !isNpmBundle) await loadOpenTuiPreload();
+          const { runTui } = await import("../tui");
+          await runTui({ bootstrapOnly: true });
+          break;
+        }
         const { runMarkdownRuntimeDiagnostic } = await import("../tui/markdown-runtime-diagnostic");
         const result = await runMarkdownRuntimeDiagnostic();
         console.log(JSON.stringify(result));

@@ -128,7 +128,7 @@ Use the smallest verification set that proves the change:
 | docs only | targeted docs grep and, when cheap, `bun run typecheck` |
 | small code | `bun run lint`, `bun run typecheck`, plus focused tests |
 | provider/session/tool/gate/TUI runtime | `bun run lint`, `bun run typecheck`, relevant tests, `bun run doctor` |
-| release or `main` snapshot | `bun run lint`, `bun run typecheck`, `bun test`, `bun run doctor`, and real TUI/provider smoke when practical |
+| release or `main` snapshot | `bun run lint`, `bun run typecheck`, `bun test`, `bun run doctor`, `bun audit`, `bun run pack:check`, `bun run pack:smoke`, and real provider smoke when practical |
 
 ## CI/CD State Machine
 
@@ -146,9 +146,10 @@ The reusable workflow is the single owner of the release gates:
 - Node 24 runtime lines for GitHub-maintained JavaScript Actions, `oven-sh/setup-bun`, and the GitHub Release Action; npm Trusted Publishing also installs Node 24 explicitly
 - frozen Bun install
 - package-version validation
-- Biome lint, typecheck, deterministic tests, dependency audit, npm allowlist check, and clean npm consumer smoke
+- Biome lint, typecheck, deterministic tests, dependency audit, and npm allowlist check
+- exact-tarball global-prefix and local-lockfile npm installs with no warnings, clean dependency trees, a clean production audit, package asset/parser diagnostics, and Linux PTY TUI startup from both the invocation cwd and an explicit project directory
 - Linux ELF build and empty-project release-shape smoke
-- Windows PE build, focused Windows runtime tests, and empty-project release-shape smoke
+- Windows exact-tarball npm install/runtime diagnostics plus a bounded real TUI bootstrap, PE build, focused Windows runtime tests, and empty-project release-shape smoke
 - pinned Inno Setup build, silent install, upgrade, runtime, and uninstall smoke
 - versioned Linux, Windows, assets-ZIP, and installer artifacts
 
@@ -162,7 +163,7 @@ The empty-project smoke runs `debug markdown-runtime`, `assets status`, asset ma
 4. Update the local `main` with a fast-forward-only pull and confirm that `HEAD` is the accepted release commit.
 5. Create one annotated `v<package.json version>` tag on that commit and push that exact tag. This `git push` is the explicit publication authorization.
 6. The tag workflow rejects a lightweight tag, a tag/version mismatch, or a tag whose commit is outside the remote `main` history. If validation succeeds, it reruns every shared gate, uploads the versioned artifacts, creates the GitHub Release and checksums, then publishes npm through Trusted Publishing.
-7. Verify the public GitHub assets, checksums, npm version/dist-tag, bin launcher, provenance attestation, and a clean installed invocation before announcing the release.
+7. Verify the public GitHub assets and checksums, then repeat the global-prefix and local-lockfile npm consumer smoke from the public registry; confirm the version/dist-tag, bin launcher, provenance attestation, clean audit, and interactive TUI startup before announcing the release.
 
 The complete normal publication command sequence after the release PR is merged is (substitute the intended `<version>`, e.g. `1.0.0-alpha.3`):
 

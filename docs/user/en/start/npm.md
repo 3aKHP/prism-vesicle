@@ -15,7 +15,7 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-The package ships a complete read-only V10 runtime baseline (`assets/`, `host-assets/`, `harness-manifest.json`); no separate Harness install is needed. The second command prints the composed ETL engine structure to confirm the install works.
+The package ships a precompiled TUI entry and a complete read-only V10 runtime baseline (`assets/`, `host-assets/`, `harness-manifest.json`). Startup does not compile application TSX inside `node_modules`, and no separate Harness install is needed. The second command prints the composed ETL engine structure to confirm the install works.
 
 If you prefer not to install globally, you can also `npm install prism-vesicle` inside a project and use `bunx vesicle …`; global install is the recommended path and directly supports the standard `cd project && vesicle .` workflow.
 

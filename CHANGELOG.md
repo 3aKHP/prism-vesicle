@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Unified clipboard-image paste input.** Raw `Ctrl+V` keyboard events now enter the existing clipboard-image attachment flow while Alt/Option+V remains available for compatibility, including WSL terminals that inject the `Ctrl+V` control byte. Terminal text and bracketed paste still use the independent text-paste route, and active modal, picker, gate, and Workspace surfaces retain keyboard ownership.
 - **Workspace file safety follow-ups.** External-change detection now compares both mtime and inode identity, so a same-timestamp replacement still asks before overwrite; project-relative preview/stat routes share the editor's absolute/traversal/NUL guard; symlinks remain metadata-only instead of loading their targets; and keyboard input stays owned while a dirty-buffer save/close action is in flight. Tree height wiring now attaches explicitly after mount rather than relying on ref/effect timing.
 
+## [1.0.0-alpha.6] - 2026-07-26
+
+### Fixed
+
+- **npm-installed interactive startup now uses a precompiled Solid TUI runtime.** The package launcher executes generated JavaScript instead of raw application TSX under `node_modules`, so global and local npm installs no longer fall through to React's `jsx-dev-runtime`. Package assets, sparse overrides, the OpenTUI native package, the parser worker, invocation cwd, and explicit project-directory launches retain their existing behavior.
+- **npm consumers receive a clean production dependency tree.** The unused `@opentui/keymap` dependency is removed; `@opentui/solid` and the aligned `solid-js@1.9.12` are build-only and bundled into the generated runtime. This removes the invalid Solid peer relationship and the deprecated/audited Babel → module-resolver → glob chain from installed production dependencies.
+- **Release gates now exercise the advertised npm journey.** The package smoke installs the exact tarball into isolated global-prefix and local lockfile consumers, rejects npm warnings and invalid trees, requires a clean production audit, checks package assets and tree-sitter outside the checkout, and launches the global command in a Linux PTY through both the invocation cwd and an explicit project argument. Windows CI installs the same tarball, verifies its selected native runtime and diagnostics, and mounts then cleanly destroys the real Solid/OpenTUI application as a bounded TUI bootstrap.
+
 ## [1.0.0-alpha.5] - 2026-07-25
 
 ### Added
@@ -267,7 +275,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed the input bar not clearing after submit.
 - Fixed per-turn session creation that caused model memory loss across turns.
 
-[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.5...HEAD
+[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.6...HEAD
+[1.0.0-alpha.6]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.5...v1.0.0-alpha.6
 [1.0.0-alpha.5]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.4...v1.0.0-alpha.5
 [1.0.0-alpha.4]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.3...v1.0.0-alpha.4
 [1.0.0-alpha.3]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
