@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import { dirname } from "node:path";
 import { OVERSIZED_BYTES, PREVIEW_LINE_CAP, type WorkspaceFilePreview } from "./workspace-files";
@@ -86,7 +86,7 @@ export async function readEditableFile(
   const abs = assertProjectRelativePath(rootDir, relPath);
   let info: Stats;
   try {
-    info = await stat(abs);
+    info = await lstat(abs);
   } catch {
     return null;
   }
@@ -104,7 +104,7 @@ export async function readEditableFile(
 /** Current disk identity for a project-relative file, or null when absent. */
 export async function readFileStamp(rootDir: string, relPath: string): Promise<FileStamp | null> {
   try {
-    const info = await stat(assertProjectRelativePath(rootDir, relPath));
+    const info = await lstat(assertProjectRelativePath(rootDir, relPath));
     return info.isFile() ? { mtimeMs: info.mtimeMs, ino: info.ino } : null;
   } catch {
     return null;

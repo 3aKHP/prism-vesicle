@@ -27,6 +27,7 @@ describe("editor path guard", () => {
     expect(assertProjectRelativePath(root, "a/b/c.md")).toBe(join(root, "a", "b", "c.md"));
     expect(() => assertProjectRelativePath(root, "/abs/path")).toThrow();
     expect(() => assertProjectRelativePath(root, "C:\\abs\\path")).toThrow();
+    expect(() => assertProjectRelativePath(root, "C:drive-relative")).toThrow();
     expect(() => assertProjectRelativePath(root, "../escape")).toThrow();
     expect(() => assertProjectRelativePath(root, "a/../../escape")).toThrow();
     expect(() => assertProjectRelativePath(root, "")).toThrow();
@@ -109,6 +110,8 @@ describe("editor editable classification", () => {
     expect(linked?.symlink).toBe(true);
     expect(linked?.lines).toBeUndefined();
     expect(isEditablePreview(linked!)).toBe(false);
+    expect(await readEditableFile(root, "link.txt")).toBeNull();
+    expect(await readFileStamp(root, "link.txt")).toBeNull();
 
     // Oversized text: read-only (would exceed the editor's in-bounds ceiling).
     const big = join(root, "big.txt");
