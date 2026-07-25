@@ -74,7 +74,7 @@ try {
 type CapturedRun = { exitCode: number; output: string };
 
 async function runCaptured(command: string[], cwd: string, configDirectory?: string): Promise<CapturedRun> {
-  const child = Bun.spawn(command, {
+  const child = Bun.spawn(spawnCommand(command), {
     cwd,
     env: runtimeEnv(configDirectory),
     stdin: "ignore",
@@ -90,7 +90,7 @@ async function runCaptured(command: string[], cwd: string, configDirectory?: str
 }
 
 async function runInherited(command: string[], cwd: string, configDirectory?: string): Promise<void> {
-  const child = Bun.spawn(command, {
+  const child = Bun.spawn(spawnCommand(command), {
     cwd,
     env: runtimeEnv(configDirectory),
     stdin: "ignore",
@@ -215,6 +215,24 @@ function npmExecutable(root: string, global: boolean): string {
     return global ? join(root, "vesicle.cmd") : join(root, ".bin", "vesicle.cmd");
   }
   return join(root, global ? "bin" : ".bin", "vesicle");
+}
+
+function spawnCommand(command: string[]): string[] {
+  const executable = command[0] ?? "";
+  if (process.platform !== "win32" || (executable !== "npm" && !executable.toLowerCase().endsWith(".cmd"))) {
+    return command;
+  }
+  return [
+    process.env.ComSpec ?? "cmd.exe",
+    "/d",
+    "/s",
+    "/c",
+    command.map(quoteWindowsCommandArgument).join(" "),
+  ];
+}
+
+function quoteWindowsCommandArgument(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 function shellQuote(value: string): string {
