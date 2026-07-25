@@ -232,6 +232,10 @@ describe("file management: delete (d)", () => {
 
     controller.handleKey(key("d"));
     controller.handleKey(key("y"));
+    // The dismissed dialog keeps input ownership until the trash move lands;
+    // a fast second `d` must not open another delete confirm.
+    controller.handleKey(key("d"));
+    expect(controller.dialog()).toBeNull();
     await new Promise((r) => setTimeout(r, 40));
     expect(controller.rows().some((row) => row.node.relPath === "notes.txt")).toBe(false);
     expect(controller.editorStatus()).toContain("trash");

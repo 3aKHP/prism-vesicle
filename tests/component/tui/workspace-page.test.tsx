@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/solid";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { WorkspacePage } from "../../../src/tui/views/WorkspacePage";
@@ -111,6 +111,20 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("logo.png");
     expect(frame).toContain("image file");
     expect(frame).toContain("inline-renderable");
+  });
+
+  test("symlink files show metadata without loading the target", async () => {
+    await symlink(join(root, "notes.txt"), join(root, "notes-link.txt"));
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes-link.txt");
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    expect(frame).toContain("symbolic link");
+    expect(frame).toContain("targets are not loaded");
+    expect(frame).not.toContain("line one");
   });
 
   test("editable source shows the editor status line with key hints", async () => {

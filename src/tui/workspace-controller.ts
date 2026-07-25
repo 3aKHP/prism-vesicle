@@ -2,13 +2,14 @@ import { createSignal } from "solid-js";
 import type { TextareaRenderable } from "@opentui/core";
 import type { TuiKeyEvent } from "./decision-interaction";
 import {
-  assertProjectRelativePath,
   atomicWriteFile,
   computeFindOffsets,
   isEditablePreview,
   readEditableFile,
-  readMtimeMs,
+  readFileStamp,
+  type FileStamp,
 } from "./workspace-editor";
+import { assertProjectRelativePath } from "./workspace-paths";
 import {
   copyEntry,
   createDirectory,
@@ -57,7 +58,8 @@ import {
  * owns the buffer pool (LRU, dirty-protected), dirty tracking
  * (plainText-vs-snapshot), save / save-as with a project-root-bounded atomic
  * write, find / goto / save-as input bars, the dirty-on-close confirm, and
- * external-modification detection by mtime on save and page reactivation.
+ * external-modification detection by mtime + inode on save and page
+ * reactivation.
  *
  * Page state lives outside the component tree so switching pages keeps the
  * tree, open file, and focus; nothing here touches session JSONL,
@@ -90,11 +92,14 @@ type EditorDialog =
 type OpsBarKind = "create-file" | "create-dir" | "move" | "copy";
 type OpsBar = { kind: OpsBarKind; draft: string; source: string } | null;
 
-type EditorBufferMeta = {
+type EditorBufferMeta = FileStamp & {
   savedSnapshot: string;
-  mtimeMs: number;
   initialContent: string;
 };
+
+function sameFileStamp(left: FileStamp, right: FileStamp): boolean {
+  return left.mtimeMs === right.mtimeMs && left.ino === right.ino;
+}
 
 /** LRU cap for open editable buffers (spike §4.1 / plan §4.1). */
 const EDITOR_LRU_CAP = 8;
@@ -363,6 +368,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       bufferMeta.set(relPath, {
         savedSnapshot: read.content,
         mtimeMs: read.mtimeMs,
+        ino: read.ino,
         initialContent: read.content,
       });
     }
@@ -552,8 +558,8 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const instance = instances.get(path);
     const meta = bufferMeta.get(path);
     if (!instance || !meta) return false;
-    const currentMtime = await readMtimeMs(rootDir, path);
-    if (currentMtime !== null && currentMtime !== meta.mtimeMs) {
+    const currentStamp = await readFileStamp(rootDir, path);
+    if (currentStamp !== null && !sameFileStamp(currentStamp, meta)) {
       setDialog({ kind: "overwrite-confirm", path });
       return false;
     }
@@ -567,6 +573,15 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
    * across buffers; choosing save-as or cancelling clears it too.
    */
   let closeAfterSave = false;
+  // Dialog actions that await filesystem I/O temporarily own keyboard input.
+  // Without this guard, the dialog disappears before the save promise settles
+  // and a fast Esc can reopen it against the same in-flight buffer.
+  let dialogActionPending = false;
+
+  function runDialogAction(action: () => Promise<unknown>): void {
+    dialogActionPending = true;
+    void action().finally(() => { dialogActionPending = false; });
+  }
 
   async function forceSaveActive(): Promise<void> {
     const path = activeEditorPath();
@@ -595,10 +610,13 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return false;
     }
     const meta = bufferMeta.get(relPath);
-    const mtime = await readMtimeMs(rootDir, relPath);
+    const stamp = await readFileStamp(rootDir, relPath);
     if (meta) {
       meta.savedSnapshot = content;
-      meta.mtimeMs = mtime ?? meta.mtimeMs;
+      if (stamp) {
+        meta.mtimeMs = stamp.mtimeMs;
+        meta.ino = stamp.ino;
+      }
     }
     setDirtyPaths((set) => {
       if (!set.has(relPath)) return set;
@@ -667,8 +685,13 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     // file's real mtime: a wall-clock value never matches the on-disk stat
     // and would raise a spurious overwrite confirm on the next Ctrl+S.
     closeBuffer(path);
-    const writtenMtime = await readMtimeMs(rootDir, target);
-    bufferMeta.set(target, { savedSnapshot: content, mtimeMs: writtenMtime ?? Date.now(), initialContent: content });
+    const writtenStamp = await readFileStamp(rootDir, target);
+    bufferMeta.set(target, {
+      savedSnapshot: content,
+      mtimeMs: writtenStamp?.mtimeMs ?? Date.now(),
+      ino: writtenStamp?.ino ?? 0,
+      initialContent: content,
+    });
     setEditorOrder((order) => [target, ...order.filter((p) => p !== target)]);
     setActiveEditorPath(target);
     setOpenFile(await readFilePreview(rootDir, target));
@@ -692,6 +715,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     instance.replaceText(read.content);
     meta.savedSnapshot = read.content;
     meta.mtimeMs = read.mtimeMs;
+    meta.ino = read.ino;
     setDirtyPaths((set) => {
       if (!set.has(path)) return set;
       const next = new Set(set);
@@ -777,21 +801,21 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   /**
    * React to whatever the external editor did: an open editable buffer is
-   * reloaded when its mtime moved (and revalidated, like a save); a deleted or
-   * re-linked file is closed; a file that was only in the tree just has its
-   * directory cache + index invalidated.
+   * reloaded when its disk identity changes (and revalidated, like a save); a
+   * deleted or re-linked file is closed; a file that was only in the tree just
+   * has its directory cache + index invalidated.
    */
   async function refreshAfterExternalEdit(relPath: string): Promise<void> {
     const meta = bufferMeta.get(relPath);
     if (meta) {
-      const currentMtime = await readMtimeMs(rootDir, relPath);
-      if (currentMtime === null) {
+      const currentStamp = await readFileStamp(rootDir, relPath);
+      if (currentStamp === null) {
         status(`${relPath} was removed by the external editor`, "error");
         closeBuffer(relPath);
         if (openFile()?.relPath === relPath) { setOpenFile(null); setFocusRegion("tree"); }
         return;
       }
-      if (currentMtime === meta.mtimeMs) {
+      if (sameFileStamp(currentStamp, meta)) {
         status("no changes from external editor");
         return;
       }
@@ -808,6 +832,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       }
       meta.savedSnapshot = read.content;
       meta.mtimeMs = read.mtimeMs;
+      meta.ino = read.ino;
       setExternalChanged((set) => {
         if (!set.has(relPath)) return set;
         const next = new Set(set);
@@ -840,8 +865,8 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     for (const path of editorOrder()) {
       const meta = bufferMeta.get(path);
       if (!meta) continue;
-      const mtime = await readMtimeMs(rootDir, path);
-      if (mtime !== null && mtime !== meta.mtimeMs) changed.push(path);
+      const stamp = await readFileStamp(rootDir, path);
+      if (stamp !== null && !sameFileStamp(stamp, meta)) changed.push(path);
     }
     if (changed.length === 0) return;
     setExternalChanged(new Set(changed));
@@ -1249,7 +1274,8 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         // overwrite confirm keeps the buffer open and arms closeAfterSave so
         // force-overwriting completes the close — the edits are never
         // discarded under the user's feet.
-        void saveActive().then((saved) => {
+        runDialogAction(async () => {
+          const saved = await saveActive();
           if (saved) afterDirtyConfirm();
           else closeAfterSave = true;
         });
@@ -1259,7 +1285,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return true;
     }
     if (current.kind === "overwrite-confirm") {
-      if (key.name === "o") { setDialog(null); void forceSaveActive(); return true; }
+      if (key.name === "o") {
+        setDialog(null);
+        runDialogAction(forceSaveActive);
+        return true;
+      }
       // Save-as satisfies the save intent by itself; the buffer moves to the
       // new path and stays open there.
       if (key.name === "s") { closeAfterSave = false; setDialog(null); openSaveAs(); return true; }
@@ -1267,13 +1297,18 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return true;
     }
     if (current.kind === "reload-confirm") {
-      if (key.name === "y") { setDialog(null); void reloadActiveBuffer(); return true; }
+      if (key.name === "y") { setDialog(null); runDialogAction(reloadActiveBuffer); return true; }
       if (key.name === "n") { setDialog(null); return true; }
       return true;
     }
     if (current.kind === "delete-confirm") {
       // Plan §5.1: "y deletes / anything else cancels".
-      if (key.name === "y") { const p = current.path; setDialog(null); void execDelete(p); return true; }
+      if (key.name === "y") {
+        const p = current.path;
+        setDialog(null);
+        runDialogAction(() => execDelete(p));
+        return true;
+      }
       setDialog(null);
       return true;
     }
@@ -1281,15 +1316,20 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       if (key.name === "o") {
         const { op, source, path: target } = current;
         setDialog(null);
-        if (op === "move") void execMove(source, target, true);
-        else void execCopy(source, target, true);
+        if (op === "move") runDialogAction(() => execMove(source, target, true));
+        else runDialogAction(() => execCopy(source, target, true));
         return true;
       }
       if (key.name === "c") { setDialog(null); return true; }
       return true;
     }
     if (current.kind === "save-as-overwrite") {
-      if (key.name === "o") { const p = current.path; setDialog(null); void performSaveAs(p); return true; }
+      if (key.name === "o") {
+        const p = current.path;
+        setDialog(null);
+        runDialogAction(() => performSaveAs(p));
+        return true;
+      }
       if (key.name === "c" || key.name === "escape") { setDialog(null); return true; }
       return true;
     }
@@ -1385,6 +1425,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   /** Returns true when the key was consumed by the Workspace page. */
   function handleKey(key: TuiKeyEvent): boolean {
     if (page() !== "workspace") return false;
+    if (dialogActionPending) return true;
     if (quickOpenActive()) return handleQuickOpenKey(key);
     if (findingsOpen()) return handleFindingsKey(key);
     if (dialog()) return handleDialogKey(key);

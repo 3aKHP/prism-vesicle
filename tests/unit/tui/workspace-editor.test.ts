@@ -3,13 +3,13 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
-  assertProjectRelativePath,
   atomicWriteFile,
   computeFindOffsets,
   isEditablePreview,
   readEditableFile,
-  readMtimeMs,
+  readFileStamp,
 } from "../../../src/tui/workspace-editor";
+import { assertProjectRelativePath } from "../../../src/tui/workspace-paths";
 import { readFilePreview } from "../../../src/tui/workspace-files";
 
 let root: string;
@@ -26,6 +26,8 @@ describe("editor path guard", () => {
     expect(assertProjectRelativePath(root, "notes.txt")).toBe(join(root, "notes.txt"));
     expect(assertProjectRelativePath(root, "a/b/c.md")).toBe(join(root, "a", "b", "c.md"));
     expect(() => assertProjectRelativePath(root, "/abs/path")).toThrow();
+    expect(() => assertProjectRelativePath(root, "C:\\abs\\path")).toThrow();
+    expect(() => assertProjectRelativePath(root, "C:drive-relative")).toThrow();
     expect(() => assertProjectRelativePath(root, "../escape")).toThrow();
     expect(() => assertProjectRelativePath(root, "a/../../escape")).toThrow();
     expect(() => assertProjectRelativePath(root, "")).toThrow();
@@ -58,6 +60,7 @@ describe("editor file read + mtime", () => {
     expect(read?.content).toBe("# Title\n\nbody\n");
     expect(read?.relPath).toBe("doc.md");
     expect(typeof read?.mtimeMs).toBe("number");
+    expect(typeof read?.ino).toBe("number");
     expect(read?.bytes).toBeGreaterThan(0);
   });
 
@@ -67,12 +70,13 @@ describe("editor file read + mtime", () => {
     expect(await readEditableFile(root, "adir")).toBeNull();
   });
 
-  test("readMtimeMs tracks the file and nulls when deleted", async () => {
+  test("readFileStamp returns identity and nulls when deleted", async () => {
     await writeFile(join(root, "f.txt"), "x\n");
-    const m1 = await readMtimeMs(root, "f.txt");
-    expect(typeof m1).toBe("number");
+    const first = await readFileStamp(root, "f.txt");
+    expect(typeof first?.mtimeMs).toBe("number");
+    expect(typeof first?.ino).toBe("number");
     await rm(join(root, "f.txt"));
-    expect(await readMtimeMs(root, "f.txt")).toBeNull();
+    expect(await readFileStamp(root, "f.txt")).toBeNull();
   });
 });
 
@@ -104,7 +108,10 @@ describe("editor editable classification", () => {
     await symlink(join(root, "real.txt"), join(root, "link.txt"));
     const linked = await readFilePreview(root, "link.txt");
     expect(linked?.symlink).toBe(true);
+    expect(linked?.lines).toBeUndefined();
     expect(isEditablePreview(linked!)).toBe(false);
+    expect(await readEditableFile(root, "link.txt")).toBeNull();
+    expect(await readFileStamp(root, "link.txt")).toBeNull();
 
     // Oversized text: read-only (would exceed the editor's in-bounds ceiling).
     const big = join(root, "big.txt");

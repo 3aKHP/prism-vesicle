@@ -1,7 +1,8 @@
-import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import type { Stats } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname } from "node:path";
 import { OVERSIZED_BYTES, PREVIEW_LINE_CAP, type WorkspaceFilePreview } from "./workspace-files";
+import { assertProjectRelativePath } from "./workspace-paths";
 
 /**
  * Editor kernel for the Workspace page (Scope B / #62, milestone B3): the
@@ -31,27 +32,11 @@ export type EditableFileRead = {
   relPath: string;
   content: string;
   mtimeMs: number;
+  ino: number;
   bytes: number;
 };
 
-/**
- * Normalize a project-relative path and assert it stays inside the project
- * root. Rejects absolute paths, NUL bytes, and `..` traversal. Returns the
- * resolved absolute path. Posix-style input (`a/b/c`) is accepted on every
- * platform; the resolved path uses the platform separator.
- */
-export function assertProjectRelativePath(rootDir: string, relPath: string): string {
-  if (!relPath || relPath.includes("\0")) throw new Error("Path is required.");
-  const posix = relPath.replace(/\\/g, "/");
-  if (posix.startsWith("/")) throw new Error("Only project-relative paths are allowed.");
-  const root = resolve(rootDir);
-  const resolved = resolve(root, posix);
-  const rel = relative(root, resolved);
-  if (rel === "" || rel === ".." || rel.startsWith("..") || resolve(rel) === rel) {
-    throw new Error(`Path escapes project root: ${relPath}`);
-  }
-  return resolved;
-}
+export type FileStamp = { mtimeMs: number; ino: number };
 
 /**
  * Whether a preview is eligible for the editable textarea. Mirrors the B2
@@ -93,7 +78,7 @@ async function safeUnlink(path: string): Promise<void> {
   }
 }
 
-/** Read the full text of an editable file plus its current mtime. */
+/** Read the full text of an editable file plus its current disk identity. */
 export async function readEditableFile(
   rootDir: string,
   relPath: string,
@@ -101,20 +86,26 @@ export async function readEditableFile(
   const abs = assertProjectRelativePath(rootDir, relPath);
   let info: Stats;
   try {
-    info = await stat(abs);
+    info = await lstat(abs);
   } catch {
     return null;
   }
   if (!info.isFile()) return null;
   const content = await readFile(abs, "utf8");
-  return { relPath: relPath.replace(/\\/g, "/"), content, mtimeMs: info.mtimeMs, bytes: info.size };
+  return {
+    relPath: relPath.replace(/\\/g, "/"),
+    content,
+    mtimeMs: info.mtimeMs,
+    ino: info.ino,
+    bytes: info.size,
+  };
 }
 
-/** Current mtime for a project-relative file, or null if it no longer exists. */
-export async function readMtimeMs(rootDir: string, relPath: string): Promise<number | null> {
+/** Current disk identity for a project-relative file, or null when absent. */
+export async function readFileStamp(rootDir: string, relPath: string): Promise<FileStamp | null> {
   try {
-    const info = await stat(assertProjectRelativePath(rootDir, relPath));
-    return info.isFile() ? info.mtimeMs : null;
+    const info = await lstat(assertProjectRelativePath(rootDir, relPath));
+    return info.isFile() ? { mtimeMs: info.mtimeMs, ino: info.ino } : null;
   } catch {
     return null;
   }

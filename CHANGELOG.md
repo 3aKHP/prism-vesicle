@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Workspace file safety follow-ups.** External-change detection now compares both mtime and inode identity, so a same-timestamp replacement still asks before overwrite; project-relative preview/stat routes share the editor's absolute/traversal/NUL guard; symlinks remain metadata-only instead of loading their targets; and keyboard input stays owned while a dirty-buffer save/close action is in flight. Tree height wiring now attaches explicitly after mount rather than relying on ref/effect timing.
+
 ## [1.0.0-alpha.5] - 2026-07-25
 
 ### Added
