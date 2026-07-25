@@ -32,6 +32,14 @@ describe("CLI source journey: non-interactive commands", () => {
     });
   });
 
+  test("debug tui-bootstrap mounts the source TUI and exits cleanly", async () => {
+    await withTempProject("vesicle-cli-tui-bootstrap-", async (projectDir, configDir) => {
+      const result = await runCli(["debug", "tui-bootstrap"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).not.toContain("jsx-dev-runtime");
+    });
+  });
+
   test("assets status reports the asset layers", async () => {
     await withTempProject("vesicle-cli-assets-", async (projectDir, configDir) => {
       const result = await runCli(["assets", "status"], { cwd: projectDir, configDir });

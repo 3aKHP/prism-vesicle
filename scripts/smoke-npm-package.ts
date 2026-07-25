@@ -163,7 +163,7 @@ async function assertInstalledCli(executable: string, cwd: string, configDirecto
   await runInherited([executable, "debug", "markdown-runtime"], cwd, configDirectory);
   if (process.platform === "win32") {
     const bootstrap = await runCaptured([executable, "debug", "tui-bootstrap"], cwd, configDirectory, 10_000);
-    if (bootstrap.exitCode !== 0 || !bootstrap.output.includes('"ok":true')) {
+    if (bootstrap.exitCode !== 0) {
       throw new Error(`Windows TUI bootstrap failed:\n${bootstrap.output.slice(-6000)}`);
     }
   }
@@ -257,17 +257,31 @@ function spawnCommand(command: string[]): string[] {
   if (process.platform !== "win32" || (executable !== "npm" && !executable.toLowerCase().endsWith(".cmd"))) {
     return command;
   }
+  const doubleEscapeMetaCharacters = /node_modules[\\/]\.bin[\\/][^\\/]+\.cmd$/i.test(executable);
+  const shellCommand = [
+    escapeWindowsCommand(executable),
+    ...command.slice(1).map((argument) => escapeWindowsArgument(argument, doubleEscapeMetaCharacters)),
+  ].join(" ");
   return [
     process.env.ComSpec ?? "cmd.exe",
     "/d",
     "/s",
     "/c",
-    command.map(quoteWindowsCommandArgument).join(" "),
+    `"${shellCommand}"`,
   ];
 }
 
-function quoteWindowsCommandArgument(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
+const windowsMetaCharacters = /([()\][%!^"`<>&|;, *?])/g;
+
+function escapeWindowsCommand(value: string): string {
+  return value.replace(windowsMetaCharacters, "^$1");
+}
+
+function escapeWindowsArgument(value: string, doubleEscapeMetaCharacters: boolean): string {
+  let escaped = value.replace(/(?=(\\+?)?)\1"/g, "$1$1\\\"");
+  escaped = escaped.replace(/(?=(\\+?)?)\1$/g, "$1$1");
+  escaped = `"${escaped}"`.replace(windowsMetaCharacters, "^$1");
+  return doubleEscapeMetaCharacters ? escaped.replace(windowsMetaCharacters, "^$1") : escaped;
 }
 
 function shellQuote(value: string): string {

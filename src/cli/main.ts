@@ -215,9 +215,9 @@ switch (parsed.kind) {
         }
         await configureTreeSitterRuntime();
         if (args[0] === "tui-bootstrap") {
+          if (!isCompiledBinary && !isNpmBundle) await loadOpenTuiPreload();
           const { runTui } = await import("../tui");
           await runTui({ bootstrapOnly: true });
-          console.log(JSON.stringify({ ok: true }));
           break;
         }
         const { runMarkdownRuntimeDiagnostic } = await import("../tui/markdown-runtime-diagnostic");
