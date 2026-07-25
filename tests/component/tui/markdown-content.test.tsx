@@ -3,6 +3,7 @@ import { parseColor } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { paletteFor, reportTerminalThemeMode, setThemePreference } from "../../../src/tui/theme";
 import { MarkdownContent } from "../../../src/tui/widgets/MarkdownContent";
+import { foregroundFor } from "../../support/markdown-test-utils";
 
 const markdownWithUntaggedCode = [
   "Before code.",
@@ -13,14 +14,6 @@ const markdownWithUntaggedCode = [
   "",
   "After code.",
 ].join("\n");
-
-function foregroundFor(setup: Awaited<ReturnType<typeof testRender>>, text: string): [number, number, number, number] {
-  const span = setup.captureSpans().lines
-    .flatMap((line) => line.spans)
-    .find((candidate) => candidate.text.includes(text));
-  if (!span) throw new Error(`Missing rendered span: ${text}`);
-  return span.fg.toInts();
-}
 
 afterEach(() => {
   setThemePreference("dark");
@@ -45,18 +38,19 @@ describe("MarkdownContent theme colors", () => {
       process.execPath,
       "--preload",
       "@opentui/solid/preload",
-      "tests/support/markdown-theme-probe.ts",
+      "tests/support/markdown-theme-probe.tsx",
     ], {
       cwd: process.cwd(),
       stdout: "pipe",
       stderr: "pipe",
     });
+    const timeout = setTimeout(() => probe.kill(), 10_000);
     const [exitCode, stdout, stderr] = await Promise.all([
-      probe.exited,
+      probe.exited.finally(() => clearTimeout(timeout)),
       new Response(probe.stdout).text(),
       new Response(probe.stderr).text(),
     ]);
     if (exitCode !== 0) throw new Error(`Markdown theme probe failed:\n${stdout}\n${stderr}`);
     expect(stdout).toContain("dark-to-light Markdown refresh passed");
-  });
+  }, 15_000);
 });

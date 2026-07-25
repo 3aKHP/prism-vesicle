@@ -2,16 +2,9 @@ import { parseColor } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { paletteFor, setThemePreference } from "../../src/tui/theme";
 import { MarkdownContent } from "../../src/tui/widgets/MarkdownContent";
+import { foregroundFor } from "./markdown-test-utils";
 
 const content = "```\nplain code\n```";
-
-function foregroundFor(setup: Awaited<ReturnType<typeof testRender>>, text: string): [number, number, number, number] {
-  const span = setup.captureSpans().lines
-    .flatMap((line) => line.spans)
-    .find((candidate) => candidate.text.includes(text));
-  if (!span) throw new Error(`Missing rendered span: ${text}`);
-  return span.fg.toInts();
-}
 
 function assertForeground(
   actual: [number, number, number, number],
@@ -24,7 +17,7 @@ function assertForeground(
 }
 
 setThemePreference("dark");
-const setup = await testRender(() => MarkdownContent({ content }), { width: 40, height: 5 });
+const setup = await testRender(() => <MarkdownContent content={content} />, { width: 40, height: 5 });
 await setup.flush();
 assertForeground(
   foregroundFor(setup, "plain code"),

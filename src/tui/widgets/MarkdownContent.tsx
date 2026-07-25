@@ -33,8 +33,10 @@ export function MarkdownContent(props: { content: string; fg?: string }) {
   }
 
   const [markdown, setMarkdown] = createSignal<MarkdownRenderable>();
-  let appliedSyntaxStyle: ReturnType<typeof syntaxStyle> | undefined;
-  let appliedForeground: string | undefined;
+  const initialSyntaxStyle = syntaxStyle();
+  const initialForeground = props.fg ?? palette.textPrimary;
+  let appliedSyntaxStyle = initialSyntaxStyle;
+  let appliedForeground = initialForeground;
   createEffect(() => {
     const nextSyntaxStyle = syntaxStyle();
     const nextForeground = props.fg ?? palette.textPrimary;
@@ -52,8 +54,8 @@ export function MarkdownContent(props: { content: string; fg?: string }) {
     <markdown
       ref={(value: MarkdownRenderable) => { setMarkdown(value); }}
       content={prepareMarkdownForDisplay(props.content)}
-      syntaxStyle={syntaxStyle()}
-      fg={props.fg ?? palette.textPrimary}
+      syntaxStyle={initialSyntaxStyle}
+      fg={initialForeground}
       conceal={true}
     />
   );
