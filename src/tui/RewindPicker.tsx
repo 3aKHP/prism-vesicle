@@ -34,7 +34,9 @@ export function rewindPickerPanelHeight(state: RewindPickerState): number {
     return Math.max(8, visibleRows + 5);
   }
   const optionRows = rewindRestoreOptions(state.target).length;
-  const warningRows = (state.target.diffStats?.filesChanged.length ? 1 : 0) + (state.target.checkpointTainted ? 1 : 0);
+  const warningRows = (state.target.diffStats?.filesChanged.length ? 1 : 0)
+    + (state.target.checkpointTainted ? 1 : 0)
+    + (state.target.failedTurn ? 1 : 0);
   return Math.min(14, 8 + optionRows + warningRows);
 }
 
@@ -101,6 +103,9 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
               <For each={point().checkpointTainted ? [true] : []}>
                 {() => <text content={truncateLine("⚠ This turn ran shell_exec; its file changes may not be restored.", props.width - 4)} fg={palette.error} wrapMode="none" />}
               </For>
+              <For each={point().failedTurn ? [true] : []}>
+                {() => <text content={truncateLine("⚠ This turn failed before a reply; its prompt was not delivered to the provider.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
+              </For>
               <text content={props.state.busy
                 ? props.state.restoringOption === "summarize" ? "Summarizing…" : "Restoring…"
                 : "↑/↓ choose · Enter select · Esc back"} fg={palette.textDim} wrapMode="none" />
@@ -137,13 +142,14 @@ function formatRelativeTime(timestamp: string): string {
 
 export function rewindPointLine(point: RewindPoint, width: number): string {
   const prompt = point.content.replace(/\s+/g, " ").trim() || "(no prompt)";
+  const ghost = point.failedTurn ? " · no reply" : "";
   const stats = point.turnDiffStats ?? point.diffStats;
   const suffix = stats
     ? stats.filesChanged.length > 0
       ? ` · ${stats.filesChanged.length} file${stats.filesChanged.length === 1 ? "" : "s"} +${stats.insertions} -${stats.deletions}`
       : " · No code changes"
     : " · No code restore";
-  return truncateLine(`${prompt}${suffix}`, width);
+  return truncateLine(`${prompt}${ghost}${suffix}`, width);
 }
 
 function restoreDescription(option: RewindRestoreOption | undefined, point: RewindPoint): string {

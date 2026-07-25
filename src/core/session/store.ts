@@ -32,6 +32,7 @@ export type { SessionRecord, SessionRole } from "./record-model";
 export { createSessionStore } from "./append-store";
 export type { SessionStore } from "./append-store";
 export type { PendingDelegationRetry } from "./interaction-recovery";
+export { FAILED_TURN_KIND } from "./history-projector";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 

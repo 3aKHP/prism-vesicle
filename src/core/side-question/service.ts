@@ -14,7 +14,7 @@ import { resolveProjectHarnessRuntime, requireProjectHarnessRuntime } from "../h
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { loadSessionSnapshot, type ResumedMessage } from "../session/store";
-import type { ReasoningTier, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderRetryInfo, ReasoningTier, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { materializeMessageImages } from "../attachments/store";
 import { createAssetResolver } from "../runtime/assets";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "./types";
@@ -28,6 +28,8 @@ export async function askSideQuestion(options: {
   question: string;
   signal?: AbortSignal;
   onDelta?: (delta: string) => void;
+  /** Observes transport retries (`fetchProvider`); never serialized. */
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<{ content: string; usage?: ResponseUsage }> {
   const { context } = options;
   const config = await loadConfigForSelection(context.providerSelection);
@@ -43,6 +45,7 @@ export async function askSideQuestion(options: {
     messages: [{ role: "user", content: projection.content, ...(images.length > 0 ? { images } : {}) }],
     ...(context.generation ? { generation: context.generation } : {}),
     signal: options.signal,
+    onRetry: options.onRetry,
   };
 
   const response = provider.stream

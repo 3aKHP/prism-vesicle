@@ -8,6 +8,7 @@ import {
   recordChildToolResult,
 } from "./child-run-durability";
 import { agentToolProgress, executeChildTool } from "./child-tool-executor";
+import { providerRetryLabel } from "../../providers/shared/retry-label";
 import type { AgentRunner } from "./manager";
 
 export { composeChildSystemPrompts, resolveChildTools } from "./child-bootstrap";
@@ -40,6 +41,10 @@ export const runChildAgent: AgentRunner = async ({
       tools: runtime.tools,
       generation: invocation.generation,
       signal,
+      // Surface transport retries through the same progress channel that drives
+      // the parent activity log, so a 429/5xx backoff no longer looks like the
+      // child stalled. Retry decisions stay single-sourced in fetchProvider.
+      onRetry: (info) => onProgress(`retrying · ${providerRetryLabel(info)}`),
     }, onProgress);
     const calls = await recordChildResponse(state, response, runtime.session, runId, handle);
     if (calls.length === 0) {

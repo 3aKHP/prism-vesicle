@@ -116,7 +116,11 @@ errors, 408, 429, and 5xx. Use bounded exponential backoff with jitter, honor a
 bounded `Retry-After`, and let host cancellation interrupt both fetch and
 backoff. Do not replay a partially consumed SSE stream inside an adapter; that
 requires agent-loop/TUI reconciliation so deltas and tool calls cannot be
-duplicated.
+duplicated. The retry loop fires an `onRetry` callback on `VesicleRequest`;
+every provider call site — the main chat turn, `/init`, `/compact`, `/btw`,
+SubAgent child rounds, and the Semantic Judge — forwards that callback to the
+appropriate UI surface (status line, activity log, `/btw` overlay, or agent
+progress) so retries are observable without any site running its own retry loop.
 Application-level provider headers are centralized under `providers/shared`.
 OpenAI-compatible Chat follows the audited OpenCode header shape, Anthropic
 Messages follows the Claude Code fingerprint, and Gemini follows Gemini CLI's
@@ -461,6 +465,21 @@ model tool call or a direct user edit.
 - Checkpoints preserve absent paths, files, and directory topology. Directory-tree moves must capture the source tree and target path so rewind can restore empty directories as well as file content.
 - Provider requests must include prior user/assistant turns when continuing a
   session.
+- A user turn whose provider round fails before any assistant reply is marked
+  with a host-only `failed-turn` system record appended after the persisted
+  prompt (issue #98 deliberately keeps the prompt in the transcript). History
+  projection drops the failed round's trailing user input — the prompt plus any
+  host-injected user input such as background-process results or a
+  quality-rewrite feedback — from provider-visible messages, so resuming or
+  resending cannot emit consecutive same-role user messages that Anthropic
+  Messages would reject. A `/compact` summary is the sole completed-operation
+  boundary that survives the marker; everything else trailing is the failed
+  round's own input. The prompt stays in `records` for the transcript and
+  `/rewind`, where it is shown as a no-reply ghost. A mid-loop failure (an
+  assistant already replied) leaves a valid alternation tail and is not marked.
+  Failed *continuation* rounds (gate, user-question, engine-switch, permission
+  resolutions) are not yet reconciled — they append a tool result too, which can
+  still surface as a consecutive-user error on resume.
 - Response usage metadata is host-only. It may be persisted on assistant
   records and restored for TUI footer display, but must not be forwarded back
   to providers as part of resumed `VesicleMessage` request history.

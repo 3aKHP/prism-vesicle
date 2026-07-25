@@ -1,4 +1,4 @@
-import type { ProviderAdapter, ResponseUsage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderAdapter, ProviderRetryInfo, ResponseUsage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import type {
   ExperimentalQualityProfileSnapshot,
   QualityCandidateType,
@@ -36,6 +36,7 @@ export async function observeBoundQualityWithJudge(options: {
   experimentalProfile?: ExperimentalQualityProfile;
   state: { attempts: number; rejectedHashes: Set<string> };
   signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<BoundQualityEvaluation> {
   const contract = options.runtime.judge;
   const profile = options.experimentalProfile;
@@ -77,6 +78,7 @@ export async function observeBoundQualityWithJudge(options: {
       timeoutMs: profile.judgeTimeoutMs,
       temperatureSupported: profile.temperatureSupported,
       reasoningTierSupported: profile.reasoningTierSupported,
+      onRetry: options.onRetry,
     });
     statuses.push(judged.status);
     judgeMs += judged.durationMs;
@@ -218,6 +220,8 @@ export async function runQualityJudge(options: {
   timeoutMs?: number;
   temperatureSupported?: boolean;
   reasoningTierSupported?: boolean;
+  /** Observes transport retries (`fetchProvider`); never serialized. */
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<QualityJudgeRunResult> {
   const started = performance.now();
   if (options.content.length > maxQualityJudgeCodeUnits) {
@@ -346,6 +350,7 @@ function judgeRequest(
       ...(options.reasoningTierSupported === true ? { reasoningTier: "off" as const } : {}),
     },
     metadata: { kind: "quality-judge", candidateType: options.candidateType, targetKind: options.targetKind },
+    onRetry: options.onRetry,
   };
 }
 

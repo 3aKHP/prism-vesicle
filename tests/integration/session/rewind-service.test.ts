@@ -8,7 +8,7 @@ import {
   rewindCodeAndConversation,
   rewindConversation,
 } from "../../../src/core/rewind/service";
-import { createSessionStore } from "../../../src/core/session/store";
+import { createSessionStore, FAILED_TURN_KIND } from "../../../src/core/session/store";
 import { executeFileTool } from "../../../src/core/tools";
 
 describe("rewind service", () => {
@@ -40,6 +40,21 @@ describe("rewind service", () => {
 
     const reopenedBeforeResubmit = await listRewindPoints(rootDir, store.sessionId, { headUuid: rewound.parentUuid });
     expect(reopenedBeforeResubmit.map((point) => point.content)).toEqual(["first"]);
+  });
+
+  test("marks a failed-turn prompt as a no-reply ghost for the picker", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-rewind-failed-"));
+    const store = await createSessionStore(rootDir, "rewind-failed");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first" });
+    await store.append({ role: "assistant", content: "answer one" });
+    await store.append({ role: "user", content: "refactor this" });
+    await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
+
+    const points = await listRewindPoints(rootDir, store.sessionId);
+    expect(points.map((point) => point.content)).toEqual(["first", "refactor this"]);
+    expect(points[0]!.failedTurn).toBeUndefined();
+    expect(points[1]!.failedTurn).toBe(true);
   });
 
   test("restores code and returns a conversation branch in one operation", async () => {

@@ -57,7 +57,7 @@ export type AgentLoopEvent =
       diagnostics: InstructionDiagnostic[];
     }
   | { type: "provider_request"; iteration: number }
-  | { type: "provider_retry"; attempt: number; maxRetries: number; delayMs: number; status?: number; iteration: number }
+  | { type: "provider_retry"; attempt: number; maxRetries: number; delayMs: number; status?: number; iteration: number; scope?: "quality-judge" }
   | { type: "assistant_delta"; delta: string }
   | { type: "assistant_reasoning_delta"; delta: string }
   | { type: "tool_call_delta"; name?: string; argumentsDelta?: string }

@@ -10,6 +10,7 @@ import type { ProviderSelection } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import { askSideQuestion, resolveSideQuestionSnapshot } from "../core/side-question/service";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "../core/side-question/types";
+import { providerRetryLabel } from "../providers/shared/retry-label";
 import type { ReasoningTier, ResponseUsage, VesicleMessage } from "../providers/shared/types";
 import type { TuiKeyEvent } from "./decision-interaction";
 
@@ -21,6 +22,8 @@ export type SideQuestionExchange = {
   phase: "loading" | "complete" | "error" | "cancelled";
   error?: string;
   usage?: ResponseUsage;
+  /** Transient transport-retry indicator shown while loading. */
+  retryText?: string;
 };
 
 export type SideQuestionOverlayState = {
@@ -194,6 +197,9 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
         onDelta: (delta) => {
           mutateExchange(sessionId, exchange.id, (current) => ({ ...current, answer: `${current.answer}${delta}` }));
         },
+        onRetry: (info) => {
+          mutateExchange(sessionId, exchange.id, { retryText: `retrying · ${providerRetryLabel(info)}` });
+        },
       });
       mutateExchange(sessionId, exchange.id, {
         phase: "complete",
@@ -211,6 +217,9 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
         mutateExchange(sessionId, exchange.id, { phase: "error", error: message });
       }
     } finally {
+      // retryText is only ever set inside the try; clear it on every exit path
+      // so a future terminal branch can't leave a stale "retrying…" indicator.
+      mutateExchange(sessionId, exchange.id, { retryText: undefined });
       if (sideController === controller) sideController = null;
     }
   }

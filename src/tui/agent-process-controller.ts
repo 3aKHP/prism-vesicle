@@ -5,6 +5,7 @@ import type { BackgroundProcessEvent, BackgroundProcessState } from "../core/pro
 import type { ProcessToolEvent } from "../core/tools";
 import { processEventFromTask } from "../core/tools/shell";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
+import { providerRetryActivityLabel, providerRetryLabel } from "../providers/shared/retry-label";
 import type { ResponseUsage } from "../providers/shared/types";
 import { applyAgentEvent } from "./agent-view";
 import type { ActivityEntry, AgentCardState, Message } from "./types";
@@ -127,8 +128,14 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
         recordActivity({ kind: "provider", text: `provider request #${event.iteration + 1}` });
         return true;
       case "provider_retry":
-        options.setStatus(`retrying · attempt ${event.attempt}/${event.maxRetries}${event.status ? ` · HTTP ${event.status}` : ""}`);
-        recordActivity({ kind: "provider", text: `provider retry ${event.attempt}/${event.maxRetries}${event.status ? ` (${event.status})` : ""}` });
+        // The quality judge runs inside a main turn that already owns the
+        // status line; surface its retries in the activity log only.
+        if (event.scope === "quality-judge") {
+          recordActivity({ kind: "provider", text: providerRetryActivityLabel("quality review retry", event) });
+          return true;
+        }
+        options.setStatus(`retrying · ${providerRetryLabel(event)}`);
+        recordActivity({ kind: "provider", text: providerRetryActivityLabel("provider retry", event) });
         return true;
       case "assistant_delta":
         options.setStreamingAssistant((previous) => `${previous}${event.delta}`);
