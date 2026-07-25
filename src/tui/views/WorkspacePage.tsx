@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { useRenderer } from "@opentui/solid";
 import type { BoxRenderable, KeyBinding, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core";
 import { palette } from "../theme";
 import { MarkdownContent } from "../widgets/MarkdownContent";
@@ -86,6 +87,21 @@ export function WorkspacePage(props: {
     },
   );
   onCleanup(unregister);
+
+  // —— external editor handoff (B5): suspend the renderer so the editor owns
+  // the tty, spawn it with inherited stdio, then resume. The controller drives
+  // the orchestration; this just wires the real CliRenderer + Bun.spawn. ——
+  const renderer = useRenderer();
+  const unregisterEditor = c.registerExternalEditor({
+    suspend: () => renderer.suspend(),
+    resume: () => renderer.resume(),
+    spawn: async (command, args) => {
+      const child = Bun.spawn([command, ...args], { stdio: ["inherit", "inherit", "inherit"] });
+      return await child.exited;
+    },
+  });
+  onCleanup(unregisterEditor);
+
   createEffect(() => {
     c.openFile()?.relPath;
     scrollbox?.scrollTo({ x: 0, y: 0 });
@@ -192,7 +208,7 @@ export function WorkspacePage(props: {
     if (region === "editor" && file) {
       const note = c.editorStatus() ? `  · ${c.editorStatus()}` : "";
       if (c.isEditing()) {
-        return `${file.relPath} · Ln ${c.cursorLn() + 1}:${c.cursorCol() + 1} · Ctrl+S save · Ctrl+F find · Ctrl+G line · Esc back${note}${validationSuffix()}`;
+        return `${file.relPath} · Ln ${c.cursorLn() + 1}:${c.cursorCol() + 1} · Ctrl+S save · Ctrl+F find · Ctrl+G line · Ctrl+X external · Esc back${note}${validationSuffix()}`;
       }
       const hint = file.kind === "markdown" ? "m edit · " : "";
       return `${file.relPath} · read-only · ${hint}r reload · v validate · Esc back${note}${validationSuffix()}`;

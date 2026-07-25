@@ -110,6 +110,16 @@ Opening a file, saving, or pressing `v` in the tree / read-only viewer runs the 
 
 The `v` findings panel owns the keyboard: each row is `✗/⚠ + finding text` (unanchored ones marked `(no anchor)`), `↑↓` selects, `Enter` jumps to the finding's line (located by pulling a `## …` section header or frontmatter key out of the message and `indexOf`-ing it; missing-field findings fall back to the frontmatter close), and `Esc` closes. In editable source `v` is an ordinary letter (it goes to the editor), so to validate manually, save first (Ctrl+S auto-validates).
 
+### External editor handoff
+
+**Ctrl+X** (any Workspace focus region — tree / viewer / editor / composer when a file is open) suspends the Vesicle UI, hands the file you are viewing or editing to your real editor, and resumes when it exits, refreshing from the result.
+
+- **Editor resolution** (git's order, specific to general): `$VESICLE_EDITOR` → the `editor:` field of the user-level `settings.yaml` → `$VISUAL` → `$EDITOR` → platform fallback (`vi` on POSIX, `notepad` on Windows). Command lines are split with quote awareness (`code --wait`, paths with spaces all work) and the file path is passed as a separate argv element — never through a shell.
+- **`settings.yaml`** is a new user-level config file (beside `providers.yaml`, same `key: value` line format, `version: 1`). Only `editor` is read for now; the rest is reserved for future settings (e.g. theme persistence).
+- **An unsaved buffer is refused** with a pointer to `Ctrl+S`, so the external editor's write cannot silently clobber your local edits.
+- **On return**: an open editable buffer is compared by mtime — changed → reloaded (`replaceText`, undo preserved) and revalidated as if saved; unchanged → `no changes`; deleted or replaced with a symlink → closed; a file that was only selected in the tree just refreshes the directory cache and index. Read-only / image / binary files may be handed off too (whether the editor can write them is its concern).
+- A missing editor command (ENOENT) → status-line error naming the resolved command; a non-zero exit → warn, then refresh anyway.
+
 ## `/btw` side questions
 
 `/btw` asks a one-shot, tool-free question about the current conversation without interrupting the active turn. It copies the frozen context boundary published before each main provider request, so it never observes a half-written tool round; but the parent Engine prompt, conversation, and tool results are placed inside one user message as **reference material**, with the dedicated side prompt as the only system instruction — parent workflow intent, tool protocol, and reasoning state never become active side instructions. The answer comes from an independent side request to the active session's provider/model (declaring no tools) and streams into a temporary overlay while the main turn keeps running underneath.

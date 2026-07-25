@@ -25,6 +25,12 @@ import {
   type ValidationState,
 } from "./workspace-validate";
 import {
+  resolveEditorCommand,
+  runExternalEditor,
+  type EditorRuntime,
+} from "./workspace-external-editor";
+import { loadSettings } from "../config/settings";
+import {
   buildFileIndex,
   flattenVisibleTree,
   matchFiles,
@@ -659,6 +665,117 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     status(`reloaded ${path}`, "success");
   }
 
+  // —— external editor handoff (B5 §6) ——
+
+  /** Renderer + spawn primitives, injected by the component (see WorkspacePage). */
+  let externalEditorRuntime: EditorRuntime | null = null;
+  function registerExternalEditor(runtime: EditorRuntime): () => void {
+    externalEditorRuntime = runtime;
+    return () => { externalEditorRuntime = null; };
+  }
+
+  /** Which file Ctrl+X hands off, by focus region (plan §6.1). */
+  function resolveHandoffTarget(): string | null {
+    const region = focusRegion();
+    if (region === "tree") {
+      const row = rows()[selectedIndex()];
+      if (!row || row.node.kind !== "file") {
+        status("select a file to edit externally", "info");
+        return null;
+      }
+      return row.node.relPath;
+    }
+    const file = openFile();
+    if (file) return file.relPath;
+    status("open or select a file to edit externally", "info");
+    return null;
+  }
+
+  async function handoffToExternal(): Promise<void> {
+    const target = resolveHandoffTarget();
+    if (!target) return;
+    let abs: string;
+    try {
+      abs = assertProjectRelativePath(rootDir, target);
+    } catch (error) {
+      status(errMsg(error), "error");
+      return;
+    }
+    const stat = await statEntry(rootDir, target);
+    if (stat?.kind === "dir") { status(`${target} is a directory`, "error"); return; }
+    // dirty gate (plan §6.1): an unsaved buffer would be silently overwritten
+    // by whatever the external editor writes, so refuse and point at Ctrl+S.
+    if (dirtyPaths().has(target)) {
+      status(`${target} has unsaved edits — press Ctrl+S before the external editor`, "error");
+      return;
+    }
+    const runtime = externalEditorRuntime;
+    if (!runtime) { status("external editor is unavailable in this build", "error"); return; }
+
+    const editor = resolveEditorCommand({ env: process.env, settings: await loadSettings() });
+    status(`opening ${target} in ${editor.command}…`, "info");
+    let exitCode = 0;
+    try {
+      const result = await runExternalEditor({ absPath: abs, editor, runtime });
+      exitCode = result.exitCode;
+    } catch (error) {
+      status(`editor "${editor.command}" failed to start — ${errMsg(error)}`, "error");
+      return;
+    }
+    if (exitCode !== 0) status(`editor exited with code ${exitCode}`, "warn");
+    await refreshAfterExternalEdit(target);
+  }
+
+  /**
+   * React to whatever the external editor did: an open editable buffer is
+   * reloaded when its mtime moved (and revalidated, like a save); a deleted or
+   * re-linked file is closed; a file that was only in the tree just has its
+   * directory cache + index invalidated.
+   */
+  async function refreshAfterExternalEdit(relPath: string): Promise<void> {
+    const meta = bufferMeta.get(relPath);
+    if (meta) {
+      const currentMtime = await readMtimeMs(rootDir, relPath);
+      if (currentMtime === null) {
+        status(`${relPath} was removed by the external editor`, "error");
+        closeBuffer(relPath);
+        if (openFile()?.relPath === relPath) { setOpenFile(null); setFocusRegion("tree"); }
+        return;
+      }
+      if (currentMtime === meta.mtimeMs) {
+        status("no changes from external editor");
+        return;
+      }
+      const read = await readEditableFile(rootDir, relPath);
+      if (!read) {
+        status(`${relPath} is no longer a readable file`, "error");
+        closeBuffer(relPath);
+        return;
+      }
+      const inst = instances.get(relPath);
+      if (inst) {
+        inst.replaceText(read.content);
+        resetStaleHorizontalScroll(inst);
+      }
+      meta.savedSnapshot = read.content;
+      meta.mtimeMs = read.mtimeMs;
+      setExternalChanged((set) => {
+        if (!set.has(relPath)) return set;
+        const next = new Set(set);
+        next.delete(relPath);
+        return next;
+      });
+      setValidationState(runValidation(read.content));
+      status(`reloaded ${relPath}`, "success");
+      return;
+    }
+    // Not an editable buffer: refresh the tree, and re-read the viewer if it
+    // was showing this file (covers read-only / image / binary handoffs).
+    invalidateDirCache(relPath);
+    await Promise.all([recomputeRows(), rebuildIndex()]);
+    if (openFile()?.relPath === relPath) await reloadViewer();
+  }
+
   function requestReloadActive(): void {
     const path = activeEditorPath();
     if (!path) return;
@@ -1213,6 +1330,10 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (gotoActive()) return handleGotoKey(key);
     if (saveAsActive()) return handleSaveAsKey(key);
     if (key.ctrl && key.name === "p") { openQuickOpen(); return true; }
+    // Ctrl+X hands off to the external editor from every Workspace focus
+    // region (B5 §6.1); caught here so it also covers the composer region and
+    // is intercepted before the editable source textarea can consume it.
+    if (isCtrl(key, "x")) { void handoffToExternal(); return true; }
     if (key.name === "f6") { cycleFocus(key.shift ? -1 : 1); return true; }
     const region = focusRegion();
     if (region === "editor" && openFile()) {
@@ -1246,6 +1367,8 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     viewMode,
     toggleViewMode,
     registerViewerScroller,
+    // external editor handoff (B5)
+    registerExternalEditor,
     // editor pool
     editorOrder,
     activeEditorPath,
