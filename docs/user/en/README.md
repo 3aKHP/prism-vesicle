@@ -22,8 +22,9 @@ Not sure which? A Windows user with no history here is best off with the install
 Whichever entry you use, the destination is the same: `vesicle doctor` passes, and Vesicle is open in your project directory. Then continue from one shared tutorial path:
 
 1. [First conversation](./tutorials/first-conversation.md)
-2. [Keep working during a turn](./tutorials/work-while-running.md)
-3. … (full contents in the [tutorial index](./tutorials/README.md))
+2. [View and edit artifacts in the Workspace page](./tutorials/workspace-page.md)
+3. [Keep working during a turn](./tutorials/work-while-running.md)
+4. … (full contents in the [tutorial index](./tutorials/README.md))
 
 ## Reference
 

@@ -22,8 +22,9 @@ Prism Vesicle 是一个在终端里运行 Prism Engine 创作工作流的宿主�
 无论从哪个入口进来,终点都一样:`vesicle doctor` 检查通过,并在你的项目目录里打开了 Vesicle 界面。到达终点后从同一条教程继续:
 
 1. [第一次对话](./tutorials/first-conversation.md)
-2. [运行中继续工作](./tutorials/work-while-running.md)
-3. …(完整目录见[教程区](./tutorials/README.md))
+2. [在 Workspace 页查看和修改产物](./tutorials/workspace-page.md)
+3. [运行中继续工作](./tutorials/work-while-running.md)
+4. …(完整目录见[教程区](./tutorials/README.md))
 
 ## 参考
 
