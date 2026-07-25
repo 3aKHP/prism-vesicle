@@ -578,6 +578,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   // and a fast Esc can reopen it against the same in-flight buffer.
   let dialogActionPending = false;
 
+  function runDialogAction(action: () => Promise<unknown>): void {
+    dialogActionPending = true;
+    void action().finally(() => { dialogActionPending = false; });
+  }
+
   async function forceSaveActive(): Promise<void> {
     const path = activeEditorPath();
     if (!path) return;
@@ -1269,13 +1274,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         // overwrite confirm keeps the buffer open and arms closeAfterSave so
         // force-overwriting completes the close — the edits are never
         // discarded under the user's feet.
-        dialogActionPending = true;
-        void saveActive()
-          .then((saved) => {
-            if (saved) afterDirtyConfirm();
-            else closeAfterSave = true;
-          })
-          .finally(() => { dialogActionPending = false; });
+        runDialogAction(async () => {
+          const saved = await saveActive();
+          if (saved) afterDirtyConfirm();
+          else closeAfterSave = true;
+        });
         return true;
       }
       if (key.name === "n") { setDialog(null); afterDirtyConfirm(); return true; }
@@ -1284,8 +1287,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (current.kind === "overwrite-confirm") {
       if (key.name === "o") {
         setDialog(null);
-        dialogActionPending = true;
-        void forceSaveActive().finally(() => { dialogActionPending = false; });
+        runDialogAction(forceSaveActive);
         return true;
       }
       // Save-as satisfies the save intent by itself; the buffer moves to the
@@ -1295,13 +1297,18 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return true;
     }
     if (current.kind === "reload-confirm") {
-      if (key.name === "y") { setDialog(null); void reloadActiveBuffer(); return true; }
+      if (key.name === "y") { setDialog(null); runDialogAction(reloadActiveBuffer); return true; }
       if (key.name === "n") { setDialog(null); return true; }
       return true;
     }
     if (current.kind === "delete-confirm") {
       // Plan §5.1: "y deletes / anything else cancels".
-      if (key.name === "y") { const p = current.path; setDialog(null); void execDelete(p); return true; }
+      if (key.name === "y") {
+        const p = current.path;
+        setDialog(null);
+        runDialogAction(() => execDelete(p));
+        return true;
+      }
       setDialog(null);
       return true;
     }
@@ -1309,15 +1316,20 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       if (key.name === "o") {
         const { op, source, path: target } = current;
         setDialog(null);
-        if (op === "move") void execMove(source, target, true);
-        else void execCopy(source, target, true);
+        if (op === "move") runDialogAction(() => execMove(source, target, true));
+        else runDialogAction(() => execCopy(source, target, true));
         return true;
       }
       if (key.name === "c") { setDialog(null); return true; }
       return true;
     }
     if (current.kind === "save-as-overwrite") {
-      if (key.name === "o") { const p = current.path; setDialog(null); void performSaveAs(p); return true; }
+      if (key.name === "o") {
+        const p = current.path;
+        setDialog(null);
+        runDialogAction(() => performSaveAs(p));
+        return true;
+      }
       if (key.name === "c" || key.name === "escape") { setDialog(null); return true; }
       return true;
     }
