@@ -46,15 +46,16 @@ export async function listRewindPoints(
   const points: RewindPoint[] = [];
   const selectable = snapshot.records.filter(isSelectableUserRecord);
   // A failed-turn marker invalidates the most recent selectable user prompt at
-  // or before it, so the picker can show that turn as a no-reply ghost.
+  // or before it, so the picker can show that turn as a no-reply ghost. A single
+  // forward pass tracks the last selectable user uuid (markers are system
+  // records, never selectable themselves).
   const failedTurnUuids = new Set<string>();
-  for (let index = 0; index < snapshot.records.length; index++) {
-    if (snapshot.records[index]!.metadata?.kind !== FAILED_TURN_KIND) continue;
-    let ownerIndex = -1;
-    for (let back = index - 1; back >= 0; back--) {
-      if (isSelectableUserRecord(snapshot.records[back]!)) { ownerIndex = back; break; }
+  let lastSelectableUserUuid: string | undefined;
+  for (const record of snapshot.records) {
+    if (isSelectableUserRecord(record)) lastSelectableUserUuid = record.uuid;
+    if (record.metadata?.kind === FAILED_TURN_KIND && lastSelectableUserUuid) {
+      failedTurnUuids.add(lastSelectableUserUuid);
     }
-    if (ownerIndex >= 0) failedTurnUuids.add(snapshot.records[ownerIndex]!.uuid);
   }
   for (let index = 0; index < selectable.length; index++) {
     const record = selectable[index]!;
@@ -117,6 +118,20 @@ export async function rewindCodeAndConversation(
 export function isSelectableUserRecord(record: SessionRecord): boolean {
   if (record.role !== "user") return false;
   const kind = record.metadata?.kind;
-  if (kind === "gate-resolution" || kind === "user-question-answer" || kind === "compact-summary" || kind === "background-process-results" || kind === ENGINE_HANDOFF_KIND) return false;
+  // Exclude every host-injected user-role record that is not an authored prompt:
+  // continuation resolutions, compacted context, and round inputs that projection
+  // treats as droppable failed-turn input (background-process results, SubAgent
+  // deliveries, quality-rewrite feedback). These should never appear as rewind
+  // points, and the failed-turn scan must skip them to attribute a marker to the
+  // real prompt.
+  if (
+    kind === "gate-resolution"
+    || kind === "user-question-answer"
+    || kind === "compact-summary"
+    || kind === "background-process-results"
+    || kind === "subagent-results"
+    || kind === "quality-rewrite-feedback"
+    || kind === ENGINE_HANDOFF_KIND
+  ) return false;
   return record.content.trim().length > 0;
 }

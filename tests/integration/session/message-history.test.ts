@@ -196,4 +196,24 @@ describe("session: message history", () => {
     expect(messages.map((m) => m.content)).toEqual(["[conversation summary]\n earlier work"]);
   });
 
+  // A quality-rewrite round appends a user-role `quality-rewrite-feedback` after
+  // the rejected assistant reply; if the rewrite round then fails, that feedback
+  // is the failed round's input and must be dropped too — otherwise resume + a
+  // new send yields [..., user:feedback, user:new] and Anthropic Messages
+  // rejects the consecutive same-role pair (the #102 fix's quality-rewrite hole
+  // surfaced by independent CR).
+  test("drops a trailing quality-rewrite feedback when the rewrite round fails", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-failed-rewrite-"));
+    const store = await createSessionStore(rootDir, "failed-rewrite");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "write a scene" });
+    await store.append({ role: "assistant", content: "a draft scene" });
+    await store.append({ role: "user", content: "[rewrite feedback]", metadata: { kind: "quality-rewrite-feedback" } });
+    await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
+
+    const messages = await loadSessionMessages(rootDir, "failed-rewrite");
+    expect(messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(messages[1]!.content).toBe("a draft scene");
+  });
+
 });

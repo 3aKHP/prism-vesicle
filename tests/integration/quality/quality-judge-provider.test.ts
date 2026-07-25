@@ -82,7 +82,7 @@ describe("Semantic Judge provider adapters", () => {
       calls += 1;
       if (calls === 1) return new Response('{"error":{"message":"rate limited"}}', { status: 429 });
       return providerResponse("openai", false);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await runQualityJudge({
       provider: providerAdapter("openai"),

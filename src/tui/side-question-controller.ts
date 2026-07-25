@@ -204,20 +204,22 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
       mutateExchange(sessionId, exchange.id, {
         phase: "complete",
         answer: result.content,
-        retryText: undefined,
         ...(result.usage ? { usage: result.usage } : {}),
       });
     } catch (error) {
       if (controller.signal.aborted) {
-        mutateExchange(sessionId, exchange.id, { phase: "cancelled", retryText: undefined });
+        mutateExchange(sessionId, exchange.id, { phase: "cancelled" });
       } else {
         // Keep the failure inside the ephemeral exchange only. Do not route it
         // through the main turn's reportError, which would write an assistant
         // error message into the main transcript and violate /btw isolation.
         const message = error instanceof Error ? error.message : String(error);
-        mutateExchange(sessionId, exchange.id, { phase: "error", error: message, retryText: undefined });
+        mutateExchange(sessionId, exchange.id, { phase: "error", error: message });
       }
     } finally {
+      // retryText is only ever set inside the try; clear it on every exit path
+      // so a future terminal branch can't leave a stale "retrying…" indicator.
+      mutateExchange(sessionId, exchange.id, { retryText: undefined });
       if (sideController === controller) sideController = null;
     }
   }

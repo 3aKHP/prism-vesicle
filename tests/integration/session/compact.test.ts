@@ -96,7 +96,7 @@ describe("conversation compact", () => {
         id: "compact",
         choices: [{ message: { content: "<summary>Whole session summary.</summary>" } }],
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await compactConversation({
       rootDir,

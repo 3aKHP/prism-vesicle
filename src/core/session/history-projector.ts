@@ -32,24 +32,30 @@ export type HistoryProjection = {
 export const FAILED_TURN_KIND = "failed-turn";
 
 /**
- * User-role records that carry durable provider context from a prior host
- * operation (compaction, SubAgent delivery, engine handoff, quality rewrite).
- * `dropFailedTurnInput` keeps these even when a later turn fails, because they
- * are not the failed turn's input and survive as conversation context.
+ * User-role record kinds that act as a completed-operation boundary: a failed
+ * turn's input is dropped only down to one of these. A `/compact` summary is the
+ * sole such boundary — it is the terminal output of a finished compaction, never
+ * the input to a round that can fail. Every other user-role record (a prompt, a
+ * queued message, background-process results, a SubAgent delivery, an engine
+ * handoff, a gate/user-question resolution, or a quality-rewrite feedback) is
+ * the failed round's own input and must be dropped, otherwise resume/resend
+ * emits consecutive same-role user messages. (SubAgent results are re-delivered
+ * via the paused delivery; background-process results are re-drained.)
  */
-const durableUserContextKinds = new Set(["compact-summary", "subagent-results", "engine-handoff", "quality-rewrite-feedback"]);
+const failedTurnBoundaryKinds = new Set(["compact-summary"]);
 
 /**
  * Remove the trailing user messages that belong to a failed turn. A failed turn
  * appends no assistant reply, so its input is a run of trailing user records
  * (the prompt plus any host-injected user context such as background-process
- * results). Durable provider context kinds are preserved.
+ * results or a quality-rewrite feedback). A completed-operation boundary
+ * (`compact-summary`) is preserved.
  */
 function dropFailedTurnInput(messages: ResumedMessage[]): void {
   while (messages.length > 0) {
     const last = messages[messages.length - 1]!;
     if (last.role !== "user") break;
-    if (last.kind && durableUserContextKinds.has(last.kind)) break;
+    if (last.kind && failedTurnBoundaryKinds.has(last.kind)) break;
     messages.pop();
   }
 }

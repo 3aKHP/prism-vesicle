@@ -5,7 +5,7 @@ import { generateProjectInstructions } from "../core/init";
 import type { EngineId } from "../core/engine/profile";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import type { ConversationRewind } from "../core/rewind/service";
-import { providerRetryLabel } from "../providers/shared/retry-label";
+import { providerRetryActivityLabel, providerRetryLabel } from "../providers/shared/retry-label";
 import type { ReasoningTier, VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerState } from "./composer";
 import { composerElementsForImages } from "./composer-history";
@@ -113,7 +113,7 @@ export function createSessionActionsController(options: SessionActionsController
         signal,
         onRetry: (info) => {
           options.setStatus(`compacting · retrying · ${providerRetryLabel(info)}`);
-          options.recordActivity({ kind: "provider", text: `compact retry ${info.attempt}/${info.maxRetries}${info.status ? ` (${info.status})` : ""}` });
+          options.recordActivity({ kind: "provider", text: providerRetryActivityLabel("compact retry", info) });
         },
       }));
       if (outcome.kind === "interrupted") throw new Error("Compaction canceled.");
@@ -154,7 +154,7 @@ export function createSessionActionsController(options: SessionActionsController
         signal,
         onRetry: (info) => {
           options.setStatus(`/init · retrying · ${providerRetryLabel(info)}`);
-          options.recordActivity({ kind: "provider", text: `/init retry ${info.attempt}/${info.maxRetries}${info.status ? ` (${info.status})` : ""}` });
+          options.recordActivity({ kind: "provider", text: providerRetryActivityLabel("/init retry", info) });
         },
       }));
       if (outcome.kind === "interrupted") throw new Error("/init canceled.");

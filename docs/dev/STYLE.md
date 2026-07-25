@@ -468,13 +468,18 @@ model tool call or a direct user edit.
 - A user turn whose provider round fails before any assistant reply is marked
   with a host-only `failed-turn` system record appended after the persisted
   prompt (issue #98 deliberately keeps the prompt in the transcript). History
-  projection drops that prompt — and any host-injected trailing user input such
-  as background-process results, but not durable context like a compact summary
-  or SubAgent results — from provider-visible messages, so resuming or resending
-  cannot emit consecutive same-role user messages that Anthropic Messages would
-  reject. The prompt stays in `records` for the transcript and `/rewind`, where
-  it is shown as a no-reply ghost. A mid-loop failure (an assistant already
-  replied) leaves a valid alternation tail and is not marked.
+  projection drops the failed round's trailing user input — the prompt plus any
+  host-injected user input such as background-process results or a
+  quality-rewrite feedback — from provider-visible messages, so resuming or
+  resending cannot emit consecutive same-role user messages that Anthropic
+  Messages would reject. A `/compact` summary is the sole completed-operation
+  boundary that survives the marker; everything else trailing is the failed
+  round's own input. The prompt stays in `records` for the transcript and
+  `/rewind`, where it is shown as a no-reply ghost. A mid-loop failure (an
+  assistant already replied) leaves a valid alternation tail and is not marked.
+  Failed *continuation* rounds (gate, user-question, engine-switch, permission
+  resolutions) are not yet reconciled — they append a tool result too, which can
+  still surface as a consecutive-user error on resume.
 - Response usage metadata is host-only. It may be persisted on assistant
   records and restored for TUI footer display, but must not be forwarded back
   to providers as part of resumed `VesicleMessage` request history.
