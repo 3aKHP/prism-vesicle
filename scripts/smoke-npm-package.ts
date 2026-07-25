@@ -5,7 +5,7 @@ import packageJson from "../package.json";
 
 export {};
 
-const skipTui = process.platform === "win32" || process.argv.includes("--skip-tui");
+const skipTui = process.platform !== "linux" || process.argv.includes("--skip-tui");
 const packageDir = await mkdtemp(join(tmpdir(), "prism-vesicle-pack-"));
 const globalPrefix = await mkdtemp(join(tmpdir(), "prism-vesicle-global-"));
 const localProject = await mkdtemp(join(tmpdir(), "prism-vesicle-local-"));
@@ -73,19 +73,33 @@ try {
 
 type CapturedRun = { exitCode: number; output: string };
 
-async function runCaptured(command: string[], cwd: string, configDirectory?: string): Promise<CapturedRun> {
+async function runCaptured(
+  command: string[],
+  cwd: string,
+  configDirectory?: string,
+  timeoutMs = 120_000,
+): Promise<CapturedRun> {
   const child = Bun.spawn(spawnCommand(command), {
     cwd,
     env: runtimeEnv(configDirectory),
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
+    windowsVerbatimArguments: process.platform === "win32",
   });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
+  const stdoutPromise = new Response(child.stdout).text();
+  const stderrPromise = new Response(child.stderr).text();
+  let timeout: number | undefined;
+  const exitCode = await Promise.race([
     child.exited,
+    new Promise<undefined>((resolve) => {
+      timeout = setTimeout(resolve, timeoutMs);
+    }),
   ]);
+  if (timeout) clearTimeout(timeout);
+  if (exitCode === undefined) child.kill();
+  const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise]);
+  if (exitCode === undefined) return { exitCode: 124, output: `${stdout}${stderr}\nTimed out after ${timeoutMs}ms.` };
   return { exitCode, output: `${stdout}${stderr}` };
 }
 
@@ -96,6 +110,7 @@ async function runInherited(command: string[], cwd: string, configDirectory?: st
     stdin: "ignore",
     stdout: "inherit",
     stderr: "inherit",
+    windowsVerbatimArguments: process.platform === "win32",
   });
   const exitCode = await child.exited;
   if (exitCode !== 0) throw new Error(`${command.join(" ")} failed (exit ${exitCode}).`);
@@ -146,6 +161,12 @@ async function assertInstalledCli(executable: string, cwd: string, configDirecto
   }
   await runInherited([executable, "prompt", "shape", "--engine", "etl"], cwd, configDirectory);
   await runInherited([executable, "debug", "markdown-runtime"], cwd, configDirectory);
+  if (process.platform === "win32") {
+    const bootstrap = await runCaptured([executable, "debug", "tui-bootstrap"], cwd, configDirectory, 10_000);
+    if (bootstrap.exitCode !== 0 || !bootstrap.output.includes('"ok":true')) {
+      throw new Error(`Windows TUI bootstrap failed:\n${bootstrap.output.slice(-6000)}`);
+    }
+  }
 }
 
 async function assertTuiStartup(
@@ -171,18 +192,17 @@ async function assertTuiStartup(
     stdout: "pipe",
     stderr: "pipe",
   });
-  let exited = false;
-  const exitPromise = child.exited.then((exitCode) => {
-    exited = true;
-    return exitCode;
-  });
+  const exitPromise = child.exited;
   const stdoutPromise = new Response(child.stdout).text();
   const stderrPromise = new Response(child.stderr).text();
 
-  await Bun.sleep(2500);
-  if (exited) {
-    const [exitCode, stdout, stderr] = await Promise.all([exitPromise, stdoutPromise, stderrPromise]);
-    throw new Error(`${label} exited before interaction (${exitCode}):\n${`${stdout}${stderr}`.slice(-6000)}`);
+  const startup = await Promise.race([
+    exitPromise.then((exitCode) => ({ exited: true as const, exitCode })),
+    Bun.sleep(2500).then(() => ({ exited: false as const })),
+  ]);
+  if (startup.exited) {
+    const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise]);
+    throw new Error(`${label} exited before interaction (${startup.exitCode}):\n${`${stdout}${stderr}`.slice(-6000)}`);
   }
 
   child.stdin.write("\x11");
@@ -202,12 +222,27 @@ async function assertTuiStartup(
 
   const debugLog = join(expectedProject, ".vesicle", "logs", "tui-debug.log");
   const debug = await readFile(debugLog, "utf8").catch(() => "");
-  if (!debug.includes(`"cwd":"${expectedProject}"`)) {
+  if (debugStartupCwd(debug) !== expectedProject) {
     throw new Error(`${label} did not prove the expected project cwd in ${debugLog}.`);
   }
   if (/uncaughtException|unhandledRejection|markdown diagnostics failed|tree-sitter .* (?:error|threw)/i.test(debug)) {
     throw new Error(`${label} debug log contains a runtime failure:\n${debug.slice(-6000)}`);
   }
+}
+
+function debugStartupCwd(debugLog: string): string | undefined {
+  const marker = "debug logging enabled ";
+  for (const line of debugLog.split("\n")) {
+    const markerIndex = line.indexOf(marker);
+    if (markerIndex < 0) continue;
+    try {
+      const detail = JSON.parse(line.slice(markerIndex + marker.length)) as { cwd?: unknown };
+      if (typeof detail.cwd === "string") return detail.cwd;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function npmExecutable(root: string, global: boolean): string {

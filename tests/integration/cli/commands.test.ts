@@ -93,7 +93,7 @@ describe("CLI source journey: non-interactive commands", () => {
 
       const debug = await runCli(["debug", "bogus"], { cwd: projectDir, configDir });
       expect(debug.exitCode).toBe(1);
-      expect(debug.stderr).toContain("Usage: vesicle debug markdown-runtime");
+      expect(debug.stderr).toContain("Usage: vesicle debug <markdown-runtime|tui-bootstrap>");
     });
   });
 

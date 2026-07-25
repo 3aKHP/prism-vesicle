@@ -149,7 +149,7 @@ The reusable workflow is the single owner of the release gates:
 - Biome lint, typecheck, deterministic tests, dependency audit, and npm allowlist check
 - exact-tarball global-prefix and local-lockfile npm installs with no warnings, clean dependency trees, a clean production audit, package asset/parser diagnostics, and Linux PTY TUI startup from both the invocation cwd and an explicit project directory
 - Linux ELF build and empty-project release-shape smoke
-- Windows exact-tarball npm install/runtime diagnostics, PE build, focused Windows runtime tests, and empty-project release-shape smoke
+- Windows exact-tarball npm install/runtime diagnostics plus a bounded real TUI bootstrap, PE build, focused Windows runtime tests, and empty-project release-shape smoke
 - pinned Inno Setup build, silent install, upgrade, runtime, and uninstall smoke
 - versioned Linux, Windows, assets-ZIP, and installer artifacts
 

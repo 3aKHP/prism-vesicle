@@ -32,7 +32,7 @@ for (const required of [
   if (!paths.includes(required)) throw new Error(`npm package is missing required runtime file: ${required}`);
 }
 
-const rawApplicationSources = paths.filter((path) => path.startsWith("src/") || /\.[cm]?[jt]sx$/.test(path));
+const rawApplicationSources = paths.filter((path) => path.startsWith("src/") || /\.(?:jsx|tsx)$/.test(path));
 if (rawApplicationSources.length > 0) {
   throw new Error(`npm package contains raw application sources: ${rawApplicationSources.join(", ")}`);
 }

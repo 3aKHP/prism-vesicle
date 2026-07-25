@@ -209,11 +209,17 @@ switch (parsed.kind) {
         break;
       }
       case "debug": {
-        if (args[0] !== "markdown-runtime") {
-          console.error("Usage: vesicle debug markdown-runtime");
+        if (args[0] !== "markdown-runtime" && args[0] !== "tui-bootstrap") {
+          console.error("Usage: vesicle debug <markdown-runtime|tui-bootstrap>");
           process.exit(1);
         }
         await configureTreeSitterRuntime();
+        if (args[0] === "tui-bootstrap") {
+          const { runTui } = await import("../tui");
+          await runTui({ bootstrapOnly: true });
+          console.log(JSON.stringify({ ok: true }));
+          break;
+        }
         const { runMarkdownRuntimeDiagnostic } = await import("../tui/markdown-runtime-diagnostic");
         const result = await runMarkdownRuntimeDiagnostic();
         console.log(JSON.stringify(result));
