@@ -31,6 +31,15 @@ describe("cleanProviderMessage", () => {
     expect(out).toBe("xxxxxxxxx…");
     expect(out.length).toBe(10);
   });
+
+  it("strips C1 control characters including NEL (U+0085)", () => {
+    expect(cleanProviderMessage("a\x85b")).toBe("ab");
+  });
+
+  it("collapses the double space left by a removed format character", () => {
+    const raw = `a ${String.fromCodePoint(0x200b)} b`;
+    expect(cleanProviderMessage(raw)).toBe("a b");
+  });
 });
 
 describe("summarizeProviderFailure", () => {

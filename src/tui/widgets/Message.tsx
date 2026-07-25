@@ -172,8 +172,8 @@ export function Message(props: {
   }
 
   // system / tool
-  const color = props.message.role === "system" ? palette.system : palette.tool;
-  const lane = props.message.role === "system" ? palette.laneSystem : palette.laneTool;
+  const color = props.message.kind === "host-error" ? palette.error : props.message.role === "system" ? palette.system : palette.tool;
+  const lane = props.message.kind === "host-error" ? palette.error : props.message.role === "system" ? palette.laneSystem : palette.laneTool;
   return (
     <box flexDirection="column">
       <box flexDirection="row">

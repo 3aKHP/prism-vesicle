@@ -55,15 +55,13 @@ const UNICODE_FORMAT_CODEPOINTS = new Set([
 ]);
 
 export function cleanProviderMessage(raw: string, maxLength = PROVIDER_MESSAGE_MAX_LENGTH): string {
-  const stripped = raw
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
-    .replace(/\s+/g, " ");
+  const stripped = raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\x80-\x9F]/g, "");
   const filtered = Array.from(stripped)
     .filter((char) => !UNICODE_FORMAT_CODEPOINTS.has(char.codePointAt(0) ?? -1))
     .join("");
-  const trimmed = filtered.trim();
-  const chars = Array.from(trimmed);
-  return chars.length <= maxLength ? trimmed : `${chars.slice(0, maxLength - 1).join("")}…`;
+  const collapsed = filtered.replace(/\s+/g, " ").trim();
+  const chars = Array.from(collapsed);
+  return chars.length <= maxLength ? collapsed : `${chars.slice(0, maxLength - 1).join("")}…`;
 }
 
 /**

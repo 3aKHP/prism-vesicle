@@ -146,7 +146,7 @@ export function App(props: AppProps = {}) {
   const [splashForceDone, setSplashForceDone] = createSignal(false);
   // M2: the empty-session hero shows only while the stream holds no
   // conversation turns; system notices (e.g. the YOLO warning) render above it.
-  const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system"));
+  const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system" && !message.kind));
 
   // Day/night theme: the env preference wins at startup; otherwise follow the
   // terminal's own mode (eager report, async detection, then live events).

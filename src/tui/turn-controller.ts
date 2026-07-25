@@ -10,7 +10,7 @@ import { setAgentDeliveryState } from "./agent-view";
 import { combineIndependentUsage } from "./telemetry";
 import { createTurnResultController } from "./turn-result-controller";
 import { createDecisionContinuations } from "./decision-continuations";
-import { ProviderError, providerFailureCategoryLabel, summarizeProviderFailure } from "../providers/shared/errors";
+import { ProviderError, cleanProviderMessage, providerFailureCategoryLabel, summarizeProviderFailure } from "../providers/shared/errors";
 
 export type { TurnControllerOptions } from "./turn-controller-options";
 import type { TurnControllerOptions } from "./turn-controller-options";
@@ -132,6 +132,14 @@ export function createTurnController(options: TurnControllerOptions) {
         handleResult(outcome.value);
       }
     } catch (error) {
+      // A retryable provider failure leaves the user message in the transcript
+      // (issue #98) but restores the composer draft + images so the "resend"
+      // hint is actionable. Terminal failures keep the message in place; the
+      // user starts the next turn fresh.
+      if (error instanceof ProviderError && summarizeProviderFailure(error).retryable) {
+        options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
+        if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
+      }
       reportError(error);
     } finally {
       options.setBusy(false);
@@ -207,17 +215,18 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setStreamingReasoning("");
     options.queuedWork.block();
     if (!(error instanceof ProviderError)) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = cleanProviderMessage(error instanceof Error ? error.message : String(error));
       options.setStatus("error");
       options.recordActivity({ kind: "system", text: `error: ${message}` });
-      options.setMessages((previous) => [...previous, { role: "system", content: message }]);
+      options.setMessages((previous) => [...previous, { role: "system", kind: "host-error", content: message }]);
       return;
     }
     const failure = summarizeProviderFailure(error);
     const title = providerFailureCategoryLabel(failure.category).title;
     const statusParts = ["error"];
     if (failure.providerId) statusParts.push(failure.providerId);
-    statusParts.push(String(failure.status ?? title));
+    if (failure.status !== undefined) statusParts.push(String(failure.status));
+    statusParts.push(title);
     options.setStatus(statusParts.join(" · "));
     options.recordActivity({ kind: "system", text: `error: ${title}: ${failure.message}` });
     options.setMessages((previous) => [...previous, {

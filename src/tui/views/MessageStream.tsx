@@ -183,7 +183,7 @@ export function MessageStream(props: {
     <box title="Messages" border borderColor={palette.sectionBorder} flexGrow={1} padding={1}>
       <Show
         when={!props.showHero}
-        fallback={<EmptyHero notices={props.messages.filter((message) => message.role === "system").map((message) => message.content)} />}
+        fallback={<EmptyHero notices={props.messages.filter((message) => message.role === "system" && !message.kind).map((message) => message.content)} />}
       >{stream}</Show>
     </box>
   );
