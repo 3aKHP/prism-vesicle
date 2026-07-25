@@ -105,7 +105,11 @@ export function markRuns(mark: readonly string[]): MarkRun[][] {
 
 /** Multiply a #rrggbb color by a brightness factor; used for splash fade-out. */
 export function scaleHex(hex: string, factor: number): string {
+  // Guard against malformed input (short codes, missing #) so the splash never
+  // fades through a `#NaN…` color — return the original unchanged.
+  if (hex.length !== 7 || hex[0] !== "#") return hex;
   const value = Number.parseInt(hex.slice(1), 16);
+  if (Number.isNaN(value)) return hex;
   const channel = (shift: number) =>
     Math.round(((value >> shift) & 0xff) * Math.max(0, Math.min(1, factor)));
   const scaled = (channel(16) << 16) | (channel(8) << 8) | channel(0);

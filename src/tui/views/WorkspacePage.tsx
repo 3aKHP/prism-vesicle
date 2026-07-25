@@ -200,6 +200,9 @@ export function WorkspacePage(props: {
     if (d?.kind === "ops-overwrite") {
       return `${d.path} exists — o overwrite · c cancel`;
     }
+    if (d?.kind === "save-as-overwrite") {
+      return `${d.path} exists — o overwrite · c cancel`;
+    }
     const region = c.focusRegion();
     if (region === "tree") {
       return `↑↓ nav · Enter/→ open · a file · A dir · m/F2 rename · c copy · d delete · r refresh · . hidden · v validate${validationSuffix()}`;
@@ -336,8 +339,8 @@ export function WorkspacePage(props: {
                         </Show>
                         <text
                           content={file().kind === "image"
-                            ? "Image preview is not inline-renderable in the terminal; external editor handoff arrives in B5."
-                            : "Binary file — editing is not supported; external editor handoff arrives in B5."}
+                            ? "Image preview is not inline-renderable in the terminal; press Ctrl+X to open in your external editor."
+                            : "Binary file — editing is not supported; press Ctrl+X to open in your external editor."}
                           fg={palette.textDim}
                           wrapMode="none"
                         />

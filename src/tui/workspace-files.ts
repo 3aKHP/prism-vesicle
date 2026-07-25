@@ -1,5 +1,5 @@
 import { constants, type Dirent, type Stats } from "node:fs";
-import { access, lstat, readFile, readdir } from "node:fs/promises";
+import { access, lstat, open, readFile, readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 
 /**
@@ -267,7 +267,21 @@ export async function readFilePreview(
 
   let content: Buffer;
   try {
-    content = await readFile(abs);
+    if (stats.size > OVERSIZED_BYTES) {
+      // Bound the read so an oversized file never fills memory — the preview
+      // is truncated to PREVIEW_LINE_CAP lines regardless, so the first
+      // OVERSIZED_BYTES is always enough.
+      const handle = await open(abs, "r");
+      try {
+        const buf = Buffer.alloc(OVERSIZED_BYTES);
+        const { bytesRead } = await handle.read(buf, 0, OVERSIZED_BYTES, 0);
+        content = buf.subarray(0, bytesRead);
+      } finally {
+        await handle.close();
+      }
+    } else {
+      content = await readFile(abs);
+    }
   } catch {
     return null;
   }

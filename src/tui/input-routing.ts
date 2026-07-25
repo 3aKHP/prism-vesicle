@@ -129,7 +129,7 @@ export function useInputRouting(options: InputRoutingOptions): void {
     // Page switch (Ctrl+O) sits above artifact focus and composer keys so it
     // works from every non-modal surface; bottom-surface modals above still
     // own their keys while active.
-    if (key.ctrl && key.name === "o" && options.togglePage) {
+    if (key.ctrl && !key.shift && key.name === "o" && options.togglePage) {
       options.togglePage();
       consumeKey(key);
       return;

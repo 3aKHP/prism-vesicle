@@ -144,6 +144,34 @@ describe("file management: move / copy (m / c)", () => {
     expect(controller.openFile()?.relPath).toBe("moved.txt");
   });
 
+  test("renaming A onto an already-open B closes B's buffer (no duplicate, no clobber)", async () => {
+    await writeFile(join(root, "target.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget();
+    // Open B (target.md) as an editable buffer, then move A (notes.txt) onto it.
+    await controller.openPath("target.md");
+    const instB = mockEditor("---\narchetype: x\n---\nbody\n");
+    controller.registerEditorInstance("target.md", instB);
+    expect(controller.editorOrder()).toContain("target.md");
+
+    gotoTree(controller);
+    selectInTree(controller, "notes.txt");
+    controller.handleKey(key("m"));
+    for (const ch of "target.md") controller.handleKey(key(ch));
+    controller.handleKey(key("enter"));
+    await new Promise((r) => setTimeout(r, 30));
+    // target.md exists → overwrite confirm; 'o' completes the move.
+    expect(controller.dialog()?.kind).toBe("ops-overwrite");
+    controller.handleKey(key("o"));
+    await new Promise((r) => setTimeout(r, 40));
+
+    // A rekeyed onto target.md; target.md appears exactly once in the pool.
+    const targetCount = controller.editorOrder().filter((p) => p === "target.md").length;
+    expect(targetCount).toBe(1);
+    expect(controller.activeEditorPath()).toBe("target.md");
+    expect(controller.editorOrder()).not.toContain("notes.txt");
+  });
+
   test("`c` copies a file, leaving the source untouched", async () => {
     const controller = createWorkspaceController(root);
     await openTree(controller);

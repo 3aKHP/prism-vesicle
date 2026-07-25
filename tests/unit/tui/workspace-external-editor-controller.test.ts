@@ -138,6 +138,17 @@ describe("external editor handoff: target resolution + gate", () => {
     // A directory is not a handoff target → the "select a file" message fires.
     expect(controller.editorStatus()).toContain("select a file");
   });
+
+  test("Ctrl+Shift+X does not trigger the handoff (shift guard)", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes.txt");
+    const { runtime, calls } = mockRuntime();
+    controller.registerExternalEditor(runtime);
+    // Ctrl+Shift+X must fall through (no handoff), so the editor keeps it.
+    expect(controller.handleKey(key("x", { ctrl: true, shift: true }))).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls.suspend).toBe(0);
+  });
 });
 
 describe("external editor handoff: refresh after return", () => {

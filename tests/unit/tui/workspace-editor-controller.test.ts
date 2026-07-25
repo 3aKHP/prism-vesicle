@@ -135,7 +135,7 @@ describe("workspace editor: dirty tracking and save", () => {
     expect(controller.editorStatusTone()).toBe("warn");
   });
 
-  test("all-dirty refusal and failed save-as report an error tone", async () => {
+  test("all-dirty refusal reports an error tone", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget();
     for (let i = 1; i <= 8; i += 1) {
@@ -148,8 +148,10 @@ describe("workspace editor: dirty tracking and save", () => {
     await writeFile(join(root, "f9.txt"), "file 9\n");
     await controller.openPath("f9.txt");
     expect(controller.editorStatusTone()).toBe("error");
+  });
 
-    // A save-as to an escaping path also reads as an error.
+  test("save-as to an escaping path reports an error tone", async () => {
+    const controller = createWorkspaceController(root);
     await openEditable(controller, "notes.txt");
     controller.handleKey(key("s", { ctrl: true, shift: true }));
     for (const ch of "../escape.txt") controller.handleKey(key(ch));
@@ -312,6 +314,23 @@ describe("workspace editor: dirty-on-close confirm", () => {
     const fs = await import("node:fs/promises");
     expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("external change\n");
   });
+
+  test("overwrite-confirm 's' diverts to save-as", async () => {
+    const controller = createWorkspaceController(root);
+    const inst = await openEditable(controller, "notes.txt", "line one\nline two\n");
+    inst.type("line one\nline two\nNEW\n");
+    controller.markEditorContentChanged("notes.txt");
+    await new Promise((r) => setTimeout(r, 25));
+    await writeFile(join(root, "notes.txt"), "external change\n");
+    controller.handleKey(key("escape"));
+    controller.handleKey(key("y"));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(controller.dialog()?.kind).toBe("overwrite-confirm");
+    // 's' diverts to save-as (the only previously-uncovered dialog branch).
+    controller.handleKey(key("s"));
+    expect(controller.dialog()).toBeNull();
+    expect(controller.saveAsActive()).toBe(true);
+  });
 });
 
 describe("workspace editor: LRU pool", () => {
@@ -367,6 +386,30 @@ describe("workspace editor: save-as", () => {
     expect(await fs.readFile(join(root, "copy.txt"), "utf8")).toBe("line one\nline two\nNEW\n");
     expect(controller.activeEditorPath()).toBe("copy.txt");
     expect(controller.dirtyPaths().has("copy.txt")).toBe(false);
+  });
+
+  test("save-as onto an existing different file opens an overwrite confirm", async () => {
+    const controller = createWorkspaceController(root);
+    await writeFile(join(root, "existing.txt"), "do not clobber me\n");
+    await openEditable(controller, "notes.txt", "line one\nline two\n");
+    controller.handleKey(key("s", { ctrl: true, shift: true }));
+    for (const ch of "existing.txt") controller.handleKey(key(ch));
+    controller.handleKey(key("enter"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(controller.dialog()?.kind).toBe("save-as-overwrite");
+    // Cancelling leaves the existing file untouched.
+    controller.handleKey(key("c"));
+    const fs = await import("node:fs/promises");
+    expect(await fs.readFile(join(root, "existing.txt"), "utf8")).toBe("do not clobber me\n");
+    // 'o' overwrites with the buffer content.
+    controller.handleKey(key("s", { ctrl: true, shift: true }));
+    for (const ch of "existing.txt") controller.handleKey(key(ch));
+    controller.handleKey(key("enter"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(controller.dialog()?.kind).toBe("save-as-overwrite");
+    controller.handleKey(key("o"));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(await fs.readFile(join(root, "existing.txt"), "utf8")).toBe("line one\nline two\n");
   });
 
   test("save-as rejects a path that escapes the project root", async () => {

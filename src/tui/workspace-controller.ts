@@ -29,7 +29,7 @@ import {
   runExternalEditor,
   type EditorRuntime,
 } from "./workspace-external-editor";
-import { loadSettings } from "../config/settings";
+import { loadSettings, type Settings } from "../config/settings";
 import {
   buildFileIndex,
   flattenVisibleTree,
@@ -83,6 +83,7 @@ type EditorDialog =
   | { kind: B3DialogKind; path: string }
   | { kind: "delete-confirm"; path: string }
   | { kind: "ops-overwrite"; path: string; op: "move" | "copy"; source: string }
+  | { kind: "save-as-overwrite"; path: string }
   | null;
 
 /** Tree file-management input bar (B4 §5.1): path prompts isomorphic to save-as. */
@@ -251,9 +252,19 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   async function ensureLoaded(): Promise<void> {
     if (!loadPromise) {
       setLoading(true);
-      loadPromise = Promise.all([recomputeRows(), rebuildIndex()]).then(() => {
-        setLoading(false);
-      });
+      // `.catch` resets the loading flag and clears the cached promise so a
+      // rejected load (e.g. a directory permission error) doesn't leave the
+      // spinner stuck forever and the next ensureLoaded() can retry — the
+      // `.then` alone would cache the rejection as permanent state.
+      loadPromise = Promise.all([recomputeRows(), rebuildIndex()])
+        .then(() => {
+          setLoading(false);
+        })
+        .catch((error) => {
+          setLoading(false);
+          loadPromise = null;
+          status(`failed to load workspace: ${errMsg(error)}`, "error");
+        });
     }
     await loadPromise;
   }
@@ -531,6 +542,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   // —— save / save-as / reload ——
 
   async function saveActive(): Promise<boolean> {
+    // Clear any close-intent left over from a prior dirty-confirm chain so it
+    // can't leak into this unrelated save (a stale closeAfterSave could close
+    // the wrong buffer when a later plain save force-overwrites). The dirty-
+    // confirm 'y' path re-arms it in its own .then, after this returns.
+    closeAfterSave = false;
     const path = activeEditorPath();
     if (!path) return false;
     const instance = instances.get(path);
@@ -541,15 +557,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       setDialog({ kind: "overwrite-confirm", path });
       return false;
     }
-    await writeBuffer(path, instance.plainText);
-    return true;
+    return writeBuffer(path, instance.plainText);
   }
 
   /**
    * Set when a dirty-confirm "save and close" diverts to the overwrite
    * confirm: the close intent survives, so force-overwriting completes the
-   * close. Choosing save-as satisfies the save intent on its own (the buffer
-   * moves to the new path and stays open); cancelling clears the intent.
+   * close. saveActive() clears it at the start of every save so it can't leak
+   * across buffers; choosing save-as or cancelling clears it too.
    */
   let closeAfterSave = false;
 
@@ -558,16 +573,27 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (!path) return;
     const instance = instances.get(path);
     if (!instance) return;
-    await writeBuffer(path, instance.plainText);
-    if (closeAfterSave) {
+    const saved = await writeBuffer(path, instance.plainText);
+    if (saved && closeAfterSave) {
       closeAfterSave = false;
       afterDirtyConfirm();
     }
   }
 
-  async function writeBuffer(relPath: string, content: string): Promise<void> {
-    const abs = assertProjectRelativePath(rootDir, relPath);
-    await atomicWriteFile(abs, content);
+  /**
+   * Atomic write + post-save bookkeeping. Returns false (and surfaces a status
+   * error) on a disk failure rather than throwing, so the `void saveActive()`
+   * callers don't surface unhandled rejections and the buffer stays dirty.
+   */
+  async function writeBuffer(relPath: string, content: string): Promise<boolean> {
+    let abs: string;
+    try {
+      abs = assertProjectRelativePath(rootDir, relPath);
+      await atomicWriteFile(abs, content);
+    } catch (error) {
+      status(`failed to save ${relPath}: ${errMsg(error)}`, "error");
+      return false;
+    }
     const meta = bufferMeta.get(relPath);
     const mtime = await readMtimeMs(rootDir, relPath);
     if (meta) {
@@ -589,6 +615,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     invalidateDirCache(relPath);
     status(`saved ${relPath}`, "success");
     setValidationState(runValidation(content));
+    return true;
   }
 
   function invalidateDirCache(relPath: string): void {
@@ -618,18 +645,33 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       status(String(error instanceof Error ? error.message : error), "error");
       return;
     }
+    // Refuse to silently clobber a different existing file — mirror the
+    // move/copy overwrite confirm. 'o' completes the save-as via performSaveAs.
+    if (trimmed !== path && await entryExists(rootDir, trimmed)) {
+      setDialog({ kind: "save-as-overwrite", path: trimmed });
+      return;
+    }
+    await performSaveAs(trimmed);
+  }
+
+  /** Write the active buffer's content to `target` and switch the buffer there. */
+  async function performSaveAs(target: string): Promise<void> {
+    const path = activeEditorPath();
+    const instance = path ? instances.get(path) : undefined;
+    if (!path || !instance) return;
     const content = instance.plainText;
-    await writeBuffer(trimmed, content);
+    const saved = await writeBuffer(target, content);
+    if (!saved) return; // writeBuffer already surfaced the error
     // Switch the editable buffer to the new path (close the old, open the new
     // without re-reading — we just wrote it). The recorded mtime must be the
     // file's real mtime: a wall-clock value never matches the on-disk stat
     // and would raise a spurious overwrite confirm on the next Ctrl+S.
     closeBuffer(path);
-    const writtenMtime = await readMtimeMs(rootDir, trimmed);
-    bufferMeta.set(trimmed, { savedSnapshot: content, mtimeMs: writtenMtime ?? Date.now(), initialContent: content });
-    setEditorOrder((order) => [trimmed, ...order.filter((p) => p !== trimmed)]);
-    setActiveEditorPath(trimmed);
-    setOpenFile(await readFilePreview(rootDir, trimmed));
+    const writtenMtime = await readMtimeMs(rootDir, target);
+    bufferMeta.set(target, { savedSnapshot: content, mtimeMs: writtenMtime ?? Date.now(), initialContent: content });
+    setEditorOrder((order) => [target, ...order.filter((p) => p !== target)]);
+    setActiveEditorPath(target);
+    setOpenFile(await readFilePreview(rootDir, target));
     setViewMode("source");
     void rebuildIndex();
   }
@@ -712,7 +754,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const runtime = externalEditorRuntime;
     if (!runtime) { status("external editor is unavailable in this build", "error"); return; }
 
-    const editor = resolveEditorCommand({ env: process.env, settings: await loadSettings() });
+    let settings: Settings;
+    try {
+      settings = await loadSettings();
+    } catch (error) {
+      status(`settings.yaml is malformed — ${errMsg(error)} (fix or remove it)`, "error");
+      return;
+    }
+    const editor = resolveEditorCommand({ env: process.env, settings });
     status(`opening ${target} in ${editor.command}…`, "info");
     let exitCode = 0;
     try {
@@ -990,6 +1039,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (oldPath === newPath) return;
     const meta = bufferMeta.get(oldPath);
     if (!meta) return;
+    // Renaming A onto an already-open B: close B first — the move is
+    // overwriting B on disk, so B's stale buffer + pool slot must go before
+    // we rekey A, otherwise editorOrder ends up with newPath twice and B's
+    // meta is silently clobbered.
+    if (bufferMeta.has(newPath)) closeBuffer(newPath);
     const inst = instances.get(oldPath);
     const currentText = inst?.plainText ?? meta.savedSnapshot;
     bufferMeta.delete(oldPath);
@@ -1119,6 +1173,10 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   function handleFindKey(key: TuiKeyEvent): boolean {
     if (key.name === "escape") { closeFind(); return true; }
     if (key.name === "enter") {
+      // Enter with an empty query closes the bar (matches the goto bar) instead
+      // of being a silent no-op; a non-empty query with no matches stays open so
+      // the user can revise it.
+      if (!findQuery()) { closeFind(); return true; }
       const matches = findMatches();
       if (matches.length === 0) return true;
       const step = key.shift ? -1 : 1;
@@ -1230,6 +1288,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       if (key.name === "c") { setDialog(null); return true; }
       return true;
     }
+    if (current.kind === "save-as-overwrite") {
+      if (key.name === "o") { const p = current.path; setDialog(null); void performSaveAs(p); return true; }
+      if (key.name === "c" || key.name === "escape") { setDialog(null); return true; }
+      return true;
+    }
     return true;
   }
 
@@ -1333,7 +1396,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     // Ctrl+X hands off to the external editor from every Workspace focus
     // region (B5 §6.1); caught here so it also covers the composer region and
     // is intercepted before the editable source textarea can consume it.
-    if (isCtrl(key, "x")) { void handoffToExternal(); return true; }
+    if (isCtrl(key, "x") && !key.shift) { void handoffToExternal(); return true; }
     if (key.name === "f6") { cycleFocus(key.shift ? -1 : 1); return true; }
     const region = focusRegion();
     if (region === "editor" && openFile()) {

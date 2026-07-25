@@ -106,7 +106,7 @@ Workspace 页有三个焦点区：文件树、查看器/编辑器、输入框。
 
 ### 校验(findings 面板)
 
-打开文件、保存,或在文件树/只读查看器按 `v`,都会跑**角色卡 / 情景卡**校验(与 `/validate` 和回合结束自动校验共用同一份校验器名单)。状态行摘要:`✓ validators passed` / `✗ N · ⚠ M · v 查看` / `no validator matched`(无匹配校验器时明示)。
+打开文件、保存,或在文件树/只读查看器按 `v`,都会跑**角色卡 / 情景卡**校验(与 `/validate` 和回合结束自动校验共用同一份校验器名单)。状态行摘要(界面文案为英文):`✓ validators passed` / `✗ N · ⚠ M · v view` / `no validator matched`(无匹配校验器时明示)。
 
 `v` 打开的 findings 面板独占键盘:每行 `✗/⚠ + finding 文本`(无锚的标 `(no anchor)`),`↑↓` 选择,`Enter` 跳转到对应行(从 finding 文本里提取 `## …` 段落头或 frontmatter 字段名定位;找不到则跳到 frontmatter 结尾),`Esc` 关闭。在可编辑源码里 `v` 是普通字母(透传给编辑器),要手动校验就先 Ctrl+S 存盘(保存即自动校验)。
 
