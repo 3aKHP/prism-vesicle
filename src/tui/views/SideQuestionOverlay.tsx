@@ -31,6 +31,7 @@ export function SideQuestionOverlay(props: SideQuestionOverlayProps) {
 
   const phase = () => props.exchange?.phase;
   const answer = () => props.exchange?.answer ?? "";
+  const retryText = () => props.exchange?.retryText;
 
   onMount(() => {
     if (!props.registerScroller) return;
@@ -88,6 +89,9 @@ export function SideQuestionOverlay(props: SideQuestionOverlayProps) {
           <Switch>
             <Match when={phase() === "loading" && answer().trim().length > 0}>
               <MarkdownContent content={`${answer()}\n\n…`} />
+            </Match>
+            <Match when={phase() === "loading" && Boolean(retryText())}>
+              <text content={retryText()!} fg={palette.warn} wrapMode="word" />
             </Match>
             <Match when={phase() === "loading"}>
               <text content="Thinking…" fg={palette.textMuted} />

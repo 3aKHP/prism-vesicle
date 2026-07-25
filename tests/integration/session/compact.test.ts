@@ -78,6 +78,40 @@ describe("conversation compact", () => {
     expect(records.at(-1)?.metadata?.kind).toBe("compact-summary");
   });
 
+  test("surfaces transport retries for the compact provider call (#101)", async () => {
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-retry");
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first" });
+    await store.append({ role: "assistant", content: "answer one" });
+    await store.append({ role: "user", content: "second" });
+    await store.append({ role: "assistant", content: "answer two" });
+
+    const retries: Array<{ attempt: number; status?: number }> = [];
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) return new Response('{"error":{"message":"rate limited"}}', { status: 429 });
+      return Response.json({
+        id: "compact",
+        choices: [{ message: { content: "<summary>Whole session summary.</summary>" } }],
+      });
+    }) as typeof fetch;
+
+    const result = await compactConversation({
+      rootDir,
+      sessionId: store.sessionId,
+      engine: "etl",
+      onRetry: (info) => retries.push({ attempt: info.attempt, status: info.status }),
+    });
+
+    expect(result.summary).toBe("Whole session summary.");
+    // One retryable 429 → exactly one onRetry notification, then success.
+    expect(retries).toHaveLength(1);
+    expect(retries[0]!.attempt).toBe(1);
+    expect(retries[0]!.status).toBe(429);
+  });
+
   test("refuses to compact while an interactive request is pending", async () => {
     const rootDir = await createPromptRoot();
     const store = await createSessionStore(rootDir, "compact-pending");

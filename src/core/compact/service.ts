@@ -1,7 +1,7 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderRetryInfo, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
@@ -71,6 +71,7 @@ export async function compactConversation(options: {
   generation?: VesicleRequest["generation"];
   instructions?: string;
   signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<ConversationCompact> {
   const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
   assertNoPendingInteraction(full);
@@ -86,6 +87,7 @@ export async function compactConversation(options: {
     messages: full.messages,
     prompt: compactPrompt(FULL_COMPACT_PROMPT, options.instructions),
     signal: options.signal,
+    onRetry: options.onRetry,
   });
 
   const compactRoot = compactRootParent(full.records);
@@ -126,6 +128,7 @@ export async function compactConversationFromPoint(options: {
   generation?: VesicleRequest["generation"];
   instructions?: string;
   signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<ConversationCompactFromPoint> {
   const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
   assertNoPendingInteraction(full);
@@ -141,6 +144,7 @@ export async function compactConversationFromPoint(options: {
     messages: full.messages,
     prompt: compactPrompt(pivotInstruction, options.instructions),
     signal: options.signal,
+    onRetry: options.onRetry,
   });
 
   const session = await createSessionStore(options.rootDir, options.sessionId, { parentUuid: options.point.parentUuid });
@@ -183,6 +187,7 @@ async function generateSummary(options: {
   messages: ResumedMessage[];
   prompt: string;
   signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<string> {
   const config = await loadConfigForSelection(options.providerSelection);
   const provider = createProvider(config);
@@ -201,6 +206,7 @@ async function generateSummary(options: {
     ],
     generation: options.generation,
     signal: options.signal,
+    onRetry: options.onRetry,
   };
   const response = await complete(provider, request);
   const summary = formatCompactSummary(response.content);

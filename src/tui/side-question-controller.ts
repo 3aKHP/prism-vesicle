@@ -10,6 +10,7 @@ import type { ProviderSelection } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import { askSideQuestion, resolveSideQuestionSnapshot } from "../core/side-question/service";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "../core/side-question/types";
+import { providerRetryLabel } from "../providers/shared/retry-label";
 import type { ReasoningTier, ResponseUsage, VesicleMessage } from "../providers/shared/types";
 import type { TuiKeyEvent } from "./decision-interaction";
 
@@ -21,6 +22,8 @@ export type SideQuestionExchange = {
   phase: "loading" | "complete" | "error" | "cancelled";
   error?: string;
   usage?: ResponseUsage;
+  /** Transient transport-retry indicator shown while loading. */
+  retryText?: string;
 };
 
 export type SideQuestionOverlayState = {
@@ -194,21 +197,25 @@ export function createSideQuestionController(options: SideQuestionControllerOpti
         onDelta: (delta) => {
           mutateExchange(sessionId, exchange.id, (current) => ({ ...current, answer: `${current.answer}${delta}` }));
         },
+        onRetry: (info) => {
+          mutateExchange(sessionId, exchange.id, { retryText: `retrying · ${providerRetryLabel(info)}` });
+        },
       });
       mutateExchange(sessionId, exchange.id, {
         phase: "complete",
         answer: result.content,
+        retryText: undefined,
         ...(result.usage ? { usage: result.usage } : {}),
       });
     } catch (error) {
       if (controller.signal.aborted) {
-        mutateExchange(sessionId, exchange.id, { phase: "cancelled" });
+        mutateExchange(sessionId, exchange.id, { phase: "cancelled", retryText: undefined });
       } else {
         // Keep the failure inside the ephemeral exchange only. Do not route it
         // through the main turn's reportError, which would write an assistant
         // error message into the main transcript and violate /btw isolation.
         const message = error instanceof Error ? error.message : String(error);
-        mutateExchange(sessionId, exchange.id, { phase: "error", error: message });
+        mutateExchange(sessionId, exchange.id, { phase: "error", error: message, retryText: undefined });
       }
     } finally {
       if (sideController === controller) sideController = null;

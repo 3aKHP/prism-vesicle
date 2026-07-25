@@ -127,6 +127,12 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
         recordActivity({ kind: "provider", text: `provider request #${event.iteration + 1}` });
         return true;
       case "provider_retry":
+        // The quality judge runs inside a main turn that already owns the
+        // status line; surface its retries in the activity log only.
+        if (event.scope === "quality-judge") {
+          recordActivity({ kind: "provider", text: `quality review retry ${event.attempt}/${event.maxRetries}${event.status ? ` (${event.status})` : ""}` });
+          return true;
+        }
         options.setStatus(`retrying · attempt ${event.attempt}/${event.maxRetries}${event.status ? ` · HTTP ${event.status}` : ""}`);
         recordActivity({ kind: "provider", text: `provider retry ${event.attempt}/${event.maxRetries}${event.status ? ` (${event.status})` : ""}` });
         return true;

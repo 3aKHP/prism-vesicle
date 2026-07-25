@@ -5,7 +5,7 @@ import { basename, dirname, join } from "node:path";
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { engineIds } from "../engine/profile";
 import { requireProjectHarnessRuntime, resolveProjectHarnessRuntime } from "../harness/activation";
 import { INSTRUCTION_COMBINED_BUDGET_BYTES, instructionFilePath, instructionLogicalName } from "../instructions";
@@ -19,6 +19,8 @@ export type GenerateProjectInstructionsOptions = {
   generation?: VesicleRequest["generation"];
   notes?: string;
   signal?: AbortSignal;
+  /** Observes transport retries (`fetchProvider`); never serialized. */
+  onRetry?: (info: ProviderRetryInfo) => void;
 };
 
 export type GeneratedInstructions = {
@@ -71,6 +73,7 @@ export async function generateProjectInstructions(
     messages: [{ role: "user", content: userContent }],
     generation: options.generation,
     signal: options.signal,
+    onRetry: options.onRetry,
   });
 
   const content = formatInitContent(response.content);

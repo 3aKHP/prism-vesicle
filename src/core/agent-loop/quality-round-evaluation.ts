@@ -60,6 +60,18 @@ export async function evaluateQualityRoundBoundary(options: {
     experimentalProfile: options.experimentalQuality,
     state: options.state,
     signal: options.signal,
+    // Surface the judge's transport retries as a scoped provider_retry so the
+    // TUI can log them without clobbering the main chat status line. The judge
+    // runs inside a main turn that already owns the status line.
+    onRetry: options.onEvent ? (info) => options.onEvent?.({
+      type: "provider_retry",
+      attempt: info.attempt,
+      maxRetries: info.maxRetries,
+      delayMs: info.delayMs,
+      ...(info.status !== undefined ? { status: info.status } : {}),
+      iteration: 0,
+      scope: "quality-judge",
+    }) : undefined,
   });
   if (result.event.experimentalJudge) options.state.experimentalJudge = result.event.experimentalJudge;
   options.state.lastResult = { outcome: result.outcome, findingCount: qualityFindingCount(result) };
