@@ -119,6 +119,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Test Windows-specific permission, process, Setup, and installer paths
         run: bun test tests/integration/config/permission-config.test.ts tests/unit/quality/permissions.test.ts tests/integration/process/process-runtime.test.ts tests/unit/core/shell-profile.test.ts tests/integration/setup/setup-model-discovery.test.ts tests/integration/setup/setup-config-writer.test.ts tests/integration/setup/setup-mcp-test.test.ts tests/component/setup/setup-ui.test.tsx tests/contract/release/windows-installer.test.ts
+      - name: Smoke the npm-installed Windows runtime
+        run: bun run pack:smoke --skip-tui
       - run: bun run build:exe windows
       - run: bun run build:assets
       - name: Smoke the release shape from an empty project

@@ -15,7 +15,7 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-包内自带完整只读 V10 运行时基线(`assets/`、`host-assets/`、`harness-manifest.json`),无需单独安装 Harness。第二条命令打印 ETL 引擎的组合结构,用来确认安装可用。
+包内自带预编译 TUI 入口与完整只读 V10 运行时基线(`assets/`、`host-assets/`、`harness-manifest.json`),启动时不会在 `node_modules` 内编译应用 TSX,也无需单独安装 Harness。第二条命令打印 ETL 引擎的组合结构,用来确认安装可用。
 
 不想全局安装时,也可以在项目内 `npm install prism-vesicle` 后用 `bunx vesicle …`;但全局安装是推荐路径,直接支撑 `cd 项目 && vesicle .` 的标准工作流。
 

@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-alpha.5 release candidate (2026-07-25)._
+_Snapshot: 1.0.0-alpha.6 release candidate (2026-07-26)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-alpha.5**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.5 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-alpha.6**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.6 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
@@ -40,7 +40,7 @@ Release candidate: **1.0.0-alpha.5**. The `State` column tracks the candidate's 
 | Workbench | `/artifact` discovery, Workspace-page preview, validation, and revision | released |
 | Quality | Output Quality Guard: deterministic findings, document metrics, durable decisions, and experimental Semantic Judge/rewrite-policy loader | released |
 | Release | Standalone Windows PE and Linux ELF binaries | released |
-| Release | npm/Bun package with pinned runtime dependencies | released |
+| Release | npm/Bun package with a precompiled Solid TUI entry, clean installed production tree, global/local consumer audit, and behavioral Linux PTY startup gate | released |
 | Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | released |
 | Release | Reusable Linux/Windows release build with tag-triggered publication | released |
 

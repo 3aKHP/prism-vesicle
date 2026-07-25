@@ -23,13 +23,21 @@ if (forbidden.length > 0) {
 
 for (const required of [
   "bin/vesicle.mjs",
-  "src/cli/main.ts",
+  "dist/npm/vesicle.mjs",
   "harness-manifest.json",
   "assets/engines/etl.profile.yaml",
   "host-assets/prompts/shared/vesicle-base.md",
   "host-assets/prompts/shared/side-question.md",
 ]) {
   if (!paths.includes(required)) throw new Error(`npm package is missing required runtime file: ${required}`);
+}
+
+const rawApplicationSources = paths.filter((path) => path.startsWith("src/") || /\.[cm]?[jt]sx$/.test(path));
+if (rawApplicationSources.length > 0) {
+  throw new Error(`npm package contains raw application sources: ${rawApplicationSources.join(", ")}`);
+}
+if (paths.includes("dist/npm/vesicle.meta.json")) {
+  throw new Error("npm package contains its development-only build metafile.");
 }
 
 console.log(`npm package shape verified: ${paths.length} files.`);

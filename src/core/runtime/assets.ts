@@ -5,6 +5,8 @@ import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { userConfigDirectory } from "../../config/paths";
 
+declare const VESICLE_NPM_BUNDLE: boolean | undefined;
+
 export type AssetSource = "project" | "user" | "managed" | "bundled" | "host";
 
 export type AssetLayer = {
@@ -209,7 +211,10 @@ export function userAssetsDirectory(env: NodeJS.ProcessEnv = process.env): strin
 
 /** Locate the complete V10 pack and host extensions shipped with this runtime. */
 export function bundledHarnessLayout(executablePath = process.execPath): BundledHarnessLayout | undefined {
-  const moduleRoot = dirname(fileURLToPath(new URL("../../../harness-manifest.json", import.meta.url)));
+  const manifestUrl = typeof VESICLE_NPM_BUNDLE === "boolean" && VESICLE_NPM_BUNDLE
+    ? new URL("../../harness-manifest.json", import.meta.url)
+    : new URL("../../../harness-manifest.json", import.meta.url);
+  const moduleRoot = dirname(fileURLToPath(manifestUrl));
   const roots = [...new Set([moduleRoot, dirname(executablePath)].map((root) => resolve(root)))];
   for (const rootDirectory of roots) {
     const manifestPath = join(rootDirectory, "harness-manifest.json");
