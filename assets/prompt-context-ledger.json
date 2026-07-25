@@ -34,9 +34,9 @@
     },
     "etl": {
       "budgetCharacters": 24000,
-      "usedCharacters": 3334,
-      "remainingCharacters": 20666,
-      "usedBytes": 5220,
+      "usedCharacters": 3543,
+      "remainingCharacters": 20457,
+      "usedBytes": 5787,
       "sections": [
         {
           "path": "assets/prompts/host/authoring.md",
@@ -45,8 +45,8 @@
         },
         {
           "path": "assets/prompts/engines/etl.md",
-          "characters": 3254,
-          "bytes": 4990
+          "characters": 3463,
+          "bytes": 5557
         }
       ]
     },
@@ -169,9 +169,9 @@
   "agents": {
     "chapter-reviewer": {
       "budgetCharacters": 24000,
-      "usedCharacters": 1307,
-      "remainingCharacters": 22693,
-      "usedBytes": 2097,
+      "usedCharacters": 1792,
+      "remainingCharacters": 22208,
+      "usedBytes": 3170,
       "sections": [
         {
           "path": "assets/prompts/host/review.md",
@@ -185,8 +185,8 @@
         },
         {
           "path": "assets/prompts/agents/chapter-reviewer.md",
-          "characters": 990,
-          "bytes": 1486
+          "characters": 1475,
+          "bytes": 2559
         }
       ]
     },

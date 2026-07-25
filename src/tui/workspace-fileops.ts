@@ -105,9 +105,17 @@ async function copyTree(srcAbs: string, targetAbs: string): Promise<void> {
   }
 }
 
-/** Remove the target file (used by the move/copy overwrite confirm path). */
+/** Remove an existing target file for move/copy overwrite; never remove a directory tree. */
 export async function removeFile(rootDir: string, relPath: string): Promise<void> {
   const abs = assertProjectRelativePath(rootDir, relPath);
+  const info = await lstat(abs).catch((error) => {
+    if (isEnoent(error)) return null;
+    throw error;
+  });
+  if (!info) return;
+  if (info.isDirectory()) {
+    throw new Error(`${relPath} is a directory and cannot be overwritten.`);
+  }
   await rm(abs, { recursive: false });
 }
 

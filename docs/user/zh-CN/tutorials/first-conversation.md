@@ -25,7 +25,7 @@ EOF
 vesicle .
 ```
 
-界面分几块:**上方是对话区**,侧边是**工作区**(产物列表),**底部是输入框**。
+Vesicle 有 Chat 与 Workspace 两个一级页面。Chat 页的上方是对话区,侧边 Host 栏显示会话、Agent 和产物状态,底部是输入框;按 `Ctrl+O` 可以随时切到项目文件工作台。
 
 在输入框里写你的意图,回车发送:
 
@@ -65,6 +65,8 @@ Agent Loop 运行时仍可继续输入普通消息或命令。按回车后，需
 - `/help` —— 列出全部命令。
 - `/context` —— 当前上下文用量。
 - `/artifact` —— 在 Workspace 页打开已生成的产物。
+- `/workspace [path]` —— 打开项目文件工作台,并可定位指定文件。
+- `/theme dark|light|auto` —— 临时切换界面主题。
 - `/engine` —— 查看当前引擎(默认是 ETL)。
 - Ctrl+Q —— 退出 Vesicle。
 
@@ -74,4 +76,4 @@ Agent Loop 运行时仍可继续输入普通消息或命令。按回车后，需
 - [ ] 你在门上做过一次确认或拒绝。
 - [ ] 你用 `/context` 看过用量。
 
-你已经摸清"回合 + 门"的节奏。下一步学习如何在[运行中继续工作](./work-while-running.md),再走完一整张卡的创建。
+你已经摸清"回合 + 门"的节奏。下一步到 [Workspace 页查看和修改产物](./workspace-page.md),再学习如何在[运行中继续工作](./work-while-running.md)。

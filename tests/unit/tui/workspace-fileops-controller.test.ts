@@ -199,6 +199,23 @@ describe("file management: move / copy (m / c)", () => {
     expect(await readFile(join(root, "workspace/cards/mira.md"), "utf8")).toBe("line one\nline two\n");
     expect(controller.rows().some((row) => row.node.relPath === "notes.txt")).toBe(false);
   });
+
+  test("confirming overwrite of a directory reports a clear error and preserves both entries", async () => {
+    const controller = createWorkspaceController(root);
+    await openTree(controller);
+    selectInTree(controller, "notes.txt");
+    controller.handleKey(key("m"));
+    for (const ch of "workspace/cards") controller.handleKey(key(ch));
+    controller.handleKey(key("enter"));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(controller.dialog()?.kind).toBe("ops-overwrite");
+
+    controller.handleKey(key("o"));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(controller.editorStatus()).toContain("directory and cannot be overwritten");
+    expect(await readFile(join(root, "notes.txt"), "utf8")).toBe("line one\nline two\n");
+    expect(await readFile(join(root, "workspace/cards/mira.md"), "utf8")).toContain("archetype");
+  });
 });
 
 describe("file management: delete (d)", () => {

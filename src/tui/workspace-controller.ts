@@ -987,7 +987,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return;
     }
     try {
-      if (overwrite) await removeFile(rootDir, target).catch(() => undefined);
+      if (overwrite) await removeFile(rootDir, target);
       await moveEntry(rootDir, source, target);
       rekeyOpenBuffer(source, target);
       status(`moved ${source} → ${target}`, "success");
@@ -1003,7 +1003,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return;
     }
     try {
-      if (overwrite) await removeFile(rootDir, target).catch(() => undefined);
+      if (overwrite) await removeFile(rootDir, target);
       await copyEntry(rootDir, source, target);
       status(`copied ${source} → ${target}`, "success");
       await afterTreeMutation2(source, target);
