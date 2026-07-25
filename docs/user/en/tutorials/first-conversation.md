@@ -25,7 +25,7 @@ Make sure you are in the project directory:
 vesicle .
 ```
 
-The screen has a few areas: the **conversation area** on top, the **workspace** list on the side, and the **input box** at the bottom.
+Vesicle has two top-level pages: Chat and Workspace. On Chat, the conversation is on top, the Host sidebar shows session, Agent, and artifact status, and the input box is at the bottom. Press `Ctrl+O` at any time to switch to the project-file workbench.
 
 Write your intent in the input box and press Enter:
 
@@ -64,7 +64,9 @@ Commands start with `/` in the input box; typing `/` opens a candidate menu (↑
 
 - `/help` — list all commands.
 - `/context` — current context usage.
-- `/artifact` — list generated artifacts.
+- `/artifact` — open generated artifacts in the Workspace page.
+- `/workspace [path]` — open the project-file workbench and optionally locate a file.
+- `/theme dark|light|auto` — switch the interface theme temporarily.
 - `/engine` — show the active engine (ETL by default).
 - Ctrl+Q — exit Vesicle.
 
@@ -74,4 +76,4 @@ Commands start with `/` in the input box; typing `/` opens a candidate menu (↑
 - [ ] You confirmed or rejected at a gate.
 - [ ] You ran `/context` to see usage.
 
-You now have the rhythm of "turn + gate". Next, learn how to [keep working during a turn](./work-while-running.md), then build a full card.
+You now have the rhythm of "turn + gate". Next, [view and edit artifacts in the Workspace page](./workspace-page.md), then learn how to [keep working during a turn](./work-while-running.md).

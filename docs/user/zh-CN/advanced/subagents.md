@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/subagents.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.4`):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.0.0-alpha.5`):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 SubAgent 是一个**子运行时**:主引擎把一块自包含的任务委派给一个专门的 Agent Profile 去跑,前台等结果或后台异步进行。多个 `spawn_agent` 在同一回合里**并行**启动。
 
@@ -32,7 +32,7 @@ SubAgent 是一个**子运行时**:主引擎把一块自包含的任务委派给
 - **前台**:阻塞当前回合等子任务结果,TUI 仍可响应。
 - **后台**:立即返回句柄,不阻塞。结果进**持久父收件箱**,在父会话**空闲**时合并投递(防抖后一次性送出 `<subagent-results>` 包,不让多个完成各自打断你)。所以后台任务**通常无需轮询**——完成会自动在下一回合通知对话。
 
-用 `/agents` 管理子任务:`/agents` 列出、`/agents <handle>` 查看、`/agents stop <handle>` 中断、`/agents retry` 在子任务因供应商错误终止后重试投递。活动/就绪的后台工作在 header 和工作区侧栏可见,每个子任务有专用 Agent 卡片原地更新。
+用 `/agents` 管理子任务:`/agents` 列出、`/agents <handle>` 查看、`/agents stop <handle>` 中断、`/agents retry` 在子任务因供应商错误终止后重试投递。活动/就绪的后台工作在 header 和 Host 侧栏可见,每个子任务有专用 Agent 卡片原地更新。
 
 ## 限制(如实写)
 

@@ -1,6 +1,6 @@
 import { prepareMarkdownForDisplay, renderMarkdownPlainText } from "../markdown-display";
 import { debugLog } from "../debug-log";
-import { palette, sharedSyntaxStyle } from "../theme";
+import { palette, syntaxStyle } from "../theme";
 
 type MarkdownRenderer = "markdown" | "plain";
 
@@ -29,5 +29,5 @@ export function MarkdownContent(props: { content: string; fg?: string }) {
   if (mode === "plain") {
     return <text content={renderMarkdownPlainText(props.content)} fg={props.fg ?? palette.textPrimary} />;
   }
-  return <markdown content={prepareMarkdownForDisplay(props.content)} syntaxStyle={sharedSyntaxStyle} conceal={true} />;
+  return <markdown content={prepareMarkdownForDisplay(props.content)} syntaxStyle={syntaxStyle()} conceal={true} />;
 }

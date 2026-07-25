@@ -36,9 +36,14 @@ export type InputRoutingOptions = {
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
   sideQuestionOverlay?: Accessor<unknown>;
   handleSideQuestionKey?: (key: TuiKeyEvent) => boolean;
+  splashActive?: Accessor<boolean>;
+  dismissSplash?: () => void;
   artifactFocusActive?: Accessor<boolean>;
   enterArtifactFocus?: () => boolean;
   handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
+  togglePage?: () => void;
+  workspaceActive?: Accessor<boolean>;
+  handleWorkspaceKey?: (key: TuiKeyEvent) => boolean;
 };
 
 export function useInputRouting(options: InputRoutingOptions): void {
@@ -80,6 +85,13 @@ export function useInputRouting(options: InputRoutingOptions): void {
       process.nextTick(() => options.renderer.destroy());
       return;
     }
+    // The startup splash swallows all other input: the first keypress ends it
+    // immediately and must not leak into the composer or any panel.
+    if (options.splashActive?.()) {
+      options.dismissSplash?.();
+      consumeKey(key);
+      return;
+    }
     if (options.sideQuestionOverlay?.() && options.handleSideQuestionKey) {
       if (options.handleSideQuestionKey(key)) consumeKey(key);
       return;
@@ -114,6 +126,20 @@ export function useInputRouting(options: InputRoutingOptions): void {
       case "composer":
         break;
     }
+    // Page switch (Ctrl+O) sits above artifact focus and composer keys so it
+    // works from every non-modal surface; bottom-surface modals above still
+    // own their keys while active.
+    if (key.ctrl && !key.shift && key.name === "o" && options.togglePage) {
+      options.togglePage();
+      consumeKey(key);
+      return;
+    }
+    // The Workspace page owns keys next (tree/viewer/quick-open/focus); its
+    // composer region returns false and falls through to the shared composer.
+    if (options.workspaceActive?.() && options.handleWorkspaceKey) {
+      if (options.handleWorkspaceKey(key)) consumeKey(key);
+      return;
+    }
     if (options.artifactFocusActive?.()) {
       if (options.handleArtifactFocusKey?.(key)) consumeKey(key);
       return;
@@ -147,6 +173,11 @@ export function useInputRouting(options: InputRoutingOptions): void {
   });
 
   usePaste((event) => {
+    if (options.splashActive?.()) {
+      options.dismissSplash?.();
+      event.preventDefault();
+      return;
+    }
     const text = new TextDecoder().decode(event.bytes);
     if (options.handleDecisionPaste(text)) {
       event.preventDefault();

@@ -1,0 +1,67 @@
+PRISM VESICLE — terminal mark (derived from the brand renders)
+==================================================================
+
+Ramp: 7-bit ASCII density chars " .:-=+*#%@". No box-drawing or
+block glyphs; safe for logs, pipes, and any code page.
+
+
+PRIMARY (56 cols) — phosphor splash, MOTD, docs
+
+                      ..:------:..
+                  .-====--------====-.
+               .-==-:.            .:-==-.
+              -+=:.                  .:=+-
+            :+=:                        :=+:
+           .+-.                          .-+.
+           +-.             ..             .-+
+          -+.             .==.             .+-
+          +-.            :=..=:            .-+
+          +:            :=....-:            :+.
+        .-#=.          -- .    ::           -+
+    ...:+@@#===-======#=-----::.=#         .==
+         .-*-.       -.      ....=-        :+.
+           :+:      =:........    .=      :+:
+            :+-.                        .-+:
+              ==-.                    .-==
+               .==-:.              .:-==.
+                  :-==--::....::--===:
+                     .:--=======-:.
+
+
+COMPACT (24 cols) — TUI headers, prompts, status lines
+
+        :-====-:
+     .+**=----=**+.
+    -%+.        .+%-
+   :@-     ..     -@:
+   *#     .##.     #*
+   ::    :%@@%:    #+
+    #+  .******.  .:.
+    .*#-.      .-#=
+      :+**++++**+:
+         .::::.
+
+
+LOCKUP — compact mark + wordmark (about panel)
+
+        :-====-:           
+     .+**=----=**+.        PRISM VESICLE
+    -%+.        .+%-       
+   :@-     ..     -@:      
+   *#     .##.     #*      
+   ::    :%@@%:    #+      one beam in,
+    #+  .******.  .:.      the spectrum out
+    .*#-.      .-#=        
+      :+**++++**+:         
+         .::::.            
+
+
+COLOUR (optional ANSI layer)
+  Plain output stays legible without colour. On truecolour terminals,
+  tint by density: %#@ chars toward emerald #10b981 (beam) and
+  #34d399 (rim hot spots); =+* toward #047857; .:- toward #151916.
+  In the PRIMARY mark the beam row (left, with @) is the brand beam;
+  the faint right-hand fan may be tinted through the engine spectrum
+  #22d3ee #facc15 #fb923c #f43f5e #e879f9.
+  256-colour fallback: 35/34 (emerald deep), 48 (bright), 236 (dim),
+  39 220 214 209 207 (spectrum).

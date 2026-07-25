@@ -30,13 +30,13 @@ After the blueprint confirmation, pick **Confirm** at each phase gate, or type "
 
 ## Look at the artifact
 
-Files written to `workspace/` show up in the workspace sidebar. In the input box:
+Files written to `workspace/` show up in the Host sidebar. In the input box:
 
 ```
 /artifact
 ```
 
-lists artifacts (an `Artifacts:` list with numbers); `/artifact 1` (or a path) previews the first one in the conversation area.
+jumps to the Workspace page and opens the latest artifact in the viewer; `/artifact 1` (or a path) opens that specific one. You can also browse `workspace/` directly in the file tree.
 
 ## Validate: Module A
 
@@ -103,7 +103,7 @@ inventory: 纸杯、钢笔、旧记者证
 ## Checklist
 
 - [ ] There is a character card file under `workspace/`.
-- [ ] `/artifact` lists it and `/validate` shows `Validation passed` (or warnings you accept).
+- [ ] `/artifact` opens it in the Workspace page and `/validate` shows `Validation passed` (or warnings you accept).
 - [ ] You used "reject + explain" at least once at a phase gate.
 
 Next: build a [scenario card](./first-scenario-card.md) from this character.

@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Prism Vesicle — animated</title>
+  <desc id="desc">Animated variant: a light spot travels the membrane (14 s linear), the lit rim breathes (12 s linear), the beam drifts (10 s linear). Honors prefers-reduced-motion by holding the static frame.</desc>
+  <style>
+    .orbit { transform-origin: 512px 500px; animation: orbit 14s linear infinite; }
+    .breath { animation: breath 12s linear infinite; }
+    .beamdrift { animation: beamdrift 10s linear infinite; }
+    @keyframes orbit { to { transform: rotate(360deg); } }
+    @keyframes breath { 0%, 100% { opacity: .4; } 50% { opacity: .22; } }
+    @keyframes beamdrift { 0%, 100% { opacity: 1; } 50% { opacity: .78; } }
+    @media (prefers-reduced-motion: reduce) {
+      .orbit, .breath, .beamdrift { animation: none; }
+    }
+  </style>
+  <defs>
+    <!-- Interior volume of the vesicle: faint emerald depth, lit from upper-left. -->
+    <radialGradient id="vesicleFill" cx="50%" cy="50%" r="50%" fx="40%" fy="33%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity=".10"/>
+      <stop offset="45%" stop-color="#10b981" stop-opacity=".045"/>
+      <stop offset="80%" stop-color="#0d1110" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Fresnel rim: transparent centre, luminous edge band. -->
+    <radialGradient id="fresnel" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0"/>
+      <stop offset="70%" stop-color="#34d399" stop-opacity="0"/>
+      <stop offset="86%" stop-color="#34d399" stop-opacity=".13"/>
+      <stop offset="95%" stop-color="#6ee7b7" stop-opacity=".38"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity=".08"/>
+    </radialGradient>
+    <!-- Prism glass: lit edge upper-left, falling to dark lower-right. -->
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e6e8e6" stop-opacity=".14"/>
+      <stop offset="45%" stop-color="#a7f3d0" stop-opacity=".05"/>
+      <stop offset="100%" stop-color="#e6e8e6" stop-opacity=".015"/>
+    </linearGradient>
+    <!-- Incoming beam: fades in from the dark, brightest at the membrane. -->
+    <linearGradient id="beamGrad" gradientUnits="userSpaceOnUse" x1="-60" y1="565" x2="420" y2="565">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0"/>
+      <stop offset="55%" stop-color="#10b981" stop-opacity=".18"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity=".55"/>
+    </linearGradient>
+    <!-- Spectrum fan: hues across the spread, muted so they read as light, not stripes. -->
+    <linearGradient id="spectrumGrad" gradientUnits="userSpaceOnUse" x1="620" y1="600" x2="620" y2="870">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="25%" stop-color="#facc15"/>
+      <stop offset="48%" stop-color="#fb923c"/>
+      <stop offset="72%" stop-color="#f43f5e"/>
+      <stop offset="92%" stop-color="#e879f9"/>
+      <stop offset="100%" stop-color="#e879f9"/>
+    </linearGradient>
+    <!-- Length fade for the fan (used as a mask): strong at the face, gone at the edge. -->
+    <linearGradient id="fanFade" gradientUnits="userSpaceOnUse" x1="619" y1="700" x2="1120" y2="700">
+      <stop offset="0%" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="65%" stop-color="#fff" stop-opacity=".5"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="fanMask"><path d="M619 585 L1120 610 L1120 860 Z" fill="url(#fanFade)"/></mask>
+    <!-- Entry / exit flares. -->
+    <radialGradient id="flareIn" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#a7f3d0" stop-opacity=".8"/>
+      <stop offset="35%" stop-color="#34d399" stop-opacity=".28"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="flareOut" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d1fae5" stop-opacity=".65"/>
+      <stop offset="35%" stop-color="#a7f3d0" stop-opacity=".25"/>
+      <stop offset="100%" stop-color="#a7f3d0" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Caustic pool below the vesicle. -->
+    <radialGradient id="pool" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity=".10"/>
+      <stop offset="70%" stop-color="#10b981" stop-opacity=".03"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Corner vignette. -->
+    <radialGradient id="vignette" cx="50%" cy="48%" r="72%">
+      <stop offset="0%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="75%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity=".38"/>
+    </radialGradient>
+    <filter id="blur6" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="blur14" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="blur28" x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="28"/></filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#0d1110"/>
+
+  <!-- Caustic pool and ring beneath the vesicle. -->
+  <ellipse cx="512" cy="852" rx="300" ry="60" fill="url(#pool)"/>
+  <ellipse cx="512" cy="852" rx="262" ry="44" fill="none" stroke="#34d399" stroke-opacity=".07" stroke-width="4" filter="url(#blur14)"/>
+
+  <!-- Ambient phosphor halo behind the prism. -->
+  <circle cx="512" cy="540" r="210" fill="#10b981" opacity=".10" filter="url(#blur28)"/>
+
+  <!-- Vesicle body: interior volume + Fresnel rim. -->
+  <circle cx="512" cy="500" r="340" fill="url(#vesicleFill)"/>
+  <circle cx="512" cy="500" r="340" fill="url(#fresnel)"/>
+
+  <!-- Rim arcs: cool lit edge upper-left, warm violet-amber Fresnel lower-right.
+       Both break at the pores where the light passes. -->
+  <path d="M 217.6 330 A 340 340 0 0 1 806.4 330" class="breath" fill="none" stroke="#a7f3d0" stroke-opacity=".4" stroke-width="5" stroke-linecap="round" filter="url(#blur6)"/>
+  <path d="M 794.6 663.5 A 340 340 0 0 1 663.5 794.6" fill="none" stroke="#7c3aed" stroke-opacity=".22" stroke-width="6" stroke-linecap="round" filter="url(#blur6)"/>
+  <path d="M 663.5 794.6 A 340 340 0 0 1 512 840" fill="none" stroke="#d97706" stroke-opacity=".16" stroke-width="6" stroke-linecap="round" filter="url(#blur6)"/>
+
+  <!-- Traveling light: one slow spot circling the membrane. -->
+  <g class="orbit">
+    <circle cx="852" cy="500" r="30" fill="url(#flareIn)"/>
+  </g>
+
+  <!-- Incoming volumetric beam: wide soft body + brighter core. -->
+  <g class="beamdrift">
+    <path d="M -60 523 L -60 607 L 417 574 L 417 556 Z" fill="url(#beamGrad)" filter="url(#blur14)"/>
+    <path d="M -60 552 L -60 578 L 417 569 L 417 561 Z" fill="url(#beamGrad)" opacity=".8" filter="url(#blur6)"/>
+    <circle cx="178" cy="565" r="52" fill="url(#flareIn)"/>
+  </g>
+
+  <!-- Prism glass. -->
+  <g>
+    <path d="M 512 400 L 362 660 L 662 660 Z" fill="url(#glass)" stroke="#e6e8e6" stroke-opacity=".55" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M 512 400 L 362 660 L 662 660 Z" fill="none" stroke="#a7f3d0" stroke-opacity=".30" stroke-width="7" stroke-linejoin="round" filter="url(#blur6)"/>
+    <!-- Refracted path glowing inside the glass. -->
+    <path d="M 417 565 L 619 585" stroke="#6ee7b7" stroke-opacity=".5" stroke-width="10" stroke-linecap="round" filter="url(#blur14)"/>
+  </g>
+
+  <!-- Exit flare and spectrum fan. -->
+  <circle cx="612" cy="582" r="24" fill="url(#flareOut)"/>
+  <g mask="url(#fanMask)">
+    <path d="M619 585 L1120 610 L1120 860 Z" fill="url(#spectrumGrad)" opacity=".55" filter="url(#blur14)"/>
+    <path d="M619 585 L1120 660 L1120 800 Z" fill="url(#spectrumGrad)" opacity=".38" filter="url(#blur6)"/>
+    <!-- Undispersed leading edge: the beam's near-straight continuation. -->
+    <path d="M619 585 L1120 612" stroke="#a5f3fc" stroke-opacity=".45" stroke-width="14" stroke-linecap="round" filter="url(#blur6)"/>
+  </g>
+
+  <rect width="1024" height="1024" fill="url(#vignette)"/>
+</svg>

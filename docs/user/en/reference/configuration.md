@@ -15,6 +15,8 @@ All configuration files live in one user directory:
 
 Override with environment variables: `VESICLE_CONFIG_DIR` (the whole directory) or `VESICLE_PROVIDERS_FILE` (just the providers file; its directory is used).
 
+Display variables unrelated to the config directory: `VESICLE_REDUCED_MOTION=1` freezes the startup splash as a still frame, for motion-sensitive users or low-power terminals. `VESICLE_THEME=dark|light|auto` selects the interface theme: `auto` (the default) follows the terminal's own light/dark mode, while `dark`/`light` force a theme. Inside a session, `/theme dark|light|auto` switches temporarily with higher priority than the environment variable and is never persisted.
+
 Files in that directory:
 
 | File | Required | Contents |
@@ -24,6 +26,7 @@ Files in that directory:
 | `mcp.yaml` | No | Optional MCP tool servers |
 | `permissions.yaml` | No | Tool-approval default and the `shell_exec` switch (see [permissions](./permissions-and-security.md)) |
 | `quality.yaml` | No | Experimental Semantic Judge |
+| `settings.yaml` | No | User-level host settings (`editor:` for the Workspace `Ctrl+X` external editor; reserved for future settings) |
 | `assets/` | No | User-level asset overrides |
 | `VESICLE.md` / `VESICLE.<engine>.md` | No | Persistent Instructions (user-level, applies across all projects; see below) |
 

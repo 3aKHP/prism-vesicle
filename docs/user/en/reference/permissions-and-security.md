@@ -24,7 +24,7 @@ The model-visible file tools are hard-constrained:
 - Paths are **project-relative only**; absolute paths, `..` escapes, and symbolic-link traversal are rejected.
 - Writes are allowed only under these roots: `source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`.
   - `source_materials/` holds imported, researched, or model-generated source material; final artifacts go under the other four roots.
-- The artifact workbench sidebar indexes only `workspace/`, `novels/`, `reports/`, `test_runs/` (not `source_materials/`).
+- The Host sidebar's artifact list indexes only `workspace/`, `novels/`, `reports/`, `test_runs/` (not `source_materials/`).
 - `shell_exec` is the **one** explicit exception: it has host-user authority and intentionally bypasses path guards (see below).
 
 > Validators (character card / scenario card, and so on) are **advisory** signals: they report structural problems but never forcibly abort your turn.

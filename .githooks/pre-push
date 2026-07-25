@@ -2,3 +2,10 @@
 set -eu
 
 bun run lint
+
+# Git LFS — push the binary objects tracked via .gitattributes.
+command -v git-lfs >/dev/null 2>&1 || {
+	echo >&2 "git-lfs not found on PATH; this repo uses Git LFS for binary assets (see .gitattributes). Install it (https://git-lfs.com) and run 'git lfs install'."
+	exit 2
+}
+git lfs pre-push "$@"

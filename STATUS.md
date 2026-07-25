@@ -1,22 +1,27 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-alpha.4 release candidate (2026-07-24)._
+_Snapshot: 1.0.0-alpha.5 release candidate (2026-07-25)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-alpha.4**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.4 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-alpha.5**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.5 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10@10.1.0-rc.1`, verified 73-file inventory) | released |
+| Assets | Bundled V10 Harness (`prism-engine-v10@10.1.2`, verified 73-file inventory) | released |
 | Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
 | Providers | Multi-provider registry with generation defaults and capability/limits metadata | released |
 | Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | released |
 | Providers | Thinking-effort controls and reasoning-block visibility | released |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
+| TUI | Startup splash and empty-session hero derived from the brand ANSI mark; truecolour animation degrades to a static frame on 256-colour terminals and freezes under `VESICLE_REDUCED_MOTION=1` | released |
+| TUI | Static motif wiring: per-message role spectrum lanes, per-engine refraction accents, and ASCII-frame sidebar section labels | released |
+| TUI | Day/night theme: light palette with AA-checked accents, terminal auto-detection plus `/theme` and `VESICLE_THEME` overrides | released |
+| TUI | Two-page shell (Chat / Workspace, `Ctrl+O` and `/workspace`), page-aware header, sidebar renamed to Host | released |
+| TUI | Workspace page workbench: file tree (lazy load, hidden-file toggle, refresh), read-only viewer (numbered source, Markdown source/preview, image/binary metadata, 512 KB / 2000-line bounds), `Ctrl+P` fuzzy quick open, three-region `F6` focus model, a B3 editing kernel (per-file textarea undo, dirty + atomic save / save-as, find / goto / reload, dirty-on-close and overwrite confirms, external-modification detection by mtime, 8-buffer LRU pool), B4 file management + in-page validation (`a`/`A`/`m`/`c`/`d` create/rename/copy/delete with recycle-bin trash, ops + delete confirms, buffer rekey on rename; `v` findings panel with anchor-based line jumps, auto-validate on open/save, shared `ARTIFACT_VALIDATOR_NAMES`), and B5 external-editor handoff (`Ctrl+X` suspends the renderer, opens the file via `$VESICLE_EDITOR` / `settings.yaml` / `$VISUAL` / `$EDITOR` / platform fallback, resumes, reload + revalidate on return; dirty gate); `/workspace [path]` locates and `/artifact` opens in the viewer | released |
 | TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | released |
 | TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | released |
 | Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | released |
@@ -32,7 +37,7 @@ Release candidate: **1.0.0-alpha.4**. The `State` column tracks the candidate's 
 | Agents | Foreground/background SubAgents with contract-bound Harness delegation | released |
 | Stage | First-party consumer RP bootstrap Engine (`/stage`) | released |
 | Validators | Module A, Module B v9, runtime packet, and evaluate-report checks | released |
-| Workbench | `/artifact` discovery, preview, validation, and revision | released |
+| Workbench | `/artifact` discovery, Workspace-page preview, validation, and revision | released |
 | Quality | Output Quality Guard: deterministic findings, document metrics, durable decisions, and experimental Semantic Judge/rewrite-policy loader | released |
 | Release | Standalone Windows PE and Linux ELF binaries | released |
 | Release | npm/Bun package with pinned runtime dependencies | released |
@@ -216,7 +221,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Assets & Harness
 
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
-- With no project lock, Vesicle automatically verifies and activates the bundled `prism-engine-v10@10.1.0-rc.1`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume.
+- With no project lock, Vesicle automatically verifies and activates the bundled `prism-engine-v10@10.1.2`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume.
 - See [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) for the bundled inventory, host extension layer, lineage, and update rules, and [`docs/dev/STYLE.md` § Managed Harness Packs](./docs/dev/STYLE.md#managed-harness-packs) for the verification and contract boundary.
 
 ### Persistent Instructions

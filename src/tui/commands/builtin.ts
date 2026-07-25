@@ -34,12 +34,12 @@ import {
   stageCommandCompletion,
 } from "./argument-completion";
 import {
-  renderArtifactList,
   renderValidationNotice,
   renderEngineList,
 } from "./render";
 import { INSTRUCTION_COMBINED_BUDGET_BYTES, resolveEffectiveSelection } from "../../core/instructions";
 import type { EffectiveInstructionSelection } from "../../core/instructions";
+import { setThemePreference, themeMode, themePreference } from "../theme";
 
 const HELP_TEXT = [
   "Commands:",
@@ -53,9 +53,11 @@ const HELP_TEXT = [
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
+  "  /theme [dark|light|auto] show or set the colour theme (auto follows the terminal)",
+  "  /workspace [path] open the Workspace page, optionally locating a file or directory",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
   "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
-  "  /artifact [n|path] list or preview generated artifacts",
+  "  /artifact [n|path] open artifacts in the Workspace page (no args = latest)",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
   "  /btw <question>   ask a temporary side question without interrupting the turn",
@@ -414,34 +416,88 @@ export const builtinCommands: Command[] = [
   },
 
   {
-    name: "artifact",
-    busyBehavior: afterToolRound,
-    description: "List artifacts or preview one in the message stream",
-    usage: "/artifact [n|path]",
-    completion: artifactCommandCompletion("artifact"),
+    name: "theme",
+    busyBehavior: immediate,
+    description: "Show or set the colour theme",
+    usage: "/theme dark|light|auto",
+    completion: fixedCommandCompletion("theme"),
     async run(ctx, args, raw) {
-      const entries = await ctx.refreshArtifacts();
       if (!args) {
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: renderArtifactList(entries) }]);
+        ctx.setMessages((prev) => [
+          ...prev,
+          { role: "user", content: raw },
+          { role: "system", content: `Theme: ${themePreference()} (resolved: ${themeMode()}). Use /theme dark|light|auto — auto follows the terminal.` },
+        ]);
         return;
       }
-      const artifact = resolveArtifactTarget(entries, args);
-      if (!artifact) {
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `No artifact matches "${args}". Use /artifact to list.` }]);
+      const mode = args.trim().toLowerCase();
+      if (mode !== "dark" && mode !== "light" && mode !== "auto") {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /theme dark|light|auto" }]);
         return;
       }
-      const selected = await ctx.loadArtifactPreview(artifact);
-      ctx.setSelectedArtifact(selected);
+      setThemePreference(mode);
+      ctx.setStatus(`theme ${mode}`);
+      ctx.recordActivity({ kind: "system", text: `theme ${mode}` });
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${mode}${mode === "auto" ? ` (terminal reports ${themeMode()})` : ""}.` }]);
+    },
+  },
+
+  {
+    name: "workspace",
+    busyBehavior: immediate,
+    description: "Open the Workspace page, optionally locating a file or directory",
+    usage: "/workspace [path]",
+    async run(ctx, args, raw) {
+      const located = await ctx.openWorkspaceTarget(args.trim() || undefined);
+      ctx.setStatus("workspace page");
       ctx.setMessages((prev) => [
         ...prev,
         { role: "user", content: raw },
         {
           role: "system",
-          kind: "artifact",
-          content: selected.preview,
-          artifactPath: selected.path,
-          artifactTruncated: selected.truncated,
+          content: args.trim()
+            ? located
+              ? `Opened ${args.trim()} in the Workspace page.`
+              : `Workspace page open — "${args.trim()}" was not found in the project.`
+            : "Workspace page open. Ctrl+O switches pages, Ctrl+P quick open, F6 cycles regions.",
         },
+      ]);
+    },
+  },
+
+  {
+    name: "artifact",
+    busyBehavior: afterToolRound,
+    description: "Open artifacts in the Workspace page (no args = latest)",
+    usage: "/artifact [n|path]",
+    completion: artifactCommandCompletion("artifact"),
+    async run(ctx, args, raw) {
+      const entries = await ctx.refreshArtifacts();
+      if (!args) {
+        const latest = entries[0];
+        await ctx.openWorkspaceTarget(latest?.path);
+        ctx.setMessages((prev) => [
+          ...prev,
+          { role: "user", content: raw },
+          {
+            role: "system",
+            content: latest
+              ? `Opened latest artifact ${latest.path} in the Workspace page.`
+              : "Workspace page open — no artifacts yet.",
+          },
+        ]);
+        return;
+      }
+      const artifact = resolveArtifactTarget(entries, args);
+      if (!artifact) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `No artifact matches "${args}". Use /artifact to open the latest.` }]);
+        return;
+      }
+      await ctx.openWorkspaceTarget(artifact.path);
+      ctx.setMessages((prev) => [
+        ...prev,
+        { role: "user", content: raw },
+        { role: "system", content: `Opened ${artifact.path} in the Workspace page.` },
       ]);
     },
   },

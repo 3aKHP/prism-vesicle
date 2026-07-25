@@ -49,7 +49,7 @@ bun test
 bun run dev
 ```
 
-`bun run hooks:install` selects the tracked `.githooks/` directory for this checkout. Its pre-push hook runs `bun run lint` and blocks the push when Biome reports a diagnostic.
+`bun run hooks:install` selects the tracked `.githooks/` directory for this checkout. Its pre-push hook runs `bun run lint` (blocking the push when Biome reports a diagnostic) and then `git lfs pre-push` to upload any binary assets tracked via Git LFS. Binary assets (images, video, audio, fonts) are routed through Git LFS repo-wide by `.gitattributes`, so contributors need `git-lfs` installed — run `git lfs install` once after cloning so the smudge/clean filter and the push upload step work.
 
 The TUI reads provider settings from:
 

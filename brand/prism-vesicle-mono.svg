@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Prism Vesicle — monochrome silhouette</title>
+  <desc id="desc">Single-colour silhouette of the Prism Vesicle mark: the membrane ring broken at the two pores, the prism solid inside. Inherits currentColor. For favicons, small sizes, engraving, and ANSI derivation.</desc>
+  <g fill="currentColor">
+    <!-- Membrane ring, open at the entry pore (~169°) and the exit pore (~25°). -->
+    <path d="M 790.5 695 A 340 340 0 0 1 186.7 599.4" fill="none" stroke="currentColor" stroke-width="60"/>
+    <path d="M 173.3 529.6 A 340 340 0 1 1 833.5 610.7" fill="none" stroke="currentColor" stroke-width="60"/>
+    <!-- Prism. -->
+    <path d="M 512 400 L 362 660 L 662 660 Z"/>
+  </g>
+</svg>

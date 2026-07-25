@@ -15,6 +15,8 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 
 可用环境变量覆盖:`VESICLE_CONFIG_DIR`(整个目录)或 `VESICLE_PROVIDERS_FILE`(只指定 providers 文件,取其所在目录)。
 
+与配置目录无关的显示环境变量:`VESICLE_REDUCED_MOTION=1` 关闭启动画面的动画(冻结为静帧),适合对动态画面敏感或低性能终端。`VESICLE_THEME=dark|light|auto` 指定界面主题:`auto`(默认)跟随终端自身的明暗模式,`dark`/`light` 强制对应主题;会话内也可用 `/theme dark|light|auto` 临时切换,优先级高于环境变量,且不会持久化。
+
 该目录下的文件:
 
 | 文件 | 必需 | 内容 |
@@ -24,6 +26,7 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 | `mcp.yaml` | 否 | 可选的 MCP 工具服务器 |
 | `permissions.yaml` | 否 | 工具批准默认与 `shell_exec` 开关(见[权限](./permissions-and-security.md)) |
 | `quality.yaml` | 否 | 实验性 Semantic Judge |
+| `settings.yaml` | 否 | 用户级宿主设置(`editor:` 用于 Workspace 页 `Ctrl+X` 外部编辑器;为后续设置项预留) |
 | `assets/` | 否 | 用户级资源覆盖 |
 | `VESICLE.md` / `VESICLE.<engine>.md` | 否 | 持久化指令(用户级,跨所有项目生效;见下文) |
 
