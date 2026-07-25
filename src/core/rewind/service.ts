@@ -6,6 +6,7 @@ import {
   type FileCheckpointDiffStats,
 } from "../checkpoints/file-history";
 import {
+  FAILED_TURN_KIND,
   loadSessionSnapshot,
   type SessionRecord,
   type SessionSnapshot,
@@ -25,6 +26,8 @@ export type RewindPoint = {
   diffStats?: FileCheckpointDiffStats;
   images?: VesicleImageAttachment[];
   checkpointTainted?: true;
+  /** This prompt's turn ended without an assistant reply (provider failure). */
+  failedTurn?: true;
 };
 
 export type ConversationRewind = {
@@ -42,6 +45,17 @@ export async function listRewindPoints(
   const snapshot = await loadSessionSnapshot(rootDir, sessionId, options);
   const points: RewindPoint[] = [];
   const selectable = snapshot.records.filter(isSelectableUserRecord);
+  // A failed-turn marker invalidates the most recent selectable user prompt at
+  // or before it, so the picker can show that turn as a no-reply ghost.
+  const failedTurnUuids = new Set<string>();
+  for (let index = 0; index < snapshot.records.length; index++) {
+    if (snapshot.records[index]!.metadata?.kind !== FAILED_TURN_KIND) continue;
+    let ownerIndex = -1;
+    for (let back = index - 1; back >= 0; back--) {
+      if (isSelectableUserRecord(snapshot.records[back]!)) { ownerIndex = back; break; }
+    }
+    if (ownerIndex >= 0) failedTurnUuids.add(snapshot.records[ownerIndex]!.uuid);
+  }
   for (let index = 0; index < selectable.length; index++) {
     const record = selectable[index]!;
     const next = selectable[index + 1];
@@ -63,6 +77,7 @@ export async function listRewindPoints(
       ...(turnDiffStats ? { turnDiffStats } : {}),
       ...(diffStats ? { diffStats } : {}),
       ...(checkpointTainted ? { checkpointTainted: true as const } : {}),
+      ...(failedTurnUuids.has(record.uuid) ? { failedTurn: true as const } : {}),
       ...(parseImageAttachments(record.metadata?.images)
         ? { images: parseImageAttachments(record.metadata?.images) }
         : {}),

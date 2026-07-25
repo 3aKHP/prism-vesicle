@@ -21,6 +21,39 @@ export type HistoryProjection = {
   harness?: HarnessRuntimeIdentity;
 };
 
+/**
+ * Host-only marker appended after a user turn whose provider round never reached
+ * a successful assistant reply. `projectSessionHistory` reads it as the cue to
+ * drop the failed turn's input from provider-visible history so a resumed or
+ * resent turn cannot send consecutive same-role user messages (Anthropic
+ * Messages requires strict user/assistant alternation). The failed user record
+ * stays in `records` for the UI transcript and `/rewind`.
+ */
+export const FAILED_TURN_KIND = "failed-turn";
+
+/**
+ * User-role records that carry durable provider context from a prior host
+ * operation (compaction, SubAgent delivery, engine handoff, quality rewrite).
+ * `dropFailedTurnInput` keeps these even when a later turn fails, because they
+ * are not the failed turn's input and survive as conversation context.
+ */
+const durableUserContextKinds = new Set(["compact-summary", "subagent-results", "engine-handoff", "quality-rewrite-feedback"]);
+
+/**
+ * Remove the trailing user messages that belong to a failed turn. A failed turn
+ * appends no assistant reply, so its input is a run of trailing user records
+ * (the prompt plus any host-injected user context such as background-process
+ * results). Durable provider context kinds are preserved.
+ */
+function dropFailedTurnInput(messages: ResumedMessage[]): void {
+  while (messages.length > 0) {
+    const last = messages[messages.length - 1]!;
+    if (last.role !== "user") break;
+    if (last.kind && durableUserContextKinds.has(last.kind)) break;
+    messages.pop();
+  }
+}
+
 /** Projects durable records into provider history plus host-only session preferences. */
 export function projectSessionHistory(records: SessionRecord[]): HistoryProjection {
   const messages: ResumedMessage[] = [];
@@ -50,6 +83,9 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         assets = parseAssetFingerprint(record.metadata?.assets);
         harness = readHarnessRuntimeIdentity(record.metadata?.harness);
         skippedFirstSystem = true;
+      }
+      if (record.metadata?.kind === FAILED_TURN_KIND) {
+        dropFailedTurnInput(messages);
       }
       continue;
     }

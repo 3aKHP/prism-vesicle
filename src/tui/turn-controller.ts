@@ -1,7 +1,7 @@
 import { runPrompt } from "../core/agent-loop/run";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
-import { loadSessionSnapshot } from "../core/session/store";
+import { createSessionStore, loadSessionSnapshot, FAILED_TURN_KIND } from "../core/session/store";
 import { listRewindPoints, rewindConversation } from "../core/rewind/service";
 import type { VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerElement } from "./composer";
@@ -140,6 +140,14 @@ export function createTurnController(options: TurnControllerOptions) {
         options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
         if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
       }
+      // Mark the failed turn so a resume or resend never re-sends the dangling
+      // user prompt as a consecutive same-role message (#102). Best-effort: a
+      // marking failure must not mask the original error. Read the session id
+      // fresh: a new session is only assigned during runPrompt (onSessionReady),
+      // so the `id` captured at the top of this function is still undefined for
+      // a first-turn failure on a new session.
+      const currentSessionId = options.sessionId();
+      if (currentSessionId) await markFailedUserTurn(currentSessionId);
       reportError(error);
     } finally {
       options.setBusy(false);
@@ -248,6 +256,26 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setStreamingReasoning("");
     options.setLastDisplayedToolAssistantContent(null);
     options.recordActivity({ kind: "system", text: "request interrupted" });
+  }
+
+  /**
+   * Append a host-only `failed-turn` marker when a fresh user turn ends without
+   * an assistant reply. `projectSessionHistory` reads the marker to drop the
+   * failed prompt from provider-visible history, so resuming or resending does
+   * not produce consecutive same-role user messages. Only marks when the
+   * trailing session record is a user (the first provider round failed before
+   * any assistant/tool reply); a mid-loop failure already leaves a valid
+   * alternation tail and is left alone.
+   */
+  async function markFailedUserTurn(sessionId: string): Promise<void> {
+    try {
+      const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: false });
+      if (snapshot.records.at(-1)?.role !== "user") return;
+      const store = await createSessionStore(options.rootDir, sessionId);
+      await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
+    } catch {
+      // Best-effort: never mask the original turn error.
+    }
   }
 
   async function restoreInterruptedPrompt(

@@ -2,7 +2,7 @@ import { mkdtemp, } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
-import { createSessionStore, loadSessionMessages, } from "../../../src/core/session/store";
+import { createSessionStore, FAILED_TURN_KIND, loadSessionMessages, } from "../../../src/core/session/store";
 
 describe("session: message history", () => {
   test("loadSessionMessages reconstructs user/assistant/tool turns and skips system records", async () => {
@@ -150,6 +150,50 @@ describe("session: message history", () => {
     const messages = await loadSessionMessages(rootDir, "2026-05-01T00-00-00-000Z-eeeeeeee");
     // No extra synthetic tool result should be appended.
     expect(messages.filter((m) => m.role === "tool")).toHaveLength(1);
+  });
+
+  // A provider failure leaves the user prompt persisted with no assistant reply
+  // (#98). The host appends a failed-turn marker so projection can drop that
+  // prompt from provider-visible history; otherwise resume + a new send would
+  // emit consecutive same-role user messages, which Anthropic Messages rejects
+  // (#102).
+  test("drops a failed user turn from resumed provider history so resend cannot double up users", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-failed-turn-"));
+    const store = await createSessionStore(rootDir, "failed-turn");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "earlier prompt" });
+    await store.append({ role: "assistant", content: "earlier reply" });
+    await store.append({ role: "user", content: "refactor this" });
+    await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
+
+    const messages = await loadSessionMessages(rootDir, "failed-turn");
+    expect(messages.map((m) => m.content)).toEqual(["earlier prompt", "earlier reply"]);
+  });
+
+  test("keeps the resent user + assistant after a failed turn marker", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-failed-resend-"));
+    const store = await createSessionStore(rootDir, "failed-resend");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "refactor this" });
+    await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
+    await store.append({ role: "user", content: "refactor this" });
+    await store.append({ role: "assistant", content: "done" });
+
+    const messages = await loadSessionMessages(rootDir, "failed-resend");
+    expect(messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(messages[0]!.content).toBe("refactor this");
+  });
+
+  test("preserves durable compact-summary context across a failed turn marker", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-failed-summary-"));
+    const store = await createSessionStore(rootDir, "failed-summary");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "[conversation summary]\n earlier work", metadata: { kind: "compact-summary" } });
+    await store.append({ role: "user", content: "refactor this" });
+    await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
+
+    const messages = await loadSessionMessages(rootDir, "failed-summary");
+    expect(messages.map((m) => m.content)).toEqual(["[conversation summary]\n earlier work"]);
   });
 
 });
