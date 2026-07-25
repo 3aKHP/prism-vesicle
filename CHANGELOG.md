@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Unified clipboard-image paste input.** Raw `Ctrl+V` keyboard events now enter the existing clipboard-image attachment flow while Alt/Option+V remains available for compatibility, including WSL terminals that inject the `Ctrl+V` control byte. Terminal text and bracketed paste still use the independent text-paste route, and active modal, picker, gate, and Workspace surfaces retain keyboard ownership.
 - **Workspace file safety follow-ups.** External-change detection now compares both mtime and inode identity, so a same-timestamp replacement still asks before overwrite; project-relative preview/stat routes share the editor's absolute/traversal/NUL guard; symlinks remain metadata-only instead of loading their targets; and keyboard input stays owned while a dirty-buffer save/close action is in flight. Tree height wiring now attaches explicitly after mount rather than relying on ref/effect timing.
 
 ## [1.0.0-alpha.5] - 2026-07-25

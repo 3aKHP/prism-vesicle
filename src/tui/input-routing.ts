@@ -148,7 +148,7 @@ export function useInputRouting(options: InputRoutingOptions): void {
       consumeKey(key);
       return;
     }
-    if (key.name?.toLowerCase() === "v" && (key.meta || key.option)) {
+    if (isClipboardImagePasteKey(key)) {
       consumeKey(key);
       void options.pasteClipboardImage();
       return;
@@ -204,6 +204,12 @@ export function createRoutingKey(rawKey: TuiKeyEvent): TuiKeyEvent {
 export function consumeKey(key: TuiKeyEvent): void {
   key.preventDefault?.();
   key.stopPropagation?.();
+}
+
+export function isClipboardImagePasteKey(key: TuiKeyEvent): boolean {
+  return key.name?.toLowerCase() === "v"
+    && key.shift !== true
+    && (key.ctrl === true || key.meta === true || key.option === true);
 }
 
 function isComposerDirectionKey(key: TuiKeyEvent): boolean {

@@ -96,7 +96,7 @@ describe("TUI reactivity static guard", () => {
   test("input routing shares bottom-surface priority and blocks hidden-composer paste", async () => {
     const source = await readFile(join(import.meta.dir, "..", "..", "..", "src", "tui", "input-routing.ts"), "utf8");
     const modeResolution = source.indexOf("resolveBottomSurfaceMode({");
-    const imagePaste = source.indexOf('key.name?.toLowerCase() === "v" && (key.meta || key.option)');
+    const imagePaste = source.indexOf("if (isClipboardImagePasteKey(key))");
     const composerRouting = source.indexOf("if (options.handleComposerKey(key))");
 
     expect(modeResolution).toBeGreaterThan(-1);

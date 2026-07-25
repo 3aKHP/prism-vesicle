@@ -55,7 +55,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | Esc | Interrupt the current provider or tool operation and immediately process the next queued input |
 | Double Esc (empty box, within 800ms) | Open the rewind picker |
 | Double Esc (box has text) | Save the draft and clear it, without sending |
-| Alt+V | Paste a clipboard image (only vision-capable models receive it) |
+| Ctrl+V / Alt/Option+V | Paste a clipboard image (only vision-capable models receive it; terminal text paste still inserts text normally) |
 | Ctrl+Q | Exit Vesicle |
 
 After a complete tool round, queued messages are added to the active conversation before its next provider request. If the loop completes without another tool boundary, the next queued input is processed immediately. Slash commands declare their own busy-turn behavior: `/help`, `/context`, `/reasoning`, `/theme`, `/workspace`, read-only settings forms, and `/agents` inspection or stop run immediately; `/artifact` and `/validate` wait for the current tool round; configuration changes, pickers, session commands, `/compact`, `/init`, and `/agents retry` wait for the Agent Loop. A picker pauses the remaining queue, and switching or resetting the session clears it.

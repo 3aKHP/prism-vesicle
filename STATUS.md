@@ -27,7 +27,7 @@ Release candidate: **1.0.0-alpha.5**. The `State` column tracks the candidate's 
 | Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | released |
 | Instructions | `/init [--force] [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); refuses an existing file unless `--force` explicitly backs it up and replaces it | released |
 | Instructions | `read_instructions` / `update_instructions` tools (non-Stage Engines): enum-target read/write/delete of Persistent Instructions with optimistic concurrency, atomic write, previous-state backup, and 32 KiB budget validation | released |
-| TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
+| TUI | Clipboard image attachments (`Ctrl+V`, with Alt/Option+V compatibility; vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
 | Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | released |
