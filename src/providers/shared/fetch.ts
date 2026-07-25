@@ -1,4 +1,5 @@
 import { ProviderError } from "./errors";
+import type { ProviderRetryInfo } from "./types";
 
 export type ProviderRetryPolicy = {
   maxRetries: number;
@@ -14,6 +15,7 @@ type ProviderFetchOptions = {
   now?: () => number;
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   attemptHeaders?: (retryCount: number) => HeadersInit;
+  onRetry?: (info: ProviderRetryInfo) => void;
 };
 
 const defaultRetryPolicy: ProviderRetryPolicy = {
@@ -46,6 +48,7 @@ export async function fetchProvider(
       if (!isRetryableStatus(response.status) || retries >= policy.maxRetries) return response;
 
       const delayMs = retryDelayMs(response, retries, policy, random, now);
+      options.onRetry?.({ attempt: retries + 1, maxRetries: policy.maxRetries, delayMs, status: response.status });
       await response.body?.cancel().catch(() => undefined);
       await sleep(delayMs, signal);
       retries += 1;
@@ -66,7 +69,9 @@ export async function fetchProvider(
         );
       }
 
-      await sleep(exponentialDelayMs(retries, policy, random), signal);
+      const delayMs = exponentialDelayMs(retries, policy, random);
+      options.onRetry?.({ attempt: retries + 1, maxRetries: policy.maxRetries, delayMs });
+      await sleep(delayMs, signal);
       retries += 1;
     }
   }
