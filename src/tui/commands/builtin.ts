@@ -39,7 +39,7 @@ import {
 } from "./render";
 import { INSTRUCTION_COMBINED_BUDGET_BYTES, resolveEffectiveSelection } from "../../core/instructions";
 import type { EffectiveInstructionSelection } from "../../core/instructions";
-import { setThemePreference, themeMode, themePreference } from "../theme";
+import { setThemePreference, themeMode, themePreference, themeSource, type ThemePreference } from "../theme";
 
 const HELP_TEXT = [
   "Commands:",
@@ -53,7 +53,7 @@ const HELP_TEXT = [
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
-  "  /theme [dark|light|auto] show or set the colour theme (auto follows the terminal)",
+  "  /theme [dark|light|default|auto] show or set the colour theme (default follows the terminal; auto follows the clock)",
   "  /workspace [path] open the Workspace page, optionally locating a file or directory",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
   "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
@@ -419,26 +419,28 @@ export const builtinCommands: Command[] = [
     name: "theme",
     busyBehavior: immediate,
     description: "Show or set the colour theme",
-    usage: "/theme dark|light|auto",
+    usage: "/theme [dark|light|default|auto]",
     completion: fixedCommandCompletion("theme"),
     async run(ctx, args, raw) {
       if (!args) {
         ctx.setMessages((prev) => [
           ...prev,
           { role: "user", content: raw },
-          { role: "system", content: `Theme: ${themePreference()} (resolved: ${themeMode()}). Use /theme dark|light|auto — auto follows the terminal.` },
+          { role: "system", content: renderThemeStatus() },
         ]);
         return;
       }
-      const mode = args.trim().toLowerCase();
-      if (mode !== "dark" && mode !== "light" && mode !== "auto") {
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /theme dark|light|auto" }]);
+      const parsed = parseThemeArgs(args);
+      if ("error" in parsed) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: parsed.error }]);
         return;
       }
-      setThemePreference(mode);
-      ctx.setStatus(`theme ${mode}`);
-      ctx.recordActivity({ kind: "system", text: `theme ${mode}` });
-      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${mode}${mode === "auto" ? ` (terminal reports ${themeMode()})` : ""}.` }]);
+      if (parsed.kind === "override") {
+        setThemePreference(parsed.pref, "session");
+        ctx.setStatus(`theme ${parsed.pref}`);
+        ctx.recordActivity({ kind: "system", text: `theme ${parsed.pref}` });
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${parsed.pref} for this session.` }]);
+      }
     },
   },
 
@@ -668,6 +670,38 @@ function renderInstructionsNotice(selection: EffectiveInstructionSelection): str
     lines.push(`  ! ${diagnostic.logicalName} [${diagnostic.scope}] ${diagnostic.kind}: ${diagnostic.message}`);
   }
   lines.push("  Instructions customize work within host capabilities; they cannot add tools, permissions, gates, validators, or filesystem authority.");
+  return lines.join("\n");
+}
+
+const THEME_PREFERENCES: readonly ThemePreference[] = ["dark", "light", "default", "auto"];
+const THEME_USAGE = "Usage: /theme [dark|light|default|auto]. default follows the terminal; auto follows the clock (light 07:00–19:00).";
+
+type ThemeArgs = { kind: "override"; pref: ThemePreference } | { kind: "status" } | { error: string };
+
+/** Parse `/theme` override form. Persist/unset-project are added with project persistence (#86). */
+function parseThemeArgs(args: string): ThemeArgs {
+  const tokens = args.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return { kind: "status" };
+  if (tokens.length !== 1) return { error: THEME_USAGE };
+  const pref = tokens[0]!.toLowerCase();
+  if (!THEME_PREFERENCES.includes(pref as ThemePreference)) return { error: THEME_USAGE };
+  return { kind: "override", pref: pref as ThemePreference };
+}
+
+function renderThemeStatus(): string {
+  const pref = themePreference();
+  const lines = [
+    "Theme",
+    `preference: ${pref}`,
+    `source: ${themeSource()}`,
+    `resolved: ${themeMode()}`,
+  ];
+  if (pref === "default") {
+    lines.push("default follows the terminal's own light/dark mode (dark until a terminal reports).");
+  } else if (pref === "auto") {
+    lines.push("auto follows the clock: light 07:00–19:00 local, dark otherwise.");
+  }
+  lines.push("Use /theme dark|light|default|auto to change this session.");
   return lines.join("\n");
 }
 

@@ -3,7 +3,8 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
-import { engineAccent, palette, reportTerminalThemeMode, setThemePreference } from "./theme";
+import { engineAccent, palette, reportTerminalThemeMode, setThemePreference, themePreference } from "./theme";
+import { createThemeScheduler } from "./theme-runtime";
 import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
@@ -152,17 +153,32 @@ export function App(props: AppProps = {}) {
   // conversation turns; system notices (e.g. the YOLO warning) render above it.
   const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system" && !message.kind));
 
-  // Day/night theme: the env preference wins at startup; otherwise follow the
-  // terminal's own mode (eager report, async detection, then live events).
-  // The shell re-renders reactively whenever the resolved mode changes.
+  // Day/night theme. The effective preference domain is dark/light/default/auto
+  // (default follows the terminal; auto is local-time [07:00, 19:00)). Startup
+  // resolves VESICLE_THEME when it names one of the four values; otherwise the
+  // built-in `default` follows the terminal's own mode (eager report, async
+  // detection, then live events). An invalid env value falls back to built-in
+  // default rather than being silently reinterpreted as auto.
   const requestedTheme = process.env.VESICLE_THEME?.trim().toLowerCase();
-  setThemePreference(requestedTheme === "dark" || requestedTheme === "light" ? requestedTheme : "auto");
+  const envTheme = requestedTheme === "dark" || requestedTheme === "light"
+      || requestedTheme === "default" || requestedTheme === "auto"
+    ? requestedTheme
+    : "default";
+  setThemePreference(envTheme, requestedTheme && envTheme !== "default" ? "env" : "builtin");
   const reportedTheme = renderer.themeMode;
   if (reportedTheme) reportTerminalThemeMode(reportedTheme);
   void renderer.waitForThemeMode(500).then((detected) => {
     if (detected) reportTerminalThemeMode(detected);
   });
   renderer.on("theme_mode", reportTerminalThemeMode);
+  // One owner for the `auto` boundary timer. It re-evaluates whenever the
+  // effective preference changes and cancels itself when leaving `auto`.
+  const themeScheduler = createThemeScheduler();
+  createEffect(() => {
+    themePreference();
+    themeScheduler.schedule();
+  });
+  onCleanup(() => themeScheduler.dispose());
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
