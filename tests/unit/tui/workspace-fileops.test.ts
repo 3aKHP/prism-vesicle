@@ -82,6 +82,11 @@ describe("fileops move / copy", () => {
     await removeFile(root, "notes.txt");
     expect(await entryExists(root, "notes.txt")).toBe(false);
   });
+
+  test("removeFile clearly rejects a directory overwrite without deleting it", async () => {
+    await expect(removeFile(root, "workspace/cards")).rejects.toThrow(/directory and cannot be overwritten/);
+    expect(await entryExists(root, "workspace/cards/mira.md")).toBe(true);
+  });
 });
 
 describe("fileops trash (recycle bin)", () => {
