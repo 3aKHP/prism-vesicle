@@ -34,7 +34,13 @@ Flags:
   -v, --version                    print the Prism Vesicle version and exit
   -h, --help                       print this usage and exit
   -r, --resume                     open the session picker on startup
+      --dark                       launch the TUI/Setup with the dark theme (process-scoped)
+      --light                      launch the TUI/Setup with the light theme (process-scoped)
       --dangerously-skip-permissions  skip approval prompts for this process only
+
+The --dark/--light flags apply only to the bare TUI launch, \`launch\`, \`dev\`,
+and \`setup\` commands. They are an initial preference; /theme may override them
+after launch. They are rejected by --version/--help and non-interactive commands.
 
 Commands:
   setup, launch, doctor, once, prompt, quality, debug, assets, dev`;
@@ -48,46 +54,63 @@ async function configureTreeSitterRuntime(): Promise<void> {
   configureTreeSitterWorkerPath();
 }
 
-async function launchProject(projectDirectory: string, dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
+async function launchProject(
+  projectDirectory: string,
+  dangerouslySkipPermissions: boolean,
+  resume: boolean,
+  themePreference?: "dark" | "light",
+): Promise<void> {
   const { launchVesicleInProject } = await import("./launch");
   // Forward the process-scoped flags to the spawned child so a project-dir
   // launch preserves them: the child re-parses its own argv.
   const args: string[] = [];
   if (dangerouslySkipPermissions) args.push("--dangerously-skip-permissions");
   if (resume) args.push("--resume");
+  if (themePreference === "dark") args.push("--dark");
+  if (themePreference === "light") args.push("--light");
   process.exitCode = await launchVesicleInProject(projectDirectory, isCompiledBinary, args);
 }
 
-async function launchProjectArgument(input: string, dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
+async function launchProjectArgument(
+  input: string,
+  dangerouslySkipPermissions: boolean,
+  resume: boolean,
+  themePreference?: "dark" | "light",
+): Promise<void> {
   const { resolveProjectDirectory } = await import("./project-target");
-  await launchProject(await resolveProjectDirectory(input), dangerouslySkipPermissions, resume);
+  await launchProject(await resolveProjectDirectory(input), dangerouslySkipPermissions, resume, themePreference);
 }
 
-async function launchProjectArgumentOrReport(input: string, dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
+async function launchProjectArgumentOrReport(
+  input: string,
+  dangerouslySkipPermissions: boolean,
+  resume: boolean,
+  themePreference?: "dark" | "light",
+): Promise<void> {
   try {
-    await launchProjectArgument(input, dangerouslySkipPermissions, resume);
+    await launchProjectArgument(input, dangerouslySkipPermissions, resume, themePreference);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
 }
 
-async function runSetupFlow(dangerouslySkipPermissions: boolean): Promise<void> {
+async function runSetupFlow(dangerouslySkipPermissions: boolean, themePreference?: "dark" | "light"): Promise<void> {
   if (!isCompiledBinary && !isNpmBundle) {
     await loadOpenTuiPreload();
   }
   const { runGuidedSetup } = await import("../setup");
-  const result = await runGuidedSetup();
-  if (result.launch && result.projectDirectory) await launchProject(result.projectDirectory, dangerouslySkipPermissions, false);
+  const result = await runGuidedSetup({ themePreference });
+  if (result.launch && result.projectDirectory) await launchProject(result.projectDirectory, dangerouslySkipPermissions, false, themePreference);
 }
 
-async function startTui(dangerouslySkipPermissions: boolean, resume: boolean): Promise<void> {
+async function startTui(dangerouslySkipPermissions: boolean, resume: boolean, themePreference?: "dark" | "light"): Promise<void> {
   if (!isCompiledBinary && !isNpmBundle) {
     await loadOpenTuiPreload();
   }
   await configureTreeSitterRuntime();
   const { runTui } = await import("../tui");
-  await runTui({ dangerouslySkipPermissions, resume });
+  await runTui({ dangerouslySkipPermissions, resume, themePreference });
 }
 
 const parsed = parseCliInvocation(process.argv.slice(2));
@@ -110,9 +133,9 @@ switch (parsed.kind) {
     // A null path is the bare `vesicle` / `vesicle --` form: start the TUI in
     // the invocation cwd, in process. An explicit path spawns into that dir.
     if (parsed.projectPath === null) {
-      await startTui(parsed.dangerouslySkipPermissions, parsed.resume);
+      await startTui(parsed.dangerouslySkipPermissions, parsed.resume, parsed.themePreference);
     } else {
-      await launchProjectArgumentOrReport(parsed.projectPath, parsed.dangerouslySkipPermissions, parsed.resume);
+      await launchProjectArgumentOrReport(parsed.projectPath, parsed.dangerouslySkipPermissions, parsed.resume, parsed.themePreference);
     }
     break;
   case "command": {
@@ -237,7 +260,7 @@ switch (parsed.kind) {
         break;
       }
       case "setup": {
-        await runSetupFlow(dangerouslySkipPermissions);
+        await runSetupFlow(dangerouslySkipPermissions, parsed.themePreference);
         break;
       }
       case "launch": {
@@ -246,11 +269,11 @@ switch (parsed.kind) {
           process.exitCode = 1;
           break;
         }
-        await launchProjectArgumentOrReport(args[0] ?? ".", dangerouslySkipPermissions, false);
+        await launchProjectArgumentOrReport(args[0] ?? ".", dangerouslySkipPermissions, false, parsed.themePreference);
         break;
       }
       case "dev": {
-        await startTui(dangerouslySkipPermissions, false);
+        await startTui(dangerouslySkipPermissions, false, parsed.themePreference);
         break;
       }
       default:

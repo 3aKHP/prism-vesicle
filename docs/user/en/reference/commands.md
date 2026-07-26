@@ -27,7 +27,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/stage <character-card-path> <scenario-card-path>` | Start a Stage narrative session from two cards |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | Control the model's thinking effort; `auto` restores the provider default |
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display (aliases off/preview/on) |
-| `/theme dark\|light\|auto` | Switch the interface theme; `auto` follows the terminal's own mode, session-scoped and never persisted |
+| `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | Switch the interface theme; `default` follows the terminal's own mode, `auto` follows the clock; `--persist` writes `.vesicle/preferences.yaml`, `--unset-project` removes the project preference; with no argument it reports preference/source/resolved mode |
 | `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages |
 
 ## Artifacts

@@ -55,7 +55,7 @@ VESICLE_EDITOR → settings.yaml 的 editor → VISUAL → EDITOR → 平台默�
 
 ## 切换主题
 
-使用 `/theme dark`、`/theme light` 或 `/theme auto` 临时切换主题。`auto` 跟随终端明暗模式；选择只对当前会话生效。
+使用 `/theme dark`、`/theme light`、`/theme default` 或 `/theme auto` 临时切换主题。`default` 跟随终端明暗模式;`auto` 按本地时间切换(07:00–19:00 浅色)。选择只对当前会话生效。
 
 ## 检查点
 

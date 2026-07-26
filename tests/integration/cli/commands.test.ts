@@ -154,4 +154,42 @@ describe("CLI source journey: non-interactive commands", () => {
       expect(result.stderr).not.toContain("Usage: vesicle [flags] -- [project-directory]");
     });
   });
+
+  test("--help documents --dark/--light and their TUI/Setup scope", async () => {
+    await withTempProject("vesicle-cli-help-theme-", async (projectDir, configDir) => {
+      const result = await runCli(["--help"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("--dark");
+      expect(result.stdout).toContain("--light");
+      expect(result.stdout).toContain("process-scoped");
+    });
+  });
+
+  test("an unsupported command rejects theme flags with exit 1 and an action-specific stderr", async () => {
+    await withTempProject("vesicle-cli-theme-reject-", async (projectDir, configDir) => {
+      const result = await runCli(["doctor", "--dark"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("doctor");
+      expect(result.stderr).toContain("themed interactive UI");
+    });
+  });
+
+  test("conflicting theme flags exit 1 with a bounded stderr", async () => {
+    await withTempProject("vesicle-cli-theme-conflict-", async (projectDir, configDir) => {
+      const result = await runCli(["--dark", "--light"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("mutually exclusive");
+    });
+  });
+
+  test("a literal --dark after a command's own -- is preserved, not treated as a flag", async () => {
+    await withTempProject("vesicle-cli-theme-literal-", async (projectDir, configDir) => {
+      // doctor with a literal --dark after -- is not a theme flag; doctor has no
+      // --dark option, so it surfaces as a doctor usage/argument error rather than
+      // the theme-rejection message.
+      const result = await runCli(["doctor", "--", "--dark"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).not.toContain("themed interactive UI");
+    });
+  });
 });

@@ -39,6 +39,7 @@ describe("/engine command", () => {
       resetRewindState() {}, setSessionId() {}, setSessionPath() {}, setConversation() {}, setOutput() {},
       setLastTurnUsage() {}, setSessionUsage() {}, setPendingGate() {}, setPendingEngineSwitch() {}, setPendingUserQuestion() {}, setStatus() {},
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
+      theme: { clearOverride() {} } as unknown as CommandContext["theme"],
     } as unknown as CommandContext;
 
     await command.run(ctx, "", "/new");

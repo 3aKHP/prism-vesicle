@@ -55,7 +55,7 @@ If the active buffer has unsaved changes, Vesicle refuses the handoff and asks y
 
 ## Switch themes
 
-Use `/theme dark`, `/theme light`, or `/theme auto` to switch temporarily. `auto` follows the terminal's light/dark mode; the choice lasts for the current session only.
+Use `/theme dark`, `/theme light`, `/theme default`, or `/theme auto` to switch temporarily. `default` follows the terminal's light/dark mode; `auto` follows the clock (light 07:00–19:00). The choice lasts for the current session only.
 
 ## Checklist
 

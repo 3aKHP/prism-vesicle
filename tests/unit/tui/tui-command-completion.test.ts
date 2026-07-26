@@ -120,6 +120,19 @@ describe("command-owned argument completion", () => {
     expect((await items(summary)).map((item) => item.id)).toEqual(["--summary"]);
     expect(summary.complete((await items(summary))[0]!)).toBe("/engine runtime --summary ");
   });
+
+  test("completes /theme preferences, --persist, and --unset-project", async () => {
+    const first = resolve("/theme ");
+    expect((await items(first)).map((item) => item.id)).toEqual(["dark", "light", "default", "auto", "--unset-project"]);
+    expect(first.complete((await items(first))[1]!)).toBe("/theme light ");
+
+    const persist = resolve("/theme light ");
+    expect((await items(persist)).map((item) => item.id)).toEqual(["--persist"]);
+    expect(persist.complete((await items(persist))[0]!)).toBe("/theme light --persist");
+
+    // After --unset-project nothing else is offered (it takes no arguments).
+    expect(resolveCommandArgumentCompletion("/theme --unset-project ", builtinCommands, context())).toBeNull();
+  });
 });
 
 describe("Stage completion paths", () => {

@@ -32,6 +32,7 @@ import {
   resumeCommandCompletion,
   splitTokens,
   stageCommandCompletion,
+  themeCommandCompletion,
 } from "./argument-completion";
 import {
   renderValidationNotice,
@@ -39,7 +40,7 @@ import {
 } from "./render";
 import { INSTRUCTION_COMBINED_BUDGET_BYTES, resolveEffectiveSelection } from "../../core/instructions";
 import type { EffectiveInstructionSelection } from "../../core/instructions";
-import { setThemePreference, themeMode, themePreference } from "../theme";
+import { type ThemePreference } from "../theme";
 
 const HELP_TEXT = [
   "Commands:",
@@ -53,7 +54,7 @@ const HELP_TEXT = [
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
-  "  /theme [dark|light|auto] show or set the colour theme (auto follows the terminal)",
+  "  /theme [dark|light|default|auto] show or set the colour theme (default follows the terminal; auto follows the clock)",
   "  /workspace [path] open the Workspace page, optionally locating a file or directory",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
   "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
@@ -419,26 +420,49 @@ export const builtinCommands: Command[] = [
     name: "theme",
     busyBehavior: immediate,
     description: "Show or set the colour theme",
-    usage: "/theme dark|light|auto",
-    completion: fixedCommandCompletion("theme"),
+    usage: "/theme [dark|light|default|auto] [--persist] [--unset-project]",
+    completion: themeCommandCompletion,
     async run(ctx, args, raw) {
-      if (!args) {
+      const parsed = parseThemeArgs(args);
+      if ("error" in parsed) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: parsed.error }]);
+        return;
+      }
+      if (parsed.kind === "status") {
         ctx.setMessages((prev) => [
           ...prev,
           { role: "user", content: raw },
-          { role: "system", content: `Theme: ${themePreference()} (resolved: ${themeMode()}). Use /theme dark|light|auto — auto follows the terminal.` },
+          { role: "system", content: ctx.theme.statusText() },
         ]);
         return;
       }
-      const mode = args.trim().toLowerCase();
-      if (mode !== "dark" && mode !== "light" && mode !== "auto") {
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /theme dark|light|auto" }]);
+      if (parsed.kind === "unset-project") {
+        try {
+          await ctx.theme.unsetProject();
+          ctx.setStatus("theme project preference unset");
+          ctx.recordActivity({ kind: "system", text: "theme project preference unset" });
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Removed the project theme preference and cleared the session override." }]);
+        } catch (error) {
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+        }
         return;
       }
-      setThemePreference(mode);
-      ctx.setStatus(`theme ${mode}`);
-      ctx.recordActivity({ kind: "system", text: `theme ${mode}` });
-      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${mode}${mode === "auto" ? ` (terminal reports ${themeMode()})` : ""}.` }]);
+      // override or persist
+      if (parsed.kind === "persist") {
+        try {
+          await ctx.theme.persistProject(parsed.pref);
+          ctx.setStatus(`theme ${parsed.pref} persisted`);
+          ctx.recordActivity({ kind: "system", text: `theme ${parsed.pref} persisted to project` });
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme ${parsed.pref} saved to .vesicle/preferences.yaml and applied for this session.` }]);
+        } catch (error) {
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+        }
+        return;
+      }
+      ctx.theme.applyOverride(parsed.pref);
+      ctx.setStatus(`theme ${parsed.pref}`);
+      ctx.recordActivity({ kind: "system", text: `theme ${parsed.pref}` });
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${parsed.pref} for this session.` }]);
     },
   },
 
@@ -537,6 +561,7 @@ export const builtinCommands: Command[] = [
     description: "Start a fresh session",
     async run(ctx, _args, raw) {
       ctx.resetRewindState();
+      ctx.theme.clearOverride();
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
       const resetStage = ctx.activeEngine() === "stage";
       if (resetStage) ctx.setActiveEngine("etl");
@@ -669,6 +694,49 @@ function renderInstructionsNotice(selection: EffectiveInstructionSelection): str
   }
   lines.push("  Instructions customize work within host capabilities; they cannot add tools, permissions, gates, validators, or filesystem authority.");
   return lines.join("\n");
+}
+
+const THEME_PREFERENCES: readonly ThemePreference[] = ["dark", "light", "default", "auto"];
+const THEME_USAGE = "Usage: /theme [dark|light|default|auto] [--persist] [--unset-project].\ndefault follows the terminal; auto follows the clock (light 07:00–19:00).";
+
+type ThemeArgs =
+  | { kind: "status" }
+  | { kind: "override"; pref: ThemePreference }
+  | { kind: "persist"; pref: ThemePreference }
+  | { kind: "unset-project" }
+  | { error: string };
+
+/**
+ * Parse the `/theme` grammar (plan §8.4):
+ *   /theme                                  status
+ *   /theme dark|light|default|auto          session override
+ *   /theme dark|light|default|auto --persist project persist + session override
+ *   /theme --unset-project                  remove project theme + clear override
+ * Extra arguments, repeated --persist, or --unset-project combined with a
+ * preference are usage errors with no mutation.
+ */
+function parseThemeArgs(args: string): ThemeArgs {
+  const tokens = args.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return { kind: "status" };
+  const persistCount = tokens.filter((token) => token === "--persist").length;
+  const hasUnset = tokens.includes("--unset-project");
+  const operands = tokens.filter((token) => token !== "--persist" && token !== "--unset-project");
+
+  if (hasUnset) {
+    if (operands.length > 0 || persistCount > 0) return { error: THEME_USAGE };
+    return { kind: "unset-project" };
+  }
+  if (persistCount > 1) return { error: THEME_USAGE };
+  if (operands.length > 1) return { error: THEME_USAGE };
+  if (persistCount === 1) {
+    if (operands.length !== 1) return { error: THEME_USAGE };
+    const pref = operands[0]!.toLowerCase();
+    if (!THEME_PREFERENCES.includes(pref as ThemePreference)) return { error: THEME_USAGE };
+    return { kind: "persist", pref: pref as ThemePreference };
+  }
+  const pref = operands[0]!.toLowerCase();
+  if (!THEME_PREFERENCES.includes(pref as ThemePreference)) return { error: THEME_USAGE };
+  return { kind: "override", pref: pref as ThemePreference };
 }
 
 function parseEngineSwitchArgs(args: string): { engine: EngineId; summary: boolean; summaryInstructions?: string } | undefined {

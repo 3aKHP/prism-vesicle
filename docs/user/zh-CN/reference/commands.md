@@ -27,7 +27,7 @@
 | `/stage <角色卡路径> <情景卡路径>` | 用两张卡开一个 Stage 叙事会话 |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | 控制模型的思考强度;`auto` 恢复供应商默认 |
 | `/reasoning hidden\|collapsed\|expanded` | 控制推理过程的显示(别名 off/preview/on) |
-| `/theme dark\|light\|auto` | 切换界面主题;`auto` 跟随终端明暗模式,仅当前会话生效,不持久化 |
+| `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | 切换界面主题;`default` 跟随终端明暗模式,`auto` 按本地时间切换;`--persist` 写入项目 `.vesicle/preferences.yaml`,`--unset-project` 移除项目偏好;不带参数显示当前 preference/来源/解析结果 |
 | `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返 |
 
 ## 制品
