@@ -8,13 +8,16 @@ import { resolveAutoCompactActivation } from "../../core/compact/context-budget"
 import type { EngineId } from "../../core/engine/profile";
 import { createManualEngineTransition } from "../../core/engine/transition";
 import type { ProviderSelection } from "../../config/providers";
-import { loadConfigForSelection } from "../../config/providers";
 import {
+  assertJudgeCandidateHasKey,
   defaultExperimentalQualityTimeoutMs,
+  judgeCandidateHasKey,
   loadExperimentalQualitySettings,
+  maxExperimentalQualityTimeoutMs,
+  minExperimentalQualityTimeoutMs,
   writeExperimentalQualitySettings,
 } from "../../config/quality";
-import { resolveQualityCandidate } from "../quality-picker-controller";
+import { completeQualityTuple, qualityTupleResolves, resolveQualityCandidate } from "../quality-picker-controller";
 import type { Command } from "./types";
 import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
@@ -162,7 +165,7 @@ export const builtinCommands: Command[] = [
       const modelId = parts[2]!;
       const judgeTimeoutMs = parts.length === 4 ? parseQualityTimeout(parts[3]!) : defaultExperimentalQualityTimeoutMs;
       if (judgeTimeoutMs === undefined) {
-        ctx.setMessages((prev) => [...prev, { role: "system", content: "Judge timeout must be an integer number of milliseconds." }]);
+        ctx.setMessages((prev) => [...prev, { role: "system", content: `Judge timeout must be an integer from ${minExperimentalQualityTimeoutMs} to ${maxExperimentalQualityTimeoutMs} milliseconds.` }]);
         return;
       }
       await runExplicitQualityMode(ctx, mode, providerAlias, modelId, judgeTimeoutMs);
@@ -612,7 +615,7 @@ export const builtinCommands: Command[] = [
 ];
 
 function renderQualitySettings(settings: Awaited<ReturnType<typeof loadExperimentalQualitySettings>>): string {
-  const tuple = qualityTuple(settings);
+  const tuple = completeQualityTuple(settings);
   if (settings.mode === "off") {
     return tuple
       ? `Experimental Semantic Judge: off (inactive). Retained profile: ${tuple.providerAlias}/${tuple.modelId} (${tuple.judgeTimeoutMs} ms). No Judge request is made while off.`
@@ -623,22 +626,20 @@ function renderQualitySettings(settings: Awaited<ReturnType<typeof loadExperimen
 
 const QUALITY_USAGE = "Usage: /quality [status|off|observe [provider model [timeout-ms]]|rewrite [provider model [timeout-ms]]]. No arguments open guided settings.";
 
-function qualityTuple(settings: Awaited<ReturnType<typeof loadExperimentalQualitySettings>>): { providerAlias: string; modelId: string; judgeTimeoutMs: number } | undefined {
-  if (settings.providerAlias && settings.modelId && settings.judgeTimeoutMs !== undefined) {
-    return { providerAlias: settings.providerAlias, modelId: settings.modelId, judgeTimeoutMs: settings.judgeTimeoutMs };
-  }
-  return undefined;
-}
-
 function parseQualityTimeout(raw: string): number | undefined {
   if (!/^[0-9]+$/.test(raw)) return undefined;
   const value = Number(raw);
-  return Number.isSafeInteger(value) ? value : undefined;
+  if (!Number.isSafeInteger(value)
+    || value < minExperimentalQualityTimeoutMs
+    || value > maxExperimentalQualityTimeoutMs) {
+    return undefined;
+  }
+  return value;
 }
 
 async function disableQuality(ctx: Parameters<Command["run"]>[0]): Promise<void> {
   const settings = await loadExperimentalQualitySettings();
-  const retained = qualityTuple(settings);
+  const retained = completeQualityTuple(settings);
   if (retained) {
     await writeExperimentalQualitySettings({ mode: "off", providerAlias: retained.providerAlias, modelId: retained.modelId, judgeTimeoutMs: retained.judgeTimeoutMs });
   } else {
@@ -656,9 +657,10 @@ async function disableQuality(ctx: Parameters<Command["run"]>[0]): Promise<void>
 
 /**
  * Bare `/quality observe|rewrite` without an explicit profile. Observe enables
- * immediately only when a retained valid profile exists; otherwise it opens the
- * guided picker with the active provider/model preselected. Rewrite resolves the
- * retained-or-active candidate and opens the red confirmation panel directly.
+ * immediately only when a retained VALID profile exists (resolves and has its
+ * key); a retained profile that lacks its key is not valid and falls through to
+ * the guided picker. Rewrite resolves the retained-or-active candidate and
+ * opens the red confirmation panel directly.
  */
 async function runBareQualityMode(ctx: Parameters<Command["run"]>[0], mode: "observe" | "rewrite"): Promise<void> {
   if (mode === "rewrite") {
@@ -666,20 +668,20 @@ async function runBareQualityMode(ctx: Parameters<Command["run"]>[0], mode: "obs
       const registry = await ctx.ensureProviderRegistry();
       const settings = await loadExperimentalQualitySettings();
       const { candidate } = resolveQualityCandidate(settings, registry, ctx.activeProvider(), ctx.activeModel());
-      await validateQualityCandidate(candidate.providerAlias, candidate.modelId);
+      await assertJudgeCandidateHasKey(candidate.providerAlias, candidate.modelId);
       await ctx.openQualityRewriteConfirm(candidate);
     } catch (error) {
       ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
     }
     return;
   }
-  // bare observe
+  // bare observe: enable immediately only with a retained valid profile.
   try {
     const registry = await ctx.ensureProviderRegistry();
     const settings = await loadExperimentalQualitySettings();
-    const retained = qualityTuple(settings);
-    if (retained && registry.providers.some((provider) => provider.id === retained.providerAlias && provider.models.some((model) => model.id === retained.modelId))) {
-      await validateQualityCandidate(retained.providerAlias, retained.modelId);
+    const retained = completeQualityTuple(settings);
+    if (retained && qualityTupleResolves(retained, registry)
+      && await judgeCandidateHasKey(retained.providerAlias, retained.modelId)) {
       await writeExperimentalQualitySettings({ mode: "observe", providerAlias: retained.providerAlias, modelId: retained.modelId, judgeTimeoutMs: retained.judgeTimeoutMs });
       ctx.setStatus("experimental Semantic Judge observe");
       ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge observe ${retained.providerAlias}/${retained.modelId}` });
@@ -690,8 +692,8 @@ async function runBareQualityMode(ctx: Parameters<Command["run"]>[0], mode: "obs
     ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
     return;
   }
-  // No retained valid profile: open the picker focused on Review only. The
-  // candidate (active provider/model) is visibly preselected by the picker.
+  // No retained valid profile (absent, stale, or keyless): open the picker
+  // focused on Review only. The candidate is visibly preselected by the picker.
   await ctx.openQualityPicker("observe");
 }
 
@@ -705,7 +707,7 @@ async function runExplicitQualityMode(
 ): Promise<void> {
   try {
     await ctx.ensureProviderRegistry();
-    await validateQualityCandidate(providerAlias, modelId);
+    await assertJudgeCandidateHasKey(providerAlias, modelId);
     if (mode === "rewrite") {
       await ctx.openQualityRewriteConfirm({ providerAlias, modelId, judgeTimeoutMs });
       return;
@@ -717,11 +719,6 @@ async function runExplicitQualityMode(
   } catch (error) {
     ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
   }
-}
-
-async function validateQualityCandidate(providerAlias: string, modelId: string): Promise<void> {
-  const config = await loadConfigForSelection({ provider: providerAlias, model: modelId });
-  if (!config.apiKey) throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
 }
 
 export function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {

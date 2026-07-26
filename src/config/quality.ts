@@ -92,6 +92,36 @@ export async function loadExperimentalQualityProfile(
   };
 }
 
+/**
+ * Whether a Judge provider/model is configured and has its API key. Shared by
+ * the `/quality` command and the quality picker so the missing-key check cannot
+ * drift between them.
+ */
+export async function judgeCandidateHasKey(
+  providerAlias: string,
+  modelId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
+  const config = await loadConfigForSelection({ provider: providerAlias, model: modelId }, env);
+  return Boolean(config.apiKey);
+}
+
+/**
+ * Validate that a Judge provider/model is configured and has its API key;
+ * throw a user-facing error otherwise. Use {@link judgeCandidateHasKey} when the
+ * caller needs to branch on a missing key rather than abort.
+ */
+export async function assertJudgeCandidateHasKey(
+  providerAlias: string,
+  modelId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  if (!(await judgeCandidateHasKey(providerAlias, modelId, env))) {
+    const config = await loadConfigForSelection({ provider: providerAlias, model: modelId }, env);
+    throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
+  }
+}
+
 const qualityKnownFields = new Set(["version", "mode", "providerAlias", "modelId", "judgeTimeoutMs"]);
 
 export function parseExperimentalQualitySettings(source: string, path = "quality.yaml"): ExperimentalQualitySettings {
@@ -169,7 +199,9 @@ function parseVersionTwo(
   timeoutValue: string | undefined,
   path: string,
 ): ExperimentalQualitySettings {
-  const present = [providerAlias, modelId, timeoutValue].filter((value) => value !== undefined);
+  // Treat empty values (e.g. a trailing `providerAlias:`) as absent so the
+  // partial-tuple check agrees with requireCompleteTuple's truthy guards.
+  const present = [providerAlias, modelId, timeoutValue].filter((value) => value !== undefined && value !== "");
   if (present.length !== 0 && present.length !== 3) {
     throw new Error("quality.yaml providerAlias, modelId, and judgeTimeoutMs must appear together.");
   }

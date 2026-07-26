@@ -1,6 +1,6 @@
 import { createSignal, type Accessor, type Setter } from "solid-js";
-import { loadConfigForSelection } from "../config/providers";
 import {
+  assertJudgeCandidateHasKey,
   defaultExperimentalQualityTimeoutMs,
   loadExperimentalQualitySettings,
   writeExperimentalQualitySettings,
@@ -34,8 +34,8 @@ export function resolveQualityCandidate(
   activeProvider: string,
   activeModel: string,
 ): ResolvedQualityCandidate {
-  const retained = completeTuple(settings);
-  if (retained && tupleResolves(retained, registry)) {
+  const retained = completeQualityTuple(settings);
+  if (retained && qualityTupleResolves(retained, registry)) {
     return { candidate: retained, source: "retained", currentTuple: retained };
   }
   return {
@@ -45,14 +45,14 @@ export function resolveQualityCandidate(
   };
 }
 
-function completeTuple(settings: Pick<ExperimentalQualitySettings, "providerAlias" | "modelId" | "judgeTimeoutMs">): QualityPickerCandidate | undefined {
+export function completeQualityTuple(settings: Pick<ExperimentalQualitySettings, "providerAlias" | "modelId" | "judgeTimeoutMs">): QualityPickerCandidate | undefined {
   if (settings.providerAlias && settings.modelId && settings.judgeTimeoutMs !== undefined) {
     return { providerAlias: settings.providerAlias, modelId: settings.modelId, judgeTimeoutMs: settings.judgeTimeoutMs };
   }
   return undefined;
 }
 
-function tupleResolves(tuple: QualityPickerCandidate, registry: ProviderRegistry): boolean {
+export function qualityTupleResolves(tuple: QualityPickerCandidate, registry: ProviderRegistry): boolean {
   const provider = registry.providers.find((entry) => entry.id === tuple.providerAlias);
   return Boolean(provider?.models.some((model) => model.id === tuple.modelId));
 }
@@ -158,7 +158,9 @@ export function createQualityPickerController(options: {
         options.setStatus("Semantic Judge is off");
         return;
       }
-      await commitOff(picker.candidate);
+      // Retain the active profile, not a merely-browsed Change Judge candidate,
+      // so disabling matches `/quality off` (retain the last complete profile).
+      await commitOff(picker.currentTuple ?? picker.candidate);
       return;
     }
     if (id === "observe") {
@@ -209,10 +211,7 @@ export function createQualityPickerController(options: {
   }
 
   async function validateCandidate(candidate: QualityPickerCandidate): Promise<void> {
-    const config = await loadConfigForSelection({ provider: candidate.providerAlias, model: candidate.modelId });
-    if (!config.apiKey) {
-      throw new Error(`Provider ${candidate.providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
-    }
+    await assertJudgeCandidateHasKey(candidate.providerAlias, candidate.modelId);
   }
 
   async function commitOff(candidate: QualityPickerCandidate): Promise<void> {
@@ -296,7 +295,6 @@ export function createQualityPickerController(options: {
         candidate: resolved.candidate,
         currentMode: settings.mode,
         currentTuple: resolved.currentTuple,
-        candidateSource: resolved.source,
       });
     } catch (error) {
       options.reportError(error);

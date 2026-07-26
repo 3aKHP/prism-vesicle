@@ -44,7 +44,6 @@ export type QualityPickerState = {
   candidate: QualityPickerCandidate;
   currentMode: ExperimentalQualityMode;
   currentTuple?: QualityPickerCandidate;
-  candidateSource: "retained" | "active";
   browsingProvider?: string;
 };
 

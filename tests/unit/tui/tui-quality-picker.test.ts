@@ -82,6 +82,27 @@ describe("quality picker controller", () => {
     expect((await loadExperimentalQualitySettings()).mode).toBe("off");
   });
 
+  test("Off after Change Judge retains the active profile, not the browsed candidate", async () => {
+    await fixture({ mode: "observe", providerAlias: "alpha", modelId: "alpha-chat", timeoutMs: 12_000 });
+    const controller = makeController();
+    await controller.openQualityPicker();
+    // Browse to beta/beta-reasoner via Change Judge.
+    controller.handleQualityPickerKey({ name: "down" }); // observe → rewrite
+    controller.handleQualityPickerKey({ name: "down" }); // rewrite → Change Judge
+    controller.handleQualityPickerKey({ name: "return" }); // → provider step
+    controller.handleQualityPickerKey({ name: "down" }); // alpha → beta
+    controller.handleQualityPickerKey({ name: "return" }); // → model step
+    controller.handleQualityPickerKey({ name: "return" }); // pick beta-reasoner → back to mode (candidate now beta)
+    expect(controller.qualityPicker()?.candidate).toMatchObject({ providerAlias: "beta", modelId: "beta-reasoner" });
+    // Select Off (now at index 0; selected reset to observe=1 after model return).
+    controller.handleQualityPickerKey({ name: "up" }); // → Off
+    controller.handleQualityPickerKey({ name: "return" });
+    await waitUntil(() => controller.qualityPicker() === null);
+    // The active alpha profile is retained as dormant; the browsed beta is NOT written.
+    const off = await loadExperimentalQualitySettings();
+    expect(off).toMatchObject({ mode: "off", providerAlias: "alpha", modelId: "alpha-chat", judgeTimeoutMs: 12_000 });
+  });
+
   test("two Enters on the rewrite confirm write the staged profile once", async () => {
     await fixture({ mode: "off" });
     const controller = makeController();

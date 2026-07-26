@@ -121,7 +121,67 @@ describe("/quality command", () => {
     const off = await loadExperimentalQualitySettings();
     expect(off).toMatchObject({ mode: "off", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 18_000 });
   });
+
+  test("/quality rewrite with an out-of-bounds timeout is rejected before staging the panel", async () => {
+    const config = await configFixture();
+    process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
+    process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
+    const command = builtinCommands.find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
+    let messages: Message[] = [];
+    const stagedCandidates: { providerAlias: string; modelId: string; judgeTimeoutMs: number }[] = [];
+    const ctx = {
+      setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
+      ensureProviderRegistry: async () => ({ providers: [] }),
+      setStatus: () => undefined,
+      recordActivity: () => undefined,
+      async openQualityRewriteConfirm(candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) { stagedCandidates.push(candidate); },
+    } as unknown as CommandContext;
+
+    await command.run(ctx, "rewrite judge judge-model 50", "/quality rewrite judge judge-model 50");
+    expect(messages.at(-1)?.content).toContain("1000 to 180000");
+    expect(stagedCandidates).toEqual([]);
+    expect((await loadExperimentalQualitySettings()).mode).toBe("off");
+  });
+
+  test("bare /quality observe with a keyless retained profile opens the picker instead of erroring", async () => {
+    const config = await keylessConfigFixture();
+    process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
+    process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
+    const command = builtinCommands.find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
+    let messages: Message[] = [];
+    const pickerOpened: string[] = [];
+    const ctx = {
+      setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
+      ensureProviderRegistry: async () => ({
+        providers: [{ id: "judge", protocol: "openai-chat-compatible", baseUrl: "https://example.test/v1", apiKeyEnv: "JUDGE_KEY", models: [{ id: "judge-model" }] }],
+      }),
+      setStatus: () => undefined,
+      recordActivity: () => undefined,
+      async openQualityPicker(focusMode?: "observe" | "rewrite") { pickerOpened.push(focusMode ?? "none"); },
+    } as unknown as CommandContext;
+
+    await command.run(ctx, "observe", "/quality observe");
+    expect(pickerOpened).toEqual(["observe"]);
+    // The keyless retained profile must not be written, and no missing-key error is shown.
+    expect(messages.at(-1)?.role).not.toBe("system");
+    expect((await loadExperimentalQualitySettings())).toMatchObject({ mode: "off", providerAlias: "judge", modelId: "judge-model" });
+  });
 });
+
+async function keylessConfigFixture(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-command-keyless-"));
+  directories.push(directory);
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, "providers.yaml"), [
+    "default:", "  provider: judge", "  model: judge-model", "providers:",
+    "  judge:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: JUDGE_KEY", "    models:", "      - judge-model", "",
+  ].join("\n"));
+  // No .env: JUDGE_KEY is intentionally unset so the retained profile is keyless.
+  await writeFile(join(directory, "quality.yaml"), "version: 2\nmode: off\nproviderAlias: judge\nmodelId: judge-model\njudgeTimeoutMs: 15000\n");
+  return directory;
+}
 
 async function configFixture(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-command-"));
