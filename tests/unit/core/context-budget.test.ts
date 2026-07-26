@@ -62,7 +62,32 @@ describe("context budget: activation", () => {
     expect(activation.softTriggerTokens).toBe(6000);
     expect(activation.hardInputCeilingTokens).toBe(6000);
   });
+
+  test("reserve precedence: explicit -> turn maxTokens -> generation maxTokens -> maxOutputTokens -> zero", () => {
+    const window = { contextWindow: 10_000 };
+    // 1. explicit reserveOutputTokens wins over everything.
+    expect(reserveOf({ config: { threshold: 0.5, reserveOutputTokens: 1_000 }, generation: { maxTokens: 500 }, turnMaxTokens: 300, limits: { ...window, maxOutputTokens: 200 } })).toEqual({ tokens: 1_000, source: "explicit" });
+    // 2. turn-level maxTokens (no explicit reserve).
+    expect(reserveOf({ config: { threshold: 0.5 }, generation: { maxTokens: 500 }, turnMaxTokens: 300, limits: { ...window, maxOutputTokens: 200 } })).toEqual({ tokens: 300, source: "generation-maxTokens" });
+    // 3. generation default maxTokens (no explicit, no turn override).
+    expect(reserveOf({ config: { threshold: 0.5 }, generation: { maxTokens: 500 }, limits: { ...window, maxOutputTokens: 200 } })).toEqual({ tokens: 500, source: "generation-maxTokens" });
+    // 4. model maxOutputTokens (no explicit, no generation).
+    expect(reserveOf({ config: { threshold: 0.5 }, generation: undefined, limits: { ...window, maxOutputTokens: 200 } })).toEqual({ tokens: 200, source: "model-maxOutputTokens" });
+    // 5. zero when nothing is configured.
+    expect(reserveOf({ config: { threshold: 0.5 }, generation: undefined, limits: window })).toEqual({ tokens: 0, source: "zero" });
+  });
+
+  test("a negative explicit reserve deactivates instead of inflating the budget", () => {
+    const activation = resolveAutoCompactActivation(baseInputs({ config: { threshold: 0.5, reserveOutputTokens: -500 } }));
+    expect(activation).toEqual({ kind: "inactive", reason: "invalid-reserve" });
+  });
 });
+
+function reserveOf(inputs: BudgetInputs): { tokens: number; source: string } {
+  const activation = resolveAutoCompactActivation(inputs);
+  if (activation.kind !== "active") throw new Error(`expected active, got ${JSON.stringify(activation)}`);
+  return { tokens: activation.reserveTokens, source: activation.reserveSource };
+}
 
 describe("context budget: decision", () => {
   const active = (overrides: Partial<BudgetInputs> = {}): BudgetInputs => baseInputs({ config: { threshold: 0.5, reserveOutputTokens: 2_000 }, ...overrides });

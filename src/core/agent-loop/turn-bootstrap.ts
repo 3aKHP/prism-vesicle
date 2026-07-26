@@ -80,7 +80,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
         sessionId: options.sessionId,
         engine,
         config,
-        engineSystemPrompt: engineAssets.systemPrompt,
+        composedSystemPrompt: systemPrompt,
         snapshot,
         input: options.input,
         images: options.images,
@@ -209,7 +209,7 @@ async function runExistingSessionPreTurnCompaction(params: {
   sessionId: string;
   engine: EngineId;
   config: VesicleConfig;
-  engineSystemPrompt: string;
+  composedSystemPrompt: string;
   snapshot: SessionSnapshot;
   input: string;
   images?: VesicleMessage["images"];
@@ -225,7 +225,7 @@ async function runExistingSessionPreTurnCompaction(params: {
     content: params.input,
     ...(params.images?.length ? { images: params.images } : {}),
   };
-  const estimatedNextRequestTokens = estimateRequestTokens([...params.snapshot.messages, incoming], params.engineSystemPrompt);
+  const estimatedNextRequestTokens = estimateRequestTokens([...params.snapshot.messages, incoming], params.composedSystemPrompt);
   const result = await runPreTurnCompaction({
     rootDir: params.rootDir,
     sessionId: params.sessionId,
@@ -243,7 +243,19 @@ async function runExistingSessionPreTurnCompaction(params: {
       estimatedNextRequestTokens,
     },
   });
-  if (result.kind === "hard-failed") throw new AutoCompactBlockedError(result.errorMessage);
+  if (result.kind === "hard-failed") {
+    throw new AutoCompactBlockedError(
+      result.errorMessage,
+      result.check.kind === "hard-ceiling"
+        ? {
+          projectedTokens: result.check.projectedTokens,
+          hardInputCeilingTokens: result.check.hardInputCeilingTokens,
+          softTriggerTokens: result.check.softTriggerTokens,
+          usageSource: result.check.usageSource,
+        }
+        : undefined,
+    );
+  }
   if (result.kind === "compacted") {
     // Reload from the new checkpoint head so the incoming user record appends
     // after the checkpoint rather than the old pre-compaction head.

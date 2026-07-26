@@ -72,7 +72,7 @@ export function resolveAutoCompactActivation(inputs: BudgetInputs): AutoCompactA
     return { kind: "inactive", reason: "missing-context-window" };
   }
   const reserve = resolveReserve(config, generation, limits?.maxOutputTokens, turnMaxTokens);
-  if (reserve.explicit && reserve.tokens >= contextWindow) {
+  if (reserve.explicit && (reserve.tokens < 0 || reserve.tokens >= contextWindow)) {
     return { kind: "inactive", reason: "invalid-reserve" };
   }
   const effectiveInputBudget = contextWindow - reserve.tokens;
@@ -132,10 +132,12 @@ function projectOccupancy(inputs: BudgetInputs): { value: number; source: Exclud
   const provider = inputs.lastContextInputTokens;
   const estimate = inputs.estimatedNextRequestTokens;
   if (typeof provider === "number" && provider > 0 && typeof estimate === "number") {
-    // Provider-observed occupancy plus the host-estimated growth since that
-    // observation. The provider value wins (it is the authoritative count);
-    // the estimate only fills the delta the provider has not seen yet.
-    return { value: Math.max(provider, estimate), source: "provider" };
+    // The provider-observed occupancy is the authoritative floor; the estimate
+    // covers growth the provider has not seen. Whichever value is larger
+    // determines the projection, and the source reflects which one did so a
+    // consumer never mistakes an estimate-derived value for provider-authoritative.
+    const value = Math.max(provider, estimate);
+    return { value, source: estimate > provider ? "estimated" : "provider" };
   }
   if (typeof provider === "number" && provider > 0) return { value: provider, source: "provider" };
   if (typeof estimate === "number") return { value: estimate, source: "estimated" };

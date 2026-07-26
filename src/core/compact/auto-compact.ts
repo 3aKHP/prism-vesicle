@@ -30,13 +30,29 @@ export type PreTurnCompactionResult =
  * Thrown by bootstrap when a mandatory hard-ceiling compaction fails or does not
  * reduce enough. It is raised BEFORE the new user record is persisted, so the
  * session is not mutated and the caller can retain the draft and let the user
- * retry, manually compact, or switch model.
+ * retry, manually compact, or switch model. Carries the structured check data so
+ * the UI can surface an actionable reason (projected vs. ceiling) instead of a
+ * generic string.
  */
+export type AutoCompactBlockedContext = {
+  projectedTokens: number;
+  hardInputCeilingTokens: number;
+  softTriggerTokens: number;
+  usageSource: "provider" | "estimated";
+};
+
 export class AutoCompactBlockedError extends Error {
-  constructor(message: string) {
-    super(message);
+  readonly context: AutoCompactBlockedContext | undefined;
+  constructor(errorMessage: string, context?: AutoCompactBlockedContext) {
+    super(formatBlockedMessage(errorMessage, context));
     this.name = "AutoCompactBlockedError";
+    this.context = context;
   }
+}
+
+function formatBlockedMessage(errorMessage: string, context?: AutoCompactBlockedContext): string {
+  if (!context) return errorMessage;
+  return `${errorMessage} (projected ${context.projectedTokens} tokens, usage ${context.usageSource}; soft trigger ${context.softTriggerTokens}, hard ceiling ${context.hardInputCeilingTokens}). Retry, run /compact manually, or switch to a model with a larger context window.`;
 }
 
 export type RunPreTurnCompactionOptions = {
