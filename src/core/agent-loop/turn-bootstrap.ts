@@ -12,7 +12,7 @@ import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { bindExecutionRound, createSessionStore, executionIdentityMetadata, newLogicalTurnId, newProviderRoundId } from "../session/store";
-import { AutoCompactBlockedError, runPreTurnCompaction } from "../compact/auto-compact";
+import { AutoCompactBlockedError, runAutomaticCompaction } from "../compact/auto-compact";
 import { estimateRequestTokens } from "../compact/context-budget";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
@@ -226,7 +226,7 @@ async function runExistingSessionPreTurnCompaction(params: {
     ...(params.images?.length ? { images: params.images } : {}),
   };
   const estimatedNextRequestTokens = estimateRequestTokens([...params.snapshot.messages, incoming], params.composedSystemPrompt);
-  const result = await runPreTurnCompaction({
+  const result = await runAutomaticCompaction({
     rootDir: params.rootDir,
     sessionId: params.sessionId,
     engine: params.engine,
@@ -234,6 +234,7 @@ async function runExistingSessionPreTurnCompaction(params: {
     generation: params.generation,
     signal: params.signal,
     onEvent: params.onEvent,
+    phase: "pre-turn",
     budget: {
       config: params.config.limits?.autoCompact,
       limits: params.config.limits,

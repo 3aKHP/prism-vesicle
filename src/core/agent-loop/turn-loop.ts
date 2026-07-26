@@ -9,7 +9,10 @@ import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
 import { getProcessManager, type ProcessManager } from "../process/manager";
 import type { SessionStore } from "../session/store";
-import { bindExecutionRound, clearExecutionRound, newProviderRoundId, withExecutionRound } from "../session/store";
+import { bindExecutionRound, clearExecutionRound, loadSessionSnapshot, newProviderRoundId, withExecutionRound } from "../session/store";
+import { runAutomaticCompaction } from "../compact/auto-compact";
+import { estimateRequestTokens } from "../compact/context-budget";
+import { toVesicleMessage } from "../compact/summary-generator";
 import type { ToolDefinition } from "../tools";
 import { createTurnAgentManager } from "./agent-manager";
 import { recordAssistantToolCalls } from "./assistant-recorder";
@@ -107,6 +110,10 @@ type LoopRuntime = {
   quality: QualityRoundState;
   logicalTurnId: string | undefined;
   providerRoundId: string | undefined;
+  /** Most recent provider-observed context occupancy, for mid-turn budget checks. Cleared after a compact (stale). */
+  lastContextInputTokens: number | undefined;
+  /** Set when a mid-turn hard-ceiling compaction fails, so the loop stops before the unsafe request. */
+  midTurnBlocked: boolean;
 };
 
 export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -164,6 +171,17 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     response = round.response;
     if (round.pause) return round.pause;
     if (!round.hadToolCalls) break;
+    // The latest provider-observed context occupancy feeds the mid-turn budget
+    // checks (the host estimate covers growth since this observation).
+    const observed = response.usage?.contextInputTokens;
+    if (typeof observed === "number" && observed > 0) runtime.lastContextInputTokens = observed;
+    // Mid-turn soft check: after a complete assistant/tool batch (any pause has
+    // been resolved by advanceRound returning, not pausing), before queued
+    // steering is drained for the next round. At most one compact per boundary.
+    const soft = args.profile.id !== "stage" && args.config.limits?.autoCompact
+      ? await runMidTurnCompaction(args, runtime, false)
+      : { compacted: false, blocked: false };
+    if (soft.blocked) break;
     // A tool round may have refreshed the in-turn frozen instruction snapshot
     // (update_instructions). Recompose the live system prompt so the next
     // provider round observes the new instructions. Stage has no instruction
@@ -174,6 +192,15 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     // carry the next round id, then drain them.
     advanceProviderRound(args, runtime);
     await processInputBoundary(args, runtime);
+    // Mid-turn hard check: after queued/background input has been materialized
+    // (those packets are pinned verbatim by the retained frontier), before the
+    // next provider request. Skipped if the soft check already compacted this
+    // boundary; only acts on a hard-ceiling projection so it does not duplicate
+    // the soft check's soft-trigger compaction.
+    if (!soft.compacted && args.profile.id !== "stage" && args.config.limits?.autoCompact) {
+      const hard = await runMidTurnCompaction(args, runtime, true);
+      if (hard.blocked) break;
+    }
 
     consecutiveFailures = round.anyFailed ? consecutiveFailures + 1 : 0;
     if (consecutiveFailures >= maxConsecutiveFailedTools) {
@@ -400,6 +427,8 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
     quality: createQualityRoundState(args.qualityState),
     logicalTurnId: args.logicalTurnId,
     providerRoundId: args.providerRoundId,
+    lastContextInputTokens: undefined,
+    midTurnBlocked: false,
   };
 }
 
@@ -461,4 +490,57 @@ async function recordNoProgressBreak(session: SessionStore, consecutiveFailures:
     content: `Tool loop stopped after ${consecutiveFailures} consecutive rounds of failing tool results.`,
     metadata: withExecutionRound(session.sessionId, { kind: "no-progress-breaker" }),
   });
+}
+
+/**
+ * One mid-turn automatic-compaction check. The soft check (onlyHardCeiling
+ * false) runs after a complete tool batch; the hard check (onlyHardCeiling true)
+ * runs after queued/background input has been drained, right before the next
+ * provider request. On a compact the active in-memory message array is rebound
+ * to the post-checkpoint history (replacement + retained frontier), and the
+ * stale provider occupancy is cleared so the next check re-estimates. On a
+ * hard-ceiling failure the loop is blocked: a system notice is appended and the
+ * caller breaks before the unsafe request. The compact provider call is a
+ * standalone request (never a bootstrap/loop turn) so it cannot re-enter this
+ * check; the outer loop signal cancels it.
+ */
+async function runMidTurnCompaction(args: RunLoopArgs, runtime: LoopRuntime, onlyHardCeiling: boolean): Promise<{ compacted: boolean; blocked: boolean }> {
+  const estimatedNextRequestTokens = estimateRequestTokens(args.messages, args.systemPrompt);
+  const result = await runAutomaticCompaction({
+    rootDir: args.rootDir,
+    sessionId: args.session.sessionId,
+    engine: args.profile.id,
+    providerSelection: { provider: args.config.providerId, model: args.config.model },
+    generation: args.generation,
+    signal: args.signal,
+    onEvent: args.onEvent,
+    phase: "mid-turn",
+    onlyHardCeiling,
+    budget: {
+      config: args.config.limits?.autoCompact,
+      limits: args.config.limits,
+      generation: args.config.generation,
+      turnMaxTokens: args.generation?.maxTokens,
+      lastContextInputTokens: runtime.lastContextInputTokens,
+      estimatedNextRequestTokens,
+    },
+  });
+  if (result.kind === "compacted") {
+    runtime.lastContextInputTokens = undefined;
+    const snapshot = await loadSessionSnapshot(args.rootDir, args.session.sessionId, { synthesizeDanglingToolResults: false });
+    const rebuilt = snapshot.messages.map(toVesicleMessage);
+    args.messages.length = 0;
+    args.messages.push(...rebuilt);
+    return { compacted: true, blocked: false };
+  }
+  if (result.kind === "hard-failed") {
+    runtime.midTurnBlocked = true;
+    await args.session.append({
+      role: "system",
+      content: `Context budget exceeded and automatic compaction failed: ${result.errorMessage} Run /compact manually or switch to a model with a larger context window.`,
+      metadata: { kind: "compact-blocked" },
+    });
+    return { compacted: false, blocked: true };
+  }
+  return { compacted: false, blocked: false };
 }

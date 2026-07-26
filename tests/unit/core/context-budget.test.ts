@@ -151,15 +151,15 @@ describe("context budget: decision", () => {
 
 describe("context budget: estimator", () => {
   test("estimates roughly ceil(bytes/2) plus per-message overhead", () => {
-    const estimate = estimateRequestTokens([{ role: "user", content: "a".repeat(100) }]);
+    const estimate = estimateRequestTokens([{ content: "a".repeat(100) }]);
     // 100 bytes / 2 = 50, plus one per-message overhead of 4 -> at least 50.
     expect(estimate).toBeGreaterThanOrEqual(50);
     expect(estimate).toBeLessThan(200);
   });
 
   test("excludes base64 image payloads from the transcript size", () => {
-    const withoutImage = estimateRequestTokens([{ role: "user", content: "short" }]);
-    const withImage = estimateRequestTokens([{ role: "user", content: "short", images: [{ id: "x", path: "p", mediaType: "image/png", bytes: 100_000, sha256: "a", source: "clipboard", data: "x".repeat(100_000) } as never] }]);
+    const withoutImage = estimateRequestTokens([{ content: "short" }]);
+    const withImage = estimateRequestTokens([{ content: "short", images: [{ id: "x", path: "p", mediaType: "image/png", bytes: 100_000, sha256: "a", source: "clipboard", data: "x".repeat(100_000) }] } as never]);
     // Image base64 is not counted; only the small content difference + overhead.
     expect(withImage - withoutImage).toBeLessThan(50);
   });

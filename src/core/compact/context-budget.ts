@@ -1,5 +1,4 @@
 import type { AutoCompactLimits, GenerationDefaults, ModelLimits } from "../../config/env";
-import type { ResumedMessage } from "../session/store";
 
 /**
  * Provider-neutral context-budget evaluation for auto-compaction (issue #107
@@ -152,7 +151,7 @@ function projectOccupancy(inputs: BudgetInputs): { value: number; source: Exclud
  * Estimated values are suitable for early compaction but must be displayed as
  * estimates; they are not a promise that the provider will accept the request.
  */
-export function estimateRequestTokens(messages: ResumedMessage[], systemPrompt?: string): number {
+export function estimateRequestTokens(messages: ReadonlyArray<{ content: string; toolCalls?: ReadonlyArray<{ arguments: string }> }>, systemPrompt?: string): number {
   let bytes = 0;
   let overhead = 0;
   if (systemPrompt) bytes += Buffer.byteLength(systemPrompt, "utf8");

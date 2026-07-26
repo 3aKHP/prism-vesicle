@@ -50,9 +50,40 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
     projectAgentCard(event);
     if (handleAgentLifecycle(event)) return;
     if (handleProcessOrAsset(event)) return;
+    if (handleCompactEvent(event)) return;
     if (handleProviderEvent(event)) return;
     if (handleToolEvent(event)) return;
     handleInteractionEvent(event);
+  }
+
+  function handleCompactEvent(event: AgentLoopEvent): boolean {
+    switch (event.type) {
+      case "compact_check":
+        // Surface only the states a user can act on; below/soft/hard are
+        // internal evaluations and stay out of the status line.
+        if (event.result === "degraded") {
+          options.setStatus("context usage unavailable; auto-compact idle");
+          recordActivity({ kind: "system", text: "auto-compact degraded: no provider usage or estimate" });
+        }
+        return true;
+      case "compact_started":
+        options.setStatus(`compacting context · ${event.phase}`);
+        recordActivity({ kind: "provider", text: `auto-compacting (${event.phase}, ${event.reason})` });
+        return true;
+      case "compact_completed":
+        options.setStatus(`compacted ${event.evictedUnits} units · ${event.phase}`);
+        recordActivity({ kind: "system", text: `auto-compacted ${event.evictedUnits} units, retained ${event.retainedUnits} (${event.phase})` });
+        return true;
+      case "compact_failed":
+        options.setStatus(`auto-compact failed · ${event.phase}`);
+        recordActivity({ kind: "system", text: `auto-compact failed (${event.phase}): ${event.errorMessage}` });
+        return true;
+      case "compact_deferred":
+        recordActivity({ kind: "system", text: `compaction deferred: ${event.reason}` });
+        return true;
+      default:
+        return false;
+    }
   }
 
   function projectAgentCard(event: AgentLoopEvent): void {

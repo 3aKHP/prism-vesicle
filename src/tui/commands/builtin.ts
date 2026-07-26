@@ -4,6 +4,7 @@
 // CommandContext `ctx`.
 
 import { engineIds } from "../../core/engine/profile";
+import { resolveAutoCompactActivation } from "../../core/compact/context-budget";
 import type { EngineId } from "../../core/engine/profile";
 import { createManualEngineTransition } from "../../core/engine/transition";
 import type { ProviderSelection } from "../../config/providers";
@@ -618,7 +619,7 @@ function renderQualitySettings(settings: Awaited<ReturnType<typeof loadExperimen
   return `Experimental Semantic Judge: ${settings.mode} with ${settings.providerAlias}/${settings.modelId} (${settings.judgeTimeoutMs} ms). It is not calibrated production policy.`;
 }
 
-function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
+export function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
   const limits = ctx.activeModelLimits();
   const usage = ctx.lastTurnUsage();
   const contextWindow = limits?.contextWindow;
@@ -632,23 +633,30 @@ function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
     lines.push("Context window: not configured");
     lines.push("Add limits.contextWindow to this model in providers.yaml to enable footer percentages.");
   } else if (typeof contextInput === "number" && contextInput > 0) {
-    lines.push(`Used: ${formatTokenCount(contextInput)} / ${formatTokenCount(contextWindow)} (${formatPercent(contextInput, contextWindow)})`);
-    const reserve = limits.autoCompact?.reserveOutputTokens ?? limits.maxOutputTokens;
-    if (reserve && reserve < contextWindow) {
-      lines.push(`Effective budget: ${formatTokenCount(contextWindow - reserve)} after reserving ${formatTokenCount(reserve)} output`);
-    }
+    lines.push(`Used: ${formatTokenCount(contextInput)} / ${formatTokenCount(contextWindow)} (${formatPercent(contextInput, contextWindow)}) — provider usage`);
   } else {
     lines.push(`Context window: ${formatTokenCount(contextWindow)}`);
     lines.push("Used: no provider usage yet");
   }
 
-  const autoCompact = limits?.autoCompact;
-  if (contextWindow && autoCompact) {
-    const enabled = autoCompact.enabled === false ? "disabled" : "enabled";
-    const threshold = autoCompact.threshold;
-    lines.push(threshold
-      ? `Auto compact: ${enabled} at ${Math.round(threshold * 100)}% (~${formatTokenCount(contextWindow * threshold)})`
-      : `Auto compact: ${enabled}`);
+  // Truthful activation state (issue #107 §9): report active/inactive with the
+  // precise reason, the effective soft/hard limits, the reserve and its source,
+  // and the active strategy. Never claim protection without a configured
+  // window + threshold; the old "enabled at N%" line could fire with neither.
+  const activation = resolveAutoCompactActivation({
+    config: limits?.autoCompact,
+    limits,
+    generation: undefined,
+  });
+  if (activation.kind === "active") {
+    lines.push(`Soft trigger: ${formatTokenCount(activation.softTriggerTokens)} (${Math.round(activation.threshold * 100)}% of window)`);
+    lines.push(`Hard input ceiling: ${formatTokenCount(activation.hardInputCeilingTokens)}`);
+    lines.push(`Output reserve: ${formatTokenCount(activation.reserveTokens)} (${reserveSourceLabel(activation.reserveSource)})`);
+    lines.push("Auto compact: active · strategy portable-summary");
+  } else if (limits?.autoCompact) {
+    lines.push(`Auto compact: inactive · ${inactiveReasonLabel(activation.reason)}`);
+  } else {
+    lines.push("Auto compact: not configured");
   }
   if (usage && (usage.inputTokens > 0 || usage.outputTokens > 0 || usage.cachedInputTokens > 0)) {
     lines.push(`Turn: ↑${formatTokenCount(usage.inputTokens)} ↓${formatTokenCount(usage.outputTokens)} ↻ ${formatTokenCount(usage.cachedInputTokens)}`);
@@ -659,6 +667,26 @@ function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
   }
   lines.push(`Source: ${usage ? "provider usage, de-duplicated by logical turn" : "model config only"}`);
   return lines.join("\n");
+}
+
+function reserveSourceLabel(source: "explicit" | "generation-maxTokens" | "model-maxOutputTokens" | "zero"): string {
+  switch (source) {
+    case "explicit": return "from autoCompact.reserveOutputTokens";
+    case "generation-maxTokens": return "from generation maxTokens";
+    case "model-maxOutputTokens": return "from limits.maxOutputTokens";
+    case "zero": return "no reserve configured";
+  }
+}
+
+function inactiveReasonLabel(reason: "missing-config" | "disabled" | "missing-threshold" | "invalid-threshold" | "missing-context-window" | "invalid-reserve"): string {
+  switch (reason) {
+    case "missing-config": return "autoCompact block absent";
+    case "disabled": return "enabled: false";
+    case "missing-threshold": return "threshold not set";
+    case "invalid-threshold": return "threshold not strictly between 0 and 1";
+    case "missing-context-window": return "limits.contextWindow not set";
+    case "invalid-reserve": return "reserveOutputTokens makes the effective input budget non-positive";
+  }
 }
 
 function formatTokenCount(value: number): string {

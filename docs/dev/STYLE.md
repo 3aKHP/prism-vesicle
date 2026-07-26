@@ -505,11 +505,50 @@ model tool call or a direct user edit.
   user messages for protocol compatibility, but the TUI should render them as
   host/system notices, and rewind/user-turn accounting must not treat them as
   authored prompts.
-- Compact summaries are also user-role provider context with host metadata
-  `kind: compact-summary`. `/compact` should create a new append-only branch
-  after the retained system root instead of deleting old records. Resume should
-  pass summaries back to providers, while the TUI renders them as host/system
-  notices and rewind/user-turn accounting skips them as authored prompts.
+- Compact summaries are user-role provider context with host metadata
+  `kind: compact-summary`. Manual `/compact` and automatic compaction install one
+  atomic system-role `compact-checkpoint-v1` record (the durable replacement
+  authority) appended to the current active head — they do not delete old records
+  or re-parent to the session root. The checkpoint carries a validated
+  `PortableCompactCheckpointV1` payload: a portable summary of the evicted prefix
+  plus a verbatim retained recent tail plus, mid-turn, the active frontier. The
+  original append-only transcript stays intact above the checkpoint for the
+  transcript, `/rewind`, and audit; provider-visible history resets at the newest
+  valid checkpoint and replays its suffix, and an unknown future version or
+  malformed v1 fails with an actionable session error instead of partially
+  projecting. The selected-pivot `/rewind` summary keeps its separate
+  `compact-summary` branch behavior. Resume passes the replacement back to
+  providers; the TUI renders summaries as host/system notices and keeps a
+  `compact-summary` display kind so the empty-session Hero never reappears over a
+  compacted transcript; rewind/user-turn accounting skips summaries as authored
+  prompts. Records carry durable `logicalTurnId` / `providerRoundId` identity
+  (one stable id per top-level Agent Loop, one per complete provider/tool round)
+  so compaction can evict only complete units and never split a tool call from
+  its result; legacy records without identity are grouped conservatively.
+- Automatic compaction is opt-in and provider-neutral. It activates only when
+  `limits.autoCompact` exists, `enabled !== false`, `threshold ∈ (0,1)`, and
+  `contextWindow` is a positive integer; there is no hidden default threshold.
+  `softTrigger = floor(min(contextWindow·threshold, contextWindow − reserve))`
+  and `hardInputCeiling = contextWindow − reserve`, with reserve precedence
+  `reserveOutputTokens` → effective turn `maxTokens` → `limits.maxOutputTokens`
+  → 0 (an explicit reserve ≥ window, or a negative reserve, deactivates). The
+  primary oracle is the most recent provider `contextInputTokens`, with a
+  host byte-based estimate (`ceil(utf8/2)` + per-message/tool overhead, base64
+  excluded) covering growth; estimates are labeled, never reported as
+  provider-confirmed protection. A pre-turn check compacts an existing session
+  before the new user record persists; a mid-turn soft check runs after a
+  complete tool batch and a hard check runs after queued/background input is
+  materialized, before the next request. A soft-trigger failure keeps the old
+  head and continues; a hard-ceiling failure or insufficient reduction blocks
+  the request without mutating the session and restores the draft. The compact
+  provider request is a standalone call (never a bootstrap/loop turn), so it
+  cannot recurse; at most one compact runs per boundary; after success the
+  in-memory message array is rebound to the post-checkpoint history and occupancy
+  is recomputed. New sessions, Stage, and resumed pending interactions skip the
+  check. `/context` reports the configured window, latest provider usage or its
+  absence, the activation state with the precise reason when inactive, the
+  effective soft/hard limits, the reserve and its source, the active strategy,
+  and any deferred/degraded state.
 - Session lists should mark unresolved gates and interrupted or exhausted quality decisions so the user can distinguish a normal transcript from a workflow waiting for confirmation or quality recovery.
 - Long-running turns should emit host-visible activity events before and after
   provider requests, tool calls, gate pauses, and validation. Provider
