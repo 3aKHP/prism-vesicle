@@ -9,6 +9,7 @@ import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
 import { getProcessManager, type ProcessManager } from "../process/manager";
 import type { SessionStore } from "../session/store";
+import { bindExecutionRound, clearExecutionRound, newProviderRoundId, withExecutionRound } from "../session/store";
 import type { ToolDefinition } from "../tools";
 import { createTurnAgentManager } from "./agent-manager";
 import { recordAssistantToolCalls } from "./assistant-recorder";
@@ -65,6 +66,20 @@ export type RunLoopArgs = {
   mcpRegistry: McpRegistry;
   messages: VesicleMessage[];
   session: SessionStore;
+  /**
+   * Stable id for the whole top-level Agent Loop. Present for any turn the
+   * bootstrap started (fresh turn) or a continuation recovered from persisted
+   * records (resumed pause). Absent only for a legacy session whose records
+   * pre-date identity stamping; in that case the loop appends without stamping.
+   */
+  logicalTurnId?: string;
+  /**
+   * First provider round for iteration 0 (a fresh turn — the bootstrap
+   * allocated it with the user input). Absent for continuations, which advance
+   * to a fresh round before their first request because the resolution just
+   * completed the previous round.
+   */
+  providerRoundId?: string;
   profile: EngineProfile;
   generation?: VesicleRequest["generation"];
   checkpoint?: FileCheckpointManager;
@@ -90,6 +105,8 @@ type LoopRuntime = {
   checkpoint?: FileCheckpointManager;
   checkpointMutationTail: Promise<void>;
   quality: QualityRoundState;
+  logicalTurnId: string | undefined;
+  providerRoundId: string | undefined;
 };
 
 export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -98,6 +115,12 @@ export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   } catch (error) {
     clearFrozenInstructionBlocks(args.session.sessionId);
     throw error;
+  } finally {
+    // The active provider round is process-local. Clear it on every exit
+    // (completion, pause, or error): a continuation re-binds the recovered
+    // round before appending, and a non-loop append (e.g. /compact) must never
+    // inherit a stale round.
+    clearExecutionRound(args.session.sessionId);
   }
 }
 
@@ -120,7 +143,15 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
   let response: VesicleResponse | undefined;
   let consecutiveFailures = 0;
 
-  if (args.injectPendingBeforeFirstProvider) await processInputBoundary(args, runtime);
+  // A fresh turn reuses the provider round the bootstrap allocated with the
+  // user input. A continuation (injectPendingBeforeFirstProvider) just appended
+  // the resolution that completed the previous round, so the first request here
+  // is a new provider round; advance before draining queued inputs so they (and
+  // the request) stamp the new round id.
+  if (args.injectPendingBeforeFirstProvider) {
+    advanceProviderRound(args, runtime);
+    await processInputBoundary(args, runtime);
+  }
 
   // Recompose from the frozen instruction snapshot before the first round. This
   // matters for a MANUAL/INERTIA resume: the approved update_instructions ran
@@ -138,6 +169,10 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     // provider round observes the new instructions. Stage has no instruction
     // tools and must keep its frozen character-context suffix, so it is skipped.
     refreshLiveSystemPrompt(args);
+    // The next provider request is a new provider/tool round; advance before
+    // queued steering/background input is materialized so those injected inputs
+    // carry the next round id, then drain them.
+    advanceProviderRound(args, runtime);
     await processInputBoundary(args, runtime);
 
     consecutiveFailures = round.anyFailed ? consecutiveFailures + 1 : 0;
@@ -363,7 +398,24 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
     checkpoint: args.checkpoint,
     checkpointMutationTail: Promise.resolve(),
     quality: createQualityRoundState(args.qualityState),
+    logicalTurnId: args.logicalTurnId,
+    providerRoundId: args.providerRoundId,
   };
+}
+
+/**
+ * Allocate the next provider/tool round id and bind it as the active round so
+ * recorders and injected-input appends stamp it. The logical turn id is stable
+ * for the whole turn; only the provider round id advances. A legacy turn with
+ * no logical turn id is left unstamped so its records stay legacy.
+ */
+function advanceProviderRound(args: RunLoopArgs, runtime: LoopRuntime): void {
+  if (!runtime.logicalTurnId) return;
+  runtime.providerRoundId = newProviderRoundId();
+  bindExecutionRound(args.session.sessionId, {
+    logicalTurnId: runtime.logicalTurnId,
+    providerRoundId: runtime.providerRoundId,
+  });
 }
 
 function trackCheckpointMutation(runtime: LoopRuntime, paths: string[]): Promise<void> {
@@ -381,7 +433,7 @@ async function injectPendingUserInputs(args: RunLoopArgs, runtime: LoopRuntime):
     const record = await args.session.append({
       role: "user",
       content,
-      metadata: {
+      metadata: withExecutionRound(args.session.sessionId, {
         kind: "queued-user-message",
         engine: args.profile.id,
         provider: args.config.provider,
@@ -389,7 +441,7 @@ async function injectPendingUserInputs(args: RunLoopArgs, runtime: LoopRuntime):
         model: args.config.model,
         ...generationMetadata(args.generation),
         ...(input.images?.length ? { images: persistedImageAttachments(input.images) } : {}),
-      },
+      }),
     });
     const checkpoint = new FileCheckpointManager(args.rootDir, args.session, record.uuid);
     await checkpoint.createSnapshot();
@@ -407,6 +459,6 @@ async function recordNoProgressBreak(session: SessionStore, consecutiveFailures:
   await session.append({
     role: "system",
     content: `Tool loop stopped after ${consecutiveFailures} consecutive rounds of failing tool results.`,
-    metadata: { kind: "no-progress-breaker" },
+    metadata: withExecutionRound(session.sessionId, { kind: "no-progress-breaker" }),
   });
 }

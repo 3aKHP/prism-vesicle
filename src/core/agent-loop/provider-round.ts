@@ -3,6 +3,7 @@ import { materializeMessageImages } from "../attachments/store";
 import type { EngineId } from "../engine/profile";
 import type { ProviderSelection } from "../../config/providers";
 import type { SessionStore } from "../session/store";
+import { withExecutionRound } from "../session/store";
 import type { ToolDefinition } from "../tools";
 import type { ProcessManager } from "../process/manager";
 import type { AgentLoopEvent } from "./types";
@@ -38,7 +39,10 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
     await options.session.append({
       role: "user",
       content,
-      metadata: { kind: "background-process-results", taskIds: backgroundNotifications.map((task) => task.taskId) },
+      metadata: withExecutionRound(options.session.sessionId, {
+        kind: "background-process-results",
+        taskIds: backgroundNotifications.map((task) => task.taskId),
+      }),
     });
   }
 

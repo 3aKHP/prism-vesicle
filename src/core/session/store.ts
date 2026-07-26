@@ -33,6 +33,32 @@ export { createSessionStore } from "./append-store";
 export type { SessionStore } from "./append-store";
 export type { PendingDelegationRetry } from "./interaction-recovery";
 export { FAILED_TURN_KIND } from "./history-projector";
+export {
+  bindExecutionRound,
+  clearExecutionRound,
+  executionIdentityMetadata,
+  newLogicalTurnId,
+  newProviderRoundId,
+  readExecutionRound,
+  readLogicalTurnId,
+  readProviderRoundId,
+  recoverActiveIdentity,
+  withExecutionRound,
+} from "./execution-identity";
+export type { ExecutionRound, SessionExecutionIdentity } from "./execution-identity";
+export { COMPACT_CHECKPOINT_KIND, isCompactCheckpointRecord, parseCompactCheckpoint } from "./compact-checkpoint";
+export type {
+  CompactCheckpointPhase,
+  CompactCheckpointReason,
+  CompactCheckpointTrigger,
+  PortableCompactCheckpointV1,
+} from "./compact-checkpoint";
+export { segmentSession } from "./segmentation";
+export type {
+  SegmentedRound,
+  SegmentedTurn,
+  SessionSegmentation,
+} from "./segmentation";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 

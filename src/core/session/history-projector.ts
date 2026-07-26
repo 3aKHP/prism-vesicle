@@ -9,6 +9,7 @@ import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from
 import type { PermissionMode } from "../permissions";
 import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
+import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
 
 export type HistoryProjection = {
   messages: ResumedMessage[];
@@ -92,6 +93,18 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
       }
       if (record.metadata?.kind === FAILED_TURN_KIND) {
         dropFailedTurnInput(messages);
+        continue;
+      }
+      if (record.metadata?.kind === COMPACT_CHECKPOINT_KIND) {
+        // A valid portable checkpoint is the durable authority for the
+        // provider-visible replacement history. Reset `messages` to its exact
+        // replacement, then keep replaying the suffix recorded after it. An
+        // unknown future version or a malformed payload throws an actionable
+        // session error rather than partially projecting or silently ignoring.
+        const checkpoint = parseCompactCheckpoint(record.metadata.checkpoint);
+        messages.length = 0;
+        messages.push(...checkpoint.replacementMessages.map((message) => ({ ...message })));
+        continue;
       }
       continue;
     }

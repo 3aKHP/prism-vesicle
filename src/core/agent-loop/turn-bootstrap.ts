@@ -9,7 +9,7 @@ import { composeInstructionBlocks } from "../instructions";
 import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
-import { createSessionStore } from "../session/store";
+import { bindExecutionRound, createSessionStore, executionIdentityMetadata, newLogicalTurnId, newProviderRoundId } from "../session/store";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
 import { generationMetadata, mergeGeneration } from "./generation";
@@ -68,6 +68,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
 
+  // A new top-level Agent Loop gets a fresh logical turn id, and its first
+  // provider round is allocated alongside the initiating input. The ids stamp
+  // the user record directly; the active-round map is bound only after all
+  // fallible bootstrap appends succeed (just before return) so a failed append
+  // can never leak a stale entry that runLoop's finally would never clear.
+  const logicalTurnId = newLogicalTurnId();
+  const providerRoundId = newProviderRoundId();
+
   if (isNewSession) {
     await session.append({
       role: "system",
@@ -112,6 +120,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
       content: options.input,
       metadata: {
         ...(options.inputMetadata ?? {}),
+        ...executionIdentityMetadata({ logicalTurnId, providerRoundId }),
         engine,
         provider: config.provider,
         providerId: config.providerId,
@@ -126,6 +135,10 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   // Freeze only after bootstrap's fallible persistence work is complete. From
   // here, runLoop owns cleanup on completion or failure, while pauses retain it.
   freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
+  // Bind the active round last, after every fallible append above has succeeded.
+  // runLoop's finally clears it on completion/pause/error; a throw before this
+  // point leaves no leaked entry.
+  bindExecutionRound(session.sessionId, { logicalTurnId, providerRoundId });
   const messages: VesicleMessage[] = options.messages ?? [{
     role: "user",
     content: options.input,
@@ -142,6 +155,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     mcpRegistry: toolSurface.mcp,
     messages,
     session,
+    logicalTurnId,
+    providerRoundId,
     profile,
     generation,
     checkpoint,

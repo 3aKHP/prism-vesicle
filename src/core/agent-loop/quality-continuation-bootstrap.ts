@@ -68,6 +68,7 @@ export async function runQualityContinuation(input: {
     mcpRegistry: context.toolSurface.mcp,
     messages: input.messages,
     session: context.session,
+    logicalTurnId: context.identity?.logicalTurnId,
     profile: context.profile,
     generation: context.generation,
     checkpoint: await FileCheckpointManager.resumeLatest(context.rootDir, context.session),

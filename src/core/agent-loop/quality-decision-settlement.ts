@@ -9,6 +9,7 @@ import {
   loadSessionSnapshot,
   type SessionSnapshot,
   type SessionStore,
+  withExecutionRound,
 } from "../session/store";
 import {
   assertExperimentalJudgeIdentity,
@@ -36,11 +37,11 @@ export async function retryQualityDecision(
   await context.session.append({
     role: "system",
     content: "",
-    metadata: {
+    metadata: withExecutionRound(context.session.sessionId, {
       kind: "quality-retry-intent",
       warningId: point.warning.id,
       attempt: point.qualityState.attempts + 1,
-    },
+    }),
   });
   if (point.phase === "before-mutations") {
     await appendRejectedCandidate(context.session, messages, snapshot, point, feedback);
