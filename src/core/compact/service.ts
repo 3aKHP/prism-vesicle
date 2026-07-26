@@ -1,13 +1,13 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { ProviderRetryInfo, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionSnapshot } from "../session/store";
 import { selectReplacement } from "./replacement-builder";
-import { formatCompactSummary, generatePortableSummary } from "./summary-generator";
+import { formatCompactSummary, generatePortableSummary, toVesicleMessage } from "./summary-generator";
 import { installCompactCheckpoint } from "./checkpoint-installer";
 
 export { formatCompactSummary };
@@ -221,17 +221,6 @@ async function complete(provider: ReturnType<typeof createProvider>, request: Ve
 function compactPrompt(base: string, instructions: string | undefined): string {
   const trimmed = instructions?.trim();
   return trimmed ? `${base}\n\nAdditional summary instructions:\n${trimmed}` : base;
-}
-
-function toVesicleMessage(message: ResumedMessage): VesicleMessage {
-  return {
-    role: message.role,
-    content: message.content,
-    ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
-    ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
-    ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
-    ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
-  };
 }
 
 function assertNoPendingInteraction(snapshot: SessionSnapshot): void {

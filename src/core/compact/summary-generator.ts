@@ -96,7 +96,7 @@ function compactPrompt(base: string, instructions: string | undefined, previousS
   return parts.join("\n\n");
 }
 
-function toVesicleMessage(message: ResumedMessage): VesicleMessage {
+export function toVesicleMessage(message: ResumedMessage): VesicleMessage {
   return {
     role: message.role,
     content: message.content,

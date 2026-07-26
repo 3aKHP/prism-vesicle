@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import type { ProviderSelection } from "../../config/providers";
 import {
   parseCompactCheckpoint,
@@ -44,7 +45,12 @@ export type InstalledCheckpoint = {
  * leaves the former head active and usable — nothing is installed in memory.
  */
 export async function installCompactCheckpoint(options: InstallCheckpointOptions): Promise<InstalledCheckpoint> {
-  const sourceHeadUuid = options.session.headUuid() ?? options.selection.evictedRecords[0]?.parentUuid ?? "session-root";
+  // Read the source head fresh from the session file right before the append
+  // (rather than the store's creation-time cache) so the recorded source head
+  // matches the parent the append will actually use. Fail closed if there is no
+  // current head — compaction always runs against a non-empty session.
+  const sourceHeadUuid = await readLatestRecordUuid(options.session.sessionPath);
+  if (!sourceHeadUuid) throw new Error("Cannot install a compact checkpoint against a session with no current head.");
   const retainedMessages = projectSessionHistory(options.selection.retainedRecords).messages;
   const summaryMessage: ResumedMessage = {
     role: "user",
@@ -93,4 +99,21 @@ export async function installCompactCheckpoint(options: InstallCheckpointOptions
     replacementMessages,
     accounting: options.accounting,
   };
+}
+
+async function readLatestRecordUuid(sessionPath: string): Promise<string | null> {
+  try {
+    const text = await readFile(sessionPath, "utf8");
+    const lines = text.split("\n");
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index]!.trim();
+      if (!line) continue;
+      const uuid = (JSON.parse(line) as { uuid?: unknown }).uuid;
+      return typeof uuid === "string" ? uuid : null;
+    }
+    return null;
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+    throw error;
+  }
 }

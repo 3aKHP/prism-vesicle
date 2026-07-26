@@ -35,8 +35,6 @@ export type ReplacementOptions = {
   contextWindow?: number;
 };
 
-export const ERROR_NOTHING_TO_COMPACT = "Nothing left to compact; the session already fits its newest complete turn.";
-
 /**
  * Select the replacement history. Returns undefined when no complete unit can be
  * evicted without splitting an indivisible round — the caller reports that the
@@ -89,9 +87,14 @@ export function selectReplacement(records: SessionRecord[], _options: Replacemen
 function splitOversizedSingleTurn(turn: SegmentedTurn): { retained: SessionRecord[]; evicted: SessionRecord[] } | undefined {
   const completeRounds = turn.rounds.filter((round) => round.complete);
   if (completeRounds.length < 2) return undefined;
-  const retainedRound = completeRounds[completeRounds.length - 1]!;
-  const retained = retainedRound.records;
-  const evicted = turn.records.filter((record) => !retained.includes(record));
+  // Retain the newest complete round plus every round after it (any trailing
+  // incomplete round is the active frontier — its tool calls may still lack
+  // results). Only complete rounds before the newest are evicted, so the summary
+  // never sees a dangling tool call without its result.
+  const retainedAnchor = completeRounds[completeRounds.length - 1]!;
+  const retainedAnchorIndex = turn.rounds.lastIndexOf(retainedAnchor);
+  const retained = turn.rounds.slice(retainedAnchorIndex).flatMap((round) => round.records);
+  const evicted = turn.rounds.slice(0, retainedAnchorIndex).flatMap((round) => round.records);
   if (evicted.length === 0) return undefined;
   return { retained, evicted };
 }
