@@ -66,7 +66,7 @@ Agent Loop 运行时仍可继续输入普通消息或命令。按回车后，需
 - `/context` —— 当前上下文用量。
 - `/artifact` —— 在 Workspace 页打开已生成的产物。
 - `/workspace [path]` —— 打开项目文件工作台,并可定位指定文件。
-- `/theme dark|light|auto` —— 临时切换界面主题。
+- `/theme dark|light|default|auto` —— 临时切换界面主题(`default` 跟随终端,`auto` 跟随时钟)。
 - `/engine` —— 查看当前引擎(默认是 ETL)。
 - Ctrl+Q —— 退出 Vesicle。
 
