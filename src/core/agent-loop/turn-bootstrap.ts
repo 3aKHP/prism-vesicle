@@ -1,7 +1,9 @@
 import { loadConfigForSelection } from "../../config/providers";
+import type { VesicleConfig } from "../../config/env";
 import { loadExperimentalQualityProfile } from "../../config/quality";
 import { createProvider } from "../../providers";
-import type { VesicleMessage } from "../../providers/shared/types";
+import type { ProviderSelection } from "../../config/providers";
+import type { VesicleMessage, VesicleRequest } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
@@ -10,18 +12,21 @@ import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { bindExecutionRound, createSessionStore, executionIdentityMetadata, newLogicalTurnId, newProviderRoundId } from "../session/store";
+import { AutoCompactBlockedError, runPreTurnCompaction } from "../compact/auto-compact";
+import { estimateRequestTokens } from "../compact/context-budget";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
 import { generationMetadata, mergeGeneration } from "./generation";
 import { resolveToolSurface } from "./tool-surface";
 import type { RunLoopArgs } from "./turn-loop";
-import type { RunPromptOptions } from "./types";
+import type { AgentLoopEvent, RunPromptOptions } from "./types";
 import {
   assertSessionHarnessIdentity,
   requireProjectHarnessRuntime,
   resolveProjectHarnessRuntime,
 } from "../harness/activation";
-import { loadSessionSnapshot } from "../session/store";
+import { loadSessionSnapshot, type ResumedMessage, type SessionRecord, type SessionSnapshot } from "../session/store";
+import type { EngineId } from "../engine/profile";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
@@ -54,13 +59,38 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   );
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   if (options.sessionId) {
-    const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
+    let snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
     if (engine === "stage") {
       if (!snapshot.stageBootstrap) throw new Error("Stage session is missing frozen bootstrap metadata.");
       systemPrompt = `${systemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
     }
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
+    // Pre-turn auto-compaction runs only for an existing session and only when
+    // limits.autoCompact is fully configured. It evaluates the projected next
+    // request (including this incoming input) BEFORE the new user record is
+    // persisted, compacts the old head if required, and — on a hard-ceiling
+    // failure — throws before any session mutation so the caller retains the
+    // draft. New sessions and Stage (no compaction) skip it. The compact
+    // provider request is a standalone call, never a bootstrap turn, so it
+    // cannot re-enter automatic evaluation.
+    if (engine !== "stage" && config.limits?.autoCompact) {
+      snapshot = await runExistingSessionPreTurnCompaction({
+        rootDir,
+        sessionId: options.sessionId,
+        engine,
+        config,
+        composedSystemPrompt: systemPrompt,
+        snapshot,
+        input: options.input,
+        images: options.images,
+        generation,
+        turnMaxTokens: options.generation?.maxTokens,
+        providerSelection: options.providerSelection,
+        signal: options.signal,
+        onEvent: options.onEvent,
+      });
+    }
   }
   const session = await createSessionStore(
     rootDir,
@@ -172,4 +202,74 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     takePendingUserInputs: options.takePendingUserInputs,
     runToolBoundaryCommands: options.runToolBoundaryCommands,
   };
+}
+
+async function runExistingSessionPreTurnCompaction(params: {
+  rootDir: string;
+  sessionId: string;
+  engine: EngineId;
+  config: VesicleConfig;
+  composedSystemPrompt: string;
+  snapshot: SessionSnapshot;
+  input: string;
+  images?: VesicleMessage["images"];
+  generation?: VesicleRequest["generation"];
+  turnMaxTokens?: number;
+  providerSelection?: Partial<ProviderSelection>;
+  signal?: AbortSignal;
+  onEvent?: (event: AgentLoopEvent) => void;
+}): Promise<SessionSnapshot> {
+  const lastContextInputTokens = findLastContextInputTokens(params.snapshot.records);
+  const incoming: ResumedMessage = {
+    role: "user",
+    content: params.input,
+    ...(params.images?.length ? { images: params.images } : {}),
+  };
+  const estimatedNextRequestTokens = estimateRequestTokens([...params.snapshot.messages, incoming], params.composedSystemPrompt);
+  const result = await runPreTurnCompaction({
+    rootDir: params.rootDir,
+    sessionId: params.sessionId,
+    engine: params.engine,
+    providerSelection: params.providerSelection,
+    generation: params.generation,
+    signal: params.signal,
+    onEvent: params.onEvent,
+    budget: {
+      config: params.config.limits?.autoCompact,
+      limits: params.config.limits,
+      generation: params.config.generation,
+      turnMaxTokens: params.turnMaxTokens,
+      lastContextInputTokens,
+      estimatedNextRequestTokens,
+    },
+  });
+  if (result.kind === "hard-failed") {
+    throw new AutoCompactBlockedError(
+      result.errorMessage,
+      result.check.kind === "hard-ceiling"
+        ? {
+          projectedTokens: result.check.projectedTokens,
+          hardInputCeilingTokens: result.check.hardInputCeilingTokens,
+          softTriggerTokens: result.check.softTriggerTokens,
+          usageSource: result.check.usageSource,
+        }
+        : undefined,
+    );
+  }
+  if (result.kind === "compacted") {
+    // Reload from the new checkpoint head so the incoming user record appends
+    // after the checkpoint rather than the old pre-compaction head.
+    return loadSessionSnapshot(params.rootDir, params.sessionId, { synthesizeDanglingToolResults: false });
+  }
+  return params.snapshot;
+}
+
+function findLastContextInputTokens(records: SessionRecord[]): number | undefined {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const usage = records[index]!.metadata?.usage as { contextInputTokens?: unknown } | undefined;
+    if (usage && typeof usage.contextInputTokens === "number" && usage.contextInputTokens > 0) {
+      return usage.contextInputTokens;
+    }
+  }
+  return undefined;
 }

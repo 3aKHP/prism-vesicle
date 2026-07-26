@@ -52,6 +52,103 @@ state needed to continue. Do not call tools. Respond with plain text only in a
 single <summary>...</summary> block.
 `.trim();
 
+export type PortableCompactionTrigger = "manual" | "auto";
+export type PortableCompactionPhase = "pre-turn" | "mid-turn" | "manual";
+export type PortableCompactionReason = "requested" | "soft-threshold" | "hard-ceiling" | "model-switch";
+
+export type PortableCompactionOutcome =
+  | {
+      kind: "completed";
+      snapshot: SessionSnapshot;
+      summary: string;
+      checkpointUuid: string;
+      messagesSummarized: number;
+      retainedUnits: number;
+      contextWindow?: number;
+    }
+  | { kind: "nothing-to-compact" }
+  | { kind: "failed"; error: unknown };
+
+export type RunPortableCompactionOptions = {
+  rootDir: string;
+  sessionId: string;
+  engine: EngineId;
+  providerSelection?: Partial<ProviderSelection>;
+  generation?: VesicleRequest["generation"];
+  trigger: PortableCompactionTrigger;
+  phase: PortableCompactionPhase;
+  reason: PortableCompactionReason;
+  instructions?: string;
+  signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
+};
+
+/**
+ * The shared portable-compaction pipeline used by manual `/compact` and the
+ * automatic pre-turn/mid-turn triggers. Transaction boundary (plan §3):
+ * produce + validate the summary first; the installer then builds + validates
+ * the replacement and appends one record. A provider failure, malformed
+ * payload, or append error leaves the former head active and usable — nothing
+ * is installed in memory. Returns a typed outcome so automatic callers can
+ * distinguish "nothing to compact" and "failed" without catching.
+ */
+export async function runPortableCompaction(options: RunPortableCompactionOptions): Promise<PortableCompactionOutcome> {
+  const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
+  assertNoPendingInteraction(full);
+
+  const config = await loadConfigForSelection(options.providerSelection);
+  const selection = selectReplacement(full.records, { contextWindow: config.limits?.contextWindow });
+  if (!selection) return { kind: "nothing-to-compact" };
+
+  let summary: string;
+  try {
+    summary = await generatePortableSummary({
+      rootDir: options.rootDir,
+      sessionId: options.sessionId,
+      engine: options.engine,
+      providerSelection: options.providerSelection,
+      generation: options.generation,
+      evictedRecords: selection.evictedRecords,
+      ...(selection.previousSummary ? { previousSummary: selection.previousSummary } : {}),
+      instructions: options.instructions,
+      signal: options.signal,
+      onRetry: options.onRetry,
+    });
+  } catch (error) {
+    return { kind: "failed", error };
+  }
+
+  const session = await createSessionStore(options.rootDir, options.sessionId);
+  const installed = await installCompactCheckpoint({
+    rootDir: options.rootDir,
+    sessionId: options.sessionId,
+    session,
+    selection,
+    summary,
+    trigger: options.trigger,
+    phase: options.phase,
+    reason: options.reason,
+    createdWith: { providerId: config.providerId, model: config.model, engine: options.engine },
+    accounting: {
+      ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
+      beforeSource: "unknown",
+    },
+  });
+
+  const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: installed.checkpointUuid });
+  const messagesSummarized = selection.evictedRecords.filter((record) => record.role !== "system").length;
+  const retainedUnits = selection.retainedRecords.filter((record) => record.role !== "system").length;
+  return {
+    kind: "completed",
+    snapshot,
+    summary,
+    checkpointUuid: installed.checkpointUuid,
+    messagesSummarized,
+    retainedUnits,
+    ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
+  };
+}
+
 export async function compactConversation(options: {
   rootDir: string;
   sessionId: string;
@@ -62,54 +159,26 @@ export async function compactConversation(options: {
   signal?: AbortSignal;
   onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<ConversationCompact> {
-  const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
-  assertNoPendingInteraction(full);
-
-  const config = await loadConfigForSelection(options.providerSelection);
-  const selection = selectReplacement(full.records, { contextWindow: config.limits?.contextWindow });
-  if (!selection) throw new Error(ERROR_NOTHING_TO_COMPACT);
-
-  // Transaction boundary (plan §3): produce + validate the summary first; the
-  // installer then builds + validates the replacement and appends one record.
-  // A provider failure, malformed payload, or append error leaves the former
-  // head active and usable — nothing is installed in memory.
-  const summary = await generatePortableSummary({
+  const outcome = await runPortableCompaction({
     rootDir: options.rootDir,
     sessionId: options.sessionId,
     engine: options.engine,
     providerSelection: options.providerSelection,
     generation: options.generation,
-    evictedRecords: selection.evictedRecords,
-    ...(selection.previousSummary ? { previousSummary: selection.previousSummary } : {}),
+    trigger: "manual",
+    phase: "manual",
+    reason: "requested",
     instructions: options.instructions,
     signal: options.signal,
     onRetry: options.onRetry,
   });
-
-  const session = await createSessionStore(options.rootDir, options.sessionId);
-  const installed = await installCompactCheckpoint({
-    rootDir: options.rootDir,
-    sessionId: options.sessionId,
-    session,
-    selection,
-    summary,
-    trigger: "manual",
-    phase: "manual",
-    reason: "requested",
-    createdWith: { providerId: config.providerId, model: config.model, engine: options.engine },
-    accounting: {
-      ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
-      beforeSource: "unknown",
-    },
-  });
-
-  const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: installed.checkpointUuid });
-  const messagesSummarized = selection.evictedRecords.filter((record) => record.role !== "system").length;
+  if (outcome.kind === "nothing-to-compact") throw new Error(ERROR_NOTHING_TO_COMPACT);
+  if (outcome.kind === "failed") throw outcome.error;
   return {
-    snapshot,
-    summary,
-    parentUuid: installed.checkpointUuid,
-    messagesSummarized,
+    snapshot: outcome.snapshot,
+    summary: outcome.summary,
+    parentUuid: outcome.checkpointUuid,
+    messagesSummarized: outcome.messagesSummarized,
   };
 }
 
