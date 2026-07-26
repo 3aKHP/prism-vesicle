@@ -228,13 +228,12 @@ export const qualityCommandCompletion: CommandCompletion = {
     const args = commandArguments(value, "quality");
     if (args === null) return null;
     const tokens = splitTokens(args);
-    const [first, second] = tokens.values;
+    const [first] = tokens.values;
     const fixedModes = [
       { id: "status", label: "status", detail: "Show Semantic Judge settings" },
-      { id: "off", label: "off", detail: "Disable the Semantic Judge" },
+      { id: "off", label: "off", detail: "Disable the Semantic Judge (retains the profile)" },
       { id: "observe", label: "observe", detail: "Record advisory Judge findings" },
-      { id: "rewrite", label: "rewrite", detail: "Configure rewrite mode" },
-      { id: "confirm", label: "confirm", detail: "Confirm rewrite mode" },
+      { id: "rewrite", label: "rewrite", detail: "Review and revise (asks once to confirm)" },
     ];
     if (!first || (!tokens.trailingSpace && tokens.values.length === 1)) {
       return completion("quality:mode", value, first ?? "", "quality modes", fixedModes, (item) => {
@@ -242,22 +241,15 @@ export const qualityCommandCompletion: CommandCompletion = {
         return `/quality ${item.id} `;
       });
     }
-    const confirmed = first === "confirm";
-    if (confirmed && (!second || (!tokens.trailingSpace && tokens.values.length === 2))) {
-      return completion("quality:confirm-mode", value, second ?? "", "rewrite confirmation", [
-        { id: "rewrite", label: "rewrite", detail: "Confirm rewrite mode" },
-      ], () => "/quality confirm rewrite ");
-    }
-    const mode = confirmed ? second : first;
-    const providerIndex = confirmed ? 2 : 1;
+    const mode = first;
     if (mode !== "observe" && mode !== "rewrite") return null;
-    const provider = tokens.values[providerIndex];
-    const model = tokens.values[providerIndex + 1];
+    const provider = tokens.values[1];
+    const model = tokens.values[2];
     const registry = context.providerRegistry();
-    const prefix = confirmed ? `/quality confirm ${mode}` : `/quality ${mode}`;
-    if (!provider || (!tokens.trailingSpace && tokens.values.length === providerIndex + 1)) {
+    const prefix = `/quality ${mode}`;
+    if (!provider || (!tokens.trailingSpace && tokens.values.length === 2)) {
       return completion(
-        `quality:${confirmed ? "confirm:" : ""}${mode}:provider`,
+        `quality:${mode}:provider`,
         value,
         provider ?? "",
         "providers",
@@ -265,9 +257,9 @@ export const qualityCommandCompletion: CommandCompletion = {
         (item) => `${prefix} ${item.id} `,
       );
     }
-    if (!model || (!tokens.trailingSpace && tokens.values.length === providerIndex + 2)) {
+    if (!model || (!tokens.trailingSpace && tokens.values.length === 3)) {
       return completion(
-        `quality:${confirmed ? "confirm:" : ""}${mode}:model:${provider}`,
+        `quality:${mode}:model:${provider}`,
         value,
         model ?? "",
         `models · ${provider}`,

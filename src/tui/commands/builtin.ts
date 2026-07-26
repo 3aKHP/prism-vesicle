@@ -10,9 +10,11 @@ import { createManualEngineTransition } from "../../core/engine/transition";
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import {
+  defaultExperimentalQualityTimeoutMs,
   loadExperimentalQualitySettings,
   writeExperimentalQualitySettings,
 } from "../../config/quality";
+import { resolveQualityCandidate } from "../quality-picker-controller";
 import type { Command } from "./types";
 import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
@@ -58,7 +60,7 @@ const HELP_TEXT = [
   "  /theme [dark|light|default|auto] show or set the colour theme (default follows the terminal; auto follows the clock)",
   "  /workspace [path] open the Workspace page, optionally locating a file or directory",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
-  "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
+  "  /quality          show or configure the experimental Semantic Judge (no args = guided settings)",
   "  /artifact [n|path] open artifacts in the Workspace page (no args = latest)",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
@@ -117,8 +119,8 @@ export const builtinCommands: Command[] = [
   {
     name: "quality",
     busyBehavior: (args) => args.trim() === "status" ? immediate : afterAgentLoop,
-    description: "Show or configure the experimental Semantic Judge",
-    usage: "/quality [off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]",
+    description: "Show or configure the experimental Semantic Judge (no args = guided settings)",
+    usage: "/quality [status|off|observe [provider model [timeout-ms]]|rewrite [provider model [timeout-ms]]]",
     completion: qualityCommandCompletion,
     async run(ctx, args, raw) {
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
@@ -132,43 +134,38 @@ export const builtinCommands: Command[] = [
         ctx.setMessages((prev) => [...prev, { role: "system", content: renderQualitySettings(settings) }]);
         return;
       }
+      // /quality confirm ... is no longer supported: Rewrite opens one modal
+      // confirmation panel. Reject it as invalid usage with no mutation.
+      if (parts[0] === "confirm") {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: `${QUALITY_USAGE}\nThe /quality confirm step was removed. Selecting Review and revise (or running /quality rewrite) opens one confirmation panel; no second command is needed.` }]);
+        return;
+      }
       if (parts[0] === "off" && parts.length === 1) {
-        await writeExperimentalQualitySettings({ mode: "off" });
-        ctx.setStatus("experimental Semantic Judge off");
-        ctx.recordActivity({ kind: "system", text: "experimental Semantic Judge disabled" });
-        ctx.setMessages((prev) => [...prev, { role: "system", content: "Experimental Semantic Judge is off. Future turns make no Judge request." }]);
+        await disableQuality(ctx);
         return;
       }
-      const confirm = parts[0] === "confirm";
-      const offset = confirm ? 1 : 0;
-      const mode = parts[offset];
-      const providerAlias = parts[offset + 1];
-      const modelId = parts[offset + 2];
-      const timeoutRaw = parts[offset + 3];
-      if ((mode !== "observe" && mode !== "rewrite") || !providerAlias || !modelId || parts.length > offset + 4) {
-        ctx.setMessages((prev) => [...prev, { role: "system", content: "Usage: /quality [status|off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]." }]);
+      const mode = parts[0];
+      if (mode !== "observe" && mode !== "rewrite") {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: QUALITY_USAGE }]);
         return;
       }
-      const judgeTimeoutMs = timeoutRaw ? Number(timeoutRaw) : 15_000;
-      if (!Number.isInteger(judgeTimeoutMs)) {
+      if (parts.length === 2 || parts.length > 4) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: QUALITY_USAGE }]);
+        return;
+      }
+      if (parts.length === 1) {
+        await runBareQualityMode(ctx, mode);
+        return;
+      }
+      // explicit advanced shortcut: /quality <mode> <provider> <model> [timeout-ms]
+      const providerAlias = parts[1]!;
+      const modelId = parts[2]!;
+      const judgeTimeoutMs = parts.length === 4 ? parseQualityTimeout(parts[3]!) : defaultExperimentalQualityTimeoutMs;
+      if (judgeTimeoutMs === undefined) {
         ctx.setMessages((prev) => [...prev, { role: "system", content: "Judge timeout must be an integer number of milliseconds." }]);
         return;
       }
-      try {
-        await ctx.ensureProviderRegistry();
-        const config = await loadConfigForSelection({ provider: providerAlias, model: modelId });
-        if (!config.apiKey) throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
-        if (mode === "rewrite" && !confirm) {
-          ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental rewrite will send eligible narrative prose to ${providerAlias}/${modelId} and may request up to two original-Engine revisions. Confirm with /quality confirm rewrite ${providerAlias} ${modelId} ${judgeTimeoutMs}.` }]);
-          return;
-        }
-        await writeExperimentalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs });
-        ctx.setStatus(`experimental Semantic Judge ${mode}`);
-        ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge ${mode} ${providerAlias}/${modelId}` });
-        ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge ${mode} is set to ${providerAlias}/${modelId} (${judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
-      } catch (error) {
-        ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
-      }
+      await runExplicitQualityMode(ctx, mode, providerAlias, modelId, judgeTimeoutMs);
     },
   },
 
@@ -615,8 +612,116 @@ export const builtinCommands: Command[] = [
 ];
 
 function renderQualitySettings(settings: Awaited<ReturnType<typeof loadExperimentalQualitySettings>>): string {
-  if (settings.mode === "off") return "Experimental Semantic Judge: off. Future turns make no Judge request.";
+  const tuple = qualityTuple(settings);
+  if (settings.mode === "off") {
+    return tuple
+      ? `Experimental Semantic Judge: off (inactive). Retained profile: ${tuple.providerAlias}/${tuple.modelId} (${tuple.judgeTimeoutMs} ms). No Judge request is made while off.`
+      : "Experimental Semantic Judge: off. Future turns make no Judge request.";
+  }
   return `Experimental Semantic Judge: ${settings.mode} with ${settings.providerAlias}/${settings.modelId} (${settings.judgeTimeoutMs} ms). It is not calibrated production policy.`;
+}
+
+const QUALITY_USAGE = "Usage: /quality [status|off|observe [provider model [timeout-ms]]|rewrite [provider model [timeout-ms]]]. No arguments open guided settings.";
+
+function qualityTuple(settings: Awaited<ReturnType<typeof loadExperimentalQualitySettings>>): { providerAlias: string; modelId: string; judgeTimeoutMs: number } | undefined {
+  if (settings.providerAlias && settings.modelId && settings.judgeTimeoutMs !== undefined) {
+    return { providerAlias: settings.providerAlias, modelId: settings.modelId, judgeTimeoutMs: settings.judgeTimeoutMs };
+  }
+  return undefined;
+}
+
+function parseQualityTimeout(raw: string): number | undefined {
+  if (!/^[0-9]+$/.test(raw)) return undefined;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : undefined;
+}
+
+async function disableQuality(ctx: Parameters<Command["run"]>[0]): Promise<void> {
+  const settings = await loadExperimentalQualitySettings();
+  const retained = qualityTuple(settings);
+  if (retained) {
+    await writeExperimentalQualitySettings({ mode: "off", providerAlias: retained.providerAlias, modelId: retained.modelId, judgeTimeoutMs: retained.judgeTimeoutMs });
+  } else {
+    await writeExperimentalQualitySettings({ mode: "off" });
+  }
+  ctx.setStatus("experimental Semantic Judge off");
+  ctx.recordActivity({ kind: "system", text: "experimental Semantic Judge disabled" });
+  ctx.setMessages((prev) => [...prev, {
+    role: "system",
+    content: retained
+      ? `Experimental Semantic Judge is off. The Judge profile ${retained.providerAlias}/${retained.modelId} is retained for later reuse; no Judge request is made while off.`
+      : "Experimental Semantic Judge is off. Future turns make no Judge request.",
+  }]);
+}
+
+/**
+ * Bare `/quality observe|rewrite` without an explicit profile. Observe enables
+ * immediately only when a retained valid profile exists; otherwise it opens the
+ * guided picker with the active provider/model preselected. Rewrite resolves the
+ * retained-or-active candidate and opens the red confirmation panel directly.
+ */
+async function runBareQualityMode(ctx: Parameters<Command["run"]>[0], mode: "observe" | "rewrite"): Promise<void> {
+  if (mode === "rewrite") {
+    try {
+      const registry = await ctx.ensureProviderRegistry();
+      const settings = await loadExperimentalQualitySettings();
+      const { candidate } = resolveQualityCandidate(settings, registry, ctx.activeProvider(), ctx.activeModel());
+      await validateQualityCandidate(candidate.providerAlias, candidate.modelId);
+      await ctx.openQualityRewriteConfirm(candidate);
+    } catch (error) {
+      ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+    }
+    return;
+  }
+  // bare observe
+  try {
+    const registry = await ctx.ensureProviderRegistry();
+    const settings = await loadExperimentalQualitySettings();
+    const retained = qualityTuple(settings);
+    if (retained && registry.providers.some((provider) => provider.id === retained.providerAlias && provider.models.some((model) => model.id === retained.modelId))) {
+      await validateQualityCandidate(retained.providerAlias, retained.modelId);
+      await writeExperimentalQualitySettings({ mode: "observe", providerAlias: retained.providerAlias, modelId: retained.modelId, judgeTimeoutMs: retained.judgeTimeoutMs });
+      ctx.setStatus("experimental Semantic Judge observe");
+      ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge observe ${retained.providerAlias}/${retained.modelId}` });
+      ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge observe is set to ${retained.providerAlias}/${retained.modelId} (${retained.judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
+      return;
+    }
+  } catch (error) {
+    ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+    return;
+  }
+  // No retained valid profile: open the picker focused on Review only. The
+  // candidate (active provider/model) is visibly preselected by the picker.
+  await ctx.openQualityPicker("observe");
+}
+
+/** Explicit `/quality observe|rewrite <provider> <model> [timeout]` advanced shortcut. */
+async function runExplicitQualityMode(
+  ctx: Parameters<Command["run"]>[0],
+  mode: "observe" | "rewrite",
+  providerAlias: string,
+  modelId: string,
+  judgeTimeoutMs: number,
+): Promise<void> {
+  try {
+    await ctx.ensureProviderRegistry();
+    await validateQualityCandidate(providerAlias, modelId);
+    if (mode === "rewrite") {
+      await ctx.openQualityRewriteConfirm({ providerAlias, modelId, judgeTimeoutMs });
+      return;
+    }
+    await writeExperimentalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs });
+    ctx.setStatus(`experimental Semantic Judge ${mode}`);
+    ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge ${mode} ${providerAlias}/${modelId}` });
+    ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge ${mode} is set to ${providerAlias}/${modelId} (${judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
+  } catch (error) {
+    ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+  }
+}
+
+async function validateQualityCandidate(providerAlias: string, modelId: string): Promise<void> {
+  const config = await loadConfigForSelection({ provider: providerAlias, model: modelId });
+  if (!config.apiKey) throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
 }
 
 export function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {

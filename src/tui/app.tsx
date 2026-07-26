@@ -18,6 +18,7 @@ import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
 import { yoloPanelHeight } from "./YoloPrompt";
+import { qualityRewritePanelHeight } from "./QualityRewritePrompt";
 import { builtinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
 import type { CommandContext } from "./commands/types";
@@ -460,16 +461,21 @@ export function App(props: AppProps = {}) {
   const qualityPickerController = createQualityPickerController({
     providerRegistry,
     ensureProviderRegistry,
+    activeProvider,
+    activeModel,
     setStatus,
     setMessages,
     reportError: (error) => turnController.reportError(error),
   });
   const {
     qualityPicker,
+    qualityRewriteConfirm,
     qualityPickerItems,
     qualityPickerTitle,
     handleQualityPickerKey,
+    handleRewriteConfirmKey,
     openQualityPicker,
+    openRewriteConfirm,
   } = qualityPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
   onCleanup(() => {
@@ -518,6 +524,7 @@ export function App(props: AppProps = {}) {
       && !sessionPicker()
       && !modelPicker()
       && !qualityPicker()
+      && !qualityRewriteConfirm()
       && !yoloConfirmStage(),
     agentCards,
     setConversation,
@@ -797,11 +804,13 @@ export function App(props: AppProps = {}) {
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
+    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
-      : decisionPanelMinHeight(),
+      : qualityRewriteConfirm()
+        ? Math.max(decisionPanelMinHeight(), qualityRewritePanelHeight(qualityRewriteConfirm()!.stage, dimensions().width))
+        : decisionPanelMinHeight(),
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
@@ -837,6 +846,8 @@ export function App(props: AppProps = {}) {
     handleModelPickerKey,
     qualityPicker,
     handleQualityPickerKey,
+    qualityRewriteConfirm,
+    handleRewriteConfirmKey,
     sessionPicker,
     handleSessionPickerKey,
     yoloConfirmStage,
@@ -939,6 +950,7 @@ export function App(props: AppProps = {}) {
     startStage: stageSessionController.start,
     openModelPicker,
     openQualityPicker,
+    openQualityRewriteConfirm: openRewriteConfirm,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
     openWorkspaceTarget: async (relPath?: string) => {
       setFocusedArtifactPath(null);
@@ -1109,6 +1121,7 @@ export function App(props: AppProps = {}) {
         rewind={rewindPicker()}
         session={sessionPicker()}
         qualityPicker={qualityPicker()}
+        qualityRewriteConfirm={qualityRewriteConfirm()}
         model={modelPicker()}
         gateFocus={gateFocus()}
         gateFeedbackMode={gateFeedbackMode()}

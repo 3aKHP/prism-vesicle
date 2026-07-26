@@ -1,6 +1,7 @@
 import { For, Match, Switch } from "solid-js";
 import type { GateRequest } from "../../core/gate/types";
 import type { PermissionRequest } from "../../core/permissions";
+import type { ExperimentalQualityMode } from "../../config/quality";
 import type { ResponsiveTuiLayout } from "../layout";
 import type { CommandArgumentCompletion } from "../commands/types";
 import type { Command } from "../commands/types";
@@ -9,6 +10,7 @@ import type { GateFocusTarget } from "../GatePrompt";
 import { GatePrompt, gateComposerIsActive, gateSummaryLineBudget } from "../GatePrompt";
 import { PermissionPrompt } from "../PermissionPrompt";
 import { PromptComposer } from "../PromptComposer";
+import { QualityRewritePrompt } from "../QualityRewritePrompt";
 import { QuestionPrompt } from "../QuestionPrompt";
 import { RewindPicker } from "../RewindPicker";
 import { SessionPicker } from "../SessionPicker";
@@ -30,11 +32,27 @@ export type ModelPickerState = {
   selected: number;
 };
 
-export type QualityPickerState =
-  | { step: "mode"; selected: number }
-  | { step: "provider"; mode: "observe" | "rewrite"; selected: number }
-  | { step: "model"; mode: "observe" | "rewrite"; providerId: string; selected: number }
-  | { step: "confirm"; providerId: string; modelId: string; selected: number };
+export type QualityPickerCandidate = {
+  providerAlias: string;
+  modelId: string;
+  judgeTimeoutMs: number;
+};
+
+export type QualityPickerState = {
+  step: "mode" | "provider" | "model";
+  selected: number;
+  candidate: QualityPickerCandidate;
+  currentMode: ExperimentalQualityMode;
+  currentTuple?: QualityPickerCandidate;
+  candidateSource: "retained" | "active";
+  browsingProvider?: string;
+};
+
+export type QualityRewriteConfirmState = {
+  stage: 1 | 2;
+  focused: "confirm" | "reject";
+  candidate: QualityPickerCandidate;
+};
 
 export type BottomSurfaceMode =
   | { kind: "yolo"; stage: 1 | 2 }
@@ -44,6 +62,7 @@ export type BottomSurfaceMode =
   | { kind: "gate"; gate: GateRequest }
   | { kind: "rewind"; picker: RewindPickerState }
   | { kind: "session"; picker: SessionPickerState }
+  | { kind: "quality-rewrite-confirm"; state: QualityRewriteConfirmState }
   | { kind: "quality-picker"; picker: QualityPickerState }
   | { kind: "model"; picker: ModelPickerState }
   | { kind: "composer" };
@@ -56,6 +75,7 @@ export type BottomSurfaceState = {
   gate: GateRequest | null;
   rewind: RewindPickerState | null;
   session: SessionPickerState | null;
+  qualityRewriteConfirm?: QualityRewriteConfirmState | null;
   qualityPicker?: QualityPickerState | null;
   model: ModelPickerState | null;
 };
@@ -68,6 +88,7 @@ export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfa
   if (state.gate) return { kind: "gate", gate: state.gate };
   if (state.rewind) return { kind: "rewind", picker: state.rewind };
   if (state.session) return { kind: "session", picker: state.session };
+  if (state.qualityRewriteConfirm) return { kind: "quality-rewrite-confirm", state: state.qualityRewriteConfirm };
   if (state.qualityPicker) return { kind: "quality-picker", picker: state.qualityPicker };
   if (state.model) return { kind: "model", picker: state.model };
   return { kind: "composer" };
@@ -88,6 +109,7 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   modelTitle: string;
   qualityPickerItems: OptionItem[];
   qualityPickerTitle: string;
+  qualityRewriteConfirm: QualityRewriteConfirmState | null;
   commandMenuOpen: boolean;
   commandItems: Command[];
   commandSelected: number;
@@ -205,6 +227,20 @@ export function BottomSurface(props: BottomSurfaceProps) {
               width={props.layout.width}
               hint="↑/↓ choose · Enter select · Esc back"
               maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
+            />
+          </box>
+        )}
+      </Match>
+      <Match when={mode().kind === "quality-rewrite-confirm" && mode() as Extract<BottomSurfaceMode, { kind: "quality-rewrite-confirm" }> }>
+        {(current) => (
+          <box height={props.layout.bottomHeight}>
+            <QualityRewritePrompt
+              stage={current().state.stage}
+              focused={current().state.focused}
+              providerAlias={current().state.candidate.providerAlias}
+              modelId={current().state.candidate.modelId}
+              judgeTimeoutMs={current().state.candidate.judgeTimeoutMs}
+              width={props.layout.width}
             />
           </box>
         )}
