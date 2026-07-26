@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfigForSelection, loadProviderRegistry } from "../../../src/config/providers";
 import { userConfigDirectory } from "../../../src/config/paths";
@@ -552,6 +552,92 @@ describe("config loading", () => {
     );
   });
 });
+
+describe("experimental quality settings versions", () => {
+  test("a version 1 file still loads and the first mutation writes valid version 2", async () => {
+    const { env, qualityPath } = await qualityFile([
+      "version: 1",
+      "mode: observe",
+      "providerAlias: judge",
+      "modelId: judge-model",
+      "judgeTimeoutMs: 12000",
+      "",
+    ], ["JUDGE_KEY=judge-secret"]);
+
+    const loaded = await loadExperimentalQualitySettings(env);
+    expect(loaded).toMatchObject({ mode: "observe", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 12_000 });
+
+    await writeExperimentalQualitySettings({ mode: "off" }, env);
+    expect(await readFile(qualityPath, "utf8")).toContain("version: 2");
+  });
+
+  test("version 2 off retains a dormant tuple while the runtime loads no Judge", async () => {
+    const { env } = await qualityFile([
+      "version: 2",
+      "mode: off",
+      "providerAlias: judge",
+      "modelId: judge-model",
+      "judgeTimeoutMs: 15000",
+      "",
+    ], ["JUDGE_KEY=judge-secret"]);
+
+    const settings = await loadExperimentalQualitySettings(env);
+    expect(settings).toMatchObject({ mode: "off", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 15_000 });
+    // off never resolves a Judge profile, even with a retained tuple.
+    await expect(loadExperimentalQualityProfile({ judge: { rubric: "fixture", rules: [] } } as never, env)).resolves.toBeUndefined();
+  });
+
+  test("disabling from an enabled mode writes the same tuple under off", async () => {
+    const { env, qualityPath } = await qualityFile([
+      "version: 2",
+      "mode: observe",
+      "providerAlias: judge",
+      "modelId: judge-model",
+      "judgeTimeoutMs: 17000",
+      "",
+    ], ["JUDGE_KEY=judge-secret"]);
+
+    await writeExperimentalQualitySettings({
+      mode: "off", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 17_000,
+    }, env);
+    const retained = await loadExperimentalQualitySettings(env);
+    expect(retained).toMatchObject({ mode: "off", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 17_000 });
+    expect(await readFile(qualityPath, "utf8")).toContain("judgeTimeoutMs: 17000");
+  });
+
+  test("version 2 rejects a partial dormant tuple", () => {
+    expect(() => parseExperimentalQualitySettings("version: 2\nmode: off\nproviderAlias: judge\n"))
+      .toThrow("providerAlias, modelId, and judgeTimeoutMs must appear together");
+  });
+
+  test("version 2 still rejects unknown fields, invalid modes, and out-of-bounds timeouts", () => {
+    expect(() => parseExperimentalQualitySettings("version: 2\nmode: observe\nproviderAlias: judge\nmodelId: m\njudgeTimeoutMs: 15000\nbaseUrl: https://bad.test\n"))
+      .toThrow("Unknown quality.yaml field: baseUrl");
+    expect(() => parseExperimentalQualitySettings("version: 2\nmode: review\n"))
+      .toThrow("Invalid quality mode");
+    expect(() => parseExperimentalQualitySettings("version: 2\nmode: rewrite\nproviderAlias: judge\nmodelId: m\njudgeTimeoutMs: 999\n"))
+      .toThrow("judgeTimeoutMs must be an integer from 1000 to 180000");
+  });
+
+  test("version 2 off without a tuple stays valid", () => {
+    expect(parseExperimentalQualitySettings("version: 2\nmode: off\n")).toMatchObject({ mode: "off" });
+  });
+
+  test("rejects an unsupported version", () => {
+    expect(() => parseExperimentalQualitySettings("version: 3\nmode: off\n")).toThrow("version: 1 or version: 2");
+  });
+});
+
+async function qualityFile(lines: string[], envLines: string[] = []): Promise<{ env: NodeJS.ProcessEnv; qualityPath: string }> {
+  const { env } = await writeProvidersFile([
+    "default:", "  provider: judge", "  model: judge-model", "providers:",
+    "  judge:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: JUDGE_KEY", "    models:", "      - judge-model", "",
+  ], envLines);
+  const configDir = dirname(env.VESICLE_PROVIDERS_FILE!);
+  const qualityPath = join(configDir, "quality.yaml");
+  await writeFile(qualityPath, lines.join("\n"));
+  return { env: { ...env, VESICLE_QUALITY_FILE: qualityPath }, qualityPath };
+}
 
 async function writeProvidersFile(lines: string[], envLines: string[] = []): Promise<{ env: NodeJS.ProcessEnv }> {
   const rootDir = await mkdtemp(join(tmpdir(), "vesicle-provider-config-"));

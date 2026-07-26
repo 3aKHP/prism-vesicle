@@ -92,6 +92,8 @@ export async function loadExperimentalQualityProfile(
   };
 }
 
+const qualityKnownFields = new Set(["version", "mode", "providerAlias", "modelId", "judgeTimeoutMs"]);
+
 export function parseExperimentalQualitySettings(source: string, path = "quality.yaml"): ExperimentalQualitySettings {
   const values = new Map<string, string>();
   for (const [index, raw] of source.split(/\r?\n/).entries()) {
@@ -104,11 +106,14 @@ export function parseExperimentalQualitySettings(source: string, path = "quality
     values.set(key, unquote(line.slice(colon + 1).trim()));
   }
   for (const key of values.keys()) {
-    if (key !== "version" && key !== "mode" && key !== "providerAlias" && key !== "modelId" && key !== "judgeTimeoutMs") {
+    if (!qualityKnownFields.has(key)) {
       throw new Error(`Unknown quality.yaml field: ${key}.`);
     }
   }
-  if (values.get("version") !== "1") throw new Error("quality.yaml requires version: 1.");
+  const version = values.get("version");
+  if (version !== "1" && version !== "2") {
+    throw new Error("quality.yaml requires version: 1 or version: 2.");
+  }
   const mode = values.get("mode") as ExperimentalQualityMode | undefined;
   if (!mode || !experimentalQualityModes.includes(mode)) {
     throw new Error(`Invalid quality mode. Available: ${experimentalQualityModes.join(", ")}.`);
@@ -116,23 +121,72 @@ export function parseExperimentalQualitySettings(source: string, path = "quality
   const providerAlias = values.get("providerAlias");
   const modelId = values.get("modelId");
   const timeoutValue = values.get("judgeTimeoutMs");
+  if (version === "1") {
+    return parseVersionOne(mode, providerAlias, modelId, timeoutValue, path);
+  }
+  return parseVersionTwo(mode, providerAlias, modelId, timeoutValue, path);
+}
+
+/**
+ * Version 1 keeps its original strict semantics: `off` carries no profile and
+ * enabled modes require the complete tuple. Existing files continue to load
+ * exactly as before; the first settings mutation rewrites the file as v2.
+ */
+function parseVersionOne(
+  mode: ExperimentalQualityMode,
+  providerAlias: string | undefined,
+  modelId: string | undefined,
+  timeoutValue: string | undefined,
+  path: string,
+): ExperimentalQualitySettings {
   if (mode === "off") {
     if (providerAlias || modelId || timeoutValue) {
       throw new Error("quality.yaml mode off cannot retain a Judge provider, model, or timeout.");
     }
-    return disabledSettings(path, true, source);
+    return disabledSettings(path, true);
   }
-  if (!providerAlias) throw new Error("quality.yaml requires providerAlias when mode is enabled.");
-  if (!modelId) throw new Error("quality.yaml requires modelId when mode is enabled.");
-  if (!timeoutValue || !/^[0-9]+$/.test(timeoutValue)) {
-    throw new Error("quality.yaml requires integer judgeTimeoutMs when mode is enabled.");
+  const resolved = requireCompleteTuple(mode, providerAlias, modelId, timeoutValue);
+  return {
+    mode,
+    providerAlias,
+    modelId,
+    judgeTimeoutMs: resolved,
+    path,
+    exists: true,
+    identity: qualitySettingsIdentity({ mode, providerAlias, modelId, judgeTimeoutMs: resolved }),
+  };
+}
+
+/**
+ * Version 2 lets `mode: off` retain one complete dormant provider/model/timeout
+ * tuple so disabling the Judge no longer destroys a valid selection. Enabled
+ * modes still require the complete tuple; partial tuples are rejected.
+ */
+function parseVersionTwo(
+  mode: ExperimentalQualityMode,
+  providerAlias: string | undefined,
+  modelId: string | undefined,
+  timeoutValue: string | undefined,
+  path: string,
+): ExperimentalQualitySettings {
+  const present = [providerAlias, modelId, timeoutValue].filter((value) => value !== undefined);
+  if (present.length !== 0 && present.length !== 3) {
+    throw new Error("quality.yaml providerAlias, modelId, and judgeTimeoutMs must appear together.");
   }
-  const judgeTimeoutMs = Number(timeoutValue);
-  if (!Number.isSafeInteger(judgeTimeoutMs)
-    || judgeTimeoutMs < minExperimentalQualityTimeoutMs
-    || judgeTimeoutMs > maxExperimentalQualityTimeoutMs) {
-    throw new Error(`quality.yaml judgeTimeoutMs must be an integer from ${minExperimentalQualityTimeoutMs} to ${maxExperimentalQualityTimeoutMs}.`);
+  if (mode === "off") {
+    if (present.length === 0) return disabledSettings(path, true);
+    const judgeTimeoutMs = requireCompleteTuple(mode, providerAlias, modelId, timeoutValue);
+    return {
+      mode: "off",
+      providerAlias,
+      modelId,
+      judgeTimeoutMs,
+      path,
+      exists: true,
+      identity: qualitySettingsIdentity({ mode: "off", providerAlias, modelId, judgeTimeoutMs }),
+    };
   }
+  const judgeTimeoutMs = requireCompleteTuple(mode, providerAlias, modelId, timeoutValue);
   return {
     mode,
     providerAlias,
@@ -140,8 +194,28 @@ export function parseExperimentalQualitySettings(source: string, path = "quality
     judgeTimeoutMs,
     path,
     exists: true,
-    identity: sha256(canonicalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs })),
+    identity: qualitySettingsIdentity({ mode, providerAlias, modelId, judgeTimeoutMs }),
   };
+}
+
+function requireCompleteTuple(
+  mode: ExperimentalQualityMode,
+  providerAlias: string | undefined,
+  modelId: string | undefined,
+  timeoutValue: string | undefined,
+): number {
+  if (!providerAlias) throw new Error(`quality.yaml requires providerAlias when mode is ${mode}.`);
+  if (!modelId) throw new Error(`quality.yaml requires modelId when mode is ${mode}.`);
+  if (!timeoutValue || !/^[0-9]+$/.test(timeoutValue)) {
+    throw new Error(`quality.yaml requires integer judgeTimeoutMs when mode is ${mode}.`);
+  }
+  const judgeTimeoutMs = Number(timeoutValue);
+  if (!Number.isSafeInteger(judgeTimeoutMs)
+    || judgeTimeoutMs < minExperimentalQualityTimeoutMs
+    || judgeTimeoutMs > maxExperimentalQualityTimeoutMs) {
+    throw new Error(`quality.yaml judgeTimeoutMs must be an integer from ${minExperimentalQualityTimeoutMs} to ${maxExperimentalQualityTimeoutMs}.`);
+  }
+  return judgeTimeoutMs;
 }
 
 export async function writeExperimentalQualitySettings(
@@ -169,31 +243,51 @@ export function renderExperimentalQualitySettings(
   if (!experimentalQualityModes.includes(settings.mode)) {
     throw new Error(`Invalid quality mode. Available: ${experimentalQualityModes.join(", ")}.`);
   }
-  if (settings.mode === "off") return "version: 1\nmode: off\n";
-  if (!settings.providerAlias || !settings.modelId || settings.judgeTimeoutMs === undefined) {
-    throw new Error("Enabled experimental quality settings require providerAlias, modelId, and judgeTimeoutMs.");
+  const hasProvider = settings.providerAlias !== undefined;
+  const hasModel = settings.modelId !== undefined;
+  const hasTimeout = settings.judgeTimeoutMs !== undefined;
+  const tuplePresent = hasProvider && hasModel && hasTimeout;
+  if (hasProvider || hasModel || hasTimeout) {
+    if (!tuplePresent) {
+      throw new Error("quality.yaml providerAlias, modelId, and judgeTimeoutMs must appear together.");
+    }
+  }
+  if (settings.mode === "off") {
+    if (!tuplePresent) return "version: 2\nmode: off\n";
+  } else if (!tuplePresent) {
+    throw new Error(`Enabled experimental quality settings require providerAlias, modelId, and judgeTimeoutMs.`);
   }
   return [
-    "version: 1",
+    "version: 2",
     `mode: ${quoteYaml(settings.mode)}`,
-    `providerAlias: ${quoteYaml(settings.providerAlias)}`,
-    `modelId: ${quoteYaml(settings.modelId)}`,
+    `providerAlias: ${quoteYaml(settings.providerAlias!)}`,
+    `modelId: ${quoteYaml(settings.modelId!)}`,
     `judgeTimeoutMs: ${settings.judgeTimeoutMs}`,
     "",
   ].join("\n");
 }
 
-function disabledSettings(path: string, exists: boolean, source = "version: 1\nmode: off\n"): ExperimentalQualitySettings {
+function disabledSettings(path: string, exists: boolean): ExperimentalQualitySettings {
   return {
     mode: "off",
     path,
     exists,
-    identity: sha256(source),
+    identity: qualitySettingsIdentity({ mode: "off" }),
   };
 }
 
-function canonicalQualitySettings(settings: { mode: ExperimentalQualityMode; providerAlias: string; modelId: string; judgeTimeoutMs: number }): string {
-  return JSON.stringify(settings);
+function qualitySettingsIdentity(settings: {
+  mode: ExperimentalQualityMode;
+  providerAlias?: string;
+  modelId?: string;
+  judgeTimeoutMs?: number;
+}): string {
+  return sha256(JSON.stringify({
+    mode: settings.mode,
+    providerAlias: settings.providerAlias ?? null,
+    modelId: settings.modelId ?? null,
+    judgeTimeoutMs: settings.judgeTimeoutMs ?? null,
+  }));
 }
 
 function resolvedProfileIdentity(settings: ExperimentalQualitySettings, config: VesicleConfig): string {
