@@ -104,7 +104,9 @@ export function App(props: AppProps = {}) {
       envParse: parseEnvTheme(process.env.VESICLE_THEME),
       project: {},
     });
-  themeController.applyStartup();
+  // runTui/runGuidedSetup already applied the startup preference before render;
+  // only the test fallback controller (props.theme absent) needs it here.
+  if (!props.theme) themeController.applyStartup();
   onMount(() => {
     if (props.bootstrapOnly) process.nextTick(() => renderer.destroy());
   });
@@ -146,7 +148,7 @@ export function App(props: AppProps = {}) {
     }] : []),
     ...(() => {
       // Surface bounded startup diagnostics (invalid env / invalid project preference).
-      const diagnostics = props.theme?.startupDiagnostics() ?? [];
+      const diagnostics = themeController.startupDiagnostics();
       return diagnostics.map((text) => ({ role: "system" as const, content: text }));
     })(),
   ]);

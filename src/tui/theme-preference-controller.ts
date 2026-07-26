@@ -133,7 +133,7 @@ export function createThemePreferenceController(inputs: ThemePreferenceControlle
     },
     effective,
     statusText() {
-      return formatThemeStatus(effective(), rootDir);
+      return formatThemeStatus(effective());
     },
     startupDiagnostics() {
       return diagnostics;
@@ -144,7 +144,7 @@ export function createThemePreferenceController(inputs: ThemePreferenceControlle
 /** Re-export so callers (runTui/setup) can read the project preference without a second import site. */
 export { readProjectThemePreference };
 
-function formatThemeStatus(state: { preference: ThemePreference; source: ThemePreferenceSource }, _rootDir: string): string {
+function formatThemeStatus(state: { preference: ThemePreference; source: ThemePreferenceSource }): string {
   const { preference, source } = state;
   const lines = [
     "Theme",

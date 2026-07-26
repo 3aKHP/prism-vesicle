@@ -76,6 +76,22 @@ describe("project theme preferences read", () => {
     expect(read.ok).toBe(false);
     expect(read.ok ? "" : read.diagnostic).toContain("duplicate");
   });
+
+  test("a non-ENOENT stat error on the preference path is a bounded diagnostic, not a thrown crash", async () => {
+    // A rootDir that is a regular file makes lstat of <rootDir>/.vesicle/preferences.yaml
+    // reject with ENOTDIR (non-ENOENT). Plan §6.3: project config is optional and
+    // recoverable — the read must surface a diagnostic, never throw.
+    const container = await mkdtemp(join(tmpdir(), "vesicle-prefs-notdir-"));
+    try {
+      const fileRoot = join(container, "not-a-dir");
+      await writeFile(fileRoot, "blocker");
+      const read = await readProjectThemePreference(fileRoot);
+      expect(read.ok).toBe(false);
+      expect(read.ok ? "" : read.diagnostic).toContain("Could not stat");
+    } finally {
+      await rm(container, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("project theme preferences write/unset", () => {

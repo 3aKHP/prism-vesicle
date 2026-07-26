@@ -49,7 +49,9 @@ export async function readProjectThemePreference(rootDir: string): Promise<Proje
     stats = await lstat(path);
   } catch (error) {
     if (isEnoent(error)) return { ok: true, path };
-    throw error;
+    // A permission/loop error on the project preference path must not crash
+    // TUI startup (plan §6.3: project config is optional and recoverable).
+    return { ok: false, diagnostic: `Could not stat ${rel(path, rootDir)}: ${messageOf(error)}.`, path };
   }
   if (stats.isSymbolicLink()) {
     return { ok: false, diagnostic: `${rel(path, rootDir)} is a symbolic link; ignoring project theme preference.`, path };
