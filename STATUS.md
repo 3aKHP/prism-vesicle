@@ -10,7 +10,7 @@ Release candidate: **1.0.0-alpha.6**. The `State` column tracks the candidate's 
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10@10.1.2`, verified 73-file inventory) | released |
+| Assets | Bundled V10 Harness (`prism-engine-v10`, verified 73-file inventory) | released |
 | Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
 | Providers | Multi-provider registry with generation defaults and capability/limits metadata | released |
@@ -223,7 +223,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Assets & Harness
 
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
-- With no project lock, Vesicle automatically verifies and activates the bundled `prism-engine-v10@10.1.2`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume.
+- With no project lock, Vesicle automatically verifies and activates the bundled `prism-engine-v10`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume.
 - See [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) for the bundled inventory, host extension layer, lineage, and update rules, and [`docs/dev/STYLE.md` § Managed Harness Packs](./docs/dev/STYLE.md#managed-harness-packs) for the verification and contract boundary.
 
 ### Persistent Instructions

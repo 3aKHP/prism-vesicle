@@ -34,7 +34,7 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10@10.1.2` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
+The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
 
 Inspect the active layers and the source of the effective manifest:
 
