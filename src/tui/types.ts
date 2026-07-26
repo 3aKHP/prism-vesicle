@@ -20,7 +20,7 @@ export type Message = {
   stageSource?: boolean;
   role: Role;
   content: string;
-  kind?: "reasoning" | "artifact" | "agent" | "stage-bootstrap-opening" | "provider-failure" | "host-error";
+  kind?: "reasoning" | "artifact" | "agent" | "stage-bootstrap-opening" | "provider-failure" | "host-error" | "compact-summary";
   agentRunId?: string;
   artifactPath?: string;
   artifactTruncated?: boolean;

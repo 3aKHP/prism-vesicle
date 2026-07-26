@@ -53,7 +53,12 @@ export function displayMessagesFromResumed(
     }];
   }
   if (message.kind === "compact-summary") {
-    return [{ role: "system", content: message.content.replace(/^\[conversation summary\]\s*/i, "Conversation summary\n") }];
+    // Preserve the compact-summary kind through the display projection so the
+    // Hero predicate can recognize this as conversation-bearing state rather
+    // than a startup notice (issue #107 PR2 addendum). Dropping the kind made a
+    // compacted session misclassify as empty and render the Hero over the
+    // summary.
+    return [{ role: "system", content: message.content.replace(/^\[conversation summary\]\s*/i, "Conversation summary\n"), kind: "compact-summary" }];
   }
   if (message.role === "assistant") {
     if (message.kind === "quality-rejected-candidate") return [];
@@ -133,6 +138,22 @@ export function displayMessagesFromResumed(
 
 export function joinSessionPath(sessionId: string): string {
   return `.vesicle/sessions/${sessionId}.jsonl`;
+}
+
+/**
+ * Whether the visible transcript proves a real conversation exists: an authored
+ * user prompt, an assistant reply, tool activity, or a compact summary that
+ * carries prior context forward. Startup notices (YOLO warning, "fresh
+ * session", etc.) are system messages without a kind and do not count. This is
+ * the empty-session Hero invariant (issue #107 PR2 addendum): the Hero may show
+ * only before any conversation-bearing state, so a compact summary or any turn
+ * keeps the transcript mounted instead of flipping to the Hero.
+ */
+export function isEmptySessionTranscript(messages: Message[]): boolean {
+  return !messages.some((message) => message.role === "user"
+    || message.role === "assistant"
+    || message.role === "tool"
+    || message.kind === "compact-summary");
 }
 
 function extractResultContent(raw: string): string {
