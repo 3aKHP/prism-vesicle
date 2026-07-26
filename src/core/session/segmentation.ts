@@ -1,6 +1,7 @@
 import { ENGINE_HANDOFF_KIND } from "../engine/transition";
 import type { SessionRecord } from "./record-model";
 import { readLogicalTurnId, readProviderRoundId } from "./execution-identity";
+import { COMPACT_CHECKPOINT_KIND } from "./compact-checkpoint";
 
 /**
  * Conservative session segmentation: the pure service that groups an active
@@ -109,7 +110,7 @@ function isTurnRelevantSystem(record: SessionRecord): boolean {
   const kind = record.metadata?.kind;
   return kind === "validation"
     || kind === "failed-turn"
-    || kind === "compact-checkpoint-v1"
+    || kind === COMPACT_CHECKPOINT_KIND
     || kind === "compact-boundary"
     || kind === "no-progress-breaker";
 }

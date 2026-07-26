@@ -84,22 +84,20 @@ export function withExecutionRound(sessionId: string, metadata: Record<string, u
 }
 
 /**
- * Recover the active logical turn + provider round for a resumed pause. The
- * logical turn is the newest persisted `logicalTurnId`; the provider round is
- * the round of the most recent record that carries one — the round that
- * produced the paused interaction. Returns undefined when no identity has been
- * persisted yet (a legacy session), so the continuation falls back to the old
- * append behavior instead of guessing.
+ * Recover the active logical turn + provider round for a resumed pause. Scans
+ * backwards and returns the identity from the most recent record that carries
+ * BOTH ids together — the round that produced the paused interaction — so a
+ * host marker that happens to persist only a logical turn id can never be
+ * cobbled together with an older round id. Returns undefined when no identity
+ * has been persisted yet (a legacy session), so the continuation falls back to
+ * the old append behavior instead of guessing.
  */
 export function recoverActiveIdentity(records: SessionRecord[]): ExecutionRound | undefined {
-  let logicalTurnId: string | undefined;
-  let providerRoundId: string | undefined;
-  for (const record of records) {
-    const turn = readLogicalTurnId(record);
-    if (turn) logicalTurnId = turn;
-    const round = readProviderRoundId(record);
-    if (round) providerRoundId = round;
+  for (let index = records.length - 1; index >= 0; index--) {
+    const record = records[index]!;
+    const logicalTurnId = readLogicalTurnId(record);
+    const providerRoundId = readProviderRoundId(record);
+    if (logicalTurnId && providerRoundId) return { logicalTurnId, providerRoundId };
   }
-  if (!logicalTurnId || !providerRoundId) return undefined;
-  return { logicalTurnId, providerRoundId };
+  return undefined;
 }

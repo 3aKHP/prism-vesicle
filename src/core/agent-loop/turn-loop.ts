@@ -459,6 +459,6 @@ async function recordNoProgressBreak(session: SessionStore, consecutiveFailures:
   await session.append({
     role: "system",
     content: `Tool loop stopped after ${consecutiveFailures} consecutive rounds of failing tool results.`,
-    metadata: { kind: "no-progress-breaker" },
+    metadata: withExecutionRound(session.sessionId, { kind: "no-progress-breaker" }),
   });
 }

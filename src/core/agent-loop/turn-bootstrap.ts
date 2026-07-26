@@ -69,12 +69,12 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   );
 
   // A new top-level Agent Loop gets a fresh logical turn id, and its first
-  // provider round is allocated alongside the initiating input. Binding the
-  // round now means every recorder and injected input this turn appends will
-  // stamp it, so segmentation can group the turn and its rounds later.
+  // provider round is allocated alongside the initiating input. The ids stamp
+  // the user record directly; the active-round map is bound only after all
+  // fallible bootstrap appends succeed (just before return) so a failed append
+  // can never leak a stale entry that runLoop's finally would never clear.
   const logicalTurnId = newLogicalTurnId();
   const providerRoundId = newProviderRoundId();
-  bindExecutionRound(session.sessionId, { logicalTurnId, providerRoundId });
 
   if (isNewSession) {
     await session.append({
@@ -135,6 +135,10 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   // Freeze only after bootstrap's fallible persistence work is complete. From
   // here, runLoop owns cleanup on completion or failure, while pauses retain it.
   freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
+  // Bind the active round last, after every fallible append above has succeeded.
+  // runLoop's finally clears it on completion/pause/error; a throw before this
+  // point leaves no leaked entry.
+  bindExecutionRound(session.sessionId, { logicalTurnId, providerRoundId });
   const messages: VesicleMessage[] = options.messages ?? [{
     role: "user",
     content: options.input,

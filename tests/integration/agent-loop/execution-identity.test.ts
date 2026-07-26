@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runPrompt } from "../../../src/core/agent-loop/run";
-import { loadSessionRecords, recoverActiveIdentity, segmentSession } from "../../../src/core/session/store";
+import { createSessionStore, loadSessionRecords, recoverActiveIdentity, segmentSession } from "../../../src/core/session/store";
 import {
   configureTestProviderEnv,
   createPromptRoot,
@@ -143,5 +143,21 @@ describe("agent loop: execution identity", () => {
     const turnRecords = records.filter((record) => (record.metadata?.logicalTurnId as string | undefined) === logicalTurnId);
     expect(turnRecords.length).toBeGreaterThan(1);
     expect(new Set(turnRecords.map((record) => record.metadata?.logicalTurnId as string | undefined)).size).toBe(1);
+  });
+
+  test("recoverActiveIdentity returns the round carrying both ids, not a cobbled-together pair", async () => {
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "recover");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first", metadata: { logicalTurnId: "t1", providerRoundId: "r1" } });
+    await store.append({ role: "assistant", content: "reply", metadata: { logicalTurnId: "t2", providerRoundId: "r2" } });
+    // A trailing host marker persists only a logical turn id (no round). The
+    // recovered round must be r2 (the assistant that produced the pause), not a
+    // t2/r1 cobble from scanning each id independently.
+    await store.append({ role: "system", content: "", metadata: { logicalTurnId: "t2" } });
+
+    const records = await loadSessionRecords(rootDir, store.sessionId);
+    const recovered = recoverActiveIdentity(records);
+    expect(recovered).toEqual({ logicalTurnId: "t2", providerRoundId: "r2" });
   });
 });
