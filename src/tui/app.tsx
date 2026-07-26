@@ -3,8 +3,9 @@ import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
-import { engineAccent, palette, reportTerminalThemeMode, setThemePreference, themePreference } from "./theme";
+import { engineAccent, palette, reportTerminalThemeMode, themePreference } from "./theme";
 import { createThemeScheduler } from "./theme-runtime";
+import { createThemePreferenceController, parseEnvTheme, type ThemePreferenceController } from "./theme-preference-controller";
 import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
@@ -74,6 +75,8 @@ export type AppProps = {
   dangerouslySkipPermissions?: boolean;
   initialResume?: boolean;
   bootstrapOnly?: boolean;
+  /** Effective theme-preference owner (source precedence, session override, project persistence). */
+  theme?: ThemePreferenceController;
 };
 
 export {
@@ -92,6 +95,16 @@ export type { TokenUsageSummary };
 export function App(props: AppProps = {}) {
   initDebugLogging();
   const renderer = useRenderer();
+  // The controller is constructed in runTui/setup before the first frame. Tests
+  // that mount App directly fall back to an env-only controller (no project
+  // read) so the palette and `/theme` still work without async I/O on mount.
+  const themeController: ThemePreferenceController = props.theme
+    ?? createThemePreferenceController({
+      rootDir: process.cwd(),
+      envParse: parseEnvTheme(process.env.VESICLE_THEME),
+      project: {},
+    });
+  themeController.applyStartup();
   onMount(() => {
     if (props.bootstrapOnly) process.nextTick(() => renderer.destroy());
   });
@@ -131,6 +144,11 @@ export function App(props: AppProps = {}) {
       role: "system" as const,
       content: "DANGER: --dangerously-skip-permissions enabled YOLO for this process. Tool approvals are bypassed; runtime hard guards remain active.",
     }] : []),
+    ...(() => {
+      // Surface bounded startup diagnostics (invalid env / invalid project preference).
+      const diagnostics = props.theme?.startupDiagnostics() ?? [];
+      return diagnostics.map((text) => ({ role: "system" as const, content: text }));
+    })(),
   ]);
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
@@ -153,18 +171,10 @@ export function App(props: AppProps = {}) {
   // conversation turns; system notices (e.g. the YOLO warning) render above it.
   const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system" && !message.kind));
 
-  // Day/night theme. The effective preference domain is dark/light/default/auto
-  // (default follows the terminal; auto is local-time [07:00, 19:00)). Startup
-  // resolves VESICLE_THEME when it names one of the four values; otherwise the
-  // built-in `default` follows the terminal's own mode (eager report, async
-  // detection, then live events). An invalid env value falls back to built-in
-  // default rather than being silently reinterpreted as auto.
-  const requestedTheme = process.env.VESICLE_THEME?.trim().toLowerCase();
-  const envTheme = requestedTheme === "dark" || requestedTheme === "light"
-      || requestedTheme === "default" || requestedTheme === "auto"
-    ? requestedTheme
-    : "default";
-  setThemePreference(envTheme, requestedTheme && envTheme !== "default" ? "env" : "builtin");
+  // Day/night theme. The effective preference (and its source) is applied
+  // before the first frame by the controller in runTui/setup. Here the shell
+  // subscribes to live terminal mode reports and owns the `auto` boundary
+  // timer; the reactive palette authority stays in theme.ts.
   const reportedTheme = renderer.themeMode;
   if (reportedTheme) reportTerminalThemeMode(reportedTheme);
   void renderer.waitForThemeMode(500).then((detected) => {
@@ -675,6 +685,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
     clearQueuedInputs,
+    clearThemeOverride: () => themeController.clearOverride(),
     onSessionActive: (id) => { void sideQuestionController.rebuildForResume(id).catch(reportError); },
   }));
   sessionActions = createSessionActionsController({
@@ -919,6 +930,13 @@ export function App(props: AppProps = {}) {
     openWorkspaceTarget: async (relPath?: string) => {
       setFocusedArtifactPath(null);
       return workspaceController.openWorkspaceTarget(relPath);
+    },
+    theme: {
+      statusText: () => themeController.statusText(),
+      applyOverride: (pref) => themeController.applyOverride(pref),
+      clearOverride: () => themeController.clearOverride(),
+      persistProject: (pref) => themeController.persistProject(pref),
+      unsetProject: () => themeController.unsetProject(),
     },
   };
 

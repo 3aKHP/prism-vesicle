@@ -140,6 +140,15 @@ export type CommandContext = {
 
   // —— shell pages (Scope B two-page model) ——
   openWorkspaceTarget: (relPath?: string) => Promise<"file" | "dir" | null>;
+
+  // —— theme preference (#86) ——
+  theme: {
+    statusText: () => string;
+    applyOverride: (pref: import("../theme").ThemePreference) => void;
+    clearOverride: () => void;
+    persistProject: (pref: import("../theme").ThemePreference) => Promise<void>;
+    unsetProject: () => Promise<void>;
+  };
 };
 
 export type Command = {

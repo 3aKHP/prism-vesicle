@@ -1,0 +1,176 @@
+import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import type { Stats } from "node:fs";
+import { dirname, join } from "node:path";
+import { readYamlKeyValue, readYamlLines } from "./yaml-line-reader";
+import type { ThemePreference } from "../tui/theme";
+
+/**
+ * Project-local `.vesicle/preferences.yaml` — version 1. This is local ignored
+ * host state (not tracked collaborative configuration): it holds UI preferences
+ * tied to a working directory. Version 1 stores only the `theme` field.
+ *
+ * Schema rules (plan §8.1):
+ *   - `version: 1` is required when the file exists.
+ *   - `theme` is optional and accepts exactly dark, light, default, or auto.
+ *   - An absent `theme` means no project override.
+ *   - No secrets, URLs, provider definitions, permissions, shell settings, or
+ *     arbitrary environment values.
+ *   - Unknown fields are invalid: startup warns and falls back; write commands
+ *     refuse to clobber an invalid existing file.
+ *
+ * Path/symlink/atomic-write behaviour (plan §8.3):
+ *   - A symlink at the exact preference path is rejected on read and write.
+ *   - Writes create `.vesicle/` when needed, write a sibling temp, and rename.
+ *   - Removing the last supported field may remove the file; `.vesicle/` itself
+ *     and unrelated project state are never removed.
+ */
+
+export const PROJECT_PREFERENCES_VERSION = 1;
+const VALID_THEMES: readonly ThemePreference[] = ["dark", "light", "default", "auto"];
+
+export type ProjectPreferencesRead =
+  | { ok: true; theme?: ThemePreference; path: string }
+  | { ok: false; diagnostic: string; path: string };
+
+export function projectPreferencesPath(rootDir: string): string {
+  return join(rootDir, ".vesicle", "preferences.yaml");
+}
+
+/**
+ * Read the project theme preference. A missing file is `ok` with no theme
+ * (no override); a symlink, malformed, unsupported-version, unknown-field, or
+ * invalid-theme file is `ok: false` with one bounded diagnostic so the caller
+ * can surface it and fall back to lower-priority sources.
+ */
+export async function readProjectThemePreference(rootDir: string): Promise<ProjectPreferencesRead> {
+  const path = projectPreferencesPath(rootDir);
+  let stats: Stats;
+  try {
+    stats = await lstat(path);
+  } catch (error) {
+    if (isEnoent(error)) return { ok: true, path };
+    throw error;
+  }
+  if (stats.isSymbolicLink()) {
+    return { ok: false, diagnostic: `${rel(path, rootDir)} is a symbolic link; ignoring project theme preference.`, path };
+  }
+  let source: string;
+  try {
+    source = await readFile(path, "utf8");
+  } catch (error) {
+    if (isEnoent(error)) return { ok: true, path };
+    return { ok: false, diagnostic: `Could not read ${rel(path, rootDir)}: ${messageOf(error)}.`, path };
+  }
+  const parsed = parsePreferencesSource(source, path, rootDir);
+  return parsed;
+}
+
+function parsePreferencesSource(source: string, path: string, rootDir: string): ProjectPreferencesRead {
+  const display = rel(path, rootDir);
+  const lines = readYamlLines(source);
+  const map = new Map<string, { value: string; line: number }>();
+  try {
+    for (const line of lines) {
+      const [key, value] = readYamlKeyValue(line.text, line.number, path, "preferences.yaml");
+      if (map.has(key)) {
+        return { ok: false, diagnostic: `${display} line ${line.number}: duplicate field "${key}".`, path };
+      }
+      map.set(key, { value, line: line.number });
+    }
+  } catch (error) {
+    return { ok: false, diagnostic: messageOf(error), path };
+  }
+  for (const key of map.keys()) {
+    if (key !== "version" && key !== "theme") {
+      return { ok: false, diagnostic: `${display}: unknown field "${key}". Only "version" and "theme" are allowed.`, path };
+    }
+  }
+  const version = map.get("version");
+  if (version === undefined) {
+    return { ok: false, diagnostic: `${display}: missing required "version: 1".`, path };
+  }
+  if (version.value !== String(PROJECT_PREFERENCES_VERSION)) {
+    return { ok: false, diagnostic: `${display}: unsupported version "${version.value}" (expected "${PROJECT_PREFERENCES_VERSION}").`, path };
+  }
+  const theme = map.get("theme");
+  if (theme && !VALID_THEMES.includes(theme.value as ThemePreference)) {
+    return { ok: false, diagnostic: `${display}: invalid theme "${theme.value}". Expected one of dark, light, default, auto.`, path };
+  }
+  return { ok: true, path, theme: theme?.value as ThemePreference | undefined };
+}
+
+/**
+ * Atomically write the project theme preference. Refuses a symlink target,
+ * refuses to clobber a malformed/invalid existing file, and creates `.vesicle/`
+ * when needed. The temp name is unique per process so two Vesicle instances do
+ * not collide; last-atomic-rename-wins is the documented race semantics.
+ */
+export async function writeProjectThemePreference(rootDir: string, theme: ThemePreference): Promise<void> {
+  const path = projectPreferencesPath(rootDir);
+  await rejectSymlinkTarget(path, rootDir);
+  const existing = await readProjectThemePreference(rootDir);
+  if (!existing.ok) {
+    throw new Error(`Refusing to overwrite malformed ${rel(path, rootDir)}: ${existing.diagnostic}`);
+  }
+  await atomicWrite(path, `version: ${PROJECT_PREFERENCES_VERSION}\ntheme: ${theme}\n`);
+}
+
+/**
+ * Remove the project theme preference. After removal the file holds only
+ * `version: 1`, so the file itself is removed (the `.vesicle/` directory and
+ * unrelated state are left untouched). Refuses to modify a malformed file.
+ * Removing an already-absent preference is a no-op.
+ */
+export async function unsetProjectThemePreference(rootDir: string): Promise<void> {
+  const path = projectPreferencesPath(rootDir);
+  const existing = await readProjectThemePreference(rootDir);
+  if (!existing.ok) {
+    throw new Error(`Refusing to modify malformed ${rel(path, rootDir)}: ${existing.diagnostic}`);
+  }
+  if (existing.theme === undefined) return;
+  await safeUnlink(path);
+}
+
+async function rejectSymlinkTarget(path: string, rootDir: string): Promise<void> {
+  try {
+    const info = await lstat(path);
+    if (info.isSymbolicLink()) {
+      throw new Error(`Refusing to write: ${rel(path, rootDir)} is a symbolic link.`);
+    }
+  } catch (error) {
+    if (!isEnoent(error)) throw error;
+  }
+}
+
+async function atomicWrite(path: string, content: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  await writeFile(tmp, content, "utf8");
+  try {
+    await rename(tmp, path);
+  } catch (error) {
+    await safeUnlink(tmp);
+    throw error;
+  }
+}
+
+async function safeUnlink(path: string): Promise<void> {
+  try {
+    await unlink(path);
+  } catch (error) {
+    if (isEnoent(error)) return;
+    throw error;
+  }
+}
+
+function isEnoent(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "ENOENT");
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function rel(path: string, rootDir: string): string {
+  return path.startsWith(`${rootDir}/`) ? path.slice(rootDir.length + 1) : path;
+}
