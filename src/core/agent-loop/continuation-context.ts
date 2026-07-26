@@ -7,6 +7,7 @@ import type { EngineId } from "../engine/profile";
 import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
+import { bindExecutionRound, recoverActiveIdentity } from "../session/store";
 import { composeInstructionBlocks, composeSystemPromptWithInstructions } from "../instructions";
 import { freezeInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
@@ -86,6 +87,13 @@ export async function loadContinuationContext(
     permission.shellInterpreter,
   );
   const session = await createSessionStore(rootDir, options.sessionId);
+  // Recover the logical turn + provider round the paused interaction belongs to
+  // and re-bind them as the active round, so every resolution record this
+  // continuation appends carries the original ids and a resumed pause never
+  // creates a new logical turn. Legacy sessions without identity fall back to
+  // the old append behavior (no round bound → no stamping).
+  const identity = recoverActiveIdentity(snapshot.records);
+  if (identity) bindExecutionRound(session.sessionId, identity);
   return {
     rootDir,
     permission,
@@ -100,6 +108,7 @@ export async function loadContinuationContext(
     harness,
     assets,
     experimentalQuality,
+    ...(identity ? { identity } : {}),
   };
 }
 

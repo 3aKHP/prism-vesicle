@@ -9,7 +9,7 @@ import { composeInstructionBlocks } from "../instructions";
 import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
-import { createSessionStore } from "../session/store";
+import { bindExecutionRound, createSessionStore, executionIdentityMetadata, newLogicalTurnId, newProviderRoundId } from "../session/store";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
 import { generationMetadata, mergeGeneration } from "./generation";
@@ -68,6 +68,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
 
+  // A new top-level Agent Loop gets a fresh logical turn id, and its first
+  // provider round is allocated alongside the initiating input. Binding the
+  // round now means every recorder and injected input this turn appends will
+  // stamp it, so segmentation can group the turn and its rounds later.
+  const logicalTurnId = newLogicalTurnId();
+  const providerRoundId = newProviderRoundId();
+  bindExecutionRound(session.sessionId, { logicalTurnId, providerRoundId });
+
   if (isNewSession) {
     await session.append({
       role: "system",
@@ -112,6 +120,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
       content: options.input,
       metadata: {
         ...(options.inputMetadata ?? {}),
+        ...executionIdentityMetadata({ logicalTurnId, providerRoundId }),
         engine,
         provider: config.provider,
         providerId: config.providerId,
@@ -142,6 +151,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     mcpRegistry: toolSurface.mcp,
     messages,
     session,
+    logicalTurnId,
+    providerRoundId,
     profile,
     generation,
     checkpoint,

@@ -2,6 +2,7 @@ import type { VesicleMessage } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
 import type { ProcessManager } from "../process/manager";
 import type { SessionStore } from "../session/store";
+import { withExecutionRound } from "../session/store";
 import type { ToolResult } from "../tools";
 import { trackBackgroundProcessCompletion } from "./background-process";
 import type { AgentLoopEvent } from "./types";
@@ -28,7 +29,7 @@ export async function recordToolResult(options: RecordToolResultOptions): Promis
   await options.session.append({
     role: "tool",
     content,
-    metadata: {
+    metadata: withExecutionRound(options.session.sessionId, {
       name: result.name,
       ok: result.ok,
       toolCallId: result.callId,
@@ -39,7 +40,7 @@ export async function recordToolResult(options: RecordToolResultOptions): Promis
       ...(result.instructionEvent ? { instructionEvent: result.instructionEvent } : {}),
       ...(result.images ? { images: persistedImageAttachments(result.images) } : {}),
       ...(options.metadata ?? {}),
-    },
+    }),
   });
   if (options.processManager) {
     trackBackgroundProcessCompletion(options.processManager, options.session, result);

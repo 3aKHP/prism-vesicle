@@ -1,6 +1,7 @@
 import type { VesicleMessage, VesicleResponse } from "../../providers/shared/types";
 import type { EngineProfile } from "../engine/profile";
 import type { SessionStore } from "../session/store";
+import { withExecutionRound } from "../session/store";
 import type { ToolCall } from "../tools";
 
 export async function recordAssistantToolCalls(options: {
@@ -24,7 +25,7 @@ export async function recordAssistantToolCalls(options: {
   await options.session.append({
     role: "assistant",
     content: response.content,
-    metadata: {
+    metadata: withExecutionRound(options.session.sessionId, {
       engine: options.profile.id,
       model: options.model,
       providerResponseId: response.id,
@@ -34,7 +35,7 @@ export async function recordAssistantToolCalls(options: {
       ...(response.usage ? { usage: response.usage } : {}),
       ...(options.metadata ?? {}),
       toolCalls,
-    },
+    }),
   });
   return parentMessages;
 }

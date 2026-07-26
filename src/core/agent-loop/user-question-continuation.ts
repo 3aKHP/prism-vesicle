@@ -7,6 +7,7 @@ import { loadContinuationContext } from "./continuation-context";
 import { generationMetadata } from "./generation";
 import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
+import { withExecutionRound } from "../session/store";
 import type { AgentManager } from "../agents/manager";
 import type { AgentMetadata } from "../agents/types";
 import { AgentStore } from "../agents/store";
@@ -44,7 +45,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     await context.session.append({
       role: "system",
       content: "",
-      metadata: {
+      metadata: withExecutionRound(context.session.sessionId, {
         kind: "delegation-retry-intent",
         retryIntent: {
           id: preparedRetry.intentId,
@@ -54,7 +55,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
           attempt: preparedRetry.failed.delegation!.attempt + 1,
           retryCallId: preparedRetry.retryCall.id,
         },
-      },
+      }),
     });
   }
   const toolResultContent = JSON.stringify({
@@ -80,7 +81,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
   await context.session.append({
     role: "tool",
     content: toolResultContent,
-    metadata: {
+    metadata: withExecutionRound(context.session.sessionId, {
       engine: options.engine,
       name: "ask_user_question",
       ok: true,
@@ -99,7 +100,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
         ...(preparedRetry ? { retryIntentId: preparedRetry.intentId } : {}),
       } : options.answer.kind ? { kind: options.answer.kind } : {}),
       ...(options.answer.freeformText ? { freeformText: options.answer.freeformText } : {}),
-    },
+    }),
   });
 
   const userFollowUp = userQuestionFollowUpMessage(options.question, options.answer);
@@ -107,7 +108,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
   await context.session.append({
     role: "user",
     content: userFollowUp,
-    metadata: {
+    metadata: withExecutionRound(context.session.sessionId, {
       engine: options.engine,
       provider: context.config.provider,
       providerId: context.config.providerId,
@@ -123,7 +124,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
         optionId: contractOption.id,
         ...(preparedRetry ? { retryIntentId: preparedRetry.intentId } : {}),
       } : {}),
-    },
+    }),
   });
 
   const manager = options.agentManager ?? createTurnAgentManager(context.rootDir, options.onEvent);
@@ -153,6 +154,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     mcpRegistry: context.toolSurface.mcp,
     messages,
     session: context.session,
+    logicalTurnId: context.identity?.logicalTurnId,
     profile: context.profile,
     generation: context.generation,
     checkpoint,
@@ -199,7 +201,7 @@ async function executeAuthorizedDelegationRetry(options: {
   await options.context.session.append({
     role: "assistant",
     content: "",
-    metadata: {
+    metadata: withExecutionRound(options.context.session.sessionId, {
       kind: "delegation-user-retry",
       retryIntentId: intentId,
       engine: options.context.profile.id,
@@ -208,7 +210,7 @@ async function executeAuthorizedDelegationRetry(options: {
       delegationId: failed.delegation.id,
       attempt: failed.delegation.attempt + 1,
       toolCalls: [retryCall],
-    },
+    }),
   });
   const child = await options.manager.spawn({
     profileId: failed.profileId,

@@ -5,7 +5,7 @@ import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { PermissionRequest, PermissionResolution, ToolPermissionBroker } from "../permissions";
 import { createPermissionRequest } from "../permissions";
 import { getProcessManager } from "../process/manager";
-import { loadSessionRecords } from "../session/store";
+import { loadSessionRecords, withExecutionRound } from "../session/store";
 import type { ToolCall, ToolResult } from "../tools";
 import { executeHostTool } from "../tools";
 import { executionPlanHash, parseShellExecPlan } from "../tools/shell";
@@ -98,13 +98,13 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
     await context.session.append({
       role: "system",
       content: "",
-      metadata: { kind: "quality-check-pending", qualityRewrite: pendingState },
+      metadata: withExecutionRound(context.session.sessionId, { kind: "quality-check-pending", qualityRewrite: pendingState }),
     });
   }
   await context.session.append({
     role: "system",
     content: `Permission ${options.resolution.decision} for ${call.name}.`,
-    metadata: {
+    metadata: withExecutionRound(context.session.sessionId, {
       kind: "permission-resolution",
       requestId: options.request.id,
       toolCallId: call.id,
@@ -115,7 +115,7 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
       decisionSource: "user",
       capabilityAvailable,
       ...(options.resolution.decision === "reject" && options.resolution.feedback ? { feedback: options.resolution.feedback } : {}),
-    },
+    }),
   });
   return { context, messages, call, approvedShellPlanHash, qualityState };
 }
@@ -189,6 +189,7 @@ async function continuePermissionSequence(
     mcpRegistry: context.toolSurface.mcp,
     messages,
     session: context.session,
+    logicalTurnId: context.identity?.logicalTurnId,
     profile: context.profile,
     generation: context.generation,
     checkpoint: context.checkpoint,
@@ -255,7 +256,7 @@ async function executeApprovedEntry(
     await context.session.append({
       role: "system",
       content: "Approved shell process started.",
-      metadata: { kind: "process-started", requestId: entry.request.id, toolCallId: call.id, planHash: approvedShellPlanHash, checkpointTainted: true },
+      metadata: withExecutionRound(context.session.sessionId, { kind: "process-started", requestId: entry.request.id, toolCallId: call.id, planHash: approvedShellPlanHash, checkpointTainted: true }),
     });
   }
   if (agentToolNames.has(call.name)) {
@@ -321,7 +322,7 @@ async function createPermissionPause(
     ),
     ...(qualityState ? { qualityState } : {}),
   };
-  await context.session.append({ role: "system", content: `Permission required for ${call.name}.`, metadata: { kind: "permission-request", request } });
+  await context.session.append({ role: "system", content: `Permission required for ${call.name}.`, metadata: withExecutionRound(context.session.sessionId, { kind: "permission-request", request }) });
   onEvent?.({ type: "permission_pending", request });
   return {
     kind: "needs_permission",
