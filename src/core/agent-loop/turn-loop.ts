@@ -112,8 +112,6 @@ type LoopRuntime = {
   providerRoundId: string | undefined;
   /** Most recent provider-observed context occupancy, for mid-turn budget checks. Cleared after a compact (stale). */
   lastContextInputTokens: number | undefined;
-  /** Set when a mid-turn hard-ceiling compaction fails, so the loop stops before the unsafe request. */
-  midTurnBlocked: boolean;
 };
 
 export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -428,7 +426,6 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
     logicalTurnId: args.logicalTurnId,
     providerRoundId: args.providerRoundId,
     lastContextInputTokens: undefined,
-    midTurnBlocked: false,
   };
 }
 
@@ -534,7 +531,6 @@ async function runMidTurnCompaction(args: RunLoopArgs, runtime: LoopRuntime, onl
     return { compacted: true, blocked: false };
   }
   if (result.kind === "hard-failed") {
-    runtime.midTurnBlocked = true;
     await args.session.append({
       role: "system",
       content: `Context budget exceeded and automatic compaction failed: ${result.errorMessage} Run /compact manually or switch to a model with a larger context window.`,

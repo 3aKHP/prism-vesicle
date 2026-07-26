@@ -219,6 +219,21 @@ async function runExistingSessionPreTurnCompaction(params: {
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<SessionSnapshot> {
+  // Defer compaction while an interaction is unresolved (plan §7): the snapshot
+  // of a session with a pending gate/permission/question/quality decision would
+  // make the compact's pending-interaction guard throw, so emit compact_deferred
+  // and leave the old head in place rather than attempting it.
+  if (
+    params.snapshot.pendingGate
+    || params.snapshot.pendingEngineSwitch
+    || params.snapshot.pendingUserQuestion
+    || params.snapshot.pendingPermission
+    || params.snapshot.pendingQualityDecision
+    || params.snapshot.pendingQualityRewrite
+  ) {
+    params.onEvent?.({ type: "compact_deferred", phase: "pre-turn", reason: "a pending interaction must be resolved first" });
+    return params.snapshot;
+  }
   const lastContextInputTokens = findLastContextInputTokens(params.snapshot.records);
   const incoming: ResumedMessage = {
     role: "user",
