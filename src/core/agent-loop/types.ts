@@ -84,7 +84,31 @@ export type AgentLoopEvent =
       findings?: Array<QualityFindingSummary & { targetPath?: string }>;
       warningReasons?: QualityTargetWarningReason[];
     }
-  | { type: "validation"; ok: boolean };
+  | { type: "validation"; ok: boolean }
+  | {
+      type: "compact_check";
+      phase: "pre-turn" | "mid-turn";
+      result: "below" | "soft-trigger" | "hard-ceiling" | "inactive" | "degraded";
+      projectedTokens?: number;
+      usageSource?: "provider" | "estimated" | "unknown";
+      softTriggerTokens?: number;
+      hardInputCeilingTokens?: number;
+      inactiveReason?: string;
+    }
+  | { type: "compact_started"; phase: "pre-turn" | "mid-turn" | "manual"; trigger: "manual" | "auto"; reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch" }
+  | {
+      type: "compact_completed";
+      phase: "pre-turn" | "mid-turn" | "manual";
+      trigger: "manual" | "auto";
+      reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch";
+      checkpointUuid: string;
+      evictedUnits: number;
+      retainedUnits: number;
+      durationMs: number;
+      usageSource?: "provider" | "estimated" | "unknown";
+    }
+  | { type: "compact_failed"; phase: "pre-turn" | "mid-turn" | "manual"; trigger: "manual" | "auto"; reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch"; durationMs: number; errorMessage: string }
+  | { type: "compact_deferred"; phase: "pre-turn" | "mid-turn"; reason: string };
 
 export type ValidatorOutcome = {
   ok: boolean;

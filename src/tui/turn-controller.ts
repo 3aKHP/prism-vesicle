@@ -1,4 +1,5 @@
 import { runPrompt } from "../core/agent-loop/run";
+import { AutoCompactBlockedError } from "../core/compact/auto-compact";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
 import { createSessionStore, loadSessionSnapshot, FAILED_TURN_KIND } from "../core/session/store";
@@ -132,6 +133,18 @@ export function createTurnController(options: TurnControllerOptions) {
         handleResult(outcome.value);
       }
     } catch (error) {
+      // A hard-ceiling auto-compaction block is raised before the new user
+      // record is persisted, so the session is not mutated. Restore the draft so
+      // the user can retry, manually compact, or switch model, and drop the
+      // trailing UI user message that was optimistically added before the send
+      // (it was never persisted, so it must not linger as a ghost turn).
+      if (error instanceof AutoCompactBlockedError) {
+        options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
+        if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
+        options.setMessages((previous) => (previous.length > 0 && previous[previous.length - 1]!.role === "user" ? previous.slice(0, -1) : previous));
+        reportError(error);
+        return;
+      }
       // A retryable provider failure leaves the user message in the transcript
       // (issue #98) but restores the composer draft + images so the "resend"
       // hint is actionable. Terminal failures keep the message in place; the
