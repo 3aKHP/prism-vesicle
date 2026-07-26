@@ -107,10 +107,8 @@ async function withSessionFileLock<T>(sessionPath: string, operation: () => Prom
   try {
     return await operation();
   } finally {
-    await handle.close();
-    await unlink(lockPath).catch((error) => {
-      if (!isFileError(error, "ENOENT")) throw error;
-    });
+    await handle.close().catch(() => undefined);
+    await unlink(lockPath).catch(() => undefined);
   }
 }
 

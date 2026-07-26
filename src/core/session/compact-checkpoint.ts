@@ -290,6 +290,7 @@ function parseImages(value: unknown, label: string): NonNullable<ResumedMessage[
       || typeof entry.path !== "string"
       || !entry.path.startsWith(".vesicle/attachments/")
       || entry.path.length === ".vesicle/attachments/".length
+      || entry.path.slice(".vesicle/attachments/".length) === ".."
       || entry.path.slice(".vesicle/attachments/".length).includes("/")
       || entry.path.includes("\\")
       || !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(String(entry.mediaType))

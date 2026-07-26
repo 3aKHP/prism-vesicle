@@ -117,6 +117,18 @@ describe("session: compact-checkpoint-v1 projection", () => {
           source: "clipboard",
         }],
       },
+      {
+        role: "user",
+        content: "standalone traversal image",
+        images: [{
+          id: "img_bad",
+          path: ".vesicle/attachments/..",
+          mediaType: "image/png",
+          bytes: 1,
+          sha256: "a".repeat(64),
+          source: "clipboard",
+        }],
+      },
     ];
 
     for (const [index, replacement] of invalidMessages.entries()) {
