@@ -888,6 +888,10 @@ export function App(props: AppProps = {}) {
     setMessages,
     activeProvider,
     activeModel,
+    activeModelGeneration: () => providerRegistry()
+      ?.providers.find((provider) => provider.id === activeProvider())
+      ?.models.find((model) => model.id === activeModel())
+      ?.generation,
     activeModelLimits,
     ensureProviderRegistry,
     applyProviderSelection,

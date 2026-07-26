@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runPrompt } from "../../../src/core/agent-loop/run";
+import type { AgentLoopEvent } from "../../../src/core/agent-loop/types";
 import { COMPACT_CHECKPOINT_KIND, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 
 const originalFetch = globalThis.fetch;
@@ -12,16 +13,15 @@ let rootDir: string | undefined;
 
 async function configure(): Promise<void> {
   configDir = await mkdtemp(join(tmpdir(), "vesicle-midturn-cfg-"));
-  // contextWindow 1400, reserve 100 -> softTrigger = floor(min(700, 1300)) = 700.
-  // One short turn + the incoming prompt estimate well under 700 (pre-turn below);
-  // a large read_file result pushes the mid-turn estimate past 700 (soft trigger).
+  // Tool schemas contribute most of the baseline estimate. The large read_file
+  // result pushes the complete round above the 4k soft trigger.
   await writeFile(join(configDir, "providers.yaml"), [
     "default:", "  provider: test", "  model: m",
     "providers:", "  test:", "    protocol: openai-chat-compatible",
     "    baseUrl: https://provider.test/v1", "    apiKeyEnv: TEST_PROVIDER_API_KEY",
     "    models:", "      - id: m", "        limits:",
-    "          contextWindow: 1400", "          autoCompact:",
-    "            enabled: true", "            threshold: 0.5", "            reserveOutputTokens: 100",
+    "          contextWindow: 5000", "          autoCompact:",
+    "            enabled: true", "            threshold: 0.8", "            reserveOutputTokens: 500",
     "", "",
   ].join("\n"), "utf8");
   await writeFile(join(configDir, ".env"), "TEST_PROVIDER_API_KEY=test-key\n", "utf8");
@@ -83,14 +83,24 @@ describe("mid-turn auto-compaction", () => {
     }) as typeof fetch;
 
     // Turn 1: a short setup turn (pre-turn check below the threshold).
-    const first = await runPrompt({ input: "setup", rootDir: rootDir!, messages: [{ role: "user", content: "setup" }] });
+    const setup = `setup ${"x".repeat(400)}`;
+    const first = await runPrompt({ input: setup, rootDir: rootDir!, messages: [{ role: "user", content: setup }] });
     if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
     const recordsAfterFirst = await loadSessionRecords(rootDir!, first.sessionId);
     expect(recordsAfterFirst.some((record) => record.metadata?.kind === COMPACT_CHECKPOINT_KIND)).toBe(false);
 
     // Turn 2: iteration 0 reads the big file (large result) -> the mid-turn soft
     // check after that complete batch compacts the old head before iteration 1.
-    const second = await runPrompt({ input: "read and continue", rootDir: rootDir!, sessionId: first.sessionId, messages: [{ role: "user", content: "read and continue" }] });
+    const second = await runPrompt({
+      input: "read and continue",
+      rootDir: rootDir!,
+      sessionId: first.sessionId,
+      messages: [
+        { role: "user", content: setup },
+        { role: "assistant", content: "done" },
+        { role: "user", content: "read and continue" },
+      ],
+    });
     if (second.kind !== "complete") throw new Error(`expected complete, got ${second.kind}`);
 
     const records = await loadSessionRecords(rootDir!, first.sessionId);
@@ -113,5 +123,60 @@ describe("mid-turn auto-compaction", () => {
     expect(assistant?.toolCalls?.[0]?.id).toBe("call-read");
     expect(tool?.toolCallId).toBe("call-read");
     expect(snapshot.messages.at(-1)?.content).toBe("done");
+  });
+
+  test("rechecks the exact request after soft compaction and queued input", async () => {
+    await configure();
+    let normalCalls = 0;
+    const events: AgentLoopEvent[] = [];
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { messages?: Array<{ content?: string }> };
+      const last = body.messages?.at(-1)?.content ?? "";
+      if (last.includes("TEXT ONLY")) {
+        return Response.json({ id: "summary", choices: [{ message: { content: "<summary>Compact prior work.</summary>" } }] });
+      }
+      normalCalls += 1;
+      if (normalCalls === 2) {
+        return Response.json({
+          id: "tool",
+          choices: [{
+            message: {
+              content: "",
+              tool_calls: [{ id: "call-read", type: "function", function: { name: "read_file", arguments: JSON.stringify({ path: "workspace/big.md" }) } }],
+            },
+          }],
+        });
+      }
+      return Response.json({ id: "unsafe", choices: [{ message: { content: "unsafe" } }] });
+    }) as typeof fetch;
+
+    const setup = `setup ${"x".repeat(400)}`;
+    const first = await runPrompt({ input: setup, rootDir: rootDir!, messages: [{ role: "user", content: setup }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    let drained = false;
+    const second = await runPrompt({
+      input: "read and continue",
+      rootDir: rootDir!,
+      sessionId: first.sessionId,
+      messages: [
+        { role: "user", content: setup },
+        { role: "assistant", content: "unsafe" },
+        { role: "user", content: "read and continue" },
+      ],
+      takePendingUserInputs: () => {
+        if (drained) return [];
+        drained = true;
+        return [{ content: `queued: ${"q".repeat(3000)}` }];
+      },
+      onEvent: (event) => events.push(event),
+    });
+    if (second.kind !== "complete") throw new Error(`expected complete, got ${second.kind}`);
+
+    expect(normalCalls).toBe(2);
+    const records = await loadSessionRecords(rootDir!, first.sessionId);
+    expect(records.filter((record) => record.metadata?.kind === COMPACT_CHECKPOINT_KIND)).toHaveLength(1);
+    expect(records.some((record) => record.metadata?.kind === "queued-user-message")).toBe(true);
+    expect(records.some((record) => record.metadata?.kind === "compact-blocked")).toBe(true);
+    expect(events.some((event) => event.type === "compact_failed" && event.reason === "hard-ceiling")).toBe(true);
   });
 });

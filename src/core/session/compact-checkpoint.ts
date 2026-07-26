@@ -51,6 +51,68 @@ const TRIGGERS = new Set<CompactCheckpointTrigger>(["manual", "auto"]);
 const PHASES = new Set<CompactCheckpointPhase>(["pre-turn", "mid-turn", "manual"]);
 const REASONS = new Set<CompactCheckpointReason>(["requested", "soft-threshold", "hard-ceiling", "model-switch"]);
 const BEFORE_SOURCES = new Set(["provider", "estimated", "unknown"]);
+const MESSAGE_ROLES = new Set(["user", "assistant", "tool"]);
+const MESSAGE_KEYS = new Set([
+  "recordUuid",
+  "role",
+  "content",
+  "reasoningContent",
+  "thinkingBlocks",
+  "toolCallId",
+  "toolCalls",
+  "toolOk",
+  "toolFileEvent",
+  "toolWebEvent",
+  "toolMcpEvent",
+  "toolProcessEvent",
+  "engine",
+  "model",
+  "usage",
+  "kind",
+  "images",
+]);
+const MESSAGE_KEYS_BY_ROLE: Record<ResumedMessage["role"], Set<string>> = {
+  user: new Set(["recordUuid", "role", "content", "usage", "kind", "images"]),
+  assistant: new Set([
+    "recordUuid",
+    "role",
+    "content",
+    "reasoningContent",
+    "thinkingBlocks",
+    "toolCalls",
+    "engine",
+    "model",
+    "usage",
+    "kind",
+  ]),
+  tool: new Set([
+    "recordUuid",
+    "role",
+    "content",
+    "toolCallId",
+    "toolOk",
+    "toolFileEvent",
+    "toolWebEvent",
+    "toolMcpEvent",
+    "toolProcessEvent",
+    "usage",
+    "kind",
+    "images",
+  ]),
+};
+const USAGE_KEYS = new Set([
+  "contextInputTokens",
+  "inputTokens",
+  "outputTokens",
+  "totalTokens",
+  "cacheReadInputTokens",
+  "cacheWriteInputTokens",
+  "cacheHitInputTokens",
+  "cacheMissInputTokens",
+  "reasoningTokens",
+  "effectiveTokens",
+  "providerDetails",
+]);
 
 export function isCompactCheckpointRecord(record: { metadata?: Record<string, unknown> | undefined }): boolean {
   return record.metadata?.kind === COMPACT_CHECKPOINT_KIND;
@@ -85,21 +147,21 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
   requireString(createdWith, "engine");
 
   const replacementMessages = requireArray(source, "replacementMessages");
-  const validatedMessages: ResumedMessage[] = replacementMessages.map((entry, index) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      throw new Error(`Session compact checkpoint replacementMessages[${index}] is malformed.`);
-    }
-    const message = entry as Record<string, unknown>;
-    if (typeof message.role !== "string" || typeof message.content !== "string") {
-      throw new Error(`Session compact checkpoint replacementMessages[${index}] is missing role/content.`);
-    }
-    return message as unknown as ResumedMessage;
-  });
+  const validatedMessages = replacementMessages.map(parseReplacementMessage);
 
   const summary = requireObject(source, "summary");
   requireString(summary, "text");
   const evictedLogicalTurnIds = requireStringArray(summary, "evictedLogicalTurnIds");
   const evictedProviderRoundIds = requireStringArray(summary, "evictedProviderRoundIds");
+  const summaryMessages = validatedMessages.filter((message) => message.kind === "compact-summary");
+  if (
+    summaryMessages.length !== 1
+    || validatedMessages[0] !== summaryMessages[0]
+    || summaryMessages[0]!.role !== "user"
+    || summaryMessages[0]!.content !== `[conversation summary]\n${summary.text}`
+  ) {
+    throw new Error("Session compact checkpoint replacement summary is malformed.");
+  }
 
   const retained = requireObject(source, "retained");
   const retainedLogicalTurnIds = requireStringArray(retained, "logicalTurnIds");
@@ -144,6 +206,153 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
       ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
     },
   };
+}
+
+function parseReplacementMessage(entry: unknown, index: number): ResumedMessage {
+  const label = `replacementMessages[${index}]`;
+  if (!isPlainObject(entry)) throw new Error(`Session compact checkpoint ${label} is malformed.`);
+  rejectUnknownKeys(entry, MESSAGE_KEYS, label);
+  const role = entry.role;
+  if (typeof role !== "string" || !MESSAGE_ROLES.has(role)) {
+    throw new Error(`Session compact checkpoint ${label}.role is malformed.`);
+  }
+  rejectUnknownKeys(entry, MESSAGE_KEYS_BY_ROLE[role as ResumedMessage["role"]], label);
+  if (typeof entry.content !== "string") {
+    throw new Error(`Session compact checkpoint ${label}.content is malformed.`);
+  }
+  if (role === "tool" && (typeof entry.toolCallId !== "string" || entry.toolCallId.length === 0)) {
+    throw new Error(`Session compact checkpoint ${label}.toolCallId is malformed.`);
+  }
+
+  const message: ResumedMessage = { role: role as ResumedMessage["role"], content: entry.content };
+  copyOptionalString(entry, message as unknown as Record<string, unknown>, "recordUuid", label);
+  copyOptionalString(entry, message as unknown as Record<string, unknown>, "reasoningContent", label);
+  copyOptionalString(entry, message as unknown as Record<string, unknown>, "toolCallId", label);
+  copyOptionalString(entry, message as unknown as Record<string, unknown>, "engine", label);
+  copyOptionalString(entry, message as unknown as Record<string, unknown>, "model", label);
+  copyOptionalString(entry, message as unknown as Record<string, unknown>, "kind", label);
+  copyOptionalBoolean(entry, message as unknown as Record<string, unknown>, "toolOk", label);
+
+  if (Object.hasOwn(entry, "toolCalls")) message.toolCalls = parseToolCalls(entry.toolCalls, label);
+  if (Object.hasOwn(entry, "thinkingBlocks")) message.thinkingBlocks = parseThinkingBlocks(entry.thinkingBlocks, label);
+  if (Object.hasOwn(entry, "images")) message.images = parseImages(entry.images, label);
+  if (Object.hasOwn(entry, "usage")) message.usage = parseUsage(entry.usage, label);
+  for (const key of ["toolFileEvent", "toolWebEvent", "toolMcpEvent", "toolProcessEvent"] as const) {
+    if (!Object.hasOwn(entry, key)) continue;
+    requireJsonObject(entry[key], `${label}.${key}`);
+    (message as unknown as Record<string, unknown>)[key] = entry[key];
+  }
+  return message;
+}
+
+function parseToolCalls(value: unknown, label: string): NonNullable<ResumedMessage["toolCalls"]> {
+  if (!Array.isArray(value)) throw new Error(`Session compact checkpoint ${label}.toolCalls is malformed.`);
+  return value.map((entry, index) => {
+    if (!isPlainObject(entry)) throw new Error(`Session compact checkpoint ${label}.toolCalls[${index}] is malformed.`);
+    rejectUnknownKeys(entry, new Set(["id", "name", "arguments"]), `${label}.toolCalls[${index}]`);
+    for (const key of ["id", "name", "arguments"] as const) {
+      if (typeof entry[key] !== "string" || (key !== "arguments" && entry[key].length === 0)) {
+        throw new Error(`Session compact checkpoint ${label}.toolCalls[${index}].${key} is malformed.`);
+      }
+    }
+    return { id: entry.id as string, name: entry.name as string, arguments: entry.arguments as string };
+  });
+}
+
+function parseThinkingBlocks(value: unknown, label: string): NonNullable<ResumedMessage["thinkingBlocks"]> {
+  if (!Array.isArray(value)) throw new Error(`Session compact checkpoint ${label}.thinkingBlocks is malformed.`);
+  return value.map((entry, index) => {
+    if (!isPlainObject(entry) || typeof entry.type !== "string") {
+      throw new Error(`Session compact checkpoint ${label}.thinkingBlocks[${index}] is malformed.`);
+    }
+    const valid = entry.type === "reasoning"
+      ? typeof entry.reasoningContent === "string"
+      : entry.type === "thinking"
+        ? typeof entry.thinking === "string"
+        : entry.type === "redacted_thinking"
+          ? typeof entry.data === "string"
+          : entry.type === "thought_summary" && (typeof entry.text === "string" || typeof entry.summary === "string");
+    if (!valid || !isJsonValue(entry)) {
+      throw new Error(`Session compact checkpoint ${label}.thinkingBlocks[${index}] is malformed.`);
+    }
+    return { ...entry } as NonNullable<ResumedMessage["thinkingBlocks"]>[number];
+  });
+}
+
+function parseImages(value: unknown, label: string): NonNullable<ResumedMessage["images"]> {
+  if (!Array.isArray(value)) throw new Error(`Session compact checkpoint ${label}.images is malformed.`);
+  return value.map((entry, index) => {
+    const imageLabel = `${label}.images[${index}]`;
+    if (!isPlainObject(entry)) throw new Error(`Session compact checkpoint ${imageLabel} is malformed.`);
+    rejectUnknownKeys(entry, new Set(["id", "path", "mediaType", "bytes", "sha256", "filename", "source", "sourcePath", "detail"]), imageLabel);
+    if (
+      typeof entry.id !== "string"
+      || typeof entry.path !== "string"
+      || !entry.path.startsWith(".vesicle/attachments/")
+      || entry.path.length === ".vesicle/attachments/".length
+      || entry.path.slice(".vesicle/attachments/".length).includes("/")
+      || entry.path.includes("\\")
+      || !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(String(entry.mediaType))
+      || typeof entry.bytes !== "number"
+      || !Number.isInteger(entry.bytes)
+      || entry.bytes < 0
+      || typeof entry.sha256 !== "string"
+      || !/^[a-f0-9]{64}$/.test(entry.sha256)
+      || (entry.source !== "clipboard" && entry.source !== "project")
+    ) throw new Error(`Session compact checkpoint ${imageLabel} is malformed.`);
+    for (const key of ["filename", "sourcePath"] as const) {
+      if (Object.hasOwn(entry, key) && typeof entry[key] !== "string") throw new Error(`Session compact checkpoint ${imageLabel}.${key} is malformed.`);
+    }
+    if (Object.hasOwn(entry, "detail") && !["auto", "high", "original"].includes(String(entry.detail))) {
+      throw new Error(`Session compact checkpoint ${imageLabel}.detail is malformed.`);
+    }
+    return entry as NonNullable<ResumedMessage["images"]>[number];
+  });
+}
+
+function parseUsage(value: unknown, label: string): NonNullable<ResumedMessage["usage"]> {
+  if (!isPlainObject(value)) throw new Error(`Session compact checkpoint ${label}.usage is malformed.`);
+  rejectUnknownKeys(value, USAGE_KEYS, `${label}.usage`);
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "providerDetails") {
+      requireJsonObject(entry, `${label}.usage.providerDetails`);
+    } else if (typeof entry !== "number" || !Number.isFinite(entry) || entry < 0) {
+      throw new Error(`Session compact checkpoint ${label}.usage.${key} is malformed.`);
+    }
+  }
+  return { ...value };
+}
+
+function copyOptionalString(source: Record<string, unknown>, target: Record<string, unknown>, key: string, label: string): void {
+  if (!Object.hasOwn(source, key)) return;
+  if (typeof source[key] !== "string") throw new Error(`Session compact checkpoint ${label}.${key} is malformed.`);
+  target[key] = source[key];
+}
+
+function copyOptionalBoolean(source: Record<string, unknown>, target: Record<string, unknown>, key: string, label: string): void {
+  if (!Object.hasOwn(source, key)) return;
+  if (typeof source[key] !== "boolean") throw new Error(`Session compact checkpoint ${label}.${key} is malformed.`);
+  target[key] = source[key];
+}
+
+function rejectUnknownKeys(record: Record<string, unknown>, allowed: Set<string>, label: string): void {
+  const unknown = Object.keys(record).find((key) => !allowed.has(key));
+  if (unknown) throw new Error(`Session compact checkpoint ${label}.${unknown} is not supported.`);
+}
+
+function requireJsonObject(value: unknown, label: string): asserts value is Record<string, unknown> {
+  if (!isPlainObject(value) || !isJsonValue(value)) throw new Error(`Session compact checkpoint ${label} is malformed.`);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isJsonValue(value: unknown): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isPlainObject(value) && Object.values(value).every(isJsonValue);
 }
 
 function requireString(record: Record<string, unknown>, key: string, expected?: string): void {

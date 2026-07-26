@@ -14,6 +14,7 @@ import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { bindExecutionRound, createSessionStore, executionIdentityMetadata, newLogicalTurnId, newProviderRoundId } from "../session/store";
 import { AutoCompactBlockedError, runAutomaticCompaction } from "../compact/auto-compact";
 import { estimateRequestTokens } from "../compact/context-budget";
+import { toVesicleMessage } from "../compact/summary-generator";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
 import { generationMetadata, mergeGeneration } from "./generation";
@@ -27,6 +28,7 @@ import {
 } from "../harness/activation";
 import { loadSessionSnapshot, type ResumedMessage, type SessionRecord, type SessionSnapshot } from "../session/store";
 import type { EngineId } from "../engine/profile";
+import type { ToolDefinition } from "../tools";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
@@ -58,6 +60,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     permission.shellInterpreter,
   );
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
+  let compactedSnapshot: SessionSnapshot | undefined;
   if (options.sessionId) {
     let snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
@@ -75,11 +78,12 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     // provider request is a standalone call, never a bootstrap turn, so it
     // cannot re-enter automatic evaluation.
     if (engine !== "stage" && config.limits?.autoCompact) {
-      snapshot = await runExistingSessionPreTurnCompaction({
+      const compacted = await runExistingSessionPreTurnCompaction({
         rootDir,
         sessionId: options.sessionId,
         engine,
         config,
+        tools: toolSurface.definitions,
         composedSystemPrompt: systemPrompt,
         snapshot,
         input: options.input,
@@ -90,6 +94,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
         signal: options.signal,
         onEvent: options.onEvent,
       });
+      snapshot = compacted.snapshot;
+      if (compacted.compacted) compactedSnapshot = snapshot;
     }
   }
   const session = await createSessionStore(
@@ -169,11 +175,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   // runLoop's finally clears it on completion/pause/error; a throw before this
   // point leaves no leaked entry.
   bindExecutionRound(session.sessionId, { logicalTurnId, providerRoundId });
-  const messages: VesicleMessage[] = options.messages ?? [{
+  const incomingMessage: VesicleMessage = {
     role: "user",
     content: options.input,
     ...(options.images ? { images: options.images } : {}),
-  }];
+  };
+  const messages: VesicleMessage[] = compactedSnapshot
+    ? [...compactedSnapshot.messages.map(toVesicleMessage), incomingMessage]
+    : options.messages ?? [incomingMessage];
 
   return {
     rootDir,
@@ -209,6 +218,7 @@ async function runExistingSessionPreTurnCompaction(params: {
   sessionId: string;
   engine: EngineId;
   config: VesicleConfig;
+  tools: ToolDefinition[];
   composedSystemPrompt: string;
   snapshot: SessionSnapshot;
   input: string;
@@ -218,7 +228,7 @@ async function runExistingSessionPreTurnCompaction(params: {
   providerSelection?: Partial<ProviderSelection>;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
-}): Promise<SessionSnapshot> {
+}): Promise<{ snapshot: SessionSnapshot; compacted: boolean }> {
   // Defer compaction while an interaction is unresolved (plan §7): the snapshot
   // of a session with a pending gate/permission/question/quality decision would
   // make the compact's pending-interaction guard throw, so emit compact_deferred
@@ -228,19 +238,25 @@ async function runExistingSessionPreTurnCompaction(params: {
     || params.snapshot.pendingEngineSwitch
     || params.snapshot.pendingUserQuestion
     || params.snapshot.pendingPermission
+    || params.snapshot.pendingDelegationRetry
+    || params.snapshot.pendingDelegationDecisionRecovery
     || params.snapshot.pendingQualityDecision
     || params.snapshot.pendingQualityRewrite
   ) {
     params.onEvent?.({ type: "compact_deferred", phase: "pre-turn", reason: "a pending interaction must be resolved first" });
-    return params.snapshot;
+    return { snapshot: params.snapshot, compacted: false };
   }
-  const lastContextInputTokens = findLastContextInputTokens(params.snapshot.records);
+  const lastObservation = findLastContextObservation(params.snapshot.records);
   const incoming: ResumedMessage = {
     role: "user",
     content: params.input,
     ...(params.images?.length ? { images: params.images } : {}),
   };
-  const estimatedNextRequestTokens = estimateRequestTokens([...params.snapshot.messages, incoming], params.composedSystemPrompt);
+  const estimatedNextRequestTokens = estimateRequestTokens(
+    [...params.snapshot.messages, incoming],
+    params.composedSystemPrompt,
+    params.tools,
+  );
   const result = await runAutomaticCompaction({
     rootDir: params.rootDir,
     sessionId: params.sessionId,
@@ -250,15 +266,27 @@ async function runExistingSessionPreTurnCompaction(params: {
     signal: params.signal,
     onEvent: params.onEvent,
     phase: "pre-turn",
+    estimateReplacementTokens: (replacement) => estimateRequestTokens(
+      [...replacement.map(toVesicleMessage), toVesicleMessage(incoming)],
+      params.composedSystemPrompt,
+      params.tools,
+    ),
     budget: {
       config: params.config.limits?.autoCompact,
       limits: params.config.limits,
       generation: params.config.generation,
       turnMaxTokens: params.turnMaxTokens,
-      lastContextInputTokens,
+      lastContextInputTokens: lastObservation?.contextInputTokens,
+      lastRequestObservation: lastObservation?.estimatedRequestTokens !== undefined
+        ? {
+          contextInputTokens: lastObservation.contextInputTokens,
+          estimatedRequestTokens: lastObservation.estimatedRequestTokens,
+        }
+        : undefined,
       estimatedNextRequestTokens,
     },
   });
+  if (result.kind === "cancelled") throw result.error;
   if (result.kind === "hard-failed") {
     throw new AutoCompactBlockedError(
       result.errorMessage,
@@ -275,16 +303,26 @@ async function runExistingSessionPreTurnCompaction(params: {
   if (result.kind === "compacted") {
     // Reload from the new checkpoint head so the incoming user record appends
     // after the checkpoint rather than the old pre-compaction head.
-    return loadSessionSnapshot(params.rootDir, params.sessionId, { synthesizeDanglingToolResults: false });
+    return {
+      snapshot: await loadSessionSnapshot(params.rootDir, params.sessionId, { synthesizeDanglingToolResults: false }),
+      compacted: true,
+    };
   }
-  return params.snapshot;
+  return { snapshot: params.snapshot, compacted: false };
 }
 
-function findLastContextInputTokens(records: SessionRecord[]): number | undefined {
+function findLastContextObservation(
+  records: SessionRecord[],
+): { contextInputTokens: number; estimatedRequestTokens?: number } | undefined {
   for (let index = records.length - 1; index >= 0; index -= 1) {
-    const usage = records[index]!.metadata?.usage as { contextInputTokens?: unknown } | undefined;
+    const metadata = records[index]!.metadata;
+    const usage = metadata?.usage as { contextInputTokens?: unknown } | undefined;
     if (usage && typeof usage.contextInputTokens === "number" && usage.contextInputTokens > 0) {
-      return usage.contextInputTokens;
+      const estimatedRequestTokens = metadata?.requestEstimateTokens;
+      return {
+        contextInputTokens: usage.contextInputTokens,
+        ...(typeof estimatedRequestTokens === "number" && estimatedRequestTokens >= 0 ? { estimatedRequestTokens } : {}),
+      };
     }
   }
   return undefined;

@@ -82,6 +82,61 @@ describe("session: compact-checkpoint-v1 projection", () => {
     await expect(loadSessionMessages(rootDir, store.sessionId)).rejects.toThrow(/replacementMessages|malformed/);
   });
 
+  test("replacement messages fail closed on invalid roles and nested provider fields", async () => {
+    const summaryMessage: PortableCompactCheckpointV1["replacementMessages"][number] = {
+      role: "user",
+      content: "[conversation summary]\nEarlier work.",
+      kind: "compact-summary",
+    };
+    const invalidMessages: unknown[] = [
+      { role: "bogus", content: "invalid role" },
+      { role: "assistant", content: "invalid calls", toolCalls: [{ id: "call", name: "read_file" }] },
+      { role: "user", content: "assistant-only field", toolCalls: [] },
+      { role: "tool", content: "missing tool call id", toolOk: true },
+      {
+        role: "user",
+        content: "invalid image",
+        images: [{
+          id: "img_bad",
+          path: "../../outside.png",
+          mediaType: "image/png",
+          bytes: 1,
+          sha256: "a".repeat(64),
+          source: "clipboard",
+        }],
+      },
+      {
+        role: "user",
+        content: "prefixed traversal image",
+        images: [{
+          id: "img_bad",
+          path: ".vesicle/attachments/../../outside.png",
+          mediaType: "image/png",
+          bytes: 1,
+          sha256: "a".repeat(64),
+          source: "clipboard",
+        }],
+      },
+    ];
+
+    for (const [index, replacement] of invalidMessages.entries()) {
+      const rootDir = await mkdtemp(join(tmpdir(), `vesicle-ckpt-deep-${index}-`));
+      const store = await createSessionStore(rootDir, `ckpt-deep-${index}`);
+      await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+      await store.append({
+        role: "system",
+        content: "compacted",
+        metadata: {
+          kind: COMPACT_CHECKPOINT_KIND,
+          checkpoint: validCheckpoint({
+            replacementMessages: [summaryMessage, replacement] as PortableCompactCheckpointV1["replacementMessages"],
+          }),
+        },
+      });
+      await expect(loadSessionMessages(rootDir, store.sessionId)).rejects.toThrow(/replacementMessages|malformed/);
+    }
+  });
+
   test("a failed turn after a checkpoint drops only the failed input, preserving the replacement", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-failed-"));
     const store = await createSessionStore(rootDir, "ckpt-failed");

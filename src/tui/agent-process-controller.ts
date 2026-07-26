@@ -78,6 +78,10 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
         options.setStatus(`auto-compact failed · ${event.phase}`);
         recordActivity({ kind: "system", text: `auto-compact failed (${event.phase}): ${event.errorMessage}` });
         return true;
+      case "compact_cancelled":
+        options.setStatus(`auto-compact cancelled · ${event.phase}`);
+        recordActivity({ kind: "system", text: `auto-compact cancelled (${event.phase})` });
+        return true;
       case "compact_deferred":
         recordActivity({ kind: "system", text: `compaction deferred: ${event.reason}` });
         return true;

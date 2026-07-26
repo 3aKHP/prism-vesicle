@@ -1,3 +1,4 @@
+import type { ResumedMessage } from "../session/store";
 import type { SessionRecord } from "../session/record-model";
 import {
   COMPACT_CHECKPOINT_KIND,
@@ -19,6 +20,8 @@ import {
  * arrives with the budget evaluator in PR 3.
  */
 export type ReplacementSelection = {
+  /** Active branch head against which this selection was built. */
+  sourceHeadUuid: string;
   /** Records to summarize (the contiguous evicted prefix), oldest→newest. */
   evictedRecords: SessionRecord[];
   /** Records to retain verbatim after the summary, oldest→newest. */
@@ -41,8 +44,12 @@ export type ReplacementOptions = {
  * session cannot be compacted further instead of guessing.
  */
 export function selectReplacement(records: SessionRecord[], _options: ReplacementOptions = {}): ReplacementSelection | undefined {
+  const sourceHeadUuid = records.at(-1)?.uuid;
+  if (!sourceHeadUuid) return undefined;
   const checkpoint = findLatestCheckpoint(records);
-  const compactable = checkpoint ? records.slice(checkpoint.index + 1) : stripLeadingBootstrap(records);
+  const compactable = checkpoint
+    ? [...checkpoint.retainedRecords, ...records.slice(checkpoint.index + 1)]
+    : stripLeadingBootstrap(records);
   const segmentation = segmentSession(compactable);
   const frontier = segmentation.frontier;
   const completeTurns = segmentation.turns;
@@ -74,6 +81,7 @@ export function selectReplacement(records: SessionRecord[], _options: Replacemen
   if (evictedRecords.length === 0) return undefined;
 
   return {
+    sourceHeadUuid,
     evictedRecords,
     retainedRecords,
     evictedLogicalTurnIds: uniqueIds(evictedRecords, "logicalTurnId"),
@@ -99,20 +107,68 @@ function splitOversizedSingleTurn(turn: SegmentedTurn): { retained: SessionRecor
   return { retained, evicted };
 }
 
-function findLatestCheckpoint(records: SessionRecord[]): { index: number; summary: string | undefined } | undefined {
+function findLatestCheckpoint(records: SessionRecord[]): {
+  index: number;
+  summary: string | undefined;
+  retainedRecords: SessionRecord[];
+} | undefined {
   for (let index = records.length - 1; index >= 0; index--) {
     const record = records[index]!;
     if (record.metadata?.kind !== COMPACT_CHECKPOINT_KIND) continue;
-    let summary: string | undefined;
-    try {
-      const checkpoint = parseCompactCheckpoint(record.metadata.checkpoint);
-      summary = checkpoint.replacementMessages.find((message) => message.kind === "compact-summary")?.content.replace(/^\[conversation summary\]\s*/i, "");
-    } catch {
-      // A malformed prior checkpoint cannot supply a merge summary; compact over it.
-    }
-    return { index, summary };
+    const checkpoint = parseCompactCheckpoint(record.metadata.checkpoint);
+    const summary = checkpoint.replacementMessages
+      .find((message) => message.kind === "compact-summary")
+      ?.content.replace(/^\[conversation summary\]\s*/i, "");
+    const sourceRecordsByUuid = new Map(records.slice(0, index).map((entry) => [entry.uuid, entry]));
+    const retainedRecords = checkpoint.replacementMessages
+      .filter((message) => message.kind !== "compact-summary")
+      .map((message, messageIndex) => replacementMessageRecord(record, message, messageIndex, sourceRecordsByUuid));
+    return { index, summary, retainedRecords };
   }
   return undefined;
+}
+
+function replacementMessageRecord(
+  checkpointRecord: SessionRecord,
+  message: ResumedMessage,
+  index: number,
+  sourceRecordsByUuid: Map<string, SessionRecord>,
+): SessionRecord {
+  const sourceMetadata = message.recordUuid ? sourceRecordsByUuid.get(message.recordUuid)?.metadata : undefined;
+  const metadata: Record<string, unknown> = {
+    ...(message.kind ? { kind: message.kind } : {}),
+    ...(message.usage ? { usage: message.usage } : {}),
+    ...(message.images ? { images: message.images } : {}),
+    ...(typeof sourceMetadata?.logicalTurnId === "string" ? { logicalTurnId: sourceMetadata.logicalTurnId } : {}),
+    ...(typeof sourceMetadata?.providerRoundId === "string" ? { providerRoundId: sourceMetadata.providerRoundId } : {}),
+  };
+  if (message.role === "assistant") {
+    Object.assign(metadata, {
+      ...(message.engine ? { engine: message.engine } : {}),
+      ...(message.model ? { model: message.model } : {}),
+      ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
+      ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
+      ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    });
+  } else if (message.role === "tool") {
+    Object.assign(metadata, {
+      ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+      ...(typeof message.toolOk === "boolean" ? { ok: message.toolOk } : {}),
+      ...(message.toolFileEvent ? { fileEvent: message.toolFileEvent } : {}),
+      ...(message.toolWebEvent ? { webEvent: message.toolWebEvent } : {}),
+      ...(message.toolMcpEvent ? { mcpEvent: message.toolMcpEvent } : {}),
+      ...(message.toolProcessEvent ? { processEvent: message.toolProcessEvent } : {}),
+    });
+  }
+  return {
+    uuid: message.recordUuid ?? `${checkpointRecord.uuid}:replacement:${index}`,
+    parentUuid: index === 0 ? checkpointRecord.parentUuid : `${checkpointRecord.uuid}:replacement:${index - 1}`,
+    ts: checkpointRecord.ts,
+    sessionId: checkpointRecord.sessionId,
+    role: message.role,
+    content: message.content,
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+  };
 }
 
 function stripLeadingBootstrap(records: SessionRecord[]): SessionRecord[] {

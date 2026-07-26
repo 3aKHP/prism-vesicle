@@ -3,7 +3,8 @@ import type { VesicleRequest } from "../../providers/shared/types";
 import type { ProviderRetryInfo } from "../../providers/shared/types";
 import type { EngineId } from "../engine/profile";
 import type { AgentLoopEvent } from "../agent-loop/types";
-import { evaluateBudgetCheck, type BudgetCheckResult, type BudgetInputs } from "./context-budget";
+import type { ResumedMessage } from "../session/store";
+import { evaluateBudgetCheck, projectOccupancy, type BudgetCheckResult, type BudgetInputs } from "./context-budget";
 import { runPortableCompaction, type PortableCompactionReason } from "./service";
 
 /**
@@ -23,6 +24,7 @@ import { runPortableCompaction, type PortableCompactionReason } from "./service"
 export type PreTurnCompactionResult =
   | { kind: "skipped"; check: BudgetCheckResult }
   | { kind: "compacted"; checkpointUuid: string; check: BudgetCheckResult }
+  | { kind: "cancelled"; check: BudgetCheckResult; error: unknown }
   | { kind: "soft-failed"; check: BudgetCheckResult; errorMessage: string }
   | { kind: "hard-failed"; check: BudgetCheckResult; errorMessage: string };
 
@@ -43,10 +45,12 @@ export type AutoCompactBlockedContext = {
 
 export class AutoCompactBlockedError extends Error {
   readonly context: AutoCompactBlockedContext | undefined;
-  constructor(errorMessage: string, context?: AutoCompactBlockedContext) {
+  readonly inputPersisted: boolean;
+  constructor(errorMessage: string, context?: AutoCompactBlockedContext, inputPersisted = false) {
     super(formatBlockedMessage(errorMessage, context));
     this.name = "AutoCompactBlockedError";
     this.context = context;
+    this.inputPersisted = inputPersisted;
   }
 }
 
@@ -73,6 +77,8 @@ export type RunAutomaticCompactionOptions = {
    * double-compact the same request.
    */
   onlyHardCeiling?: boolean;
+  /** Estimate the exact normal request if this replacement were installed. */
+  estimateReplacementTokens: (messages: ResumedMessage[]) => number;
 };
 
 /**
@@ -109,6 +115,18 @@ export async function runAutomaticCompaction(options: RunAutomaticCompactionOpti
     reason,
     signal: options.signal,
     onRetry: options.onRetry,
+    automaticBudget: {
+      beforeTokens: check.projectedTokens,
+      beforeEstimateTokens: options.budget.estimatedNextRequestTokens,
+      beforeSource: check.usageSource,
+      softTriggerTokens: check.softTriggerTokens,
+      hardInputCeilingTokens: check.hardInputCeilingTokens,
+      estimateReplacementTokens: options.estimateReplacementTokens,
+      projectReplacementTokens: (estimatedTokens) => projectOccupancy({
+        ...options.budget,
+        estimatedNextRequestTokens: estimatedTokens,
+      })?.value ?? estimatedTokens,
+    },
   });
   const durationMs = Date.now() - started;
 
@@ -122,9 +140,16 @@ export async function runAutomaticCompaction(options: RunAutomaticCompactionOpti
       evictedUnits: outcome.messagesSummarized,
       retainedUnits: outcome.retainedUnits,
       durationMs,
+      beforeTokens: check.projectedTokens,
+      ...(outcome.projectedAfterTokens !== undefined ? { projectedAfterTokens: outcome.projectedAfterTokens } : {}),
       ...(check.kind === "soft-trigger" || check.kind === "hard-ceiling" ? { usageSource: check.usageSource } : {}),
     });
     return { kind: "compacted", checkpointUuid: outcome.checkpointUuid, check };
+  }
+
+  if (outcome.kind === "cancelled") {
+    options.onEvent?.({ type: "compact_cancelled", phase: options.phase, trigger: "auto", reason, durationMs });
+    return { kind: "cancelled", check, error: outcome.error };
   }
 
   const errorMessage = outcome.kind === "failed"

@@ -646,7 +646,7 @@ export function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string 
   const activation = resolveAutoCompactActivation({
     config: limits?.autoCompact,
     limits,
-    generation: undefined,
+    generation: ctx.activeModelGeneration(),
   });
   if (activation.kind === "active") {
     lines.push(`Soft trigger: ${formatTokenCount(activation.softTriggerTokens)} (${Math.round(activation.threshold * 100)}% of window)`);

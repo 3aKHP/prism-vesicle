@@ -44,6 +44,7 @@ describe("agent loop tool round", () => {
         };
       },
       appendMany: async () => { throw new Error("unexpected batch append"); },
+      appendIfHead: async () => { throw new Error("unexpected conditional append"); },
     } satisfies SessionStore;
 
     await recordToolResult({

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveGate, runPrompt } from "../../../src/core/agent-loop/run";
 import type { AgentLoopEvent } from "../../../src/core/agent-loop/run";
+import { AutoCompactBlockedError } from "../../../src/core/compact/auto-compact";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);
@@ -218,6 +219,69 @@ describe("agent loop: gate continuation", () => {
     expect(resumed.kind).toBe("complete");
     const finalMessages = seenBodies[1].messages;
     expect(finalMessages.some((m) => m.role === "user" && m.content.includes("change archetype to trickster"))).toBe(true);
+  });
+
+  test("checks queued continuation input before the first resumed provider request", async () => {
+    const rootDir = await createPromptRoot({ stopGates: ["blueprint-confirmation"] });
+    let normalCalls = 0;
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { messages?: Array<{ content?: string }> };
+      if (body.messages?.at(-1)?.content?.includes("TEXT ONLY")) {
+        return Response.json({ id: "summary", choices: [{ message: { content: "<summary>Prior gate context.</summary>" } }] });
+      }
+      normalCalls += 1;
+      if (normalCalls > 1) throw new Error("unsafe resumed request was sent");
+      return Response.json({
+        id: "chatcmpl-gate",
+        choices: [{
+          finish_reason: "tool_calls",
+          message: {
+            content: "Blueprint ready.",
+            tool_calls: [{
+              id: "call-gate-guard",
+              type: "function",
+              function: {
+                name: "request_confirmation",
+                arguments: JSON.stringify({ gate: "blueprint-confirmation", summary: "Concept: A" }),
+              },
+            }],
+          },
+        }],
+      });
+    }) as typeof fetch;
+
+    const paused = await runPrompt({
+      input: "draft a blueprint",
+      rootDir,
+      messages: [{ role: "user", content: "draft a blueprint" }],
+    });
+    if (paused.kind !== "needs_user") throw new Error("expected needs_user");
+
+    await writeFile(process.env.VESICLE_PROVIDERS_FILE!, [
+      "default:", "  provider: test", "  model: test-model",
+      "providers:", "  test:", "    protocol: openai-chat-compatible",
+      "    baseUrl: https://provider.test/v1", "    apiKeyEnv: TEST_PROVIDER_API_KEY",
+      "    models:", "      - id: test-model", "        limits:",
+      "          contextWindow: 500", "          autoCompact:",
+      "            enabled: true", "            threshold: 0.5", "            reserveOutputTokens: 100", "",
+    ].join("\n"), "utf8");
+    let pending = [{ content: `queued: ${"q".repeat(1000)}` }];
+
+    await expect(resolveGate({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      toolCallId: paused.toolCallId,
+      gate: paused.gate,
+      resolution: { decision: "confirm" },
+      takePendingUserInputs: () => {
+        const current = pending;
+        pending = [];
+        return current;
+      },
+    })).rejects.toBeInstanceOf(AutoCompactBlockedError);
+    expect(normalCalls).toBe(1);
   });
 
   test("a gate the engine did not declare is refused, not paused", async () => {

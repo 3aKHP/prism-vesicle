@@ -8,7 +8,7 @@ import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionSnapshot } from "../session/store";
 import { selectReplacement } from "./replacement-builder";
 import { formatCompactSummary, generatePortableSummary, toVesicleMessage } from "./summary-generator";
-import { installCompactCheckpoint } from "./checkpoint-installer";
+import { buildCompactReplacementMessages, installCompactCheckpoint } from "./checkpoint-installer";
 
 export { formatCompactSummary };
 
@@ -17,7 +17,7 @@ export const COMPACT_SUMMARY_KIND = "compact-summary";
 
 export const ERROR_NOTHING_TO_COMPACT = "Nothing left to compact; the newest complete turn is already the retained tail.";
 export const ERROR_NOT_ENOUGH_MESSAGES_TO_COMPACT = ERROR_NOTHING_TO_COMPACT;
-export const ERROR_PENDING_INTERACTION = "Resolve the pending gate, engine switch, or question before compacting.";
+export const ERROR_PENDING_INTERACTION = "Resolve the pending interaction before compacting.";
 
 type CompactPoint = {
   uuid: string;
@@ -65,8 +65,10 @@ export type PortableCompactionOutcome =
       messagesSummarized: number;
       retainedUnits: number;
       contextWindow?: number;
+      projectedAfterTokens?: number;
     }
   | { kind: "nothing-to-compact" }
+  | { kind: "cancelled"; error: unknown }
   | { kind: "failed"; error: unknown };
 
 export type RunPortableCompactionOptions = {
@@ -81,6 +83,15 @@ export type RunPortableCompactionOptions = {
   instructions?: string;
   signal?: AbortSignal;
   onRetry?: (info: ProviderRetryInfo) => void;
+  automaticBudget?: {
+    beforeTokens: number;
+    beforeEstimateTokens?: number;
+    beforeSource: "provider" | "estimated";
+    softTriggerTokens: number;
+    hardInputCeilingTokens: number;
+    estimateReplacementTokens: (messages: ResumedMessage[]) => number;
+    projectReplacementTokens: (estimatedTokens: number) => number;
+  };
 };
 
 /**
@@ -115,26 +126,67 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
       onRetry: options.onRetry,
     });
   } catch (error) {
+    if (options.signal?.aborted || isAbortError(error)) return { kind: "cancelled", error };
     return { kind: "failed", error };
   }
 
-  const session = await createSessionStore(options.rootDir, options.sessionId);
-  const installed = await installCompactCheckpoint({
-    rootDir: options.rootDir,
-    sessionId: options.sessionId,
-    session,
-    selection,
-    summary,
-    trigger: options.trigger,
-    phase: options.phase,
-    reason: options.reason,
-    createdWith: { providerId: config.providerId, model: config.model, engine: options.engine },
-    accounting: {
-      ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
-      beforeSource: "unknown",
-    },
-  });
+  const replacementMessages = buildCompactReplacementMessages(selection, summary);
+  let projectedAfterTokens: number | undefined;
+  let installed: Awaited<ReturnType<typeof installCompactCheckpoint>>;
+  try {
+    const replacementEstimateTokens = options.automaticBudget?.estimateReplacementTokens(replacementMessages);
+    projectedAfterTokens = replacementEstimateTokens === undefined
+      ? undefined
+      : options.automaticBudget!.projectReplacementTokens(replacementEstimateTokens);
+    if (
+      replacementEstimateTokens !== undefined
+      && options.automaticBudget?.beforeEstimateTokens !== undefined
+      && replacementEstimateTokens >= options.automaticBudget.beforeEstimateTokens
+    ) {
+      throw new Error(
+        `Automatic compaction did not reduce the estimated next request (${replacementEstimateTokens} replacement tokens >= ${options.automaticBudget.beforeEstimateTokens} before compaction).`,
+      );
+    }
+    if (
+      projectedAfterTokens !== undefined
+      && projectedAfterTokens > options.automaticBudget!.hardInputCeilingTokens
+    ) {
+      throw new Error(
+        `Automatic compaction could not reduce the next request below the hard ceiling (${projectedAfterTokens} projected tokens > ${options.automaticBudget!.hardInputCeilingTokens}).`,
+      );
+    }
+    const session = await createSessionStore(options.rootDir, options.sessionId);
+    installed = await installCompactCheckpoint({
+      rootDir: options.rootDir,
+      sessionId: options.sessionId,
+      session,
+      selection,
+      summary,
+      replacementMessages,
+      trigger: options.trigger,
+      phase: options.phase,
+      reason: options.reason,
+      createdWith: { providerId: config.providerId, model: config.model, engine: options.engine },
+      accounting: {
+        ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
+        ...(options.automaticBudget ? {
+          softTriggerTokens: options.automaticBudget.softTriggerTokens,
+          hardInputCeilingTokens: options.automaticBudget.hardInputCeilingTokens,
+          beforeTokens: options.automaticBudget.beforeTokens,
+          beforeSource: options.automaticBudget.beforeSource,
+        } : { beforeSource: "unknown" as const }),
+        ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
+      },
+    });
 
+  } catch (error) {
+    if (options.signal?.aborted || isAbortError(error)) return { kind: "cancelled", error };
+    return { kind: "failed", error };
+  }
+
+  // The append above is the transaction boundary. Do not turn a later reload
+  // problem into a "failed without mutation" outcome: the checkpoint is
+  // already durable and callers must see the reload error directly.
   const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: installed.checkpointUuid });
   const messagesSummarized = selection.evictedRecords.filter((record) => record.role !== "system").length;
   const retainedUnits = selection.retainedRecords.filter((record) => record.role !== "system").length;
@@ -146,7 +198,12 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     messagesSummarized,
     retainedUnits,
     ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
+    ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
   };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === "AbortError" || /abort|cancel/i.test(error.message));
 }
 
 export async function compactConversation(options: {
@@ -173,6 +230,7 @@ export async function compactConversation(options: {
     onRetry: options.onRetry,
   });
   if (outcome.kind === "nothing-to-compact") throw new Error(ERROR_NOTHING_TO_COMPACT);
+  if (outcome.kind === "cancelled") throw outcome.error;
   if (outcome.kind === "failed") throw outcome.error;
   return {
     snapshot: outcome.snapshot,
@@ -293,7 +351,16 @@ function compactPrompt(base: string, instructions: string | undefined): string {
 }
 
 function assertNoPendingInteraction(snapshot: SessionSnapshot): void {
-  if (snapshot.pendingGate || snapshot.pendingEngineSwitch || snapshot.pendingUserQuestion) {
+  if (
+    snapshot.pendingGate
+    || snapshot.pendingEngineSwitch
+    || snapshot.pendingUserQuestion
+    || snapshot.pendingPermission
+    || snapshot.pendingDelegationRetry
+    || snapshot.pendingDelegationDecisionRecovery
+    || snapshot.pendingQualityRewrite
+    || snapshot.pendingQualityDecision
+  ) {
     throw new Error(ERROR_PENDING_INTERACTION);
   }
 }

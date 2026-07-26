@@ -143,6 +143,38 @@ describe("context budget: decision", () => {
     expect(estimateOnly.usageSource).toBe("estimated");
   });
 
+  test("adds host-estimated growth since the exact provider-observed request", () => {
+    const result = evaluateBudgetCheck(active({
+      lastRequestObservation: {
+        contextInputTokens: 7_500,
+        estimatedRequestTokens: 3_000,
+      },
+      estimatedNextRequestTokens: 4_000,
+    }));
+
+    expect(result.kind).toBe("hard-ceiling");
+    if (result.kind !== "hard-ceiling") return;
+    // Independent oracle: provider occupancy 7500 + (next host estimate 4000
+    // - observed-request host estimate 3000) = 8500, above the 8000 ceiling.
+    expect(result.projectedTokens).toBe(8_500);
+    expect(result.usageSource).toBe("estimated");
+  });
+
+  test("never subtracts occupancy when the next host estimate is smaller", () => {
+    const result = evaluateBudgetCheck(active({
+      lastRequestObservation: {
+        contextInputTokens: 7_500,
+        estimatedRequestTokens: 4_000,
+      },
+      estimatedNextRequestTokens: 3_000,
+    }));
+
+    expect(result.kind).toBe("soft-trigger");
+    if (result.kind !== "soft-trigger") return;
+    expect(result.projectedTokens).toBe(7_500);
+    expect(result.usageSource).toBe("provider");
+  });
+
   test("usage and estimate both unavailable is degraded, not a trigger", () => {
     const result = evaluateBudgetCheck(active({ lastContextInputTokens: undefined, estimatedNextRequestTokens: undefined }));
     expect(result.kind).toBe("degraded");
@@ -155,6 +187,19 @@ describe("context budget: estimator", () => {
     // 100 bytes / 2 = 50, plus one per-message overhead of 4 -> at least 50.
     expect(estimate).toBeGreaterThanOrEqual(50);
     expect(estimate).toBeLessThan(200);
+  });
+
+  test("includes the provider-visible tool schema", () => {
+    const withoutTools = estimateRequestTokens([{ content: "short" }], "system");
+    const withTools = estimateRequestTokens([{ content: "short" }], "system", [{
+      type: "function",
+      function: {
+        name: "large_tool",
+        description: "d".repeat(400),
+        parameters: { type: "object", properties: { value: { type: "string", description: "p".repeat(400) } } },
+      },
+    }]);
+    expect(withTools).toBeGreaterThan(withoutTools + 350);
   });
 
   test("excludes base64 image payloads from the transcript size", () => {
