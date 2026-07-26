@@ -183,7 +183,8 @@ export function createQualityPickerController(options: {
 
   function handleRewriteConfirmKey(key: TuiKeyEvent): boolean {
     const confirm = qualityRewriteConfirm();
-    if (!confirm || qualityPickerBusy()) return false;
+    if (!confirm) return false;
+    if (qualityPickerBusy()) return true; // swallow keys while a write is in flight
     if (key.name === "up" || key.name === "down" || (key.ctrl && (key.name === "p" || key.name === "n"))) {
       setQualityRewriteConfirm({ ...confirm, focused: confirm.focused === "confirm" ? "reject" : "confirm" });
       return true;
