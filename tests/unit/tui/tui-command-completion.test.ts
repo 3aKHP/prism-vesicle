@@ -82,7 +82,7 @@ describe("command-owned argument completion", () => {
 
   test("walks the quality grammar through fixed, provider, and model stages", async () => {
     const mode = resolve("/quality ");
-    expect((await items(mode)).map((item) => item.id)).toEqual(["status", "off", "observe", "rewrite", "confirm"]);
+    expect((await items(mode)).map((item) => item.id)).toEqual(["status", "off", "observe", "rewrite"]);
     expect(mode.complete((await items(mode))[2]!)).toBe("/quality observe ");
 
     const provider = resolve("/quality observe ");
@@ -93,9 +93,9 @@ describe("command-owned argument completion", () => {
     expect((await items(model)).map((item) => item.id)).toEqual(["alpha-chat"]);
     expect(model.complete((await items(model))[0]!)).toBe("/quality observe alpha alpha-chat ");
 
-    const confirmed = resolve("/quality confirm ");
-    expect((await items(confirmed)).map((item) => item.id)).toEqual(["rewrite"]);
-    expect(confirmed.complete((await items(confirmed))[0]!)).toBe("/quality confirm rewrite ");
+    const rewriteProvider = resolve("/quality rewrite ");
+    expect((await items(rewriteProvider)).map((item) => item.id)).toEqual(["alpha", "beta"]);
+    expect(rewriteProvider.complete((await items(rewriteProvider))[0]!)).toBe("/quality rewrite alpha ");
   });
 
   test("completes artifact, validation, and resumable-session targets from refreshed stores", async () => {

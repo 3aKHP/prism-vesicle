@@ -42,7 +42,7 @@
 | 命令 | 作用 |
 |---|---|
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | 查看或设置工具批准模式 |
-| `/quality [off\|observe\|rewrite …]` | 配置实验性 Semantic Judge(默认关) |
+| `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | 查看或配置实验性 Semantic Judge;不带参数打开引导式设置。`off` 关闭 Judge 并保留 profile;不带 profile 的 `observe`/`rewrite` 使用已保留或当前的 provider/model。选择 Review and revise(或 `/quality rewrite`)只打开一个红色确认面板——已没有 `/quality confirm` 这第二条命令 |
 | `/agents [handle\|stop <handle>\|retry]` | 查看/中断/重试 SubAgent |
 
 ## 输入框按键

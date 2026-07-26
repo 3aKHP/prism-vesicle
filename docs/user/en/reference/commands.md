@@ -42,7 +42,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | Command | Purpose |
 |---|---|
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Show or set the tool approval mode |
-| `/quality [off\|observe\|rewrite …]` | Configure the experimental Semantic Judge (off by default) |
+| `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | Show or configure the experimental Semantic Judge; no arguments open guided settings. `off` disables the Judge and retains the profile; `observe`/`rewrite` without a profile use the retained or active provider/model. Selecting Review and revise (or `/quality rewrite`) opens one red confirmation panel — there is no `/quality confirm` second command |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry SubAgent delivery |
 
 ## Input-box keys

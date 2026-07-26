@@ -26,15 +26,32 @@ What it checks:
 
 ### 2. Semantic Judge (🟡, optional, off by default)
 
-A user-level experimental overlay that has a **separately registered** provider/model re-check prose. Configured via `quality.yaml` (beside `providers.yaml`) or the `/quality` command; defaults to `off`.
+A user-level experimental overlay that has a **separately registered** provider/model re-check prose. It is off by default.
+
+The normal path is the guided `/quality` command (run with no arguments). It opens a state-aware settings picker that shows the current mode and the effective Judge profile, and offers three modes plus a secondary **Change Judge** action:
+
+| Label | Stable value | Effect |
+|---|---|---|
+| `Off` | `off` | No Judge requests |
+| `Review only` | `observe` | Record experimental findings; no revisions |
+| `Review and revise` | `rewrite` | May request up to two Engine revisions |
+| `Change Judge` | — | Browse the registered provider/model list without enabling anything |
+
+`/quality` remembers your profile: turning the Judge off (or running `/quality off`) retains the last complete provider/model/timeout tuple as a dormant profile and makes zero Judge requests while off. On first use with no retained profile, the picker visibly preselects the active registered provider/model — this is a UI default followed by an explicit action, never a silent runtime fallback. `Bare /quality observe` enables Observe immediately when a retained valid profile exists, otherwise it opens the picker focused on `Review only`. `Bare /quality rewrite` resolves the retained-or-active candidate and opens the red confirmation panel directly.
+
+Selecting **Review and revise** (or running `/quality rewrite [provider model [timeout-ms]]`) stages the candidate and opens a red, two-stage confirmation panel modelled on the `/permissions YOLO` flow: Enter advances from `Continue` to `Enable Review and Rewrite`, a second Enter persists the setting, and Esc at either stage leaves the prior configuration unchanged. No `/quality confirm` second command exists anymore.
+
+For automation and alpha diagnostics the same settings live in `quality.yaml` beside `providers.yaml`:
 
 ```yaml
-version: 1
+version: 2
 mode: observe          # off / observe / rewrite
 providerAlias: deepseek
 modelId: deepseek-v4-flash
 judgeTimeoutMs: 15000
 ```
+
+A complete tuple may also stay under `mode: off` as a dormant retained profile. Version 2 is an alpha-era forward migration; older Vesicle builds may not read it, and the first setting change rewrites a version 1 file as version 2.
 
 It only runs when: the producer is `runtime` or `stage`, **and** the deterministic guard already decided `pass` (a second pass over an already-clean candidate). Properties:
 

@@ -136,7 +136,8 @@ export type CommandContext = {
 
   // —— model picker (used by /model with no args) ——
   openModelPicker: () => Promise<void>;
-  openQualityPicker: () => Promise<void>;
+  openQualityPicker: (focusMode?: "observe" | "rewrite") => Promise<void>;
+  openQualityRewriteConfirm: (candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) => Promise<void>;
   openSideQuestion: (args: string) => Promise<void>;
 
   // —— shell pages (Scope B two-page model) ——
