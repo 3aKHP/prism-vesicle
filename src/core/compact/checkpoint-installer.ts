@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import type { ProviderSelection } from "../../config/providers";
 import {
   parseCompactCheckpoint,
@@ -24,10 +23,14 @@ export type InstallCheckpointOptions = {
   reason: CompactCheckpointReason;
   createdWith: { providerId: string; model: string; engine: string };
   providerSelection?: Partial<ProviderSelection>;
+  replacementMessages?: ResumedMessage[];
   accounting: {
     contextWindow?: number;
+    softTriggerTokens?: number;
+    hardInputCeilingTokens?: number;
     beforeTokens?: number;
     beforeSource: "provider" | "estimated" | "unknown";
+    projectedAfterTokens?: number;
   };
 };
 
@@ -45,19 +48,8 @@ export type InstalledCheckpoint = {
  * leaves the former head active and usable — nothing is installed in memory.
  */
 export async function installCompactCheckpoint(options: InstallCheckpointOptions): Promise<InstalledCheckpoint> {
-  // Read the source head fresh from the session file right before the append
-  // (rather than the store's creation-time cache) so the recorded source head
-  // matches the parent the append will actually use. Fail closed if there is no
-  // current head — compaction always runs against a non-empty session.
-  const sourceHeadUuid = await readLatestRecordUuid(options.session.sessionPath);
-  if (!sourceHeadUuid) throw new Error("Cannot install a compact checkpoint against a session with no current head.");
-  const retainedMessages = projectSessionHistory(options.selection.retainedRecords).messages;
-  const summaryMessage: ResumedMessage = {
-    role: "user",
-    content: `[conversation summary]\n${options.summary}`,
-    kind: "compact-summary",
-  };
-  const replacementMessages: ResumedMessage[] = [summaryMessage, ...retainedMessages];
+  const sourceHeadUuid = options.selection.sourceHeadUuid;
+  const replacementMessages = options.replacementMessages ?? buildCompactReplacementMessages(options.selection, options.summary);
 
   const payload: PortableCompactCheckpointV1 = {
     version: 1,
@@ -79,8 +71,11 @@ export async function installCompactCheckpoint(options: InstallCheckpointOptions
     },
     accounting: {
       ...(options.accounting.contextWindow !== undefined ? { contextWindow: options.accounting.contextWindow } : {}),
+      ...(options.accounting.softTriggerTokens !== undefined ? { softTriggerTokens: options.accounting.softTriggerTokens } : {}),
+      ...(options.accounting.hardInputCeilingTokens !== undefined ? { hardInputCeilingTokens: options.accounting.hardInputCeilingTokens } : {}),
       ...(options.accounting.beforeTokens !== undefined ? { beforeTokens: options.accounting.beforeTokens } : {}),
       beforeSource: options.accounting.beforeSource,
+      ...(options.accounting.projectedAfterTokens !== undefined ? { projectedAfterTokens: options.accounting.projectedAfterTokens } : {}),
     },
   };
   // Validate the exact payload before it is persisted. parseCompactCheckpoint
@@ -88,7 +83,7 @@ export async function installCompactCheckpoint(options: InstallCheckpointOptions
   // reaches the JSONL and never partially projects.
   parseCompactCheckpoint(payload);
 
-  const record = await options.session.append({
+  const record = await options.session.appendIfHead(sourceHeadUuid, {
     role: "system",
     content: "Conversation compacted into a portable checkpoint.",
     metadata: { kind: "compact-checkpoint-v1", checkpoint: payload },
@@ -101,19 +96,14 @@ export async function installCompactCheckpoint(options: InstallCheckpointOptions
   };
 }
 
-async function readLatestRecordUuid(sessionPath: string): Promise<string | null> {
-  try {
-    const text = await readFile(sessionPath, "utf8");
-    const lines = text.split("\n");
-    for (let index = lines.length - 1; index >= 0; index -= 1) {
-      const line = lines[index]!.trim();
-      if (!line) continue;
-      const uuid = (JSON.parse(line) as { uuid?: unknown }).uuid;
-      return typeof uuid === "string" ? uuid : null;
-    }
-    return null;
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
-    throw error;
-  }
+export function buildCompactReplacementMessages(
+  selection: ReplacementSelection,
+  summary: string,
+): ResumedMessage[] {
+  const retainedMessages = projectSessionHistory(selection.retainedRecords).messages;
+  return [{
+    role: "user",
+    content: `[conversation summary]\n${summary}`,
+    kind: "compact-summary",
+  }, ...retainedMessages];
 }

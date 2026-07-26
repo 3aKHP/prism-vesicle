@@ -531,11 +531,14 @@ model tool call or a direct user edit.
   `softTrigger = floor(min(contextWindow·threshold, contextWindow − reserve))`
   and `hardInputCeiling = contextWindow − reserve`, with reserve precedence
   `reserveOutputTokens` → effective turn `maxTokens` → `limits.maxOutputTokens`
-  → 0 (an explicit reserve ≥ window, or a negative reserve, deactivates). The
-  primary oracle is the most recent provider `contextInputTokens`, with a
-  host byte-based estimate (`ceil(utf8/2)` + per-message/tool overhead, base64
-  excluded) covering growth; estimates are labeled, never reported as
-  provider-confirmed protection. A pre-turn check compacts an existing session
+  → 0. Provider configuration rejects statically known reserves that leave no
+  positive input budget. The primary oracle is the most recent provider
+  `contextInputTokens`, paired with the host estimate of that exact request;
+  the next projection adds only host-estimated growth after that observation.
+  The fallback estimate includes the current system prompt, messages, tool-call
+  envelopes, and full active tool schema (`ceil(utf8/2)` plus overhead); base64
+  image materialization remains excluded and therefore approximate. Estimates
+  are labeled, never reported as provider-confirmed protection. A pre-turn check compacts an existing session
   before the new user record persists; a mid-turn soft check runs after a
   complete tool batch and a hard check runs after queued/background input is
   materialized, before the next request. A soft-trigger failure keeps the old
@@ -543,9 +546,13 @@ model tool call or a direct user edit.
   the request without mutating the session and restores the draft. The compact
   provider request is a standalone call (never a bootstrap/loop turn), so it
   cannot recurse; at most one compact runs per boundary; after success the
-  in-memory message array is rebound to the post-checkpoint history and occupancy
-  is recomputed. New sessions, Stage, and resumed pending interactions skip the
-  check. `/context` reports the configured window, latest provider usage or its
+  in-memory message array is rebound to the post-checkpoint history. Before the
+  checkpoint append, the exact replacement request is re-estimated and rejected
+  if it does not reduce the request or still exceeds the hard ceiling.
+  Cancellation is distinct from failure.
+  New sessions and Stage skip the pre-turn check; unresolved interactions defer
+  compaction but their resumed first provider request still passes the exact send
+  guard. `/context` reports the configured window, latest provider usage or its
   absence, the activation state with the precise reason when inactive, the
   effective soft/hard limits, the reserve and its source, the active strategy,
   and any deferred/degraded state.

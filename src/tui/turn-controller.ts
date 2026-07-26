@@ -139,9 +139,11 @@ export function createTurnController(options: TurnControllerOptions) {
       // trailing UI user message that was optimistically added before the send
       // (it was never persisted, so it must not linger as a ghost turn).
       if (error instanceof AutoCompactBlockedError) {
-        options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
-        if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
-        options.setMessages((previous) => (previous.length > 0 && previous[previous.length - 1]!.role === "user" ? previous.slice(0, -1) : previous));
+        if (!error.inputPersisted) {
+          options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
+          if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
+          options.setMessages((previous) => (previous.length > 0 && previous[previous.length - 1]!.role === "user" ? previous.slice(0, -1) : previous));
+        }
         reportError(error);
         return;
       }

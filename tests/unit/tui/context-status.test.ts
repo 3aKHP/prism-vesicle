@@ -6,6 +6,7 @@ type Ctx = Parameters<typeof renderContextStatus>[0];
 function mockCtx(options: {
   contextWindow?: number;
   autoCompact?: { enabled?: boolean; threshold?: number; reserveOutputTokens?: number };
+  generationMaxTokens?: number;
   maxOutputTokens?: number;
   contextInputTokens?: number;
 }): Ctx {
@@ -15,6 +16,9 @@ function mockCtx(options: {
       ...(options.maxOutputTokens !== undefined ? { maxOutputTokens: options.maxOutputTokens } : {}),
       ...(options.autoCompact ? { autoCompact: options.autoCompact } : {}),
     }),
+    activeModelGeneration: () => (options.generationMaxTokens !== undefined
+      ? { maxTokens: options.generationMaxTokens }
+      : undefined),
     lastTurnUsage: () => (options.contextInputTokens !== undefined
       ? { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: options.contextInputTokens }
       : undefined),
@@ -32,6 +36,18 @@ describe("/context status", () => {
     expect(out).toContain("Output reserve: 2.0k (from autoCompact.reserveOutputTokens)");
     expect(out).toContain("Auto compact: active · strategy portable-summary");
     expect(out).toContain("provider usage");
+  });
+
+  test("generation maxTokens takes precedence over the model output limit", () => {
+    const out = renderContextStatus(mockCtx({
+      contextWindow: 200_000,
+      autoCompact: { enabled: true, threshold: 0.99 },
+      generationMaxTokens: 4_096,
+      maxOutputTokens: 16_384,
+    }));
+    expect(out).toContain("Soft trigger: 195.9k");
+    expect(out).toContain("Hard input ceiling: 195.9k");
+    expect(out).toContain("Output reserve: 4.1k (from generation maxTokens)");
   });
 
   test("a missing threshold reports inactive with a reason, not 'enabled'", () => {

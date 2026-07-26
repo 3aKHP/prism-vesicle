@@ -29,22 +29,12 @@ type ProviderRoundOptions = {
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
   onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
+  /** The Agent Loop already drained notifications before its exact send guard. */
+  backgroundAlreadyMaterialized?: boolean;
 };
 
 export async function completeProviderRound(options: ProviderRoundOptions): Promise<VesicleResponse> {
-  const backgroundNotifications = await options.processManager.drainNotifications(options.session.sessionId);
-  if (backgroundNotifications.length > 0) {
-    const content = renderBackgroundProcessNotifications(backgroundNotifications);
-    options.messages.push({ role: "user", content });
-    await options.session.append({
-      role: "user",
-      content,
-      metadata: withExecutionRound(options.session.sessionId, {
-        kind: "background-process-results",
-        taskIds: backgroundNotifications.map((task) => task.taskId),
-      }),
-    });
-  }
+  if (!options.backgroundAlreadyMaterialized) await materializeBackgroundProcessNotifications(options);
 
   // Publish the immutable side-question context boundary immediately before
   // materializing images and sending the request. At this point `messages`
@@ -63,7 +53,7 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
 
   options.onEvent?.({ type: "provider_request", iteration: options.iteration });
   const messages = await prepareProviderMessages(options.rootDir, options.messages, options.visionEnabled);
-  const response = await completeWithStreaming(options.provider, {
+  return completeWithStreaming(options.provider, {
     id: options.session.sessionId,
     model: { provider: options.providerId, model: options.model },
     system: [options.systemPrompt],
@@ -80,8 +70,24 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
       iteration: options.iteration,
     }) : undefined,
   }, options.onEvent, options.bufferAssistant === true);
+}
 
-  return response;
+export async function materializeBackgroundProcessNotifications(
+  options: Pick<ProviderRoundOptions, "messages" | "processManager" | "session">,
+): Promise<void> {
+  const backgroundNotifications = await options.processManager.drainNotifications(options.session.sessionId);
+  if (backgroundNotifications.length > 0) {
+    const content = renderBackgroundProcessNotifications(backgroundNotifications);
+    options.messages.push({ role: "user", content });
+    await options.session.append({
+      role: "user",
+      content,
+      metadata: withExecutionRound(options.session.sessionId, {
+        kind: "background-process-results",
+        taskIds: backgroundNotifications.map((task) => task.taskId),
+      }),
+    });
+  }
 }
 
 export function emitAssistantResponse(response: VesicleResponse, onEvent?: (event: AgentLoopEvent) => void): void {

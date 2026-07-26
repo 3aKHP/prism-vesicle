@@ -106,8 +106,11 @@ export type AgentLoopEvent =
       retainedUnits: number;
       durationMs: number;
       usageSource?: "provider" | "estimated" | "unknown";
+      beforeTokens?: number;
+      projectedAfterTokens?: number;
     }
   | { type: "compact_failed"; phase: "pre-turn" | "mid-turn" | "manual"; trigger: "manual" | "auto"; reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch"; durationMs: number; errorMessage: string }
+  | { type: "compact_cancelled"; phase: "pre-turn" | "mid-turn" | "manual"; trigger: "manual" | "auto"; reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch"; durationMs: number }
   | { type: "compact_deferred"; phase: "pre-turn" | "mid-turn"; reason: string };
 
 export type ValidatorOutcome = {

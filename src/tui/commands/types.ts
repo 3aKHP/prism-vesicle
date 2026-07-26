@@ -6,7 +6,7 @@
 // the dispatch layer.
 
 import type { ProviderRegistry, ProviderSelection } from "../../config/providers";
-import type { ModelLimits } from "../../config/env";
+import type { GenerationDefaults, ModelLimits } from "../../config/env";
 import type { EngineId } from "../../core/engine/profile";
 import type { EngineTransition } from "../../core/engine/transition";
 import type { ReasoningTier, VesicleMessage } from "../../providers/shared/types";
@@ -78,6 +78,7 @@ export type CommandContext = {
   // —— provider / model ——
   activeProvider: () => string;
   activeModel: () => string;
+  activeModelGeneration: () => GenerationDefaults | undefined;
   activeModelLimits: () => ModelLimits | undefined;
   ensureProviderRegistry: () => Promise<ProviderRegistry>;
   applyProviderSelection: (selection: Partial<ProviderSelection>) => Promise<ProviderSelection>;

@@ -219,6 +219,40 @@ describe("config loading", () => {
     });
   });
 
+  test("rejects an explicit auto-compaction reserve at or above the context window", async () => {
+    const { env } = await writeProvidersFile([
+      "default:", "  provider: test", "  model: m", "providers:",
+      "  test:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: TEST_KEY",
+      "    models:", "      - id: m", "        limits:", "          contextWindow: 1000", "          autoCompact:",
+      "            enabled: true", "            threshold: 0.8", "            reserveOutputTokens: 1000", "",
+    ]);
+
+    await expect(loadProviderRegistry(env)).rejects.toThrow("reserveOutputTokens (1000) greater than or equal to contextWindow (1000)");
+  });
+
+  test("rejects an inherited reserve that leaves no positive auto-compaction input budget", async () => {
+    const { env } = await writeProvidersFile([
+      "default:", "  provider: test", "  model: m", "providers:",
+      "  test:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: TEST_KEY",
+      "    models:", "      - id: m", "        generation:", "          maxTokens: 1200", "        limits:",
+      "          contextWindow: 1000", "          autoCompact:", "            enabled: true", "            threshold: 0.8", "",
+    ]);
+
+    await expect(loadProviderRegistry(env)).rejects.toThrow("effective output reserve (1200) that leaves no positive input budget");
+  });
+
+  test("validates static input budget using reserve precedence", async () => {
+    const { env } = await writeProvidersFile([
+      "default:", "  provider: test", "  model: m", "providers:",
+      "  test:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: TEST_KEY",
+      "    models:", "      - id: m", "        generation:", "          maxTokens: 1200", "        limits:",
+      "          contextWindow: 1000", "          maxOutputTokens: 1400", "          autoCompact:",
+      "            enabled: true", "            threshold: 0.8", "            reserveOutputTokens: 200", "",
+    ]);
+
+    await expect(loadProviderRegistry(env)).resolves.toBeDefined();
+  });
+
   test("loads Anthropic Messages provider profiles", async () => {
     const { env } = await writeProvidersFile([
       "default:",

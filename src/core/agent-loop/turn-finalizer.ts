@@ -14,6 +14,7 @@ export async function finalizeTurn(options: {
   model: string;
   onEvent?: (event: AgentLoopEvent) => void;
   quality?: { outcome: QualityOutcome; findingCount: number };
+  requestEstimateTokens?: number;
 }): Promise<RunPromptResult> {
   const { response } = options;
   let assistantRecordUuid: string | undefined;
@@ -34,6 +35,7 @@ export async function finalizeTurn(options: {
         ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
         ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
         ...(response.usage ? { usage: response.usage } : {}),
+        ...(options.requestEstimateTokens !== undefined ? { requestEstimateTokens: options.requestEstimateTokens } : {}),
       }),
     });
     assistantRecordUuid = record.uuid;

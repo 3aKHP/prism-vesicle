@@ -172,6 +172,7 @@ describe("/engine command", () => {
     const ctx = {
       activeProvider: () => "deepseek",
       activeModel: () => "deepseek-v4-flash",
+      activeModelGeneration: () => undefined,
       activeModelLimits: () => ({
         contextWindow: 1_000_000,
         maxOutputTokens: 65536,
@@ -216,6 +217,7 @@ describe("/engine command", () => {
     const ctx = {
       activeProvider: () => "local",
       activeModel: () => "qwen3",
+      activeModelGeneration: () => undefined,
       activeModelLimits: () => undefined,
       lastTurnUsage: () => undefined,
       sessionUsage: () => ({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: 0 }),

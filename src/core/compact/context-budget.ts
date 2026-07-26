@@ -47,6 +47,16 @@ export type BudgetInputs = {
   turnMaxTokens?: number;
   /** Most recent provider-observed active context-window occupancy. */
   lastContextInputTokens?: number;
+  /**
+   * Provider occupancy paired with the host estimate of that exact request.
+   * Keeping the values together lets the next projection add only growth that
+   * occurred after the provider observation instead of comparing two totals
+   * that may use very different token-counting oracles.
+   */
+  lastRequestObservation?: {
+    contextInputTokens: number;
+    estimatedRequestTokens: number;
+  };
   /** Host estimate of the full next provider request (system + history + tool schema + incoming input). */
   estimatedNextRequestTokens?: number;
 };
@@ -127,9 +137,27 @@ export function evaluateBudgetCheck(inputs: BudgetInputs): BudgetCheckResult {
   return { kind: "hard-ceiling", projectedTokens: projected.value, usageSource: projected.source, softTriggerTokens, hardInputCeilingTokens };
 }
 
-function projectOccupancy(inputs: BudgetInputs): { value: number; source: Exclude<UsageSource, "unknown"> } | undefined {
-  const provider = inputs.lastContextInputTokens;
+export function projectOccupancy(inputs: BudgetInputs): { value: number; source: Exclude<UsageSource, "unknown"> } | undefined {
+  const observation = inputs.lastRequestObservation;
   const estimate = inputs.estimatedNextRequestTokens;
+  if (
+    observation
+    && Number.isFinite(observation.contextInputTokens)
+    && observation.contextInputTokens > 0
+    && Number.isFinite(observation.estimatedRequestTokens)
+    && observation.estimatedRequestTokens >= 0
+  ) {
+    if (typeof estimate !== "number" || !Number.isFinite(estimate)) {
+      return { value: observation.contextInputTokens, source: "provider" };
+    }
+    const estimatedGrowth = Math.max(0, estimate - observation.estimatedRequestTokens);
+    return {
+      value: observation.contextInputTokens + estimatedGrowth,
+      source: estimatedGrowth > 0 ? "estimated" : "provider",
+    };
+  }
+
+  const provider = inputs.lastContextInputTokens;
   if (typeof provider === "number" && provider > 0 && typeof estimate === "number") {
     // The provider-observed occupancy is the authoritative floor; the estimate
     // covers growth the provider has not seen. Whichever value is larger
@@ -151,10 +179,18 @@ function projectOccupancy(inputs: BudgetInputs): { value: number; source: Exclud
  * Estimated values are suitable for early compaction but must be displayed as
  * estimates; they are not a promise that the provider will accept the request.
  */
-export function estimateRequestTokens(messages: ReadonlyArray<{ content: string; toolCalls?: ReadonlyArray<{ arguments: string }> }>, systemPrompt?: string): number {
+export function estimateRequestTokens(
+  messages: ReadonlyArray<{ content: string; toolCalls?: ReadonlyArray<{ arguments: string }> }>,
+  systemPrompt?: string,
+  tools: ReadonlyArray<unknown> = [],
+): number {
   let bytes = 0;
   let overhead = 0;
   if (systemPrompt) bytes += Buffer.byteLength(systemPrompt, "utf8");
+  if (tools.length > 0) {
+    bytes += Buffer.byteLength(JSON.stringify(tools), "utf8");
+    overhead += tools.length * 4;
+  }
   for (const message of messages) {
     overhead += 4;
     bytes += Buffer.byteLength(message.content, "utf8");

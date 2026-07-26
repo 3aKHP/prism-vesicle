@@ -10,14 +10,14 @@ import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissi
 import { getProcessManager, type ProcessManager } from "../process/manager";
 import type { SessionStore } from "../session/store";
 import { bindExecutionRound, clearExecutionRound, loadSessionSnapshot, newProviderRoundId, withExecutionRound } from "../session/store";
-import { runAutomaticCompaction } from "../compact/auto-compact";
+import { AutoCompactBlockedError, runAutomaticCompaction } from "../compact/auto-compact";
 import { estimateRequestTokens } from "../compact/context-budget";
 import { toVesicleMessage } from "../compact/summary-generator";
 import type { ToolDefinition } from "../tools";
 import { createTurnAgentManager } from "./agent-manager";
 import { recordAssistantToolCalls } from "./assistant-recorder";
 import { resolveInteractionPause } from "./interaction-pause";
-import { completeProviderRound, emitAssistantResponse } from "./provider-round";
+import { completeProviderRound, emitAssistantResponse, materializeBackgroundProcessNotifications } from "./provider-round";
 import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
@@ -112,6 +112,8 @@ type LoopRuntime = {
   providerRoundId: string | undefined;
   /** Most recent provider-observed context occupancy, for mid-turn budget checks. Cleared after a compact (stale). */
   lastContextInputTokens: number | undefined;
+  lastRequestObservation: { contextInputTokens: number; estimatedRequestTokens: number } | undefined;
+  lastRequestEstimateTokens: number | undefined;
 };
 
 export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -166,13 +168,25 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
 
   for (let iteration = 0; iteration < maxToolIterations; iteration++) {
     const round = await advanceRound(args, runtime, iteration);
+    if (round.blocked) {
+      if (!response) throw round.error;
+      break;
+    }
     response = round.response;
     if (round.pause) return round.pause;
     if (!round.hadToolCalls) break;
     // The latest provider-observed context occupancy feeds the mid-turn budget
     // checks (the host estimate covers growth since this observation).
     const observed = response.usage?.contextInputTokens;
-    if (typeof observed === "number" && observed > 0) runtime.lastContextInputTokens = observed;
+    if (typeof observed === "number" && observed > 0) {
+      runtime.lastContextInputTokens = observed;
+      if (runtime.lastRequestEstimateTokens !== undefined) {
+        runtime.lastRequestObservation = {
+          contextInputTokens: observed,
+          estimatedRequestTokens: runtime.lastRequestEstimateTokens,
+        };
+      }
+    }
     // Mid-turn soft check: after a complete assistant/tool batch (any pause has
     // been resolved by advanceRound returning, not pausing), before queued
     // steering is drained for the next round. At most one compact per boundary.
@@ -190,16 +204,6 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     // carry the next round id, then drain them.
     advanceProviderRound(args, runtime);
     await processInputBoundary(args, runtime);
-    // Mid-turn hard check: after queued/background input has been materialized
-    // (those packets are pinned verbatim by the retained frontier), before the
-    // next provider request. Skipped if the soft check already compacted this
-    // boundary; only acts on a hard-ceiling projection so it does not duplicate
-    // the soft check's soft-trigger compaction.
-    if (!soft.compacted && args.profile.id !== "stage" && args.config.limits?.autoCompact) {
-      const hard = await runMidTurnCompaction(args, runtime, true);
-      if (hard.blocked) break;
-    }
-
     consecutiveFailures = round.anyFailed ? consecutiveFailures + 1 : 0;
     if (consecutiveFailures >= maxConsecutiveFailedTools) {
       await recordNoProgressBreak(args.session, consecutiveFailures);
@@ -220,6 +224,7 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     model: args.config.model,
     onEvent: args.onEvent,
     quality: runtime.quality.lastResult,
+    requestEstimateTokens: runtime.lastRequestEstimateTokens,
   });
 }
 
@@ -227,7 +232,13 @@ async function advanceRound(
   args: RunLoopArgs,
   runtime: LoopRuntime,
   iteration: number,
-): Promise<{ response: VesicleResponse; pause?: RunPromptResult; hadToolCalls: boolean; anyFailed: boolean }> {
+): Promise<
+  | { response: VesicleResponse; pause?: RunPromptResult; hadToolCalls: boolean; anyFailed: boolean; blocked?: false }
+  | { blocked: true; error: AutoCompactBlockedError }
+> {
+  const boundary = await prepareExactProviderBoundary(args, runtime);
+  if (boundary.blocked) return { blocked: true, error: boundary.error! };
+  runtime.lastRequestEstimateTokens = estimateRequestTokens(args.messages, args.systemPrompt, args.tools);
   const response = await completeProviderRound({
     rootDir: args.rootDir,
     provider: args.provider,
@@ -247,6 +258,7 @@ async function advanceRound(
     signal: args.signal,
     onEvent: args.onEvent,
     onProviderContextSnapshot: args.onProviderContextSnapshot,
+    backgroundAlreadyMaterialized: true,
   });
   const toolCalls = response.toolCalls ?? [];
   if (toolCalls.length === 0) runtime.quality.proseParts.push(...qualityCandidateParts(response));
@@ -280,6 +292,9 @@ async function advanceRound(
     session: args.session,
     profile: args.profile,
     model: args.config.model,
+    metadata: runtime.lastRequestEstimateTokens !== undefined
+      ? { requestEstimateTokens: runtime.lastRequestEstimateTokens }
+      : undefined,
   });
   const plan = planToolRound(toolCalls, args.tools, runtime.permission);
   await recordPendingQualityCheck(
@@ -426,6 +441,8 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
     logicalTurnId: args.logicalTurnId,
     providerRoundId: args.providerRoundId,
     lastContextInputTokens: undefined,
+    lastRequestObservation: undefined,
+    lastRequestEstimateTokens: undefined,
   };
 }
 
@@ -481,6 +498,22 @@ async function processInputBoundary(args: RunLoopArgs, runtime: LoopRuntime): Pr
   await injectPendingUserInputs(args, runtime);
 }
 
+/** Materialize every request-bound input, then enforce the mandatory hard ceiling. */
+async function prepareExactProviderBoundary(
+  args: RunLoopArgs,
+  runtime: LoopRuntime,
+): Promise<{ compacted: boolean; blocked: boolean; error?: AutoCompactBlockedError }> {
+  await materializeBackgroundProcessNotifications({
+    messages: args.messages,
+    processManager: runtime.processManager,
+    session: args.session,
+  });
+  if (args.profile.id === "stage" || !args.config.limits?.autoCompact) {
+    return { compacted: false, blocked: false };
+  }
+  return runMidTurnCompaction(args, runtime, true);
+}
+
 async function recordNoProgressBreak(session: SessionStore, consecutiveFailures: number): Promise<void> {
   await session.append({
     role: "system",
@@ -501,8 +534,12 @@ async function recordNoProgressBreak(session: SessionStore, consecutiveFailures:
  * standalone request (never a bootstrap/loop turn) so it cannot re-enter this
  * check; the outer loop signal cancels it.
  */
-async function runMidTurnCompaction(args: RunLoopArgs, runtime: LoopRuntime, onlyHardCeiling: boolean): Promise<{ compacted: boolean; blocked: boolean }> {
-  const estimatedNextRequestTokens = estimateRequestTokens(args.messages, args.systemPrompt);
+async function runMidTurnCompaction(
+  args: RunLoopArgs,
+  runtime: LoopRuntime,
+  onlyHardCeiling: boolean,
+): Promise<{ compacted: boolean; blocked: boolean; error?: AutoCompactBlockedError }> {
+  const estimatedNextRequestTokens = estimateRequestTokens(args.messages, args.systemPrompt, args.tools);
   const result = await runAutomaticCompaction({
     rootDir: args.rootDir,
     sessionId: args.session.sessionId,
@@ -513,17 +550,25 @@ async function runMidTurnCompaction(args: RunLoopArgs, runtime: LoopRuntime, onl
     onEvent: args.onEvent,
     phase: "mid-turn",
     onlyHardCeiling,
+    estimateReplacementTokens: (replacement) => estimateRequestTokens(
+      replacement.map(toVesicleMessage),
+      args.systemPrompt,
+      args.tools,
+    ),
     budget: {
       config: args.config.limits?.autoCompact,
       limits: args.config.limits,
       generation: args.config.generation,
       turnMaxTokens: args.generation?.maxTokens,
       lastContextInputTokens: runtime.lastContextInputTokens,
+      lastRequestObservation: runtime.lastRequestObservation,
       estimatedNextRequestTokens,
     },
   });
+  if (result.kind === "cancelled") throw result.error;
   if (result.kind === "compacted") {
     runtime.lastContextInputTokens = undefined;
+    runtime.lastRequestObservation = undefined;
     const snapshot = await loadSessionSnapshot(args.rootDir, args.session.sessionId, { synthesizeDanglingToolResults: false });
     const rebuilt = snapshot.messages.map(toVesicleMessage);
     args.messages.length = 0;
@@ -536,7 +581,22 @@ async function runMidTurnCompaction(args: RunLoopArgs, runtime: LoopRuntime, onl
       content: `Context budget exceeded and automatic compaction failed: ${result.errorMessage} Run /compact manually or switch to a model with a larger context window.`,
       metadata: { kind: "compact-blocked" },
     });
-    return { compacted: false, blocked: true };
+    return {
+      compacted: false,
+      blocked: true,
+      error: new AutoCompactBlockedError(
+        result.errorMessage,
+        result.check.kind === "hard-ceiling"
+          ? {
+            projectedTokens: result.check.projectedTokens,
+            hardInputCeilingTokens: result.check.hardInputCeilingTokens,
+            softTriggerTokens: result.check.softTriggerTokens,
+            usageSource: result.check.usageSource,
+          }
+          : undefined,
+        true,
+      ),
+    };
   }
   return { compacted: false, blocked: false };
 }

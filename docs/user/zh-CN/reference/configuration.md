@@ -73,7 +73,7 @@ providers:
 - `authMethod`:Anthropic 用 `x-api-key`,Gemini 用 `x-goog-api-key`。
 - `userAgent`(可选):只替换该供应商的 User-Agent,其它指纹与鉴权头不变。
 - 模型条目可以是字符串简写,也可以是对象,带 `generation`(`temperature`/`maxTokens`)、`capabilities`(`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`)、`limits`(`contextWindow`/`maxOutputTokens`/`autoCompact`)。
-- `limits.contextWindow` 启用底部状态栏的上下文百分比。`autoCompact` 用于开启自动上下文压缩:仅当 `enabled` 不为 `false`、`threshold` 严格介于 0 与 1 之间、且 `contextWindow` 为正整数时才生效;生效后,Vesicle 会在下一次顶层输入之前、以及工具循环中的安全边界处,当预测的下一请求超过软阈值时(通过 portable `/compact` checkpoint)自动压缩。`reserveOutputTokens` 为下一轮输出预留空间(优先级:`reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0);显式预留大于等于上下文窗口会停用自动压缩。没有隐藏默认阈值。用 `/context` 查看实际生效的软阈值、硬上限、预留来源与激活状态。
+- `limits.contextWindow` 启用底部状态栏的上下文百分比。`autoCompact` 用于开启自动上下文压缩:仅当 `enabled` 不为 `false`、`threshold` 严格介于 0 与 1 之间、且 `contextWindow` 为正整数时才生效;生效后,Vesicle 会在下一次顶层输入之前、以及工具循环中的安全边界处,当预测的下一请求超过软阈值时(通过 portable `/compact` checkpoint)自动压缩。每次供应商请求都会在排队输入和已完成的后台进程通知加入后再检查。`reserveOutputTokens` 为下一轮输出预留空间(优先级:`reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0);供应商配置加载会拒绝使输入预算不再为正的静态预留组合。没有隐藏默认阈值。用 `/context` 查看实际生效的软阈值、硬上限、预留来源(包括当前模型的 generation 默认值)与激活状态。
 
 ## .env
 
