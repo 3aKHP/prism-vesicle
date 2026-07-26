@@ -1,7 +1,7 @@
 import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import { palette } from "../theme";
-import { padDisplayEnd, truncateLine } from "../format";
+import { displayWidth, padDisplayEnd, truncateLine } from "../format";
 import type { OptionItem } from "../types";
 
 // A reusable bottom-panel list picker: a titled, bordered column of options
@@ -30,11 +30,16 @@ const LABEL_COLUMN = 22;
 export function OptionPicker(props: OptionPickerProps) {
   const safeSelected = () => (props.items.length === 0 ? 0 : Math.max(0, Math.min(props.selected, props.items.length - 1)));
   const win = () => visibleWindow(props.items, safeSelected(), props.maxVisible ?? MAX_VISIBLE);
+  // Keep the title + hint on one row without clipping at narrow widths.
+  const title = () => {
+    const budget = Math.max(8, props.width - 4 - (props.hint ? displayWidth(props.hint) + 2 : 0));
+    return truncateLine(props.title, budget);
+  };
 
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
-        <text content={props.title} fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <text content={title()} fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
         {props.hint ? <text content={`  ${props.hint}`} fg={palette.textDim} wrapMode="none" /> : null}
       </box>
       <For each={win().visible}>

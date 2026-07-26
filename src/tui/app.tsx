@@ -809,7 +809,13 @@ export function App(props: AppProps = {}) {
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
       : qualityRewriteConfirm()
-        ? Math.max(decisionPanelMinHeight(), qualityRewritePanelHeight(qualityRewriteConfirm()!.stage, dimensions().width))
+        ? Math.max(decisionPanelMinHeight(), qualityRewritePanelHeight(
+          qualityRewriteConfirm()!.stage,
+          qualityRewriteConfirm()!.candidate.providerAlias,
+          qualityRewriteConfirm()!.candidate.modelId,
+          qualityRewriteConfirm()!.candidate.judgeTimeoutMs,
+          dimensions().width,
+        ))
         : decisionPanelMinHeight(),
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,

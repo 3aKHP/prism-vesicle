@@ -39,14 +39,17 @@ describe("resolveQualityCandidate", () => {
     expect(retained.source).toBe("retained");
   });
 
-  test("does not silently substitute another model for a stale retained tuple", () => {
+  test("falls back to the active model as the visible candidate but preserves the stale tuple", () => {
+    // Per plan selection rule 2 the active model becomes the visible candidate
+    // when the retained tuple no longer resolves; rule 3 is enforced separately
+    // (the picker gates enable behind Change Judge). The stale tuple is kept so
+    // the UI can explain the problem rather than silently swapping it in.
     const stale = resolveQualityCandidate(
       { mode: "off", providerAlias: "alpha", modelId: "gone", judgeTimeoutMs: 12_000 },
       registry, "beta", "beta-reasoner",
     );
     expect(stale.candidate).toEqual({ providerAlias: "beta", modelId: "beta-reasoner", judgeTimeoutMs: 15_000 });
     expect(stale.source).toBe("active");
-    // The stale tuple is preserved for explanation, not silently swapped in.
     expect(stale.currentTuple).toEqual({ providerAlias: "alpha", modelId: "gone", judgeTimeoutMs: 12_000 });
   });
 });
@@ -82,7 +85,7 @@ describe("quality picker controller", () => {
     expect((await loadExperimentalQualitySettings()).mode).toBe("off");
   });
 
-  test("Off after Change Judge retains the active profile, not the browsed candidate", async () => {
+  test("Off after Change Judge commits the browsed candidate as the dormant profile", async () => {
     await fixture({ mode: "observe", providerAlias: "alpha", modelId: "alpha-chat", timeoutMs: 12_000 });
     const controller = makeController();
     await controller.openQualityPicker();
@@ -94,13 +97,43 @@ describe("quality picker controller", () => {
     controller.handleQualityPickerKey({ name: "return" }); // → model step
     controller.handleQualityPickerKey({ name: "return" }); // pick beta-reasoner → back to mode (candidate now beta)
     expect(controller.qualityPicker()?.candidate).toMatchObject({ providerAlias: "beta", modelId: "beta-reasoner" });
-    // Select Off (now at index 0; selected reset to observe=1 after model return).
-    controller.handleQualityPickerKey({ name: "up" }); // → Off
+    // Off is a mode action: it commits the browsed candidate as dormant.
+    controller.handleQualityPickerKey({ name: "up" }); // → Off (selected reset to observe=1 after model return)
     controller.handleQualityPickerKey({ name: "return" });
     await waitUntil(() => controller.qualityPicker() === null);
-    // The active alpha profile is retained as dormant; the browsed beta is NOT written.
+    const off = await loadExperimentalQualitySettings();
+    expect(off).toMatchObject({ mode: "off", providerAlias: "beta", modelId: "beta-reasoner", judgeTimeoutMs: 12_000 });
+  });
+
+  test("Off without browsing retains the active profile", async () => {
+    await fixture({ mode: "observe", providerAlias: "alpha", modelId: "alpha-chat", timeoutMs: 12_000 });
+    const controller = makeController();
+    await controller.openQualityPicker();
+    controller.handleQualityPickerKey({ name: "up" }); // observe(1) → Off(0)
+    controller.handleQualityPickerKey({ name: "return" });
+    await waitUntil(() => controller.qualityPicker() === null);
+    // No browsing: candidate is the active profile, so it is retained.
     const off = await loadExperimentalQualitySettings();
     expect(off).toMatchObject({ mode: "off", providerAlias: "alpha", modelId: "alpha-chat", judgeTimeoutMs: 12_000 });
+  });
+
+  test("a stale retained profile requires Change Judge before enabling", async () => {
+    // Retained alpha/gone where "gone" is not in the registry.
+    await fixture({ mode: "off", providerAlias: "alpha", modelId: "gone", timeoutMs: 12_000 });
+    const controller = makeController();
+    await controller.openQualityPicker();
+    expect(controller.qualityPicker()?.requireChangeJudge).toBe(true);
+    // Selecting Review only must NOT silently enable the active-model candidate.
+    controller.handleQualityPickerKey({ name: "down" }); // Off(0) → Review only(1)
+    controller.handleQualityPickerKey({ name: "return" });
+    expect(controller.qualityPicker()?.step).toBe("provider"); // routed to Change Judge
+    expect((await loadExperimentalQualitySettings()).mode).toBe("off");
+    // An explicit Change Judge pick clears the gate. The provider step starts
+    // at the candidate's provider (beta), so picking through yields beta.
+    controller.handleQualityPickerKey({ name: "return" }); // pick beta → model step
+    controller.handleQualityPickerKey({ name: "return" }); // pick beta-reasoner → mode step
+    expect(controller.qualityPicker()?.requireChangeJudge).toBe(false);
+    expect(controller.qualityPicker()?.candidate).toMatchObject({ providerAlias: "beta", modelId: "beta-reasoner" });
   });
 
   test("two Enters on the rewrite confirm write the staged profile once", async () => {
@@ -150,9 +183,18 @@ describe("quality picker controller", () => {
 describe("QualityRewritePrompt height", () => {
   test("fits within the gate-modal bottom budget at 80 columns and one narrower width", () => {
     for (const stage of [1, 2] as const) {
-      expect(qualityRewritePanelHeight(stage, 80)).toBeLessThanOrEqual(14);
-      expect(qualityRewritePanelHeight(stage, 60)).toBeLessThanOrEqual(14);
+      expect(qualityRewritePanelHeight(stage, "deepseek", "deepseek-v4-flash", 15_000, 80)).toBeLessThanOrEqual(14);
+      expect(qualityRewritePanelHeight(stage, "deepseek", "deepseek-v4-flash", 15_000, 60)).toBeLessThanOrEqual(14);
     }
+  });
+
+  test("accounts for a wrapped judge line so a long provider/model ID is fully shown", () => {
+    const shortId = qualityRewritePanelHeight(1, "a", "m", 15_000, 80);
+    const longId = qualityRewritePanelHeight(1, "a".repeat(40), "m".repeat(40), 15_000, 80);
+    // The judge line wraps, so the panel grows to fit the full candidate.
+    expect(longId).toBeGreaterThan(shortId);
+    // A realistic long ID still fits the gate-modal budget at 80 columns.
+    expect(longId).toBeLessThanOrEqual(14);
   });
 });
 

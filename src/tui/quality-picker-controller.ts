@@ -2,6 +2,7 @@ import { createSignal, type Accessor, type Setter } from "solid-js";
 import {
   assertJudgeCandidateHasKey,
   defaultExperimentalQualityTimeoutMs,
+  judgeCandidateHasKey,
   loadExperimentalQualitySettings,
   writeExperimentalQualitySettings,
 } from "../config/quality";
@@ -97,7 +98,9 @@ export function createQualityPickerController(options: {
     const picker = qualityPicker();
     if (!picker) return "Experimental Semantic Judge";
     if (picker.step === "mode") {
-      return `Experimental Semantic Judge · ${picker.currentMode} · ${picker.candidate.providerAlias}/${picker.candidate.modelId}`;
+      // The exact candidate is shown in the Change Judge detail row; keep the
+      // title short so it never crowds the hint at 80 columns.
+      return `Experimental Semantic Judge · ${picker.currentMode}`;
     }
     if (picker.step === "provider") return "Change Judge · provider";
     return `Change Judge · model · ${picker.browsingProvider ?? picker.candidate.providerAlias}`;
@@ -140,7 +143,9 @@ export function createQualityPickerController(options: {
     } else {
       const providerId = picker.browsingProvider ?? picker.candidate.providerAlias;
       const candidate: QualityPickerCandidate = { providerAlias: providerId, modelId: selected.id, judgeTimeoutMs: picker.candidate.judgeTimeoutMs };
-      setQualityPicker({ ...picker, step: "mode", candidate, selected: modeIndexFor(picker.currentMode) });
+      // An explicit Change Judge selection resolves any stale/keyless retained
+      // profile and re-enables direct mode actions.
+      setQualityPicker({ ...picker, step: "mode", candidate, selected: modeIndexFor(picker.currentMode), requireChangeJudge: false });
       options.setStatus(`Judge candidate: ${candidate.providerAlias}/${candidate.modelId}`);
     }
     return true;
@@ -153,15 +158,26 @@ export function createQualityPickerController(options: {
       return;
     }
     if (id === "off") {
-      if (picker.currentMode === "off") {
+      // Off is a mode action: it commits the current candidate (retained, active,
+      // or browsed via Change Judge) as the dormant profile. It is a no-op only
+      // when already off with an unchanged profile (plan selection rule 5).
+      if (picker.currentMode === "off" && sameCandidate(picker.currentTuple, picker.candidate)) {
         setQualityPicker(null);
         options.setStatus("Semantic Judge is off");
         return;
       }
-      // Retain the active profile, not a merely-browsed Change Judge candidate,
-      // so disabling matches `/quality off` (retain the last complete profile).
-      await commitOff(picker.currentTuple ?? picker.candidate);
+      await commitOff(picker.candidate);
       return;
+    }
+    if (id === "observe" || id === "rewrite") {
+      if (picker.requireChangeJudge) {
+        // A retained profile exists but cannot be enabled. Do not silently
+        // substitute the active model — require an explicit Change Judge pick.
+        const registry = options.providerRegistry();
+        options.setStatus("retained Judge profile is unavailable; use Change Judge to pick a valid profile");
+        setQualityPicker({ ...picker, step: "provider", selected: providerIndex(registry, picker.candidate.providerAlias) });
+        return;
+      }
     }
     if (id === "observe") {
       if (picker.currentMode === "observe" && sameCandidate(picker.currentTuple, picker.candidate)) {
@@ -288,6 +304,12 @@ export function createQualityPickerController(options: {
       const registry = await options.ensureProviderRegistry();
       const settings = await loadExperimentalQualitySettings();
       const resolved = resolveQualityCandidate(settings, registry, options.activeProvider(), options.activeModel());
+      // A retained profile that no longer resolves or lacks its key cannot be
+      // enabled silently — require Change Judge (plan rule 3).
+      const retained = resolved.currentTuple;
+      const requireChangeJudge = Boolean(retained)
+        && (!qualityTupleResolves(retained!, registry)
+          || !(await judgeCandidateHasKey(retained!.providerAlias, retained!.modelId)));
       setQualityPickerBusy(false);
       setQualityPicker({
         step: "mode",
@@ -295,7 +317,11 @@ export function createQualityPickerController(options: {
         candidate: resolved.candidate,
         currentMode: settings.mode,
         currentTuple: resolved.currentTuple,
+        requireChangeJudge,
       });
+      if (requireChangeJudge) {
+        options.setStatus("retained Judge profile is unavailable; use Change Judge to pick a valid profile");
+      }
     } catch (error) {
       options.reportError(error);
     }

@@ -168,6 +168,44 @@ describe("/quality command", () => {
     expect(messages.at(-1)?.role).not.toBe("system");
     expect((await loadExperimentalQualitySettings())).toMatchObject({ mode: "off", providerAlias: "judge", modelId: "judge-model" });
   });
+
+  test("bare /quality rewrite with a stale retained profile opens the picker, not the red panel", async () => {
+    // Retained judge/stale-model where stale-model is not in the registry.
+    const directory = await mkdtemp(join(tmpdir(), "vesicle-quality-rewrite-stale-"));
+    directories.push(directory);
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "providers.yaml"), [
+      "default:", "  provider: judge", "  model: judge-model", "providers:",
+      "  judge:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1", "    apiKeyEnv: JUDGE_KEY", "    models:", "      - judge-model", "",
+    ].join("\n"));
+    await writeFile(join(directory, ".env"), "JUDGE_KEY=test-key\n");
+    await writeFile(join(directory, "quality.yaml"), "version: 2\nmode: off\nproviderAlias: judge\nmodelId: stale-model\njudgeTimeoutMs: 15000\n");
+    process.env.VESICLE_PROVIDERS_FILE = join(directory, "providers.yaml");
+    process.env.VESICLE_QUALITY_FILE = join(directory, "quality.yaml");
+    const command = builtinCommands.find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
+    let messages: Message[] = [];
+    const pickerOpened: string[] = [];
+    const stagedCandidates: { providerAlias: string; modelId: string; judgeTimeoutMs: number }[] = [];
+    const ctx = {
+      setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
+      ensureProviderRegistry: async () => ({
+        providers: [{ id: "judge", protocol: "openai-chat-compatible", baseUrl: "https://example.test/v1", apiKeyEnv: "JUDGE_KEY", models: [{ id: "judge-model" }] }],
+      }),
+      setStatus: () => undefined,
+      recordActivity: () => undefined,
+      activeProvider: () => "judge",
+      activeModel: () => "judge-model",
+      async openQualityPicker(focusMode?: "observe" | "rewrite") { pickerOpened.push(focusMode ?? "none"); },
+      async openQualityRewriteConfirm(candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) { stagedCandidates.push(candidate); },
+    } as unknown as CommandContext;
+
+    await command.run(ctx, "rewrite", "/quality rewrite");
+    // Stale retained → require Change Judge via the picker; the red panel must not stage a substitute.
+    expect(pickerOpened).toEqual(["rewrite"]);
+    expect(stagedCandidates).toEqual([]);
+    expect((await loadExperimentalQualitySettings()).mode).toBe("off");
+  });
 });
 
 async function keylessConfigFixture(): Promise<string> {

@@ -45,6 +45,10 @@ export type QualityPickerState = {
   currentMode: ExperimentalQualityMode;
   currentTuple?: QualityPickerCandidate;
   browsingProvider?: string;
+  // True when a retained profile exists but cannot be enabled (no longer
+  // resolves or lacks its key). While true, observe/rewrite route to Change
+  // Judge instead of silently substituting the active model (plan rule 3).
+  requireChangeJudge?: boolean;
 };
 
 export type QualityRewriteConfirmState = {

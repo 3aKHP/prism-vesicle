@@ -659,14 +659,24 @@ async function disableQuality(ctx: Parameters<Command["run"]>[0]): Promise<void>
  * Bare `/quality observe|rewrite` without an explicit profile. Observe enables
  * immediately only when a retained VALID profile exists (resolves and has its
  * key); a retained profile that lacks its key is not valid and falls through to
- * the guided picker. Rewrite resolves the retained-or-active candidate and
- * opens the red confirmation panel directly.
+ * the guided picker. Rewrite opens the red panel for a valid retained profile
+ * (or, on first use with no retained tuple, the active model); if a retained
+ * profile exists but is stale or keyless it routes to the picker so the user
+ * must Change Judge rather than silently enabling a substitute (plan rule 3).
  */
 async function runBareQualityMode(ctx: Parameters<Command["run"]>[0], mode: "observe" | "rewrite"): Promise<void> {
   if (mode === "rewrite") {
     try {
       const registry = await ctx.ensureProviderRegistry();
       const settings = await loadExperimentalQualitySettings();
+      const retained = completeQualityTuple(settings);
+      const retainedResolves = retained ? qualityTupleResolves(retained, registry) : false;
+      if (retained && (!retainedResolves || !(await judgeCandidateHasKey(retained.providerAlias, retained.modelId)))) {
+        // Stale or keyless retained: require Change Judge via the picker.
+        await ctx.openQualityPicker("rewrite");
+        return;
+      }
+      // Valid retained, or first use with no retained tuple.
       const { candidate } = resolveQualityCandidate(settings, registry, ctx.activeProvider(), ctx.activeModel());
       await assertJudgeCandidateHasKey(candidate.providerAlias, candidate.modelId);
       await ctx.openQualityRewriteConfirm(candidate);
