@@ -45,7 +45,7 @@ import {
   turnUsageTelemetryLine,
   type TokenUsageSummary,
 } from "./telemetry";
-import { displayTranscriptFromSnapshot } from "./session-presenter";
+import { displayTranscriptFromSnapshot, isEmptySessionTranscript } from "./session-presenter";
 import { BottomSurface } from "./views/BottomSurface";
 import { createAgentProcessController } from "./agent-process-controller";
 import { createSessionResumeController } from "./session-resume-controller";
@@ -169,9 +169,16 @@ export function App(props: AppProps = {}) {
   });
   const [splashGone, setSplashGone] = createSignal(splashMode === "skip");
   const [splashForceDone, setSplashForceDone] = createSignal(false);
-  // M2: the empty-session hero shows only while the stream holds no
-  // conversation turns; system notices (e.g. the YOLO warning) render above it.
-  const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system" && !message.kind));
+  // M2: the empty-session hero shows only while the stream holds no real
+  // conversation. The invariant (isEmptySessionTranscript) is "no user prompt,
+  // assistant reply, tool activity, or compact summary has appeared yet" —
+  // startup notices (the YOLO warning, "fresh session", etc.) are system
+  // messages without a kind and may render above the hero, but a compact summary
+  // or any turn makes this a live transcript. Deriving this from an explicit
+  // conversation contract (instead of only "every visible role is system")
+  // prevents a future system-role record from recreating the post-compact Hero
+  // regression (issue #107 PR2 addendum).
+  const showHero = createMemo(() => !restoringSession() && isEmptySessionTranscript(messages()));
 
   // Day/night theme. The effective preference (and its source) is applied
   // before the first frame by the controller in runTui/setup. Here the shell

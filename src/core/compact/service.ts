@@ -5,12 +5,18 @@ import type { ProviderRetryInfo, VesicleMessage, VesicleRequest, VesicleResponse
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
-import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionRecord, type SessionSnapshot } from "../session/store";
+import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionSnapshot } from "../session/store";
+import { selectReplacement } from "./replacement-builder";
+import { formatCompactSummary, generatePortableSummary } from "./summary-generator";
+import { installCompactCheckpoint } from "./checkpoint-installer";
+
+export { formatCompactSummary };
 
 export const COMPACT_BOUNDARY_KIND = "compact-boundary";
 export const COMPACT_SUMMARY_KIND = "compact-summary";
 
-export const ERROR_NOT_ENOUGH_MESSAGES_TO_COMPACT = "Not enough messages to compact.";
+export const ERROR_NOTHING_TO_COMPACT = "Nothing left to compact; the newest complete turn is already the retained tail.";
+export const ERROR_NOT_ENOUGH_MESSAGES_TO_COMPACT = ERROR_NOTHING_TO_COMPACT;
 export const ERROR_PENDING_INTERACTION = "Resolve the pending gate, engine switch, or question before compacting.";
 
 type CompactPoint = {
@@ -38,23 +44,6 @@ CRITICAL: Respond with TEXT ONLY. Do NOT call tools.
 - Your entire response must be plain text: an <analysis> block followed by a <summary> block.
 `.trim();
 
-const FULL_COMPACT_PROMPT = `
-Your task is to create a detailed summary of the conversation so far so a
-future model can continue the work without the removed turns. Preserve the
-user's explicit intent, project decisions, relevant files and artifacts, tool
-outcomes, unresolved issues, current workflow state, and the next useful step.
-
-In <analysis>, check the conversation chronologically for:
-1. User requests and corrections.
-2. Important technical concepts and architecture decisions.
-3. Files, commands, generated artifacts, and tool outcomes.
-4. Errors encountered and how they were fixed.
-5. Pending tasks and the exact current state.
-
-In <summary>, provide a compact but specific continuation brief. Include only
-facts that are useful for continuing the session.
-`.trim();
-
 const PARTIAL_COMPACT_PROMPT = `
 Summarize the conversation context from the selected user message onward so a
 future model can continue the work without the removed turns. Preserve user
@@ -75,47 +64,52 @@ export async function compactConversation(options: {
 }): Promise<ConversationCompact> {
   const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
   assertNoPendingInteraction(full);
-  const compactableCount = countCompactableMessages(full.messages);
-  if (compactableCount < 2) throw new Error(ERROR_NOT_ENOUGH_MESSAGES_TO_COMPACT);
 
-  const summary = await generateSummary({
+  const config = await loadConfigForSelection(options.providerSelection);
+  const selection = selectReplacement(full.records, { contextWindow: config.limits?.contextWindow });
+  if (!selection) throw new Error(ERROR_NOTHING_TO_COMPACT);
+
+  // Transaction boundary (plan §3): produce + validate the summary first; the
+  // installer then builds + validates the replacement and appends one record.
+  // A provider failure, malformed payload, or append error leaves the former
+  // head active and usable — nothing is installed in memory.
+  const summary = await generatePortableSummary({
     rootDir: options.rootDir,
     sessionId: options.sessionId,
     engine: options.engine,
     providerSelection: options.providerSelection,
     generation: options.generation,
-    messages: full.messages,
-    prompt: compactPrompt(FULL_COMPACT_PROMPT, options.instructions),
+    evictedRecords: selection.evictedRecords,
+    ...(selection.previousSummary ? { previousSummary: selection.previousSummary } : {}),
+    instructions: options.instructions,
     signal: options.signal,
     onRetry: options.onRetry,
   });
 
-  const compactRoot = compactRootParent(full.records);
-  const session = await createSessionStore(options.rootDir, options.sessionId, { parentUuid: compactRoot });
-  await session.append({
-    role: "system",
-    content: "Conversation compacted.",
-    metadata: {
-      kind: COMPACT_BOUNDARY_KIND,
-      engine: options.engine,
-      messagesSummarized: compactableCount,
+  const session = await createSessionStore(options.rootDir, options.sessionId);
+  const installed = await installCompactCheckpoint({
+    rootDir: options.rootDir,
+    sessionId: options.sessionId,
+    session,
+    selection,
+    summary,
+    trigger: "manual",
+    phase: "manual",
+    reason: "requested",
+    createdWith: { providerId: config.providerId, model: config.model, engine: options.engine },
+    accounting: {
+      ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
+      beforeSource: "unknown",
     },
   });
-  const summaryRecord = await session.append({
-    role: "user",
-    content: `[conversation summary]\n${summary}`,
-    metadata: {
-      kind: COMPACT_SUMMARY_KIND,
-      engine: options.engine,
-      messagesSummarized: compactableCount,
-    },
-  });
-  const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: summaryRecord.uuid });
+
+  const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: installed.checkpointUuid });
+  const messagesSummarized = selection.evictedRecords.filter((record) => record.role !== "system").length;
   return {
     snapshot,
     summary,
-    parentUuid: summaryRecord.uuid,
-    messagesSummarized: compactableCount,
+    parentUuid: installed.checkpointUuid,
+    messagesSummarized,
   };
 }
 
@@ -240,22 +234,8 @@ function toVesicleMessage(message: ResumedMessage): VesicleMessage {
   };
 }
 
-export function formatCompactSummary(content: string): string {
-  const withoutAnalysis = content.replace(/<analysis>[\s\S]*?<\/analysis>/i, "").trim();
-  const match = withoutAnalysis.match(/<summary>([\s\S]*?)<\/summary>/i);
-  return (match?.[1] ?? withoutAnalysis).trim();
-}
-
 function assertNoPendingInteraction(snapshot: SessionSnapshot): void {
   if (snapshot.pendingGate || snapshot.pendingEngineSwitch || snapshot.pendingUserQuestion) {
     throw new Error(ERROR_PENDING_INTERACTION);
   }
-}
-
-function countCompactableMessages(messages: ResumedMessage[]): number {
-  return messages.filter((message) => message.kind !== COMPACT_SUMMARY_KIND).length;
-}
-
-function compactRootParent(records: SessionRecord[]): string | null {
-  return records.find((record) => record.role === "system")?.uuid ?? null;
 }

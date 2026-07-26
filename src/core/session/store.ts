@@ -33,6 +33,7 @@ export { createSessionStore } from "./append-store";
 export type { SessionStore } from "./append-store";
 export type { PendingDelegationRetry } from "./interaction-recovery";
 export { FAILED_TURN_KIND } from "./history-projector";
+export { projectSessionHistory } from "./history-projector";
 export {
   bindExecutionRound,
   clearExecutionRound,
