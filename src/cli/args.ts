@@ -19,16 +19,23 @@ export type ParsedCliInvocation =
       // Open the session picker on startup (equivalent to `/resume` with no
       // argument). Only meaningful for launch; never set for commands.
       resume: boolean;
+      // Process-scoped `--dark`/`--light` initial theme preference. Initial
+      // input only — `/theme` may override it after launch.
+      themePreference?: "dark" | "light";
     }
   | {
       kind: "command";
       command: string;
       args: string[];
       dangerouslySkipPermissions: boolean;
+      // Present only on TUI/Setup commands that accept `--dark`/`--light`.
+      themePreference?: "dark" | "light";
     }
   | { kind: "error"; message: string };
 
 const DANGEROUS_FLAG = "--dangerously-skip-permissions";
+const DARK_FLAG = "--dark";
+const LIGHT_FLAG = "--light";
 
 // Subcommands that own their remaining argv once recognized before any `--`.
 const KNOWN_COMMANDS = new Set([
@@ -43,7 +50,35 @@ const KNOWN_COMMANDS = new Set([
   "dev",
 ]);
 
+// Commands that open a themed interactive UI and accept --dark/--light.
+const THEME_COMMANDS = new Set(["setup", "launch", "dev"]);
+
+type ThemeAccum = { dark: boolean; light: boolean };
+
 const error = (message: string): ParsedCliInvocation => ({ kind: "error", message });
+
+function isThemeFlag(token: string): boolean {
+  return token === DARK_FLAG || token === LIGHT_FLAG;
+}
+
+function applyThemeFlag(accum: ThemeAccum, token: string): void {
+  if (token === DARK_FLAG) accum.dark = true;
+  else if (token === LIGHT_FLAG) accum.light = true;
+}
+
+function themeConflict(accum: ThemeAccum): boolean {
+  return accum.dark && accum.light;
+}
+
+function themePreference(accum: ThemeAccum): "dark" | "light" | undefined {
+  if (accum.dark) return "dark";
+  if (accum.light) return "light";
+  return undefined;
+}
+
+function themeUnsupportedMessage(command: string): string {
+  return `\`--dark\`/\`--light\` apply only to launching the TUI or Guided Setup; \`${command}\` does not open a themed interactive UI.`;
+}
 
 function terminalActionError(version: boolean): ParsedCliInvocation {
   return error(
@@ -59,8 +94,10 @@ function launchAfterTerminator(
   version: boolean,
   help: boolean,
   resume: boolean,
+  theme: ThemeAccum,
 ): ParsedCliInvocation {
   if (version || help) return terminalActionError(version);
+  if (themeConflict(theme)) return error("`--dark` and `--light` are mutually exclusive; pick one.");
   if (after.length > 1) {
     return error("Usage: vesicle [flags] -- [project-directory]");
   }
@@ -69,12 +106,19 @@ function launchAfterTerminator(
     projectPath: after[0] ?? null,
     dangerouslySkipPermissions,
     resume,
+    ...(themePreference(theme) ? { themePreference: themePreference(theme) } : {}),
   };
 }
 
+/**
+ * Strip process-scoped flags (dangerous + theme) from a command's argv before
+ * that command's own `--`. Theme flags are collected so the caller can validate
+ * them against the command's action class.
+ */
 function stripCommandProcessFlags(
   args: string[],
   dangerouslySkipPermissions: boolean,
+  theme: ThemeAccum,
 ): { args: string[]; dangerouslySkipPermissions: boolean } {
   const stripped: string[] = [];
   let commandOptionsEnded = false;
@@ -85,8 +129,16 @@ function stripCommandProcessFlags(
       stripped.push(token);
       continue;
     }
-    if (!commandOptionsEnded && token === DANGEROUS_FLAG) {
+    if (commandOptionsEnded) {
+      stripped.push(token);
+      continue;
+    }
+    if (token === DANGEROUS_FLAG) {
       dangerous = true;
+      continue;
+    }
+    if (isThemeFlag(token)) {
+      applyThemeFlag(theme, token);
       continue;
     }
     stripped.push(token);
@@ -106,6 +158,7 @@ function stripCommandProcessFlags(
  *   vesicle --resume | -r [path]  -> launch and open the session picker
  *   vesicle -vhr                  -> bundled boolean short options
  *   --dangerously-skip-permissions -> process-scoped, accepted anywhere before `--`
+ *   --dark / --light              -> process-scoped theme preference (TUI/Setup only)
  *
  * Short options are always boolean and never take a value; options that need a
  * value use the long form (`--name value`). A lone `--` ends top-level option
@@ -117,15 +170,21 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
   let version = false;
   let help = false;
   let resume = false;
+  const theme: ThemeAccum = { dark: false, light: false };
 
   // Scan top-level options until the first positional token. A top-level `--`
   // before that positional switches to launch-operand parsing; after a known
   // command is recognized, later `--` tokens belong to that command.
   let i = 0;
   while (i < argv.length) {
-    const token = argv[i];
+    const token = argv[i]!;
     if (token === DANGEROUS_FLAG) {
       dangerouslySkipPermissions = true;
+      i++;
+      continue;
+    }
+    if (isThemeFlag(token)) {
+      applyThemeFlag(theme, token);
       i++;
       continue;
     }
@@ -136,6 +195,7 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
         version,
         help,
         resume,
+        theme,
       );
     }
     if (token === "--version") {
@@ -173,7 +233,7 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
 
   // Terminal global actions reject any other token and any launch modifier.
   if (version || help) {
-    if (dangerouslySkipPermissions || resume || i < argv.length) {
+    if (dangerouslySkipPermissions || resume || theme.dark || theme.light || i < argv.length) {
       return terminalActionError(version);
     }
     return version ? { kind: "version" } : { kind: "help" };
@@ -188,12 +248,21 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
     if (resume) {
       return error("`--resume`/`-r` only applies to launching the TUI");
     }
-    const command = stripCommandProcessFlags(argv.slice(i + 1), dangerouslySkipPermissions);
+    if (themeConflict(theme)) {
+      return error("`--dark` and `--light` are mutually exclusive; pick one.");
+    }
+    const command = stripCommandProcessFlags(argv.slice(i + 1), dangerouslySkipPermissions, theme);
+    const supportsTheme = THEME_COMMANDS.has(first);
+    const sawTheme = theme.dark || theme.light;
+    if (sawTheme && !supportsTheme) {
+      return error(themeUnsupportedMessage(first));
+    }
     return {
       kind: "command",
       command: first,
       args: command.args,
       dangerouslySkipPermissions: command.dangerouslySkipPermissions,
+      ...(themePreference(theme) ? { themePreference: themePreference(theme) } : {}),
     };
   }
 
@@ -206,7 +275,14 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
       dangerouslySkipPermissions = true;
       continue;
     }
+    if (isThemeFlag(token)) {
+      applyThemeFlag(theme, token);
+      continue;
+    }
     positionals.push(token);
+  }
+  if (themeConflict(theme)) {
+    return error("`--dark` and `--light` are mutually exclusive; pick one.");
   }
   if (positionals.length > 1) {
     return error(`Unknown command or project directory: ${positionals[0]}`);
@@ -217,5 +293,6 @@ export function parseCliInvocation(argv: string[]): ParsedCliInvocation {
     projectPath: positionals[0] ?? null,
     dangerouslySkipPermissions,
     resume,
+    ...(themePreference(theme) ? { themePreference: themePreference(theme) } : {}),
   };
 }
