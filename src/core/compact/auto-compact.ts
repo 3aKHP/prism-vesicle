@@ -55,7 +55,7 @@ function formatBlockedMessage(errorMessage: string, context?: AutoCompactBlocked
   return `${errorMessage} (projected ${context.projectedTokens} tokens, usage ${context.usageSource}; soft trigger ${context.softTriggerTokens}, hard ceiling ${context.hardInputCeilingTokens}). Retry, run /compact manually, or switch to a model with a larger context window.`;
 }
 
-export type RunPreTurnCompactionOptions = {
+export type RunAutomaticCompactionOptions = {
   rootDir: string;
   sessionId: string;
   engine: EngineId;
@@ -65,20 +65,38 @@ export type RunPreTurnCompactionOptions = {
   onRetry?: (info: ProviderRetryInfo) => void;
   onEvent?: (event: AgentLoopEvent) => void;
   budget: BudgetInputs;
+  phase: "pre-turn" | "mid-turn";
+  /**
+   * When true (the mid-turn pre-request hard check), compact only on a
+   * hard-ceiling projection — the post-tool soft check already handled
+   * soft-trigger compaction for this boundary, so a soft-trigger here would
+   * double-compact the same request.
+   */
+  onlyHardCeiling?: boolean;
 };
 
-export async function runPreTurnCompaction(options: RunPreTurnCompactionOptions): Promise<PreTurnCompactionResult> {
+/**
+ * Run one automatic-compaction evaluation + (if needed) the portable pipeline.
+ * Used by both the pre-turn bootstrap check (phase "pre-turn") and the mid-turn
+ * loop checks (phase "mid-turn"). The caller decides what to do with the result:
+ * the pre-turn caller throws AutoCompactBlockedError on hard-failed; the
+ * mid-turn caller rebuilds the in-memory message array on compacted and breaks
+ * the loop on hard-failed.
+ */
+export async function runAutomaticCompaction(options: RunAutomaticCompactionOptions): Promise<PreTurnCompactionResult> {
   const check = evaluateBudgetCheck(options.budget);
-  const phase = "pre-turn";
-  emitCheck(options.onEvent, phase, check);
+  emitCheck(options.onEvent, options.phase, check);
 
   if (check.kind === "below" || check.kind === "inactive" || check.kind === "degraded") {
+    return { kind: "skipped", check };
+  }
+  if (options.onlyHardCeiling && check.kind === "soft-trigger") {
     return { kind: "skipped", check };
   }
 
   const reason: PortableCompactionReason = check.kind === "hard-ceiling" ? "hard-ceiling" : "soft-threshold";
   const started = Date.now();
-  options.onEvent?.({ type: "compact_started", phase, trigger: "auto", reason });
+  options.onEvent?.({ type: "compact_started", phase: options.phase, trigger: "auto", reason });
 
   const outcome = await runPortableCompaction({
     rootDir: options.rootDir,
@@ -87,7 +105,7 @@ export async function runPreTurnCompaction(options: RunPreTurnCompactionOptions)
     providerSelection: options.providerSelection,
     generation: options.generation,
     trigger: "auto",
-    phase,
+    phase: options.phase,
     reason,
     signal: options.signal,
     onRetry: options.onRetry,
@@ -97,7 +115,7 @@ export async function runPreTurnCompaction(options: RunPreTurnCompactionOptions)
   if (outcome.kind === "completed") {
     options.onEvent?.({
       type: "compact_completed",
-      phase,
+      phase: options.phase,
       trigger: "auto",
       reason,
       checkpointUuid: outcome.checkpointUuid,
@@ -112,7 +130,7 @@ export async function runPreTurnCompaction(options: RunPreTurnCompactionOptions)
   const errorMessage = outcome.kind === "failed"
     ? (outcome.error instanceof Error ? outcome.error.message : String(outcome.error))
     : "Nothing left to compact before the next request.";
-  options.onEvent?.({ type: "compact_failed", phase, trigger: "auto", reason, durationMs, errorMessage });
+  options.onEvent?.({ type: "compact_failed", phase: options.phase, trigger: "auto", reason, durationMs, errorMessage });
   // A soft-trigger failure happened while the request was still within the hard
   // ceiling, so the caller may continue on the old head. A hard-ceiling failure
   // must block the provider request without mutating the session.

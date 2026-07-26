@@ -104,6 +104,7 @@ export function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.images?.length ? { images: message.images } : {}),
   };
 }
 

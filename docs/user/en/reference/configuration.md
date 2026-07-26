@@ -73,7 +73,7 @@ Field notes:
 - `authMethod`: `x-api-key` for Anthropic, `x-goog-api-key` for Gemini.
 - `userAgent` (optional): replaces the User-Agent for this provider only; other fingerprint and auth headers stay fixed.
 - A model entry can be a string shorthand or an object with `generation` (`temperature`/`maxTokens`), `capabilities` (`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`), and `limits` (`contextWindow`/`maxOutputTokens`/`autoCompact`).
-- `limits.contextWindow` enables the context percentage in the status bar; `autoCompact` controls the auto-compact threshold and output reserve.
+- `limits.contextWindow` enables the context percentage in the status bar. `autoCompact` opts into automatic context compaction: it activates only when `enabled` is not `false`, `threshold` is strictly between 0 and 1, and `contextWindow` is a positive integer; once active, Vesicle compacts (via the portable `/compact` checkpoint) before a new top-level prompt and at safe mid-turn boundaries when the projected next request crosses the soft trigger. `reserveOutputTokens` reserves space for the next output (precedence: `reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0); an explicit reserve no smaller than the context window deactivates auto-compaction. There is no hidden default threshold. Run `/context` to inspect the effective soft trigger, hard input ceiling, reserve source, and activation state.
 
 ## .env
 

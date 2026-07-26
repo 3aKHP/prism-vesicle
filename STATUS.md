@@ -16,6 +16,8 @@ Release candidate: **1.0.0-alpha.6**. The `State` column tracks the candidate's 
 | Providers | Multi-provider registry with generation defaults and capability/limits metadata | released |
 | Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | released |
 | Providers | Thinking-effort controls and reasoning-block visibility | released |
+| Context | Portable `/compact` checkpoint (`compact-checkpoint-v1`): atomic replacement history (summary + verbatim retained tail), append-only transcript preserved, projection/resume/rewind exact across the checkpoint | released |
+| Context | Opt-in automatic compaction: pre-turn and safe mid-turn triggering on the projected next request against `limits.autoCompact` (threshold/reserve/contextWindow), soft-trigger continue + hard-ceiling block without session mutation, truthful `/context`, lifecycle events | released |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
 | TUI | Startup splash and empty-session hero derived from the brand ANSI mark; truecolour animation degrades to a static frame on 256-colour terminals and freezes under `VESICLE_REDUCED_MOTION=1` | released |
 | TUI | Static motif wiring: per-message role spectrum lanes, per-engine refraction accents, and ASCII-frame sidebar section labels | released |

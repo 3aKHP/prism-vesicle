@@ -12,7 +12,7 @@ import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { bindExecutionRound, createSessionStore, executionIdentityMetadata, newLogicalTurnId, newProviderRoundId } from "../session/store";
-import { AutoCompactBlockedError, runPreTurnCompaction } from "../compact/auto-compact";
+import { AutoCompactBlockedError, runAutomaticCompaction } from "../compact/auto-compact";
 import { estimateRequestTokens } from "../compact/context-budget";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
@@ -219,6 +219,21 @@ async function runExistingSessionPreTurnCompaction(params: {
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
 }): Promise<SessionSnapshot> {
+  // Defer compaction while an interaction is unresolved (plan §7): the snapshot
+  // of a session with a pending gate/permission/question/quality decision would
+  // make the compact's pending-interaction guard throw, so emit compact_deferred
+  // and leave the old head in place rather than attempting it.
+  if (
+    params.snapshot.pendingGate
+    || params.snapshot.pendingEngineSwitch
+    || params.snapshot.pendingUserQuestion
+    || params.snapshot.pendingPermission
+    || params.snapshot.pendingQualityDecision
+    || params.snapshot.pendingQualityRewrite
+  ) {
+    params.onEvent?.({ type: "compact_deferred", phase: "pre-turn", reason: "a pending interaction must be resolved first" });
+    return params.snapshot;
+  }
   const lastContextInputTokens = findLastContextInputTokens(params.snapshot.records);
   const incoming: ResumedMessage = {
     role: "user",
@@ -226,7 +241,7 @@ async function runExistingSessionPreTurnCompaction(params: {
     ...(params.images?.length ? { images: params.images } : {}),
   };
   const estimatedNextRequestTokens = estimateRequestTokens([...params.snapshot.messages, incoming], params.composedSystemPrompt);
-  const result = await runPreTurnCompaction({
+  const result = await runAutomaticCompaction({
     rootDir: params.rootDir,
     sessionId: params.sessionId,
     engine: params.engine,
@@ -234,6 +249,7 @@ async function runExistingSessionPreTurnCompaction(params: {
     generation: params.generation,
     signal: params.signal,
     onEvent: params.onEvent,
+    phase: "pre-turn",
     budget: {
       config: params.config.limits?.autoCompact,
       limits: params.config.limits,
