@@ -274,6 +274,101 @@ describe("file management: delete (d)", () => {
   });
 });
 
+describe("in-page validation: target and ownership (#118)", () => {
+  test("tree `v` validates the selected file, not the previously open file", async () => {
+    await writeFile(join(root, "workspace/cards/alpha.md"), "---\narchetype: x\n---\nbody\n");
+    await writeFile(join(root, "workspace/cards/beta.md"), "---\narchetype: b\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    // Open alpha first — its verdict would wrongly attach to a later `v` under
+    // the old behavior.
+    await controller.openWorkspaceTarget("workspace/cards/alpha.md");
+    const alphaSnap = controller.validationSnapshot();
+    expect(alphaSnap.state).toBe("result");
+    if (alphaSnap.state === "result") {
+      expect(alphaSnap.path).toBe("workspace/cards/alpha.md");
+    }
+
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/beta.md");
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 30));
+    // The snapshot now describes the selected beta, not the still-open alpha.
+    expect(controller.findingsOpen()).toBe(true);
+    const betaSnap = controller.validationSnapshot();
+    expect(betaSnap.state).toBe("result");
+    if (betaSnap.state === "result") {
+      expect(betaSnap.path).toBe("workspace/cards/beta.md");
+    }
+  });
+
+  test("cross-file findings: Enter is not reachable when the panel describes a different file than the open one (#118 review)", async () => {
+    // tree `v` validates the selection WITHOUT opening it, so the panel can
+    // describe beta while alpha is still the open editable buffer. Enter must
+    // not jump — it would land beta's line in alpha.
+    await writeFile(join(root, "workspace/cards/alpha.md"), "---\narchetype: x\n---\nbody\n");
+    await writeFile(join(root, "workspace/cards/beta.md"), "---\narchetype: b\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/alpha.md");
+    const inst = mockEditor("---\narchetype: x\n---\nbody\n");
+    controller.registerEditorInstance("workspace/cards/alpha.md", inst);
+    expect(controller.canEditOpenFile()).toBe(true);
+
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/beta.md");
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(controller.findingsOpen()).toBe(true);
+    expect(controller.canJumpToSelectedFinding()).toBe(false);
+    // Enter is a no-op: no focus steal to the editor (would mean a jump ran).
+    controller.handleKey(key("enter"));
+    expect(controller.focusRegion()).toBe("tree");
+  });
+
+  test("tree `v` on a directory keeps the panel closed with a status hint", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/mira.md");
+    gotoTree(controller);
+    selectInTree(controller, "workspace"); // a directory
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(controller.findingsOpen()).toBe(false);
+    expect(controller.editorStatus()).toContain("select a file");
+  });
+
+  test("tree `v` on a dirty buffer refuses to validate the stale disk image", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/mira.md");
+    const inst = mockEditor("---\narchetype: x\n---\nbody\nDIRTY\n");
+    controller.registerEditorInstance("workspace/cards/mira.md", inst);
+    controller.markEditorContentChanged("workspace/cards/mira.md");
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/mira.md");
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(controller.findingsOpen()).toBe(false);
+    expect(controller.editorStatus()).toContain("save");
+  });
+
+  test("renaming the validated file rekeys the snapshot path (verdict survives)", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/mira.md");
+    expect(controller.validationSnapshot().state).toBe("result");
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/mira.md");
+    controller.handleKey(key("m"));
+    // The move bar prefills the directory prefix; type only the new name.
+    for (const ch of "renamed.md") controller.handleKey(key(ch));
+    controller.handleKey(key("enter"));
+    await new Promise((r) => setTimeout(r, 30));
+    // The result is retained but now attributed to the new path.
+    const rekeyedSnap = controller.validationSnapshot();
+    expect(rekeyedSnap.state).toBe("result");
+    if (rekeyedSnap.state === "result") {
+      expect(rekeyedSnap.path).toBe("workspace/cards/renamed.md");
+    }
+  });
+});
+
 describe("in-page validation (v)", () => {
   test("opening a card runs the validators and the status summary reflects findings", async () => {
     const controller = createWorkspaceController(root);
@@ -295,6 +390,7 @@ describe("in-page validation (v)", () => {
     controller.registerEditorInstance("workspace/cards/mira.md", inst);
     gotoTree(controller);
     controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 30));
     expect(controller.findingsOpen()).toBe(true);
     const state = controller.validationState();
     const count = state.state === "result" ? state.findings.length : 0;
@@ -313,6 +409,51 @@ describe("in-page validation (v)", () => {
     expect(controller.validationState().state).toBe("no-match");
     gotoTree(controller);
     controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 30));
     expect(controller.findingsOpen()).toBe(true);
+  });
+
+  test("deleting a tree-validated-but-unopened file clears its snapshot (#118 review r2)", async () => {
+    await writeFile(join(root, "workspace/cards/alpha.md"), "---\narchetype: x\n---\nbody\n");
+    await writeFile(join(root, "workspace/cards/beta.md"), "---\narchetype: b\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/alpha.md");
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/beta.md");
+    controller.handleKey(key("v")); // validate beta without opening it
+    await new Promise((r) => setTimeout(r, 30));
+    const betaSnap = controller.validationSnapshot();
+    expect(betaSnap.state).toBe("result");
+    if (betaSnap.state === "result") expect(betaSnap.path).toBe("workspace/cards/beta.md");
+    controller.handleKey(key("escape")); // close the findings panel (owns keys while open)
+    // Delete beta (not the open file). The snapshot it owned must clear so a
+    // recreated file at the same path cannot inherit stale findings.
+    selectInTree(controller, "workspace/cards/beta.md");
+    controller.handleKey(key("d"));
+    controller.handleKey(key("y"));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(controller.validationSnapshot().state).toBe("pending");
+  });
+
+  test("a recreated file at the same path does not inherit the prior findings (#118 review r2)", async () => {
+    await writeFile(join(root, "card.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("card.md");
+    expect(controller.validationSnapshot().state).toBe("result");
+    gotoTree(controller);
+    selectInTree(controller, "card.md");
+    controller.handleKey(key("d"));
+    controller.handleKey(key("y"));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(controller.validationSnapshot().state).toBe("pending");
+    // Recreate as plain text (no validator matches) and re-validate via tree `v`.
+    await writeFile(join(root, "card.md"), "just plain text, no frontmatter\n");
+    await controller.refresh();
+    selectInTree(controller, "card.md");
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(controller.findingsOpen()).toBe(true);
+    // Re-validated against the new content: no-match, not the old error result.
+    expect(controller.validationSnapshot().state).toBe("no-match");
   });
 });

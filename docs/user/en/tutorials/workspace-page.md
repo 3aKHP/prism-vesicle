@@ -28,9 +28,9 @@ Text files enter the editor directly. Markdown opens in preview; press `m` for t
 1. Edit the file; use `Ctrl+Z` / `Ctrl+Y` to undo or redo.
 2. Press `Ctrl+F` to find text or `Ctrl+G` to go to a line.
 3. Press `Ctrl+S` for an atomic save. Character and scenario cards automatically run their matching validators.
-4. When the status line reports findings, press `v` in the tree or read-only viewer. Select a finding and press `Enter` to jump to its location.
+4. When the status line reports findings, press `v` in the tree to validate the **selection** (or in the read-only viewer to validate the open file). Select a finding and press `Enter` to jump to its location.
 
-If another program changed the file on disk, saving asks you to overwrite, save as, or cancel; it never silently overwrites the external edit. Pressing `Esc` with unsaved content likewise asks whether to save, discard, or cancel.
+Each verdict is owned by the file it describes: the status line shows a summary only for the current focus target, so moving the tree selection never misattributes another file's result. Entering the editable source marks the prior verdict `validation stale` (it no longer keeps the old pass/fail colour); undoing back to the saved content restores it as current, and saving installs a fresh verdict. `Enter jump` appears only when the file is genuinely editable — read-only, oversized, or non-admitted files do not offer a jump.
 
 ## Manage files
 

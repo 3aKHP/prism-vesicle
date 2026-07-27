@@ -26,23 +26,33 @@ export type LocatedFinding = {
   anchored: boolean;
 };
 
+/**
+ * Validation snapshot. Every non-pending outcome owns the project-relative
+ * path it describes, so the view can bind a summary to the file it belongs to
+ * (Issue #118: a tree selection must never wear another file's verdict).
+ *
+ * `stale` is the projection used while the owning buffer is dirty: the
+ * underlying result is retained by the controller (so undo-back-to-clean
+ * restores it) but the display collapses to a neutral `validation stale`.
+ */
 export type ValidationState =
   | { state: "pending" }
-  | { state: "no-match" }
-  | { state: "result"; ok: boolean; findings: LocatedFinding[] };
+  | { state: "no-match"; path: string }
+  | { state: "stale"; path: string }
+  | { state: "result"; path: string; ok: boolean; findings: LocatedFinding[] };
 
 export const pendingValidation: ValidationState = { state: "pending" };
 
-/** Run the shared artifact validators over content, locating each finding. */
-export function runValidation(content: string): ValidationState {
+/** Run the shared artifact validators over `content`, attributing the result to `path`. */
+export function runValidation(path: string, content: string): ValidationState {
   const result = validateContent([...ARTIFACT_VALIDATOR_NAMES], content);
-  if (!result) return { state: "no-match" };
+  if (!result) return { state: "no-match", path };
   const findings: LocatedFinding[] = [];
   for (const entry of result.results) {
     for (const text of entry.result.errors) findings.push(located(content, "error", entry.name, text));
     for (const text of entry.result.warnings) findings.push(located(content, "warning", entry.name, text));
   }
-  return { state: "result", ok: result.ok, findings };
+  return { state: "result", path, ok: result.ok, findings };
 }
 
 function located(content: string, severity: ValidationSeverity, validator: string, text: string): LocatedFinding {
@@ -96,13 +106,19 @@ function frontmatterEndLine(content: string): number {
   return 0;
 }
 
-/** Status-line summary text for the current validation state. */
+/**
+ * Status-line summary text for the current validation state. This is pure
+ * state — it never carries an input instruction (`v`, `view`, `Enter`, …);
+ * components decide which action is reachable in their own focus.
+ */
 export function validationSummary(state: ValidationState): string {
   switch (state.state) {
     case "pending":
       return "";
     case "no-match":
       return "no validator matched";
+    case "stale":
+      return "validation stale";
     case "result": {
       const errors = state.findings.filter((f) => f.severity === "error").length;
       const warnings = state.findings.filter((f) => f.severity === "warning").length;
@@ -110,14 +126,15 @@ export function validationSummary(state: ValidationState): string {
       const parts: string[] = [];
       if (errors > 0) parts.push(`✗ ${errors}`);
       if (warnings > 0) parts.push(`⚠ ${warnings}`);
-      return `${parts.join(" · ")} · v view`;
+      return parts.join(" · ");
     }
   }
 }
 
 /**
  * Severity rank for status-line colour, -1 when validation contributes nothing
- * (pending/no-match). The component folds this into the overall status tone.
+ * (pending/no-match/stale — a stale verdict must not borrow the old result's
+ * colour). The component folds this into the overall status tone.
  * 0 = passed (emerald), 1 = warnings only (amber), 2 = errors (red).
  */
 export function validationSeverity(state: ValidationState): number {
