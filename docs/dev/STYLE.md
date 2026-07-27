@@ -34,7 +34,7 @@ core/user-question/  # ask_user_question host question types
 core/validators/  # Module A/B v9 schema checks + registry
 mcp/  # external MCP tool discovery and execution
 providers/  # protocol adapters only
-skills/  # future controlled skill bundle surface
+skills/  # Agent Skills parser, discovery, store, catalog (Phase 0; no activation yet)
 types/  # shared host types
 assets/  # exact bundled V10 Harness manifest inventory
 host-assets/  # restricted Vesicle prompts and generic Agent extensions
@@ -50,6 +50,7 @@ Allowed dependency direction:
 - `core/agents -> providers, session, tools, runtime assets, mcp`
 - `core/harness -> engine, agents, tools, validators, runtime assets, config paths`
 - `core/artifacts -> tools, validators`
+- `skills -> config paths` (it takes pre-resolved discovery roots and must not import the asset resolver, providers, harness runtime, or TUI; the CLI owns Harness-root resolution and passes roots to `discoverSkills`)
 - `providers -> providers/shared` and config only
 - `core/tools` must not depend on providers or TUI
 - `mcp` must not depend on providers or TUI; it may depend on core tool types
@@ -426,6 +427,49 @@ model tool call or a direct user edit.
   `.vesicle/init-backups/`. A non-forced write must also fail if the target
   appears while the provider request is in flight, so a long generation cannot
   race an external edit into an overwrite.
+
+## Skills Runtime
+
+A Skill is on-demand procedural context plus bundled resources in the open
+Agent Skills `SKILL.md` format. It is never an Engine, Agent Profile, MCP
+server, permission grant, or executable plugin; it may guide or narrow use of
+the current effective tool surface but can never widen it. See
+[`docs/dev/SKILLS.md`](./SKILLS.md) for the full boundary and
+`dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` for the research
+basis.
+
+- Phase 0 delivers format, inventory, and the Skill Store only. There is no
+  model-visible activation: no `activate_skill` / `read_skill_resource` tools,
+  no `/skill` command, and no prompt-composition, session, compaction, or
+  Engine-switch changes. Repository install commands, the activation runtime,
+  project `.agents/skills/` scope, and executable scripts are later phases.
+- Discovery is bounded to two deterministic, non-merging scopes: the verified
+  Harness under logical `assets/skills/` (resolved through the active asset
+  resolver) and the user configuration directory's `skills/`. Project,
+  host-bundled, and installed-store scopes are reserved for later phases and are
+  not scanned today. The `skills/` module takes pre-resolved roots and must not
+  import the asset resolver, providers, harness runtime, or TUI; the CLI owns
+  Harness-root resolution.
+- On a name collision, exactly one winner is selected by scope precedence
+  (`user` outranks `harness`) and lower-precedence entries are reported as
+  shadowed. Bodies and resources are never merged. Catalog and diagnostic shapes
+  never carry an absolute host path: only safe logical scope labels and
+  skill-relative paths are surfaced.
+- Parsing is strict and fail-soft. One malformed Skill is skipped with a
+  diagnostic while valid siblings remain available. The experimental standard
+  `allowed-tools` field is parsed but never enforced; the Tool Permission Runtime
+  remains the only tool-approval authority. Unknown frontmatter fields are
+  preserved for inspection but have no runtime behavior.
+- Supporting resources live behind a virtual Skill root: every path is
+  skill-relative, shallow, and resolved only inside that root. Absolute paths,
+  `..` escapes, backslashes, NUL, empty/dot segments, symbolic links, devices,
+  and sockets are rejected so a Skill cannot read arbitrary host files.
+- The Skill Store keeps immutable, content-addressed snapshots under
+  `<user-config>/skill-store/<name>/<version>/` (a byte-exact standard bundle)
+  plus a sibling provenance sidecar and a small active index. Snapshots are
+  staged, re-verified by hash, and atomically renamed; reinstalling identical
+  content is idempotent by bundle hash, and the stored copy never remains a live
+  dependency on its source path.
 
 ## Managed Harness Packs
 
