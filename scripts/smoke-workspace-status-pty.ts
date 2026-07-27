@@ -13,8 +13,15 @@
  *   - no duplicated `v view · v view` (or any `v view`) anywhere;
  *   - the validation verdict and `v findings` stay visible at 80 columns;
  *   - the findings panel header is action-free and identifies its target;
- *   - closing the panel and moving tree focus does not leave the open file's
- *     verdict misattributed to the new selection.
+ *   - closing the panel, stepping to the tree, and moving the selection keeps
+ *     the tree status row live (the selection genuinely moves, not just focus).
+ *
+ * Note: this smoke drives the real terminal, but `script` captures a cumulative
+ * byte stream, not the current frame, so it cannot assert "the verdict is no
+ * longer attached to the new selection" — that cross-selection contract is
+ * covered by the path-bound component test instead. The smoke's job here is the
+ * mounted lifecycle, width, and focus-transition behaviour a static frame
+ * cannot prove.
  *
  * A static testRender frame cannot prove OpenTUI focus transitions, terminal-
  * width measurement, or the production preload path, so this is the authority
@@ -54,6 +61,8 @@ async function main(): Promise<void> {
   await mkdir(configDir, { recursive: true });
   await mkdir(join(project, "workspace"), { recursive: true });
   await writeFile(join(project, CARD_REL), CARD_BODY, "utf8");
+  // A second file so the tree has a distinct row to move the selection to.
+  await writeFile(join(project, "notes.txt"), "plain notes\n", "utf8");
 
   const server = Bun.serve({
     port: 0,
@@ -142,10 +151,14 @@ async function main(): Promise<void> {
   const findingsReady = await waitFor("findings:", 8000);
   if (!findingsReady) fail("findings panel never opened on viewer `v`");
   snapshot("findings open");
-  // Close the panel (Esc → back to viewer), then step viewer → tree (Esc again).
+  // Close the panel (Esc → back to viewer), step viewer → tree (Esc again),
+  // then genuinely MOVE the selection (↓ to a different file) — not just a
+  // focus change — so the tree-focus snapshot reflects a real selection move.
   type("\x1b"); // Esc closes findings
   await Bun.sleep(300);
   type("\x1b"); // Esc steps viewer → tree
+  await Bun.sleep(300);
+  type("\x1b[B"); // ↓ move the selection to another row
   await Bun.sleep(300);
   snapshot("tree focus");
 
@@ -195,15 +208,16 @@ async function main(): Promise<void> {
     fail("findings frame never captured"); anyFail = true;
   }
 
-  // Issue #118 §3: after closing the panel and moving tree focus, the open
-  // file's verdict must not be misattributed to the new selection. The tree
-  // status offers `v validate` (selection-bound), not the open file's summary.
+  // Issue #118 §3: after closing the panel, stepping to the tree, and moving
+  // the selection, the tree status row must still be live (the smoke moves the
+  // selection for real; the cross-selection verdict-attribution contract itself
+  // is asserted by the path-bound component test, since `script` captures a
+  // cumulative stream, not the current frame).
   const tree = frames.find((f) => f.name === "tree focus");
-  if (tree) {
-    if (!/v validate/.test(tree.text) && !/↑↓ nav/.test(tree.text)) {
-      // Tree status may have ceded to another surface; not a hard fail unless
-      // the duplicate action reappeared (already checked above).
-    }
+  if (!tree) { fail("tree-focus frame never captured"); anyFail = true; }
+  else if (!/↑↓ nav/.test(tree.text) && !/v validate/.test(tree.text)) {
+    fail("tree-focus frame: tree status row not live after selection move");
+    anyFail = true;
   }
 
   if (!anyFail) console.log(`\nWorkspace status PTY smoke passed at ${WIDTH}x${HEIGHT}.`);
