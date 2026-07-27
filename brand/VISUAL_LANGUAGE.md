@@ -11,7 +11,7 @@ This is the version-controlled brand design language for Prism Vesicle. It fixes
 Every design decision aligns to these. When they conflict, the higher one wins; the first is the highest.
 
 1. **Calm, never loud.** Prefer quiet restraint over spectacle. Never compete for attention.
-2. **Light is the subject, not the lines.** Show light itself — glow, volume, depth, Fresnel edges, air — rather than示意 its path with straight segments.
+2. **Light is the subject, not the lines.** Show light itself — glow, volume, depth, Fresnel edges, air — rather than diagramming its path with straight segments.
 3. **Slow, physical motion.** Light drifts, shadows grade, edges breathe on a seconds-scale. No spring, jitter, or fast flash.
 4. **Instrument/terminal feel.** Like an optical bench or an old oscilloscope, not a consumer app.
 5. **Reject the generic AI/SaaS look.** No flat line icons, no flowchart topologies, no neon cyberpunk, no cheerful rainbow gradients.
@@ -90,7 +90,7 @@ The working area below the composer stays static; continuous animation lives onl
 
 | Do not | Reason |
 |---|---|
-| Flat line-art icons (pure stroke示意) | draws light as line segments, loses the soul |
+| Flat line-art icons (pure-stroke outlines) | draws light as line segments, loses the soul |
 | Flowchart / network-topology spectrum fans | reads as an AI-startup diagram |
 | Generic SaaS / AI product chrome | the family this design rejects |
 | Neon, cyberpunk, bloom, lens-flare abuse | violates calm restraint |
