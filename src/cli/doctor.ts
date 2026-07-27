@@ -3,6 +3,7 @@ import { loadExperimentalQualitySettings } from "../config/quality";
 import { inspectMcpConfig } from "../mcp/registry";
 import { inspectAssets } from "./assets";
 import { inspectSkills } from "./skills";
+import { readActiveIndex } from "../skills";
 import { loadPermissionSettings } from "../config/permissions";
 import { resolveShellProfile } from "../core/process/shell-profile";
 
@@ -29,7 +30,8 @@ export async function runDoctor(): Promise<void> {
   try {
     const skills = await inspectSkills();
     const shadowed = skills.result.diagnostics.filter((diagnostic) => diagnostic.kind === "shadowed").length;
-    skillsStatus = `${skills.result.skills.length} valid, ${skills.result.invalid.length} invalid, ${shadowed} shadowed`;
+    const installed = (await readActiveIndex()).entries.length;
+    skillsStatus = `${skills.result.skills.length} valid, ${skills.result.invalid.length} invalid, ${shadowed} shadowed, ${installed} installed`;
   } catch (error) {
     skillsStatus = `unavailable: ${error instanceof Error ? error.message : String(error)}`;
   }
@@ -60,7 +62,7 @@ export async function runDoctor(): Promise<void> {
   console.log(assets.harness
     ? `Harness: ${assets.harness.selection} ${assets.harness.identity.packId}@${assets.harness.identity.packVersion}`
     : `Assets manifest: ${assets.manifest ? `${assets.manifest.source} (${assets.manifest.path})` : "missing"}`);
-  console.log(`Skills: ${skillsStatus} (harness and user scopes)`);
+  console.log(`Skills: ${skillsStatus} (harness, user, installed)`);
   if (mcp.statuses.length > 0) {
     for (const status of mcp.statuses) {
       const state = status.connected ? `connected, ${status.toolCount} tools` : status.enabled ? "error" : "disabled";

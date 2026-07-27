@@ -23,7 +23,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { copyFile, lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { userConfigDirectory } from "../config/paths";
 import { SKILL_FILE_NAME } from "./loader";
@@ -63,6 +63,12 @@ export interface SkillProvenance {
   sourceIdentity?: string;
   requestedRef?: string;
   resolvedCommit?: string;
+  /**
+   * Present when a local Git snapshot was taken from a dirty working tree
+   * (`--include-worktree`) rather than a clean commit. The resolved commit
+   * alone is then not the snapshot's complete identity; the bundle hash is.
+   */
+  dirtySource?: boolean;
   /** Repository-relative skill root (e.g. `.` or `skills/foo`). Never an absolute host path. */
   skillRoot: string;
   /** SHA-256 of the `SKILL.md` body (without frontmatter). */
@@ -81,6 +87,8 @@ export interface InstallSnapshotOptions {
   sourceIdentity?: string;
   requestedRef?: string;
   resolvedCommit?: string;
+  /** Mark the snapshot as coming from a dirty Git working tree. */
+  dirtySource?: boolean;
   skillRoot?: string;
   enabled?: boolean;
   env?: NodeJS.ProcessEnv;
@@ -216,6 +224,80 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
   );
 }
 
+// --- lifecycle: list / activate / rollback / uninstall ---------------------
+
+/**
+ * List every installed version directory of a skill family, oldest first by
+ * each version's provenance install time. Used by `rollback` and the CLI.
+ */
+export async function listSkillVersions(name: string, env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+  assertStoreSegment(name, "name");
+  const familyRoot = join(skillStoreDirectory(env), name);
+  const entries = await readdir(familyRoot, { withFileTypes: true }).catch((error: unknown) => {
+    if (isNotFound(error)) return undefined;
+    throw error;
+  });
+  if (!entries) return [];
+  const stamped: Array<{ version: string; installedAt: string }> = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    assertStoreSegment(entry.name, "version");
+    const provenance = await readProvenance(name, entry.name, env);
+    stamped.push({ version: entry.name, installedAt: provenance?.installedAt ?? "" });
+  }
+  stamped.sort((left, right) => left.installedAt.localeCompare(right.installedAt) || left.version.localeCompare(right.version));
+  return stamped.map((entry) => entry.version);
+}
+
+/** Point a skill's active index entry at an already-installed version. */
+export async function setActiveVersion(name: string, version: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  assertStoreSegment(name, "name");
+  assertStoreSegment(version, "version");
+  const storeRoot = skillStoreDirectory(env);
+  if (!(await pathExists(join(storeRoot, name, version)))) {
+    throw new Error(`Version "${version}" is not installed for skill "${name}".`);
+  }
+  await updateActiveIndex(storeRoot, (index) => {
+    const existing = index.entries.find((entry) => entry.name === name);
+    if (!existing) throw new Error(`No installed skill named "${name}".`);
+    const entries = index.entries.filter((entry) => entry.name !== name);
+    entries.push({ ...existing, version, installedAt: new Date().toISOString() });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    return { schema: INDEX_SCHEMA, entries };
+  });
+}
+
+/**
+ * Roll a skill back to the most recently installed version that is not the
+ * current one. Returns the version it rolled back to.
+ */
+export async function rollbackSkill(name: string, env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  const index = await readActiveIndex(env);
+  const entry = index.entries.find((item) => item.name === name);
+  if (!entry) throw new Error(`No installed skill named "${name}".`);
+  const versions = (await listSkillVersions(name, env)).filter((version) => version !== entry.version);
+  if (versions.length === 0) throw new Error(`No previous version to roll back to for "${name}".`);
+  const target = versions[versions.length - 1]!;
+  await setActiveVersion(name, target, env);
+  return target;
+}
+
+/** Remove a skill entirely: drop its index entry and delete its version family. */
+export async function uninstallSkill(name: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  assertStoreSegment(name, "name");
+  const storeRoot = skillStoreDirectory(env);
+  const familyRoot = join(storeRoot, name);
+  const index = await readActiveIndex(env);
+  const indexHas = index.entries.some((entry) => entry.name === name);
+  const dirHas = await pathExists(familyRoot);
+  if (!indexHas && !dirHas) throw new Error(`No installed skill named "${name}".`);
+  await updateActiveIndex(storeRoot, (current) => ({
+    schema: INDEX_SCHEMA,
+    entries: current.entries.filter((entry) => entry.name !== name).sort((left, right) => left.name.localeCompare(right.name)),
+  }));
+  await rm(familyRoot, { recursive: true, force: true }).catch(() => undefined);
+}
+
 // --- hashing ----------------------------------------------------------------
 
 /** Deterministic SHA-256 over a sorted `path\0sha256` inventory. */
@@ -277,13 +359,13 @@ async function writeProvenanceAndIndex(
 }
 
 /**
- * In-process serialization of the active-index read-modify-write. The atomic
- * temp+rename only prevents a half-written file; without serialization two
- * concurrent installs in one process could both read the old index and the
- * later write would drop the earlier entry. The RMW is narrow (just the index
- * file), so snapshot staging still runs concurrently. Cross-process
- * serialization (lock file / CAS) is a Phase 1 concern when the install CLI
- * can run as separate processes; document and add it there.
+ * The active-index read-modify-write is serialized twice. Within one process an
+ * in-process chain orders overlapping installs so the later write cannot drop an
+ * entry the earlier one added. Across processes (the install CLI invoked in two
+ * terminals), `withIndexLock` holds an exclusive `index.lock` so concurrent
+ * writes cannot interleave their read and write. The atomic temp+rename still
+ * prevents a half-written file; the lock prevents lost updates. Snapshot
+ * staging runs concurrently with everything except the narrow index RMW.
  */
 let indexUpdateChain: Promise<unknown> = Promise.resolve();
 
@@ -298,18 +380,80 @@ function updateActiveIndex(
   return next;
 }
 
+const INDEX_LOCK_FILE = "index.lock";
+const INDEX_LOCK_POLL_MS = 50;
+const INDEX_LOCK_TIMEOUT_MS = 10_000;
+
+/** Hold an exclusive cross-process lock around `critical`. */
+async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): Promise<T> {
+  await mkdir(storeRoot, { recursive: true });
+  const lockPath = join(storeRoot, INDEX_LOCK_FILE);
+  const handle = await acquireIndexLock(lockPath);
+  try {
+    return await critical();
+  } finally {
+    await handle.close().catch(() => undefined);
+    await rm(lockPath, { force: true }).catch(() => undefined);
+  }
+}
+
+async function acquireIndexLock(lockPath: string) {
+  const deadline = Date.now() + INDEX_LOCK_TIMEOUT_MS;
+  while (true) {
+    try {
+      const handle = await open(lockPath, "wx");
+      await handle.writeFile(String(process.pid));
+      return handle;
+    } catch (error: unknown) {
+      if (!isLockHeld(error)) throw error;
+      if (await breakStaleLock(lockPath)) continue;
+      if (Date.now() >= deadline) {
+        throw new Error("Skill Store index is locked by another process; retry later.");
+      }
+      await new Promise((resolve) => setTimeout(resolve, INDEX_LOCK_POLL_MS));
+    }
+  }
+}
+
+async function breakStaleLock(lockPath: string): Promise<boolean> {
+  try {
+    const pid = Number.parseInt(await readFile(lockPath, "utf8"), 10);
+    if (Number.isFinite(pid) && !isProcessAlive(pid)) {
+      await rm(lockPath, { force: true }).catch(() => undefined);
+      return true;
+    }
+  } catch {
+    // A malformed or unreadable lock is left in place and retried until timeout.
+  }
+  return false;
+}
+
+function isLockHeld(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code: unknown }).code === "EEXIST");
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function updateActiveIndexCritical(
   storeRoot: string,
   mutate: (index: SkillStoreIndex) => SkillStoreIndex,
 ): Promise<void> {
-  const indexPath = join(storeRoot, INDEX_FILE);
-  await mkdir(storeRoot, { recursive: true });
-  const current = await readFile(indexPath).catch((error: unknown) => {
-    if (isNotFound(error)) return undefined;
-    throw error;
+  await withIndexLock(storeRoot, async () => {
+    const indexPath = join(storeRoot, INDEX_FILE);
+    const current = await readFile(indexPath).catch((error: unknown) => {
+      if (isNotFound(error)) return undefined;
+      throw error;
+    });
+    const base: SkillStoreIndex = current === undefined ? { schema: INDEX_SCHEMA, entries: [] } : parseActiveIndex(current);
+    await writeJsonAtomic(indexPath, mutate(base));
   });
-  const base: SkillStoreIndex = current === undefined ? { schema: INDEX_SCHEMA, entries: [] } : parseActiveIndex(current);
-  await writeJsonAtomic(indexPath, mutate(base));
 }
 
 function buildProvenance(args: {
@@ -334,6 +478,7 @@ function buildProvenance(args: {
   if (args.options.sourceIdentity !== undefined) provenance.sourceIdentity = args.options.sourceIdentity;
   if (args.options.requestedRef !== undefined) provenance.requestedRef = args.options.requestedRef;
   if (args.options.resolvedCommit !== undefined) provenance.resolvedCommit = args.options.resolvedCommit;
+  if (args.options.dirtySource) provenance.dirtySource = true;
   return provenance;
 }
 
@@ -402,6 +547,7 @@ function parseProvenance(raw: Buffer | string): SkillProvenance {
   if (typeof value.sourceIdentity === "string") provenance.sourceIdentity = value.sourceIdentity;
   if (typeof value.requestedRef === "string") provenance.requestedRef = value.requestedRef;
   if (typeof value.resolvedCommit === "string") provenance.resolvedCommit = value.resolvedCommit;
+  if (value.dirtySource === true) provenance.dirtySource = true;
   return provenance;
 }
 

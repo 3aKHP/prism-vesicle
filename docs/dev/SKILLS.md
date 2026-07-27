@@ -17,6 +17,19 @@ Phase 0 delivers **format, inventory, and the Skill Store** only:
 
 Phase 0 does **not** add `activate_skill` / `read_skill_resource` tools, a `/skill` command, repository install commands (`install | update | rollback | uninstall`), project `.agents/skills/` scope, script execution, or any prompt-composition, session, compaction, or Engine-switch behavior. Those belong to later phases and must not be implied by Phase 0 surfaces.
 
+## Phase 1 scope
+
+Phase 1 adds **repository installation and lifecycle** on top of the Phase 0 store, still without model-visible activation:
+
+- local directory and local Git installation (`vesicle skills install <path>`);
+- GitHub repository URL installation with ref resolution to an immutable commit (`vesicle skills install <url> [--ref <ref>] [--path <root>] [--all]`);
+- repository shape detection (root, single-nested, `skills/*` collection, multi-arbitrary) with deterministic selection — it refuses to guess when multiple skills are present;
+- immutable snapshot install with provenance sidecar, plus `update`, `rollback`, and `uninstall` over the active index and retained versions;
+- the Skill Store as a **CLI-listable** source (`list`/`inspect` show installed skills with scope `installed`) — **not** a model-visible catalog source;
+- dirty local worktree detection with explicit `--include-worktree` handling.
+
+Phase 1 does **not** add `activate_skill` / `read_skill_resource` tools, a `/skill` command, project `.agents/skills/` scope, script execution, or any prompt-composition, session, compaction, or Engine-switch behavior. Those remain Phase 2 and must not be implied by Phase 1 surfaces.
+
 ## What a Skill is (and is not)
 
 | Surface | Responsibility | Loaded when | May grant capability |
@@ -41,7 +54,7 @@ The `src/skills` module takes **pre-resolved roots** and does not import the ass
 
 On a name collision, exactly one winner is selected by precedence (`user` outranks `harness`); lower-precedence entries produce one `shadowed` diagnostic each. Bodies and resources are never merged. Catalog and diagnostic shapes never carry an absolute host path — only logical source scopes and skill-relative paths.
 
-Reserved for later phases: host-bundled Skills, project `.agents/skills/`, and the installed Skill Store as a discovery source. Project Skills may enter the catalog when their project is opened; their source scope must remain visible, without a separate project-trust state.
+Reserved for later phases: host-bundled Skills, project `.agents/skills/`, and the installed Skill Store as a **model-visible** discovery source. (Phase 1 lists installed Skills in the CLI; they are not yet part of the model-facing catalog.) Project Skills may enter the catalog when their project is opened; their source scope must remain visible, without a separate project-trust state.
 
 ## Parsing and validation
 
@@ -77,7 +90,7 @@ Loading (`src/skills/loader.ts`) is fail-soft per root: UTF-8 is decoded fatally
 
 The version directory holds only the auditable standard bundle; provenance lives in a sibling sidecar so the bundle stays byte-for-byte comparable with its source. Snapshots are staged, re-verified by hash, and atomically renamed; an interrupted install never leaves a live dependency on the source path or a half-written active version. Reinstalling identical content is idempotent by bundle hash; a differing bundle under the same version is a hard conflict.
 
-Phase 0 ships the storage mechanism (`installSnapshot`) and the read APIs so Phase 1 can layer repository-install commands on top without re-deriving the immutable-snapshot contract. The store is **not yet a discovery source**.
+Phase 0 shipped the storage mechanism (`installSnapshot`) and read APIs; Phase 1 layers repository-install commands and lifecycle (`update`, `rollback`, `uninstall`) on top without re-deriving the immutable-snapshot contract. The active-index read-modify-write is serialized in process and across processes (an exclusive `index.lock` with stale-lock reclamation). The store is a **CLI-listable** source (`list`/`inspect`); it is **not** a model-visible catalog source until Phase 2 activation.
 
 ## Catalog
 
@@ -89,9 +102,13 @@ Phase 0 ships the storage mechanism (`installSnapshot`) and the read APIs so Pha
 vesicle skills list
 vesicle skills validate <skill-directory>
 vesicle skills inspect <name>
+vesicle skills install <path-or-url> [--ref <ref>] [--path <root>] [--all] [--include-worktree]
+vesicle skills update <name>
+vesicle skills rollback <name>
+vesicle skills uninstall <name>
 ```
 
-`vesicle doctor` reports valid/invalid/shadowed counts over the Harness and user scopes. None of these surfaces expose an absolute host path.
+`vesicle skills list` and `inspect` also show installed Skills (scope `installed`) with their version and source kind. `vesicle doctor` reports valid/invalid/shadowed counts over the Harness and user scopes plus the installed count. `inspect` of an installed Skill shows its provenance (source kind and identity, requested ref, resolved commit, dirty-source marker, bundle hash); for local sources the source identity is the local path, shown only in this user-facing CLI output and never in model-facing catalog or diagnostic shapes.
 
 ## Risk disclosure and runtime boundaries
 
@@ -112,9 +129,8 @@ Static scanning may produce useful warnings, but it cannot certify Markdown or c
 
 ## Current boundary
 
-The shipped runtime covers format, inventory, and the Skill Store only. The following are **not** part of the current contract and must not be implied by any current surface:
+The shipped runtime covers format, inventory, the Skill Store, and repository installation with lifecycle (`install | update | rollback | uninstall`). The Skill Store is CLI-listable but not yet model-visible. The following are **not** part of the current contract and must not be implied by any current surface:
 
-- repository installation (`install | update | rollback | uninstall`), staging, and atomic activation as a discovery source;
 - model-visible activation — `activate_skill` / `read_skill_resource` tools, a `/skill` command, and any prompt-composition, session, compaction, or Engine-switch behavior;
 - script execution through Process/Permission Runtime;
 - project `.agents/skills/` scope and Skill authoring workflows; and

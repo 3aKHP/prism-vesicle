@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   computeBundleHash,
   installSnapshot,
+  listSkillVersions,
   readActiveIndex,
   readProvenance,
+  rollbackSkill,
   skillStoreDirectory,
+  uninstallSkill,
 } from "../../../src/skills";
 
 const symlinkSupported = await (async (): Promise<boolean> => {
@@ -160,6 +163,91 @@ mutated body
       // would refuse it, so the store must not accept an unreadable inventory.
       await writeFile(join(source, "references", "bad\\name.md"), "x", "utf8");
       await expect(installSnapshot({ sourceDirectory: source, env })).rejects.toThrow(/cannot be stored/);
+    });
+  });
+});
+
+describe("skill store: lifecycle", () => {
+  test("listSkillVersions returns installed versions oldest-first", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "versions", "a");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      await writeFile(join(source, "SKILL.md"), `---
+name: versions
+description: "demo: versions"
+---
+b
+`, "utf8");
+      await installSnapshot({ sourceDirectory: source, version: "v2", env });
+      expect(await listSkillVersions("versions", env)).toEqual(["v1", "v2"]);
+    });
+  });
+
+  test("rollback restores the previous active version", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "rolling", "v1 body");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      await writeFile(join(source, "SKILL.md"), `---
+name: rolling
+description: "demo: rolling"
+---
+v2 body
+`, "utf8");
+      await installSnapshot({ sourceDirectory: source, version: "v2", env });
+      expect((await readActiveIndex(env)).entries.find((entry) => entry.name === "rolling")?.version).toBe("v2");
+      const target = await rollbackSkill("rolling", env);
+      expect(target).toBe("v1");
+      expect((await readActiveIndex(env)).entries.find((entry) => entry.name === "rolling")?.version).toBe("v1");
+    });
+  });
+
+  test("rollback fails when there is no previous version", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "solo", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      await expect(rollbackSkill("solo", env)).rejects.toThrow(/No previous version/);
+    });
+  });
+
+  test("uninstall removes the index entry and the version family", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "removable", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "removable")).toBe(true);
+      await uninstallSkill("removable", env);
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "removable")).toBe(false);
+      expect(await lstat(join(skillStoreDirectory(env), "removable")).catch(() => undefined)).toBeUndefined();
+    });
+  });
+
+  test("the index lock is released after an install completes", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "locked", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      expect(await lstat(join(skillStoreDirectory(env), "index.lock")).catch(() => undefined)).toBeUndefined();
+    });
+  });
+
+  test("a stale lock left by a dead process is reclaimed", async () => {
+    await withEnv(async (env, scratch) => {
+      const storeRoot = skillStoreDirectory(env);
+      await mkdir(storeRoot, { recursive: true });
+      await writeFile(join(storeRoot, "index.lock"), "999999999", "utf8");
+      const source = await makeSource(scratch, "stale", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "stale")).toBe(true);
+    });
+  });
+
+  test("a failed install leaves the active version unchanged", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "safe", "v1 body");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      const conflictSource = await makeSource(join(scratch, "other"), "safe", "different body");
+      await expect(installSnapshot({ sourceDirectory: conflictSource, version: "v1", env })).rejects.toThrow(/already exists with different content/);
+      const index = await readActiveIndex(env);
+      expect(index.entries.find((entry) => entry.name === "safe")?.version).toBe("v1");
+      expect(index.entries).toHaveLength(1);
     });
   });
 });
