@@ -126,15 +126,15 @@ describe("validate run + summary + severity", () => {
     expect(validationSeverity(state)).toBe(2);
   });
 
-  test("the summary never carries an action token (Issue #118 §1)", () => {
-    // Every semantic outcome must be pure state — no `v`, `view`, `Enter`, …
-    const cases: Array<{ label: string; state: import("../../../src/tui/workspace-validate").ValidationState }> = [
-      { label: "pending", state: { state: "pending" } },
-      { label: "no-match", state: { state: "no-match", path: "a.md" } },
-      { label: "stale", state: { state: "stale", path: "a.md" } },
-      { label: "passed", state: { state: "result", path: "a.md", ok: true, findings: [] } },
+  test("the summary is pure state and never carries an action token (Issue #118 §1)", () => {
+    type VState = import("../../../src/tui/workspace-validate").ValidationState;
+    // Each outcome maps to an exact summary, and none carries an action token.
+    const cases: Array<{ state: VState; want: string }> = [
+      { state: { state: "pending" }, want: "" },
+      { state: { state: "no-match", path: "a.md" }, want: "no validator matched" },
+      { state: { state: "stale", path: "a.md" }, want: "validation stale" },
+      { state: { state: "result", path: "a.md", ok: true, findings: [] }, want: "✓ validators passed" },
       {
-        label: "errors+warnings",
         state: {
           state: "result", path: "a.md", ok: false,
           findings: [
@@ -142,15 +142,15 @@ describe("validate run + summary + severity", () => {
             { severity: "warning", validator: "y", text: "w", line: 1, anchored: true },
           ],
         },
+        want: "✗ 1 · ⚠ 1",
       },
     ];
-    for (const { label, state } of cases) {
+    for (const { state, want } of cases) {
       const summary = validationSummary(state);
+      expect(summary).toBe(want);
       expect(summary).not.toMatch(/\b(view|validate|Enter|jump)\b/);
-      // The historic duplicate suffix must not survive.
+      // The historic duplicate suffix must not return.
       expect(summary).not.toContain("v view");
-      // Sanity: the label is informative (avoid a vacuous pass on empty-string cases).
-      expect(label).toBeTruthy();
     }
   });
 

@@ -362,8 +362,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   /** Whether the currently open file is shown in the editable textarea. */
   function isEditing(): boolean {
-    const file = openFile();
-    return Boolean(file && isEditablePreview(file) && activeEditorPath() === file.relPath && viewMode() === "source");
+    return canEditOpenFile() && viewMode() === "source";
   }
 
   /**
@@ -1240,9 +1239,15 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
    * targets must neither advertise nor execute a jump).
    */
   function canJumpToSelectedFinding(): boolean {
-    if (!canEditOpenFile()) return false;
+    const file = openFile();
+    if (!file || !canEditOpenFile()) return false;
     const snap = validationSnapshot();
     if (snap.state !== "result") return false;
+    // The findings panel can describe a different file than the one open (tree
+    // `v` validates the selection without opening it). A jump must target the
+    // open buffer, so refuse — and do not advertise Enter — when the snapshot
+    // belongs to another file (Issue #118 review: cross-file jump).
+    if (snap.path !== file.relPath) return false;
     const finding = snap.findings[findingsIndex()];
     return Boolean(finding && finding.line !== null);
   }
@@ -1267,7 +1272,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   /** Land the active editable buffer at a finding's line and close the panel. */
   function jumpToFinding(finding: LocatedFinding): void {
     const file = openFile();
+    // Defence-in-depth alongside canJumpToSelectedFinding: never jump a finding
+    // from another file's snapshot into the open buffer.
+    const snap = validationSnapshot();
     if (!file || !canEditOpenFile() || finding.line === null) return;
+    if (snap.state !== "pending" && snap.path !== file.relPath) return;
     if (activeEditorPath() !== file.relPath) setActiveEditorPath(file.relPath);
     setViewMode("source");
     setFocusRegion("editor");

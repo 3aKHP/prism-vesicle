@@ -12,6 +12,11 @@
  * Boundary: pure presentation only. The controller owns state transitions; the
  * view owns layout. Builders take explicit per-surface inputs, never the whole
  * controller, so unrelated TUI surfaces cannot grow into this contract.
+ *
+ * Hot path: `statusLine` recomputes on every keystroke, so the composition
+ * caches each segment's display width once and derives the joined width from
+ * the cache rather than re-running `displayWidth` (Bun.stringWidth) per drop
+ * pass or shrink iteration.
  */
 import { displayWidth, truncateMiddle } from "./format";
 
@@ -32,16 +37,28 @@ export type StatusSegment = {
 
 const DROP_ORDER: StatusPriority[] = ["low", "medium", "high"];
 const SEP = " · ";
+const SEP_W = displayWidth(SEP);
+const MIN = 8;
 
-/** Join non-empty segments with the shared separator. */
-function join(segments: StatusSegment[]): string {
-  return segments.map((s) => s.text).filter((t) => t.length > 0).join(SEP);
+/** A segment with its display width cached so the hot path avoids re-measuring. */
+type Item = { seg: StatusSegment; w: number };
+
+function mkItems(segments: StatusSegment[]): Item[] {
+  return segments
+    .filter((s) => s.text.length > 0)
+    .map((seg) => ({ seg, w: displayWidth(seg.text) }));
 }
 
-function joinedWidth(segments: StatusSegment[]): number {
-  const texts = segments.map((s) => s.text).filter((t) => t.length > 0);
-  if (texts.length === 0) return 0;
-  return displayWidth(texts.join(SEP));
+/** Joined display width from cached per-segment widths (no `displayWidth` calls). */
+function itemsWidth(items: Item[]): number {
+  if (items.length === 0) return 0;
+  let sum = 0;
+  for (const it of items) sum += it.w;
+  return sum + SEP_W * (items.length - 1);
+}
+
+function joinItems(items: Item[]): string {
+  return items.map((it) => it.seg.text).join(SEP);
 }
 
 /**
@@ -51,18 +68,18 @@ function joinedWidth(segments: StatusSegment[]): number {
  * the result never exceeds the budget.
  */
 export function composeStatus(segments: StatusSegment[], budget: number): string {
-  const limit = Math.max(8, Math.floor(budget));
-  let kept = segments.filter((s) => s.text.length > 0);
-  if (joinedWidth(kept) <= limit) return join(kept);
+  const limit = Math.max(MIN, Math.floor(budget));
+  let items = mkItems(segments);
+  if (itemsWidth(items) <= limit) return joinItems(items);
   // Drop non-shrinkable segments from low priority upward. A `shrink` segment
   // (the target/path/draft) is retained through dropping and middle-truncated
   // last instead, so a long path never disappears wholesale.
   for (const prio of DROP_ORDER) {
-    kept = kept.filter((s) => s.priority !== prio || s.shrink);
-    if (joinedWidth(kept) <= limit) return join(kept);
+    items = items.filter((it) => it.seg.priority !== prio || it.seg.shrink);
+    if (itemsWidth(items) <= limit) return joinItems(items);
   }
-  kept = shrinkToFit(kept, limit);
-  const joined = join(kept);
+  items = shrinkToFit(items, limit);
+  const joined = joinItems(items);
   if (displayWidth(joined) <= limit) return joined;
   // Last resort (below the 80-column floor): guarantee the width invariant by
   // truncating the composed line itself. This only fires for adversarial
@@ -73,37 +90,39 @@ export function composeStatus(segments: StatusSegment[], budget: number): string
 /**
  * Iteratively middle-truncate segments until the line fits. Prefers `shrink`
  * segments; once none can shrink further, falls back to truncating the widest
- * remaining segment so the width invariant always holds (Issue #118 §8). The
- * 8-col floor mirrors `truncateMiddle`'s own floor, so a segment already at the
- * floor is treated as fully shrunk rather than spinning.
+ * remaining segment so the width invariant always holds (Issue #118 §8). Works
+ * from cached widths and re-measures only the one segment mutated per pass.
  */
-function shrinkToFit(segments: StatusSegment[], limit: number): StatusSegment[] {
-  const MIN = 8;
-  const result = segments.map((s) => ({ ...s }));
-  for (let guard = 0; guard < 256 && joinedWidth(result) > limit; guard += 1) {
-    const over = joinedWidth(result) - limit;
+function shrinkToFit(items: Item[], limit: number): Item[] {
+  const result = items.map((it) => ({ ...it, seg: { ...it.seg } }));
+  for (let guard = 0; guard < 256; guard += 1) {
+    const total = itemsWidth(result);
+    if (total <= limit) break;
+    const over = total - limit;
     let target = -1;
     let widest = -1;
     // First pass: the widest shrink-flagged segment that can still shrink.
     for (let i = 0; i < result.length; i += 1) {
-      if (!result[i].shrink) continue;
-      const w = displayWidth(result[i].text);
-      const next = Math.max(MIN, w - Math.max(1, over));
-      if (next >= w) continue;
-      if (w > widest) { widest = w; target = i; }
+      const it = result[i]!;
+      if (!it.seg.shrink) continue;
+      const next = Math.max(MIN, it.w - Math.max(1, over));
+      if (next >= it.w) continue;
+      if (it.w > widest) { widest = it.w; target = i; }
     }
     // Fall back to any widest segment if no shrink segment can shrink further.
     if (target < 0) {
       for (let i = 0; i < result.length; i += 1) {
-        const w = displayWidth(result[i].text);
-        const next = Math.max(MIN, w - Math.max(1, over));
-        if (next >= w) continue;
-        if (w > widest) { widest = w; target = i; }
+        const it = result[i]!;
+        const next = Math.max(MIN, it.w - Math.max(1, over));
+        if (next >= it.w) continue;
+        if (it.w > widest) { widest = it.w; target = i; }
       }
     }
     if (target < 0) break;
-    const cur = displayWidth(result[target].text);
-    result[target].text = truncateMiddle(result[target].text, Math.max(MIN, cur - Math.max(1, over)));
+    const it = result[target]!;
+    const newW = Math.max(MIN, it.w - Math.max(1, over));
+    it.seg.text = truncateMiddle(it.seg.text, newW);
+    it.w = displayWidth(it.seg.text);
   }
   return result;
 }
@@ -113,11 +132,24 @@ function shrinkToFit(segments: StatusSegment[], limit: number): StatusSegment[] 
 /** Validation summary text bound to this surface's target, or "" when it does not bind. */
 export type ValidationText = string;
 
+/**
+ * Append a controller status `note` (save/reload/refusal/error message) to a
+ * surface. It is `critical` so it survives width pressure alongside the
+ * validation verdict; without it the controller's `status(...)` messages would
+ * be set but never rendered (Issue #118 review: status-text orphan).
+ */
+function withNote(segs: StatusSegment[], note: string | undefined): StatusSegment[] {
+  if (note && note.length > 0) segs.push({ text: note, priority: "critical" });
+  return segs;
+}
+
 export type TreeStatusInput = {
   budget: number;
   /** Selected row is a regular file (so `v` can validate it). */
   selectedIsFile: boolean;
   validation: ValidationText;
+  /** Controller status text (e.g. "select a file to validate"), or "". */
+  note?: string;
 };
 
 export function treeStatus(input: TreeStatusInput): string {
@@ -137,7 +169,7 @@ export function treeStatus(input: TreeStatusInput): string {
     { text: "r refresh", priority: "low" },
     { text: ". hidden", priority: "low" },
   );
-  return composeStatus(segs, input.budget);
+  return composeStatus(withNote(segs, input.note), input.budget);
 }
 
 export type ViewerStatusInput = {
@@ -150,8 +182,10 @@ export type ViewerStatusInput = {
   validation: ValidationText;
   /** Reachable mode toggle hint, e.g. "m edit" / "m source" / "m preview", or "". */
   toggleHint: string;
-  /** Whether `v findings` is reachable (a current result exists for the target). */
+  /** Whether `v findings` is reachable (a current result exists and the target is not dirty). */
   canViewFindings: boolean;
+  /** Controller status text (e.g. "reloaded <path>", "save <path> before validating"), or "". */
+  note?: string;
 };
 
 export function viewerStatus(input: ViewerStatusInput): string {
@@ -164,7 +198,7 @@ export function viewerStatus(input: ViewerStatusInput): string {
   if (input.canViewFindings) segs.push({ text: "v findings", priority: "medium" });
   segs.push({ text: "r reload", priority: "low" });
   segs.push({ text: "Esc", priority: "critical" });
-  return composeStatus(segs, input.budget);
+  return composeStatus(withNote(segs, input.note), input.budget);
 }
 
 export type EditorStatusInput = {
@@ -176,6 +210,8 @@ export type EditorStatusInput = {
   diskMark: string;
   cursor: string;
   validation: ValidationText;
+  /** Controller status text (e.g. "saved <path>", LRU-refusal, "failed to save …"), or "". */
+  note?: string;
 };
 
 export function editorStatus(input: EditorStatusInput): string {
@@ -192,7 +228,7 @@ export function editorStatus(input: EditorStatusInput): string {
     { text: "Ctrl+X external", priority: "low" },
   );
   segs.push({ text: "Esc", priority: "critical" });
-  return composeStatus(segs, input.budget);
+  return composeStatus(withNote(segs, input.note), input.budget);
 }
 
 export type FindingsStatusInput = {

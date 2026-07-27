@@ -331,6 +331,49 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("short top line");
   });
 
+  test("a save confirmation surfaces in the status row (#118 review: status text restored)", async () => {
+    // The statusLine refactor had dropped the `${note}` suffix; controller
+    // status() messages (save/reload/refusal/error) must be visible again.
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes.txt");
+    // typeText does not route through onContentChange in this harness, so drive
+    // dirty + save through a mock instance the way the controller unit tests do,
+    // and set the state BEFORE rendering so the first frame already shows it.
+    const inst = {
+      get plainText() { return "line one\nline two\nEDIT\n"; },
+      setSelection: () => {}, gotoLine: () => {}, insertText: () => {}, replaceText: () => {},
+    } as unknown as import("@opentui/core").TextareaRenderable;
+    controller.registerEditorInstance("notes.txt", inst);
+    controller.markEditorContentChanged("notes.txt");
+    await controller.saveActive();
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("saved");
+  });
+
+  test("a dirty preview-mode Markdown does not advertise `v findings` (#118 review)", async () => {
+    // A dirty buffer under a read-only preview: `v` would refuse (dirty guard),
+    // so the viewer row must not advertise `v findings` as a reachable action.
+    await writeFile(join(root, "card.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("card.md");
+    const inst = {
+      get plainText() { return "---\narchetype: x\n---\nbody\nDIRTY\n"; },
+      setSelection: () => {}, gotoLine: () => {}, insertText: () => {}, replaceText: () => {},
+    } as unknown as import("@opentui/core").TextareaRenderable;
+    controller.registerEditorInstance("card.md", inst);
+    controller.markEditorContentChanged("card.md");
+    expect(controller.dirtyPaths().has("card.md")).toBe(true);
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).not.toContain("v findings");
+    expect(frame).toContain("validation stale");
+  });
+
   test("a long document never paints over the shell's bottom surface", async () => {
     // Regression for the B2 overlap bug: the page used an explicit height that
     // ignored the dynamically sized BottomSurface, so long viewer content

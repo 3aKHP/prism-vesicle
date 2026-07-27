@@ -191,6 +191,18 @@ describe("workspace-status: input bars and dialogs", () => {
   });
 });
 
+describe("workspace-status: status note (controller status() text)", () => {
+  test("builders render the note, and it survives width pressure (#118 review)", () => {
+    expect(editorStatus({ budget: 140, target: "x.md", dirtyMark: "", diskMark: "", cursor: "Ln 1:1", validation: "", note: "saved x.md" })).toContain("saved x.md");
+    expect(viewerStatus({ budget: 140, target: "x.md", mode: "preview", flags: "", validation: "", toggleHint: "", canViewFindings: false, note: "reloaded x.md" })).toContain("reloaded x.md");
+    expect(treeStatus({ budget: 140, selectedIsFile: true, validation: "", note: "select a file to validate" })).toContain("select a file to validate");
+    // The note is critical: under width pressure it stays while a path truncates.
+    const line = editorStatus({ budget: 60, target: "workspace/cards/very-long-name.md", dirtyMark: "", diskMark: "", cursor: "Ln 1:1", validation: "", note: "failed: disk full" });
+    expect(displayWidth(line)).toBeLessThanOrEqual(60);
+    expect(line).toContain("failed: disk full");
+  });
+});
+
 describe("workspace-status: truncatePath", () => {
   test("never reports a width wider than the budget", () => {
     for (const p of ["a.md", "workspace/cards/very-long-card-name.md", "工作区/卡片/角色卡.md"]) {

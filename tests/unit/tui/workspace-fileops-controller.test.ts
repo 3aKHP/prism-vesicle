@@ -301,6 +301,29 @@ describe("in-page validation: target and ownership (#118)", () => {
     }
   });
 
+  test("cross-file findings: Enter is not reachable when the panel describes a different file than the open one (#118 review)", async () => {
+    // tree `v` validates the selection WITHOUT opening it, so the panel can
+    // describe beta while alpha is still the open editable buffer. Enter must
+    // not jump — it would land beta's line in alpha.
+    await writeFile(join(root, "workspace/cards/alpha.md"), "---\narchetype: x\n---\nbody\n");
+    await writeFile(join(root, "workspace/cards/beta.md"), "---\narchetype: b\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/alpha.md");
+    const inst = mockEditor("---\narchetype: x\n---\nbody\n");
+    controller.registerEditorInstance("workspace/cards/alpha.md", inst);
+    expect(controller.canEditOpenFile()).toBe(true);
+
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/beta.md");
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(controller.findingsOpen()).toBe(true);
+    expect(controller.canJumpToSelectedFinding()).toBe(false);
+    // Enter is a no-op: no focus steal to the editor (would mean a jump ran).
+    controller.handleKey(key("enter"));
+    expect(controller.focusRegion()).toBe("tree");
+  });
+
   test("tree `v` on a directory keeps the panel closed with a status hint", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget("workspace/cards/mira.md");

@@ -6,8 +6,9 @@ import { MarkdownContent } from "../widgets/MarkdownContent";
 import type { WorkspaceController, EditorStatusTone } from "../workspace-controller";
 import { resetStaleHorizontalScroll } from "../workspace-controller";
 import type { WorkspaceFileKind } from "../workspace-files";
-import { validationSeverity, validationSummary } from "../workspace-validate";
-import { displayWidth } from "../format";
+import { pendingValidation, validationSeverity, validationSummary } from "../workspace-validate";
+import type { ValidationState } from "../workspace-validate";
+import { displayWidth, truncateMiddle } from "../format";
 import {
   dialogStatus,
   editorStatus,
@@ -174,19 +175,31 @@ export function WorkspacePage(props: {
   const showViewer = () => !props.compact || (c.focusRegion() === "editor" && c.openFile());
 
   /**
-   * Validation summary bound to a surface's target, or "" when the snapshot
-   * belongs to a different file (Issue #118 §3/§5 — a tree selection never
-   * wears another file's verdict). Reads the projected state so a dirty owner
-   * reads as `validation stale` rather than the old verdict. Only actual
-   * outcomes (`result`/`stale`) surface inline; `no-match` is the default for
-   * non-card files and is stated explicitly in the findings header on demand so
-   * it never crowds the editor hints.
+   * Validation state bound to a surface's target: the controller's projected
+   * (stale-aware) state when the snapshot owns `target`, otherwise pending.
+   * This is the single place that decides whether validation binds to the
+   * current focus (Issue #118 §3/§5 — a tree selection never wears another
+   * file's verdict, and neither does its colour). Reads the projected state so
+   * a dirty owner — including a dirty non-card file — reads as `validation
+   * stale` rather than the old verdict or nothing at all.
+   */
+  const boundValidationState = (target: string | null | undefined): ValidationState => {
+    if (!target) return pendingValidation;
+    const snap = c.validationSnapshot();
+    if (snap.state === "pending" || snap.path !== target) return pendingValidation;
+    return c.validationState();
+  };
+
+  /**
+   * Validation summary text for the bound target. Only actual outcomes
+   * (`result`/`stale`) surface inline; `no-match` is the default for non-card
+   * files and is stated explicitly in the findings header on demand so it never
+   * crowds the editor hints.
    */
   const validationTextFor = (target: string | null | undefined): string => {
-    if (!target) return "";
-    const snap = c.validationSnapshot();
-    if (snap.state === "pending" || snap.state === "no-match" || snap.path !== target) return "";
-    return validationSummary(c.validationState());
+    const s = boundValidationState(target);
+    if (s.state === "pending" || s.state === "no-match") return "";
+    return validationSummary(s);
   };
 
   const selectedRelPath = () => {
@@ -277,6 +290,7 @@ export function WorkspacePage(props: {
         budget,
         selectedIsFile: selectedRelPath() !== null,
         validation: validationTextFor(selectedRelPath()),
+        note: c.editorStatus(),
       });
     }
     const file = c.openFile();
@@ -289,6 +303,7 @@ export function WorkspacePage(props: {
           diskMark: c.externalChanged().has(file.relPath) ? "†disk" : "",
           cursor: `Ln ${c.cursorLn() + 1}:${c.cursorCol() + 1}`,
           validation: validationTextFor(file.relPath),
+          note: c.editorStatus(),
         });
       }
       const flags = [
@@ -300,6 +315,10 @@ export function WorkspacePage(props: {
         ? (c.viewMode() === "source" ? "source view" : "preview")
         : "viewer";
       const vText = validationTextFor(file.relPath);
+      // `v findings` is reachable only when there is a current (non-stale,
+      // non-no-match) result AND the buffer is clean — viewerValidate refuses a
+      // dirty target, so advertising otherwise is a dead affordance.
+      const dirty = c.dirtyPaths().has(file.relPath);
       return viewerStatus({
         budget,
         target: file.relPath,
@@ -307,7 +326,8 @@ export function WorkspacePage(props: {
         flags,
         validation: vText,
         toggleHint: toggleHint(),
-        canViewFindings: Boolean(vText) && vText !== "no validator matched",
+        canViewFindings: Boolean(vText) && !dirty,
+        note: c.editorStatus(),
       });
     }
     return "";
@@ -324,7 +344,12 @@ export function WorkspacePage(props: {
     if (c.findingsOpen() || c.findActive() || c.gotoActive() || c.saveAsActive() || c.opsBar()) return "info";
     if (c.dialog()) return "warn";
     if (c.externalChanged().size > 0) return "warn";
-    switch (validationSeverity(c.validationState())) {
+    // Severity binds to the focused target, matching the path-bound text above
+    // (Issue #118 §5 review): navigating the tree away from the validated file
+    // no longer paints the row red/green for a verdict the row does not show.
+    const region = c.focusRegion();
+    const target = region === "tree" ? selectedRelPath() : c.openFile()?.relPath ?? null;
+    switch (validationSeverity(boundValidationState(target))) {
       case 2: return "error";
       case 1: return "warn";
       case 0: return "success";
@@ -519,7 +544,7 @@ export function WorkspacePage(props: {
               <text content="(nothing to report)" fg={palette.textDim} wrapMode="none" />
             </Show>
             <text
-              content={`↑↓ navigate${c.canJumpToSelectedFinding() ? " · Enter jump" : ""} · Esc close`}
+              content={findingsStatus({ budget: Math.max(8, quickOpenWidth(props.width) - 4), canJump: c.canJumpToSelectedFinding() })}
               fg={palette.textDim}
               wrapMode="none"
             />
@@ -643,7 +668,11 @@ function FindingsHeader(props: { state: import("../workspace-validate").Validati
     // If the path cannot fit at all (very narrow panel), drop it rather than
     // overflow; the summary still identifies the outcome.
     const path = pathBudget >= 8 ? truncatePath(s.path, pathBudget) : "";
-    return path ? `findings: ${path} — ${summary}` : `findings: ${summary}`;
+    const full = path ? `findings: ${path} — ${summary}` : `findings: ${summary}`;
+    // A long summary ("no validator matched", "✓ validators passed") can still
+    // exceed a narrow panel once the path is dropped — middle-truncate the
+    // composed line so the header never overflows its box (Issue #118 §8).
+    return displayWidth(full) <= contentWidth ? full : truncateMiddle(full, contentWidth);
   };
   return <text content={content()} fg={palette.textPrimary} wrapMode="none" />;
 }
