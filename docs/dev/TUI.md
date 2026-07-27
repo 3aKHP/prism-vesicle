@@ -63,3 +63,10 @@ This document defines terminal layout, input ownership, transcript presentation,
 - Static rendering tests do not prove modal transitions, raw terminal key sequences, scrolling, or production preload behavior.
 - Interaction changes should receive focused component or PTY coverage at the real boundary when the regression risk justifies it.
 - The affected workflow must remain usable at 80 columns and at the relevant wide layout before the change is considered complete.
+
+## Structured Summaries And One-Line Status
+
+- A structured state summary (validation, quality, gate, or any reusable status string) must stay **action-free**: it states a semantic outcome only (`✓ passed`, `✗ N · ⚠ M`, `validation stale`, `no validator matched`, …) and never embeds an input instruction (`v`, `view`, `Enter`, …). The component that owns the current focus decides which single action, if any, is reachable, so one key is never advertised twice and a summary never tells the user to open a panel that is already open.
+- A reusable status value must carry the identity of what it describes (e.g. the project-relative path a validation result belongs to). A surface may show it only when that identity matches the object its focus represents; a tree selection must never wear another file's verdict.
+- A dirty editor buffer projects its prior validator verdict as a neutral `validation stale` (no old pass/fail colour or counts); undo-back-to-clean, save, and reload restore or replace it. Validators are not run on every keystroke.
+- One-line action/status surfaces (the Workspace status row, input bars, confirmation dialogs) compose by **display-width priority**, not tail clipping: drop whole low-priority segments before middle-truncating a path, keep destructive/committing choices and the cursor visible, and guarantee the rendered width never exceeds the supplied content budget. A long or CJK path must not push a warning or a primary action off the row at 80 columns.
