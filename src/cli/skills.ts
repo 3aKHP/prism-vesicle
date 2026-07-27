@@ -88,10 +88,20 @@ async function runList(): Promise<void> {
   const inspection = await inspectSkills();
   const { result } = inspection;
   const shadowed = result.diagnostics.filter((diagnostic) => diagnostic.kind === "shadowed").length;
-  const installed = await listInstalledSkills();
+  // A corrupted Skill Store index must not mask the harness/user listing; the
+  // same guard `vesicle doctor` already uses. Per-sidecar read errors are
+  // already tolerated inside `listInstalledSkills`, so this only fires on a bad
+  // index file.
+  let installed: InstalledSkillView[] = [];
+  let installedNotice = "";
+  try {
+    installed = await listInstalledSkills();
+  } catch (error) {
+    installedNotice = ` (installed unavailable: ${error instanceof Error ? error.message : String(error)})`;
+  }
 
   console.log("Prism Vesicle Skills");
-  if (result.skills.length === 0 && result.invalid.length === 0 && installed.length === 0) {
+  if (result.skills.length === 0 && result.invalid.length === 0 && installed.length === 0 && !installedNotice) {
     console.log("No skills discovered or installed.");
     return;
   }
@@ -119,7 +129,7 @@ async function runList(): Promise<void> {
       console.log(`  ${skill.name}  v${skill.version}${flag}  [${skill.sourceKind}]`);
     }
   }
-  console.log(`Summary: ${result.skills.length} valid, ${result.invalid.length} invalid, ${shadowed} shadowed, ${installed.length} installed`);
+  console.log(`Summary: ${result.skills.length} valid, ${result.invalid.length} invalid, ${shadowed} shadowed, ${installed.length} installed${installedNotice}`);
 }
 
 async function runValidate(target: string): Promise<void> {
@@ -229,13 +239,14 @@ async function listInstalledSkills(env: NodeJS.ProcessEnv = process.env): Promis
   const index = await readActiveIndex(env);
   const views: InstalledSkillView[] = [];
   for (const entry of index.entries) {
-    const provenance = await readProvenance(entry.name, entry.version, env);
-    views.push({
-      name: entry.name,
-      version: entry.version,
-      enabled: entry.enabled,
-      sourceKind: provenance?.sourceKind ?? "unknown",
-    });
+    let sourceKind = "unknown";
+    try {
+      const provenance = await readProvenance(entry.name, entry.version, env);
+      if (provenance) sourceKind = provenance.sourceKind;
+    } catch {
+      // A single unreadable provenance sidecar must not hide the other installed skills.
+    }
+    views.push({ name: entry.name, version: entry.version, enabled: entry.enabled, sourceKind });
   }
   return views.sort((left, right) => left.name.localeCompare(right.name));
 }

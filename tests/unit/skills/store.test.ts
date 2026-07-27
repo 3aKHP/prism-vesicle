@@ -239,6 +239,40 @@ v2 body
     });
   });
 
+  test("an empty index.lock left by a crashed write is reclaimed", async () => {
+    await withEnv(async (env, scratch) => {
+      const storeRoot = skillStoreDirectory(env);
+      await mkdir(storeRoot, { recursive: true });
+      await writeFile(join(storeRoot, "index.lock"), "", "utf8");
+      const source = await makeSource(scratch, "crashedlock", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "crashedlock")).toBe(true);
+      expect(await lstat(join(storeRoot, "index.lock")).catch(() => undefined)).toBeUndefined();
+    });
+  });
+
+  test("a malformed index.lock is reclaimed rather than bricking the store", async () => {
+    await withEnv(async (env, scratch) => {
+      const storeRoot = skillStoreDirectory(env);
+      await mkdir(storeRoot, { recursive: true });
+      await writeFile(join(storeRoot, "index.lock"), "not-a-pid", "utf8");
+      const source = await makeSource(scratch, "malformed", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "malformed")).toBe(true);
+    });
+  });
+
+  test("listSkillVersions skips interrupted staging dirs and orphan version dirs", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "listed", "body");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      const familyRoot = join(skillStoreDirectory(env), "listed");
+      await mkdir(join(familyRoot, ".staging-v2-deadbeef"), { recursive: true });
+      await mkdir(join(familyRoot, "v3"), { recursive: true });
+      expect(await listSkillVersions("listed", env)).toEqual(["v1"]);
+    });
+  });
+
   test("a failed install leaves the active version unchanged", async () => {
     await withEnv(async (env, scratch) => {
       const source = await makeSource(scratch, "safe", "v1 body");

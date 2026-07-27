@@ -16,11 +16,12 @@
  * checkout.
  */
 
-import { copyFile, lstat, mkdir, mkdtemp, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { detectSkillRepo, installSnapshot, readActiveIndex, readProvenance } from "../skills";
+import { buildProcessEnvironment, DEFAULT_PROCESS_TIMEOUT_MS, MAX_PROCESS_STREAM_BYTES } from "../core/process/runtime";
+import { detectSkillRepo, installSnapshot, parseSkillMarkdown, readActiveIndex, readProvenance, SKILL_FILE_NAME, SKILL_NAME_PATTERN } from "../skills";
 import type { SkillProvenance, SkillRepoShape } from "../skills";
 
 export interface InstallSourceOptions {
@@ -82,14 +83,15 @@ async function installFromLocalGit(
   repo: string,
   options: InstallSourceOptions,
 ): Promise<SkillProvenance[]> {
-  if (!gitAvailable()) {
+  const env = options.env ?? process.env;
+  if (!gitAvailable(env)) {
     throw new Error(
       "Source is a Git repository but `git` is not on PATH; install Git or pass a non-Git directory.",
     );
   }
-  const headSha = runGit(repo, ["rev-parse", "HEAD"]).trim();
+  const headSha = runGit(repo, ["rev-parse", "HEAD"], env).trim();
   if (!headSha) throw new Error("Could not resolve the HEAD commit of the Git repository.");
-  const status = runGit(repo, ["status", "--porcelain"]).trim();
+  const status = runGit(repo, ["status", "--porcelain"], env).trim();
   const clean = status.length === 0;
   if (!clean && !options.includeWorktree) {
     const preview = status.split("\n").slice(0, 20).join("\n");
@@ -104,7 +106,7 @@ async function installFromLocalGit(
   const staging = join(scratch, basename(repo));
   await mkdir(staging, { recursive: true });
   try {
-    await stageTrackedWorkingTree(repo, staging);
+    await stageTrackedWorkingTree(repo, staging, env);
     const shape = await detectSkillRepo(staging);
     const selections = selectSkillRoots(shape, options);
     const results: SkillProvenance[] = [];
@@ -174,8 +176,8 @@ function resolveSkillRoot(base: string, skillRoot: string): string {
  * For a clean tree the working copy equals HEAD, so this yields the committed
  * snapshot; with `--include-worktree` it yields the current files instead.
  */
-async function stageTrackedWorkingTree(repo: string, staging: string): Promise<void> {
-  const out = runGit(repo, ["ls-files", "-z"]);
+async function stageTrackedWorkingTree(repo: string, staging: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const out = runGit(repo, ["ls-files", "-z"], env);
   const paths = out.split("\0").filter((segment) => segment.length > 0);
   for (const relative of paths) {
     const src = join(repo, ...relative.split("/"));
@@ -187,16 +189,16 @@ async function stageTrackedWorkingTree(repo: string, staging: string): Promise<v
   }
 }
 
-function gitAvailable(): boolean {
+function gitAvailable(env: NodeJS.ProcessEnv): boolean {
   try {
-    return runGitExitCode(["--version"]) === 0;
+    return runGitExitCode(["--version"], env) === 0;
   } catch {
     return false;
   }
 }
 
-function runGit(repo: string, args: string[]): string {
-  const result = runGitRaw(["-C", repo, ...args]);
+function runGit(repo: string, args: string[], env: NodeJS.ProcessEnv): string {
+  const result = runGitRaw(["-C", repo, ...args], env);
   if (result.exitCode !== 0) {
     const stderr = result.stderr?.toString().trim() ?? `exit code ${result.exitCode}`;
     throw new Error(`git ${args.join(" ")} failed: ${stderr}`);
@@ -204,12 +206,14 @@ function runGit(repo: string, args: string[]): string {
   return result.stdout.toString();
 }
 
-function runGitExitCode(args: string[]): number | undefined {
-  return runGitRaw(args).exitCode;
+function runGitExitCode(args: string[], env: NodeJS.ProcessEnv): number | undefined {
+  return runGitRaw(args, env).exitCode;
 }
 
-function runGitRaw(args: string[]): { stdout: Buffer; stderr: Buffer | null; exitCode: number | undefined } {
-  return Bun.spawnSync(["git", ...args]);
+function runGitRaw(args: string[], env: NodeJS.ProcessEnv): { stdout: Buffer; stderr: Buffer | null; exitCode: number | undefined } {
+  // Spawn with a filtered environment so host secrets (GITHUB_TOKEN, provider
+  // keys, …) are never inherited by the Git child. Git access here is local-only.
+  return Bun.spawnSync(["git", ...args], { env: buildProcessEnvironment(env) });
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -286,26 +290,21 @@ export async function installFromGitHub(
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const requestedRef = options.ref ?? parsed.ref ?? (await resolveDefaultBranch(parsed.owner, parsed.repo, fetchImpl, env));
-  const resolvedCommit = await resolveGitHubCommit(parsed.owner, parsed.repo, requestedRef, fetchImpl, env);
-  if (!/^[0-9a-f]{40}$/.test(resolvedCommit)) {
+  const resolved = await resolveRefAndSubpath(parsed, options, fetchImpl, env);
+  if (!/^[0-9a-f]{40}$/.test(resolved.commit)) {
     throw new Error("GitHub did not return a valid 40-character commit SHA.");
   }
-  const tarball = await downloadGitHubTarball(parsed.owner, parsed.repo, resolvedCommit, fetchImpl, env);
+  const tarball = await downloadGitHubTarball(parsed.owner, parsed.repo, resolved.commit, fetchImpl, env);
 
   const scratch = await mkdtemp(join(tmpdir(), "vesicle-skill-github-"));
   const extracted = join(scratch, "extracted");
   await mkdir(extracted, { recursive: true });
   try {
-    await extractTarball(tarball, extracted);
+    await extractTarball(tarball, extracted, env);
     const extractedRoot = await singleTopLevelDir(extracted);
-    // GitHub names the archive root `<repo>-<sha>`; rename it to the repository
-    // name so a root Skill validates (the parser requires `name` to match its
-    // directory, and a valid root-skill repo has `name` equal to the repo name).
-    const sourceRoot = basename(extractedRoot) === parsed.repo ? extractedRoot : join(extracted, parsed.repo);
-    if (sourceRoot !== extractedRoot) await rename(extractedRoot, sourceRoot);
+    const sourceRoot = await renameRootForSkill(extracted, extractedRoot);
     const shape = await detectSkillRepo(sourceRoot);
-    const selections = selectSkillRoots(shape, { ...options, path: options.path ?? parsed.subpath });
+    const selections = selectSkillRoots(shape, { ...options, path: options.path ?? resolved.subpath });
     const results: SkillProvenance[] = [];
     for (const skillRoot of selections) {
       results.push(
@@ -313,8 +312,8 @@ export async function installFromGitHub(
           sourceDirectory: resolveSkillRoot(sourceRoot, skillRoot),
           sourceKind: "github",
           sourceIdentity: `${parsed.owner}/${parsed.repo}`,
-          requestedRef,
-          resolvedCommit,
+          requestedRef: resolved.ref,
+          resolvedCommit: resolved.commit,
           skillRoot,
           enabled: true,
           env,
@@ -360,7 +359,14 @@ export async function updateSkill(
     results = await installFromGitHub(url, { ref, path: previous.skillRoot, env, fetchImpl: options.fetchImpl });
   } else {
     if (!previous.sourceIdentity) throw new Error(`Cannot update "${name}": no source path is recorded.`);
-    results = await installFromLocalPath(previous.sourceIdentity, { path: previous.skillRoot, env });
+    // A skill originally snapshotted from a dirty worktree (--include-worktree)
+    // must be re-acquired the same way; otherwise a still-dirty source fails the
+    // clean-tree gate and `update` has no flag to pass through.
+    results = await installFromLocalPath(previous.sourceIdentity, {
+      path: previous.skillRoot,
+      env,
+      includeWorktree: previous.dirtySource === true,
+    });
   }
   const provenance = results.find((item) => item.name === name) ?? results[0];
   if (!provenance) throw new Error(`Update of "${name}" did not produce a skill.`);
@@ -402,6 +408,63 @@ async function resolveGitHubCommit(
   return data.sha;
 }
 
+/** Like `resolveGitHubCommit` but returns `undefined` on a 404 instead of throwing. */
+async function tryResolveGitHubCommit(
+  owner: string,
+  repo: string,
+  ref: string,
+  fetchImpl: FetchLike,
+  env: NodeJS.ProcessEnv,
+): Promise<string | undefined> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}`;
+  const response = await githubFetch(url, fetchImpl, env);
+  if (response.status === 404) return undefined;
+  if (!response.ok) {
+    throw new Error(`GitHub could not resolve ref "${ref}" (HTTP ${response.status}).`);
+  }
+  const data = (await response.json()) as { sha?: unknown };
+  if (typeof data.sha !== "string") throw new Error("GitHub commit response is missing a SHA.");
+  return data.sha;
+}
+
+/**
+ * Resolve a GitHub ref and optional subpath from the parsed URL and options. An
+ * explicit `--ref` is used verbatim. Without one, a `/tree/<ref>/<subpath>` URL
+ * is ambiguous when `<ref>` contains a slash (e.g. `feature/integrate`): the
+ * parser splits it into a short ref and a long subpath. Try the longest ref
+ * prefix first, peeling trailing segments into the subpath, until one resolves
+ * to a commit — so a slash-bearing branch resolves correctly while a plain ref
+ * with a real subpath still resolves in a single request.
+ */
+async function resolveRefAndSubpath(
+  parsed: GitHubSource,
+  options: GitHubInstallOptions,
+  fetchImpl: FetchLike,
+  env: NodeJS.ProcessEnv,
+): Promise<{ ref: string; commit: string; subpath?: string }> {
+  const owner = parsed.owner;
+  const repo = parsed.repo;
+  if (options.ref) {
+    const commit = await resolveGitHubCommit(owner, repo, options.ref, fetchImpl, env);
+    return { ref: options.ref, commit, ...(parsed.subpath ? { subpath: parsed.subpath } : {}) };
+  }
+  const segments = parsed.ref === undefined ? [] : [parsed.ref, ...(parsed.subpath ? parsed.subpath.split("/") : [])];
+  if (segments.length === 0) {
+    const branch = await resolveDefaultBranch(owner, repo, fetchImpl, env);
+    const commit = await resolveGitHubCommit(owner, repo, branch, fetchImpl, env);
+    return { ref: branch, commit };
+  }
+  for (let count = segments.length; count >= 1; count--) {
+    const candidateRef = segments.slice(0, count).join("/");
+    const commit = await tryResolveGitHubCommit(owner, repo, candidateRef, fetchImpl, env);
+    if (commit !== undefined) {
+      const subpath = count < segments.length ? segments.slice(count).join("/") : undefined;
+      return { ref: candidateRef, commit, ...(subpath ? { subpath } : {}) };
+    }
+  }
+  throw new Error(`GitHub could not resolve ref "${segments.join("/")}" in ${owner}/${repo}.`);
+}
+
 async function downloadGitHubTarball(
   owner: string,
   repo: string,
@@ -425,22 +488,76 @@ async function githubFetch(url: string, fetchImpl: FetchLike, env: NodeJS.Proces
 /**
  * Extract a gzipped tar `tarGz` into `dest` using the system `tar`. The archive
  * is staged outside `dest` so only the extracted tree remains. Throws if `tar`
- * is missing or reports a non-zero exit.
+ * is missing, reports a non-zero exit, or runs past the host timeout, so a
+ * hostile archive cannot hang or flood output. Runs with a filtered environment.
  */
-async function extractTarball(tarGz: Buffer, dest: string): Promise<void> {
+async function extractTarball(tarGz: Buffer, dest: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const archive = join(tmpdir(), `vesicle-github-${randomUUID()}.tar.gz`);
   await writeFile(archive, tarGz);
   try {
     // --no-same-owner avoids restoring archive ownership (EPERM as non-root, or
-  // foreign uid/gid as root). --no-same-permissions is intentionally NOT used:
-  // a Skill may bundle executable scripts whose +x bit must survive extraction.
-  const result = Bun.spawnSync(["tar", "--no-same-owner", "-xzf", archive, "-C", dest]);
+    // foreign uid/gid as root). --no-same-permissions is intentionally NOT used:
+    // a Skill may bundle executable scripts whose +x bit must survive extraction.
+    const result = await runHostCommand(["tar", "--no-same-owner", "-xzf", archive, "-C", dest], { env });
+    if (result.timedOut) {
+      throw new Error("tar extraction timed out; the archive may be hostile or the disk slow.");
+    }
     if (result.exitCode !== 0) {
-      throw new Error(`tar extraction failed: ${result.stderr?.toString().trim() ?? `exit code ${result.exitCode}`}`);
+      throw new Error(`tar extraction failed: ${result.stderr.trim() || `exit code ${result.exitCode}`}`);
     }
   } finally {
     await rm(archive, { force: true }).catch(() => undefined);
   }
+}
+
+/**
+ * Run a host command under the project's process-hardening policy: a filtered
+ * environment (no inherited host secrets), a bounded timeout that kills the
+ * child, and truncated output capture. Used for extracting an untrusted remote
+ * GitHub tarball; Git invocations stay synchronous because they are local.
+ */
+async function runHostCommand(
+  argv: string[],
+  { env, timeoutMs = DEFAULT_PROCESS_TIMEOUT_MS }: { env: NodeJS.ProcessEnv; timeoutMs?: number },
+): Promise<{ exitCode?: number; stdout: string; stderr: string; timedOut: boolean }> {
+  const child = Bun.spawn(argv, {
+    env: buildProcessEnvironment(env),
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGKILL");
+  }, timeoutMs);
+  try {
+    const [exitCode, stdout, stderr] = await Promise.all([child.exited, readBounded(child.stdout), readBounded(child.stderr)]);
+    return { exitCode, stdout, stderr, timedOut };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readBounded(stream: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  const chunks: Buffer[] = [];
+  let kept = 0;
+  while (kept < MAX_PROCESS_STREAM_BYTES) {
+    const next = await reader.read();
+    if (next.done) break;
+    const remaining = MAX_PROCESS_STREAM_BYTES - kept;
+    const slice = next.value.byteLength <= remaining ? Buffer.from(next.value) : Buffer.from(next.value.subarray(0, remaining));
+    chunks.push(slice);
+    kept += slice.byteLength;
+  }
+  try {
+    await reader.cancel();
+  } catch {
+    // Stream already closed after process exit or kill.
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 /** GitHub tarballs extract to one top-level directory; return its absolute path. */
@@ -449,4 +566,29 @@ async function singleTopLevelDir(directory: string): Promise<string> {
   const dirs = entries.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink());
   if (dirs.length === 1) return join(directory, dirs[0]!.name);
   throw new Error("GitHub archive did not extract to a single top-level directory.");
+}
+
+/**
+ * GitHub names an archive root `<repo>-<sha>`. A root Skill must live in a
+ * directory whose name equals its declared `name`, and GitHub repository names
+ * need not be valid skill names (uppercase, underscores, dots). Rename the
+ * extracted root to the `SKILL.md` `name` when the archive is a root Skill;
+ * nested/collection layouts key off subdirectories and are left unchanged.
+ */
+async function renameRootForSkill(extracted: string, extractedRoot: string): Promise<string> {
+  const current = basename(extractedRoot);
+  const desired = (await readRootSkillName(extractedRoot)) ?? current;
+  if (desired === current) return extractedRoot;
+  const target = join(extracted, desired);
+  await rename(extractedRoot, target);
+  return target;
+}
+
+/** Read the declared `name` from a root `SKILL.md`, if it is a valid skill name. */
+async function readRootSkillName(root: string): Promise<string | undefined> {
+  const raw = await readFile(join(root, SKILL_FILE_NAME)).catch(() => undefined);
+  if (raw === undefined) return undefined;
+  const parsed = parseSkillMarkdown(raw.toString("utf8"), undefined);
+  if (!parsed.ok) return undefined;
+  return SKILL_NAME_PATTERN.test(parsed.metadata.name) ? parsed.metadata.name : undefined;
 }

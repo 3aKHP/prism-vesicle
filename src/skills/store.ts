@@ -200,7 +200,7 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
     );
   }
 
-  const staging = join(familyRoot, `.staging-${version}-${randomUUID()}`);
+  const staging = join(familyRoot, `${STAGING_DIR_PREFIX}${version}-${randomUUID()}`);
   await mkdir(familyRoot, { recursive: true });
   try {
     await copyBundle(sourceDirectory, staging, inventory);
@@ -241,9 +241,14 @@ export async function listSkillVersions(name: string, env: NodeJS.ProcessEnv = p
   const stamped: Array<{ version: string; installedAt: string }> = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    // Skip in-flight staging dirs from an interrupted install and version dirs
+    // without a provenance sidecar (orphans). rollback must only target fully
+    // installed versions, or it can repoint the active index at a half-copied tree.
+    if (entry.name.startsWith(STAGING_DIR_PREFIX)) continue;
     assertStoreSegment(entry.name, "version");
     const provenance = await readProvenance(name, entry.name, env);
-    stamped.push({ version: entry.name, installedAt: provenance?.installedAt ?? "" });
+    if (!provenance) continue;
+    stamped.push({ version: entry.name, installedAt: provenance.installedAt });
   }
   stamped.sort((left, right) => left.installedAt.localeCompare(right.installedAt) || left.version.localeCompare(right.version));
   return stamped.map((entry) => entry.version);
@@ -383,6 +388,8 @@ function updateActiveIndex(
 const INDEX_LOCK_FILE = "index.lock";
 const INDEX_LOCK_POLL_MS = 50;
 const INDEX_LOCK_TIMEOUT_MS = 10_000;
+/** Prefix for in-flight install staging directories inside a skill family. */
+const STAGING_DIR_PREFIX = ".staging-";
 
 /** Hold an exclusive cross-process lock around `critical`. */
 async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): Promise<T> {
@@ -403,11 +410,19 @@ async function acquireIndexLock(lockPath: string) {
   const deadline = Date.now() + INDEX_LOCK_TIMEOUT_MS;
   const token = randomUUID();
   while (true) {
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      const handle = await open(lockPath, "wx");
+      handle = await open(lockPath, "wx");
       await handle.writeFile(`${process.pid}\n${token}\n`);
       return { handle, token };
     } catch (error: unknown) {
+      // If we created the file but could not finish writing it (ENOSPC/EIO, or a
+      // kill between create and write), remove the half-written lock so a later
+      // caller never sees an empty file it cannot parse as a held lock.
+      if (handle !== undefined) {
+        await handle.close().catch(() => undefined);
+        await rm(lockPath, { force: true }).catch(() => undefined);
+      }
       if (!isLockHeld(error)) throw error;
       if (await breakStaleLock(lockPath)) continue;
       if (Date.now() >= deadline) {
@@ -430,29 +445,41 @@ async function releaseIfOwned(lockPath: string, token: string): Promise<void> {
 }
 
 async function breakStaleLock(lockPath: string): Promise<boolean> {
+  let raw: string;
   try {
-    const raw = await readFile(lockPath, "utf8");
-    const pid = Number.parseInt(raw.split("\n")[0] ?? "", 10);
-    if (Number.isFinite(pid) && !isProcessAlive(pid)) {
-      await rm(lockPath, { force: true }).catch(() => undefined);
-      return true;
-    }
+    raw = await readFile(lockPath, "utf8");
   } catch {
-    // A malformed or unreadable lock is left in place and retried until timeout.
+    // Unreadable lock is left for the timeout to surface.
+    return false;
+  }
+  const pid = Number.parseInt(raw.split("\n")[0] ?? "", 10);
+  // An empty or malformed lock has no holder PID: it is an orphan from a crashed
+  // create-then-write (SIGKILL, power loss). It cannot represent a live holder,
+  // so reclaim it instead of bricking the store until the timeout elapses.
+  if (!Number.isFinite(pid) || !isProcessAlive(pid)) {
+    await rm(lockPath, { force: true }).catch(() => undefined);
+    return true;
   }
   return false;
 }
 
+function isErrorCode(error: unknown, code: string): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code: unknown }).code === code);
+}
+
 function isLockHeld(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && (error as { code: unknown }).code === "EEXIST");
+  return isErrorCode(error, "EEXIST");
 }
 
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    // ESRCH: no such process (dead). EPERM: the pid exists but is not signalable
+    // by this user — treat it as alive so a cross-user live lock is never broken,
+    // which would reintroduce the lost update the lock exists to prevent.
+    return isErrorCode(error, "EPERM");
   }
 }
 

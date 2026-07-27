@@ -299,6 +299,54 @@ describe("github acquisition", () => {
       expect(provenance.resolvedCommit).toBe(fakeSha);
     });
   });
+
+  test("resolves a slash-bearing branch ref instead of truncating it", async () => {
+    if (!tarSupported) return;
+    await withEnv(async (env, scratch) => {
+      const topLevel = "slashskill-abcdef0";
+      const repoTree = join(scratch, "repo-tree");
+      await writeSkillAt(join(repoTree, topLevel), "slashskill", "body");
+      const tarball = await makeTarball(repoTree, topLevel);
+      const fakeSha = "1111111111111111111111111111111111111111";
+      const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+        const target = String(input);
+        if (target.includes("/commits/")) {
+          // Only the full slash-bearing ref resolves; the truncated prefix does not.
+          return target.endsWith("/commits/feature%2Fintegrate")
+            ? new Response(JSON.stringify({ sha: fakeSha }), { status: 200, headers: { "content-type": "application/json" } })
+            : new Response("not found", { status: 404 });
+        }
+        if (target.includes("codeload.github.com")) return new Response(new Uint8Array(tarball), { status: 200 });
+        return new Response("not found", { status: 404 });
+      };
+      const [provenance] = await installFromGitHub("https://github.com/owner/slashskill/tree/feature/integrate", { fetchImpl, env });
+      expect(provenance.requestedRef).toBe("feature/integrate");
+      expect(provenance.resolvedCommit).toBe(fakeSha);
+    });
+  });
+
+  test("installs a root skill whose GitHub repo name is not lowercase", async () => {
+    if (!tarSupported) return;
+    await withEnv(async (env, scratch) => {
+      const topLevel = "MyCoolSkill-abcdef0";
+      const repoTree = join(scratch, "repo-tree");
+      await writeSkillAt(join(repoTree, topLevel), "my-cool-skill", "body");
+      const tarball = await makeTarball(repoTree, topLevel);
+      const fakeSha = "2222222222222222222222222222222222222222";
+      const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+        const target = String(input);
+        if (target.includes("/commits/")) {
+          return new Response(JSON.stringify({ sha: fakeSha }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        if (target.includes("codeload.github.com")) return new Response(new Uint8Array(tarball), { status: 200 });
+        return new Response("not found", { status: 404 });
+      };
+      const [provenance] = await installFromGitHub("https://github.com/Alice/MyCoolSkill/tree/main", { fetchImpl, env });
+      expect(provenance.name).toBe("my-cool-skill");
+      expect(provenance.sourceIdentity).toBe("Alice/MyCoolSkill");
+      expect(provenance.resolvedCommit).toBe(fakeSha);
+    });
+  });
 });
 
 describe("skill lifecycle (update + rollback)", () => {
@@ -326,6 +374,25 @@ describe("skill lifecycle (update + rollback)", () => {
       const result = await updateSkill("alpha", { env });
       expect(result.changed).toBe(true);
       expect(result.provenance.skillRoot).toBe("skills/alpha");
+    });
+  });
+
+  test("update re-acquires a dirty-worktree skill by replaying its recorded includeWorktree", async () => {
+    if (!gitSupported) return;
+    await withEnv(async (env, scratch) => {
+      const repo = await makeGitRepo(scratch, "redirty", "committed body");
+      await writeFile(join(repo, "SKILL.md"), `---
+name: redirty
+description: "demo: redirty"
+---
+still dirty
+`, "utf8");
+      const [first] = await installFromLocalPath(repo, { includeWorktree: true, env });
+      expect(first!.dirtySource).toBe(true);
+      // Without replaying includeWorktree this throws "uncommitted changes" and
+      // the CLI has no flag to pass through `update`.
+      const result = await updateSkill("redirty", { env });
+      expect(result.provenance.dirtySource).toBe(true);
     });
   });
 });
