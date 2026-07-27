@@ -62,6 +62,7 @@ host-assets/  # restricted Vesicle prompts and generic Agent extensions
 - TUI presentation and input routing observe and control host state without redefining domain semantics. See [`TUI.md`](./TUI.md).
 - Profile validators inspect Prism artifact documents rather than ordinary transition prose or every assistant turn. Artifact workbench validation reads the selected file from disk, and findings remain advisory unless a feature contract explicitly introduces a stronger policy.
 - Warning, confirmation, and risk-control design preserves informed user choice while enforcing concrete host boundaries. See [`USER_AGENCY_AND_RISK_DISCLOSURE.md`](./USER_AGENCY_AND_RISK_DISCLOSURE.md).
+- Guided Setup and the Windows installer own first-run onboarding, model discovery, configuration transactions, and OS integration within a bounded, secret-free scope. See [`SETUP.md`](./SETUP.md).
 
 ## Configuration And Setup Ownership
 
@@ -70,6 +71,8 @@ host-assets/  # restricted Vesicle prompts and generic Agent extensions
 - `src/setup` owns interactive onboarding, discovery, validation, backup, and configuration transactions. The Windows installer owns only the installed application lifecycle and operating-system integration.
 - Setup configuration writes are direct host actions, not model-visible tools. They validate the complete staged shape and preserve unrelated user configuration.
 - Project launch derives its root from the invocation directory or explicit directory argument. Setup and standalone asset resolution must not change the parent process working directory to make lookup succeed.
+
+Installer, onboarding, model-discovery, configuration-write, and project-launch rules live in [`SETUP.md`](./SETUP.md).
 
 ## Contract Ownership
 
@@ -85,6 +88,7 @@ host-assets/  # restricted Vesicle prompts and generic Agent extensions
 | [`SUBAGENTS.md`](./SUBAGENTS.md) | Child-Agent lifecycle, persistence, capability, concurrency, and delivery |
 | [`SKILLS.md`](./SKILLS.md) | Skill format, discovery, storage, path safety, and phased capability boundary |
 | [`USER_AGENCY_AND_RISK_DISCLOSURE.md`](./USER_AGENCY_AND_RISK_DISCLOSURE.md) | User agency, disclosure, confirmation, and enforceable-boundary policy |
+| [`SETUP.md`](./SETUP.md) | Windows installer scope, guided onboarding, model discovery, configuration transactions, and project-launch rules |
 | [`WORKFLOW.md`](./WORKFLOW.md) | Branching, verification, review, publication, and documentation workflow |
 
 Each contract has one owner. Other documents should summarize only what their audience needs and link to that owner instead of repeating detailed rules.
