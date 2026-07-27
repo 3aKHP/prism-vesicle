@@ -2,15 +2,19 @@
 
 A Skill is on-demand procedural context plus bundled resources in the open
 [Agent Skills](https://agentskills.io/specification) `SKILL.md` format. A Skill
-is **not** an Engine, Agent Profile, MCP server, permission grant, or executable
-plugin. It can guide or narrow use of the current effective tool surface, but it
-must never add tools, writable roots, shell authority, MCP servers, Agent scope,
-permission exemptions, or provider capabilities.
+is **not** an Engine, Agent Profile, MCP server, or permission grant. It may
+contain instructions, references, assets, and scripts. A Skill does not itself
+add tools, writable roots, shell authority, MCP servers, Agent scope, permission
+exemptions, or provider capabilities; actions it requests use the capabilities
+and permission mode the user already selected.
 
 This document is the authoritative runtime boundary for Skills in Vesicle. The
 research basis, ecosystem comparison, and full phased delivery plan live in
-`dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` (an ignored local
-working note; treat its archived plans as historical context).
+`dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` (the ignored local
+implementation plan). Phases 0-3 are approved for implementation in order; an
+Agent directed to follow or continue that plan should execute its earliest
+incomplete phase rather than perform another feasibility pass. Git publication
+operations remain governed separately by `docs/dev/WORKFLOW.md`.
 
 ## Phase 0 scope
 
@@ -21,13 +25,13 @@ Phase 0 delivers **format, inventory, and the Skill Store** only:
   (`src/skills/discovery.ts`);
 - collision, invalid, and unsupported-field diagnostics;
 - `vesicle skills list | validate | inspect` and `vesicle doctor` integration;
-- immutable versioned Skill Store, active index, and safe catalog hashing
+- immutable versioned Skill Store, active index, and catalog hashing
   (`src/skills/store.ts`, `src/skills/catalog.ts`);
 - **no model-visible activation.**
 
 Phase 0 does **not** add `activate_skill` / `read_skill_resource` tools, a
 `/skill` command, repository install commands (`install | update | rollback |
-uninstall`), project `.agents/skills/` scope, executable script resources, or any
+uninstall`), project `.agents/skills/` scope, script execution, or any
 prompt-composition, session, compaction, or Engine-switch behavior. Those belong
 to later phases and must not be implied by Phase 0 surfaces.
 
@@ -62,13 +66,13 @@ Harness-root resolution and passes both root lists to `discoverSkills`.
 On a name collision, exactly one winner is selected by precedence (`user`
 outranks `harness`); lower-precedence entries produce one `shadowed` diagnostic
 each. Bodies and resources are never merged. Catalog and diagnostic shapes never
-carry an absolute host path — only safe logical scope labels and skill-relative
+carry an absolute host path — only logical source scopes and skill-relative
 paths.
 
-Reserved for later phases: host-bundled Skills, project `.agents/skills/` (only
-after an explicit project-trust primitive), and the installed Skill Store as a
-discovery source. Project Skills must not be injected merely because a user
-opened a freshly cloned directory.
+Reserved for later phases: host-bundled Skills, project `.agents/skills/`, and
+the installed Skill Store as a discovery source. Project Skills may enter the
+catalog when their project is opened; their source scope must remain visible,
+without a separate project-trust state.
 
 ## Parsing and validation
 
@@ -133,13 +137,13 @@ immutable-snapshot contract. The store is **not yet a discovery source**.
 ## Catalog
 
 `src/skills/catalog.ts` builds the bounded, frozen routing view from discovery
-winners. It exposes only `name`, `description`, and a safe `scope`, capped to
-~2% of the model context window when known or an 8 KiB fallback, preferring
-description shortening and then omission of lowest-precedence skills. The catalog
-hash is an identity fingerprint over the kept skills' `name\0scope\0contentSha256`
-— description shortening does not change it, but activating, omitting, or changing
-the content version of a skill does. Phase 0 builds and hashes the catalog; it is
-not yet model-visible.
+winners. It exposes only `name`, `description`, and a logical source `scope`,
+capped to ~2% of the model context window when known or an 8 KiB fallback,
+preferring description shortening and then omission of lowest-precedence skills.
+The catalog hash is an identity fingerprint over the kept skills'
+`name\0scope\0contentSha256` — description shortening does not change it, but
+activating, omitting, or changing the content version of a skill does. Phase 0
+builds and hashes the catalog; it is not yet model-visible.
 
 ## CLI surface
 
@@ -152,22 +156,29 @@ vesicle skills inspect <name>
 `vesicle doctor` reports valid/invalid/shadowed counts over the Harness and user
 scopes. None of these surfaces expose an absolute host path.
 
-## Threat model (summary)
+## Risk disclosure and runtime boundaries
 
-| Threat | Control |
+Explicit installation is the user's decision to make a Skill available. Vesicle
+must show its source, resolved version, bundled scripts, declared requirements,
+and material warnings, but it must not add a second trust ceremony or block a
+valid Skill based on a host judgment about its intent.
+
+| Risk or condition | Product response |
 |---|---|
-| Malicious project `description` (pre-activation injection) | Project scope is not discovered in Phase 0; catalog renders bounded data, not instructions |
-| Malicious body | Activation is a lower-authority tool result (Phase 2); explicit conflict ordering |
-| Path traversal / symlink | Virtual skill root, strict relative paths, no symlinks, race-aware reads |
-| `allowed-tools` abuse | Parsed but ignored; Tool Permission Runtime is authoritative |
-| Script / dependency attack | No execution in Phase 0; scripts are listed but unsupported |
-| Mutable remote Skill | Resolve to immutable snapshot, hash, provenance (Phase 1 install) |
-| Name collision | Deterministic precedence, one winner, shadow diagnostic |
-| Catalog bloat | Count/byte/context budget; identity-hash freeze |
+| Project or remote instructions influence model behavior | Show source scope and version; keep activation observable; do not require a separate trust gate |
+| Skill conflicts with Engine/Harness or requests unavailable capability | Apply normal instruction precedence and report the conflict or unavailable capability |
+| Path traversal, escaping symlink, socket, or device | Reject because it cannot be represented inside a stable portable Skill root |
+| `allowed-tools` declares capabilities | Display it as compatibility metadata; effective tools and the user's Permission Runtime mode remain authoritative |
+| Bundled script or dependency can execute code, access the network, or modify files | Show script inventory and requirements; execute through Process Runtime with the same permissions as an equivalent process action |
+| Remote ref can change | Resolve the installed version to a commit and content hash; show update diffs and retain rollback |
+| Name collision | Select deterministically and show winning and shadowed scopes |
+| Catalog bloat affects context and cache behavior | Apply count/context budgets and report omitted entries |
 
-Static scanning is useful but insufficient. Markdown can be semantically
-malicious without suspicious syntax. Trust, least privilege, immutable
-provenance, runtime observation, and human review remain necessary.
+Static scanning may produce useful warnings, but it cannot certify Markdown or
+code as benign. Findings are disclosures, not a content-approval gate or an
+implied safety certification when no warning is emitted. Format validation,
+portable path rules, immutable provenance, and runtime observation protect
+correctness and auditability without replacing the user's judgment.
 
 ## Phase roadmap
 
@@ -175,13 +186,14 @@ provenance, runtime observation, and human review remain necessary.
 - **Phase 1 — local and GitHub repository installation**: `install | update |
   rollback | uninstall`, staging, full-inventory validation, content hash,
   provenance, atomic activation, dirty-worktree handling.
-- **Phase 2 — read-only runtime**: Engine-declared `activate_skill` and
-  `read_skill_resource` tools, `/skill <name> [task]` and `--context-only`,
-  `/skills` inventory, structured activation/session events, TUI rendering,
-  exact resume/compact/rewind/Engine-switch semantics.
-- **Phase 3 — authoring and trusted project scope**: project trust before
-  `.agents/skills` disclosure, create/edit workflow, enable/disable, refresh.
-- **Phase 4 — executable resources**: `run_skill_script` through bounded Process
-  Runtime (separate security design first).
-- **Phase 5 — registries and broader distribution**: only after the read-only
-  lifecycle and supply-chain contract are correct.
+- **Phase 2 — activation, resources, and scripts**: Engine-declared
+  `activate_skill` / `read_skill_resource`, bare `/skill` inventory and picker,
+  `/skill <name> [task]`, `--context-only`, and `run_skill_script` for
+  process-capable Engines through existing Process/Permission Runtime behavior;
+  structured activation/session events, TUI rendering, and exact
+  resume/compact/rewind/Engine-switch semantics.
+- **Phase 3 — authoring and project scope**: `.agents/skills` discovery with
+  visible project provenance and no separate trust state, create/edit workflow,
+  enable/disable, and refresh.
+- **Phase 4 — registries and broader distribution**: optional distribution work
+  after direct local/GitHub repository installation is established.

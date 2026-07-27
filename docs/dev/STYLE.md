@@ -432,17 +432,20 @@ model tool call or a direct user edit.
 
 A Skill is on-demand procedural context plus bundled resources in the open
 Agent Skills `SKILL.md` format. It is never an Engine, Agent Profile, MCP
-server, permission grant, or executable plugin; it may guide or narrow use of
-the current effective tool surface but can never widen it. See
+server, or permission grant; it may contain instructions, references, assets,
+and scripts. A Skill cannot itself widen the effective tool surface. Actions it
+requests use the capabilities and permission mode the user already selected. See
 [`docs/dev/SKILLS.md`](./SKILLS.md) for the full boundary and
-`dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` for the research
-basis.
+`dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` for the approved
+implementation plan and research basis.
 
 - Phase 0 delivers format, inventory, and the Skill Store only. There is no
   model-visible activation: no `activate_skill` / `read_skill_resource` tools,
   no `/skill` command, and no prompt-composition, session, compaction, or
-  Engine-switch changes. Repository install commands, the activation runtime,
-  project `.agents/skills/` scope, and executable scripts are later phases.
+  Engine-switch changes. Repository install commands, the activation/runtime
+  surface, project `.agents/skills/` scope, and script execution are later
+  phases; scripts join activation in Phase 2 rather than a separate privileged
+  plugin tier.
 - Discovery is bounded to two deterministic, non-merging scopes: the verified
   Harness under logical `assets/skills/` (resolved through the active asset
   resolver) and the user configuration directory's `skills/`. Project,
@@ -453,13 +456,18 @@ basis.
 - On a name collision, exactly one winner is selected by scope precedence
   (`user` outranks `harness`) and lower-precedence entries are reported as
   shadowed. Bodies and resources are never merged. Catalog and diagnostic shapes
-  never carry an absolute host path: only safe logical scope labels and
+  never carry an absolute host path: only logical source scopes and
   skill-relative paths are surfaced.
 - Parsing is strict and fail-soft. One malformed Skill is skipped with a
   diagnostic while valid siblings remain available. The experimental standard
   `allowed-tools` field is parsed but never enforced; the Tool Permission Runtime
   remains the only tool-approval authority. Unknown frontmatter fields are
   preserved for inspection but have no runtime behavior.
+- Explicit installation is the user's choice to make a Skill available. Source,
+  resolved version, bundled scripts, declared requirements, and material risks
+  must be visible, but warnings do not create a separate trust state or
+  Skill-specific approval layer. Script actions use the existing Process and
+  Tool Permission Runtime behavior for the current Engine and permission mode.
 - Supporting resources live behind a virtual Skill root: every path is
   skill-relative, shallow, and resolved only inside that root. Absolute paths,
   `..` escapes, backslashes, NUL, empty/dot segments, symbolic links, devices,

@@ -2,22 +2,22 @@
  * Shared types for the Skills runtime.
  *
  * A Skill is on-demand procedural context plus bundled resources, never an
- * Engine, Agent Profile, MCP server, permission grant, or executable plugin.
+ * Engine, Agent Profile, MCP server, or permission grant. It may contain
+ * scripts but cannot itself widen the effective tool or permission surface.
  * See `docs/dev/SKILLS.md` for the runtime boundary and
  * `dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` for the
- * research basis.
+ * approved implementation plan and research basis.
  *
  * Diagnostic and catalog shapes never carry an absolute host path: discovery
- * surfaces only safe logical scope labels and skill-relative paths so a
- * project or third-party Skill cannot learn host layout or pose as a
- * filesystem authority.
+ * surfaces only logical source scopes and skill-relative paths. Physical paths
+ * are host implementation details, not part of the portable Skill contract.
  */
 
 /**
- * Safe logical discovery scope label. Phase 0 implements `harness` and `user`.
- * Future scopes (`host`-bundled, `project` under `.agents/skills/` after trust,
- * `installed` snapshots from the Skill Store) are reserved here so catalog and
- * diagnostic consumers handle one closed set.
+ * Logical discovery scope label. Phase 0 implements `harness` and `user`.
+ * Future scopes (`host`-bundled, `project` under `.agents/skills/`, `installed`
+ * snapshots from the Skill Store) are reserved here so catalog and diagnostic
+ * consumers handle one closed set.
  */
 export type SkillScope = "harness" | "user" | "host" | "project" | "installed";
 
