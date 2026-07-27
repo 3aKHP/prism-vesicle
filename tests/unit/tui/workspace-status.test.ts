@@ -128,6 +128,18 @@ describe("workspace-status: viewer surface", () => {
     expect(line).toContain("⚠ 1");
     expect(line).toContain("...");
   });
+
+  test("a long CJK path compresses before m/v actions drop at 79 columns (#118 review r2)", () => {
+    // The real 80-column budget is 79; the path must shrink so the reachable
+    // m/v actions survive, rather than being crowded out by the path.
+    const line = viewerStatus({
+      budget: 79, target: "workspace/很长很长的路径/角色卡.md", mode: "preview",
+      flags: "RO · truncated", validation: "✗ 7 · ⚠ 3", toggleHint: "m source", canViewFindings: true,
+    });
+    expect(displayWidth(line)).toBeLessThanOrEqual(79);
+    expect(line).toContain("v findings");
+    expect(line).toContain("m source");
+  });
 });
 
 describe("workspace-status: editor surface", () => {

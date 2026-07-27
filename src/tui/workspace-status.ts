@@ -63,28 +63,29 @@ function joinItems(items: Item[]): string {
 
 /**
  * Compose a one-line status string that fits `budget` display columns. Whole
- * low-priority segments drop first; once only undroppable segments remain, any
- * `shrink` segment is middle-truncated; a final hard middle-truncate guarantees
- * the result never exceeds the budget.
+ * low-priority segments drop first; AFTER each drop tier the path/target is
+ * middle-truncated before the next tier is sacrificed, so a long or CJK path
+ * compresses instead of crowding out the medium m/v actions at 80 columns
+ * (Issue #118 review round 2). A final hard middle-truncate guarantees the
+ * result never exceeds the budget.
  */
 export function composeStatus(segments: StatusSegment[], budget: number): string {
   const limit = Math.max(MIN, Math.floor(budget));
   let items = mkItems(segments);
   if (itemsWidth(items) <= limit) return joinItems(items);
   // Drop non-shrinkable segments from low priority upward. A `shrink` segment
-  // (the target/path/draft) is retained through dropping and middle-truncated
-  // last instead, so a long path never disappears wholesale.
+  // (the target/path/draft) is retained through dropping. After each tier is
+  // dropped, shrink the path/target and re-check — only if that still does not
+  // fit do we drop the next (higher) tier, so the medium m/v actions survive a
+  // long path at the 80-column floor.
   for (const prio of DROP_ORDER) {
     items = items.filter((it) => it.seg.priority !== prio || it.seg.shrink);
     if (itemsWidth(items) <= limit) return joinItems(items);
+    items = shrinkToFit(items, limit);
+    if (itemsWidth(items) <= limit) return joinItems(items);
   }
-  items = shrinkToFit(items, limit);
   const joined = joinItems(items);
-  if (displayWidth(joined) <= limit) return joined;
-  // Last resort (below the 80-column floor): guarantee the width invariant by
-  // truncating the composed line itself. This only fires for adversarial
-  // budgets where undroppable critical segments already exceed the limit.
-  return truncateMiddle(joined, limit);
+  return displayWidth(joined) <= limit ? joined : truncateMiddle(joined, limit);
 }
 
 /**

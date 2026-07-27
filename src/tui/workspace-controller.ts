@@ -260,14 +260,25 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     return snap;
   }
 
-  /** Install a fresh snapshot for `relPath` from its content. */
-  function setValidationFor(relPath: string, content: string): void {
+  /**
+   * Disk identity (mtime+ino) of the file the snapshot was computed from. The
+   * findings panel compares this against the live file before reusing a
+   * snapshot, so a deleted-then-recreated or externally rewritten file at the
+   * same path cannot inherit the previous file's findings (Issue #118 review
+   * round 2).
+   */
+  let validationStamp: FileStamp | null = null;
+
+  /** Install a fresh snapshot for `relPath` from its content, with its disk identity. */
+  function setValidationFor(relPath: string, content: string, stamp: FileStamp | null = null): void {
     setValidationSnapshot(runValidation(relPath, content));
+    validationStamp = stamp;
   }
 
   /** Clear the snapshot back to pending (close/delete of the validated file). */
   function clearValidation(): void {
     setValidationSnapshot(pendingValidation);
+    validationStamp = null;
   }
 
   /** Rekey the snapshot path after a rename/move; the underlying result is unchanged. */
@@ -384,7 +395,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setViewMode(preview.kind === "markdown" ? "preview" : "source");
     setFocusRegion("editor");
     status("");
-    setValidationFor(relPath, preview.lines?.join("\n") ?? "");
+    setValidationFor(relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, relPath));
     if (isEditablePreview(preview)) {
       await openEditableBuffer(relPath);
     } else {
@@ -536,7 +547,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const preview = await readFilePreview(rootDir, file.relPath);
     if (preview) {
       setOpenFile(preview);
-      setValidationFor(file.relPath, preview.lines?.join("\n") ?? "");
+      setValidationFor(file.relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, file.relPath));
       status(`reloaded ${file.relPath}`, "success");
     }
   }
@@ -687,7 +698,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     });
     invalidateDirCache(relPath);
     status(`saved ${relPath}`, "success");
-    setValidationFor(relPath, content);
+    setValidationFor(relPath, content, stamp);
     return true;
   }
 
@@ -785,7 +796,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     });
     // Reload is a content change: install a fresh snapshot so the status row
     // never reads the pre-reload verdict as current (Issue #118 §3).
-    setValidationFor(path, read.content);
+    setValidationFor(path, read.content, { mtimeMs: read.mtimeMs, ino: read.ino });
     status(`reloaded ${path}`, "success");
   }
 
@@ -897,7 +908,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         next.delete(relPath);
         return next;
       });
-      setValidationFor(relPath, read.content);
+      setValidationFor(relPath, read.content, { mtimeMs: read.mtimeMs, ino: read.ino });
       status(`reloaded ${relPath}`, "success");
       return;
     }
@@ -1103,8 +1114,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         setOpenFile(null);
         setActiveEditorPath(null);
         setFocusRegion("tree");
-        clearValidation();
       }
+      // A deleted file may own the validation snapshot even when it was never
+      // opened (tree `v` validates the selection without opening it). Clear it
+      // whenever the snapshot describes the deleted path, so a recreated file
+      // at the same path — or an external rewrite — cannot inherit stale
+      // findings (Issue #118 review round 2).
+      const deletedSnap = validationSnapshot();
+      if (deletedSnap.state !== "pending" && deletedSnap.path === relPath) clearValidation();
       const trashPath = await trashEntry(rootDir, relPath);
       status(`moved ${relPath} → ${trashPath} (trash)`, "success");
       await afterTreeMutation(relPath);
@@ -1174,14 +1191,20 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   /**
    * Open the findings panel for a snapshot already current for `relPath`
-   * (consume, no re-run). Returns false when the caller should bail.
+   * (consume, no re-run). Returns false when the caller should bail. Reuse is
+   * gated on the live file's disk identity still matching the snapshot's, so a
+   * recreated or externally rewritten file at the same path does not inherit
+   * stale findings (Issue #118 review round 2).
    */
-  function openFindingsForCurrent(relPath: string): boolean {
+  async function openFindingsForCurrent(relPath: string): Promise<boolean> {
     const snap = validationSnapshot();
     if ((snap.state === "result" || snap.state === "no-match") && snap.path === relPath && !dirtyPaths().has(relPath)) {
-      setFindingsIndex(0);
-      setFindingsOpen(true);
-      return true;
+      const current = await readFileStamp(rootDir, relPath);
+      if (validationStamp !== null && current !== null && sameFileStamp(current, validationStamp)) {
+        setFindingsIndex(0);
+        setFindingsOpen(true);
+        return true;
+      }
     }
     return false;
   }
@@ -1203,13 +1226,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       status(`save ${relPath} before validating`, "info");
       return;
     }
-    if (openFindingsForCurrent(relPath)) return;
+    if (await openFindingsForCurrent(relPath)) return;
     const preview = await readFilePreview(rootDir, relPath);
     if (!preview) {
       status(`${relPath} is not readable`, "error");
       return;
     }
-    setValidationFor(relPath, preview.lines?.join("\n") ?? "");
+    const stamp = await readFileStamp(rootDir, relPath);
+    setValidationFor(relPath, preview.lines?.join("\n") ?? "", stamp);
     setFindingsIndex(0);
     setFindingsOpen(true);
   }
@@ -1219,15 +1243,16 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
    * rules as the tree path; re-validates only when the snapshot is stale or
    * for a different file.
    */
-  function viewerValidate(): void {
+  async function viewerValidate(): Promise<void> {
     const file = openFile();
     if (!file) { status("open a file to validate", "info"); return; }
     if (dirtyPaths().has(file.relPath)) {
       status(`save ${file.relPath} before validating`, "info");
       return;
     }
-    if (openFindingsForCurrent(file.relPath)) return;
-    setValidationFor(file.relPath, file.lines?.join("\n") ?? "");
+    if (await openFindingsForCurrent(file.relPath)) return;
+    const stamp = await readFileStamp(rootDir, file.relPath);
+    setValidationFor(file.relPath, file.lines?.join("\n") ?? "", stamp);
     setFindingsIndex(0);
     setFindingsOpen(true);
   }
@@ -1517,7 +1542,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "q": setFocusRegion("tree"); return true;
       case "r": void reloadViewer(); return true;
       case "m": toggleViewMode(); return true;
-      case "v": viewerValidate(); return true;
+      case "v": void viewerValidate(); return true;
       case "up": viewerScrollBy?.(-1); return true;
       case "down": viewerScrollBy?.(1); return true;
       case "pageup": viewerScrollBy?.(-10); return true;

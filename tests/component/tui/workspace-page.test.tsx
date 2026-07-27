@@ -228,7 +228,8 @@ describe("tui: workspace page (B2)", () => {
     await writeFile(join(root, "big.md"), `---\narchetype: x\n---\n${"x".repeat(600 * 1024)}\n`);
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget("big.md");
-    controller.handleKey({ name: "v" }); // viewer-focus v opens findings
+    controller.handleKey({ name: "v" }); // viewer-focus v opens findings (async)
+    await new Promise((r) => setTimeout(r, 30));
     expect(controller.findingsOpen()).toBe(true);
     expect(controller.canJumpToSelectedFinding()).toBe(false);
     const setup = await renderPage(controller);
@@ -246,6 +247,7 @@ describe("tui: workspace page (B2)", () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget(`workspace/cards/${longName}`);
     controller.handleKey({ name: "v" });
+    await new Promise((r) => setTimeout(r, 30));
     expect(controller.findingsOpen()).toBe(true);
     const setup = await renderPage(controller, 80, 24);
     await setup.flush();
@@ -264,6 +266,7 @@ describe("tui: workspace page (B2)", () => {
       controller.handleKey({ name: "f6" });
     }
     controller.handleKey({ name: "v" });
+    await new Promise((r) => setTimeout(r, 30));
     expect(controller.findingsOpen()).toBe(true);
     const setup = await renderPage(controller);
     await setup.flush();
@@ -372,6 +375,26 @@ describe("tui: workspace page (B2)", () => {
     setup.renderer.destroy();
     expect(frame).not.toContain("v findings");
     expect(frame).toContain("validation stale");
+  });
+
+  test("a tree selection away from the validated file shows no verdict (#118 review r2: path-bound)", async () => {
+    // The colour and text are both bound to the focused target: selecting
+    // notes.txt while card.md holds the error verdict must not paint the tree
+    // row red or show card's ✗.
+    await writeFile(join(root, "card.md"), "---\narchetype: x\n---\nbody\n");
+    await writeFile(join(root, "notes.txt"), "plain\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("card.md");
+    for (let i = 0; i < 4 && controller.focusRegion() !== "tree"; i += 1) controller.handleKey({ name: "f6" });
+    const target = controller.rows().findIndex((r) => r.node.relPath === "notes.txt");
+    expect(target).toBeGreaterThanOrEqual(0);
+    while (controller.selectedIndex() < target) controller.handleKey({ name: "down" });
+    while (controller.selectedIndex() > target) controller.handleKey({ name: "up" });
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).not.toContain("✗");
   });
 
   test("a long document never paints over the shell's bottom surface", async () => {
