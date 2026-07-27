@@ -108,6 +108,8 @@ export async function readProvenance(
   version: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<SkillProvenance | undefined> {
+  assertStoreSegment(name, "name");
+  assertStoreSegment(version, "version");
   const path = join(skillStoreDirectory(env), name, `${version}.${PROVENANCE_FILE}`);
   const raw = await readFile(path).catch((error: unknown) => {
     if (isNotFound(error)) return undefined;
@@ -158,6 +160,11 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
   const bundleSha256 = computeBundleHash(inventory);
   const version = options.version ?? `sha-${bundleSha256.slice(0, 12)}`;
   const name = parsed.metadata.name;
+  // Defense in depth: `name` is parser-validated and `version` defaults to a
+  // content-addressed label, but both are also used directly in path joins, so
+  // every Store API re-validates them as single path segments.
+  assertStoreSegment(name, "name");
+  assertStoreSegment(version, "version");
 
   const storeRoot = skillStoreDirectory(env);
   const familyRoot = join(storeRoot, name);
@@ -269,7 +276,29 @@ async function writeProvenanceAndIndex(
   return provenance;
 }
 
-async function updateActiveIndex(
+/**
+ * In-process serialization of the active-index read-modify-write. The atomic
+ * temp+rename only prevents a half-written file; without serialization two
+ * concurrent installs in one process could both read the old index and the
+ * later write would drop the earlier entry. The RMW is narrow (just the index
+ * file), so snapshot staging still runs concurrently. Cross-process
+ * serialization (lock file / CAS) is a Phase 1 concern when the install CLI
+ * can run as separate processes; document and add it there.
+ */
+let indexUpdateChain: Promise<unknown> = Promise.resolve();
+
+function updateActiveIndex(
+  storeRoot: string,
+  mutate: (index: SkillStoreIndex) => SkillStoreIndex,
+): Promise<void> {
+  const next = indexUpdateChain.then(() => updateActiveIndexCritical(storeRoot, mutate));
+  // Keep the chain alive regardless of this update's outcome, while still
+  // surfacing failures to the caller.
+  indexUpdateChain = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+async function updateActiveIndexCritical(
   storeRoot: string,
   mutate: (index: SkillStoreIndex) => SkillStoreIndex,
 ): Promise<void> {
@@ -414,6 +443,20 @@ async function pathExists(path: string): Promise<boolean> {
 
 function isNotFound(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
+}
+
+/**
+ * Reject anything that is not a single path segment. Used for every Store
+ * `name`/`version` so a caller-supplied or Phase 1 remote/CLI value containing
+ * `/`, `\`, `..`, `.`, or NUL cannot escape its directory via `join`.
+ */
+function assertStoreSegment(label: string, kind: "name" | "version"): void {
+  if (!label || label.includes("\0")) {
+    throw new Error(`Skill Store ${kind} is required.`);
+  }
+  if (label === "." || label === ".." || label.includes("/") || label.includes("\\")) {
+    throw new Error(`Skill Store ${kind} must be a single path segment: ${label}.`);
+  }
 }
 
 function errorMessage(error: unknown): string {

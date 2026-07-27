@@ -51,8 +51,11 @@ export function buildCatalog(skills: readonly LoadedSkill[], options: BuildCatal
     .sort((left, right) => left.entry.name.localeCompare(right.entry.name));
 
   const kept = applyBudget(candidates, budget);
+  // `applyBudget` may return new Candidate objects (shortened/minimal), so
+  // compare by stable identity (name + scope), never by object reference.
+  const keptIds = new Set(kept.map(candidateId));
   const omitted: SkillCatalog["omitted"] = candidates
-    .filter((candidate) => !kept.includes(candidate))
+    .filter((candidate) => !keptIds.has(candidateId(candidate)))
     .map((candidate) => ({ name: candidate.entry.name, scope: candidate.scope, reason: "omitted to respect the catalog budget" }));
   const diagnostics: SkillDiagnostic[] = [];
   if (omitted.length > 0) {
@@ -113,6 +116,11 @@ function applyBudget(candidates: readonly Candidate[], budget: number): Candidat
     if (index >= 0) kept.splice(index, 1);
   }
   return kept;
+}
+
+/** Stable identity for a candidate, independent of description shortening. */
+function candidateId(candidate: Candidate): string {
+  return `${candidate.entry.name}\0${candidate.scope}`;
 }
 
 function withDescription(candidate: Candidate, maxChars: number): Candidate {

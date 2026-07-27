@@ -90,4 +90,19 @@ body`, "utf8");
       expect(loaded.parsed.diagnostics.map((d) => d.kind)).toContain("linked-root");
     });
   });
+
+  test("a SKILL.md that is itself a symbolic link is rejected", async () => {
+    if (!symlinkSupported) return;
+    await withTemp(async (dir) => {
+      const root = join(dir, "linked-entry");
+      await mkdir(root, { recursive: true });
+      const target = join(dir, "real-skill.md");
+      await writeFile(target, "---\nname: linked-entry\ndescription: x\n---\nbody\n", "utf8");
+      await symlink(target, join(root, "SKILL.md"));
+      const loaded = await loadSkill(root, "user");
+      expect(loaded.parsed.ok).toBe(false);
+      if (loaded.parsed.ok) return;
+      expect(loaded.parsed.diagnostics.map((d) => d.kind)).toContain("not-a-regular-file");
+    });
+  });
 });

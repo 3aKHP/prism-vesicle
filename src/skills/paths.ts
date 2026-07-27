@@ -153,6 +153,16 @@ async function walkSkillFiles(
         diagnostics.push({ kind: "resource-path-unsafe", message: `${relativePath} is not a regular file.` });
         return;
       }
+      // Reject paths Phase 2's read_skill_resource would refuse (e.g. a POSIX
+      // filename containing a backslash) so a snapshot is never installed with
+      // an unreadable inventory. `assertSafeRelativePath` throws; surface it as
+      // one `resource-path-unsafe` diagnostic and skip the file.
+      try {
+        assertSafeRelativePath(relativePath);
+      } catch {
+        diagnostics.push({ kind: "resource-path-unsafe", message: `${relativePath} is not a supported skill-relative path.` });
+        return;
+      }
       files.push({ path: relativePath, bytes: info.size });
     } else if (entry.isDirectory()) {
       await visit(absolutePath);

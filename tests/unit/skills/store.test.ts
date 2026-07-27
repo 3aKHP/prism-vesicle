@@ -127,4 +127,39 @@ mutated body
       await expect(installSnapshot({ sourceDirectory: source, env })).rejects.toThrow(/symbolic link/i);
     });
   });
+
+  test("rejects name/version that are not single path segments", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "seg", "body");
+      await expect(installSnapshot({ sourceDirectory: source, version: "../escape", env })).rejects.toThrow(/single path segment/);
+      await expect(installSnapshot({ sourceDirectory: source, version: "a/b", env })).rejects.toThrow(/single path segment/);
+      await expect(readProvenance("../x", "v1", env)).rejects.toThrow(/single path segment/);
+      await expect(readProvenance("ok", "v/1", env)).rejects.toThrow(/single path segment/);
+    });
+  });
+
+  test("concurrent installs of different skills both land in the index", async () => {
+    await withEnv(async (env, scratch) => {
+      const sourceA = await makeSource(scratch, "concurrent-a", "a");
+      const sourceB = await makeSource(join(scratch, "other"), "concurrent-b", "b");
+      await Promise.all([
+        installSnapshot({ sourceDirectory: sourceA, env }),
+        installSnapshot({ sourceDirectory: sourceB, env }),
+      ]);
+      const index = await readActiveIndex(env);
+      const names = index.entries.map((entry) => entry.name).sort();
+      expect(names).toEqual(["concurrent-a", "concurrent-b"]);
+    });
+  });
+
+  test("a POSIX filename with a backslash is rejected before install", async () => {
+    if (process.platform === "win32") return; // backslash is a separator on Windows
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "bs", "body");
+      // POSIX allows a literal backslash in a filename; Phase 2's path guard
+      // would refuse it, so the store must not accept an unreadable inventory.
+      await writeFile(join(source, "references", "bad\\name.md"), "x", "utf8");
+      await expect(installSnapshot({ sourceDirectory: source, env })).rejects.toThrow(/cannot be stored/);
+    });
+  });
 });

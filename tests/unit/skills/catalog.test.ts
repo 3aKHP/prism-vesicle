@@ -34,15 +34,32 @@ describe("skill catalog", () => {
     expect(reversed.hash).toBe(catalog.hash);
   });
 
-  test("omits lowest-precedence entries to respect a tight budget", () => {
+  test("shortens descriptions without omitting when the budget nearly fits", () => {
+    // Two long descriptions whose full form exceeds a modest budget but whose
+    // shortened form fits: both entries are kept, none omitted.
+    const long = "x".repeat(300);
+    const skills = [
+      fakeSkill("h1", "harness", long),
+      fakeSkill("u1", "user", long),
+    ];
+    const fullBytes = 2 * Buffer.byteLength(`h1\n${long}\nharness\n`, "utf8");
+    const catalog = buildCatalog(skills, { budgetBytes: Math.floor(fullBytes / 2) });
+    expect(catalog.entries.map((e) => e.name).sort()).toEqual(["h1", "u1"]);
+    expect(catalog.omitted).toEqual([]);
+    // Descriptions were actually shortened.
+    expect(catalog.entries.every((e) => e.description.length < long.length)).toBe(true);
+  });
+
+  test("omits lowest-precedence entries exactly when the budget cannot fit both", () => {
     const skills = [
       fakeSkill("h1", "harness", "harness one description text"),
       fakeSkill("u1", "user", "user one description text"),
     ];
-    // A budget so small that even shortened descriptions cannot fit both.
+    // A budget so small that even min-shortened descriptions cannot fit both.
     const catalog = buildCatalog(skills, { budgetBytes: 60 });
     expect(catalog.entries.map((e) => e.name)).toEqual(["u1"]);
-    expect(catalog.omitted.map((o) => o.name)).toContain("h1");
+    // Precise: exactly h1 omitted (with its scope), u1 kept, nothing else.
+    expect(catalog.omitted).toEqual([{ name: "h1", scope: "harness", reason: "omitted to respect the catalog budget" }]);
   });
 
   test("the catalog hash is over identity, not mutable description text", () => {

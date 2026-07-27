@@ -3,16 +3,18 @@
  *
  * Mirrors `core/instructions/loader.ts`: UTF-8 is decoded fatally, one leading
  * BOM is stripped, the SKILL.md target must be a regular file (not a symbolic
- * link), and a race-aware `stat` re-check guards a swap to a non-regular file
- * between the link check and the read. The skill root itself must be a real
- * directory. Loading is fail-soft: any I/O or parse failure is returned as an
- * `ok: false` parsed result with diagnostics so discovery can skip the skill
- * without hiding its valid siblings.
+ * link), and a race-aware `lstat` re-check guards a swap to a symlink or
+ * non-regular file between the link check and the read. `lstat` (not `stat`)
+ * is used for the re-check so a swap to a symbolic link is detected instead of
+ * silently followed. The skill root itself must be a real directory. Loading is
+ * fail-soft: any I/O or parse failure is returned as an `ok: false` parsed
+ * result with diagnostics so discovery can skip the skill without hiding its
+ * valid siblings.
  */
 
-import { lstat, readFile, readdir, stat } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { enumerateSkillResources } from "./paths";
 import { parseSkillMarkdown } from "./parser";
 import type { LoadedSkill, SkillDiagnostic, SkillScope } from "./types";
@@ -50,7 +52,7 @@ export async function loadSkill(
     return failed(name, scope, rootDirectory, [{ kind: "not-a-regular-file", message: "Skill root is not a directory." }]);
   }
 
-  const skillPath = `${rootDirectory}/${skillFileName}`;
+  const skillPath = join(rootDirectory, skillFileName);
   const entryInfo = await lstat(skillPath).catch((error: unknown) => error as NodeJS.ErrnoException);
   if (entryInfo instanceof Error) {
     return failed(name, scope, rootDirectory, [{ kind: "read-error", message: `${skillFileName}: ${readErrorMessage(entryInfo)}` }]);
@@ -65,12 +67,16 @@ export async function loadSkill(
   } catch (error) {
     return failed(name, scope, rootDirectory, [{ kind: "read-error", message: readErrorMessage(error) }]);
   }
-  // Race-aware re-check: confirm the entry is still a regular file (no swap to a
-  // directory or link between the lstat and the read).
+  // Race-aware re-check with `lstat` (not `stat`): if the entry was swapped to a
+  // symbolic link or non-regular file between the first check and the read,
+  // detect it instead of following the new target. A residual TOCTOU window
+  // remains (path → open is not bound to one handle); Phase 2's
+  // `read_skill_resource` should bind the check and read to one fd via
+  // `open(O_NOFOLLOW)` + `fstat` to close it for model-driven reads.
   try {
-    const followed = await stat(skillPath);
-    if (!followed.isFile()) {
-      return failed(name, scope, rootDirectory, [{ kind: "not-a-regular-file", message: `${skillFileName} resolved to a non-regular file.` }]);
+    const rechecked = await lstat(skillPath);
+    if (rechecked.isSymbolicLink() || !rechecked.isFile()) {
+      return failed(name, scope, rootDirectory, [{ kind: "not-a-regular-file", message: `${skillFileName} changed to a non-regular file during read.` }]);
     }
   } catch (error) {
     return failed(name, scope, rootDirectory, [{ kind: "read-error", message: readErrorMessage(error) }]);
@@ -112,7 +118,7 @@ export async function loadSkill(
 
 /** A directly-authored skill root exists if `SKILL.md` is a regular file inside it. */
 export async function skillRootExists(directory: string, skillFileName = SKILL_FILE_NAME): Promise<boolean> {
-  const info = await lstat(`${directory}/${skillFileName}`).catch(() => undefined);
+  const info = await lstat(join(directory, skillFileName)).catch(() => undefined);
   return Boolean(info?.isFile() && !info.isSymbolicLink());
 }
 
@@ -130,7 +136,7 @@ export async function listChildSkillRoots(
   const roots: string[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-    const root = `${parentDirectory}/${entry.name}`;
+    const root = join(parentDirectory, entry.name);
     if (await skillRootExists(root, skillFileName)) {
       roots.push(root);
     }
