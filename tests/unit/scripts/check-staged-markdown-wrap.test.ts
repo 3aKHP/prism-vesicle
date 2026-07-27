@@ -17,10 +17,15 @@ describe("staged Markdown wrap advisory", () => {
     ]);
   });
 
-  test("warns on an added list-item continuation", () => {
-    const source = "- One list item that should stay on one source line\n  continued prose\n";
+  test("warns on quoted prose and indented list-item continuations", () => {
+    const quoted = "> First quoted source line\n> Second quoted source line\n";
+    const listItem = "- One list item that should stay on one source line\n  continued prose\n";
 
-    expect(findSuspiciousMarkdownWraps(source, added(2))).toHaveLength(1);
+    expect(findSuspiciousMarkdownWraps(quoted, added(2))).toEqual([
+      { line: 2, reason: "Added prose appears to continue the preceding source line." },
+    ]);
+    expect(findSuspiciousMarkdownWraps(listItem, added(2))).toHaveLength(1);
+    expect(findSuspiciousMarkdownWraps("- Complete item\nNext paragraph.\n", added(2))).toEqual([]);
   });
 
   test("does not report boundaries outside the added lines", () => {
@@ -29,28 +34,64 @@ describe("staged Markdown wrap advisory", () => {
     expect(findSuspiciousMarkdownWraps(source, added(4))).toEqual([]);
   });
 
-  test("preserves structural and intentional line boundaries", () => {
+  test("preserves table and link-definition boundaries adjacent to prose", () => {
+    const source = [
+      "Introductory prose.",
+      "| Column A | Column B |",
+      "|---|---|",
+      "| Value A | Value B |",
+      "Following prose.",
+      "",
+      "Another paragraph.",
+      "[reference]: https://example.com/reference",
+      "Closing prose.",
+      "",
+    ].join("\n");
+
+    expect(findSuspiciousMarkdownWraps(source, new Set(source.split("\n").map((_, index) => index + 1)))).toEqual([]);
+  });
+
+  test("preserves HTML block interiors and their surrounding boundaries", () => {
+    const source = [
+      "Before the HTML block.",
+      "<!--",
+      "HTML comment content line one",
+      "HTML comment content line two",
+      "-->",
+      "After the comment.",
+      "",
+      "<pre>",
+      "raw content line one",
+      "raw content line two",
+      "</pre>",
+      "After the raw block.",
+      "",
+    ].join("\n");
+
+    expect(findSuspiciousMarkdownWraps(source, new Set(source.split("\n").map((_, index) => index + 1)))).toEqual([]);
+  });
+
+  test("preserves explicit line breaks and indented code", () => {
+    const source = [
+      "Explicit HTML break.<br>",
+      "Next line.",
+      "",
+      "Explicit Markdown break.  ",
+      "Next line.",
+      "",
+      "    const first = 1;",
+      "    const second = 2;",
+      "",
+    ].join("\n");
+
+    expect(findSuspiciousMarkdownWraps(source, new Set(source.split("\n").map((_, index) => index + 1)))).toEqual([]);
+  });
+
+  test("preserves structural and fenced-code boundaries", () => {
     const source = [
       "> Quoted paragraph.",
       ">",
       "> Next quoted paragraph.",
-      "",
-      "| Column A | Column B |",
-      "|---|---|",
-      "| Value A | Value B |",
-      "",
-      "Column A | Column B",
-      "--- | ---",
-      "Value A | Value B",
-      "Value C | Value D",
-      "",
-      "<div>",
-      "HTML content line one",
-      "HTML content line two",
-      "</div>",
-      "",
-      "Explicit hard break.  ",
-      "Next line.",
       "",
       "```text",
       "code line one",
