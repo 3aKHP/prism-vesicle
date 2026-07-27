@@ -75,8 +75,11 @@ mutated body
       const second = await installSnapshot({ sourceDirectory: source, env });
       expect(second.version).toBe(first.version);
       expect(second.bundleSha256).toBe(first.bundleSha256);
+      // A pure no-op: the active index keeps the original install time.
+      expect(second.installedAt).toBe(first.installedAt);
       const index = await readActiveIndex(env);
       expect(index.entries.filter((e) => e.name === "idem")).toHaveLength(1);
+      expect(index.entries[0]!.installedAt).toBe(first.installedAt);
     });
   });
 

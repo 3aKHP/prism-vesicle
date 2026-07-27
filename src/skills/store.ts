@@ -169,6 +169,12 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
     if (computeBundleHash(existing) !== bundleSha256) {
       throw new Error(`Skill "${name}" version "${version}" already exists with different content; use a distinct version.`);
     }
+    // Idempotent reinstall by bundle hash: a matching snapshot is a pure no-op.
+    // Return the existing provenance without rewriting it or bumping the index.
+    const existingProvenance = await readProvenance(name, version, env);
+    if (existingProvenance) return existingProvenance;
+    // Orphan recovery: snapshot exists without a sidecar. Rebuild provenance and
+    // ensure the active-index entry without claiming a fresh install time.
     return writeProvenanceAndIndex(
       provenancePath,
       buildProvenance({ name, version, options, contentSha256: parsed.bodySha256, bundleSha256, inventory }),
