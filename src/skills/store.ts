@@ -23,8 +23,9 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { copyFile, lstat, mkdir, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { Database } from "bun:sqlite";
 import { userConfigDirectory } from "../config/paths";
 import { SKILL_FILE_NAME } from "./loader";
 import { enumerateSkillBundle } from "./paths";
@@ -296,11 +297,14 @@ export async function uninstallSkill(name: string, env: NodeJS.ProcessEnv = proc
   const indexHas = index.entries.some((entry) => entry.name === name);
   const dirHas = await pathExists(familyRoot);
   if (!indexHas && !dirHas) throw new Error(`No installed skill named "${name}".`);
+  // Keep the index entry until the version family is actually gone. If removal
+  // fails, the command reports the error and a later uninstall can retry from
+  // the same visible state instead of claiming success with files left behind.
+  if (dirHas) await rm(familyRoot, { recursive: true, force: true });
   await updateActiveIndex(storeRoot, (current) => ({
     schema: INDEX_SCHEMA,
     entries: current.entries.filter((entry) => entry.name !== name).sort((left, right) => left.name.localeCompare(right.name)),
   }));
-  await rm(familyRoot, { recursive: true, force: true }).catch(() => undefined);
 }
 
 // --- hashing ----------------------------------------------------------------
@@ -367,10 +371,12 @@ async function writeProvenanceAndIndex(
  * The active-index read-modify-write is serialized twice. Within one process an
  * in-process chain orders overlapping installs so the later write cannot drop an
  * entry the earlier one added. Across processes (the install CLI invoked in two
- * terminals), `withIndexLock` holds an exclusive `index.lock` so concurrent
- * writes cannot interleave their read and write. The atomic temp+rename still
- * prevents a half-written file; the lock prevents lost updates. Snapshot
- * staging runs concurrently with everything except the narrow index RMW.
+ * terminals), `withIndexLock` holds a SQLite `BEGIN IMMEDIATE` transaction so
+ * concurrent writes cannot interleave their read and write. SQLite releases the
+ * lock when a process exits, including after a crash, so stale-lock guessing and
+ * deletion cannot race a new owner. The atomic temp+rename still prevents a
+ * half-written index; snapshot staging runs concurrently with everything except
+ * the narrow index RMW.
  */
 let indexUpdateChain: Promise<unknown> = Promise.resolve();
 
@@ -385,8 +391,7 @@ function updateActiveIndex(
   return next;
 }
 
-const INDEX_LOCK_FILE = "index.lock";
-const INDEX_LOCK_POLL_MS = 50;
+const INDEX_LOCK_DATABASE = "index-lock.sqlite";
 const INDEX_LOCK_TIMEOUT_MS = 10_000;
 /** Prefix for in-flight install staging directories inside a skill family. */
 const STAGING_DIR_PREFIX = ".staging-";
@@ -394,92 +399,45 @@ const STAGING_DIR_PREFIX = ".staging-";
 /** Hold an exclusive cross-process lock around `critical`. */
 async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): Promise<T> {
   await mkdir(storeRoot, { recursive: true });
-  const lockPath = join(storeRoot, INDEX_LOCK_FILE);
-  const { handle, token } = await acquireIndexLock(lockPath);
+  const database = new Database(join(storeRoot, INDEX_LOCK_DATABASE), { create: true });
+  let transactionOpen = false;
   try {
-    return await critical();
+    await beginImmediateWithRetry(database);
+    transactionOpen = true;
+    const result = await critical();
+    database.exec("COMMIT");
+    transactionOpen = false;
+    return result;
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        database.exec("ROLLBACK");
+      } catch {
+        // Preserve the original index update failure.
+      }
+    }
+    if (error instanceof Error && /database is locked|database is busy/i.test(error.message)) {
+      throw new Error("Skill Store index is locked by another process; retry later.", { cause: error });
+    }
+    throw error;
   } finally {
-    await handle.close().catch(() => undefined);
-    // Only remove the lock if it is still ours: another process may have
-    // reclaimed a stale lock and re-acquired it while we were slow.
-    await releaseIfOwned(lockPath, token);
+    database.close(false);
   }
 }
 
-async function acquireIndexLock(lockPath: string) {
+async function beginImmediateWithRetry(database: Database): Promise<void> {
   const deadline = Date.now() + INDEX_LOCK_TIMEOUT_MS;
-  const token = randomUUID();
   while (true) {
-    let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      handle = await open(lockPath, "wx");
-      await handle.writeFile(`${process.pid}\n${token}\n`);
-      return { handle, token };
-    } catch (error: unknown) {
-      // If we created the file but could not finish writing it (ENOSPC/EIO, or a
-      // kill between create and write), remove the half-written lock so a later
-      // caller never sees an empty file it cannot parse as a held lock.
-      if (handle !== undefined) {
-        await handle.close().catch(() => undefined);
-        await rm(lockPath, { force: true }).catch(() => undefined);
-      }
-      if (!isLockHeld(error)) throw error;
-      if (await breakStaleLock(lockPath)) continue;
+      database.exec("BEGIN IMMEDIATE");
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || !/database is locked|database is busy/i.test(error.message)) throw error;
       if (Date.now() >= deadline) {
-        throw new Error("Skill Store index is locked by another process; retry later.");
+        throw new Error("Skill Store index is locked by another process; retry later.", { cause: error });
       }
-      await new Promise((resolve) => setTimeout(resolve, INDEX_LOCK_POLL_MS));
+      await Bun.sleep(50);
     }
-  }
-}
-
-/** Remove the lock only if it still carries our unique token. */
-async function releaseIfOwned(lockPath: string, token: string): Promise<void> {
-  try {
-    if ((await readFile(lockPath, "utf8")).includes(token)) {
-      await rm(lockPath, { force: true }).catch(() => undefined);
-    }
-  } catch {
-    // Lock already gone or unreadable; nothing to release.
-  }
-}
-
-async function breakStaleLock(lockPath: string): Promise<boolean> {
-  let raw: string;
-  try {
-    raw = await readFile(lockPath, "utf8");
-  } catch {
-    // Unreadable lock is left for the timeout to surface.
-    return false;
-  }
-  const pid = Number.parseInt(raw.split("\n")[0] ?? "", 10);
-  // An empty or malformed lock has no holder PID: it is an orphan from a crashed
-  // create-then-write (SIGKILL, power loss). It cannot represent a live holder,
-  // so reclaim it instead of bricking the store until the timeout elapses.
-  if (!Number.isFinite(pid) || !isProcessAlive(pid)) {
-    await rm(lockPath, { force: true }).catch(() => undefined);
-    return true;
-  }
-  return false;
-}
-
-function isErrorCode(error: unknown, code: string): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && (error as { code: unknown }).code === code);
-}
-
-function isLockHeld(error: unknown): boolean {
-  return isErrorCode(error, "EEXIST");
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error: unknown) {
-    // ESRCH: no such process (dead). EPERM: the pid exists but is not signalable
-    // by this user — treat it as alive so a cross-user live lock is never broken,
-    // which would reintroduce the lost update the lock exists to prevent.
-    return isErrorCode(error, "EPERM");
   }
 }
 

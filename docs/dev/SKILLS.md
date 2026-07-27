@@ -83,6 +83,7 @@ Loading (`src/skills/loader.ts`) is fail-soft per root: UTF-8 is decoded fatally
 ```text
 <user-config>/skill-store/
 ├── index.json                       active index (name → version, enabled, time)
+├── index-lock.sqlite                cross-process index coordination
 └── <name>/
     ├── <version>/                   byte-exact standard bundle (SKILL.md + resources)
     └── <version>.provenance.json    host sidecar (source, hashes, inventory)
@@ -90,7 +91,7 @@ Loading (`src/skills/loader.ts`) is fail-soft per root: UTF-8 is decoded fatally
 
 The version directory holds only the auditable standard bundle; provenance lives in a sibling sidecar so the bundle stays byte-for-byte comparable with its source. Snapshots are staged, re-verified by hash, and atomically renamed; an interrupted install never leaves a live dependency on the source path or a half-written active version. Reinstalling identical content is idempotent by bundle hash; a differing bundle under the same version is a hard conflict.
 
-Phase 0 shipped the storage mechanism (`installSnapshot`) and read APIs; Phase 1 layers repository-install commands and lifecycle (`update`, `rollback`, `uninstall`) on top without re-deriving the immutable-snapshot contract. The active-index read-modify-write is serialized in process and across processes (an exclusive `index.lock` with stale-lock reclamation). The store is a **CLI-listable** source (`list`/`inspect`); it is **not** a model-visible catalog source until Phase 2 activation.
+Phase 0 shipped the storage mechanism (`installSnapshot`) and read APIs; Phase 1 layers repository-install commands and lifecycle (`update`, `rollback`, `uninstall`) on top without re-deriving the immutable-snapshot contract. The active-index read-modify-write is serialized in process and across processes by a SQLite `BEGIN IMMEDIATE` transaction; process exit releases the lock without stale-owner guessing. The store is a **CLI-listable** source (`list`/`inspect`); it is **not** a model-visible catalog source until Phase 2 activation.
 
 ## Catalog
 

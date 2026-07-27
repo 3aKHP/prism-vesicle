@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -220,45 +220,72 @@ v2 body
     });
   });
 
-  test("the index lock is released after an install completes", async () => {
+  test.skipIf(process.platform === "win32")("uninstall reports removal failure and keeps the index entry for retry", async () => {
     await withEnv(async (env, scratch) => {
-      const source = await makeSource(scratch, "locked", "body");
+      const source = await makeSource(scratch, "retryable", "body");
       await installSnapshot({ sourceDirectory: source, env });
-      expect(await lstat(join(skillStoreDirectory(env), "index.lock")).catch(() => undefined)).toBeUndefined();
+      const familyRoot = join(skillStoreDirectory(env), "retryable");
+      await chmod(familyRoot, 0o500);
+      try {
+        await expect(uninstallSkill("retryable", env)).rejects.toThrow();
+        expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "retryable")).toBe(true);
+      } finally {
+        await chmod(familyRoot, 0o700);
+      }
+      await uninstallSkill("retryable", env);
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "retryable")).toBe(false);
     });
   });
 
-  test("a stale lock left by a dead process is reclaimed", async () => {
+  test("cross-process index updates wait for the owner and recover after it exits", async () => {
     await withEnv(async (env, scratch) => {
       const storeRoot = skillStoreDirectory(env);
       await mkdir(storeRoot, { recursive: true });
-      await writeFile(join(storeRoot, "index.lock"), "999999999", "utf8");
-      const source = await makeSource(scratch, "stale", "body");
-      await installSnapshot({ sourceDirectory: source, env });
-      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "stale")).toBe(true);
-    });
-  });
+      const source = await makeSource(scratch, "after-crash", "body");
+      const ready = join(scratch, "lock-ready");
+      const databasePath = join(storeRoot, "index-lock.sqlite");
+      const storeModule = join(import.meta.dir, "../../../src/skills/store.ts");
+      const holderScript = [
+        'import { Database } from "bun:sqlite";',
+        'import { writeFile } from "node:fs/promises";',
+        `const database = new Database(${JSON.stringify(databasePath)}, { create: true });`,
+        'database.exec("BEGIN IMMEDIATE");',
+        `await writeFile(${JSON.stringify(ready)}, "ready");`,
+        "await Bun.sleep(60_000);",
+      ].join("\n");
+      const workerScript = [
+        `import { installSnapshot } from ${JSON.stringify(storeModule)};`,
+        `await installSnapshot({ sourceDirectory: ${JSON.stringify(source)}, env: { ...process.env, VESICLE_CONFIG_DIR: ${JSON.stringify(env.VESICLE_CONFIG_DIR)} } });`,
+      ].join("\n");
+      const holder = Bun.spawn({ cmd: [process.execPath, "-e", holderScript], stdout: "pipe", stderr: "pipe" });
+      try {
+        for (let attempt = 0; attempt < 200; attempt++) {
+          if (await lstat(ready).catch(() => undefined)) break;
+          await Bun.sleep(10);
+        }
+        expect(await lstat(ready).catch(() => undefined)).toBeDefined();
 
-  test("an empty index.lock left by a crashed write is reclaimed", async () => {
-    await withEnv(async (env, scratch) => {
-      const storeRoot = skillStoreDirectory(env);
-      await mkdir(storeRoot, { recursive: true });
-      await writeFile(join(storeRoot, "index.lock"), "", "utf8");
-      const source = await makeSource(scratch, "crashedlock", "body");
-      await installSnapshot({ sourceDirectory: source, env });
-      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "crashedlock")).toBe(true);
-      expect(await lstat(join(storeRoot, "index.lock")).catch(() => undefined)).toBeUndefined();
-    });
-  });
-
-  test("a malformed index.lock is reclaimed rather than bricking the store", async () => {
-    await withEnv(async (env, scratch) => {
-      const storeRoot = skillStoreDirectory(env);
-      await mkdir(storeRoot, { recursive: true });
-      await writeFile(join(storeRoot, "index.lock"), "not-a-pid", "utf8");
-      const source = await makeSource(scratch, "malformed", "body");
-      await installSnapshot({ sourceDirectory: source, env });
-      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "malformed")).toBe(true);
+        const worker = Bun.spawn({ cmd: [process.execPath, "-e", workerScript], stdout: "pipe", stderr: "pipe" });
+        const workerStdout = new Response(worker.stdout).text();
+        const workerStderr = new Response(worker.stderr).text();
+        let workerExited = false;
+        const workerExit = worker.exited.then((exitCode) => {
+          workerExited = true;
+          return exitCode;
+        });
+        await Bun.sleep(100);
+        if (workerExited) {
+          throw new Error(`Index worker exited before the holder: ${await workerExit}\n${await workerStdout}\n${await workerStderr}`);
+        }
+        holder.kill("SIGKILL");
+        const [exitCode, stderr] = await Promise.all([workerExit, workerStderr]);
+        expect(stderr).toBe("");
+        expect(exitCode).toBe(0);
+        expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "after-crash")).toBe(true);
+      } finally {
+        holder.kill("SIGKILL");
+        await holder.exited;
+      }
     });
   });
 
