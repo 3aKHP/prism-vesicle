@@ -34,6 +34,8 @@ Logical `assets/...` paths resolve through:
 
 Managed and bundled Harness baselines never merge file by file. A managed Pack may read only its declared `externalHostAssets` plus the fixed generic host Agent whitelist from `host-assets/`. `vesicle assets rollback` removes the project lock and returns to the bundled V10 baseline.
 
+Logical `assets/...` paths are the only asset namespace the model, provider, prompt loader, and the `stat_path` / `list_files` / `grep_files` / `read_file` / `view_image` / `copy_file` tools ever see. Host-only locations — the user configuration directory, `node_modules`, the executable directory, and the Bun-compiled filesystem — stay behind the resolver and never surface as model-visible paths. Asset symlinks are rejected so direct reads, merged listings, integrity fingerprints, and path-boundary checks cannot disagree. The project root for `.vesicle/`, workspaces, artifacts, and sparse project overrides is the invocation directory or an explicit project argument; a standalone binary locates its bundled release defaults relative to `process.execPath` and does not change the working directory to make resolution succeed.
+
 Every start and resume reverifies the active Harness identity. Sessions created before bundled V10 activation do not contain that identity and must start a new session rather than silently resuming under different runtime contracts.
 
 ## Managed Pack Contract
@@ -52,15 +54,8 @@ Every start and resume reverifies the active Harness identity. Sessions created 
 
 - Contract-bound delegation resolves one Driver binding from the active parent Engine and requested Agent Profile. The verified contract owns mode, purpose, retry limit, and delivery behavior; model arguments cannot widen them.
 - Delegation attempts persist their id, Agent Profile, mode, categorized outcome, and terminal state. Retry intent is durable before a user-authorized continuation, and cancellation is terminal.
-- `core/quality` loads Rule Pack and Detector assets only from the verified Harness and fails closed on unknown schemas, matchers, metrics, preprocessing, or binding semantics.
-- Quality assessment, policy outcome, and host action are separate durable concepts. Findings retain target, bounded evidence, Pack and Rule identity, outcome, and action without becoming a second permission system.
-- Artifact quality targets come only from successful structured file-mutation events and are evaluated from the complete current guarded UTF-8 post-image.
-- A later mutation supersedes the same target without erasing rejected-hash history. Clean prose or a different clean target cannot resolve a blocking target.
-- Runtime rewrite keeps rejected prose out of the displayed transcript, returns target-specific findings to the same Engine, uses the contract's bounded rewrite budget, and stops when a blocking target repeats its post-image hash.
-- Quality decisions persist before another provider request. Retry requires the same Engine, Harness, manifest, and Rule identity; accept and stop do not call the provider and retain applicable warnings.
-- Unreadable, non-UTF-8, and over-budget post-images are inconclusive warnings rather than clean assessments.
-- Observe bindings record deterministic findings without blocking ordinary work. Analyze bindings describe an Agent's own audit role and are excluded from recursive Guard enforcement.
-- `/permissions` remains the only approval layer for model-visible execution. Harness and quality bindings declare delivery policy and capability but do not create parallel trust or path-authorization systems.
+
+The Output Quality Guard loads Rule Pack and Detector assets only from the verified Harness (failing closed on unknown schemas, matchers, metrics, preprocessing, or binding semantics) and applies the host delivery-quality policy as a durable, separate concept — never a second permission system. Its candidate extraction, deterministic detection, experimental Semantic Judge, host policy, rewrite lifecycle, session records, and the current unconnected calibrated-policy boundary are owned by [`QUALITY_GUARD.md`](./QUALITY_GUARD.md). `/permissions` remains the only approval layer for model-visible execution; Harness and quality bindings declare delivery policy and capability but do not create parallel trust or path-authorization systems.
 
 ## Verification
 
@@ -80,3 +75,9 @@ The runtime asset archive and npm package must contain `harness-manifest.json`, 
 `assets/prompt-context-ledger.json` is a raw, static Harness prompt-asset ledger. Its 24,000-character static asset limit is verified when a Harness is activated, but it is not a provider context-window limit and never blocks a request. Runtime injections and conversation history are deliberately excluded.
 
 For Stage, `/stage` appends the frozen Module A source to the system message and sends the frozen Module B opening as assistant history. Those user-supplied values are intentionally outside the static asset ledger; their length belongs to provider/context management, not Harness asset review.
+
+## Prompt Customization Boundary
+
+`vesicle assets materialize assets/prompts/engines/<id>.md` copies one effective prompt file into a sparse project or user layer so it can be edited as an overlay. The materialized file is the **compiled effective layer**: it already carries the Harness-generated Host Adapter Binding section that maps abstract Prism Driver operations (`hal://` URIs) to the concrete Vesicle tools, interaction gates, and quality bindings the model must call. Editing a materialized prompt must preserve that section — removing it leaves the model without the binding between Prism Driver operations and the host tools that implement them.
+
+Source-layer prompt editing (the abstract `hal://` prompt before Harness compilation) and a `/prompt` or `prompt edit` workflow are **not** current product capabilities. The supported customization path is overlay-based editing of the compiled layer; the Harness compilation pipeline, the HAL URI system, and the Adapter Binding generation are unchanged.

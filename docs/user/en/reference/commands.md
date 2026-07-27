@@ -37,6 +37,8 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/artifact [n\|path]` | Open an artifact in the Workspace page viewer; no args opens the latest one |
 | `/validate <n\|path>` | Validate an artifact by number or path |
 
+The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that list (only when the sidebar is visible and at least one artifact exists): `↑`/`↓` move the focus, `Enter` opens the existing `/artifact` preview, and `Esc` or `Alt+A` returns to the input box. The focused file's full relative path shows in an untruncated strip while focus is active; the sidebar rows themselves stay one line.
+
 ## Permissions and quality
 
 | Command | Purpose |
