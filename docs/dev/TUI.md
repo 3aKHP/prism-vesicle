@@ -8,8 +8,18 @@ This document defines terminal layout, input ownership, transcript presentation,
 - Hide secondary panes before squeezing the message stream below a useful width.
 - Gate, permission, question, and picker panels own the bottom area while active. Side panes may be hidden so the active controls remain legible.
 - Artifact previews appear as bounded structure-preserving cards in the message stream. The sidebar is an index rather than a duplicate preview surface.
+- The persistent artifact sidebar is deliberately narrow, so its rows stay one line and middle truncation would make long paths indistinguishable. `Alt+A` (meta/option + `a`) enters artifact focus only when the Host sidebar is visible, the host is not busy, and at least one artifact is available. While focus is active, `Up`/`Down` move the focused artifact, `Enter` opens the existing `/artifact` preview path, and `Escape` or `Alt+A` returns focus to the composer. The selected relative path renders in an untruncated, display-width-aware strip above the workspace for that one focused item; rows themselves are not widened or multi-lined. Focus is transient presentation state — it clears when the sidebar hides and does not change artifact scanning, selection syntax, session records, or tool/runtime authority.
 - Avoid changing stable layout dimensions from dynamic labels or transient content when a bounded region can scroll, clip, or reserve space.
 - Modal input routing has priority over prompt editing, command completion, history scrolling, and global key handling.
+
+## Visual And Motion Maintenance
+
+- Essential information and actions must never depend on an animation or effect completing; every animated state has an immediate non-animated fallback and `VESICLE_REDUCED_MOTION=1` freezes it to a static frame.
+- Continuous animation is confined to brand signature moments; the working area below the composer stays static so reading and editing never fight a moving surface.
+- Centralize palette, motion duration, easing, effect intensity, and terminal-capability degradation in the theme module instead of scattering animation constants through views.
+- Static rendering and component tests do not reproduce every OpenTUI effect, keyboard, mouse, streaming, or native-renderer path; visual changes that touch the renderer or worker boundary should be smoked in a live terminal, including native Windows where relevant.
+
+The brand aesthetic, palette of record, motion grammar, and anti-patterns are owned by [`brand/VISUAL_LANGUAGE.md`](../../brand/VISUAL_LANGUAGE.md). The TUI carries three signature surfaces under that language: a startup splash (ANSI mark, wordmark, one slow traveling light; degrades animated → static → frozen → skipped and never blocks startup), an empty-session hero that the first turn replaces, and the static motif wiring — a 1-cell per-message role spectrum lane, the active engine refraction accent on the header and turn markers, and a restrained `┌─ Title ─` ASCII-frame label on the sidebar's internal sections. Easing is `linear`/`steps` only.
 
 ## Rendering
 

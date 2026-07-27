@@ -2,7 +2,7 @@
 
 One beam in, the spectrum out. A translucent vesicle holds a glass prism; an emerald beam enters through a pore in the membrane, refracts, and leaves as a soft spectrum. Light is the subject — volume, Fresnel rim, phosphor glow, caustics. Calm, precise, never loud.
 
-The mark follows a fixed visual design language whose palette, motion grammar, and anti-patterns govern every variant. Palette of record:
+The mark follows a fixed visual design language. [`VISUAL_LANGUAGE.md`](./VISUAL_LANGUAGE.md) is the authoritative aesthetic, concept, motif vocabulary, palette of record, motion grammar, terminal-derivation rules, and anti-patterns; this README catalogs the concrete mark variants and usage rules. Palette of record:
 
 - Emerald `#10b981` (deep `#047857`, bright `#34d399`) — the brand beam
 - Engine spectrum `#22d3ee` `#facc15` `#fb923c` `#f43f5e` `#e879f9`

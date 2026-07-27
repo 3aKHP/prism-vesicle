@@ -10,6 +10,7 @@ For non-trivial work, read these before editing:
 
 - `AGENTS.md`: AI collaborator entry point and doc map.
 - `STATUS.md`: current implementation state, known limits, tool surface, and verification commands.
+- `docs/dev/README.md`: public developer-document index, path semantics, and maintenance rules.
 - `docs/dev/STYLE.md`: source-code structure, maintainability, types, errors, naming, comments, and test design.
 - `docs/dev/ARCHITECTURE.md`: dependency direction, cross-cutting boundaries, and links to the authoritative provider, tool, session, prompt, Agent, Skill, and TUI contracts.
 - `docs/dev/WORKFLOW.md`: branching, hotfixes, PR body shape, independent CR, and documentation sweep.
@@ -24,7 +25,7 @@ Also read:
 - `docs/examples/providers.yaml` before changing provider config behavior.
 - `docs/examples/provider.env.example` before changing provider secret loading behavior.
 
-For architecture, provider, TUI, session, or command-UX changes, first check whether the documented reference projects already solved a similar problem. Ignored local notes under `dev/docs/` may describe private reference locations; when present, start with `dev/docs/REFERENCE_PROJECTS.md` to find those local absolute paths and the current working/decision/archive routes. Use the notes, but treat archived plans as historical context and never copy local absolute paths or machine-private details into public docs.
+For architecture, provider, TUI, session, or command-UX changes, first check whether the documented reference projects already solved a similar problem. The tracked `docs/dev/` tree contains self-contained public developer contracts; ignored local notes under `dev/docs/` are subordinate working context and may describe private reference locations. When the local tree is present, use `dev/docs/README.md` for its document routes and start reference-project research from the directly indexed `dev/docs/REFERENCE_PROJECTS.md`. This collaborator-navigation exception does not make a public contract depend on local notes. Treat archived plans as historical context, and never copy local absolute paths or machine-private details into public docs.
 
 ## High-Risk Boundaries
 

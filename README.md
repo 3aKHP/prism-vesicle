@@ -206,6 +206,7 @@ Pull requests and `develop` pushes call one reusable Linux/Windows release build
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Contributor setup, repository boundaries, and documentation style |
 | [`CODE_SIGNING_POLICY.md`](./CODE_SIGNING_POLICY.md) | Windows signing scope, approval, verification, and incident handling |
 | [`PRIVACY.md`](./PRIVACY.md) | Local data, external-service transfers, uninstall behavior, and deletion |
+| [`docs/dev/`](./docs/dev/README.md) | Public developer contracts and their complete index |
 | [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Source-code structure and maintainability rules |
 | [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) | Architecture boundaries and developer-contract navigation |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, review, release, and documentation sweep |

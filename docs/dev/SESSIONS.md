@@ -8,6 +8,8 @@ This document defines durable conversation history, provider projection, file ch
 - Session JSONL is append-only. Rewind, compaction, recovery, and branching append records and never truncate or rewrite prior records.
 - Conversational records carry stable `uuid` and `parentUuid` links. Legacy linear records project as an implicit parent chain.
 - Provider and Engine selection, usage metadata, validation, gates, questions, permissions, quality decisions, tool calls, and tool results persist when required for replay or recovery.
+- The initial session system record stores SHA-256 hashes, logical asset paths, safe layer ids for the effective merged tree, and the exact bundled or managed Pack, manifest, source, and Adapter identity. It never stores prompt text, image bytes, secrets, or absolute paths.
+- Resume and continuation reverify the active Harness identity against that initial record and block continuation on mismatch rather than silently switching runtime contracts; see [`ASSETS.md`](./ASSETS.md).
 - Host-only metadata may support replay and rendering but must not be forwarded to providers unless its record kind explicitly defines provider-visible context.
 - Child-session ownership uses separate parent session and parent tool-call identity; `parentUuid` remains an intra-session branch edge. See [`SUBAGENTS.md`](./SUBAGENTS.md).
 

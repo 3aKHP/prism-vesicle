@@ -206,6 +206,7 @@ Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复�
 | [`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md) | 贡献者配置、仓库边界和文档规范 |
 | [`CODE_SIGNING_POLICY.zh-CN.md`](./CODE_SIGNING_POLICY.zh-CN.md) | Windows 签名范围、批准、验证与事件处理 |
 | [`PRIVACY.zh-CN.md`](./PRIVACY.zh-CN.md) | 本地数据、外部服务传输、卸载行为与删除方式 |
+| [`docs/dev/`](./docs/dev/README.md) | 公开开发者契约及其完整索引 |
 | [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | 源代码结构与可维护性规范 |
 | [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) | 架构边界与开发者契约导航 |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | 分支、审查、发布和文档扫描流程 |

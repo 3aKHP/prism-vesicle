@@ -110,10 +110,14 @@ Apply the cross-cutting policy in [`USER_AGENCY_AND_RISK_DISCLOSURE.md`](./USER_
 
 Static scanning may produce useful warnings, but it cannot certify Markdown or code as benign. Findings are disclosures, not a content-approval gate or an implied safety certification when no warning is emitted. Format validation, portable path rules, immutable provenance, and runtime observation protect correctness and auditability without replacing the user's judgment.
 
-## Phase roadmap
+## Current boundary
 
-- **Phase 0 — format, inventory, Skill Store** (this change).
-- **Phase 1 — local and GitHub repository installation**: `install | update | rollback | uninstall`, staging, full-inventory validation, content hash, provenance, atomic activation, dirty-worktree handling.
-- **Phase 2 — activation, resources, and scripts**: Engine-declared `activate_skill` / `read_skill_resource`, bare `/skill` inventory and picker, `/skill <name> [task]`, `--context-only`, and `run_skill_script` for process-capable Engines through existing Process/Permission Runtime behavior; structured activation/session events, TUI rendering, and exact resume/compact/rewind/Engine-switch semantics.
-- **Phase 3 — authoring and project scope**: `.agents/skills` discovery with visible project provenance and no separate trust state, create/edit workflow, enable/disable, and refresh.
-- **Phase 4 — registries and broader distribution**: optional distribution work after direct local/GitHub repository installation is established.
+The shipped runtime covers format, inventory, and the Skill Store only. The following are **not** part of the current contract and must not be implied by any current surface:
+
+- repository installation (`install | update | rollback | uninstall`), staging, and atomic activation as a discovery source;
+- model-visible activation — `activate_skill` / `read_skill_resource` tools, a `/skill` command, and any prompt-composition, session, compaction, or Engine-switch behavior;
+- script execution through Process/Permission Runtime;
+- project `.agents/skills/` scope and Skill authoring workflows; and
+- registries or broader distribution.
+
+Current capability state and known limits belong in [`STATUS.md`](../../STATUS.md). Later delivery phases are internal planning; they do not change this boundary until their runtime contract lands and is documented here.
