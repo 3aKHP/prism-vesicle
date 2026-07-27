@@ -2,7 +2,7 @@
 
 _Snapshot: 1.0.0-alpha.6 release candidate (2026-07-26)._
 
-> This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
+> This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
@@ -277,5 +277,7 @@ Native Windows CI installs pinned Inno Setup, builds the versioned guided instal
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled Harness inventory, host layer, lineage, updates |
 | [`docs/dev/SUBAGENTS.md`](./docs/dev/SUBAGENTS.md) | SubAgent lifecycle and delivery contract |
 | [`docs/dev/SKILLS.md`](./docs/dev/SKILLS.md) | Skills runtime boundary (Agent Skills format, discovery, store) |
+| [`docs/dev/STAGE.md`](./docs/dev/STAGE.md) | Stage consumer Engine bootstrap, three-part packet, and prose-first rendering contract |
+| [`docs/dev/QUALITY_GUARD.md`](./docs/dev/QUALITY_GUARD.md) | Output Quality Guard delivery-policy runtime (detection, Semantic Judge, host policy, rewrite) |
 | [`docs/dev/COMMAND_COMPLETION.md`](./docs/dev/COMMAND_COMPLETION.md) | Slash-command argument completion contract |
 | [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | Developer Quality Guard benchmark runner |

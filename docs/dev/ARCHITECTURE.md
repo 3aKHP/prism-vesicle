@@ -56,11 +56,15 @@ host-assets/  # restricted Vesicle prompts and generic Agent extensions
 - Model-visible tools remain behind host capability, path, permission, and process enforcement. See [`TOOLS.md`](./TOOLS.md).
 - Sessions are append-only durable history. Projection, rewind, checkpoints, compaction, and continuation recovery must preserve that invariant. See [`SESSIONS.md`](./SESSIONS.md).
 - Prompt assets are runtime files resolved through the active verified asset stack; Engine prompts are not TypeScript literals. See [`ASSETS.md`](./ASSETS.md).
+- Generation prompts receive only the role, task, relevant input, effective actions, output contract, and concise task-specific quality guidance. Host enforcement — tool allowlists, permissions, path guards, integrity hashes, session identity, and the Quality lifecycle — is applied at runtime and must not be duplicated as prompt prose. Harness contract data stays declarative unless the active model must act on the exact binding in the current task; a profile with no tools must not be told about tools, Agents, shell, Web, state roots, or resource paths it cannot use. Prompt ledgers and prompt inspection keep capability and audience drift measurable without turning a review budget into a runtime admission threshold.
 - Persistent Instructions are live host configuration and model context, not capability authority or session identity. See [`PERSISTENT_INSTRUCTIONS.md`](./PERSISTENT_INSTRUCTIONS.md).
 - SubAgents have explicit lifecycle, identity, capability, ownership, and delivery contracts. See [`SUBAGENTS.md`](./SUBAGENTS.md).
 - Skills provide bounded procedural context and resources without granting capabilities. See [`SKILLS.md`](./SKILLS.md).
 - TUI presentation and input routing observe and control host state without redefining domain semantics. See [`TUI.md`](./TUI.md).
+- The TUI is built on OpenTUI with Solid. Its hard limit is the terminal medium, not a missing framework API: font choice, anti-aliasing, sub-cell positioning, arbitrary transforms, blur, vector graphics, and pixel-perfect image composition cannot be made consistent across terminal emulators, SSH, and multiplexers, so effects are designed as terminal-native visuals with graceful degradation rather than as a simulation of a browser canvas. OpenTUI upgrades are evaluated in isolated branches against source, npm, Linux binary, and native Windows binary lanes; they are maintenance work, not an automatic substitute for the stack decision. Interaction and workflow rules live in pure TypeScript controllers, and OpenTUI types must not enter `core/`, provider adapters, session semantics, or tool-runtime contracts.
 - Profile validators inspect Prism artifact documents rather than ordinary transition prose or every assistant turn. Artifact workbench validation reads the selected file from disk, and findings remain advisory unless a feature contract explicitly introduces a stronger policy.
+- Stage bootstraps a consumer narrative session from frozen card input and renders the validated three-part turn packet prose-first while preserving raw content in provider history and sessions. See [`STAGE.md`](./STAGE.md).
+- The Output Quality Guard applies the active Harness's delivery-quality policy to generated prose through deterministic detection, an optional experimental Semantic Judge, and a bounded host-policy rewrite. It is a delivery-policy runtime, not a second permission system. See [`QUALITY_GUARD.md`](./QUALITY_GUARD.md).
 - Warning, confirmation, and risk-control design preserves informed user choice while enforcing concrete host boundaries. See [`USER_AGENCY_AND_RISK_DISCLOSURE.md`](./USER_AGENCY_AND_RISK_DISCLOSURE.md).
 - Guided Setup and the Windows installer own first-run onboarding, model discovery, configuration transactions, and OS integration within a bounded, secret-free scope. See [`SETUP.md`](./SETUP.md).
 
@@ -86,9 +90,12 @@ Installer, onboarding, model-discovery, configuration-write, and project-launch 
 | [`TUI.md`](./TUI.md) | Terminal layout, input ownership, commands, rendering, and side-question interaction |
 | [`ASSETS.md`](./ASSETS.md) | Bundled and managed Harness assets, host extensions, verification, and Quality Guard bindings |
 | [`SUBAGENTS.md`](./SUBAGENTS.md) | Child-Agent lifecycle, persistence, capability, concurrency, and delivery |
-| [`SKILLS.md`](./SKILLS.md) | Skill format, discovery, storage, path safety, and phased capability boundary |
+| [`SKILLS.md`](./SKILLS.md) | Skill format, discovery, storage, path safety, and current capability boundary |
+| [`STAGE.md`](./STAGE.md) | Stage consumer Engine bootstrap, three-part packet, and prose-first rendering contract |
+| [`QUALITY_GUARD.md`](./QUALITY_GUARD.md) | Output Quality Guard delivery-policy runtime and rewrite lifecycle |
 | [`USER_AGENCY_AND_RISK_DISCLOSURE.md`](./USER_AGENCY_AND_RISK_DISCLOSURE.md) | User agency, disclosure, confirmation, and enforceable-boundary policy |
 | [`SETUP.md`](./SETUP.md) | Windows installer scope, guided onboarding, model discovery, configuration transactions, and project-launch rules |
 | [`WORKFLOW.md`](./WORKFLOW.md) | Branching, verification, review, publication, and documentation workflow |
+| [`brand/VISUAL_LANGUAGE.md`](../../brand/VISUAL_LANGUAGE.md) | Brand aesthetic, palette of record, motion grammar, and anti-patterns |
 
 Each contract has one owner. Other documents should summarize only what their audience needs and link to that owner instead of repeating detailed rules.

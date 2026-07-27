@@ -9,6 +9,7 @@ Always read this file before working in the repository.
 For any non-trivial code, prompt-runtime, TUI, provider, session, tool, workflow, or documentation change, also read:
 
 - `STATUS.md`: current project shape, implemented capabilities, tool surface, known limits, and standard verification.
+- `docs/dev/README.md`: public developer-document index, path semantics, and maintenance rules.
 - `docs/dev/STYLE.md`: source-code structure, maintainability, types, errors, naming, comments, and test design.
 - `docs/dev/ARCHITECTURE.md`: dependency direction, cross-cutting boundaries, and routing to the authoritative provider, tool, session, prompt, Agent, Skill, and TUI contracts.
 - `docs/dev/WORKFLOW.md`: branch model, iteration loop, hotfix flow, PR shape, independent CR expectations, and documentation sweep.
@@ -24,7 +25,7 @@ Read asset-specific docs when touching assets:
 - `docs/examples/providers.yaml`: canonical provider registry shape.
 - `docs/examples/provider.env.example`: user-level provider secret file shape.
 
-If a task touches architecture, provider behavior, TUI interaction, session semantics, or command UX, look for existing implementation patterns before inventing a new one. The ignored local `dev/docs/` area may contain private reference-project notes and local paths. When present, start with `dev/docs/REFERENCE_PROJECTS.md` to find the local reference project locations; use its working/decision/archive routes when available, but do not copy local absolute paths or private machine details into public docs. Archived local plans are historical context, never current authority.
+If a task touches architecture, provider behavior, TUI interaction, session semantics, or command UX, look for existing implementation patterns before inventing a new one. The tracked `docs/dev/` tree contains self-contained public developer contracts; the ignored `dev/docs/` tree is a subordinate machine-local workbench that may contain private reference-project notes and local paths. When the local tree is present, use `dev/docs/README.md` for its document routes and start reference-project research from the directly indexed `dev/docs/REFERENCE_PROJECTS.md`. This collaborator-navigation exception does not make a public contract depend on local notes. Never copy local absolute paths and private machine details into public docs, and treat archived local plans as historical context rather than current authority.
 
 ## Documentation Map
 
@@ -37,6 +38,7 @@ Use the docs by responsibility:
 | `STATUS.md` | Current implemented state, limits, tool surface, verification |
 | `CHANGELOG.md` | User-visible and notable unreleased changes |
 | `CONTRIBUTING.md` | Contributor workflow, repo boundary, provider setup, and documentation style |
+| `docs/dev/README.md` | Public developer-document index, path boundary, and maintenance rules |
 | `CODE_SIGNING_POLICY.md` | Windows signing scope, approval, verification, and incident handling |
 | `PRIVACY.md` | Local data, external-service transfers, uninstall behavior, and deletion |
 | `docs/dev/STYLE.md` | Source-code structure, maintainability, types, errors, naming, comments, and test design |
