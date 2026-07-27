@@ -43,7 +43,7 @@ and \`setup\` commands. They are an initial preference; /theme may override them
 after launch. They are rejected by --version/--help and non-interactive commands.
 
 Commands:
-  setup, launch, doctor, once, prompt, quality, debug, assets, dev`;
+  setup, launch, doctor, once, prompt, quality, debug, assets, skills, dev`;
 
 async function configureTreeSitterRuntime(): Promise<void> {
   // Compiled executables receive an explicit flat worker entrypoint through
@@ -125,7 +125,7 @@ switch (parsed.kind) {
   case "error":
     console.error(parsed.message);
     if (parsed.message.startsWith("Unknown command or project directory")) {
-      console.error("Commands: setup, launch, doctor, once, prompt, quality, debug, assets, dev");
+      console.error("Commands: setup, launch, doctor, once, prompt, quality, debug, assets, skills, dev");
     }
     process.exitCode = 1;
     break;
@@ -253,6 +253,16 @@ switch (parsed.kind) {
         const { runAssetsCommand } = await import("./assets");
         try {
           await runAssetsCommand(args);
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : String(error));
+          process.exitCode = 1;
+        }
+        break;
+      }
+      case "skills": {
+        const { runSkillsCommand } = await import("./skills");
+        try {
+          await runSkillsCommand(args);
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));
           process.exitCode = 1;
