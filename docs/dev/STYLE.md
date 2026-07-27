@@ -1,61 +1,13 @@
-# Prism Vesicle Architecture And Style
+# Prism Vesicle Code Style
 
-This file records the hard rules for code shape, prompt/runtime boundaries, and
-tool behavior. It is intentionally practical: keep Vesicle small, explicit, and
-hard to fool.
+This document defines how Prism Vesicle source code should be shaped so contributors can understand, change, and verify it safely. Architecture and runtime behavior belong in the domain contracts linked from [`ARCHITECTURE.md`](./ARCHITECTURE.md); workflow and verification commands belong in [`WORKFLOW.md`](./WORKFLOW.md).
 
-## Layering
+## Tool-Enforced Baseline
 
-```text
-cli/  # command dispatch only
-tui/  # OpenTUI rendering and keyboard interaction
-config/  # environment loading and config inspection
-setup/  # guided onboarding, discovery, validated config transactions
-core/agent-loop/  # provider requests, tool loop, gate pause/resume
-core/agents/  # Agent profiles, child lifecycle, concurrency, inbox delivery
-core/artifacts/  # artifact discovery, preview bounds, validation selection
-core/attachments/  # clipboard image content-addressed store
-core/checkpoints/  # per-turn file snapshots, diff stats, restore
-core/compact/  # context compaction service
-core/engine/  # engine profile YAML loading
-core/gate/  # request_confirmation tool + GateRequest types
-core/harness/  # Harness manifest verification, compatibility, immutable install
-core/permissions/  # Tool Permission Runtime broker and policy
-core/process/  # bounded Process Runtime and shell profiles
-core/prompt/  # prompt asset loading and composition
-core/quality/  # Output Quality Guard host runtime
-core/rewind/  # conversation rewind and partial summarization
-core/runtime/  # engine and runtime asset resolution helpers
-core/session/  # durable session persistence + resume helpers
-core/side-question/  # `/btw` tool-free side question snapshot + service
-core/stage/  # Stage consumer bootstrap
-core/tools/  # host tool contracts and execution
-core/user-question/  # ask_user_question host question types
-core/validators/  # Module A/B v9 schema checks + registry
-mcp/  # external MCP tool discovery and execution
-providers/  # protocol adapters only
-skills/  # Agent Skills parser, discovery, store, catalog (Phase 0; no activation yet)
-types/  # shared host types
-assets/  # exact bundled V10 Harness manifest inventory
-host-assets/  # restricted Vesicle prompts and generic Agent extensions
-harness-manifest.json  # bundled V10 Harness identity and hashes
-```
-
-Allowed dependency direction:
-
-- `cli -> tui, core, config`
-- `tui -> core, config, providers/types`
-- `setup -> config, mcp, core engine/permission types, and reusable TUI presentation/input primitives`
-- `core/agent-loop -> providers, prompt, session, tools, gate, engine, validators, mcp`
-- `core/agents -> providers, session, tools, runtime assets, mcp`
-- `core/harness -> engine, agents, tools, validators, runtime assets, config paths`
-- `core/artifacts -> tools, validators`
-- `skills -> config paths` (it takes pre-resolved discovery roots and must not import the asset resolver, providers, harness runtime, or TUI; the CLI owns Harness-root resolution and passes roots to `discoverSkills`)
-- `providers -> providers/shared` and config only
-- `core/tools` must not depend on providers or TUI
-- `mcp` must not depend on providers or TUI; it may depend on core tool types
-  and engine ids for tool definitions and engine scoping
-- `core/gate` depends only on `core/tools` types
+- TypeScript runs in strict mode. Do not weaken compiler settings or hide an uncertain value behind `any`; narrow `unknown` at the boundary that receives it.
+- Biome owns lint diagnostics. Its formatter is intentionally disabled, so preserve the surrounding source style and avoid unrelated formatting churn.
+- Use Bun-native APIs and existing project dependencies where they already express the required behavior. Do not add a dependency or abstraction for a small local operation.
+- Keep source, tests, scripts, and runtime assets inside their established roots. Do not mix generated state or host configuration into tracked source directories.
 
 ## Responsibility And Maintainability
 
@@ -69,666 +21,112 @@ Evaluate structure from several signals together:
 - Local reasoning and testing: behavior should be understandable and testable through a narrow interface without constructing unrelated runtime state.
 - Change safety: prefer boundaries that let one concern evolve without broad edits, synchronized changes across files, or fragile ordering assumptions.
 
-Split code when these signals reveal a stable domain boundary or a recurring maintenance cost. Keep a large composition root, registry, parser, state machine, or data table intact when it remains cohesive and splitting it would scatter invariants or introduce indirect coupling. Do not create generic `helpers.ts`, `utils.ts`, or `common.ts` piles; name extracted modules by the domain responsibility they own.
+Split code when these signals reveal a stable domain boundary or a recurring maintenance cost. Keep a large composition root, registry, parser, state machine, or data table intact when it remains cohesive and splitting it would scatter invariants or introduce indirect coupling.
 
-## Provider Adapters
+Do not create generic `helpers.ts`, `utils.ts`, or `common.ts` piles. Name an extracted module after the domain responsibility or policy it owns.
 
-Provider adapters convert Vesicle's internal request model to wire format and
-back. They must not:
+## Prohibited God Structures
 
-- read or write project files
-- mutate sessions
-- know about Prism engine phases
-- implement host tools directly
+God files, god functions, and god classes are prohibited. A change that creates one, materially expands one, or moves the same mixed ownership behind a new name is blocking and must be redesigned before merge.
 
-Tool calls are normalized into `ToolCall` and executed by `core/tools`. MCP
-tools are the origin exception, not a provider-shape exception: the agent loop
-discovers them through `src/mcp`, exposes them as ordinary function tool
-definitions, and dispatches `mcp_<prefix>_<tool>` aliases back through the MCP
-registry. Provider adapters still see only normalized tool definitions and
-tool-call messages.
+- A god file owns several unrelated domains or layers, accumulates independent reasons to change, or serves as the place where new behavior is added merely because it already coordinates everything.
+- A god function performs substantial work across several concerns such as parsing, policy, persistence, provider or tool I/O, state transitions, and presentation instead of delegating through named boundaries.
+- A god class centralizes unrelated lifecycle, scheduling, persistence, policy, resource ownership, and presentation knowledge behind one mutable object or broad method surface.
+- A mega-controller, service locator, global host-state object, growing context or options bag, or generic manager is still a god structure when callers and callees must understand unrelated subsystems through it.
+- A mechanical split into several files does not resolve the smell when the extracted files remain order-dependent, share broad mutable state, reach into each other's internals, or can change only in lockstep.
 
-Provider selection is host state, not prompt state. The TUI may switch among
-configured provider/model profiles, but adapters still receive a normalized
-`VesicleRequest` and must not know about sessions, artifacts, or Prism phases.
-Provider responses may include normalized usage counters (`contextInputTokens`,
-`inputTokens`, `outputTokens`, cache read/write/hit/miss counts, reasoning
-tokens, and effective tokens). `contextInputTokens` is the request's active
-context-window occupancy after provider-specific cache accounting: do not add
-cached tokens twice for OpenAI-compatible/Gemini providers, but do include
-Anthropic cache creation/read counters. Adapters may map provider-native usage
-detail objects into `providerDetails`, but must keep raw requests, headers,
-URLs, and secrets out of that metadata. Pricing and billing policy belong
-outside adapters.
-User and tool messages may carry durable image attachment references. Core
-materializes those references into base64 before invoking an adapter;
-provider adapters map already-materialized data to native image blocks and
-must not read image files themselves. Models opt in with
-`capabilities.vision: true`; non-vision models receive neither image content
-nor the `view_image` tool.
-Generation controls follow the same rule: core/TUI may pass the normalized
-`reasoningTier` values (`off`, `low`, `medium`, `high`, `xhigh`, `max`), but
-only the provider adapter maps them to wire fields such as `thinking` and
-`reasoning_effort`. TUI commands may offer `auto`/`unset` to clear an explicit
-selection; that means no `reasoningTier` is sent.
-Provider HTTP calls share one transport retry policy under `providers/shared`.
-Retry only failures that are safe before a response is consumed: connection
-errors, 408, 429, and 5xx. Use bounded exponential backoff with jitter, honor a
-bounded `Retry-After`, and let host cancellation interrupt both fetch and
-backoff. Do not replay a partially consumed SSE stream inside an adapter; that
-requires agent-loop/TUI reconciliation so deltas and tool calls cannot be
-duplicated. The retry loop fires an `onRetry` callback on `VesicleRequest`;
-every provider call site — the main chat turn, `/init`, `/compact`, `/btw`,
-SubAgent child rounds, and the Semantic Judge — forwards that callback to the
-appropriate UI surface (status line, activity log, `/btw` overlay, or agent
-progress) so retries are observable without any site running its own retry loop.
-Application-level provider headers are centralized under `providers/shared`.
-OpenAI-compatible Chat follows the audited OpenCode header shape, Anthropic
-Messages follows the Claude Code fingerprint, and Gemini follows Gemini CLI's
-Google GenAI SDK shape. Streaming must preserve each protocol's normal
-`Accept` behavior instead of applying a shared `text/event-stream` override;
-Gemini selects SSE through `alt=sse`. Leave `Host`, `Content-Length`,
-`Connection`, and compression negotiation to Bun. Authentication headers are
-injected by the adapter after the fingerprint. The only user-configurable
-header is provider-level `userAgent`; arbitrary header overrides are not part
-of the provider registry contract.
-Anthropic Messages adapters map Vesicle messages to Anthropic content blocks:
-assistant thinking blocks must be emitted before text/tool_use blocks, and
-tool results are user messages containing `tool_result` blocks. The agent loop
-and session store must not interpret these native blocks beyond preserving
-their typed metadata. Anthropic streaming must reconstruct text, thinking, and
-tool_use blocks by provider content-block index before emitting the final
-`VesicleResponse`.
-Gemini `generateContent` adapters map Vesicle messages to `systemInstruction`
-plus `contents`, and tool results to `functionResponse` parts. If Gemini
-returns `thought` / `thoughtSignature` metadata, preserve the original model
-parts as provider-native `gemini_part` thinking blocks and replay those parts
-on the next request instead of reconstructing them from assistant prose. This
-keeps Gemini's tool-loop thought signatures attached to the exact parts that
-the provider expects.
-High-frequency thinking controls may be interactive TUI state. Lower-frequency
-generation defaults such as `temperature` and `maxTokens` belong in the
-user-level provider model config and are merged by `core/agent-loop` before
-calling adapters. Adapters should only map the normalized request shape to wire
-fields; they should not invent host policy defaults.
-Persistent provider profiles live in the user-level provider config, not in the
-project `.vesicle/` runtime state directory. The default path is
-`%APPDATA%\prism-vesicle\providers.yaml` on Windows and
-`$XDG_CONFIG_HOME/prism-vesicle/providers.yaml` or
-`~/.config/prism-vesicle/providers.yaml` elsewhere. API keys must be referenced
-via per-provider environment variables (`apiKeyEnv`) and must not be stored
-inline in the provider file. The user-level `.env` file beside
-`providers.yaml` is the default place for those secret values; process
-environment variables are fallback only so a legacy project-root `.env` loaded
-by the runtime cannot override the user-level secret file.
-`providers.yaml` supports optional provider-level `defaultModel` and
-`userAgent` fields, string model entries for the common case, and object model
-entries for `id`,
-`generation`, `capabilities`, and `limits` metadata. `generation.maxTokens` is
-the provider request default; `limits.contextWindow` is model capacity metadata
-used by `/context` and footer percentages. A `defaultModel` must name a model
-in the same provider catalog. Keep this schema small and explicit until native
-protocol adapters require more fields.
+Size, branch count, import fan-out, state-field count, and churn are screening evidence rather than standalone verdicts. The blocking decision rests on mixed ownership, cross-domain knowledge, change coupling, and inability to reason about or test one concern independently.
 
-## Guided Setup And Installer
+A focused change is not required to rewrite every pre-existing hotspot it encounters. It must not add another unrelated responsibility or deepen the coupling; when the requested behavior would do so, extracting the affected stable boundary is part of the change rather than optional cleanup.
 
-- The Windows installer owns only the application lifecycle: complete runtime payload, per-user install location, PATH, shortcuts, upgrade identity, and uninstall. It must not parse provider/MCP schemas, accept secrets, or mutate `%APPDATA%\prism-vesicle`.
-- The installed terminal command is the native `vesicle.exe`, renamed from the staged release binary during installation rather than wrapped in a batch file. Upgrades remove superseded executable, wrapper, and Start Menu launch entries. A detected installation exposes Reinstall, Repair, and Uninstall maintenance choices; Repair restores installed files and Windows integration without reopening Guided Setup.
-- `src/setup` owns interactive onboarding. Network discovery, masked input, configuration merge/backup, validation, optional MCP/Tavily setup, permission defaults, and project selection stay in the application so they reuse runtime contracts.
-- Setup choice pages must expose a visible backward action in addition to Escape handling, reset selection when returning to a shorter option list, and keep every rendered row clipped within compact terminal bounds.
-- OpenAI-compatible model discovery may use the user-supplied Base URL and API key only for a bounded `GET /v1/models` request. Do not follow credential-bearing redirects, log the key, infer capabilities from model names, or make discovery success mandatory when exact manual ids are available.
-- Setup configuration writes are host actions, not model-visible tools. Validate the complete staged provider/MCP/environment shape, preserve unrelated secrets and profiles, create timestamped backups for existing files, and keep YOLO and `shell_exec` out of first-run persistent defaults.
-- Setup must not persist a global project pointer. An optional onboarding folder is only a one-time post-Setup launch target. Every later project launch derives its root from the invocation directory or an explicit `vesicle <directory>` argument; path-based launch starts a new process with that directory as cwd rather than changing the parent process cwd.
+## Module Boundaries
 
-## Tool Runtime
+- Modularization and decoupling are requirements, not optional polish. Organize code around stable domain responsibilities and expose the narrowest contract that independent callers need.
+- Put behavior in the layer that owns the decision, not in the nearest caller that happens to need it. Follow the dependency direction in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+- Keep composition roots thin: construct dependencies, connect lifecycle callbacks, and delegate domain decisions to their owners.
+- Prefer a narrow public facade when a domain has several implementation modules. Re-export only the surface callers need; do not turn barrel files into an implicit global API.
+- Avoid circular dependencies, cross-layer reach-through, and imports of another domain's internal implementation files.
+- Keep dependencies explicit and one-directional. Pass a narrow capability or domain interface instead of an entire application object, manager, context, or unrelated state bundle.
+- Separate policy from transport and persistence, pure projection from mutation, and host runtime state from presentation whenever those concerns can evolve independently.
+- Colocate implementation and domain-specific types in the owning source domain. Place fixtures and focused tests under the corresponding subsystem within the appropriate test layer.
+- Keep provider adapters, host tools, session persistence, and TUI presentation independent. A convenience import is not sufficient reason to cross one of those boundaries.
+- Reuse existing domain constants and normalization functions instead of maintaining parallel arrays, enums, or path rules.
+- Judge an extraction by reduced knowledge and safer independent change, not by the number of files produced. Preserve a cohesive invariant in one owner when splitting it would create chatty or cyclic pseudo-modules.
 
-Model-visible tools are a security boundary.
+## Directory Structure
 
-- Only project-relative paths are allowed.
-- Absolute paths and traversal outside the project root are rejected.
-- Existing path components must not be symbolic links or linked directory junctions. For missing targets, validate the nearest existing ancestor before mutation.
-- Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`,
-  `test_runs/`, `novels/`, `reports/`.
-- Create/write/replace/append/delete/copy-target/move and directory-mutation roots:
-  `source_materials/`, `workspace/`, `test_runs/`, `novels/`, `reports/`.
-- The canonical generated-artifact root set and display order live in
-  `core/artifacts/roots.ts`. Filesystem write guards and artifact workbench
-  discovery must consume that shared constant instead of declaring parallel
-  arrays. `source_materials/` is a writable research/input root but is not a
-  final artifact root, so `/artifact` discovery and the Artifacts sidebar stay
-  scoped to the other four roots.
-- `read_file` remains UTF-8 text-only. Binary visual inspection uses
-  `view_image`, which shares the readable-root path guard, validates image
-  magic bytes and size, and emits a structured attachment instead of base64
-  tool text.
-- `delete_file` must delete only files, never directories or directory trees.
-- `list_directory` exposes files, directories, and symbolic-link entries without following links. Recursive listings are bounded.
-- `create_directory`, `move_directory`, and `delete_directory` operate only below writable roots; the fixed roots themselves cannot be created, moved, or deleted.
-- `delete_directory` deletes empty directories only. Recursive directory deletion is intentionally not model-visible.
-- `grep_files` regex mode is for trusted single-user model input. If Vesicle
-  ever exposes untrusted model/plugin input, regex matching needs a timeout
-  boundary such as RE2 or a worker-thread sandbox.
-- A model must not claim a file was created, written, edited, deleted, copied,
-  or moved unless the corresponding file tool returned success.
-- The `request_confirmation` gate tool is attached only when the active engine
-  profile declares at least one stop gate. Undeclared gates are refused with a
-  tool result, not paused — the model self-corrects on the next turn.
-- The `request_engine_switch` handoff tool is available to all engines. It is
-  a user-confirmed host workflow boundary, not a normal tool side effect:
-  confirmed switches update future turns and must not continue the same tool
-  loop under a different system prompt. Rejected switches must complete the
-  tool call and continue the current engine loop so the model can respond to
-  the user's feedback or ask for clarification when no feedback was supplied.
-- Engine switches use one host-level transition shape whether they come from
-  manual `/engine` commands or model-requested `request_engine_switch`
-  handoffs. Confirmed/in-session transitions may append a bounded user-role
-  `engine_handoff` packet to the conversation instead of adding a dynamic
-  history `system` message or modifying the composed system prompt. This keeps
-  the packet visible to OpenAI-compatible, Anthropic Messages, and Gemini
-  adapters while preserving the engine prompt as the stable prefix-cache
-  boundary. Runtime behavior defaults to full-context preservation; manual
-  `/engine <id> --summary [notes]` compacts first, and model-requested
-  handoffs can use the confirmation panel's `Confirm with summary` option.
-  Both record the transition as `contextPolicy: summary`. The `fresh` policy
-  remains reserved for a future explicit context-discard workflow.
-- The `ask_user_question` tool is available to all engines for one
-  user-facing single-select clarification question. The model supplies 2-4
-  concrete options; the host appends Skip and open-ended answer fallbacks while
-  preserving the model option order. The open-ended fallback exposes an inline
-  composer and continues the current engine loop after the user chooses,
-  unlike engine handoff. Do not collapse Skip and open-ended answer: neither is
-  semantically equivalent to gate rejection.
-- `web_search`, `web_fetch`, `web_map`, `web_crawl`, and `web_research` are
-  host-executed Tavily web tools, not provider adapter features. Attach them
-  only to research/audit engines that declare them, keep provider adapters
-  unaware of Tavily, and persist structured `webEvent` metadata for replay. Web
-  results do not mutate project files; engines must use file tools to write
-  synthesized notes under `source_materials/`.
-- MCP tools are host-executed external tools configured in user-level
-  `mcp.yaml` beside `providers.yaml`, or by `VESICLE_MCP_FILE`. Header values
-  may use `${ENV_VAR}` or `${ENV_VAR:-fallback}` placeholders that expand from
-  the sibling `.env` loaded for provider/Tavily secrets. Do not log or persist
-  resolved header values. The first runtime milestone supports Streamable HTTP
-  `tools/list` and `tools/call` only; stdio, classic HTTP+SSE, prompts, and
-  resources remain separate future work.
-- Tool-loop ceilings protect against genuinely stuck models, not against a
-  model that legitimately chains many tool calls. The breaker fires on
-  consecutive *failing* tool rounds, not on raw tool count.
+Flat directory layouts are discouraged once an area contains distinct domains, abstraction levels, or fixture and support roles. A growing heterogeneous directory makes ownership ambiguous, encourages generic naming, and turns proximity into an accidental dependency rule.
 
-Add tests when adding or changing a tool. Include both the successful behavior
-and the boundary check that prevents overreach.
+- Place a new file in the narrowest existing domain directory that owns its behavior. When a stable new domain has several related files, create a named directory instead of adding more unrelated peers to a crowded root.
+- Keep directory roots for deliberate entry points, public facades, registries, and a small set of genuinely peer modules. Do not use a root as a catch-all because choosing a domain is inconvenient.
+- Avoid taxonomy theatre: a directory containing one trivial file or layers of pass-through re-exports is not useful modularization.
+- Shared directories such as `tests/support/` contain cross-domain infrastructure with a clear reusable contract, not miscellaneous helpers or fixtures that merely lack an owner.
+- Tests use a level-first, domain-second structure: `unit/`, `component/`, `integration/`, `contract/`, and `acceptance/`, followed by the subsystem under test. System and release smoke may live in `scripts/` and CI when that is the real execution boundary.
+- Test fixtures belong under the nearest suite or domain that owns their meaning. Promote a fixture or helper to shared support only after independent domains genuinely reuse the same contract.
 
-## Tool Permission Runtime
+A small, cohesive directory may remain flat when its files are true peers and further grouping would add navigation without clarifying ownership. A reviewer should block new placement that enlarges a heterogeneous flat root when a stable domain or test-layer boundary is already evident.
 
-- Permission modes control approval friction and never widen the effective tool surface or bypass runtime guards. MANUAL asks for every model-visible execution, INERTIA auto-allows observation tools, MOMENTUM auto-allows every tool except `shell_exec`, and YOLO auto-allows all effective tools.
-- `request_confirmation`, `request_engine_switch`, and `ask_user_question` are interaction requests and remain outside Tool Permission Runtime. Gates continue to represent workflow discipline rather than security approval.
-- Unknown tools fail closed into the mutate class. Every provider-returned call is also checked against the current effective tool surface before permission evaluation or execution; a permission mode must never make an unavailable tool executable. Every MCP tool is mutate regardless of its remote name, description, or schema.
-- Permission requests bind to the originating session and tool call. Shell approval additionally binds to the exact normalized execution plan hash. Rejection returns a failed tool result; it does not add a synthetic user turn.
-- Child requests are routed through the parent-owned permission broker. A foreground or background child pauses at its call boundary until the parent TUI resolves the request. Child `shell_exec`, `shell_output`, and `shell_stop` remain disabled in the first runtime.
-- YOLO cannot be persisted as a user default. Interactive activation requires two red confirmations, resume downgrades a prior YOLO session to MOMENTUM, and `--dangerously-skip-permissions` applies only to the current process while keeping a visible red indicator.
-- Permission bypass never disables path guards, MCP/Agent capability scopes, argument validation, output bounds, timeout, environment filtering, process-tree cleanup, or concurrency controls.
-- `shell_exec` is opt-in through user-level `permissions.yaml`. It is a non-interactive host command with host-user filesystem and network authority, not an OS sandbox. Shell mutations must mark checkpoint completeness as tainted and must never be described as rewind-safe.
-- Shell interpreter selection uses host-owned profiles rather than model-provided executables. Resolve the interpreter before approval, bind its profile id, absolute executable path, and runtime policy version into the exact plan hash, and execute that approved plan without a later cross-profile fallback. Windows `auto` may fall back from PowerShell 7 to Windows PowerShell 5.1 only; Linux/WSL `auto` remains `/bin/sh`. Explicit unavailable profiles fail closed. Every profile owns its non-interactive arguments, output encoding policy, display name, and model-visible command dialect guidance.
-- `shell_exec` may set `runInBackground: true` to return a managed short task id immediately. Background output/status is bounded and persisted under ignored `.vesicle/processes/` state, completion is delivered as host-owned provider context at the next available turn, and `shell_output` / `shell_stop` provide explicit observation and cancellation. Background work does not survive a Vesicle host restart as a managed live process; stale running records recover as interrupted and are never replayed.
-- Foreground shell cards show bounded live tail output and elapsed time. Background shell cards retain their task id and terminal state, while active background work remains visible in the TUI header and Workspace sidebar. Observability callbacks must not alter process lifetime or tool results.
+## Types And Contracts
 
-## SubAgent Runtime
+- Model meaningful states with discriminated unions or explicit result types. Do not represent mutually exclusive runtime states with several independent booleans.
+- Keep external input `unknown` until it has been parsed and validated. Validate at provider, filesystem, configuration, session, and model-tool boundaries before passing values into trusted code.
+- Prefer immutable inputs and return values for projections and normalization. Make mutation visible in the owning API when state must change.
+- Preserve protocol and persisted-data compatibility deliberately. A tolerant reader and strict writer are acceptable only when the compatibility rule is explicit and tested at the boundary.
+- Do not expose host paths, secrets, provider-native payloads, or internal identifiers through shared types unless the public contract explicitly requires them.
+- Keep types beside the domain that owns their meaning. Move a type to a shared module only when independent consumers genuinely share the same contract.
 
-- Agent Profiles are logical runtime assets under `assets/agents/`, independent of the six Prism Engine profiles. User-global, Harness-provided, host-provided, and sparse project profiles use one loader. The only hardcoded profile ids are the exact five generic host Agents (`explore`, `general`, `plan`, `research`, and `reviewer`) because they form a security-relevant exemption from Driver delegation; do not expand that whitelist implicitly.
-- Foreground/background controls whether the parent provider loop joins the child. Sequential/parallel is separate: multiple spawn calls from one assistant response must begin before any foreground join is awaited.
-- A foreground child shares parent-turn cancellation but keeps the Bun event loop and TUI responsive. A background child owns an independent controller, returns an accepted handle immediately, and delivers its terminal result through the durable parent inbox.
-- Never append a late result to the original `spawn_agent` tool call. The accepted background handle completes that call; later completion is a host-owned user-role packet delivered by the continuation scheduler when the parent session is idle.
-- `SessionRecord.parentUuid` is only an intra-session branch edge. Persist `parentSessionId` and `parentToolCallId` separately for child ownership.
-- Keep host identity and interaction identity separate. Persist an opaque `runId` for storage/recovery and a parent-scoped `<profile>-<ordinal>` handle for model tools and user commands. Never expose new run UUIDs merely because an internal map or error message uses them; legacy ids remain input-only compatibility references.
-- Render `spawn_agent` as a first-class Agent card rather than a generic tool card. The stream card owns lifecycle/progress, while the header and sidebar retain a compact active/ready summary after the spawn position scrolls away. Background `ready`, `integrating`, and `integrated` are delivery states and must not be conflated with provider execution.
-- Agent `*` inherits the parent's effective tools. An explicit installed profile allowlist may select guarded host tools outside the parent Engine's ordinary surface; MCP tools remain subject to their configured server and Engine scope. Task arguments cannot widen the installed profile.
-- Parallel writers are supported. Claim mutated paths for the lifetime of a child and coordinate parent file-tool mutations through the same ownership table. Ownership conflicts include the same path and ancestor/descendant paths, so a directory-tree mutation cannot overlap a child file mutation. Reject conflicting ownership instead of globally forcing children to be read-only.
-- Parent completion delivery is serialized with user turns, gates, questions, and engine handoffs. Never mutate an in-flight provider request.
+## Control Flow And Errors
 
-See `docs/dev/SUBAGENTS.md` for the complete lifecycle and delivery contract.
+- Return early when it makes the valid path easier to read. Avoid nesting that mixes validation, policy, I/O, and presentation in one block.
+- Catch errors only where the caller can add context, classify the failure, recover, or translate it into a stable boundary result. Do not catch and silently discard unexpected failures.
+- Preserve cancellation as a distinct outcome where the runtime supports it. Do not report user cancellation as provider failure or successful completion.
+- Use domain-specific error types when callers need structured classification; otherwise throw an `Error` with a concise, actionable message.
+- Keep retries, fallback, and fail-soft behavior at the layer that owns their policy. Lower adapters and helpers must not invent host workflow decisions.
+- Make partial success explicit. Never return a success shape when required work was skipped or a durable mutation is uncertain.
 
-## Gate Runtime
+## State And Side Effects
 
-Gates are workflow discipline, not a security permission system. They encode
-"the engine should pause here for human confirmation" — the opposite of a
-coding agent's "should I let this tool run?" prompt.
+- Keep pure parsing, normalization, and projection separate from filesystem, network, process, and session mutations when that separation improves local reasoning.
+- Give durable state one owner. Session records, checkpoints, process metadata, asset locks, and configuration transactions must not be written through competing code paths.
+- Persist the intent or state required for recovery before starting an externally visible continuation that could be interrupted.
+- Use atomic write patterns for host configuration and indexes whose partial state would be invalid. Preserve the domain's concurrency and optimistic-locking rules.
+- Do not hide filesystem, provider, process, or model calls behind names that imply a pure lookup.
+- Keep observability callbacks informational. Logging, progress, and rendering hooks must not change the result or lifetime of the operation they observe.
 
-- A gate is declared in an engine profile's `stopGates` list and triggered by
-  a `request_confirmation` tool call.
-- Engine handoff is triggered by `request_engine_switch` and confirmed through
-  the same Confirm/Reject UI pattern, with an additional Confirm with summary
-  option. It intentionally has no transition allowlist yet; concrete workflow
-  restrictions are deferred.
-- Clarifying questions are triggered by `ask_user_question` and rendered as an
-  option selector with host-owned Skip and open-ended answer fallbacks.
-  Arrow-key selection belongs to the question panel and must not scroll the
-  message history while the panel is active. Keep it distinct from
-  `request_confirmation`; question answers are ordinary information gathering,
-  not workflow gates.
-- The agent loop returns `needs_user` and hands control to the caller (TUI);
-  it does not call back into the UI. Session state is durable, so resume is
-  just reading the session.
-- `resolveGate()` writes the user's decision as the gate tool result and
-  continues the loop. `confirm` advances; `reject` does not advance and either
-  carries user feedback or explicitly asks the model to clarify what should
-  change before retrying.
-- Engines with no declared stop gates never offer the gate tool. A model
-  cannot invent a gate the host did not approve.
-- Interactive resume must preserve unresolved gate state for the TUI. A
-  non-interactive provider resume may synthesize "gate was not resolved" tool
-  results to satisfy Chat Completions tool-call pairing, but the TUI should
-  restore the decision panel when the original `request_confirmation`,
-  `request_engine_switch`, or `ask_user_question` arguments are available.
+## Naming And Source Layout
 
-## Prompt Assets
+- Use domain language consistently across source, types, tests, and documentation. Do not create near-synonyms for the same state or operation.
+- Name booleans and predicates so their truth meaning is clear. Name commands as actions and persisted records as facts that have occurred.
+- Match file names to their primary exported responsibility. A directory may use `index.ts` as a deliberate facade, but substantive behavior belongs in named modules.
+- Keep abbreviations limited to established project or protocol terms such as TUI, MCP, SSE, and HTTP.
+- Remove dead imports, types, helpers, and compatibility branches made obsolete by the current change. Do not perform unrelated cleanup in the same patch.
 
-Prompts are runtime assets, not hardcoded source literals.
+## Comments And Documentation
 
-- Vesicle host rules resolve logically as `assets/prompts/shared/vesicle-base.md` but are physically owned by the restricted `host-assets/` layer.
-- Prism engine prompts live in `assets/prompts/engines/`.
-- Specs and templates under `assets/` are read-only references for the model.
-- Host-specific references such as Codex, Claude Code, RooCode, `AGENTS.md`,
-  `CLAUDE.md`, `ask_followup_question`, and `new_task` should not leak into
-  Vesicle engine prompts except as negative host-boundary examples.
-- Treat `assets/...` as a logical read-only namespace, not as one physical project directory. Resolution order is sparse project override, user-global override, then one complete verified baseline: either a project-pinned managed Harness or the packaged/standalone bundled V10 Harness. The restricted host layer may supply only declared external host assets and the fixed generic Agent whitelist; directories merge only within the selected resolution stack.
-- Profile/prompt loaders and model-visible read tools must consume the same asset resolver. Never let the model receive APPDATA, home-directory, `node_modules`, executable, or Bun virtual filesystem paths.
-- Standalone executables must preserve the invocation cwd as the project root. Resolve executable-owned runtime/default files explicitly through `process.execPath`; do not call `process.chdir()` to make asset lookup work.
-- Session roots record a content-only fingerprint of the effective merged asset tree. Resume and active continuation warn when that fingerprint changes, while keeping prompt text, user content, absolute paths, and secrets out of drift metadata.
-- Sparse overrides are the recommended editing contract. Full snapshots remain available for compatibility but can mask future packaged updates. Version 1 intentionally has no deletion tombstones.
-
-## Persistent Instructions
-
-Persistent Instructions are user-authored Markdown that customizes an Engine's
-workflow and survives new sessions. The host loads them into the system prompt
-automatically; the user never has to ask the model to write a spec to a file
-and remind it to read it next session. This is model context, not automatic
-memory: the host never infers, summarizes, or writes instructions without a
-model tool call or a direct user edit.
-
-- File names are Vesicle-native and aligned across both scopes: `VESICLE.md`
-  (general, every Engine) and `VESICLE.<engine>.md` (Engine-specific override),
-  where `<engine>` is one of the `engineIds`. They are the Vesicle analog of a
-  coding agent's `CLAUDE.md`/`AGENTS.md`. The host must not auto-load those
-  aliases, inject coding-agent identity, or name them in Prism engine prompts or
-  the instruction envelope preamble. User-authored instruction text is preserved
-  verbatim (byte-exact apart from one stripped BOM) and may mention anything —
-  the boundary is on what the host names and loads, not on user content.
-- Project scope lives at the launch project root and travels with the project.
-  User scope lives beside `providers.yaml` (resolved through `userConfigDirectory`),
-  so it applies across every project root. Both are outside the guarded `assets/`
-  namespace and the writable artifact roots; instruction resolution must not be
-  routed through `core/tools/file/path-policy.ts` or the asset resolver, and must
-  not perturb the Harness asset fingerprint.
-- Resolution is **replacement within a scope, composition across scopes**. Within
-  one scope, an Engine-specific target fully replaces that scope's general target;
-  file existence — not nonempty content — controls replacement, so an empty Engine
-  file is an intentional empty override that suppresses general fallback. If an
-  Engine-specific file is present but invalid, fallback to the general file is
-  suppressed for that scope. Across scopes, the selected user file is followed by
-  the selected project file; project content has higher precedence on a direct
-  conflict. Neither can override the Engine contract or host runtime.
-- Instructions are appended after the byte-identical Engine prompt as ordered host
-  context, never as a second system authority. A fixed host preamble frames each
-  block with its scope, target, precedence, and the capability boundary. The
-  Engine prompt stays first so provider prefix caching keeps the stable Harness
-  prefix; Stage character context follows Persistent Instructions. Every
-  system-prompt construction site — turn bootstrap, continuation context, Stage
-  bootstrap, `/compact`, and the `/btw` snapshot resolver — composes through one
-  primitive, while continuations, the provider round, side-question projection,
-  and fork children inherit the already-composed string.
-- Persistent Instructions are live user configuration, not session identity.
-  The host resolves the active Engine selection from current disk when a
-  top-level turn begins, when a session is resumed after a process restart, and
-  on a confirmed Engine switch. Within a single turn the selection is frozen:
-  an in-process continuation (gate/permission/question/quality) reuses the
-  turn-start instruction blocks instead of re-reading disk, so a tool call
-  decided under one instruction set never continues under another after a
-  mid-turn pause. The frozen snapshot is in-process only; a Vesicle restart
-  loses it, so a resumed continuation re-reads current disk, and a new top-level
-  turn re-resolves and overwrites it. Editing an instruction file is a
-  configuration update that takes effect on the next turn, never mid-turn.
-- Validation is fail-soft per scope: decode UTF-8 with fatal error handling
-  (strip one leading BOM), require a regular file, reject a project target that
-  is a symbolic link and skip a user-scope link, and bound the combined selected
-  content to 32 KiB. An invalid, linked, or oversized scope is skipped with a
-  diagnostic while the rest of the turn continues; content is never truncated and
-  the turn is never blocked by optional instruction state. Never log instruction
-  contents; diagnostics and session audit use target, bytes, and hash only.
-- Targets are identified by a fixed enum `{ scope, engine }` and never by an
-  arbitrary path. Instruction text cannot widen the effective tool surface,
-  permission mode, path roots, stop gates, validators, Harness identity, or
-  provider configuration; the tool runtime enforces capabilities independently.
-- `read_instructions` and `update_instructions` are the model-visible surface for
-  Persistent Instructions, available on every Engine except Stage (Stage stays
-  strictly tool-less — its consumer-RP role does not benefit from
-  self-management of host configuration). `read_instructions` is an observation;
-  `update_instructions` is a mutation. They resolve only the fixed `{ scope,
-  engine }` target — never an arbitrary path — so they are a bounded host
-  exception that writes outside the model-visible writable roots, not a widened
-  filesystem surface. `update_instructions` writes atomically (temp + rename),
-  keeps one recoverable previous-state backup per target under
-  `.vesicle/instruction-backups/` (project) or beside `providers.yaml` (user),
-  honors optional `ifMatchSha256` optimistic concurrency (`"absent"` or a 64-hex
-  hash; a stale value never overwrites), and rejects any write whose new content
-  plus the other scope would exceed the 32 KiB budget for an Engine it affects.
-  It routes through the existing Tool Permission Runtime as an ordinary
-  `mutate` (MANUAL/INERTIA pause, MOMENTUM/YOLO execute) — never a second
-  approval system. These host-configuration writes are deliberately outside the
-  guarded file-checkpoint ledger: `/rewind` may remove their tool records from
-  the conversation but never restores the target file. The tool result must name
-  the single previous-state backup and identify recovery as manual. A successful
-  update is the one mid-turn reason to recompose:
-  it refreshes the in-turn frozen instruction snapshot so the next provider round
-  of the same turn observes the new content. The tools are for explicit,
-  user-requested persistent workflow management, not autonomous self-modification.
-- `/init` is the direct host action for drafting the general project target. It
-  must refuse an existing `VESICLE.md` before calling a provider unless the user
-  supplies `--force`; the forced path backs up the existing file under
-  `.vesicle/init-backups/`. A non-forced write must also fail if the target
-  appears while the provider request is in flight, so a long generation cannot
-  race an external edit into an overwrite.
-
-## Skills Runtime
-
-A Skill is on-demand procedural context plus bundled resources in the open
-Agent Skills `SKILL.md` format. It is never an Engine, Agent Profile, MCP
-server, or permission grant; it may contain instructions, references, assets,
-and scripts. A Skill cannot itself widen the effective tool surface. Actions it
-requests use the capabilities and permission mode the user already selected. See
-[`docs/dev/SKILLS.md`](./SKILLS.md) for the full boundary and
-`dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` for the approved
-implementation plan and research basis.
-
-- Phase 0 delivers format, inventory, and the Skill Store only. There is no
-  model-visible activation: no `activate_skill` / `read_skill_resource` tools,
-  no `/skill` command, and no prompt-composition, session, compaction, or
-  Engine-switch changes. Repository install commands, the activation/runtime
-  surface, project `.agents/skills/` scope, and script execution are later
-  phases; scripts join activation in Phase 2 rather than a separate privileged
-  plugin tier.
-- Discovery is bounded to two deterministic, non-merging scopes: the verified
-  Harness under logical `assets/skills/` (resolved through the active asset
-  resolver) and the user configuration directory's `skills/`. Project,
-  host-bundled, and installed-store scopes are reserved for later phases and are
-  not scanned today. The `skills/` module takes pre-resolved roots and must not
-  import the asset resolver, providers, harness runtime, or TUI; the CLI owns
-  Harness-root resolution.
-- On a name collision, exactly one winner is selected by scope precedence
-  (`user` outranks `harness`) and lower-precedence entries are reported as
-  shadowed. Bodies and resources are never merged. Catalog and diagnostic shapes
-  never carry an absolute host path: only logical source scopes and
-  skill-relative paths are surfaced.
-- Parsing is strict and fail-soft. One malformed Skill is skipped with a
-  diagnostic while valid siblings remain available. The experimental standard
-  `allowed-tools` field is parsed but never enforced; the Tool Permission Runtime
-  remains the only tool-approval authority. Unknown frontmatter fields are
-  preserved for inspection but have no runtime behavior.
-- Explicit installation is the user's choice to make a Skill available. Source,
-  resolved version, bundled scripts, declared requirements, and material risks
-  must be visible, but warnings do not create a separate trust state or
-  Skill-specific approval layer. Script actions use the existing Process and
-  Tool Permission Runtime behavior for the current Engine and permission mode.
-- Supporting resources live behind a virtual Skill root: every path is
-  skill-relative, shallow, and resolved only inside that root. Absolute paths,
-  `..` escapes, backslashes, NUL, empty/dot segments, symbolic links, devices,
-  and sockets are rejected so a Skill cannot read arbitrary host files.
-- The Skill Store keeps immutable, content-addressed snapshots under
-  `<user-config>/skill-store/<name>/<version>/` (a byte-exact standard bundle)
-  plus a sibling provenance sidecar and a small active index. Snapshots are
-  staged, re-verified by hash, and atomically renamed; reinstalling identical
-  content is idempotent by bundle hash, and the stored copy never remains a live
-  dependency on its source path.
-
-## Managed Harness Packs
-
-- Neural Narratology Harness Packs are independently versioned runtime products. Vesicle must consume a released pack or explicit local pack directory; runtime code and tests must not read a sibling checkout, follow cross-repository symlinks, or embed local source paths.
-- `core/harness` owns strict `prism-harness-pack/v1` parsing, file inventory and hash verification, Adapter/capability compatibility, Profile/Prompt binding checks, external host asset checks, and immutable installation under the user configuration directory.
-- Compatibility is fail-closed. Do not advertise a capability until Vesicle enforces its full host contract; in particular, generic SubAgent availability is not sufficient for contract-bound `prism-agent/delegation@1`, and prompt guidance is not a substitute for `quality-guard/anti-ai-flavor@1`.
-- Contract-bound delegation is a Driver Adapter over the generic SubAgent runtime. Resolve a unique delegation from the active parent Engine and requested Agent Profile, then bind mode, purpose, and retry limit from the verified Driver Contract. Model arguments may provide the self-contained `prompt` and a display label but must not widen those bindings. Harness delegations are sequential within one parent session; transient failures consume the declared retry budget, while exhaustion creates the Contract-declared, append-only, resumable user decision point. A user-authorized extra retry must persist its intent before resolving that decision; if restart cannot restore the same verified Harness context, session resume blocks instead of silently dropping or replaying the retry.
-- Delegation failures use the Driver ABI categories `unsupported`, `invalid_request`, `denied`, `not_found`, `conflict`, `transient`, and `failed`. Persist the delegation id, Agent Profile, mode, attempt history, category, and terminal result in session metadata. Cancellation is terminal and does not consume or silently restart a retry.
-- `core/quality` owns the host Output Quality Guard. Load Rule Pack and Detector assets only from a verified Harness directory, check their inner artifact hashes and published schema contracts, normalize CRLF/CR to LF plus Unicode NFC, and preserve normalized-candidate UTF-16 offsets while masking fenced code, blockquotes, HTML comments, Prism HUD and host-provided protected ranges. Unknown matcher, metric, preprocessing, schema, or binding semantics fail closed; the first host does not claim `strict` mode.
-- Harness `qualityBindings` and `agentQualityBindings` are delivery policy, not permissions or Validators. Artifact targets come only from successful create/write/replace/append `FileToolEvent` records, are keyed by normalized project-relative path, and are evaluated from the complete current UTF-8 post-image through the same writable-path and symlink guards as file tools. A later successful mutation supersedes the same target without clearing its rejected hash history; clean prose or another clean path cannot resolve a blocking target. Runtime `rewrite` buffers prose, keeps rejected candidates out of the displayed transcript, returns target-specific structured findings to the same Engine, allows at most two shared rewrite rounds, and stops when a blocking target repeats its post-image hash. Quality feedback, per-target pending state, pack/rule identity and bounded events must persist before another provider request so permission pauses, cancellation, or restart cannot silently bypass the Guard.
-- Quality assessment, policy outcome, and host action are separate durable concepts. New `QualityEvent` records retain the legacy decision projection while adding the policy version, outcome/action, and bounded per-target finding summaries. Exhaustion is a `needs_quality_decision` pause backed by append-only warning, retry-intent, and resolution records; it must not be overwritten by ordinary completion or a simultaneous gate. Retry permits exactly one user-authorized provider continuation under the same Engine, Harness, manifest, and Rule Pack identity. Accept and stop do not call the provider, retain target warnings, and restore any lower-priority gate or question. Cancellation or provider failure leaves the same decision recoverable. Unreadable, non-UTF-8, and over-budget post-images are inconclusive warnings rather than clean results, and only an explicit user resolution or a later clean assessment of the same target may close a warning.
-- `observe` records deterministic findings without blocking Dyad, Weaver, Weaver-Orch or Scene Writer. Scene Writer observation runs in the child session before terminal delivery to the parent. `analyze` bindings for Evaluate and Chapter Reviewer describe their own audit role and are excluded from recursive Guard enforcement; a future model-visible analysis tool is a separate capability.
-- Explicit tool allowlists in released Harness Agent Profiles may reference only Vesicle built-in host tools, so packs remain portable across projects. Runtime-local MCP or parent-provided tools are not valid explicit pack dependencies; wildcard inheritance remains subject to the runtime child-tool scope.
-- `/permissions` is the only ask/allow/deny layer for model-visible tool calls. Harness and HAL declare capabilities and map operations; they must not duplicate permission prompts or require a second per-delegation path-authorization system. Agent Profiles narrow the effective tool surface, while Tool Runtime continues to enforce path, symlink, concurrency, timeout, environment, and process invariants independently of permission mode.
-- Installation and activation are separate. The installer accepts an already-extracted directory, verifies it before and after staging, and atomically renames it into `asset-packs/<id>/<version>/`; explicit activation reverifies that immutable directory and atomically writes `.vesicle/assets.lock.json` without mutating editable user assets.
-- The bundled V10 Harness is a first-class verified Pack selected automatically when no project lock exists. Its root `harness-manifest.json` and exact `assets/` inventory must be verified before runtime construction; project/user overrides are excluded from that integrity check.
-- A selected managed Harness is one complete baseline, not another sparse fallback layer. Project and user overrides may remain above it, but a missing pack file must not fall through to the bundled Pack unless the manifest declares that exact logical path in `externalHostAssets`. Removing a project lock returns to the whole bundled V10 baseline.
-- The three Harness workflow Agents remain Driver-contract Agents. Only the exact five generic host Agent ids may use the ordinary concurrent SubAgent path while a Harness is active. Arbitrary project/user Agent Profiles must not use the host exemption and must fail closed when the Driver Contract does not declare a matching delegation.
-- Project locks and initial session host metadata persist pack id/version, source commit, manifest hash, and Adapter identity. Every start and resume reverifies the active bundled or managed Pack and requires exact session/project identity; missing, malformed, tampered, rolled-back, or switched identities block provider continuation instead of silently changing Harness content. A persisted quality decision may still be opened under identity drift so the user can accept or stop locally, but retry remains disabled until the exact recorded Harness and Rule Pack identity is restored. Sessions created before bundled V10 activation intentionally fail this identity check and require a new session.
-
-## Session Semantics
-
-- One interactive TUI run should reuse one active session until the user starts
-  or resumes another session.
-- JSONL records are append-only.
-- Image bytes live in the ignored content-addressed
-  `.vesicle/attachments/` store. Session JSONL persists attachment ids,
-  hashes, MIME types, sizes, and relative storage/source paths, never base64
-  image payloads.
-- Conversational records carry stable `uuid` and `parentUuid` links. Rewind
-  moves the in-memory head and lets the next persisted record create a new
-  branch; it must not truncate or rewrite JSONL. Legacy linear records are
-  projected as an implicit parent chain when read.
-- A real user prompt owns the file checkpoint for the work it initiates.
-  Mutation tools must capture every affected writable path before changing it;
-  checkpoint metadata remains host-only and must not enter provider messages.
-- Checkpoints preserve absent paths, files, and directory topology. Directory-tree moves must capture the source tree and target path so rewind can restore empty directories as well as file content.
-- Provider requests must include prior user/assistant turns when continuing a
-  session.
-- A user turn whose provider round fails before any assistant reply is marked
-  with a host-only `failed-turn` system record appended after the persisted
-  prompt (issue #98 deliberately keeps the prompt in the transcript). History
-  projection drops the failed round's trailing user input — the prompt plus any
-  host-injected user input such as background-process results or a
-  quality-rewrite feedback — from provider-visible messages, so resuming or
-  resending cannot emit consecutive same-role user messages that Anthropic
-  Messages would reject. A `/compact` summary is the sole completed-operation
-  boundary that survives the marker; everything else trailing is the failed
-  round's own input. The prompt stays in `records` for the transcript and
-  `/rewind`, where it is shown as a no-reply ghost. A mid-loop failure (an
-  assistant already replied) leaves a valid alternation tail and is not marked.
-  Failed *continuation* rounds (gate, user-question, engine-switch, permission
-  resolutions) are not yet reconciled — they append a tool result too, which can
-  still surface as a consecutive-user error on resume.
-- Response usage metadata is host-only. It may be persisted on assistant
-  records and restored for TUI footer display, but must not be forwarded back
-  to providers as part of resumed `VesicleMessage` request history.
-- Tool calls and tool results should be persisted for replay/debugging.
-- Successful filesystem tool results should persist structured `fileEvent`
-  metadata on the session tool record. Callers may use this for artifact
-  audit/ledger views without parsing natural-language tool result text.
-  In `fileEvent`, `bytes` means the resulting or observed file size, and for
-  `delete_file` it means the deleted file size. Successful create/write/replace/append results also include the SHA-256 of the complete resulting file. `append_file` may also report
-  `deltaBytes`; `list_files` and `list_directory` report `entryCount`; `grep_files` reports
-  `matches`.
-- User-selected reasoning tiers should be persisted as session metadata so
-  interactive resume restores runtime generation behavior. Provider
-  thinking state is preserved as thinking blocks for protocol continuity and
-  TUI display, but it is metadata and must not be merged into normal assistant
-  prose. OpenAI-compatible `reasoning_content` is a compatibility bridge into
-  that block structure.
-- User-selected engine profiles should be persisted as session metadata so
-  interactive resume restores which Prism workflow profile future turns and
-  gate resolution should use.
-- Engine handoff packets are user-role provider context with host metadata
-  `kind: engine-handoff`. Resume should pass them back to providers as normal
-  user messages for protocol compatibility, but the TUI should render them as
-  host/system notices, and rewind/user-turn accounting must not treat them as
-  authored prompts.
-- Compact summaries are user-role provider context with host metadata
-  `kind: compact-summary`. Manual `/compact` and automatic compaction install one
-  atomic system-role `compact-checkpoint-v1` record (the durable replacement
-  authority) appended to the current active head — they do not delete old records
-  or re-parent to the session root. The checkpoint carries a validated
-  `PortableCompactCheckpointV1` payload: a portable summary of the evicted prefix
-  plus a verbatim retained recent tail plus, mid-turn, the active frontier. The
-  original append-only transcript stays intact above the checkpoint for the
-  transcript, `/rewind`, and audit; provider-visible history resets at the newest
-  valid checkpoint and replays its suffix, and an unknown future version or
-  malformed v1 fails with an actionable session error instead of partially
-  projecting. The selected-pivot `/rewind` summary keeps its separate
-  `compact-summary` branch behavior. Resume passes the replacement back to
-  providers; the TUI renders summaries as host/system notices and keeps a
-  `compact-summary` display kind so the empty-session Hero never reappears over a
-  compacted transcript; rewind/user-turn accounting skips summaries as authored
-  prompts. Records carry durable `logicalTurnId` / `providerRoundId` identity
-  (one stable id per top-level Agent Loop, one per complete provider/tool round)
-  so compaction can evict only complete units and never split a tool call from
-  its result; legacy records without identity are grouped conservatively.
-- Automatic compaction is opt-in and provider-neutral. It activates only when
-  `limits.autoCompact` exists, `enabled !== false`, `threshold ∈ (0,1)`, and
-  `contextWindow` is a positive integer; there is no hidden default threshold.
-  `softTrigger = floor(min(contextWindow·threshold, contextWindow − reserve))`
-  and `hardInputCeiling = contextWindow − reserve`, with reserve precedence
-  `reserveOutputTokens` → effective turn `maxTokens` → `limits.maxOutputTokens`
-  → 0. Provider configuration rejects statically known reserves that leave no
-  positive input budget. The primary oracle is the most recent provider
-  `contextInputTokens`, paired with the host estimate of that exact request;
-  the next projection adds only host-estimated growth after that observation.
-  The fallback estimate includes the current system prompt, messages, tool-call
-  envelopes, and full active tool schema (`ceil(utf8/2)` plus overhead); base64
-  image materialization remains excluded and therefore approximate. Estimates
-  are labeled, never reported as provider-confirmed protection. A pre-turn check compacts an existing session
-  before the new user record persists; a mid-turn soft check runs after a
-  complete tool batch and a hard check runs after queued/background input is
-  materialized, before the next request. A soft-trigger failure keeps the old
-  head and continues; a hard-ceiling failure or insufficient reduction blocks
-  the request without mutating the session and restores the draft. The compact
-  provider request is a standalone call (never a bootstrap/loop turn), so it
-  cannot recurse; at most one compact runs per boundary; after success the
-  in-memory message array is rebound to the post-checkpoint history. Before the
-  checkpoint append, the exact replacement request is re-estimated and rejected
-  if it does not reduce the request or still exceeds the hard ceiling.
-  Cancellation is distinct from failure.
-  New sessions and Stage skip the pre-turn check; unresolved interactions defer
-  compaction but their resumed first provider request still passes the exact send
-  guard. `/context` reports the configured window, latest provider usage or its
-  absence, the activation state with the precise reason when inactive, the
-  effective soft/hard limits, the reserve and its source, the active strategy,
-  and any deferred/degraded state.
-- Session lists should mark unresolved gates and interrupted or exhausted quality decisions so the user can distinguish a normal transcript from a workflow waiting for confirmation or quality recovery.
-- Long-running turns should emit host-visible activity events before and after
-  provider requests, tool calls, gate pauses, and validation. Provider
-  streaming should emit assistant deltas as they arrive while still
-  reconstructing a final provider response for session replay.
-
-## Validation Semantics
-
-- Profile validators check Prism artifact documents, not every assistant turn.
-- Ordinary phase-transition prose such as "confirmed, moving to Phase 1" must
-  not be reported as a Module A/B schema failure.
-- Artifact-shaped assistant content starts with YAML frontmatter. Artifact
-  workbench validation reads the selected artifact file from disk before
-  presenting findings, so validation reflects what was actually written rather
-  than only the last assistant message.
-
-## TUI Interaction
-
-- Keep the surface dense and operational.
-- The layout must remain readable at 80 columns. Hide secondary panes before
-  squeezing the message stream below a useful width.
-- Gate and picker panels own the bottom area while active; side panes may be
-  hidden during those modes so confirmation controls stay legible.
-- Artifact previews belong in the message stream as bounded, structure-
-  preserving cards. The sidebar is an index, not a second preview surface.
-- Markdown extension and LaTeX cleanup is a TUI display concern. Keep
-  terminal-readable formula conversion and static formatting fallbacks outside
-  fenced code blocks, and do not mutate session records, provider messages, or
-  artifact files for rendering-only cleanup. Prefer readable static fallbacks
-  for terminal-hostile constructs such as images and disclosure widgets instead
-  of pretending they are interactive.
-- Avoid shape-near command pairs such as singular/plural twins. Prefer one
-  canonical command that inspects or lists without arguments and acts when an
-  argument is present: `/artifact [n|path]` and `/engine [id]` follow this
-  contract.
-- Use `/effort` for provider generation effort and `/reasoning` for reasoning
-  visibility. Do not give `/engine` a `workflow` alias; that command name is
-  reserved for a future host-owned workflow surface.
-- `/rewind` and empty-input double Esc must open the same selector. The picker
-  defaults to a virtual `(current)` row, selects only authored user prompts,
-  and restores to immediately before the chosen prompt. Keep `/checkpoint` as
-  the Claude Code compatibility alias; do not introduce additional rewind
-  synonyms.
-- `/compact [notes]` is the standalone active-session compaction command. It
-  may call the provider, but it must not expose tools to the summarization
-  request. Keep optional custom instructions as plain text appended to the
-  compaction prompt.
-- `/btw <question>` is a one-shot, tool-free side question over the current
-  conversation. It is `immediate` because it copies the immutable
-  `SideQuestionContextSnapshot` published before each main provider request
-  (never a half-written tool round) and sends one no-tools request through a
-  side-specific AbortController independent of the main turn. The request has
-  exactly one system authority — the dedicated `assets/prompts/shared/side-question.md`
-  — and one user message: a host-rendered reference packet that quotes the
-  parent Engine prompt, the conversation, and tool results verbatim as inert
-  reference data (`src/core/side-question/reference.ts`). Parent workflow
-  intent, tool protocol (`toolCalls`/`toolCallId`/tool-role messages),
-  reasoning, and thinking blocks never become active side instructions or
-  provider protocol fields; inherited images stay reference-only in the
-  snapshot and materialize on the single user packet for vision models. No
-  tools are declared, and any structured tool call in the response (including
-  mixed text-plus-tool) fails the exchange. Side exchanges are in-memory only:
-  they must never enter session JSONL, the main `conversation()` value, the
-  visible transcript, checkpoints, validators, gates, permissions, or tool
-  execution, and must not cancel or fail the main Agent Loop. The side overlay
-  is visual priority only — a gate, permission, or question the main loop
-  raises while it is open stays pending and appears on dismissal. Bare `/btw`
-  reopens the latest in-memory exchange for the current session; with no prior
-  exchange it returns to the composer with a usage hint.
-- Escape uses an 800ms double-press window: empty input opens rewind, non-empty
-  input saves and clears the draft, and an in-flight request is aborted. Active
-  modal panels consume Escape before the prompt-level handler.
-- Provider/model switching commands and artifact workbench commands are local
-  host actions. They should add concise host notices to the transcript and must
-  not call the provider.
-- Opening rewind and restoring checkpoints are host actions. Only `/compact`
-  and the explicit `Summarize from here` restore option call the active
-  provider.
-- Slash commands with fixed argument enums should expose those values through
-  the shared argument-completion popup instead of requiring memorized input.
-  Keep completion values sourced from the runtime enum where one exists, and
-  preserve parser aliases while completing to canonical values.
-- See [`COMMAND_COMPLETION.md`](./COMMAND_COMPLETION.md) for the command-owned
-  registration contract, dynamic candidate rules, and required regression
-  coverage for slash-command argument completion.
-- Main prompt editing should go through Vesicle's host-owned composer layer,
-  not directly through OpenTUI's single-line `<input>`. Keep the core keyboard
-  semantics aligned with Claude Code's prompt input model: ordinary editing
-  keys never interrupt a running turn, `Ctrl+Enter` inserts a newline,
-  `Shift+Enter` is inert when reported distinctly, plain Enter submits, and
-  Up/Down first move within soft-wrapped or explicit multiline drafts before
-  falling back to history. The render layer should own visual wrapping,
-  cursor-following viewport selection, and adaptive composer height; the
-  keyboard state machine should stay focused on text mutation and submit/
-  history actions. Trailing backslash+Enter remains a compatibility newline
-  fallback for terminals that cannot distinguish modified Enter keys.
-- Reasoning content should follow the RikkaHub-style pattern of a separate
-  thinking block before assistant text: it is independent from the assistant
-  markdown body, collapsible or hideable, and bounded by height/tail display so
-  long thinking does not dominate the transcript.
-- Ctrl+C behavior:
-  - With a selectable OpenTUI range, copy selection.
-  - Without a selection, first press arms exit and the second press exits.
-  - Use `renderer.destroy()` for real shutdown.
-- Avoid changing layout dimensions based on dynamic text when possible.
+- Comment invariants, non-obvious compatibility constraints, and reasons a tempting alternative is unsafe. Do not narrate syntax or restate the function name.
+- Keep comments accurate when behavior changes; stale rationale is worse than no comment.
+- Public docs must not contain secrets, absolute local paths, or references that require an ignored local document to understand the supported contract.
+- Markdown prose uses natural line wrapping: keep each paragraph or list item on one source line unless Markdown structure or meaning requires a break.
+- Update the authoritative domain document when a boundary changes. Prefer a link over copying the same detailed contract into several documents.
 
 ## Tests
 
-Use Bun tests under `tests/`.
+- Add or change tests only when they protect a user-visible behavior, security or durability boundary, external contract, or plausible regression not already covered at the appropriate layer.
+- State the defect the test would catch and use an oracle derived from the product or protocol contract rather than the current implementation's statement order or source text.
+- Prefer the narrowest existing test layer that can observe the behavior. Use integration, contract, acceptance, PTY, package, or platform smoke coverage when a unit test cannot exercise the real boundary.
+- Treat skipped or unavailable coverage honestly. Do not return early and count an unexecuted conditional test as passing.
+- Refactors should reuse existing coverage unless a risky boundary lacks characterization. Do not preserve incorrect production structure merely to satisfy implementation-locked tests.
 
-Standard checks:
+Verification commands and the change-risk matrix live in [`WORKFLOW.md`](./WORKFLOW.md). Test counts and source line counts are not quality targets.
 
-```bash
-bun run typecheck
-bun test
-```
+## Review Questions
 
-Add focused tests for:
-
-- config and prompt loading
-- session history reuse
-- provider tool-call normalization
-- tool execution and path guards
-- TUI smoke rendering
+- Does each changed module still have one recognizable owner and reason to change?
+- Does the change create or expand a god file, god function, god class, mega-controller, service locator, or broad state bag?
+- Did modularization reduce cross-domain knowledge, or merely distribute the same coupling across more files?
+- Does each new file live in an intentional domain and abstraction-level directory rather than a heterogeneous flat root?
+- Can the behavior be understood and tested without constructing unrelated runtime state?
+- Are external input, side effects, persistence, and cancellation handled at explicit boundaries?
+- Did the change preserve provider, tool, session, prompt, permission, and TUI separation?
+- Is new complexity required by the current behavior, or is it speculative flexibility?
+- Are comments, tests, and domain documentation aligned with the resulting contract?
