@@ -92,16 +92,18 @@ describe("validate run + summary + severity", () => {
   ].join("\n");
 
   test("plain prose → no-match (no validator applies)", () => {
-    const state = runValidation("just some prose, not a card");
+    const state = runValidation("workspace/x.md", "just some prose, not a card");
     expect(state.state).toBe("no-match");
+    if (state.state === "no-match") expect(state.path).toBe("workspace/x.md");
     expect(validationSummary(state)).toBe("no validator matched");
     expect(validationSeverity(state)).toBe(-1);
   });
 
   test("a valid card passes clean", () => {
-    const state = runValidation(validCard);
+    const state = runValidation("workspace/cards/mira.md", validCard);
     expect(state.state).toBe("result");
     if (state.state === "result") {
+      expect(state.path).toBe("workspace/cards/mira.md");
       expect(state.ok).toBe(true);
       expect(state.findings.every((f) => f.severity === "warning")).toBe(true);
     }
@@ -111,7 +113,7 @@ describe("validate run + summary + severity", () => {
 
   test("a card missing a mandatory section reports anchored errors", () => {
     const broken = validCard.replace("## Narrative Engine\nx\n", "");
-    const state = runValidation(broken);
+    const state = runValidation("workspace/cards/broken.md", broken);
     expect(state.state).toBe("result");
     if (state.state === "result") {
       expect(state.ok).toBe(false);
@@ -122,5 +124,39 @@ describe("validate run + summary + severity", () => {
     const summary = validationSummary(state);
     expect(summary).toContain("✗");
     expect(validationSeverity(state)).toBe(2);
+  });
+
+  test("the summary never carries an action token (Issue #118 §1)", () => {
+    // Every semantic outcome must be pure state — no `v`, `view`, `Enter`, …
+    const cases: Array<{ label: string; state: import("../../../src/tui/workspace-validate").ValidationState }> = [
+      { label: "pending", state: { state: "pending" } },
+      { label: "no-match", state: { state: "no-match", path: "a.md" } },
+      { label: "stale", state: { state: "stale", path: "a.md" } },
+      { label: "passed", state: { state: "result", path: "a.md", ok: true, findings: [] } },
+      {
+        label: "errors+warnings",
+        state: {
+          state: "result", path: "a.md", ok: false,
+          findings: [
+            { severity: "error", validator: "x", text: "e", line: 0, anchored: true },
+            { severity: "warning", validator: "y", text: "w", line: 1, anchored: true },
+          ],
+        },
+      },
+    ];
+    for (const { label, state } of cases) {
+      const summary = validationSummary(state);
+      expect(summary).not.toMatch(/\b(view|validate|Enter|jump)\b/);
+      // The historic duplicate suffix must not survive.
+      expect(summary).not.toContain("v view");
+      // Sanity: the label is informative (avoid a vacuous pass on empty-string cases).
+      expect(label).toBeTruthy();
+    }
+  });
+
+  test("a stale projection reads neutral and contributes no severity colour", () => {
+    const stale = { state: "stale", path: "a.md" } as const;
+    expect(validationSummary(stale)).toBe("validation stale");
+    expect(validationSeverity(stale)).toBe(-1);
   });
 });

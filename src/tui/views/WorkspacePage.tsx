@@ -7,6 +7,16 @@ import type { WorkspaceController, EditorStatusTone } from "../workspace-control
 import { resetStaleHorizontalScroll } from "../workspace-controller";
 import type { WorkspaceFileKind } from "../workspace-files";
 import { validationSeverity, validationSummary } from "../workspace-validate";
+import { displayWidth } from "../format";
+import {
+  dialogStatus,
+  editorStatus,
+  findingsStatus,
+  inputBarStatus,
+  truncatePath,
+  treeStatus,
+  viewerStatus,
+} from "../workspace-status";
 
 /**
  * Workspace page (Scope B / #62): the project-file workbench — lazy file tree
@@ -141,11 +151,15 @@ export function WorkspacePage(props: {
     const file = c.openFile();
     if (!file) return " No file ";
     const editing = c.isEditing();
-    const mode = editing
-      ? " · source"
+    // Mode vocabulary (Issue #118 §5): editing = "source"; Markdown preview or
+    // non-editable source = "preview"/"source view"; everything else = "viewer".
+    // Disk restrictions stay explicit flags (RO/link/truncated) rather than a
+    // blanket "read-only" that also names the viewing mode.
+    const modeLabel = editing
+      ? "source"
       : file.kind === "markdown"
-        ? ` · ${c.viewMode()}`
-        : "";
+        ? (c.viewMode() === "source" ? "source view" : "preview")
+        : "viewer";
     const flags = [
       editing && c.dirtyPaths().has(file.relPath) ? "●" : null,
       c.externalChanged().has(file.relPath) ? "†disk" : null,
@@ -153,68 +167,148 @@ export function WorkspacePage(props: {
       !editing && file.symlink ? "link" : null,
       !editing && file.truncated ? "truncated" : null,
     ].filter(Boolean).join(" ");
-    return ` ${file.relPath} · ${KIND_BADGES[file.kind]}${mode}${flags ? ` · ${flags}` : ""} `;
+    return ` ${file.relPath} · ${KIND_BADGES[file.kind]} · ${modeLabel}${flags ? ` · ${flags}` : ""} `;
   });
 
   const showTree = () => !props.compact || !(c.focusRegion() === "editor" && c.openFile());
   const showViewer = () => !props.compact || (c.focusRegion() === "editor" && c.openFile());
 
-  const validationSuffix = createMemo(() => {
-    const v = c.validationState();
-    const summary = validationSummary(v);
-    if (!summary) return "";
-    // The `v` key opens the findings panel from the tree and the read-only
-    // viewer; in editable source `v` types, so the "v view" affordance would
-    // be a lie there and is omitted.
-    const region = c.focusRegion();
-    const vReachable = region === "tree" || (region === "editor" && !c.isEditing());
-    const hasFindings = v.state === "result" && (v.findings.some((f) => f.severity === "error") || v.findings.some((f) => f.severity === "warning"));
-    return `  · ${summary}${hasFindings && vReachable ? " · v view" : ""}`;
-  });
+  /**
+   * Validation summary bound to a surface's target, or "" when the snapshot
+   * belongs to a different file (Issue #118 §3/§5 — a tree selection never
+   * wears another file's verdict). Reads the projected state so a dirty owner
+   * reads as `validation stale` rather than the old verdict. Only actual
+   * outcomes (`result`/`stale`) surface inline; `no-match` is the default for
+   * non-card files and is stated explicitly in the findings header on demand so
+   * it never crowds the editor hints.
+   */
+  const validationTextFor = (target: string | null | undefined): string => {
+    if (!target) return "";
+    const snap = c.validationSnapshot();
+    if (snap.state === "pending" || snap.state === "no-match" || snap.path !== target) return "";
+    return validationSummary(c.validationState());
+  };
+
+  const selectedRelPath = () => {
+    const row = c.rows()[c.selectedIndex()];
+    return row?.node.kind === "file" ? row.node.relPath : null;
+  };
+
+  /** Reachable Markdown mode-toggle hint, or "" (Issue #118 §4/§5). */
+  const toggleHint = (): string => {
+    const file = c.openFile();
+    if (!file || file.kind !== "markdown" || !file.lines) return "";
+    if (c.viewMode() === "preview") return c.canEditOpenFile() ? "m edit" : "m source";
+    // Non-editable source view can step back to preview; editable source is the
+    // editor region, which does not reach this hint.
+    return c.canEditOpenFile() ? "" : "m preview";
+  };
+
+  const statusBudget = () => Math.max(8, props.width - 1);
 
   const statusLine = createMemo(() => {
-    if (c.findingsOpen()) return "findings — ↑↓ navigate · Enter jump · Esc close";
+    const budget = statusBudget();
+    if (c.findingsOpen()) {
+      return findingsStatus({ budget, canJump: c.canJumpToSelectedFinding() });
+    }
     if (c.findActive()) {
       const count = c.findMatches().length;
       const idx = count > 0 ? c.findMatchIndex() + 1 : 0;
-      return `find: ${c.findQuery()}▌  ${idx}/${count}  Enter next · Shift+Enter prev · Esc close`;
+      return inputBarStatus({
+        budget,
+        label: "find:",
+        draft: `${c.findQuery()}▌  ${idx}/${count}`,
+        choices: "Enter next · Shift+Enter prev · Esc close",
+      });
     }
-    if (c.gotoActive()) return `goto line: ${c.gotoDraft() || " "}▌  Enter jump · Esc close`;
-    if (c.saveAsActive()) return `save as: ${c.saveAsDraft() || " "}▌  Enter save · Esc close`;
+    if (c.gotoActive()) {
+      return inputBarStatus({
+        budget,
+        label: "goto line:",
+        draft: `${c.gotoDraft() || " "}▌`,
+        choices: "Enter jump · Esc close",
+      });
+    }
+    if (c.saveAsActive()) {
+      return inputBarStatus({
+        budget,
+        label: "save as:",
+        draft: `${c.saveAsDraft() || " "}▌`,
+        choices: "Enter save · Esc close",
+      });
+    }
     const ops = c.opsBar();
     if (ops) {
-      const verb = ops.kind === "create-file" ? "new file"
-        : ops.kind === "create-dir" ? "new dir"
-        : ops.kind === "move" ? `move ${ops.source} →`
-        : `copy ${ops.source} →`;
-      return `${verb}: ${ops.draft || " "}▌  Enter confirm · Esc close`;
+      const label = ops.kind === "create-file" ? "new file:"
+        : ops.kind === "create-dir" ? "new dir:"
+        : ops.kind === "move" ? `move ${ops.source} →:`
+        : `copy ${ops.source} →:`;
+      return inputBarStatus({
+        budget,
+        label,
+        draft: `${ops.draft || " "}▌`,
+        choices: "Enter confirm · Esc close",
+      });
     }
     const d = c.dialog();
-    if (d?.kind === "dirty-confirm") return `${d.path} has unsaved edits — y save · n discard · Esc cancel`;
-    if (d?.kind === "overwrite-confirm") return `${d.path} changed on disk — o overwrite · s save as · c cancel`;
-    if (d?.kind === "reload-confirm") return `reload ${d.path}? local edits lost — y reload · n cancel`;
+    if (d?.kind === "dirty-confirm") {
+      return dialogStatus({ budget, lead: `${d.path} has unsaved edits`, choices: "y save · n discard · Esc cancel" });
+    }
+    if (d?.kind === "overwrite-confirm") {
+      return dialogStatus({ budget, lead: `${d.path} changed on disk`, choices: "o overwrite · s save as · c cancel" });
+    }
+    if (d?.kind === "reload-confirm") {
+      return dialogStatus({ budget, lead: `reload ${d.path}? local edits lost`, choices: "y reload · n cancel" });
+    }
     if (d?.kind === "delete-confirm") {
       const dirty = c.dirtyPaths().has(d.path);
-      return `delete ${d.path}?${dirty ? " (has unsaved edits)" : ""} — y delete (to trash) · any other key cancels`;
+      return dialogStatus({
+        budget,
+        lead: `delete ${d.path}?${dirty ? " (has unsaved edits)" : ""}`,
+        choices: "y delete (to trash) · any other key cancels",
+      });
     }
-    if (d?.kind === "ops-overwrite") {
-      return `${d.path} exists — o overwrite · c cancel`;
-    }
-    if (d?.kind === "save-as-overwrite") {
-      return `${d.path} exists — o overwrite · c cancel`;
+    if (d?.kind === "ops-overwrite" || d?.kind === "save-as-overwrite") {
+      return dialogStatus({ budget, lead: `${d.path} exists`, choices: "o overwrite · c cancel" });
     }
     const region = c.focusRegion();
     if (region === "tree") {
-      return `↑↓ nav · Enter/→ open · a file · A dir · m/F2 rename · c copy · d delete · r refresh · . hidden · v validate${validationSuffix()}`;
+      return treeStatus({
+        budget,
+        selectedIsFile: selectedRelPath() !== null,
+        validation: validationTextFor(selectedRelPath()),
+      });
     }
     const file = c.openFile();
     if (region === "editor" && file) {
-      const note = c.editorStatus() ? `  · ${c.editorStatus()}` : "";
       if (c.isEditing()) {
-        return `${file.relPath} · Ln ${c.cursorLn() + 1}:${c.cursorCol() + 1} · Ctrl+S save · Ctrl+F find · Ctrl+G line · Ctrl+X external · Esc back${note}${validationSuffix()}`;
+        return editorStatus({
+          budget,
+          target: file.relPath,
+          dirtyMark: c.dirtyPaths().has(file.relPath) ? "●" : "",
+          diskMark: c.externalChanged().has(file.relPath) ? "†disk" : "",
+          cursor: `Ln ${c.cursorLn() + 1}:${c.cursorCol() + 1}`,
+          validation: validationTextFor(file.relPath),
+        });
       }
-      const hint = file.kind === "markdown" ? "m edit · " : "";
-      return `${file.relPath} · read-only · ${hint}r reload · v validate · Esc back${note}${validationSuffix()}`;
+      const flags = [
+        file.readonly ? "RO" : null,
+        file.symlink ? "link" : null,
+        file.truncated ? "truncated" : null,
+      ].filter(Boolean).join(" ");
+      const modeLabel = file.kind === "markdown"
+        ? (c.viewMode() === "source" ? "source view" : "preview")
+        : "viewer";
+      const vText = validationTextFor(file.relPath);
+      return viewerStatus({
+        budget,
+        target: file.relPath,
+        mode: modeLabel,
+        flags,
+        validation: vText,
+        toggleHint: toggleHint(),
+        canViewFindings: Boolean(vText) && vText !== "no validator matched",
+      });
     }
     return "";
   });
@@ -410,7 +504,7 @@ export function WorkspacePage(props: {
             flexDirection="column"
             paddingX={1}
           >
-            <FindingsHeader state={c.validationState()} />
+            <FindingsHeader state={c.validationState()} width={quickOpenWidth(props.width)} />
             <For each={findingsList(c.validationState())}>
               {(finding, index) => (
                 <text
@@ -424,7 +518,11 @@ export function WorkspacePage(props: {
             <Show when={findingsList(c.validationState()).length === 0} fallback={<box height={0} />}>
               <text content="(nothing to report)" fg={palette.textDim} wrapMode="none" />
             </Show>
-            <text content="↑↓ navigate · Enter jump · Esc close" fg={palette.textDim} wrapMode="none" />
+            <text
+              content={`↑↓ navigate${c.canJumpToSelectedFinding() ? " · Enter jump" : ""} · Esc close`}
+              fg={palette.textDim}
+              wrapMode="none"
+            />
           </box>
         </Show>
       </box>
@@ -523,7 +621,29 @@ function findingsList(state: import("../workspace-validate").ValidationState): i
   return state.state === "result" ? state.findings : [];
 }
 
-function FindingsHeader(props: { state: import("../workspace-validate").ValidationState }) {
-  const summary = () => validationSummary(props.state);
-  return <text content={`findings: ${summary() || "—"}`} fg={palette.textPrimary} wrapMode="none" />;
+/**
+ * Findings panel header. Identifies the target file by a bounded path and
+ * states the pure summary — never an action token like `v view` (Issue #118
+ * §1/§5). The panel is already open, so the header must not tell the user to
+ * open it again. The path is middle-truncated to the real content width minus
+ * the `findings: `/` — ` chrome and the summary, so a long or CJK path can
+ * never clip the verdict (Issue #118 §8).
+ */
+function FindingsHeader(props: { state: import("../workspace-validate").ValidationState; width: number }) {
+  const content = () => {
+    const s = props.state;
+    const summary = validationSummary(s) || "—";
+    const summaryW = displayWidth(summary);
+    // Panel content width: full width minus border (2) and paddingX (2).
+    const contentWidth = Math.max(8, props.width - 4);
+    const lead = displayWidth("findings: ");
+    if (s.state === "pending") return `findings: ${summary}`;
+    const sep = displayWidth(" — ");
+    const pathBudget = contentWidth - lead - sep - summaryW;
+    // If the path cannot fit at all (very narrow panel), drop it rather than
+    // overflow; the summary still identifies the outcome.
+    const path = pathBudget >= 8 ? truncatePath(s.path, pathBudget) : "";
+    return path ? `findings: ${path} — ${summary}` : `findings: ${summary}`;
+  };
+  return <text content={content()} fg={palette.textPrimary} wrapMode="none" />;
 }

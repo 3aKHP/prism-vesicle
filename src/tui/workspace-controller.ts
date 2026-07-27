@@ -236,9 +236,47 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   const [opsBar, setOpsBar] = createSignal<OpsBar>(null);
 
   // —— in-page validation (B4 §5.2) ——
-  const [validationState, setValidationState] = createSignal<ValidationState>(pendingValidation);
+  // The snapshot is the retained last result plus the path it describes. The
+  // projected `validationState()` folds in the dirty-buffer staleness rule so
+  // the view never has to: a result whose owning buffer is dirty reads as the
+  // neutral `validation stale` state, and clearing the dirty flag (undo to
+  // clean, save, reload) restores it without re-running the validators.
+  const [validationSnapshot, setValidationSnapshot] = createSignal<ValidationState>(pendingValidation);
   const [findingsOpen, setFindingsOpen] = createSignal(false);
   const [findingsIndex, setFindingsIndex] = createSignal(0);
+
+  /**
+   * Displayed validation state. Reads the snapshot plus dirty-buffer truth: a
+   * result/no-match whose path is currently dirty projects to `stale` so the
+   * old verdict never reads as current over edited content. Plain function (not
+   * a memo) so callers — including tests outside a reactive root — always read
+   * the latest projection.
+   */
+  function validationState(): ValidationState {
+    const snap = validationSnapshot();
+    if ((snap.state === "result" || snap.state === "no-match") && dirtyPaths().has(snap.path)) {
+      return { state: "stale", path: snap.path };
+    }
+    return snap;
+  }
+
+  /** Install a fresh snapshot for `relPath` from its content. */
+  function setValidationFor(relPath: string, content: string): void {
+    setValidationSnapshot(runValidation(relPath, content));
+  }
+
+  /** Clear the snapshot back to pending (close/delete of the validated file). */
+  function clearValidation(): void {
+    setValidationSnapshot(pendingValidation);
+  }
+
+  /** Rekey the snapshot path after a rename/move; the underlying result is unchanged. */
+  function rekeyValidation(oldPath: string, newPath: string): void {
+    const snap = validationSnapshot();
+    if (snap.state !== "pending" && snap.path === oldPath) {
+      setValidationSnapshot({ ...snap, path: newPath } as ValidationState);
+    }
+  }
 
   async function recomputeRows(): Promise<void> {
     const version = ++flattenVersion;
@@ -328,6 +366,18 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     return Boolean(file && isEditablePreview(file) && activeEditorPath() === file.relPath && viewMode() === "source");
   }
 
+  /**
+   * Whether the open file actually has an admitted editable buffer for its
+   * path — i.e. `m edit` would really enter the editor. The file-shape check
+   * alone is not enough: the 8-buffer LRU pool can refuse a ninth file when
+   * every resident buffer is dirty, leaving the file in the read-only viewer
+   * even though `isEditablePreview` is true (Issue #118 §4).
+   */
+  function canEditOpenFile(): boolean {
+    const file = openFile();
+    return Boolean(file && isEditablePreview(file) && activeEditorPath() === file.relPath);
+  }
+
   async function openPath(relPath: string): Promise<boolean> {
     const preview = await readFilePreview(rootDir, relPath);
     if (!preview) return false;
@@ -335,7 +385,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setViewMode(preview.kind === "markdown" ? "preview" : "source");
     setFocusRegion("editor");
     status("");
-    setValidationState(runValidation(preview.lines?.join("\n") ?? ""));
+    setValidationFor(relPath, preview.lines?.join("\n") ?? "");
     if (isEditablePreview(preview)) {
       await openEditableBuffer(relPath);
     } else {
@@ -469,8 +519,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   // —— viewer actions ——
 
+  /**
+   * Toggle Markdown preview ↔ source. Requires a Markdown file with loaded
+   * text lines: a metadata-only symlink has `kind: "markdown"` but no lines,
+   * so advertising or executing a toggle there is a no-op lie (Issue #118 §4/§5).
+   */
   function toggleViewMode(): void {
-    if (openFile()?.kind !== "markdown") return;
+    const file = openFile();
+    if (!file || file.kind !== "markdown" || !file.lines) return;
     setViewMode((mode) => (mode === "source" ? "preview" : "source"));
   }
 
@@ -481,7 +537,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const preview = await readFilePreview(rootDir, file.relPath);
     if (preview) {
       setOpenFile(preview);
-      setValidationState(runValidation(preview.lines?.join("\n") ?? ""));
+      setValidationFor(file.relPath, preview.lines?.join("\n") ?? "");
       status(`reloaded ${file.relPath}`, "success");
     }
   }
@@ -632,7 +688,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     });
     invalidateDirCache(relPath);
     status(`saved ${relPath}`, "success");
-    setValidationState(runValidation(content));
+    setValidationFor(relPath, content);
     return true;
   }
 
@@ -728,6 +784,9 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       next.delete(path);
       return next;
     });
+    // Reload is a content change: install a fresh snapshot so the status row
+    // never reads the pre-reload verdict as current (Issue #118 §3).
+    setValidationFor(path, read.content);
     status(`reloaded ${path}`, "success");
   }
 
@@ -839,7 +898,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         next.delete(relPath);
         return next;
       });
-      setValidationState(runValidation(read.content));
+      setValidationFor(relPath, read.content);
       status(`reloaded ${relPath}`, "success");
       return;
     }
@@ -1045,7 +1104,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         setOpenFile(null);
         setActiveEditorPath(null);
         setFocusRegion("tree");
-        setValidationState(pendingValidation);
+        clearValidation();
       }
       const trashPath = await trashEntry(rootDir, relPath);
       status(`moved ${relPath} → ${trashPath} (trash)`, "success");
@@ -1080,6 +1139,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setExternalChanged((set) => rekeySet(set, oldPath, newPath));
     const file = openFile();
     if (file?.relPath === oldPath) setOpenFile({ ...file, relPath: newPath });
+    rekeyValidation(oldPath, newPath);
   }
 
   function rekeySet(set: ReadonlySet<string>, oldPath: string, newPath: string): ReadonlySet<string> {
@@ -1113,24 +1173,92 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   // —— in-page validation (B4 §5.2) ——
 
-  function openFindings(): void {
-    const file = openFile();
-    if (!file) { status("open a file to validate", "info"); return; }
-    setValidationState(runValidation(file.lines?.join("\n") ?? ""));
+  /**
+   * Open the findings panel for a snapshot already current for `relPath`
+   * (consume, no re-run). Returns false when the caller should bail.
+   */
+  function openFindingsForCurrent(relPath: string): boolean {
+    const snap = validationSnapshot();
+    if ((snap.state === "result" || snap.state === "no-match") && snap.path === relPath && !dirtyPaths().has(relPath)) {
+      setFindingsIndex(0);
+      setFindingsOpen(true);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Tree-focus `v` targets the selected row, never an unrelated open file
+   * (Issue #118 §3). A directory or empty selection stays closed with a hint;
+   * a dirty buffer is not silently validated against its older disk image; a
+   * snapshot already current for the selection is consumed rather than re-run.
+   */
+  async function treeValidate(): Promise<void> {
+    const row = rows()[selectedIndex()];
+    if (!row || row.node.kind !== "file") {
+      status("select a file to validate", "info");
+      return;
+    }
+    const relPath = row.node.relPath;
+    if (dirtyPaths().has(relPath)) {
+      status(`save ${relPath} before validating`, "info");
+      return;
+    }
+    if (openFindingsForCurrent(relPath)) return;
+    const preview = await readFilePreview(rootDir, relPath);
+    if (!preview) {
+      status(`${relPath} is not readable`, "error");
+      return;
+    }
+    setValidationFor(relPath, preview.lines?.join("\n") ?? "");
     setFindingsIndex(0);
     setFindingsOpen(true);
   }
 
+  /**
+   * Viewer-focus `v` targets the open file. Same dirty-buffer and consume
+   * rules as the tree path; re-validates only when the snapshot is stale or
+   * for a different file.
+   */
+  function viewerValidate(): void {
+    const file = openFile();
+    if (!file) { status("open a file to validate", "info"); return; }
+    if (dirtyPaths().has(file.relPath)) {
+      status(`save ${file.relPath} before validating`, "info");
+      return;
+    }
+    if (openFindingsForCurrent(file.relPath)) return;
+    setValidationFor(file.relPath, file.lines?.join("\n") ?? "");
+    setFindingsIndex(0);
+    setFindingsOpen(true);
+  }
+
+  /**
+   * Whether `Enter` in the findings panel would really jump. Requires an
+   * admitted editable buffer for the open file and a selected finding with a
+   * resolvable line (Issue #118 §4 — read-only / oversized / refused-buffer
+   * targets must neither advertise nor execute a jump).
+   */
+  function canJumpToSelectedFinding(): boolean {
+    if (!canEditOpenFile()) return false;
+    const snap = validationSnapshot();
+    if (snap.state !== "result") return false;
+    const finding = snap.findings[findingsIndex()];
+    return Boolean(finding && finding.line !== null);
+  }
+
   function handleFindingsKey(key: TuiKeyEvent): boolean {
-    const state = validationState();
+    const state = validationSnapshot();
     const findings = state.state === "result" ? state.findings : [];
     if (key.name === "escape") { setFindingsOpen(false); return true; }
     if (findings.length === 0) return true;
     if (key.name === "up") { setFindingsIndex((i) => Math.max(0, i - 1)); return true; }
     if (key.name === "down") { setFindingsIndex((i) => Math.min(findings.length - 1, i + 1)); return true; }
     if (key.name === "enter") {
-      const finding = findings[findingsIndex()];
-      if (finding && finding.line !== null) jumpToFinding(finding);
+      if (canJumpToSelectedFinding()) {
+        const finding = findings[findingsIndex()];
+        if (finding) jumpToFinding(finding);
+      }
       return true;
     }
     return true;
@@ -1139,7 +1267,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   /** Land the active editable buffer at a finding's line and close the panel. */
   function jumpToFinding(finding: LocatedFinding): void {
     const file = openFile();
-    if (!file || !isEditablePreview(file) || finding.line === null) return;
+    if (!file || !canEditOpenFile() || finding.line === null) return;
     if (activeEditorPath() !== file.relPath) setActiveEditorPath(file.relPath);
     setViewMode("source");
     setFocusRegion("editor");
@@ -1345,6 +1473,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (path) closeBuffer(path);
     setOpenFile(null);
     setFocusRegion("tree");
+    clearValidation();
   }
 
   function handleTreeKey(key: TuiKeyEvent): boolean {
@@ -1366,7 +1495,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         if (row) setDialog({ kind: "delete-confirm", path: row.node.relPath });
         return true;
       }
-      case "v": openFindings(); return true;
+      case "v": void treeValidate(); return true;
       case "q": setFocusRegion("composer"); return true;
       case "escape": setFocusRegion("composer"); return true;
       default: return true; // focused region owns (and swallows) the rest
@@ -1379,7 +1508,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "q": setFocusRegion("tree"); return true;
       case "r": void reloadViewer(); return true;
       case "m": toggleViewMode(); return true;
-      case "v": openFindings(); return true;
+      case "v": viewerValidate(); return true;
       case "up": viewerScrollBy?.(-1); return true;
       case "down": viewerScrollBy?.(1); return true;
       case "pageup": viewerScrollBy?.(-10); return true;
@@ -1504,9 +1633,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     opsBar,
     // in-page validation (B4)
     validationState,
+    validationSnapshot,
     findingsOpen,
     findingsIndex,
-    openFindings,
+    canEditOpenFile,
+    canJumpToSelectedFinding,
     // quick open
     quickOpenActive,
     quickQuery,

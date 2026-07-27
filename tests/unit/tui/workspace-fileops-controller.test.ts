@@ -274,6 +274,78 @@ describe("file management: delete (d)", () => {
   });
 });
 
+describe("in-page validation: target and ownership (#118)", () => {
+  test("tree `v` validates the selected file, not the previously open file", async () => {
+    await writeFile(join(root, "workspace/cards/alpha.md"), "---\narchetype: x\n---\nbody\n");
+    await writeFile(join(root, "workspace/cards/beta.md"), "---\narchetype: b\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    // Open alpha first — its verdict would wrongly attach to a later `v` under
+    // the old behavior.
+    await controller.openWorkspaceTarget("workspace/cards/alpha.md");
+    const alphaSnap = controller.validationSnapshot();
+    expect(alphaSnap.state).toBe("result");
+    if (alphaSnap.state === "result") {
+      expect(alphaSnap.path).toBe("workspace/cards/alpha.md");
+    }
+
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/beta.md");
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 30));
+    // The snapshot now describes the selected beta, not the still-open alpha.
+    expect(controller.findingsOpen()).toBe(true);
+    const betaSnap = controller.validationSnapshot();
+    expect(betaSnap.state).toBe("result");
+    if (betaSnap.state === "result") {
+      expect(betaSnap.path).toBe("workspace/cards/beta.md");
+    }
+  });
+
+  test("tree `v` on a directory keeps the panel closed with a status hint", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/mira.md");
+    gotoTree(controller);
+    selectInTree(controller, "workspace"); // a directory
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(controller.findingsOpen()).toBe(false);
+    expect(controller.editorStatus()).toContain("select a file");
+  });
+
+  test("tree `v` on a dirty buffer refuses to validate the stale disk image", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/mira.md");
+    const inst = mockEditor("---\narchetype: x\n---\nbody\nDIRTY\n");
+    controller.registerEditorInstance("workspace/cards/mira.md", inst);
+    controller.markEditorContentChanged("workspace/cards/mira.md");
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/mira.md");
+    controller.handleKey(key("v"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(controller.findingsOpen()).toBe(false);
+    expect(controller.editorStatus()).toContain("save");
+  });
+
+  test("renaming the validated file rekeys the snapshot path (verdict survives)", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/mira.md");
+    expect(controller.validationSnapshot().state).toBe("result");
+    gotoTree(controller);
+    selectInTree(controller, "workspace/cards/mira.md");
+    controller.handleKey(key("m"));
+    // The move bar prefills the directory prefix; type only the new name.
+    for (const ch of "renamed.md") controller.handleKey(key(ch));
+    controller.handleKey(key("enter"));
+    await new Promise((r) => setTimeout(r, 30));
+    // The result is retained but now attributed to the new path.
+    const rekeyedSnap = controller.validationSnapshot();
+    expect(rekeyedSnap.state).toBe("result");
+    if (rekeyedSnap.state === "result") {
+      expect(rekeyedSnap.path).toBe("workspace/cards/renamed.md");
+    }
+  });
+});
+
 describe("in-page validation (v)", () => {
   test("opening a card runs the validators and the status summary reflects findings", async () => {
     const controller = createWorkspaceController(root);

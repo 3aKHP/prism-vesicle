@@ -464,6 +464,64 @@ describe("workspace editor: save-as", () => {
   });
 });
 
+describe("workspace validation: dirty-buffer staleness (#118)", () => {
+  test("a dirty buffer projects the prior verdict as stale; undo-to-clean restores it", async () => {
+    await writeFile(join(root, "workspace/cards/broken.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("workspace/cards/broken.md");
+    // Opened card → character-card validator applies with errors.
+    expect(controller.validationState().state).toBe("result");
+    if (controller.validationState().state !== "result") return;
+
+    const inst = await openEditable(controller, "workspace/cards/broken.md", "---\narchetype: x\n---\nbody\n");
+    // A dirty edit projects the prior result as stale (neutral, no old colour).
+    inst.type("---\narchetype: x\n---\nbody\nDIRTY\n");
+    controller.markEditorContentChanged("workspace/cards/broken.md");
+    expect(controller.dirtyPaths().has("workspace/cards/broken.md")).toBe(true);
+    expect(controller.validationState().state).toBe("stale");
+
+    // Undo back to the saved snapshot restores the current verdict.
+    inst.type("---\narchetype: x\n---\nbody\n");
+    controller.markEditorContentChanged("workspace/cards/broken.md");
+    expect(controller.dirtyPaths().has("workspace/cards/broken.md")).toBe(false);
+    expect(controller.validationState().state).toBe("result");
+  });
+
+  test("save installs a fresh current verdict over a stale one", async () => {
+    await writeFile(join(root, "workspace/cards/broken.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    const inst = await openEditable(controller, "workspace/cards/broken.md", "---\narchetype: x\n---\nbody\n");
+    inst.type("---\narchetype: x\n---\nbody\nMORE\n");
+    controller.markEditorContentChanged("workspace/cards/broken.md");
+    expect(controller.validationState().state).toBe("stale");
+    // saveActive writes the buffer and installs a fresh snapshot (Markdown opens
+    // in preview, so this exercises saveActive directly rather than via Ctrl+S
+    // key routing, which is covered by the text-file save tests above).
+    await controller.saveActive();
+    await eventually(() => {
+      expect(controller.dirtyPaths().has("workspace/cards/broken.md")).toBe(false);
+      expect(controller.validationState().state).toBe("result");
+    });
+  });
+
+  test("reloading the active buffer installs a fresh current verdict over a stale one (#118 §3)", async () => {
+    await writeFile(join(root, "workspace/cards/broken.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    const inst = await openEditable(controller, "workspace/cards/broken.md", "---\narchetype: x\n---\nbody\n");
+    inst.type("---\narchetype: x\n---\nbody\nDIRTY\n");
+    controller.markEditorContentChanged("workspace/cards/broken.md");
+    expect(controller.validationState().state).toBe("stale");
+    // reloadActiveBuffer (Ctrl+R → reload-confirm → y, in editable source) must
+    // install a fresh snapshot over the stale one. Exercised directly because
+    // Markdown opens in preview, where viewer `r` routes to reloadViewer instead.
+    await controller.reloadActiveBuffer();
+    await eventually(() => {
+      expect(controller.dirtyPaths().has("workspace/cards/broken.md")).toBe(false);
+      expect(controller.validationState().state).toBe("result");
+    });
+  });
+});
+
 describe("workspace editor: external modification detection", () => {
   test("saving over an externally-changed file opens an overwrite confirm", async () => {
     const controller = createWorkspaceController(root);
