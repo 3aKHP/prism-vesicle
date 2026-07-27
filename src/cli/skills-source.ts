@@ -357,10 +357,10 @@ export async function updateSkill(
     if (!owner || !repo) throw new Error(`Cannot update "${name}": GitHub source identity is incomplete.`);
     const ref = previous.requestedRef;
     const url = ref ? `https://github.com/${owner}/${repo}/tree/${ref}` : `https://github.com/${owner}/${repo}`;
-    results = await installFromGitHub(url, { ref, env, fetchImpl: options.fetchImpl });
+    results = await installFromGitHub(url, { ref, path: previous.skillRoot, env, fetchImpl: options.fetchImpl });
   } else {
     if (!previous.sourceIdentity) throw new Error(`Cannot update "${name}": no source path is recorded.`);
-    results = await installFromLocalPath(previous.sourceIdentity, { env });
+    results = await installFromLocalPath(previous.sourceIdentity, { path: previous.skillRoot, env });
   }
   const provenance = results.find((item) => item.name === name) ?? results[0];
   if (!provenance) throw new Error(`Update of "${name}" did not produce a skill.`);
@@ -431,7 +431,10 @@ async function extractTarball(tarGz: Buffer, dest: string): Promise<void> {
   const archive = join(tmpdir(), `vesicle-github-${randomUUID()}.tar.gz`);
   await writeFile(archive, tarGz);
   try {
-    const result = Bun.spawnSync(["tar", "-xzf", archive, "-C", dest]);
+    // --no-same-owner avoids restoring archive ownership (EPERM as non-root, or
+  // foreign uid/gid as root). --no-same-permissions is intentionally NOT used:
+  // a Skill may bundle executable scripts whose +x bit must survive extraction.
+  const result = Bun.spawnSync(["tar", "--no-same-owner", "-xzf", archive, "-C", dest]);
     if (result.exitCode !== 0) {
       throw new Error(`tar extraction failed: ${result.stderr?.toString().trim() ?? `exit code ${result.exitCode}`}`);
     }

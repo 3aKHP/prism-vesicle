@@ -30,8 +30,15 @@ export async function runDoctor(): Promise<void> {
   try {
     const skills = await inspectSkills();
     const shadowed = skills.result.diagnostics.filter((diagnostic) => diagnostic.kind === "shadowed").length;
-    const installed = (await readActiveIndex()).entries.length;
-    skillsStatus = `${skills.result.skills.length} valid, ${skills.result.invalid.length} invalid, ${shadowed} shadowed, ${installed} installed`;
+    const base = `${skills.result.skills.length} valid, ${skills.result.invalid.length} invalid, ${shadowed} shadowed`;
+    let installed: string;
+    try {
+      installed = `${(await readActiveIndex()).entries.length} installed`;
+    } catch {
+      // A corrupted store index must not mask the harness/user scope counts.
+      installed = "installed count unavailable";
+    }
+    skillsStatus = `${base}, ${installed}`;
   } catch (error) {
     skillsStatus = `unavailable: ${error instanceof Error ? error.message : String(error)}`;
   }

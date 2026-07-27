@@ -388,22 +388,25 @@ const INDEX_LOCK_TIMEOUT_MS = 10_000;
 async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): Promise<T> {
   await mkdir(storeRoot, { recursive: true });
   const lockPath = join(storeRoot, INDEX_LOCK_FILE);
-  const handle = await acquireIndexLock(lockPath);
+  const { handle, token } = await acquireIndexLock(lockPath);
   try {
     return await critical();
   } finally {
     await handle.close().catch(() => undefined);
-    await rm(lockPath, { force: true }).catch(() => undefined);
+    // Only remove the lock if it is still ours: another process may have
+    // reclaimed a stale lock and re-acquired it while we were slow.
+    await releaseIfOwned(lockPath, token);
   }
 }
 
 async function acquireIndexLock(lockPath: string) {
   const deadline = Date.now() + INDEX_LOCK_TIMEOUT_MS;
+  const token = randomUUID();
   while (true) {
     try {
       const handle = await open(lockPath, "wx");
-      await handle.writeFile(String(process.pid));
-      return handle;
+      await handle.writeFile(`${process.pid}\n${token}\n`);
+      return { handle, token };
     } catch (error: unknown) {
       if (!isLockHeld(error)) throw error;
       if (await breakStaleLock(lockPath)) continue;
@@ -415,9 +418,21 @@ async function acquireIndexLock(lockPath: string) {
   }
 }
 
+/** Remove the lock only if it still carries our unique token. */
+async function releaseIfOwned(lockPath: string, token: string): Promise<void> {
+  try {
+    if ((await readFile(lockPath, "utf8")).includes(token)) {
+      await rm(lockPath, { force: true }).catch(() => undefined);
+    }
+  } catch {
+    // Lock already gone or unreadable; nothing to release.
+  }
+}
+
 async function breakStaleLock(lockPath: string): Promise<boolean> {
   try {
-    const pid = Number.parseInt(await readFile(lockPath, "utf8"), 10);
+    const raw = await readFile(lockPath, "utf8");
+    const pid = Number.parseInt(raw.split("\n")[0] ?? "", 10);
     if (Number.isFinite(pid) && !isProcessAlive(pid)) {
       await rm(lockPath, { force: true }).catch(() => undefined);
       return true;

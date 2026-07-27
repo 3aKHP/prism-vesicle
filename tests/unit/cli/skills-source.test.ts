@@ -273,6 +273,32 @@ describe("github acquisition", () => {
       expect(sidecar?.requestedRef).toBe("release-1");
     });
   });
+
+  test("resolves the default branch when the URL has no /tree/<ref>", async () => {
+    if (!tarSupported) return;
+    await withEnv(async (env, scratch) => {
+      const topLevel = "defbranch-abcdef0";
+      const repoTree = join(scratch, "repo-tree");
+      await writeSkillAt(join(repoTree, topLevel), "defbranch", "body");
+      const tarball = await makeTarball(repoTree, topLevel);
+      const fakeSha = "fedcba9876543210fedcba9876543210fedcba98";
+      const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+        const target = String(input);
+        if (target.includes("/repos/owner/defbranch") && !target.includes("/commits")) {
+          return new Response(JSON.stringify({ default_branch: "main" }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        if (target.includes("/commits/")) {
+          return new Response(JSON.stringify({ sha: fakeSha }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        if (target.includes("codeload.github.com")) return new Response(new Uint8Array(tarball), { status: 200 });
+        return new Response("not found", { status: 404 });
+      };
+      const [provenance] = await installFromGitHub("https://github.com/owner/defbranch", { fetchImpl, env });
+      expect(provenance.sourceKind).toBe("github");
+      expect(provenance.requestedRef).toBe("main");
+      expect(provenance.resolvedCommit).toBe(fakeSha);
+    });
+  });
 });
 
 describe("skill lifecycle (update + rollback)", () => {
@@ -287,6 +313,19 @@ describe("skill lifecycle (update + rollback)", () => {
       expect(await listSkillVersions("updatable", env)).toHaveLength(2);
       const back = await rollbackSkill("updatable", env);
       expect(back).toBe(first!.version);
+    });
+  });
+
+  test("update re-acquires a skill installed from a multi-skill source via its recorded skillRoot", async () => {
+    await withEnv(async (env, scratch) => {
+      await makeSource(join(scratch, "skills"), "alpha", "a");
+      await makeSource(join(scratch, "skills"), "beta", "b");
+      const [first] = await installFromLocalPath(scratch, { path: "skills/alpha", env });
+      expect(first!.name).toBe("alpha");
+      await writeFile(join(scratch, "skills", "alpha", "references", "glossary.md"), "updated gloss", "utf8");
+      const result = await updateSkill("alpha", { env });
+      expect(result.changed).toBe(true);
+      expect(result.provenance.skillRoot).toBe("skills/alpha");
     });
   });
 });
