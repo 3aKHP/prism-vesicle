@@ -19,16 +19,20 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  ETL_PROMPT,
+  MOCK_ENV,
+  SHARED_BASE_PROMPT,
+  engineProfileYaml,
+  providersYaml,
+  stripAnsi,
+} from "./support/pty-smoke";
 
 export {};
 
 const WIDTH = Number(process.argv[2] ?? 80);
 const HEIGHT = Number(process.argv[3] ?? 24);
 const REPO_ROOT = join(import.meta.dir, "..");
-
-function stripAnsi(input: string): string {
-  return input.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b[=>]/g, "").replace(/\r/g, "");
-}
 
 async function main(): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-compact-pty-"));
@@ -53,22 +57,8 @@ async function main(): Promise<void> {
     },
   });
 
-  await writeFile(join(configDir, "providers.yaml"), [
-    "default:",
-    "  provider: mock",
-    "  model: mock-model",
-    "providers:",
-    "  mock:",
-    "    protocol: openai-chat-compatible",
-    `    baseUrl: http://127.0.0.1:${server.port}/v1`,
-    "    apiKeyEnv: MOCK_KEY",
-    "    models:",
-    "      - id: mock-model",
-    "        limits:",
-    "          contextWindow: 8000",
-    "",
-  ].join("\n"), "utf8");
-  await writeFile(join(configDir, ".env"), "MOCK_KEY=mock\n", "utf8");
+  await writeFile(join(configDir, "providers.yaml"), providersYaml(server.port ?? 0), "utf8");
+  await writeFile(join(configDir, ".env"), MOCK_ENV, "utf8");
 
   const sharedDir = join(project, "assets", "prompts", "shared");
   const engineDir = join(project, "assets", "prompts", "engines");
@@ -76,13 +66,9 @@ async function main(): Promise<void> {
   await mkdir(sharedDir, { recursive: true });
   await mkdir(engineDir, { recursive: true });
   await mkdir(enginesDir, { recursive: true });
-  await writeFile(join(sharedDir, "vesicle-base.md"), "base", "utf8");
-  await writeFile(join(engineDir, "etl.md"), "etl", "utf8");
-  await writeFile(join(enginesDir, "etl.profile.yaml"), [
-    "id: etl", "displayName: Smoke ETL", "protocolVersion: v9.0-state-space",
-    "systemPrompt:", "  - assets/prompts/shared/vesicle-base.md", "  - assets/prompts/engines/etl.md",
-    "defaultTools:", "  - read_file", "validators: []", "stopGates: []", "stateRoots:", "  - workspace", "",
-  ].join("\n"), "utf8");
+  await writeFile(join(sharedDir, "vesicle-base.md"), SHARED_BASE_PROMPT, "utf8");
+  await writeFile(join(engineDir, "etl.md"), ETL_PROMPT, "utf8");
+  await writeFile(join(enginesDir, "etl.profile.yaml"), engineProfileYaml, "utf8");
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.VESICLE_PROVIDERS_FILE = join(configDir, "providers.yaml");

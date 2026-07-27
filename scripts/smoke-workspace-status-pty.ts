@@ -26,6 +26,14 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  ETL_PROMPT,
+  MOCK_ENV,
+  SHARED_BASE_PROMPT,
+  engineProfileYaml,
+  providersYaml,
+  stripAnsi,
+} from "./support/pty-smoke";
 
 export {};
 
@@ -37,15 +45,6 @@ const REPO_ROOT = join(import.meta.dir, "..");
 // exercises CJK display width in the status row.
 const CARD_REL = "workspace/角色卡.md";
 const CARD_BODY = "---\narchetype: voyager\n---\nA card with no required sections.\n";
-
-function stripAnsi(input: string): string {
-  return input
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "") // OSC (query responses, terminal capabilities)
-    .replace(/\x1b[PX^_][^\x1b]*\x1b\\|\x1b[PX^_][^\x07]*\x07/g, "") // DCS / SOS / PM / APC
-    .replace(/\x1b\[[0-9:;<=>?]*[ -/]*[@-~]/g, "") // CSI (full ECMA-48, incl. intermediates like `$`)
-    .replace(/\x1b./g, "") // any other two-byte escape
-    .replace(/\r/g, "");
-}
 
 async function main(): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-ws-status-pty-"));
@@ -63,22 +62,8 @@ async function main(): Promise<void> {
     },
   });
 
-  await writeFile(join(configDir, "providers.yaml"), [
-    "default:",
-    "  provider: mock",
-    "  model: mock-model",
-    "providers:",
-    "  mock:",
-    "    protocol: openai-chat-compatible",
-    `    baseUrl: http://127.0.0.1:${server.port}/v1`,
-    "    apiKeyEnv: MOCK_KEY",
-    "    models:",
-    "      - id: mock-model",
-    "        limits:",
-    "          contextWindow: 8000",
-    "",
-  ].join("\n"), "utf8");
-  await writeFile(join(configDir, ".env"), "MOCK_KEY=mock\n", "utf8");
+  await writeFile(join(configDir, "providers.yaml"), providersYaml(server.port ?? 0), "utf8");
+  await writeFile(join(configDir, ".env"), MOCK_ENV, "utf8");
 
   const sharedDir = join(project, "assets", "prompts", "shared");
   const engineDir = join(project, "assets", "prompts", "engines");
@@ -86,14 +71,9 @@ async function main(): Promise<void> {
   await mkdir(sharedDir, { recursive: true });
   await mkdir(engineDir, { recursive: true });
   await mkdir(enginesDir, { recursive: true });
-  await writeFile(join(sharedDir, "vesicle-base.md"), "base", "utf8");
-  await writeFile(join(engineDir, "etl.md"), "etl", "utf8");
-  await writeFile(join(enginesDir, "etl.profile.yaml"), [
-    "id: etl", "displayName: Smoke ETL", "protocolVersion: v9.0-state-space",
-    "systemPrompt:", "  - assets/prompts/shared/vesicle-base.md", "  - assets/prompts/engines/etl.md",
-    "defaultTools:", "  - read_file", "validators: []", "stopGates: []", "stateRoots:",
-    "  - workspace", "",
-  ].join("\n"), "utf8");
+  await writeFile(join(sharedDir, "vesicle-base.md"), SHARED_BASE_PROMPT, "utf8");
+  await writeFile(join(engineDir, "etl.md"), ETL_PROMPT, "utf8");
+  await writeFile(join(enginesDir, "etl.profile.yaml"), engineProfileYaml, "utf8");
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.VESICLE_PROVIDERS_FILE = join(configDir, "providers.yaml");
@@ -107,15 +87,22 @@ async function main(): Promise<void> {
   const stdin = child.stdin!;
   let accumulated = "";
   const reader = child.stdout!.getReader();
+  // One long-lived streaming decoder so a multi-byte glyph (CJK char, ✗) split
+  // across two read chunks does not corrupt to U+FFFD on both sides.
+  const decoder = new TextDecoder();
   const pump = (async () => {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      accumulated += new TextDecoder().decode(value);
+      accumulated += decoder.decode(value, { stream: true });
     }
+    accumulated += decoder.decode();
   })();
 
-  const type = (text: string) => { stdin.write(text); stdin.flush(); };
+  const type = (text: string) => {
+    // Guard the broken-pipe write that follows a fast child exit (EPIPE).
+    try { stdin.write(text); stdin.flush(); } catch { /* child exited */ }
+  };
   const plain = () => stripAnsi(accumulated);
   const waitFor = async (marker: string | RegExp, timeoutMs = 15000): Promise<boolean> => {
     const deadline = Date.now() + timeoutMs;
@@ -166,6 +153,11 @@ async function main(): Promise<void> {
   type("\x03"); await Bun.sleep(500);
   try { stdin.end(); } catch { /* exited */ }
   await Promise.race([pump, Bun.sleep(2000)]);
+  // Explicitly terminate the `script` child so a TUI that didn't honour the
+  // Ctrl+C bytes (modal, slow shutdown) cannot leak the process group and the
+  // tmpdir out from under a still-writing pty.log.
+  try { child.kill(); } catch { /* already gone */ }
+  await Promise.race([pump, Bun.sleep(500)]);
   server.stop(true);
   await rm(root, { recursive: true, force: true });
 
