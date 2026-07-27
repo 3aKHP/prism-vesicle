@@ -46,6 +46,9 @@ export {
 
 export { assertSafeRelativePath, classifyResource, enumerateSkillResources, isTextReference } from "./paths";
 
+export { detectSkillRepo } from "./repo";
+export type { DetectSkillRepoOptions, SkillRepoShape, SkillRepoShapeKind } from "./repo";
+
 export {
   PHASE0_PRECEDENCE,
   discoverSkills,
@@ -58,9 +61,13 @@ export type { BuildCatalogOptions } from "./catalog";
 export {
   computeBundleHash,
   installSnapshot,
+  listSkillVersions,
   readActiveIndex,
   readProvenance,
+  rollbackSkill,
+  setActiveVersion,
   skillStoreDirectory,
+  uninstallSkill,
 } from "./store";
 export type {
   InstallSnapshotOptions,

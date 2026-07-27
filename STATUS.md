@@ -87,7 +87,7 @@ prism-vesicle/
 │   │   └── validators/   # Module A/B v9 validators + registry
 │   ├── providers/        # Provider-neutral types and adapters
 │   ├── mcp/              # Streamable HTTP MCP tool discovery and execution
-│   ├── skills/           # Agent Skills parser, discovery, store, catalog (Phase 0)
+│   ├── skills/           # Agent Skills parser, discovery, store, install, catalog (Phase 0–1)
 │   ├── tui/              # OpenTUI/Solid interface, theme, GatePrompt
 │   └── types/            # Shared host types
 ├── assets/               # Exact 73-file V10 Harness manifest inventory
@@ -234,7 +234,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ### Other
 
-- Skills Phase 0 (format, inventory, and Skill Store) is implemented: a strict Agent Skills `SKILL.md` parser and validator, bounded discovery for the verified Harness (`assets/skills/`) and user (`<user-config>/skills/`) scopes with collision and unsupported-field diagnostics, an immutable versioned Skill Store with an active index and catalog hashing, and the `vesicle skills list|validate|inspect` commands plus `vesicle doctor` integration. There is no model-visible activation in this phase: no `activate_skill` / `read_skill_resource` tools, no `/skill` command, and no prompt-composition, session, compaction, or Engine-switch changes. See [`docs/dev/SKILLS.md`](./docs/dev/SKILLS.md). Deferred to later phases: local and GitHub repository installation (`vesicle skills install|update|rollback|uninstall`); Phase 2 activation, bare `/skill` inventory/picker, and script execution through existing Process/Permission Runtime behavior; project `.agents/skills/` discovery with visible provenance and no separate trust state; and optional registry or marketplace work.
+- Skills Phase 0 (format, inventory, Skill Store) and Phase 1 (repository installation and lifecycle) are implemented: a strict Agent Skills `SKILL.md` parser and validator, bounded discovery for the verified Harness (`assets/skills/`) and user (`<user-config>/skills/`) scopes with collision and unsupported-field diagnostics, an immutable versioned Skill Store with an active index, catalog hashing, and cross-process index locking, and the `vesicle skills list|validate|inspect|install|update|rollback|uninstall` commands plus `vesicle doctor` integration. `install` accepts a local path or a GitHub repository URL (`--ref`, `--path`, `--all`, `--include-worktree`), resolves remote refs to immutable commits, installs immutable snapshots with a provenance sidecar, and refuses to guess when a source contains multiple Skills; `update`/`rollback`/`uninstall` operate on the active index and retained versions. The Skill Store is a CLI-listable source (`list`/`inspect` show installed skills with scope `installed`) but not yet a model-visible catalog source. There is no model-visible activation: no `activate_skill` / `read_skill_resource` tools, no `/skill` command, and no prompt-composition, session, compaction, or Engine-switch changes. See [`docs/dev/SKILLS.md`](./docs/dev/SKILLS.md). Deferred to later phases: Phase 2 activation, bare `/skill` inventory/picker, and script execution through existing Process/Permission Runtime behavior; project `.agents/skills/` discovery with visible provenance and no separate trust state; and optional registry or marketplace work.
 - Prompt-cache engineering (PrefixShape hashing, CacheDiagnostics) is deferred.
 
 ## Verification

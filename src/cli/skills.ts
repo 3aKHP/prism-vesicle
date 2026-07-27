@@ -3,8 +3,10 @@ import { userConfigDirectory } from "../config/paths";
 import { resolveProjectHarnessRuntime } from "../core/harness";
 import { createAssetResolver } from "../core/runtime/assets";
 import { dirname, join } from "node:path";
-import { discoverSkills, listChildSkillRoots, loadSkill } from "../skills";
+import { discoverSkills, listChildSkillRoots, loadSkill, readActiveIndex, readProvenance, rollbackSkill, uninstallSkill } from "../skills";
 import type { DiscoveryResult, LoadedSkill } from "../skills";
+import { installFromSource, updateSkill } from "./skills-source";
+import type { InstallSourceOptions } from "./skills-source";
 
 /** Resolve Harness skill roots from the active verified Harness (`assets/skills/<name>/SKILL.md`). */
 async function resolveHarnessSkillRoots(projectRoot: string, env: NodeJS.ProcessEnv): Promise<string[]> {
@@ -62,6 +64,22 @@ export async function runSkillsCommand(args: string[]): Promise<void> {
     await runInspect(args[1]!);
     return;
   }
+  if (command === "install" && args.length >= 2) {
+    await runInstall(args.slice(1));
+    return;
+  }
+  if (command === "update" && args.length === 2) {
+    await runUpdate(args[1]!);
+    return;
+  }
+  if (command === "rollback" && args.length === 2) {
+    await runRollback(args[1]!);
+    return;
+  }
+  if (command === "uninstall" && args.length === 2) {
+    await runUninstall(args[1]!);
+    return;
+  }
   printUsage();
   process.exitCode = 1;
 }
@@ -70,10 +88,21 @@ async function runList(): Promise<void> {
   const inspection = await inspectSkills();
   const { result } = inspection;
   const shadowed = result.diagnostics.filter((diagnostic) => diagnostic.kind === "shadowed").length;
+  // A corrupted Skill Store index must not mask the harness/user listing; the
+  // same guard `vesicle doctor` already uses. Per-sidecar read errors are
+  // already tolerated inside `listInstalledSkills`, so this only fires on a bad
+  // index file.
+  let installed: InstalledSkillView[] = [];
+  let installedNotice = "";
+  try {
+    installed = await listInstalledSkills();
+  } catch (error) {
+    installedNotice = ` (installed unavailable: ${error instanceof Error ? error.message : String(error)})`;
+  }
 
   console.log("Prism Vesicle Skills");
-  if (result.skills.length === 0 && result.invalid.length === 0) {
-    console.log("No skills discovered (harness and user scopes).");
+  if (result.skills.length === 0 && result.invalid.length === 0 && installed.length === 0 && !installedNotice) {
+    console.log("No skills discovered or installed.");
     return;
   }
   for (const skill of result.skills) {
@@ -93,7 +122,14 @@ async function runList(): Promise<void> {
       if (diagnostic.kind === "shadowed") console.log(`  ${diagnostic.message}`);
     }
   }
-  console.log(`Summary: ${result.skills.length} valid, ${result.invalid.length} invalid, ${shadowed} shadowed`);
+  if (installed.length > 0) {
+    console.log("Installed:");
+    for (const skill of installed) {
+      const flag = skill.enabled ? "" : " (disabled)";
+      console.log(`  ${skill.name}  v${skill.version}${flag}  [${skill.sourceKind}]`);
+    }
+  }
+  console.log(`Summary: ${result.skills.length} valid, ${result.invalid.length} invalid, ${shadowed} shadowed, ${installed.length} installed${installedNotice}`);
 }
 
 async function runValidate(target: string): Promise<void> {
@@ -118,28 +154,33 @@ async function runValidate(target: string): Promise<void> {
 async function runInspect(name: string): Promise<void> {
   const inspection = await inspectSkills();
   const skill = [...inspection.result.skills, ...inspection.result.invalid].find((entry) => entry.name === name);
-  if (!skill) {
-    console.error(`No skill named "${name}" found in the harness or user scope.`);
-    process.exitCode = 1;
+  if (skill) {
+    console.log(`Name: ${skill.name}`);
+    console.log(`Scope: ${skill.scope}`);
+    if (skill.parsed.ok) {
+      const { metadata, resources, diagnostics } = skill.parsed;
+      console.log(`Description: ${metadata.description}`);
+      printExtraMetadata(metadata);
+      console.log(`Resources: ${resources.length}`);
+      for (const resource of resources.slice(0, 20)) {
+        console.log(`  ${resource.path}  (${resource.kind}, ${resource.bytes} bytes)`);
+      }
+      if (resources.length > 20) console.log(`  …and ${resources.length - 20} more`);
+      printDiagnostics(diagnostics);
+    } else {
+      printDiagnostics(skill.parsed.diagnostics);
+      console.log("INVALID");
+      process.exitCode = 1;
+    }
     return;
   }
-  console.log(`Name: ${skill.name}`);
-  console.log(`Scope: ${skill.scope}`);
-  if (skill.parsed.ok) {
-    const { metadata, resources, diagnostics } = skill.parsed;
-    console.log(`Description: ${metadata.description}`);
-    printExtraMetadata(metadata);
-    console.log(`Resources: ${resources.length}`);
-    for (const resource of resources.slice(0, 20)) {
-      console.log(`  ${resource.path}  (${resource.kind}, ${resource.bytes} bytes)`);
-    }
-    if (resources.length > 20) console.log(`  …and ${resources.length - 20} more`);
-    printDiagnostics(diagnostics);
-  } else {
-    printDiagnostics(skill.parsed.diagnostics);
-    console.log("INVALID");
-    process.exitCode = 1;
+  const entry = (await readActiveIndex()).entries.find((item) => item.name === name);
+  if (entry) {
+    await printInstalledInspection(entry.name, entry.version);
+    return;
   }
+  console.error(`No skill named "${name}" found in the harness, user, or installed scope.`);
+  process.exitCode = 1;
 }
 
 function printExtraMetadata(metadata: { license?: string; compatibility?: string; metadata?: Record<string, string>; allowedTools?: string[]; unknownFields: string[] }): void {
@@ -181,4 +222,132 @@ function printUsage(): void {
   console.error("  vesicle skills list");
   console.error("  vesicle skills validate <skill-directory>");
   console.error("  vesicle skills inspect <name>");
+  console.error("  vesicle skills install <path-or-url> [--ref <ref>] [--path <root>] [--all] [--include-worktree]");
+  console.error("  vesicle skills update <name>");
+  console.error("  vesicle skills rollback <name>");
+  console.error("  vesicle skills uninstall <name>");
+}
+
+interface InstalledSkillView {
+  name: string;
+  version: string;
+  enabled: boolean;
+  sourceKind: string;
+}
+
+async function listInstalledSkills(env: NodeJS.ProcessEnv = process.env): Promise<InstalledSkillView[]> {
+  const index = await readActiveIndex(env);
+  const views: InstalledSkillView[] = [];
+  for (const entry of index.entries) {
+    let sourceKind = "unknown";
+    try {
+      const provenance = await readProvenance(entry.name, entry.version, env);
+      if (provenance) sourceKind = provenance.sourceKind;
+    } catch {
+      // A single unreadable provenance sidecar must not hide the other installed skills.
+    }
+    views.push({ name: entry.name, version: entry.version, enabled: entry.enabled, sourceKind });
+  }
+  return views.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+interface ParsedInstallArgs {
+  source?: string;
+  options: InstallSourceOptions;
+}
+
+function parseInstallArgs(rest: string[]): ParsedInstallArgs {
+  let source: string | undefined;
+  const options: InstallSourceOptions = {};
+  for (let index = 0; index < rest.length; index++) {
+    const arg = rest[index]!;
+    if (arg === "--all") options.all = true;
+    else if (arg === "--include-worktree") options.includeWorktree = true;
+    else if (arg === "--ref") options.ref = consumeFlagValue(rest, ++index, "--ref");
+    else if (arg === "--path") options.path = consumeFlagValue(rest, ++index, "--path");
+    else if (!arg.startsWith("--") && source === undefined) source = arg;
+    else throw new Error(`Unexpected argument: ${arg}`);
+  }
+  return { source, options };
+}
+
+function consumeFlagValue(rest: string[], index: number, flag: string): string {
+  const value = rest[index];
+  if (value === undefined) throw new Error(`${flag} requires a value.`);
+  return value;
+}
+
+async function runInstall(rest: string[]): Promise<void> {
+  const { source, options } = parseInstallArgs(rest);
+  if (!source) {
+    console.error("Usage: vesicle skills install <path-or-url> [--ref <ref>] [--path <root>] [--all] [--include-worktree]");
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    const results = await installFromSource(source, options);
+    for (const provenance of results) {
+      const origin = provenance.sourceIdentity ?? "local directory";
+      const root = provenance.skillRoot !== "." ? ` (root: ${provenance.skillRoot})` : "";
+      console.log(`Installed ${provenance.name} ${provenance.version} [${provenance.sourceKind}] from ${origin}${root}.`);
+    }
+    console.log(`${results.length} skill(s) installed.`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function runUpdate(name: string): Promise<void> {
+  try {
+    const result = await updateSkill(name);
+    if (!result.changed) {
+      console.log(`${name} ${result.provenance.version} is already up to date.`);
+      return;
+    }
+    console.log(`Updated ${name}: ${result.previousVersion} -> ${result.provenance.version}.`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function runRollback(name: string): Promise<void> {
+  try {
+    const version = await rollbackSkill(name);
+    console.log(`Rolled back ${name} to ${version}.`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function runUninstall(name: string): Promise<void> {
+  try {
+    await uninstallSkill(name);
+    console.log(`Uninstalled ${name}.`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function printInstalledInspection(name: string, version: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const provenance = await readProvenance(name, version, env);
+  if (!provenance) {
+    console.error(`Installed metadata for "${name}" is missing.`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`Name: ${provenance.name}`);
+  console.log(`Scope: installed`);
+  console.log(`Version: ${provenance.version}`);
+  console.log(`Source: ${provenance.sourceKind}`);
+  if (provenance.sourceIdentity) console.log(`Source identity: ${provenance.sourceIdentity}`);
+  if (provenance.requestedRef) console.log(`Requested ref: ${provenance.requestedRef}`);
+  if (provenance.resolvedCommit) console.log(`Resolved commit: ${provenance.resolvedCommit}`);
+  if (provenance.dirtySource) console.log(`Dirty source: true (snapshot includes uncommitted changes)`);
+  console.log(`Skill root: ${provenance.skillRoot}`);
+  console.log(`Bundle SHA-256: ${provenance.bundleSha256}`);
+  console.log(`Files: ${provenance.fileInventory.length}`);
 }

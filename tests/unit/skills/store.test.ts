@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   computeBundleHash,
   installSnapshot,
+  listSkillVersions,
   readActiveIndex,
   readProvenance,
+  rollbackSkill,
   skillStoreDirectory,
+  uninstallSkill,
 } from "../../../src/skills";
 
 const symlinkSupported = await (async (): Promise<boolean> => {
@@ -160,6 +163,152 @@ mutated body
       // would refuse it, so the store must not accept an unreadable inventory.
       await writeFile(join(source, "references", "bad\\name.md"), "x", "utf8");
       await expect(installSnapshot({ sourceDirectory: source, env })).rejects.toThrow(/cannot be stored/);
+    });
+  });
+});
+
+describe("skill store: lifecycle", () => {
+  test("listSkillVersions returns installed versions oldest-first", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "versions", "a");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      await writeFile(join(source, "SKILL.md"), `---
+name: versions
+description: "demo: versions"
+---
+b
+`, "utf8");
+      await installSnapshot({ sourceDirectory: source, version: "v2", env });
+      expect(await listSkillVersions("versions", env)).toEqual(["v1", "v2"]);
+    });
+  });
+
+  test("rollback restores the previous active version", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "rolling", "v1 body");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      await writeFile(join(source, "SKILL.md"), `---
+name: rolling
+description: "demo: rolling"
+---
+v2 body
+`, "utf8");
+      await installSnapshot({ sourceDirectory: source, version: "v2", env });
+      expect((await readActiveIndex(env)).entries.find((entry) => entry.name === "rolling")?.version).toBe("v2");
+      const target = await rollbackSkill("rolling", env);
+      expect(target).toBe("v1");
+      expect((await readActiveIndex(env)).entries.find((entry) => entry.name === "rolling")?.version).toBe("v1");
+    });
+  });
+
+  test("rollback fails when there is no previous version", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "solo", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      await expect(rollbackSkill("solo", env)).rejects.toThrow(/No previous version/);
+    });
+  });
+
+  test("uninstall removes the index entry and the version family", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "removable", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "removable")).toBe(true);
+      await uninstallSkill("removable", env);
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "removable")).toBe(false);
+      expect(await lstat(join(skillStoreDirectory(env), "removable")).catch(() => undefined)).toBeUndefined();
+    });
+  });
+
+  test.skipIf(process.platform === "win32")("uninstall reports removal failure and keeps the index entry for retry", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "retryable", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      const familyRoot = join(skillStoreDirectory(env), "retryable");
+      await chmod(familyRoot, 0o500);
+      try {
+        await expect(uninstallSkill("retryable", env)).rejects.toThrow();
+        expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "retryable")).toBe(true);
+      } finally {
+        await chmod(familyRoot, 0o700);
+      }
+      await uninstallSkill("retryable", env);
+      expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "retryable")).toBe(false);
+    });
+  });
+
+  test("cross-process index updates wait for the owner and recover after it exits", async () => {
+    await withEnv(async (env, scratch) => {
+      const storeRoot = skillStoreDirectory(env);
+      await mkdir(storeRoot, { recursive: true });
+      const source = await makeSource(scratch, "after-crash", "body");
+      const ready = join(scratch, "lock-ready");
+      const databasePath = join(storeRoot, "index-lock.sqlite");
+      const storeModule = join(import.meta.dir, "../../../src/skills/store.ts");
+      const holderScript = [
+        'import { Database } from "bun:sqlite";',
+        'import { writeFile } from "node:fs/promises";',
+        `const database = new Database(${JSON.stringify(databasePath)}, { create: true });`,
+        'database.exec("BEGIN IMMEDIATE");',
+        `await writeFile(${JSON.stringify(ready)}, "ready");`,
+        "await Bun.sleep(60_000);",
+      ].join("\n");
+      const workerScript = [
+        `import { installSnapshot } from ${JSON.stringify(storeModule)};`,
+        `await installSnapshot({ sourceDirectory: ${JSON.stringify(source)}, env: { ...process.env, VESICLE_CONFIG_DIR: ${JSON.stringify(env.VESICLE_CONFIG_DIR)} } });`,
+      ].join("\n");
+      const holder = Bun.spawn({ cmd: [process.execPath, "-e", holderScript], stdout: "pipe", stderr: "pipe" });
+      try {
+        for (let attempt = 0; attempt < 200; attempt++) {
+          if (await lstat(ready).catch(() => undefined)) break;
+          await Bun.sleep(10);
+        }
+        expect(await lstat(ready).catch(() => undefined)).toBeDefined();
+
+        const worker = Bun.spawn({ cmd: [process.execPath, "-e", workerScript], stdout: "pipe", stderr: "pipe" });
+        const workerStdout = new Response(worker.stdout).text();
+        const workerStderr = new Response(worker.stderr).text();
+        let workerExited = false;
+        const workerExit = worker.exited.then((exitCode) => {
+          workerExited = true;
+          return exitCode;
+        });
+        await Bun.sleep(100);
+        if (workerExited) {
+          throw new Error(`Index worker exited before the holder: ${await workerExit}\n${await workerStdout}\n${await workerStderr}`);
+        }
+        holder.kill("SIGKILL");
+        const [exitCode, stderr] = await Promise.all([workerExit, workerStderr]);
+        expect(stderr).toBe("");
+        expect(exitCode).toBe(0);
+        expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "after-crash")).toBe(true);
+      } finally {
+        holder.kill("SIGKILL");
+        await holder.exited;
+      }
+    });
+  });
+
+  test("listSkillVersions skips interrupted staging dirs and orphan version dirs", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "listed", "body");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      const familyRoot = join(skillStoreDirectory(env), "listed");
+      await mkdir(join(familyRoot, ".staging-v2-deadbeef"), { recursive: true });
+      await mkdir(join(familyRoot, "v3"), { recursive: true });
+      expect(await listSkillVersions("listed", env)).toEqual(["v1"]);
+    });
+  });
+
+  test("a failed install leaves the active version unchanged", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "safe", "v1 body");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      const conflictSource = await makeSource(join(scratch, "other"), "safe", "different body");
+      await expect(installSnapshot({ sourceDirectory: conflictSource, version: "v1", env })).rejects.toThrow(/already exists with different content/);
+      const index = await readActiveIndex(env);
+      expect(index.entries.find((entry) => entry.name === "safe")?.version).toBe("v1");
+      expect(index.entries).toHaveLength(1);
     });
   });
 });
