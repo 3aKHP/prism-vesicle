@@ -25,7 +25,7 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 | `.env` | 是 | 上面对应的密钥值 |
 | `mcp.yaml` | 否 | 可选的 MCP 工具服务器 |
 | `permissions.yaml` | 否 | 工具批准默认与 `shell_exec` 开关(见[权限](./permissions-and-security.md)) |
-| `quality.yaml` | 否 | 实验性 Semantic Judge(`version: 2`;`mode: off` 可保留一组休眠的 provider/model/timeout)。见[质量守卫](./quality-guard.md);常规入口是 `/quality` |
+| `quality.yaml` | 否 | 实验性 Semantic Judge(`version: 2`;`mode: off` 可保留一组休眠的 provider/model/timeout)。见[质量守卫](../advanced/quality-guard.md);常规入口是 `/quality` |
 | `settings.yaml` | 否 | 用户级宿主设置(`editor:` 用于 Workspace 页 `Ctrl+X` 外部编辑器;为后续设置项预留) |
 | `assets/` | 否 | 用户级资源覆盖 |
 | `VESICLE.md` / `VESICLE.<engine>.md` | 否 | 持久化指令(用户级,跨所有项目生效;见下文) |

@@ -52,7 +52,7 @@ The 1.0 alpha makes Vesicle a credible direct API host for the Prism Engine, not
 
 Public user-facing documentation is intentionally limited during the alpha. Treat the [`docs/user/`](./docs/user/) manual, the [README](./README.md) installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and [`docs/examples/`](./docs/examples/) as the supported onboarding references; other behavior is subject to alpha-level change while feature and fix work remains the priority.
 
-Architecture and runtime contracts — provider adapters, tool guards, gates, sessions, prompts, TUI behavior, the SubAgent lifecycle, Harness and Quality Guard contracts, and command completion — live in [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) and its sibling documents under [`docs/dev/`](./docs/dev/). This file intentionally does not restate them.
+Architecture and runtime contracts are routed from [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) to their authoritative domain documents. Source-code conventions live separately in [`docs/dev/STYLE.md`](./docs/dev/STYLE.md). This file intentionally records current implementation state and limits rather than duplicating those contracts.
 
 The Prism asset lineage comes from the public sibling repository [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology).
 
@@ -113,7 +113,7 @@ prism-vesicle/
 
 ## Tool Surface
 
-Model-visible tools and their write scope. Path-guard rules, write roots, and the full tool-runtime contract live in [`docs/dev/STYLE.md` § Tool Runtime](./docs/dev/STYLE.md#tool-runtime); the table below is the authoritative tool inventory.
+Model-visible tools and their write scope. Path guards, permissions, process authority, gates, questions, and MCP execution are defined in [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md); the table below is the authoritative current tool inventory.
 
 | Tool | Write scope |
 |------|-------------|
@@ -161,7 +161,7 @@ Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`, `novels
 | `phase-confirmation` | etl | Wired (Phase artifact checkpoints) |
 | `runtime-turn` | runtime | Declared in profile and prompt-bound |
 
-Engines with empty `stopGates` never offer `request_confirmation`, so their models cannot invoke a gate the host would then have to refuse. `request_engine_switch` is available to all engines as a user-confirmed handoff; transition restrictions are intentionally deferred. Gate semantics and the Confirm/Reject/summary UI contract live in [`docs/dev/STYLE.md` § Gate Runtime](./docs/dev/STYLE.md#gate-runtime).
+Engines with empty `stopGates` never offer `request_confirmation`, so their models cannot invoke a gate the host would then have to refuse. `request_engine_switch` is available to all engines as a user-confirmed handoff; transition restrictions are intentionally deferred. Gate and handoff semantics live in [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md), while presentation belongs to [`docs/dev/TUI.md`](./docs/dev/TUI.md).
 
 ## Validators
 
@@ -188,7 +188,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 - OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini `generateContent` are implemented. **OpenAI Responses is deferred.**
 - Model discovery currently targets the OpenAI-compatible `GET /v1/models` response shape. Anthropic and Gemini use their existing profiles plus exact manual model ids until their native discovery APIs receive separate adapters. Discovery never infers capabilities from names.
-- Mid-stream SSE disconnect replay is deferred: replaying partial assistant/tool deltas requires explicit UI and tool-loop reconciliation. Transport and retryable-HTTP retry is implemented; see [`docs/dev/STYLE.md` § Provider Adapters](./docs/dev/STYLE.md#provider-adapters).
+- Mid-stream SSE disconnect replay is deferred: replaying partial assistant/tool deltas requires explicit UI and tool-loop reconciliation. Transport and retryable-HTTP retry is implemented; see [`docs/dev/PROVIDERS.md`](./docs/dev/PROVIDERS.md).
 
 ### Engines & Gates
 
@@ -211,7 +211,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Host Shell
 
 - `shell_exec` is a user-authorized host command, **not an OS sandbox**. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind.
-- Process cleanup terminates the managed shell and ordinary descendants in its process group/tree; an explicitly approved command can still escape that tree through a new session or external service manager. See [`docs/dev/STYLE.md` § Tool Permission Runtime](./docs/dev/STYLE.md#tool-permission-runtime) for the runtime contract and [`docs/user/en/advanced/shell-exec.md`](./docs/user/en/advanced/shell-exec.md) for the user-facing surface.
+- Process cleanup terminates the managed shell and ordinary descendants in its process group/tree; an explicitly approved command can still escape that tree through a new session or external service manager. See [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md) for the runtime contract and [`docs/user/en/advanced/shell-exec.md`](./docs/user/en/advanced/shell-exec.md) for the user-facing surface.
 
 ### Quality Guard & Stage
 
@@ -224,7 +224,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
 - With no project lock, Vesicle automatically verifies and activates the bundled `prism-engine-v10`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume.
-- See [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) for the bundled inventory, host extension layer, lineage, and update rules, and [`docs/dev/STYLE.md` § Managed Harness Packs](./docs/dev/STYLE.md#managed-harness-packs) for the verification and contract boundary.
+- See [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) for the bundled inventory, host extension layer, managed Pack verification, Driver bindings, Quality Guard bindings, lineage, and update rules.
 
 ### Persistent Instructions
 
@@ -265,7 +265,14 @@ Native Windows CI installs pinned Inno Setup, builds the versioned guided instal
 | [`CODE_SIGNING_POLICY.md`](./CODE_SIGNING_POLICY.md) | Windows signing scope, approval, verification, incident handling |
 | [`PRIVACY.md`](./PRIVACY.md) | Local data, external-service transfers, uninstall, deletion |
 | [`AGENTS.md`](./AGENTS.md) / [`CLAUDE.md`](./CLAUDE.md) | AI collaborator startup and coordination |
-| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Architecture and runtime contract boundaries |
+| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Source-code structure and maintainability rules |
+| [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) | Layering, dependency direction, and runtime-contract routing |
+| [`docs/dev/PROVIDERS.md`](./docs/dev/PROVIDERS.md) | Provider adapters, protocol mapping, transport, usage, and configuration |
+| [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md) | Tool capability, path, permission, process, gate, question, web, and MCP contracts |
+| [`docs/dev/SESSIONS.md`](./docs/dev/SESSIONS.md) | Session persistence, projection, checkpoints, rewind, compaction, and recovery |
+| [`docs/dev/PERSISTENT_INSTRUCTIONS.md`](./docs/dev/PERSISTENT_INSTRUCTIONS.md) | Persistent Instruction resolution, composition, mutation, and capability limits |
+| [`docs/dev/TUI.md`](./docs/dev/TUI.md) | Terminal layout, input, rendering, commands, rewind, and side-question contracts |
+| [`docs/dev/USER_AGENCY_AND_RISK_DISCLOSURE.md`](./docs/dev/USER_AGENCY_AND_RISK_DISCLOSURE.md) | User agency, risk disclosure, confirmation, and enforceable-boundary policy |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, PRs, hotfixes, independent CR, release lifecycle |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled Harness inventory, host layer, lineage, updates |
 | [`docs/dev/SUBAGENTS.md`](./docs/dev/SUBAGENTS.md) | SubAgent lifecycle and delivery contract |

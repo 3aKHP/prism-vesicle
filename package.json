@@ -42,6 +42,7 @@
   "scripts": {
     "dev": "bun run src/cli/main.ts",
     "doctor": "bun run src/cli/main.ts doctor",
+    "docs:check:staged": "bun run scripts/check-staged-markdown-wrap.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "lint": "biome lint .",
     "typecheck": "tsc --noEmit",

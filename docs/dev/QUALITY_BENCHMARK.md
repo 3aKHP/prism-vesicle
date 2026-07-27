@@ -73,4 +73,4 @@ The event log and report never contain candidate text or raw provider responses.
 
 ## Decision Boundary
 
-A successful dev benchmark is not authorization for a production held-out run, a Host Policy artifact, or semantic blocking. Follow the staged gates in `dev/docs/working/OUTPUT_QUALITY_GUARD_PR6_FEASIBILITY_ASSESSMENT.md`: freeze the rule/model scope and budget, complete the blinded held-out and preservation review, then perform the independent Policy handshake and Runtime promotion.
+A successful development benchmark is not authorization for a production held-out run, a Host Policy artifact, or semantic blocking. Production promotion requires separately governed rule and model scope, budget, blinded held-out evaluation, preservation review, independent Policy review, and Runtime integration evidence.

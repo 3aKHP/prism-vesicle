@@ -1,9 +1,6 @@
 # Skills Runtime
 
-Skills are on-demand procedural context plus bundled resources in the open
-Agent Skills `SKILL.md` format. A Skill is never an Engine, Agent Profile, MCP
-server, or permission grant. It may contain instructions, references, assets,
-and scripts, but cannot itself widen the current effective tool surface.
+Skills are on-demand procedural context plus bundled resources in the open Agent Skills `SKILL.md` format. A Skill is never an Engine, Agent Profile, MCP server, or permission grant. It may contain instructions, references, assets, and scripts, but cannot itself widen the current effective tool surface.
 
 Phase 0 (format, inventory, and Skill Store) is implemented here:
 
@@ -15,7 +12,4 @@ Phase 0 (format, inventory, and Skill Store) is implemented here:
 - `store.ts` — immutable, content-addressed Skill Store with an active index.
 - `types.ts` / `index.ts` — shared types and the public surface.
 
-There is no model-visible activation in this phase. See
-`docs/dev/SKILLS.md` for the runtime boundary and
-`dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` for the approved
-implementation plan, research basis, and Phase 1-4 delivery contract.
+There is no model-visible activation in this phase. See `docs/dev/SKILLS.md` for the runtime boundary and the phase roadmap.
