@@ -32,6 +32,20 @@ const BINARY_PATH =
 type ScenarioResult = { name: string; ok: boolean; detail: string };
 type SpawnResult = { exitCode: number | null; stdout: string; stderr: string };
 
+async function cleanupTemporaryTree(root: string): Promise<string | undefined> {
+  try {
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: process.platform === "win32" ? 5 : 0,
+      retryDelay: 100,
+    });
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 // Hermetic env: carry only what the runtime, shell resolver, and OS need, and
 // never a host VESICLE_PROVIDERS_FILE (it overrides VESICLE_CONFIG_DIR) or any
 // real API key. Same surface as the CLI journey in tests/integration/cli.
@@ -181,7 +195,7 @@ async function main(): Promise<void> {
     );
   });
 
-  await rm(root, { recursive: true, force: true });
+  const cleanupWarning = await cleanupTemporaryTree(root);
 
   const failed = results.filter((r) => !r.ok);
   for (const r of results) {
@@ -189,6 +203,9 @@ async function main(): Promise<void> {
     console.log(`[${tag}] ${r.name}${r.ok ? "" : ` — ${r.detail}`}`);
   }
   console.log(`\n${results.length - failed.length}/${results.length} binary smoke scenarios passed.`);
+  if (cleanupWarning) {
+    console.warn(`Warning: could not remove binary smoke temporary directory: ${cleanupWarning}`);
+  }
   if (failed.length > 0) {
     throw new Error(`${failed.length} binary smoke scenario(s) failed.`);
   }

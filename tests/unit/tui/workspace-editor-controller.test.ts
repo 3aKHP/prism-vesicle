@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createWorkspaceController } from "../../../src/tui/workspace-controller";
 import type { TuiKeyEvent } from "../../../src/tui/decision-interaction";
+import { eventually } from "../../support/async/eventually";
 import type { TextareaRenderable } from "@opentui/core";
 
 let root: string;
@@ -92,10 +93,11 @@ describe("workspace editor: dirty tracking and save", () => {
     expect(controller.dirtyPaths().has("notes.txt")).toBe(true);
 
     expect(controller.handleKey(key("s", { ctrl: true }))).toBe(true);
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.dirtyPaths().has("notes.txt")).toBe(false);
-    expect(await import("node:fs/promises").then((fs) => fs.readFile(join(root, "notes.txt"), "utf8")))
-      .toBe("line one\nline two\nnew line\n");
+    await eventually(async () => {
+      expect(controller.dirtyPaths().has("notes.txt")).toBe(false);
+      expect(await import("node:fs/promises").then((fs) => fs.readFile(join(root, "notes.txt"), "utf8")))
+        .toBe("line one\nline two\nnew line\n");
+    });
   });
 
   test("Ctrl+S dual-encoding (raw DC3 byte) also saves", async () => {
@@ -105,9 +107,10 @@ describe("workspace editor: dirty tracking and save", () => {
     controller.markEditorContentChanged("notes.txt");
     // A terminal that sends 0x13 without decomposing it to ctrl+s.
     expect(controller.handleKey({ sequence: "\x13" } as TuiKeyEvent)).toBe(true);
-    await new Promise((r) => setTimeout(r, 30));
-    expect(await import("node:fs/promises").then((fs) => fs.readFile(join(root, "notes.txt"), "utf8")))
-      .toBe("DC3\n");
+    await eventually(async () => {
+      expect(await import("node:fs/promises").then((fs) => fs.readFile(join(root, "notes.txt"), "utf8")))
+        .toBe("DC3\n");
+    });
   });
 
   test("status tone escalates with severity (success / warn / error)", async () => {
@@ -117,8 +120,7 @@ describe("workspace editor: dirty tracking and save", () => {
 
     // A clean save reads as a success tone.
     controller.handleKey(key("s", { ctrl: true }));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.editorStatusTone()).toBe("success");
+    await eventually(() => expect(controller.editorStatusTone()).toBe("success"));
 
     // Editing clears the stale "saved" note back to neutral.
     const inst2 = mockEditor("line one\nline two\nMORE\n");
@@ -131,8 +133,7 @@ describe("workspace editor: dirty tracking and save", () => {
     await new Promise((r) => setTimeout(r, 25));
     await writeFile(join(root, "notes.txt"), "disk version\n");
     controller.setActivePage("workspace");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.editorStatusTone()).toBe("warn");
+    await eventually(() => expect(controller.editorStatusTone()).toBe("warn"));
   });
 
   test("all-dirty refusal reports an error tone", async () => {
@@ -156,8 +157,7 @@ describe("workspace editor: dirty tracking and save", () => {
     controller.handleKey(key("s", { ctrl: true, shift: true }));
     for (const ch of "../escape.txt") controller.handleKey(key(ch));
     controller.handleKey(key("enter"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.editorStatusTone()).toBe("error");
+    await eventually(() => expect(controller.editorStatusTone()).toBe("error"));
   });
 });
 
@@ -246,10 +246,11 @@ describe("workspace editor: dirty-on-close confirm", () => {
     controller.markEditorContentChanged("notes.txt");
     controller.handleKey(key("escape"));
     controller.handleKey(key("y"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.activeEditorPath()).toBeNull();
     const fs = await import("node:fs/promises");
-    expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("line one\nline two\nSAVED\n");
+    await eventually(async () => {
+      expect(controller.activeEditorPath()).toBeNull();
+      expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("line one\nline two\nSAVED\n");
+    });
   });
 
   test("keys stay owned while dirty-confirm save is in flight", async () => {
@@ -265,8 +266,7 @@ describe("workspace editor: dirty-on-close confirm", () => {
     expect(controller.handleKey(key("escape"))).toBe(true);
     expect(controller.dialog()).toBeNull();
 
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.activeEditorPath()).toBeNull();
+    await eventually(() => expect(controller.activeEditorPath()).toBeNull());
   });
 
   test("Esc cancels the confirm and keeps editing", async () => {
@@ -295,10 +295,9 @@ describe("workspace editor: dirty-on-close confirm", () => {
     controller.handleKey(key("escape"));
     expect(controller.dialog()?.kind).toBe("dirty-confirm");
     controller.handleKey(key("y"));
-    await new Promise((r) => setTimeout(r, 30));
 
     // The save diverted: overwrite confirm is live and the buffer survived.
-    expect(controller.dialog()?.kind).toBe("overwrite-confirm");
+    await eventually(() => expect(controller.dialog()?.kind).toBe("overwrite-confirm"));
     expect(controller.activeEditorPath()).toBe("notes.txt");
     expect(controller.dirtyPaths().has("notes.txt")).toBe(true);
     const fs = await import("node:fs/promises");
@@ -306,9 +305,10 @@ describe("workspace editor: dirty-on-close confirm", () => {
 
     // Force-overwrite completes the original "save and close" intent.
     controller.handleKey(key("o"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("my local edit\n");
-    expect(controller.activeEditorPath()).toBeNull();
+    await eventually(async () => {
+      expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("my local edit\n");
+      expect(controller.activeEditorPath()).toBeNull();
+    });
     expect(controller.focusRegion()).toBe("tree");
   });
 
@@ -322,8 +322,7 @@ describe("workspace editor: dirty-on-close confirm", () => {
 
     controller.handleKey(key("escape"));
     controller.handleKey(key("y"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.dialog()?.kind).toBe("overwrite-confirm");
+    await eventually(() => expect(controller.dialog()?.kind).toBe("overwrite-confirm"));
     controller.handleKey(key("c"));
     expect(controller.dialog()).toBeNull();
     expect(controller.activeEditorPath()).toBe("notes.txt");
@@ -341,8 +340,7 @@ describe("workspace editor: dirty-on-close confirm", () => {
     await writeFile(join(root, "notes.txt"), "external change\n");
     controller.handleKey(key("escape"));
     controller.handleKey(key("y"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.dialog()?.kind).toBe("overwrite-confirm");
+    await eventually(() => expect(controller.dialog()?.kind).toBe("overwrite-confirm"));
     // 's' diverts to save-as (the only previously-uncovered dialog branch).
     controller.handleKey(key("s"));
     expect(controller.dialog()).toBeNull();
@@ -398,11 +396,12 @@ describe("workspace editor: save-as", () => {
     expect(controller.saveAsActive()).toBe(true);
     for (const ch of "copy.txt") controller.handleKey(key(ch));
     controller.handleKey(key("enter"));
-    await new Promise((r) => setTimeout(r, 30));
     const fs = await import("node:fs/promises");
-    expect(await fs.readFile(join(root, "copy.txt"), "utf8")).toBe("line one\nline two\nNEW\n");
-    expect(controller.activeEditorPath()).toBe("copy.txt");
-    expect(controller.dirtyPaths().has("copy.txt")).toBe(false);
+    await eventually(async () => {
+      expect(await fs.readFile(join(root, "copy.txt"), "utf8")).toBe("line one\nline two\nNEW\n");
+      expect(controller.activeEditorPath()).toBe("copy.txt");
+      expect(controller.dirtyPaths().has("copy.txt")).toBe(false);
+    });
   });
 
   test("save-as onto an existing different file opens an overwrite confirm", async () => {
@@ -412,8 +411,7 @@ describe("workspace editor: save-as", () => {
     controller.handleKey(key("s", { ctrl: true, shift: true }));
     for (const ch of "existing.txt") controller.handleKey(key(ch));
     controller.handleKey(key("enter"));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(controller.dialog()?.kind).toBe("save-as-overwrite");
+    await eventually(() => expect(controller.dialog()?.kind).toBe("save-as-overwrite"));
     // Cancelling leaves the existing file untouched.
     controller.handleKey(key("c"));
     const fs = await import("node:fs/promises");
@@ -422,11 +420,11 @@ describe("workspace editor: save-as", () => {
     controller.handleKey(key("s", { ctrl: true, shift: true }));
     for (const ch of "existing.txt") controller.handleKey(key(ch));
     controller.handleKey(key("enter"));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(controller.dialog()?.kind).toBe("save-as-overwrite");
+    await eventually(() => expect(controller.dialog()?.kind).toBe("save-as-overwrite"));
     controller.handleKey(key("o"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(await fs.readFile(join(root, "existing.txt"), "utf8")).toBe("line one\nline two\n");
+    await eventually(async () => {
+      expect(await fs.readFile(join(root, "existing.txt"), "utf8")).toBe("line one\nline two\n");
+    });
   });
 
   test("save-as rejects a path that escapes the project root", async () => {
@@ -435,8 +433,7 @@ describe("workspace editor: save-as", () => {
     controller.handleKey(key("s", { ctrl: true, shift: true }));
     for (const ch of "../escape.txt") controller.handleKey(key(ch));
     controller.handleKey(key("enter"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.editorStatus()).toContain("escapes project root");
+    await eventually(() => expect(controller.editorStatus()).toContain("escapes project root"));
     const fs = await import("node:fs/promises");
     await expect(fs.readFile(join(root, "..", "escape.txt"), "utf8")).rejects.toBeDefined();
   });
@@ -452,18 +449,18 @@ describe("workspace editor: save-as", () => {
     controller.handleKey(key("s", { ctrl: true, shift: true }));
     for (const ch of "copy.txt") controller.handleKey(key(ch));
     controller.handleKey(key("enter"));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.activeEditorPath()).toBe("copy.txt");
+    await eventually(() => expect(controller.activeEditorPath()).toBe("copy.txt"));
 
     const inst2 = mockEditor("line one\nline two\nNEW\n");
     controller.registerEditorInstance("copy.txt", inst2);
     inst2.type("line one\nline two\nNEW\nmore\n");
     controller.markEditorContentChanged("copy.txt");
     controller.handleKey(key("s", { ctrl: true }));
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.dialog()).toBeNull();
     const fs = await import("node:fs/promises");
-    expect(await fs.readFile(join(root, "copy.txt"), "utf8")).toBe("line one\nline two\nNEW\nmore\n");
+    await eventually(async () => {
+      expect(controller.dialog()).toBeNull();
+      expect(await fs.readFile(join(root, "copy.txt"), "utf8")).toBe("line one\nline two\nNEW\nmore\n");
+    });
   });
 });
 
@@ -477,14 +474,14 @@ describe("workspace editor: external modification detection", () => {
     await writeFile(join(root, "notes.txt"), "externally changed\n");
     controller.handleKey(key("s", { ctrl: true }));
     // saveActive is fire-and-forget; the dialog is set after its mtime read.
-    await new Promise((r) => setTimeout(r, 20));
-    expect(controller.dialog()?.kind).toBe("overwrite-confirm");
+    await eventually(() => expect(controller.dialog()?.kind).toBe("overwrite-confirm"));
     // 's' routes to save-as, 'o' force-overwrites.
     controller.handleKey(key("o"));
-    await new Promise((r) => setTimeout(r, 30));
     const fs = await import("node:fs/promises");
     // The buffer content (the opened snapshot, unedited) now wins on disk.
-    expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("line one\nline two\n");
+    await eventually(async () => {
+      expect(await fs.readFile(join(root, "notes.txt"), "utf8")).toBe("line one\nline two\n");
+    });
   });
 
   test("same-mtime inode replacement opens an overwrite confirm", async () => {
@@ -506,8 +503,7 @@ describe("workspace editor: external modification detection", () => {
     await rename(replacement, path);
 
     controller.handleKey(key("s", { ctrl: true }));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(controller.dialog()?.kind).toBe("overwrite-confirm");
+    await eventually(() => expect(controller.dialog()?.kind).toBe("overwrite-confirm"));
   });
 
   test("reactivating the page stats open buffers and marks disk-changed ones", async () => {
@@ -517,9 +513,10 @@ describe("workspace editor: external modification detection", () => {
     await writeFile(join(root, "notes.txt"), "changed on disk\n");
     // Re-entering the workspace page triggers the mtime sweep.
     controller.setActivePage("workspace");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.externalChanged().has("notes.txt")).toBe(true);
-    expect(controller.editorStatus()).toContain("changed on disk");
+    await eventually(() => {
+      expect(controller.externalChanged().has("notes.txt")).toBe(true);
+      expect(controller.editorStatus()).toContain("changed on disk");
+    });
   });
 
   test("Ctrl+R on a disk-changed buffer reloads it (replaceText preserves undo)", async () => {
@@ -528,13 +525,13 @@ describe("workspace editor: external modification detection", () => {
     await new Promise((r) => setTimeout(r, 25));
     await writeFile(join(root, "notes.txt"), "fresh from disk\n");
     controller.setActivePage("workspace");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(controller.externalChanged().has("notes.txt")).toBe(true);
+    await eventually(() => expect(controller.externalChanged().has("notes.txt")).toBe(true));
     controller.handleKey(key("r", { ctrl: true }));
     expect(controller.dialog()?.kind).toBe("reload-confirm");
     controller.handleKey(key("y"));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(inst.calls.replaceText).toContain("fresh from disk\n");
-    expect(controller.externalChanged().has("notes.txt")).toBe(false);
+    await eventually(() => {
+      expect(inst.calls.replaceText).toContain("fresh from disk\n");
+      expect(controller.externalChanged().has("notes.txt")).toBe(false);
+    });
   });
 });
