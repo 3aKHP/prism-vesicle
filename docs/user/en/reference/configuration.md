@@ -25,7 +25,7 @@ Files in that directory:
 | `.env` | Yes | The corresponding secret values |
 | `mcp.yaml` | No | Optional MCP tool servers |
 | `permissions.yaml` | No | Tool-approval default and the `shell_exec` switch (see [permissions](./permissions-and-security.md)) |
-| `quality.yaml` | No | Experimental Semantic Judge (`version: 2`; `mode: off` may retain a dormant provider/model/timeout tuple). See [quality guard](./quality-guard.md); `/quality` is the normal path |
+| `quality.yaml` | No | Experimental Semantic Judge (`version: 2`; `mode: off` may retain a dormant provider/model/timeout tuple). See [quality guard](../advanced/quality-guard.md); `/quality` is the normal path |
 | `settings.yaml` | No | User-level host settings (`editor:` for the Workspace `Ctrl+X` external editor; reserved for future settings) |
 | `assets/` | No | User-level asset overrides |
 | `VESICLE.md` / `VESICLE.<engine>.md` | No | Persistent Instructions (user-level, applies across all projects; see below) |

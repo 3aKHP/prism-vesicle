@@ -1,15 +1,13 @@
 # Prism Vesicle Workflow
 
-This document adapts the PRTS-MCP branch and independent review workflow to
-Prism Vesicle's current rapid internal development stage.
+This document adapts the PRTS-MCP branch and independent review workflow to Prism Vesicle's current rapid internal development stage.
 
 ## Hard Rules
 
 - Commit only after the user explicitly asks for a commit or PR.
 - Push only after the user explicitly asks for a push.
 - Keep work reviewable: one branch/PR should have one main intent.
-- Update docs and changelog when behavior, config, tool surface, or runtime
-  contracts change.
+- Update docs and changelog when behavior, config, tool surface, or runtime contracts change.
 - Never commit secrets, generated session state, or local runtime artifacts.
 
 ## Branch Model
@@ -44,13 +42,9 @@ Examples:
 
 ## Rapid Development Exception
 
-Prism Vesicle is currently in a fast internal development phase with no public
-release pressure and no external user dependency on `main`. During this phase,
-`develop` is the active trunk.
+Prism Vesicle is currently in a fast internal development phase with no public release pressure and no external user dependency on `main`. During this phase, `develop` is the active trunk.
 
-Small and medium changes may be committed and pushed directly to `develop` when
-the user explicitly asks for commit/push work and the change is easy to review
-from the commit itself. Examples:
+Small and medium changes may be committed and pushed directly to `develop` when the user explicitly asks for commit/push work and the change is easy to review from the commit itself. Examples:
 
 - documentation-only updates
 - prompt or asset copy edits that do not change runtime contracts
@@ -69,9 +63,7 @@ Use a short-lived branch and PR for higher-risk work:
 - changes intended for `main`, a tag, or release readiness
 - changes where Bot review or independent CR is useful
 
-`main` does not need to be updated on every iteration in this phase. Update
-`main` only for milestone snapshots, release-readiness checkpoints, or explicit
-user requests.
+`main` does not need to be updated on every iteration in this phase. Update `main` only for milestone snapshots, release-readiness checkpoints, or explicit user requests.
 
 The exception does not relax these rules:
 
@@ -82,10 +74,7 @@ The exception does not relax these rules:
 - Conventional Commits still apply
 - verification must match the risk of the change
 
-For public-release paths, this exception is retired:
-release-readiness changes use a release branch and PR, require independent CR,
-and must not be tagged from an unreviewed dogfood worktree. Keep `develop` as
-the integration trunk for subsequent internal iteration.
+For public-release paths, this exception is retired: release-readiness changes use a release branch and PR, require independent CR, and must not be tagged from an unreviewed dogfood worktree. Keep `develop` as the integration trunk for subsequent internal iteration.
 
 ## Iteration Loop
 
@@ -94,8 +83,7 @@ the integration trunk for subsequent internal iteration.
 Run `bun run hooks:install` once per checkout so the tracked pre-push hook enforces `bun run lint` before remote updates.
 
 1. Align scope: state what changes, files likely touched, risks, and validation.
-2. Decide whether the Rapid Development Exception allows direct `develop`
-   work. Otherwise branch from `develop`.
+2. Decide whether the Rapid Development Exception allows direct `develop` work. Otherwise branch from `develop`.
 3. Implement in small, reviewable commits when committing is requested.
 4. Run local verification:
 
@@ -110,11 +98,10 @@ bun run doctor
    - `README.md` for user-facing usage
    - `STATUS.md` for current project shape or limits
    - `CHANGELOG.md` for user-visible changes
-   - `docs/dev/STYLE.md` for architecture rules
+   - `docs/dev/STYLE.md` for source-code conventions
+   - `docs/dev/ARCHITECTURE.md` or its linked domain contract for architecture and runtime boundaries
    - `docs/dev/WORKFLOW.md` for process changes
-6. Push directly to `develop` only when allowed by the Rapid Development
-   Exception and explicitly requested by the user; otherwise open a PR when
-   requested.
+6. Push directly to `develop` only when allowed by the Rapid Development Exception and explicitly requested by the user; otherwise open a PR when requested.
 7. Run independent CR before merge for non-trivial PRs.
 8. Address Blocking and Should-fix findings.
 9. Wait for human merge when using PR flow.
@@ -232,8 +219,7 @@ Use this for regressions that block real use, such as:
 - path guards are unsafe
 - TUI cannot exit or accept input
 
-Use the hotfix path only when `main` or a tagged milestone must be repaired.
-During rapid internal development, most urgent fixes can go through `develop`.
+Use the hotfix path only when `main` or a tagged milestone must be repaired. During rapid internal development, most urgent fixes can go through `develop`.
 
 Full hotfix flow:
 
@@ -246,8 +232,7 @@ Full hotfix flow:
 
 ## Independent CR
 
-Every non-trivial PR should be reviewed by an independent agent or reviewer that
-did not participate in the implementation conversation.
+Every non-trivial PR should be reviewed by an independent agent or reviewer that did not participate in the implementation conversation.
 
 ### Reviewer Prompt Template
 

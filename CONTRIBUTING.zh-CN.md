@@ -75,7 +75,9 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 - `STATUS.md` 是当前实现清单的权威来源，包括工具接口、验证器、验证方式和已知限制。
 - `CHANGELOG.md` 记录值得关注的已发布和未发布变更。
 - `CONTRIBUTING.md` 负责贡献者配置、仓库边界和文档约定。
-- `docs/dev/STYLE.md` 和 `docs/dev/WORKFLOW.md` 分别负责架构与开发工作流。
+- `docs/dev/STYLE.md` 负责源代码结构与可维护性规范。
+- `docs/dev/ARCHITECTURE.md` 负责分层、依赖方向以及各项运行时权威契约的导航。
+- `docs/dev/WORKFLOW.md` 负责开发与发布工作流。
 
 详细清单应链接到对应的权威文档，而不是在多个根目录文件中重复维护。
 
@@ -93,7 +95,7 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 
 - 说明行为发生了什么变化，以及它为何属于当前里程碑。
 - 在 PR 描述中列出验证命令。
-- 用户可见行为、运行时契约或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md` 或 `docs/dev/STYLE.md`。
+- 用户可见行为、运行时行为或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md`、`docs/dev/ARCHITECTURE.md` 或对应的领域契约。仅在源代码规范变化时更新 `docs/dev/STYLE.md`。
 - 不要把生成的 `.vesicle/` 会话提交到 Git。
 - 新增或编辑的 Markdown 正文应使用自然换行。
 

@@ -75,7 +75,9 @@ Keep root-document responsibilities distinct:
 - `STATUS.md` is the authoritative current implementation inventory, including tool surface, validators, verification, and known limits.
 - `CHANGELOG.md` records notable released and unreleased changes.
 - `CONTRIBUTING.md` owns contributor setup, repository boundaries, and documentation conventions.
-- `docs/dev/STYLE.md` and `docs/dev/WORKFLOW.md` own architecture and development workflow respectively.
+- `docs/dev/STYLE.md` owns source-code structure and maintainability rules.
+- `docs/dev/ARCHITECTURE.md` owns layering, dependency direction, and links to the authoritative runtime contracts.
+- `docs/dev/WORKFLOW.md` owns development and publication workflow.
 
 Prefer links to the authoritative document over duplicating detailed inventories in multiple root files.
 
@@ -93,7 +95,7 @@ Keep commands, paths, configuration keys, code, and product identifiers unchange
 
 - Explain the behavior change and why it belongs in the current milestone.
 - Include verification commands in the PR description.
-- Update `README.md`, `STATUS.md`, `CHANGELOG.md`, or `docs/dev/STYLE.md` when the user-visible behavior, runtime contract, or architecture boundary changes.
+- Update `README.md`, `STATUS.md`, `CHANGELOG.md`, `docs/dev/ARCHITECTURE.md`, or the owning domain contract when user-visible behavior, runtime behavior, or an architecture boundary changes. Update `docs/dev/STYLE.md` only when source-code conventions change.
 - Keep generated `.vesicle/` sessions out of git.
 - Keep new or edited Markdown prose naturally wrapped.
 

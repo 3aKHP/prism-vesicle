@@ -206,7 +206,8 @@ Pull requests and `develop` pushes call one reusable Linux/Windows release build
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Contributor setup, repository boundaries, and documentation style |
 | [`CODE_SIGNING_POLICY.md`](./CODE_SIGNING_POLICY.md) | Windows signing scope, approval, verification, and incident handling |
 | [`PRIVACY.md`](./PRIVACY.md) | Local data, external-service transfers, uninstall behavior, and deletion |
-| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Architecture and runtime boundaries |
+| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Source-code structure and maintainability rules |
+| [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) | Architecture boundaries and developer-contract navigation |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, review, release, and documentation sweep |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled V10 inventory, host extension layer, lineage, and update rules |
 | [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | Developer-only Semantic Judge measurement, caps, resume, and evidence boundary |
