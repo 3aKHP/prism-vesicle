@@ -87,7 +87,7 @@ prism-vesicle/
 │   │   └── validators/   # Module A/B v9 validators + registry
 │   ├── providers/        # Provider-neutral types and adapters
 │   ├── mcp/              # Streamable HTTP MCP tool discovery and execution
-│   ├── skills/           # Future controlled skill bundle surface
+│   ├── skills/           # Agent Skills parser, discovery, store, catalog (Phase 0)
 │   ├── tui/              # OpenTUI/Solid interface, theme, GatePrompt
 │   └── types/            # Shared host types
 ├── assets/               # Exact 73-file V10 Harness manifest inventory
@@ -234,7 +234,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ### Other
 
-- Skills are a directory stub, not a runtime integration.
+- Skills Phase 0 (format, inventory, and Skill Store) is implemented: a strict Agent Skills `SKILL.md` parser and validator, bounded discovery for the verified Harness (`assets/skills/`) and user (`<user-config>/skills/`) scopes with collision and unsupported-field diagnostics, an immutable versioned Skill Store with an active index and catalog hashing, and the `vesicle skills list|validate|inspect` commands plus `vesicle doctor` integration. There is no model-visible activation in this phase: no `activate_skill` / `read_skill_resource` tools, no `/skill` command, and no prompt-composition, session, compaction, or Engine-switch changes. See [`docs/dev/SKILLS.md`](./docs/dev/SKILLS.md). Deferred to later phases: local and GitHub repository installation (`vesicle skills install|update|rollback|uninstall`); Phase 2 activation, bare `/skill` inventory/picker, and script execution through existing Process/Permission Runtime behavior; project `.agents/skills/` discovery with visible provenance and no separate trust state; and optional registry or marketplace work.
 - Prompt-cache engineering (PrefixShape hashing, CacheDiagnostics) is deferred.
 
 ## Verification
@@ -269,5 +269,6 @@ Native Windows CI installs pinned Inno Setup, builds the versioned guided instal
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, PRs, hotfixes, independent CR, release lifecycle |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled Harness inventory, host layer, lineage, updates |
 | [`docs/dev/SUBAGENTS.md`](./docs/dev/SUBAGENTS.md) | SubAgent lifecycle and delivery contract |
+| [`docs/dev/SKILLS.md`](./docs/dev/SKILLS.md) | Skills runtime boundary (Agent Skills format, discovery, store) |
 | [`docs/dev/COMMAND_COMPLETION.md`](./docs/dev/COMMAND_COMPLETION.md) | Slash-command argument completion contract |
 | [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | Developer Quality Guard benchmark runner |

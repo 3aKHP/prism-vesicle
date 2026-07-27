@@ -252,6 +252,12 @@ describe("CLI invocation parser", () => {
         args: ["shape", "--engine", "etl"],
         dangerouslySkipPermissions: false,
       });
+      expect(parseCliInvocation(["skills", "list"])).toEqual({
+        kind: "command",
+        command: "skills",
+        args: ["list"],
+        dangerouslySkipPermissions: false,
+      });
     });
 
     test("the launch command keeps an explicit dash-prefixed path", () => {
@@ -455,8 +461,8 @@ describe("CLI invocation parser", () => {
       expect(after.kind === "error" && after.message).toContain("doctor");
     });
 
-    test("once, prompt, quality, assets, and debug reject theme flags", () => {
-      for (const command of ["once", "prompt", "quality", "assets", "debug"]) {
+    test("once, prompt, quality, assets, skills, and debug reject theme flags", () => {
+      for (const command of ["once", "prompt", "quality", "assets", "skills", "debug"]) {
         const result = parseCliInvocation([command, "--dark"]);
         expect(result.kind).toBe("error");
         expect(result.kind === "error" && result.message).toContain(command);

@@ -47,6 +47,7 @@ const KNOWN_COMMANDS = new Set([
   "quality",
   "debug",
   "assets",
+  "skills",
   "dev",
 ]);
 
