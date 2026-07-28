@@ -185,10 +185,14 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
     if (computeBundleHash(existing) !== bundleSha256) {
       throw new Error(`Skill "${name}" version "${version}" already exists with different content; use a distinct version.`);
     }
-    // Idempotent reinstall by bundle hash: a matching snapshot is a pure no-op.
-    // Return the existing provenance without rewriting it or bumping the index.
+    // Idempotent reinstall by bundle hash: snapshot and provenance already exist.
+    // Verify the active index actually points at this version; a prior install
+    // may have written provenance but crashed before the index update.
     const existingProvenance = await readProvenance(name, version, env);
-    if (existingProvenance) return existingProvenance;
+    if (existingProvenance) {
+      await ensureActiveIndexEntry(storeRoot, name, version, options.enabled ?? true, existingProvenance.installedAt);
+      return existingProvenance;
+    }
     // Orphan recovery: snapshot exists without a sidecar. Rebuild provenance and
     // ensure the active-index entry without claiming a fresh install time.
     return writeProvenanceAndIndex(
@@ -379,6 +383,28 @@ async function writeProvenanceAndIndex(
     return { schema: INDEX_SCHEMA, entries: without };
   });
   return provenance;
+}
+
+/**
+ * Verify the active index contains an entry for `name` pointing at `version`.
+ * If the entry is missing or stale (points at a different version), upsert it.
+ * Cheap no-op when the index is already correct.
+ */
+async function ensureActiveIndexEntry(
+  storeRoot: string,
+  name: string,
+  version: string,
+  enabled: boolean,
+  installedAt: string,
+): Promise<void> {
+  await updateActiveIndex(storeRoot, (index) => {
+    const existing = index.entries.find((entry) => entry.name === name);
+    if (existing && existing.version === version) return index;
+    const without = index.entries.filter((entry) => entry.name !== name);
+    without.push({ name, version, enabled, installedAt });
+    without.sort((left, right) => left.name.localeCompare(right.name));
+    return { schema: INDEX_SCHEMA, entries: without };
+  });
 }
 
 /**

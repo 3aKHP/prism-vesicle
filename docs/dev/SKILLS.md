@@ -101,7 +101,7 @@ Loading (`src/skills/loader.ts`) is fail-soft per root: UTF-8 is decoded fatally
 
 ## Path hardening
 
-`src/skills/paths.ts` is the shared virtual-root guard, reused by the parser, loader, store, and the future Phase 2 `read_skill_resource` tool. Every resource path is skill-relative and shallow; absolute paths, `..` escapes, backslashes, NUL, empty/dot segments, normalization ambiguity, symbolic links, devices, and sockets are rejected.
+`src/skills/paths.ts` is the shared virtual-root guard, reused by the parser, loader, store, and the `read_skill_resource` tool. Every resource path is skill-relative and shallow; absolute paths, `..` escapes, backslashes, NUL, empty/dot segments, normalization ambiguity, symbolic links, devices, and sockets are rejected.
 
 ## Skill Store
 

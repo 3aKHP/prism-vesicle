@@ -239,7 +239,7 @@ function parseReplacementMessage(entry: unknown, index: number): ResumedMessage 
   if (Object.hasOwn(entry, "thinkingBlocks")) message.thinkingBlocks = parseThinkingBlocks(entry.thinkingBlocks, label);
   if (Object.hasOwn(entry, "images")) message.images = parseImages(entry.images, label);
   if (Object.hasOwn(entry, "usage")) message.usage = parseUsage(entry.usage, label);
-  for (const key of ["toolFileEvent", "toolWebEvent", "toolMcpEvent", "toolProcessEvent"] as const) {
+  for (const key of ["toolFileEvent", "toolWebEvent", "toolMcpEvent", "toolProcessEvent", "toolSkillEvent"] as const) {
     if (!Object.hasOwn(entry, key)) continue;
     requireJsonObject(entry[key], `${label}.${key}`);
     (message as unknown as Record<string, unknown>)[key] = entry[key];

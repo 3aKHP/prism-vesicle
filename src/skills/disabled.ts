@@ -16,6 +16,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { Database } from "bun:sqlite";
 import { userConfigDirectory } from "../config/paths";
 import type { SkillScope } from "./types";
 
@@ -42,13 +43,62 @@ export async function readDisabledNames(path: string): Promise<Set<string>> {
 }
 
 export async function setDisabled(path: string, name: string, disabled: boolean): Promise<void> {
-  const names = await readDisabledNames(path);
-  if (disabled) {
-    names.add(name);
-  } else {
-    names.delete(name);
-  }
-  await writeDisabledNames(path, names);
+  return withDisabledLock(path, async () => {
+    const names = await readDisabledNames(path);
+    if (disabled) {
+      names.add(name);
+    } else {
+      names.delete(name);
+    }
+    await writeDisabledNames(path, names);
+  });
+}
+
+const disabledLockChains = new Map<string, Promise<unknown>>();
+const DISABLED_LOCK_TIMEOUT_MS = 5_000;
+
+function withDisabledLock<T>(path: string, critical: () => Promise<T>): Promise<T> {
+  const prev = disabledLockChains.get(path) ?? Promise.resolve();
+  const next = prev.then(() => withDisabledCrossProcessLock(path, critical));
+  disabledLockChains.set(path, next.then(() => undefined, () => undefined));
+  return next;
+}
+
+function withDisabledCrossProcessLock<T>(path: string, critical: () => Promise<T>): Promise<T> {
+  const lockDir = dirname(path);
+  const database = new Database(join(lockDir, ".disabled-lock.sqlite"), { create: true });
+  let transactionOpen = false;
+  const deadline = Date.now() + DISABLED_LOCK_TIMEOUT_MS;
+  const tryBegin = (): void => {
+    while (true) {
+      try {
+        database.exec("BEGIN IMMEDIATE");
+        return;
+      } catch (error) {
+        if (!(error instanceof Error) || !/database is locked|database is busy/i.test(error.message)) throw error;
+        if (Date.now() >= deadline) throw new Error("Skill disable state is locked by another process; retry later.", { cause: error });
+        Bun.sleepSync(25);
+      }
+    }
+  };
+  return (async () => {
+    try {
+      await mkdir(lockDir, { recursive: true });
+      tryBegin();
+      transactionOpen = true;
+      const result = await critical();
+      database.exec("COMMIT");
+      transactionOpen = false;
+      return result;
+    } catch (error) {
+      if (transactionOpen) {
+        try { database.exec("ROLLBACK"); } catch { /* preserve original */ }
+      }
+      throw error;
+    } finally {
+      database.close(false);
+    }
+  })();
 }
 
 async function writeDisabledNames(path: string, names: Set<string>): Promise<void> {

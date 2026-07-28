@@ -196,4 +196,32 @@ describe("session: compact-checkpoint-v1 projection", () => {
     ]);
     expect(messages[1]!.images?.map((entry) => entry.id)).toEqual(["img_reachable"]);
   });
+
+  test("toolSkillEvent in the retained tail survives checkpoint round-trip", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-skill-"));
+    const store = await createSessionStore(rootDir, "ckpt-skill");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    const skillEvent = { kind: "skill_resource_read", name: "vesicle-docs", path: "references/root-readme.md", bytes: 4096, truncated: false } as const;
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          replacementMessages: [
+            { role: "user", content: "[conversation summary]\nEarlier work.", kind: "compact-summary" },
+            { role: "assistant", content: "", toolCalls: [{ id: "call_1", name: "read_skill_resource", arguments: "{}" }] },
+            { role: "tool", content: "# Prism Vesicle", toolCallId: "call_1", toolOk: true, toolSkillEvent: skillEvent },
+          ],
+          retained: { logicalTurnIds: ["t1"], providerRoundIds: ["r1"] },
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages).toHaveLength(3);
+    const toolMessage = messages[2]!;
+    expect(toolMessage.role).toBe("tool");
+    expect((toolMessage as Record<string, unknown>).toolSkillEvent).toEqual(skillEvent);
+  });
 });

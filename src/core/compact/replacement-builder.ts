@@ -158,6 +158,7 @@ function replacementMessageRecord(
       ...(message.toolWebEvent ? { webEvent: message.toolWebEvent } : {}),
       ...(message.toolMcpEvent ? { mcpEvent: message.toolMcpEvent } : {}),
       ...(message.toolProcessEvent ? { processEvent: message.toolProcessEvent } : {}),
+      ...(message.toolSkillEvent ? { skillEvent: message.toolSkillEvent } : {}),
     });
   }
   return {

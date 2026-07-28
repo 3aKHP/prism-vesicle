@@ -21,4 +21,3 @@ export function providerRetryLabel(info: RetryLabelInfo): string {
 export function providerRetryActivityLabel(prefix: string, info: RetryLabelInfo): string {
   return `${prefix} ${info.attempt}/${info.maxRetries}${info.status ? ` (${info.status})` : ""}`;
 }
-
