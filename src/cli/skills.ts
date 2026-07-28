@@ -1,36 +1,16 @@
 import { copyFile, mkdir } from "node:fs/promises";
-import { userConfigDirectory } from "../config/paths";
-import { resolveProjectHarnessRuntime } from "../core/harness";
-import { createAssetResolver } from "../core/runtime/assets";
 import { writableProjectRoots } from "../core/artifacts/roots";
+import { resolveFilesystemSkills } from "../core/skills/catalog-sources";
+import type { FilesystemSkillInspection } from "../core/skills/catalog-sources";
 import { dirname, join, resolve } from "node:path";
-import { assertSafeRelativePath, createSkill, discoverSkills, listChildSkillRoots, loadSkill, projectDisabledPath, readActiveIndex, readProvenance, rollbackSkill, setDisabled, setSkillEnabled, skillStoreDirectory, uninstallSkill, userDisabledPath } from "../skills";
+import { assertSafeRelativePath, createSkill, loadSkill, projectDisabledPath, readActiveIndex, readProvenance, rollbackSkill, setDisabled, setSkillEnabled, skillStoreDirectory, uninstallSkill, userDisabledPath } from "../skills";
 import type { CreateSkillScope, DiscoveryResult, LoadedSkill } from "../skills";
 import { installFromSource, updateSkill } from "./skills-source";
 import type { InstallSourceOptions } from "./skills-source";
 
-/** Resolve Harness skill roots from the active verified Harness (`assets/skills/<name>/SKILL.md`). */
-async function resolveHarnessSkillRoots(projectRoot: string, env: NodeJS.ProcessEnv): Promise<string[]> {
-  const runtime = await resolveProjectHarnessRuntime(projectRoot, { env }).catch(() => undefined);
-  const resolver = runtime?.assets ?? createAssetResolver(projectRoot, { env });
-  let files: string[];
-  try {
-    files = await resolver.listFiles("assets/skills", true);
-  } catch {
-    return [];
-  }
-  const roots: string[] = [];
-  for (const file of files) {
-    const match = /^assets\/skills\/([^/]+)\/SKILL\.md$/.exec(file);
-    if (!match) continue;
-    const resolved = await resolver.resolveFile(file).catch(() => undefined);
-    if (resolved) roots.push(dirname(resolved.absolutePath));
-  }
-  return roots;
-}
-
 export interface SkillsInspection {
   result: DiscoveryResult;
+  hostRootCount: number;
   harnessRootCount: number;
   userRootCount: number;
   projectRootCount: number;
@@ -46,11 +26,14 @@ export async function inspectSkills(
   projectRoot = process.cwd(),
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<SkillsInspection> {
-  const harnessRoots = await resolveHarnessSkillRoots(projectRoot, env);
-  const userRoots = await listChildSkillRoots(join(userConfigDirectory(env), "skills"));
-  const projectRoots = await listChildSkillRoots(join(projectRoot, ".agents", "skills"));
-  const result = await discoverSkills({ harnessRoots, userRoots, projectRoots });
-  return { result, harnessRootCount: harnessRoots.length, userRootCount: userRoots.length, projectRootCount: projectRoots.length };
+  const inspection: FilesystemSkillInspection = await resolveFilesystemSkills(projectRoot, env);
+  return {
+    result: inspection.result,
+    hostRootCount: inspection.counts.host,
+    harnessRootCount: inspection.counts.harness,
+    userRootCount: inspection.counts.user,
+    projectRootCount: inspection.counts.project,
+  };
 }
 
 export async function runSkillsCommand(args: string[]): Promise<void> {
@@ -198,7 +181,7 @@ async function runInspect(name: string): Promise<void> {
     await printInstalledInspection(entry.name, entry.version);
     return;
   }
-  console.error(`No skill named "${name}" found in the harness, user, project, or installed scope.`);
+  console.error(`No skill named "${name}" found in the host, harness, user, project, or installed scope.`);
   process.exitCode = 1;
 }
 

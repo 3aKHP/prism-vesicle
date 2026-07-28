@@ -20,10 +20,11 @@ import type { LoadedSkill, SkillCatalog, SkillCatalogEntry, SkillDiagnostic, Ski
 
 /**
  * Full catalog omission precedence, highest first. When the budget forces
- * omission, lowest-precedence skills are dropped first: `harness` before
- * `installed`, `installed` before `user`, `user` before `project`.
+ * omission, lowest-precedence skills are dropped first: `host` before
+ * `harness`, `harness` before `installed`, `installed` before `user`,
+ * `user` before `project`.
  */
-const CATALOG_PRECEDENCE: readonly SkillScope[] = ["project", "user", "installed", "harness"];
+const CATALOG_PRECEDENCE: readonly SkillScope[] = ["project", "user", "installed", "harness", "host"];
 
 const FALLBACK_BUDGET_BYTES = 8 * 1024;
 const SHORTENED_DESCRIPTION_CHARS = 160;

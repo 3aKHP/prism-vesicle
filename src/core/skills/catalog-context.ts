@@ -24,6 +24,7 @@ import type { EngineProfile } from "../engine/profile";
 import type { SkillCatalog, SkillDiagnostic } from "../../skills";
 import { catalogNames, resolveSkillCatalog } from "./catalog";
 import type { ResolvedSkillCatalog } from "./catalog";
+import type { ResolveFilesystemSkillsOptions } from "./catalog-sources";
 import type { SkillCatalogSnapshot } from "./catalog-snapshot";
 
 const frozenCatalogsBySession = new Map<string, ResolvedSkillCatalog>();
@@ -50,12 +51,13 @@ export async function resolveSessionSkillCatalog(
   sessionId: string,
   persistedSnapshot: SkillCatalogSnapshot | undefined,
   contextWindow?: number,
+  options?: ResolveFilesystemSkillsOptions,
 ): Promise<ResolvedSkillCatalog> {
   const frozen = frozenCatalogsBySession.get(sessionId);
   if (frozen) return frozen;
   const resolved = persistedSnapshot
-    ? await reresolveFromSnapshot(rootDir, env, profile, persistedSnapshot, contextWindow)
-    : await resolveSkillCatalog(rootDir, env, profile, contextWindow);
+    ? await reresolveFromSnapshot(rootDir, env, profile, persistedSnapshot, contextWindow, options)
+    : await resolveSkillCatalog(rootDir, env, profile, contextWindow, options);
   frozenCatalogsBySession.set(sessionId, resolved);
   return resolved;
 }
@@ -72,8 +74,9 @@ async function reresolveFromSnapshot(
   profile: Pick<EngineProfile, "id">,
   snapshot: SkillCatalogSnapshot,
   contextWindow?: number,
+  options?: ResolveFilesystemSkillsOptions,
 ): Promise<ResolvedSkillCatalog> {
-  const fresh = await resolveSkillCatalog(rootDir, env, profile, contextWindow);
+  const fresh = await resolveSkillCatalog(rootDir, env, profile, contextWindow, options);
   if (fresh.catalog.entries.length === 0) {
     const diagnostics = snapshot.entries.map((entry) => snapshotMismatchDiagnostic(entry.name));
     return {

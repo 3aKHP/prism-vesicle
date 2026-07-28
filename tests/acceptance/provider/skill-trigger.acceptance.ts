@@ -90,6 +90,25 @@ const researchSynthesisCases: TriggerCase[] = [
   { prompt: "Compact the conversation to free context." },
 ];
 
+const vesicleDocsCases: TriggerCase[] = [
+  // Positive Chinese
+  { prompt: "Vesicle 的 auto-compact 怎么配置？", expectSkill: "vesicle-docs" },
+  { prompt: "为什么我看不到 shell_exec？", expectSkill: "vesicle-docs" },
+  { prompt: "Gemini provider 的 providers.yaml 应该怎么写？", expectSkill: "vesicle-docs" },
+  { prompt: "rewind、compact 和 resume 有什么区别？", expectSkill: "vesicle-docs" },
+  { prompt: "怎么安装、调用和禁用一个 Skill？", expectSkill: "vesicle-docs" },
+  { prompt: "Stage 为什么不能使用 Skills？", expectSkill: "vesicle-docs" },
+  // Positive English
+  { prompt: "How do I configure MCP in Vesicle?", expectSkill: "vesicle-docs" },
+  { prompt: "Where does Vesicle store provider secrets?", expectSkill: "vesicle-docs" },
+  { prompt: "How does the session Skill catalog behave after an upgrade?", expectSkill: "vesicle-docs" },
+  // Near-miss: ordinary Prism creative work and generic technical questions
+  { prompt: "帮我写一张角色卡。" },
+  { prompt: "继续这个场景。" },
+  { prompt: "Review this chapter for continuity." },
+  { prompt: "How does YAML parsing work in general?" },
+];
+
 let rootDir: string | undefined;
 beforeEach(async () => {
   if (!precondition.ok) return;
@@ -193,6 +212,28 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
       if (activations.includes("research-synthesis")) falsePositives += 1;
     }
     summarize("trigger-research-synthesis-negative", { total: negatives.length, falsePositives });
+    expect(falsePositives).toBeLessThanOrEqual(Math.floor(negatives.length * 0.25));
+  });
+
+  test("vesicle-docs: positive triggers activate the skill", async () => {
+    const positives = vesicleDocsCases.filter((c) => c.expectSkill);
+    let hits = 0;
+    for (const triggerCase of positives) {
+      const activations = await runTriggerCase(triggerCase);
+      if (activations.includes("vesicle-docs")) hits += 1;
+    }
+    summarize("trigger-vesicle-docs-positive", { total: positives.length, hits });
+    expect(hits).toBeGreaterThanOrEqual(Math.ceil(positives.length * 0.6));
+  });
+
+  test("vesicle-docs: near-miss prompts do not activate", async () => {
+    const negatives = vesicleDocsCases.filter((c) => !c.expectSkill);
+    let falsePositives = 0;
+    for (const triggerCase of negatives) {
+      const activations = await runTriggerCase(triggerCase);
+      if (activations.includes("vesicle-docs")) falsePositives += 1;
+    }
+    summarize("trigger-vesicle-docs-negative", { total: negatives.length, falsePositives });
     expect(falsePositives).toBeLessThanOrEqual(Math.floor(negatives.length * 0.25));
   });
 });

@@ -51,6 +51,7 @@ describe("session activation registry", () => {
 
 describe("resolveSkillCatalog", () => {
   const env = (): NodeJS.ProcessEnv => ({ VESICLE_CONFIG_DIR: join(scratch, "config") });
+  const noHost = () => ({ hostAssetsDirectory: join(scratch, "no-host") });
 
   test("Stage resolves an empty catalog", async () => {
     const resolved = await resolveSkillCatalog(scratch, env(), { id: "stage" });
@@ -62,7 +63,7 @@ describe("resolveSkillCatalog", () => {
     const source = await writeSkill(scratch, "alpha", { body: "Installed alpha procedure." });
     await installSnapshot({ sourceDirectory: source, env: env() });
 
-    const resolved = await resolveSkillCatalog(scratch, env(), { id: "etl" });
+    const resolved = await resolveSkillCatalog(scratch, env(), { id: "etl" }, undefined, noHost());
     expect(resolved.catalog.entries).toEqual([{ name: "alpha", description: "alpha description", scope: "installed" }]);
     expect(catalogNames(resolved)).toEqual(["alpha"]);
     // The catalog winner resolves to the on-disk store snapshot for activation.
@@ -78,7 +79,7 @@ describe("resolveSkillCatalog", () => {
     await mkdir(userRoot, { recursive: true });
     await Bun.write(join(userRoot, "SKILL.md"), "---\nname: alpha\ndescription: user override\n---\n\nUser version.\n");
 
-    const resolved = await resolveSkillCatalog(scratch, env(), { id: "etl" });
+    const resolved = await resolveSkillCatalog(scratch, env(), { id: "etl" }, undefined, noHost());
     expect(resolved.catalog.entries).toEqual([{ name: "alpha", description: "user override", scope: "user" }]);
     expect(resolved.byName.get("alpha")?.scope).toBe("user");
     expect(resolved.catalog.diagnostics.some((diagnostic) => diagnostic.kind === "shadowed" && diagnostic.message.includes('"installed"'))).toBe(true);
@@ -90,7 +91,7 @@ describe("resolveSkillCatalog", () => {
     await installSnapshot({ sourceDirectory: source, env: envValue });
     await rm(join(scratch, "config", "skill-store", "alpha"), { recursive: true, force: true });
 
-    const resolved = await resolveSkillCatalog(scratch, envValue, { id: "etl" });
+    const resolved = await resolveSkillCatalog(scratch, envValue, { id: "etl" }, undefined, noHost());
     expect(resolved.catalog.entries).toEqual([]);
     expect(resolved.catalog.diagnostics.some((diagnostic) => diagnostic.kind === "read-error")).toBe(true);
   });

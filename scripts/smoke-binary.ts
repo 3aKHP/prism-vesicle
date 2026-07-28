@@ -195,6 +195,22 @@ async function main(): Promise<void> {
     );
   });
 
+  await scenario("skills list discovers vesicle-docs from the staged host-assets", async () => {
+    await copyFile(join(REPO_ROOT, "harness-manifest.json"), join(release, "harness-manifest.json"));
+    const r = await runBinary(binary, ["skills", "list"], project, config);
+    assert(r.exitCode === 0, `exit ${r.exitCode}; stderr=${r.stderr.slice(0, 200)}`);
+    assert(r.stdout.includes("vesicle-docs"), `vesicle-docs not listed; stdout=${r.stdout.slice(0, 300)}`);
+    assert(r.stdout.includes("[host]"), `host scope not shown; stdout=${r.stdout.slice(0, 300)}`);
+  });
+
+  await scenario("skills inspect vesicle-docs shows valid metadata and resources", async () => {
+    const r = await runBinary(binary, ["skills", "inspect", "vesicle-docs"], project, config);
+    assert(r.exitCode === 0, `exit ${r.exitCode}; stderr=${r.stderr.slice(0, 200)}`);
+    assert(r.stdout.includes("Name: vesicle-docs"), `missing name; stdout=${r.stdout.slice(0, 300)}`);
+    assert(r.stdout.includes("Scope: host"), `missing scope; stdout=${r.stdout.slice(0, 300)}`);
+    assert(r.stdout.includes("Resources:"), `missing resources; stdout=${r.stdout.slice(0, 300)}`);
+  });
+
   const cleanupWarning = await cleanupTemporaryTree(root);
 
   const failed = results.filter((r) => !r.ok);

@@ -14,6 +14,7 @@ This section covers capabilities that the tutorials and reference do not expand 
 | [Output Quality Guard](./quality-guard.md) | 🟢 Guard body · 🟡 Judge/Policy experimental | Deterministic checks of artifact post-images, document metrics, optional Semantic Judge |
 | [SubAgents](./subagents.md) | 🟢 Implemented | Foreground/background child tasks; generic and Driver-contract agents |
 | [Stage consumer engine](./stage.md) | 🟢 Implemented | Open a continuous narrative session from a character card + scenario card |
+| [Skills](./skills.md) | 🟢 Implemented | On-demand procedural context: discovery, activation, resource reads, `/skill` command |
 
 ## Prerequisites
 

@@ -69,18 +69,19 @@ A useful test: if a feature needs a new network service, tool schema, credential
 
 ## Discovery scopes
 
-Discovery resolves three deterministic, non-merging filesystem scopes plus the installed Skill Store, from lowest to highest precedence:
+Discovery resolves four deterministic, non-merging filesystem scopes plus the installed Skill Store, from lowest to highest precedence:
 
-1. **Harness** — logical `assets/skills/<name>/SKILL.md`, resolved through the active verified Harness asset resolver.
-2. **Installed** — enabled Skill Store snapshots (`<user-config>/skill-store/<name>/<version>/`), resolved from the active index.
-3. **User** — `<user-config>/skills/<name>/SKILL.md`, direct filesystem.
-4. **Project** — `<project-root>/.agents/skills/<name>/SKILL.md`, direct filesystem with visible project provenance. No separate trust gate.
+1. **Host** — package-owned first-party Skills under `host-assets/skills/<name>/SKILL.md`, resolved from the bundled package layout beside the module root or executable. Host Skills are Vesicle extensions independent of the active Harness; a managed Harness selection cannot replace, relocate, or suppress them except through ordinary same-name precedence.
+2. **Harness** — logical `assets/skills/<name>/SKILL.md`, resolved through the active verified Harness asset resolver.
+3. **Installed** — enabled Skill Store snapshots (`<user-config>/skill-store/<name>/<version>/`), resolved from the active index.
+4. **User** — `<user-config>/skills/<name>/SKILL.md`, direct filesystem.
+5. **Project** — `<project-root>/.agents/skills/<name>/SKILL.md`, direct filesystem with visible project provenance. No separate trust gate.
 
-The `src/skills` module takes **pre-resolved roots** and does not import the asset resolver, providers, harness runtime, or TUI. The CLI (`src/cli/skills.ts`) and the session catalog (`src/core/skills/catalog.ts`) own root resolution and pass root lists to `discoverSkills`.
+The `src/skills` module takes **pre-resolved roots** and does not import the asset resolver, providers, harness runtime, or TUI. A shared filesystem-source resolver (`src/core/skills/catalog-sources.ts`) resolves all four filesystem scopes and is used by both the CLI (`src/cli/skills.ts`) and the session catalog (`src/core/skills/catalog.ts`).
 
-On a name collision, exactly one winner is selected by precedence (`project` > `user` > `installed` > `harness`); lower-precedence entries produce one `shadowed` diagnostic each. Bodies and resources are never merged. Catalog and diagnostic shapes never carry an absolute host path — only logical source scopes and skill-relative paths.
+On a name collision, exactly one winner is selected by precedence (`project` > `user` > `installed` > `harness` > `host`); lower-precedence entries produce one `shadowed` diagnostic each. Bodies and resources are never merged. Catalog and diagnostic shapes never carry an absolute host path — only logical source scopes and skill-relative paths.
 
-Filesystem-scope Skills (user, project) support disable state via line-delimited names files (`<user-config>/skills/.disabled` and `<project-root>/.vesicle/disabled-skills`). Installed Skills use the active-index `enabled` flag. Disabled Skills are excluded from the session catalog at resolution time; the catalog remains frozen per session.
+Filesystem-scope Skills (user, project, host) support disable state via line-delimited names files. User and Host scopes share `<user-config>/skills/.disabled`; project uses `<project-root>/.vesicle/disabled-skills`. Installed Skills use the active-index `enabled` flag. Harness remains non-disableable. Disabled Skills are excluded from the session catalog at resolution time; the catalog remains frozen per session.
 
 ## Parsing and validation
 
@@ -160,7 +161,7 @@ Static scanning may produce useful warnings, but it cannot certify Markdown or c
 
 ## Current boundary
 
-The shipped runtime covers format, inventory, the Skill Store, repository installation with lifecycle, model-visible activation with resources, scripts, and the `/skill` TUI command, project `.agents/skills/` discovery with visible provenance, Skill authoring (`create`), enable/disable across all scopes, and text template copy into approved writable roots. The Skill Store is both CLI-listable and a model-visible catalog source (scope `installed`). The following are **not** part of the current contract and must not be implied by any current surface:
+The shipped runtime covers format, inventory, the Skill Store, repository installation with lifecycle, model-visible activation with resources, scripts, and the `/skill` TUI command, project `.agents/skills/` discovery with visible provenance, Skill authoring (`create`), enable/disable across all scopes, text template copy into approved writable roots, and Host-bundled first-party Skill discovery from `host-assets/skills/`. The first-party `vesicle-docs` Skill ships version-matched public documentation as bundled references readable through `read_skill_resource` without process capability. The Skill Store is both CLI-listable and a model-visible catalog source (scope `installed`). The following are **not** part of the current contract and must not be implied by any current surface:
 
 - registries or broader distribution; and
 - SubAgent Skill inheritance (children do not receive parent Skills).
