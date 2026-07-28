@@ -9,6 +9,7 @@ import {
   readActiveIndex,
   readProvenance,
   rollbackSkill,
+  setSkillEnabled,
   skillStoreDirectory,
   uninstallSkill,
 } from "../../../src/skills";
@@ -309,6 +310,29 @@ v2 body
       const index = await readActiveIndex(env);
       expect(index.entries.find((entry) => entry.name === "safe")?.version).toBe("v1");
       expect(index.entries).toHaveLength(1);
+    });
+  });
+
+  test("setSkillEnabled toggles the enabled flag and round-trips through the index", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "toggle-me", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      let index = await readActiveIndex(env);
+      expect(index.entries.find((e) => e.name === "toggle-me")?.enabled).toBe(true);
+
+      await setSkillEnabled("toggle-me", false, env);
+      index = await readActiveIndex(env);
+      expect(index.entries.find((e) => e.name === "toggle-me")?.enabled).toBe(false);
+
+      await setSkillEnabled("toggle-me", true, env);
+      index = await readActiveIndex(env);
+      expect(index.entries.find((e) => e.name === "toggle-me")?.enabled).toBe(true);
+    });
+  });
+
+  test("setSkillEnabled throws for a non-installed skill", async () => {
+    await withEnv(async (env) => {
+      await expect(setSkillEnabled("ghost", false, env)).rejects.toThrow(/No installed skill named "ghost"/);
     });
   });
 });

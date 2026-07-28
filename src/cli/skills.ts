@@ -1,10 +1,9 @@
-import { resolve } from "node:path";
 import { copyFile, mkdir } from "node:fs/promises";
 import { userConfigDirectory } from "../config/paths";
 import { resolveProjectHarnessRuntime } from "../core/harness";
 import { createAssetResolver } from "../core/runtime/assets";
 import { writableProjectRoots } from "../core/artifacts/roots";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { assertSafeRelativePath, createSkill, discoverSkills, listChildSkillRoots, loadSkill, projectDisabledPath, readActiveIndex, readProvenance, rollbackSkill, setDisabled, setSkillEnabled, skillStoreDirectory, uninstallSkill, userDisabledPath } from "../skills";
 import type { CreateSkillScope, DiscoveryResult, LoadedSkill } from "../skills";
 import { installFromSource, updateSkill } from "./skills-source";
@@ -407,19 +406,24 @@ async function runCreate(rest: string[]): Promise<void> {
 async function runEnableDisable(name: string, enabled: boolean): Promise<void> {
   const action = enabled ? "Enabled" : "Disabled";
   try {
+    const inspection = await inspectSkills();
+    const discovered = [...inspection.result.skills, ...inspection.result.invalid].find((skill) => skill.name === name);
+    if (discovered) {
+      if (discovered.scope === "harness") {
+        console.error(`Harness-scope skill "${name}" cannot be disabled; it is part of the verified Harness baseline.`);
+        process.exitCode = 1;
+        return;
+      }
+      const path = discovered.scope === "project" ? projectDisabledPath(process.cwd()) : userDisabledPath();
+      await setDisabled(path, name, !enabled);
+      console.log(`${action} ${discovered.scope}-scope skill "${name}".`);
+      return;
+    }
     const index = await readActiveIndex();
     const installed = index.entries.find((entry) => entry.name === name);
     if (installed) {
       await setSkillEnabled(name, enabled);
       console.log(`${action} installed skill "${name}".`);
-      return;
-    }
-    const inspection = await inspectSkills();
-    const discovered = [...inspection.result.skills, ...inspection.result.invalid].find((skill) => skill.name === name);
-    if (discovered) {
-      const path = discovered.scope === "project" ? projectDisabledPath(process.cwd()) : userDisabledPath();
-      await setDisabled(path, name, !enabled);
-      console.log(`${action} ${discovered.scope}-scope skill "${name}".`);
       return;
     }
     console.error(`No skill named "${name}" found in any scope.`);

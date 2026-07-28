@@ -77,8 +77,13 @@ export async function resolveSkillCatalog(
   const userDisabled = await readDisabledNames(userDisabledPath(env)).catch(() => new Set<string>());
   const projectDisabled = await readDisabledNames(projectDisabledPath(rootDir)).catch(() => new Set<string>());
   for (const [name, skill] of winners) {
-    if (skill.scope === "user" && userDisabled.has(name)) winners.delete(name);
-    else if (skill.scope === "project" && projectDisabled.has(name)) winners.delete(name);
+    if (skill.scope === "user" && userDisabled.has(name)) {
+      winners.delete(name);
+      diagnostics.push({ kind: "shadowed", message: `Skill "${name}" in scope "user" is disabled and excluded from the catalog.` });
+    } else if (skill.scope === "project" && projectDisabled.has(name)) {
+      winners.delete(name);
+      diagnostics.push({ kind: "shadowed", message: `Skill "${name}" in scope "project" is disabled and excluded from the catalog.` });
+    }
   }
 
   const catalog = buildCatalog([...winners.values()], { contextWindow });

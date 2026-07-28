@@ -51,6 +51,29 @@ describe("skill discovery", () => {
     });
   });
 
+  test("project scope outranks user scope on a name collision", async () => {
+    await withTemp(async (dir) => {
+      const userRoot = await makeSkill(join(dir, "user"), "shared", "user version");
+      const projectRoot = await makeSkill(join(dir, "project"), "shared", "project version");
+      const result = await discoverSkills({ userRoots: [userRoot], projectRoots: [projectRoot] });
+      expect(result.skills.map((s) => s.name)).toEqual(["shared"]);
+      expect(result.skills[0]!.scope).toBe("project");
+      expect(result.diagnostics.filter((d) => d.kind === "shadowed")).toHaveLength(1);
+    });
+  });
+
+  test("three-scope collision selects project > user > harness", async () => {
+    await withTemp(async (dir) => {
+      const harnessRoot = await makeSkill(join(dir, "h"), "triple", "harness version");
+      const userRoot = await makeSkill(join(dir, "u"), "triple", "user version");
+      const projectRoot = await makeSkill(join(dir, "p"), "triple", "project version");
+      const result = await discoverSkills({ harnessRoots: [harnessRoot], userRoots: [userRoot], projectRoots: [projectRoot] });
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]!.scope).toBe("project");
+      expect(result.diagnostics.filter((d) => d.kind === "shadowed")).toHaveLength(2);
+    });
+  });
+
   test("a malformed skill does not hide a valid sibling", async () => {
     await withTemp(async (dir) => {
       const good = await makeSkill(dir, "good-one");
