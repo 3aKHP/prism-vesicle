@@ -5,9 +5,11 @@
  * verified Harness and user scopes, collision and unsupported-field
  * diagnostics, an immutable versioned Skill Store with active index and safe
  * catalog hashing, and the `vesicle skills list|validate|inspect` plus
- * `vesicle doctor` integration. There is no model-visible activation in this
- * phase: no `activate_skill` / `read_skill_resource` tools, no `/skill`
- * command, no prompt-composition or session changes.
+ * `vesicle doctor` integration. The model-visible activation runtime
+ * (`activate_skill` / `read_skill_resource` / `run_skill_script`, the session
+ * catalog, and the activation registry) is layered on top of this surface by
+ * `src/core/skills/`; this module stays the format/discovery/store layer and
+ * owns no session or prompt-composition behavior.
  *
  * See `docs/dev/SKILLS.md` for the runtime boundary and
  * `dev/docs/working/SKILLS_RUNTIME_RESEARCH_AND_FEASIBILITY.md` for the

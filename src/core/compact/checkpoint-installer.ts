@@ -99,11 +99,12 @@ export async function installCompactCheckpoint(options: InstallCheckpointOptions
 export function buildCompactReplacementMessages(
   selection: ReplacementSelection,
   summary: string,
+  reattachMessages: ResumedMessage[] = [],
 ): ResumedMessage[] {
   const retainedMessages = projectSessionHistory(selection.retainedRecords).messages;
   return [{
     role: "user",
     content: `[conversation summary]\n${summary}`,
     kind: "compact-summary",
-  }, ...retainedMessages];
+  }, ...reattachMessages, ...retainedMessages];
 }

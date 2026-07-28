@@ -7,6 +7,7 @@ import { normalizeKeyName } from "./composer";
 import type { PendingQualityDecisionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
 import { resolveBottomSurfaceMode, type ModelPickerState, type QualityPickerState, type QualityRewriteConfirmState } from "./views/BottomSurface";
 import type { RewindPickerState, SessionPickerState } from "./types";
+import type { SkillPickerState } from "./skill-picker-controller";
 
 export type InputRoutingOptions = {
   renderer: ReturnType<typeof useRenderer>;
@@ -21,6 +22,8 @@ export type InputRoutingOptions = {
   handleRewriteConfirmKey: (key: TuiKeyEvent) => boolean;
   sessionPicker: Accessor<SessionPickerState | null>;
   handleSessionPickerKey: (key: TuiKeyEvent) => boolean;
+  skillPicker: Accessor<SkillPickerState | null>;
+  handleSkillPickerKey: (key: TuiKeyEvent) => boolean;
   yoloConfirmStage: Accessor<1 | 2 | null>;
   handleYoloKey: (key: TuiKeyEvent) => boolean;
   activePermissionRequest: Accessor<PermissionRequest | undefined>;
@@ -58,6 +61,7 @@ export function useInputRouting(options: InputRoutingOptions): void {
     gate: options.activeGateRequest(),
     rewind: options.rewindPicker(),
     session: options.sessionPicker(),
+    skillPicker: options.skillPicker(),
     qualityPicker: options.qualityPicker(),
     qualityRewriteConfirm: options.qualityRewriteConfirm(),
     model: options.modelPicker(),
@@ -119,6 +123,9 @@ export function useInputRouting(options: InputRoutingOptions): void {
         return;
       case "session":
         if (options.handleSessionPickerKey(key)) consumeKey(key);
+        return;
+      case "skill-picker":
+        if (options.handleSkillPickerKey(key)) consumeKey(key);
         return;
       case "model":
         if (options.handleModelPickerKey(key)) consumeKey(key);

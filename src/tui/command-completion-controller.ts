@@ -13,6 +13,7 @@ import type { AgentCardState, OptionItem } from "./types";
 
 export type CommandCompletionControllerOptions = {
   rootDir: string;
+  activeEngine: Accessor<string>;
   inputValue: Accessor<string>;
   applyComposerState: (state: ComposerState) => void;
   clearComposer: () => void;
@@ -44,6 +45,7 @@ export function createCommandCompletionController(options: CommandCompletionCont
 
   const commandArgumentDraft = createMemo(() => resolveCommandArgumentCompletion(options.inputValue(), builtinCommands, {
     rootDir: options.rootDir,
+    activeEngine: options.activeEngine,
     providerRegistry: options.providerRegistry,
     activeProvider: options.activeProvider,
     refreshArtifacts: options.refreshArtifacts,

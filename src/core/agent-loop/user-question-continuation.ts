@@ -156,6 +156,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     session: context.session,
     logicalTurnId: context.identity?.logicalTurnId,
     profile: context.profile,
+    skillCatalog: context.skillCatalog,
     generation: context.generation,
     checkpoint,
     signal: options.signal,

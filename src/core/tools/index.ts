@@ -25,7 +25,10 @@ export type BuiltInToolName =
   | "delete_directory"
   | "shell_exec"
   | "shell_output"
-  | "shell_stop";
+  | "shell_stop"
+  | "activate_skill"
+  | "read_skill_resource"
+  | "run_skill_script";
 import { executeFileTool, fileToolDefinitions } from "./fs";
 import {
   executeWebCrawlTool,
@@ -53,6 +56,17 @@ import {
   shellOutputToolDefinition,
   shellStopToolDefinition,
 } from "./shell";
+// Imported directly from the tools module (not the core/skills barrel) so this
+// registry does not pull the session catalog's harness dependency into its
+// import graph.
+import {
+  executeActivateSkillTool,
+  executeReadSkillResourceTool,
+  executeRunSkillScriptTool,
+  readSkillResourceToolDefinition,
+  runSkillScriptToolDefinition,
+} from "../skills/tools";
+import type { ResolvedSkillCatalog } from "../skills/catalog";
 
 export { executeFileTool, fileToolDefinitions, readWritableProjectText } from "./fs";
 export {
@@ -206,6 +220,8 @@ export const hostToolDefinitions: ToolDefinition[] = [
   shellExecToolDefinition,
   shellOutputToolDefinition,
   shellStopToolDefinition,
+  readSkillResourceToolDefinition,
+  runSkillScriptToolDefinition,
 ];
 
 export async function executeHostTool(
@@ -219,6 +235,8 @@ export async function executeHostTool(
     shellInterpreter?: ShellInterpreterPreference;
     processExecutionPlan?: ProcessExecutionPlan;
     activeEngine?: EngineId;
+    /** Effective session Skill catalog; absent until the host wires one (Phase 2 Wave B). */
+    skillCatalog?: ResolvedSkillCatalog;
   } = {},
 ): Promise<ToolResult> {
   if (call.name === "read_instructions") {
@@ -226,6 +244,18 @@ export async function executeHostTool(
   }
   if (call.name === "update_instructions") {
     return executeUpdateInstructionsTool(call, { rootDir, activeEngine: options.activeEngine, sessionId: options.parentSessionId });
+  }
+  if (call.name === "activate_skill" || call.name === "read_skill_resource" || call.name === "run_skill_script") {
+    const skillOptions = {
+      catalog: options.skillCatalog,
+      sessionId: options.parentSessionId,
+      signal: options.signal,
+      shellInterpreter: options.shellInterpreter,
+      onProcessProgress: options.onProcessProgress,
+    };
+    if (call.name === "activate_skill") return executeActivateSkillTool(call, skillOptions);
+    if (call.name === "read_skill_resource") return executeReadSkillResourceTool(call, skillOptions);
+    return executeRunSkillScriptTool(rootDir, call, skillOptions);
   }
   if (call.name === "shell_exec") return executeShellExecTool(rootDir, call, {
     signal: options.signal,

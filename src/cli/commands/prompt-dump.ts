@@ -9,6 +9,13 @@ import type { McpRegistryOptions } from "../../mcp/registry";
 import { loadPermissionSettings } from "../../config/permissions";
 import { resolveToolSurface } from "../../core/agent-loop/tool-surface";
 import { resolveProjectHarnessRuntime } from "../../core/harness";
+import {
+  catalogNames,
+  composeSkillCatalogBlock,
+  resolveEngineEligibleCatalog,
+  resolveSkillCatalog,
+} from "../../core/skills";
+import type { ResolvedSkillCatalog } from "../../core/skills";
 import type { ShellInterpreterPreference } from "../../core/process/shell-profile";
 import type { AssetResolver } from "../../core/runtime/assets";
 
@@ -41,15 +48,19 @@ export async function runPromptDump(args: string[]): Promise<void> {
   // Prompt shape/dump is not session-aware: it resolves current-disk Persistent
   // Instructions the way a new session launched now would.
   const instructional = await composeSystemPromptWithInstructions(engine, enginePrompt, rootDir);
-  const systemPrompt = instructional.systemPrompt;
+  let systemPrompt = instructional.systemPrompt;
   const permissions = await loadPermissionSettings();
+  // The Skill catalog a new session would freeze, filtered for this engine.
+  const skills = resolveEngineEligibleCatalog(await resolveSkillCatalog(rootDir, process.env, profile), profile);
+  const skillCatalogBlock = composeSkillCatalogBlock(skills.catalog);
+  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
 
   if (shapeOnly) {
-    await printShape(profile, bundle, systemPrompt, instructional.selection, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
+    await printShape(profile, bundle, systemPrompt, instructional.selection, permissions.shellExec, permissions.shellInterpreter, harness?.assets, skills, skillCatalogBlock);
     return;
   }
 
-  await printFullDump(profile, bundle, systemPrompt, instructional.selection, permissions.shellExec, permissions.shellInterpreter, harness?.assets);
+  await printFullDump(profile, bundle, systemPrompt, instructional.selection, permissions.shellExec, permissions.shellInterpreter, harness?.assets, skills, skillCatalogBlock);
 }
 
 type ParsedArgs = { ok: true; value: { engine: EngineId; shapeOnly: boolean } } | { ok: false; error: string };
@@ -63,8 +74,16 @@ export async function getEffectivePromptToolNames(
   options: McpRegistryOptions = {},
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
+  skillNames: string[] = [],
 ): Promise<EffectivePromptToolNames> {
-  const surface = await resolveToolSurface(profile, true, shellExecEnabled, shellInterpreter, options);
+  const surface = await resolveToolSurface(
+    profile,
+    true,
+    shellExecEnabled,
+    shellInterpreter,
+    options,
+    skillNames.length > 0 ? { catalogNames: skillNames } : undefined,
+  );
   return {
     modelVisible: surface.definitions.map((definition) => definition.function.name),
   };
@@ -116,9 +135,11 @@ async function printShape(
   instructions: EffectiveInstructionSelection,
   shellExecEnabled: boolean,
   shellInterpreter: ShellInterpreterPreference,
-  assets?: AssetResolver,
+  assets: AssetResolver | undefined,
+  skills: ResolvedSkillCatalog,
+  skillCatalogBlock: string,
 ): Promise<void> {
-  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter);
+  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter, catalogNames(skills));
 
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
@@ -128,6 +149,7 @@ async function printShape(
     console.log(`  - ${section.path} [${section.source}] (${[...section.text].length} chars, ${Buffer.byteLength(section.text, "utf8")} bytes)`);
   }
   printInstructionShape(instructions);
+  printSkillCatalogShape(skills, skillCatalogBlock);
   const ledger = assets ? await loadStaticAssetLedger(assets, profile.id) : undefined;
   printStaticAssetLedger(profile.id, ledger);
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
@@ -143,9 +165,11 @@ async function printFullDump(
   instructions: EffectiveInstructionSelection,
   shellExecEnabled: boolean,
   shellInterpreter: ShellInterpreterPreference,
-  assets?: AssetResolver,
+  assets: AssetResolver | undefined,
+  skills: ResolvedSkillCatalog,
+  skillCatalogBlock: string,
 ): Promise<void> {
-  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter);
+  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter, catalogNames(skills));
 
   console.log("=== Prism Vesicle Prompt Dump ===");
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
@@ -153,6 +177,7 @@ async function printFullDump(
   console.log(`Model-visible tools: ${effectiveTools.modelVisible.join(", ")}`);
   console.log(`Stop gates: ${profile.stopGates.length > 0 ? profile.stopGates.join(", ") : "(none)"}`);
   console.log(`Validators: ${profile.validators.length > 0 ? profile.validators.join(", ") : "(none)"}`);
+  printSkillCatalogShape(skills, skillCatalogBlock);
   console.log("");
   console.log("=== Sections ===");
   for (const section of bundle.sections) {
@@ -168,8 +193,21 @@ async function printFullDump(
   console.log("=== End (length: " + [...systemPrompt].length + " chars) ===");
 }
 
-function printInstructionShape(instructions: EffectiveInstructionSelection): void {
-  const files = [instructions.user, instructions.project].filter((file): file is NonNullable<typeof file> => Boolean(file));
+/** Skill catalog identity and byte cost — never entry bodies or paths. */
+function printSkillCatalogShape(skills: ResolvedSkillCatalog, skillCatalogBlock: string): void {
+  if (skills.catalog.entries.length === 0) {
+    console.log("Skill catalog: (none)");
+    return;
+  }
+  console.log(
+    `Skill catalog: ${skills.catalog.entries.length} entries, hash ${skills.catalog.hash}, catalog block ${Buffer.byteLength(skillCatalogBlock, "utf8")} bytes`,
+  );
+  if (skills.catalog.omitted.length > 0) {
+    console.log(`  ! ${skills.catalog.omitted.length} skill(s) omitted to respect the catalog budget`);
+  }
+}
+
+function printInstructionShape(instructions: EffectiveInstructionSelection): void {  const files = [instructions.user, instructions.project].filter((file): file is NonNullable<typeof file> => Boolean(file));
   console.log("Persistent instructions:");
   if (files.length === 0 && instructions.diagnostics.length === 0) {
     console.log("  (none)");

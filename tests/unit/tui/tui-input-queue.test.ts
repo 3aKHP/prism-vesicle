@@ -47,6 +47,7 @@ describe("TUI input queue", () => {
       const inputQueue = createInputQueue();
       const controller = createComposerController({
         rootDir: process.cwd(),
+        activeEngine: () => "etl",
         terminalWidth: () => 80,
         providerRegistry: () => null,
         activeProvider: () => "test",

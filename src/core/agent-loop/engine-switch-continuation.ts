@@ -83,6 +83,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     session,
     logicalTurnId: continuation.identity?.logicalTurnId,
     profile: continuation.profile,
+    skillCatalog: continuation.skillCatalog,
     generation: continuation.generation,
     checkpoint: await FileCheckpointManager.resumeLatest(continuation.rootDir, session),
     signal: options.signal,

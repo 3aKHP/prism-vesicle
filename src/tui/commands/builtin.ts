@@ -36,6 +36,7 @@ import {
   modelCommandCompletion,
   qualityCommandCompletion,
   resumeCommandCompletion,
+  skillCommandCompletion,
   splitTokens,
   stageCommandCompletion,
   themeCommandCompletion,
@@ -68,6 +69,9 @@ const HELP_TEXT = [
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
   "  /btw <question>   ask a temporary side question without interrupting the turn",
+  "  /skill            list available skills (no args = picker)",
+  "  /skill <name> [task] activate a skill and optionally invoke it with a task",
+  "  /skill <name> --context-only activate without starting a provider request",
   "  /resume           list sessions",
   "  /resume <n|id>    resume a session",
   "  /new              start a fresh session",
@@ -103,6 +107,38 @@ export const builtinCommands: Command[] = [
     usage: "/btw <question>",
     async run(ctx, args) {
       await ctx.openSideQuestion(args);
+    },
+  },
+
+  {
+    name: "skill",
+    busyBehavior: (args) => {
+      const trimmed = args.trim();
+      if (!trimmed || trimmed.endsWith("--context-only")) return immediate;
+      return afterAgentLoop;
+    },
+    description: "List, activate, or invoke a Skill",
+    usage: "/skill [name [task|--context-only]]",
+    completion: skillCommandCompletion,
+    async run(ctx, args, raw) {
+      const trimmed = args.trim();
+      if (!trimmed) {
+        await ctx.openSkillPicker();
+        return;
+      }
+      const contextOnly = trimmed.endsWith("--context-only");
+      const withoutFlag = contextOnly ? trimmed.slice(0, -"--context-only".length).trim() : trimmed;
+      const spaceIndex = withoutFlag.indexOf(" ");
+      const name = spaceIndex === -1 ? withoutFlag : withoutFlag.slice(0, spaceIndex);
+      const taskText = spaceIndex === -1 ? undefined : withoutFlag.slice(spaceIndex + 1).trim() || undefined;
+      if (!name) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /skill [name [task|--context-only]]" }]);
+        return;
+      }
+      await ctx.activateSkill(name, {
+        mode: contextOnly ? "context-only" : "invoke",
+        ...(taskText ? { taskText } : {}),
+      });
     },
   },
 

@@ -141,6 +141,7 @@ export type ToolResult = {
   processEvent?: ProcessToolEvent;
   agentEvent?: AgentToolEvent;
   instructionEvent?: import("../instructions/types").InstructionToolEvent;
+  skillEvent?: import("../skills/types").SkillToolEvent;
   delegationDecision?: import("../harness/driver").HarnessDelegationDecision;
   images?: import("../../providers/shared/types").VesicleImageAttachment[];
 };

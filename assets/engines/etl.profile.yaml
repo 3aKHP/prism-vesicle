@@ -22,6 +22,9 @@ defaultTools:
   - web_map
   - web_crawl
   - web_research
+  - activate_skill
+  - read_skill_resource
+  - run_skill_script
 validators:
   - character-card
   - scenario-card

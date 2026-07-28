@@ -18,6 +18,9 @@ defaultTools:
   - replace_in_file
   - append_file
   - copy_file
+  - activate_skill
+  - read_skill_resource
+  - run_skill_script
 validators: []
 stopGates: []
 stateRoots:

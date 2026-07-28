@@ -335,6 +335,32 @@ export const stageCommandCompletion: CommandCompletion = {
   },
 };
 
+export const skillCommandCompletion: CommandCompletion = {
+  resolve(value, context) {
+    const args = commandArguments(value, "skill");
+    if (args === null) return null;
+    const tokens = splitTokens(args);
+    if (tokens.values.length > 1) return null;
+    if (tokens.values.length === 1 && tokens.trailingSpace) return null;
+    return completion(
+      "skill:name",
+      value,
+      tokens.values[0] ?? "",
+      "skills",
+      async () => {
+        const { resolveSkillCatalog } = await import("../../core/skills");
+        const catalog = await resolveSkillCatalog(context.rootDir, process.env, { id: context.activeEngine() as import("../../core/engine/profile").EngineId });
+        return catalog.catalog.entries.map((entry) => ({
+          id: entry.name,
+          label: entry.name,
+          detail: `[${entry.scope}] ${entry.description}`,
+        }));
+      },
+      (item) => `/skill ${item.id} `,
+    );
+  },
+};
+
 export const themeCommandCompletion: CommandCompletion = {
   resolve(value) {
     const args = commandArguments(value, "theme");
