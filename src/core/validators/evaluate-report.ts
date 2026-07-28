@@ -30,7 +30,7 @@ export function validateEvaluateReport(content: string): ValidationResult {
     const contentStart = position + matches[0]![0].length;
     const next = REPORT_SECTIONS[index + 1];
     const contentEnd = next ? content.indexOf(next, contentStart) : content.length;
-    if (contentEnd < 0 || !content.slice(contentStart, contentEnd).trim()) {
+    if (contentEnd >= 0 && !content.slice(contentStart, contentEnd).trim()) {
       errors.push(`Evaluate: report section "${section}" is empty.`);
     }
   }

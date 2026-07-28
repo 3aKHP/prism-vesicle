@@ -101,7 +101,7 @@ function validateOrderedSections(
     const contentStart = position + matches[0]![0].length;
     const nextHeading = headings[index + 1];
     const contentEnd = nextHeading ? content.indexOf(nextHeading, contentStart) : content.length;
-    if (contentEnd < 0 || !content.slice(contentStart, contentEnd).trim()) {
+    if (contentEnd >= 0 && !content.slice(contentStart, contentEnd).trim()) {
       errors.push(`Module A: ${label} ${heading} is empty.`);
     }
   }

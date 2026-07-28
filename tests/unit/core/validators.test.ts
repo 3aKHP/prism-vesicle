@@ -55,6 +55,7 @@ describe("validateCharacterCard (Module A)", () => {
       .replace("## Visual Cortex", "## Biography")
       .replace("## Biography\n诞生", "## Visual Cortex\n诞生"));
     expect(outOfOrder.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(outOfOrder.errors.some((error) => error.includes("is empty"))).toBe(false);
 
     const empty = validateCharacterCard(VALID_CHARACTER_CARD.replace("## Visual Cortex\n身高约156cm，银灰色长发。", "## Visual Cortex"));
     expect(empty.errors.some((error) => error.includes("## Visual Cortex is empty"))).toBe(true);
@@ -162,6 +163,26 @@ describe("validateScenarioCard (Module B)", () => {
     expect(result.errors.some((error) => error.includes('exactly one "## User Role"'))).toBe(true);
   });
 
+  test("recognizes keep-chomping world_state block scalars", () => {
+    for (const indicator of ["|+", ">+"]) {
+      const card = VALID_SCENARIO_CARD.replace(
+        "world_state: 深夜公寓屋顶，雨后",
+        `world_state: ${indicator}\n  深夜公寓屋顶\n  雨后`,
+      );
+      const result = validateScenarioCard(card);
+      expect(result.errors.some((error) => error.includes("ordinary single-line string"))).toBe(true);
+    }
+  });
+
+  test("does not report populated comment sections as empty when they are out of order", () => {
+    const card = VALID_SCENARIO_CARD
+      .replace("## Scene Premise", "## User Role")
+      .replace("## User Role\n- **Identity:**", "## Scene Premise\n- **Identity:**");
+    const result = validateScenarioCard(card);
+    expect(result.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(result.errors.some((error) => error.includes("is empty"))).toBe(false);
+  });
+
   test("rejects duplicate beat fields and non-string beat fields", () => {
     const card = VALID_SCENARIO_CARD
       .replace("    variant_config: suppression-active", "    label: Duplicate\n    variant_config: suppression-active")
@@ -251,7 +272,21 @@ describe("validateEvaluateReport (Evaluate engine)", () => {
 `);
     expect(result.errors.some((error) => error.includes("out of order"))).toBe(true);
     expect(result.errors.some((error) => error.includes('exactly one section "## 1. Executive Summary"'))).toBe(true);
-    expect(result.errors.some((error) => error.includes("is empty"))).toBe(true);
+
+    const empty = validateEvaluateReport(VALID_EVALUATE_REPORT.replace(
+      "## 3. Detailed Findings\nPersona Topology 的 Invariant Axes 满足两条，Topology 结构完整。",
+      "## 3. Detailed Findings",
+    ));
+    expect(empty.errors.some((error) => error.includes('section "## 3. Detailed Findings" is empty'))).toBe(true);
+  });
+
+  test("does not report populated report sections as empty when they are out of order", () => {
+    const report = VALID_EVALUATE_REPORT
+      .replace("## 2. Dimension Scores", "## 3. Detailed Findings")
+      .replace("## 3. Detailed Findings\nPersona", "## 2. Dimension Scores\nPersona");
+    const result = validateEvaluateReport(report);
+    expect(result.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(result.errors.some((error) => error.includes("is empty"))).toBe(false);
   });
 });
 

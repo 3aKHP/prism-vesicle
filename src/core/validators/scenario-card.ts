@@ -108,7 +108,7 @@ function hasInlineSingleLineWorldState(yaml: string): boolean {
   const index = lines.findIndex((line) => /^world_state:/.test(line));
   if (index < 0) return false;
   const value = lines[index]!.slice(lines[index]!.indexOf(":") + 1).trim();
-  if (!value || value === "|" || value === ">" || value.startsWith("|-") || value.startsWith(">-")) return false;
+  if (!value || /^[|>][-+]?$/.test(value)) return false;
   for (let cursor = index + 1; cursor < lines.length; cursor++) {
     if (!lines[cursor]!.trim()) continue;
     return !/^[ \t]+/.test(lines[cursor]!);
@@ -167,7 +167,7 @@ function validateScenarioBody(body: string, errors: string[]): void {
     const contentStart = start + matches[0]![0].length;
     const nextHeading = headings[index + 1];
     const contentEnd = nextHeading ? comment.indexOf(nextHeading, contentStart) : comment.length;
-    if (contentEnd < 0 || !comment.slice(contentStart, contentEnd).trim()) {
+    if (contentEnd >= 0 && !comment.slice(contentStart, contentEnd).trim()) {
       errors.push(`Module B: HTML comment section "${heading}" is empty.`);
     }
   }
