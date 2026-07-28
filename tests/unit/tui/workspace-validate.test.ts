@@ -45,7 +45,7 @@ describe("validate finding → line resolution", () => {
   });
 
   test("a missing field has no anchor → falls back to the frontmatter close, anchored=false", () => {
-    const { line, anchored } = locateFinding(card, 'recommended YAML field "inventory" is missing.');
+    const { line, anchored } = locateFinding(card, 'required YAML field "inventory" is missing.');
     expect(anchored).toBe(false);
     // Fallback is the closing "---" of the frontmatter (line 3, 0-indexed).
     expect(line).toBe(3);
@@ -63,8 +63,8 @@ describe("validate run + summary + severity", () => {
     "---",
     "name: Mira",
     "archetype: voyager",
-    "age_gender: 30",
-    "inventory: []",
+    "age_gender: \"30\"",
+    "inventory: none",
     "---",
     "## Visual Cortex",
     "x",
@@ -83,7 +83,7 @@ describe("validate run + summary + severity", () => {
     "- b",
     "- c",
     "### Boundary Conditions",
-    "Hard limit: none",
+    "- Hard limit: none",
     "## Narrative Engine",
     "x",
     "## World Context",
