@@ -198,7 +198,7 @@ async function runInspect(name: string): Promise<void> {
     await printInstalledInspection(entry.name, entry.version);
     return;
   }
-  console.error(`No skill named "${name}" found in the harness, user, or installed scope.`);
+  console.error(`No skill named "${name}" found in the harness, user, project, or installed scope.`);
   process.exitCode = 1;
 }
 

@@ -13,6 +13,7 @@
  * same file content produces the same disabled set everywhere.
  */
 
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { userConfigDirectory } from "../config/paths";
@@ -57,7 +58,7 @@ async function writeDisabledNames(path: string, names: Set<string>): Promise<voi
   }
   const content = [...names].sort().join("\n") + "\n";
   await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.${process.pid}.tmp`;
+  const tmp = `${path}.${randomUUID()}.tmp`;
   await writeFile(tmp, content, "utf8");
   try {
     await rename(tmp, path);
