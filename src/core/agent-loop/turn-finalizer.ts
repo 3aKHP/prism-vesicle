@@ -1,6 +1,7 @@
 import type { VesicleMessage, VesicleResponse } from "../../providers/shared/types";
 import type { EngineProfile } from "../engine/profile";
 import type { SessionStore } from "../session/store";
+import { withExecutionRound } from "../session/store";
 import { validateContent } from "../validators/registry";
 import type { AgentLoopEvent, RunPromptResult, ValidatorOutcome } from "./types";
 import type { QualityOutcome } from "../quality";
@@ -13,6 +14,7 @@ export async function finalizeTurn(options: {
   model: string;
   onEvent?: (event: AgentLoopEvent) => void;
   quality?: { outcome: QualityOutcome; findingCount: number };
+  requestEstimateTokens?: number;
 }): Promise<RunPromptResult> {
   const { response } = options;
   let assistantRecordUuid: string | undefined;
@@ -26,14 +28,15 @@ export async function finalizeTurn(options: {
     const record = await options.session.append({
       role: "assistant",
       content: response.content,
-      metadata: {
+      metadata: withExecutionRound(options.session.sessionId, {
         engine: options.profile.id,
         model: options.model,
         providerResponseId: response.id,
         ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
         ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
         ...(response.usage ? { usage: response.usage } : {}),
-      },
+        ...(options.requestEstimateTokens !== undefined ? { requestEstimateTokens: options.requestEstimateTokens } : {}),
+      }),
     });
     assistantRecordUuid = record.uuid;
   }

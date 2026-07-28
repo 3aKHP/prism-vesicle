@@ -3,49 +3,110 @@ import { SyntaxStyle } from "@opentui/core";
 
 /**
  * Theme mode: the TUI ships a dark (night) and a light (day) palette derived
- * from the same locked brand palette. Resolution order:
- *   /theme command (session)  →  VESICLE_THEME env  →  terminal auto-detect
- * The mode signal lives at module scope; every consumer reads through the
- * reactive `palette` getters, so a mode switch re-renders the whole shell
- * without touching call sites.
+ * from the same locked brand palette. The preference domain has four values:
+ *
+ *   dark    — force the night palette.
+ *   light   — force the day palette.
+ *   default — follow the terminal's own reported light/dark mode, falling
+ *             back to dark until a terminal reports. (This is the built-in.)
+ *   auto    — local-time adaptation: light over [07:00, 19:00), dark otherwise.
+ *
+ * Effective source precedence (see project-preferences + theme controller):
+ *   session /theme  >  CLI --dark/--light  >  project .vesicle/preferences.yaml
+ *                  >  VESICLE_THEME env  >  built-in default
+ *
+ * The mode/preference/source signals live at module scope; every consumer
+ * reads through the reactive `palette` getters, so a mode switch re-renders
+ * the whole shell without touching call sites. `preference` and `source` are
+ * signals so a scheduler owner (theme-runtime) can react to changes.
  */
 export type ThemeMode = "dark" | "light";
-export type ThemePreference = ThemeMode | "auto";
+export type ThemePreference = ThemeMode | "default" | "auto";
+export type ThemePreferenceSource = "session" | "cli" | "project" | "env" | "builtin";
 
 const [mode, setMode] = createSignal<ThemeMode>("dark");
-let preference: ThemePreference = "auto";
+const [preference, setPreference] = createSignal<ThemePreference>("default");
+const [source, setSource] = createSignal<ThemePreferenceSource>("builtin");
 let terminalMode: ThemeMode | null = null;
 
 function applyPreference(): void {
-  setMode(preference === "auto" ? terminalMode ?? "dark" : preference);
+  setMode(resolveThemeMode(preference(), terminalMode, new Date()));
 }
 
-/** Current resolved mode (never "auto"). */
+/** Resolve a preference to a rendered palette mode. Pure: no clock but `now`. */
+export function resolveThemeMode(
+  preference: ThemePreference,
+  terminal: ThemeMode | null,
+  now: Date,
+): ThemeMode {
+  if (preference === "dark" || preference === "light") return preference;
+  if (preference === "default") return terminal ?? "dark";
+  return isLocalDaytime(now) ? "light" : "dark";
+}
+
+/** Local-time day window for `auto`: light over [07:00, 19:00), dark otherwise. */
+export function isLocalDaytime(now: Date): boolean {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  return minutes >= 7 * 60 && minutes < 19 * 60;
+}
+
+/**
+ * Next local 07:00 or 19:00 strictly after `now`. Constructed from local
+ * calendar components so DST transitions remain coherent rather than adding a
+ * fixed twelve-hour duration. Pure: no clock but `now`.
+ */
+export function nextAutoThemeBoundary(now: Date): Date {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
+  const sevenToday = new Date(year, month, day, 7, 0, 0, 0);
+  const nineteenToday = new Date(year, month, day, 19, 0, 0, 0);
+  if (now < sevenToday) return sevenToday;
+  if (now < nineteenToday) return nineteenToday;
+  return new Date(year, month, day + 1, 7, 0, 0, 0);
+}
+
+/** Current resolved mode (never "default"/"auto"). */
 export function themeMode(): ThemeMode {
   return mode();
 }
 
-/** Current preference as requested by env / /theme. */
+/** Current effective preference as requested by the active source. */
 export function themePreference(): ThemePreference {
-  return preference;
+  return preference();
+}
+
+/** Current effective source: the highest-priority input that supplied the preference. */
+export function themeSource(): ThemePreferenceSource {
+  return source();
 }
 
 /**
- * Set the session preference. An explicit mode wins over terminal reports;
- * "auto" follows the terminal (falling back to dark until one reports).
+ * Set the effective preference and its source, then re-resolve. The caller
+ * picks the source so the controller (not this module) owns precedence.
  */
-export function setThemePreference(next: ThemePreference): void {
-  preference = next;
+export function setThemePreference(next: ThemePreference, src: ThemePreferenceSource = "session"): void {
+  setPreference(next);
+  setSource(src);
   applyPreference();
 }
 
 /**
- * Feed a terminal-reported mode (startup detection / theme_mode event).
- * Pass null to clear the report (terminal no longer knows its mode).
+ * Re-resolve from the actual current time. The auto-boundary scheduler calls
+ * this from its timer callback so a delayed fire (e.g. after sleep) self-corrects.
+ */
+export function refreshAutoTheme(): void {
+  applyPreference();
+}
+
+/**
+ * Feed a terminal-reported mode (startup detection / theme_mode event). The
+ * cache always updates; a rendered mode change happens only while the effective
+ * preference is `default` (terminal following). Pass null to clear the report.
  */
 export function reportTerminalThemeMode(next: ThemeMode | null): void {
   terminalMode = next;
-  if (preference === "auto") applyPreference();
+  if (preference() === "default") applyPreference();
 }
 
 /**

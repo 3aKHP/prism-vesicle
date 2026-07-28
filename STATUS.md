@@ -1,33 +1,35 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-alpha.6 release candidate (2026-07-26)._
+_Snapshot: 1.0.0-alpha.7 release candidate (2026-07-28)._
 
-> This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
+> This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-alpha.6**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.6 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-alpha.7**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.7 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10@10.1.2`, verified 73-file inventory) | released |
+| Assets | Bundled V10 Harness (`prism-engine-v10`, verified 73-file inventory) | released |
 | Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
 | Providers | Multi-provider registry with generation defaults and capability/limits metadata | released |
 | Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | released |
 | Providers | Thinking-effort controls and reasoning-block visibility | released |
+| Context | Portable `/compact` checkpoint (`compact-checkpoint-v1`): atomic replacement history (summary + verbatim retained tail), append-only transcript preserved, projection/resume/rewind exact across the checkpoint | released |
+| Context | Opt-in automatic compaction: pre-turn and exact provider-send guards over current history, queued/background input, and tool schemas; provider-observation delta projection; pre-install replacement ceiling validation; soft-trigger continue + hard-ceiling block; truthful `/context`; cancelled lifecycle | released |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
 | TUI | Startup splash and empty-session hero derived from the brand ANSI mark; truecolour animation degrades to a static frame on 256-colour terminals and freezes under `VESICLE_REDUCED_MOTION=1` | released |
 | TUI | Static motif wiring: per-message role spectrum lanes, per-engine refraction accents, and ASCII-frame sidebar section labels | released |
-| TUI | Day/night theme: light palette with AA-checked accents, terminal auto-detection plus `/theme` and `VESICLE_THEME` overrides | released |
+| TUI | Day/night theme: four-value preference (dark/light/default/auto), terminal-following `default` with dark fallback, time-based `auto` (light 07:00–19:00), `/theme` session override plus `--persist`/`--unset-project` project file, `--dark`/`--light` launch flags, and `VESICLE_THEME` env | released |
 | TUI | Two-page shell (Chat / Workspace, `Ctrl+O` and `/workspace`), page-aware header, sidebar renamed to Host | released |
-| TUI | Workspace page workbench: file tree (lazy load, hidden-file toggle, refresh), read-only viewer (numbered source, Markdown source/preview, image/binary metadata, 512 KB / 2000-line bounds), `Ctrl+P` fuzzy quick open, three-region `F6` focus model, a B3 editing kernel (per-file textarea undo, dirty + atomic save / save-as, find / goto / reload, dirty-on-close and overwrite confirms, external-modification detection by mtime, 8-buffer LRU pool), B4 file management + in-page validation (`a`/`A`/`m`/`c`/`d` create/rename/copy/delete with recycle-bin trash, ops + delete confirms, buffer rekey on rename; `v` findings panel with anchor-based line jumps, auto-validate on open/save, shared `ARTIFACT_VALIDATOR_NAMES`), and B5 external-editor handoff (`Ctrl+X` suspends the renderer, opens the file via `$VESICLE_EDITOR` / `settings.yaml` / `$VISUAL` / `$EDITOR` / platform fallback, resumes, reload + revalidate on return; dirty gate); `/workspace [path]` locates and `/artifact` opens in the viewer | released |
+| TUI | Workspace page workbench: file tree (lazy load, hidden-file toggle, refresh), read-only viewer (numbered source, Markdown source/preview, image/binary metadata, metadata-only symlinks, 512 KB / 2000-line bounds), `Ctrl+P` fuzzy quick open, three-region `F6` focus model, a B3 editing kernel (per-file textarea undo, dirty + atomic save / save-as, find / goto / reload, dirty-on-close and overwrite confirms, external-modification detection by mtime + inode identity, 8-buffer LRU pool), B4 file management + in-page validation (`a`/`A`/`m`/`c`/`d` create/rename/copy/delete with recycle-bin trash, ops + delete confirms, buffer rekey on rename; `v` findings panel with anchor-based line jumps, auto-validate on open/save, shared `ARTIFACT_VALIDATOR_NAMES`; path-owned current/stale validation snapshots bound to their focus target, capability-aware mode/action hints, and a width-aware one-line status projection that stays usable at 80 columns), and B5 external-editor handoff (`Ctrl+X` suspends the renderer, opens the file via `$VESICLE_EDITOR` / `settings.yaml` / `$VISUAL` / `$EDITOR` / platform fallback, resumes, reload + revalidate on return; dirty gate); `/workspace [path]` locates and `/artifact` opens in the viewer | released |
 | TUI | Shared FIFO for user messages and capability-classified commands, with tool/Loop boundaries, Escape interrupt, preview, and edit recall | released |
 | TUI | `/btw` side questions: one tool-free question over a frozen context boundary, shown in an ephemeral overlay while the main turn continues | released |
 | Instructions | Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and Engine-specific replacement | released |
 | Instructions | `/init [--force] [notes]`: scan the project and draft a project-scope `VESICLE.md` via a dedicated host prompt (no new Harness); refuses an existing file unless `--force` explicitly backs it up and replaces it | released |
 | Instructions | `read_instructions` / `update_instructions` tools (non-Stage Engines): enum-target read/write/delete of Persistent Instructions with optimistic concurrency, atomic write, previous-state backup, and 32 KiB budget validation | released |
-| TUI | Clipboard image attachments (`Alt+V`, vision-gated) | released |
+| TUI | Clipboard image attachments (`Ctrl+V`, with Alt/Option+V compatibility; vision-gated) | released |
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
 | Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | released |
@@ -50,7 +52,7 @@ The 1.0 alpha makes Vesicle a credible direct API host for the Prism Engine, not
 
 Public user-facing documentation is intentionally limited during the alpha. Treat the [`docs/user/`](./docs/user/) manual, the [README](./README.md) installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and [`docs/examples/`](./docs/examples/) as the supported onboarding references; other behavior is subject to alpha-level change while feature and fix work remains the priority.
 
-Architecture and runtime contracts — provider adapters, tool guards, gates, sessions, prompts, TUI behavior, the SubAgent lifecycle, Harness and Quality Guard contracts, and command completion — live in [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) and its sibling documents under [`docs/dev/`](./docs/dev/). This file intentionally does not restate them.
+Architecture and runtime contracts are routed from [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) to their authoritative domain documents. Source-code conventions live separately in [`docs/dev/STYLE.md`](./docs/dev/STYLE.md). This file intentionally records current implementation state and limits rather than duplicating those contracts.
 
 The Prism asset lineage comes from the public sibling repository [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology).
 
@@ -85,7 +87,7 @@ prism-vesicle/
 │   │   └── validators/   # Module A/B v9 validators + registry
 │   ├── providers/        # Provider-neutral types and adapters
 │   ├── mcp/              # Streamable HTTP MCP tool discovery and execution
-│   ├── skills/           # Future controlled skill bundle surface
+│   ├── skills/           # Agent Skills parser, discovery, store, install, catalog, authoring (Phase 0–3)
 │   ├── tui/              # OpenTUI/Solid interface, theme, GatePrompt
 │   └── types/            # Shared host types
 ├── assets/               # Exact 73-file V10 Harness manifest inventory
@@ -111,7 +113,7 @@ prism-vesicle/
 
 ## Tool Surface
 
-Model-visible tools and their write scope. Path-guard rules, write roots, and the full tool-runtime contract live in [`docs/dev/STYLE.md` § Tool Runtime](./docs/dev/STYLE.md#tool-runtime); the table below is the authoritative tool inventory.
+Model-visible tools and their write scope. Path guards, permissions, process authority, gates, questions, and MCP execution are defined in [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md); the table below is the authoritative current tool inventory.
 
 | Tool | Write scope |
 |------|-------------|
@@ -159,18 +161,20 @@ Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`, `novels
 | `phase-confirmation` | etl | Wired (Phase artifact checkpoints) |
 | `runtime-turn` | runtime | Declared in profile and prompt-bound |
 
-Engines with empty `stopGates` never offer `request_confirmation`, so their models cannot invoke a gate the host would then have to refuse. `request_engine_switch` is available to all engines as a user-confirmed handoff; transition restrictions are intentionally deferred. Gate semantics and the Confirm/Reject/summary UI contract live in [`docs/dev/STYLE.md` § Gate Runtime](./docs/dev/STYLE.md#gate-runtime).
+Engines with empty `stopGates` never offer `request_confirmation`, so their models cannot invoke a gate the host would then have to refuse. `request_engine_switch` is available to all engines as a user-confirmed handoff; transition restrictions are intentionally deferred. Gate and handoff semantics live in [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md), while presentation belongs to [`docs/dev/TUI.md`](./docs/dev/TUI.md).
 
 ## Validators
 
 | Validator | Engine | Checks |
 |-----------|--------|--------|
-| `character-card` | etl | Module A v9: frontmatter allowlist, seven sections, Persona Topology subsections, axis counts, L-System leakage |
-| `scenario-card` | etl | Module B v9: 3–5 beat map, per-beat fields, tension range, trajectory, legacy field rejection |
-| `runtime-packet` | runtime, stage | Three-part turn packet: Hidden Neural Chain (`[!Neural Chain]`), five-line Dynamic HUD markers, L-System leakage (thin MVP; output contract owned by Neural-Narratology) |
-| `evaluate-report` | evaluate | Audit report Overall Verdict (PASS/CONDITIONAL/FAIL) and five numbered sections; inline only — file-written reports are not read yet |
+| `character-card` | etl | Module A v9: parsed YAML field contract, ordered/non-empty sections and Persona Topology subsections, axis counts, scoped `Hard limit:`, artifact lexical-policy warnings, L-System leakage |
+| `scenario-card` | etl | Module B v9: parsed YAML field and beat-map contract, single-line `world_state`, trajectory, visible opening, ordered/non-empty logic-comment sections, artifact lexical-policy warnings, L-System leakage |
+| `runtime-packet` | runtime, stage | Ordered three-part packet: scoped Hidden Neural Chain fields, standalone ordered Dynamic HUD lines, non-empty prose, Runtime/Stage marker separation, L-System leakage |
+| `evaluate-report` | evaluate | One independent Overall Verdict (PASS/CONDITIONAL/FAIL) and five exactly-once, ordered, non-empty sections; inline only — file-written reports are not read yet |
 
 Validator findings are advisory: they surface in the TUI and session log but never abort a turn. Each validator runs only when its own applicable content shape matches — Module A/B YAML-frontmatter artifacts for `character-card` and `scenario-card`, the three-part turn packet for `runtime-packet` on Runtime and Stage, or an inline audit report for `evaluate-report` — never on ordinary phase-transition prose.
+
+The Module A/B artifact Validators intentionally mirror the verified `zh-f1-not-x-but-y` matcher as a transitional lexical-policy warning. It applies only after artifact-shape routing, reports the matched prohibited `不是……而是……` pattern without inferring authorship, and does not add an ETL Quality Guard binding, provider call, rewrite, or delivery gate.
 
 ## Known Limits & Deferred Work
 
@@ -186,7 +190,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 - OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini `generateContent` are implemented. **OpenAI Responses is deferred.**
 - Model discovery currently targets the OpenAI-compatible `GET /v1/models` response shape. Anthropic and Gemini use their existing profiles plus exact manual model ids until their native discovery APIs receive separate adapters. Discovery never infers capabilities from names.
-- Mid-stream SSE disconnect replay is deferred: replaying partial assistant/tool deltas requires explicit UI and tool-loop reconciliation. Transport and retryable-HTTP retry is implemented; see [`docs/dev/STYLE.md` § Provider Adapters](./docs/dev/STYLE.md#provider-adapters).
+- Mid-stream SSE disconnect replay is deferred: replaying partial assistant/tool deltas requires explicit UI and tool-loop reconciliation. Transport and retryable-HTTP retry is implemented; see [`docs/dev/PROVIDERS.md`](./docs/dev/PROVIDERS.md).
 
 ### Engines & Gates
 
@@ -209,7 +213,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Host Shell
 
 - `shell_exec` is a user-authorized host command, **not an OS sandbox**. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind.
-- Process cleanup terminates the managed shell and ordinary descendants in its process group/tree; an explicitly approved command can still escape that tree through a new session or external service manager. See [`docs/dev/STYLE.md` § Tool Permission Runtime](./docs/dev/STYLE.md#tool-permission-runtime) for the runtime contract and [`docs/user/en/advanced/shell-exec.md`](./docs/user/en/advanced/shell-exec.md) for the user-facing surface.
+- Process cleanup terminates the managed shell and ordinary descendants in its process group/tree; an explicitly approved command can still escape that tree through a new session or external service manager. See [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md) for the runtime contract and [`docs/user/en/advanced/shell-exec.md`](./docs/user/en/advanced/shell-exec.md) for the user-facing surface.
 
 ### Quality Guard & Stage
 
@@ -221,8 +225,8 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Assets & Harness
 
 - Asset overlays do not support deletion tombstones. An absent higher-layer file falls back to the next layer; disabling packaged engines/assets will require a future explicit manifest policy rather than magic filenames.
-- With no project lock, Vesicle automatically verifies and activates the bundled `prism-engine-v10@10.1.2`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume.
-- See [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) for the bundled inventory, host extension layer, lineage, and update rules, and [`docs/dev/STYLE.md` § Managed Harness Packs](./docs/dev/STYLE.md#managed-harness-packs) for the verification and contract boundary.
+- With no project lock, Vesicle automatically verifies and activates the bundled `prism-engine-v10`; rollback returns to that same baseline. Sessions recorded before the V10 migration have no Harness identity and fail closed on resume.
+- See [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) for the bundled inventory, host extension layer, managed Pack verification, Driver bindings, Quality Guard bindings, lineage, and update rules.
 
 ### Persistent Instructions
 
@@ -232,7 +236,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ### Other
 
-- Skills are a directory stub, not a runtime integration.
+- Skills Phase 0 (format, inventory, Skill Store), Phase 1 (repository installation and lifecycle), Phase 2 (activation, resources, scripts), Phase 3 (authoring and project scope), and Host-bundled first-party Skills are implemented: a strict Agent Skills `SKILL.md` parser and validator, bounded discovery for the Host (`host-assets/skills/`), Harness (`assets/skills/`), user (`<user-config>/skills/`), and project (`.agents/skills/`) scopes with deterministic `project` > `user` > `installed` > `harness` > `host` precedence, collision and unsupported-field diagnostics, an immutable versioned Skill Store with an active index, catalog hashing, and cross-process index locking, and the `vesicle skills list|validate|inspect|create|enable|disable|copy-template|install|update|rollback|uninstall` commands plus `vesicle doctor` integration. `install` accepts a local path or a GitHub repository URL (`--ref`, `--path`, `--all`, `--include-worktree`), resolves remote refs to immutable commits, installs immutable snapshots with a provenance sidecar, and refuses to guess when a source contains multiple Skills; `update`/`rollback`/`uninstall` operate on the active index and retained versions. Phase 2 adds model-visible activation: `activate_skill` (enum dynamic catalog, hash dedup), `read_skill_resource` (script sources readable without process capability, 256 KiB truncation), and `run_skill_script` (structured argv, no shell interpolation, reuses Process Runtime timeout/output/cancel/cleanup); the `/skill` TUI command (bare picker, `<name> [task]` activate-and-invoke, `--context-only`); per-session catalog freeze with resume by name+hash; catalog prompt block injection; compaction reattach (16 KiB budget) with loss reporting; Engine-switch eligibility filtering and activation registry pruning; and replay/rewind/resume derivation from durable records. Six non-Stage Engine profiles declare Skill tools. Phase 3 adds project `.agents/skills/` discovery with visible provenance and no separate trust gate, `create` scaffolding with explicit overwrite behavior, `enable`/`disable` across all scopes (store index for installed; line-delimited disabled-names files for user/project/host), and `copy-template` into approved writable roots. Host scope adds generic package-owned first-party Skill discovery independent of the active Harness; the bundled `vesicle-docs` Skill ships version-matched public documentation (README, user manual, developer contracts, examples) as readable references without scripts or process capability. See [`docs/dev/SKILLS.md`](./docs/dev/SKILLS.md). Deferred to later phases: SubAgent Skill inheritance; and optional registry or marketplace work.
 - Prompt-cache engineering (PrefixShape hashing, CacheDiagnostics) is deferred.
 
 ## Verification
@@ -263,9 +267,19 @@ Native Windows CI installs pinned Inno Setup, builds the versioned guided instal
 | [`CODE_SIGNING_POLICY.md`](./CODE_SIGNING_POLICY.md) | Windows signing scope, approval, verification, incident handling |
 | [`PRIVACY.md`](./PRIVACY.md) | Local data, external-service transfers, uninstall, deletion |
 | [`AGENTS.md`](./AGENTS.md) / [`CLAUDE.md`](./CLAUDE.md) | AI collaborator startup and coordination |
-| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Architecture and runtime contract boundaries |
+| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Source-code structure and maintainability rules |
+| [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) | Layering, dependency direction, and runtime-contract routing |
+| [`docs/dev/PROVIDERS.md`](./docs/dev/PROVIDERS.md) | Provider adapters, protocol mapping, transport, usage, and configuration |
+| [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md) | Tool capability, path, permission, process, gate, question, web, and MCP contracts |
+| [`docs/dev/SESSIONS.md`](./docs/dev/SESSIONS.md) | Session persistence, projection, checkpoints, rewind, compaction, and recovery |
+| [`docs/dev/PERSISTENT_INSTRUCTIONS.md`](./docs/dev/PERSISTENT_INSTRUCTIONS.md) | Persistent Instruction resolution, composition, mutation, and capability limits |
+| [`docs/dev/TUI.md`](./docs/dev/TUI.md) | Terminal layout, input, rendering, commands, rewind, and side-question contracts |
+| [`docs/dev/USER_AGENCY_AND_RISK_DISCLOSURE.md`](./docs/dev/USER_AGENCY_AND_RISK_DISCLOSURE.md) | User agency, risk disclosure, confirmation, and enforceable-boundary policy |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, PRs, hotfixes, independent CR, release lifecycle |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled Harness inventory, host layer, lineage, updates |
 | [`docs/dev/SUBAGENTS.md`](./docs/dev/SUBAGENTS.md) | SubAgent lifecycle and delivery contract |
+| [`docs/dev/SKILLS.md`](./docs/dev/SKILLS.md) | Skills runtime boundary (Agent Skills format, discovery, store) |
+| [`docs/dev/STAGE.md`](./docs/dev/STAGE.md) | Stage consumer Engine bootstrap, three-part packet, and prose-first rendering contract |
+| [`docs/dev/QUALITY_GUARD.md`](./docs/dev/QUALITY_GUARD.md) | Output Quality Guard delivery-policy runtime (detection, Semantic Judge, host policy, rewrite) |
 | [`docs/dev/COMMAND_COMPLETION.md`](./docs/dev/COMMAND_COMPLETION.md) | Slash-command argument completion contract |
 | [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | Developer Quality Guard benchmark runner |

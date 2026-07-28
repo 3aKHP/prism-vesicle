@@ -1,9 +1,12 @@
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
+import { join } from "node:path";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
-import { engineAccent, palette, reportTerminalThemeMode, setThemePreference } from "./theme";
+import { engineAccent, palette, reportTerminalThemeMode, themePreference } from "./theme";
+import { createThemeScheduler } from "./theme-runtime";
+import { createThemePreferenceController, parseEnvTheme, type ThemePreferenceController } from "./theme-preference-controller";
 import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
@@ -16,6 +19,7 @@ import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
 import { yoloPanelHeight } from "./YoloPrompt";
+import { qualityRewritePanelHeight } from "./QualityRewritePrompt";
 import { builtinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
 import type { CommandContext } from "./commands/types";
@@ -43,7 +47,7 @@ import {
   turnUsageTelemetryLine,
   type TokenUsageSummary,
 } from "./telemetry";
-import { displayTranscriptFromSnapshot } from "./session-presenter";
+import { displayTranscriptFromSnapshot, isEmptySessionTranscript } from "./session-presenter";
 import { BottomSurface } from "./views/BottomSurface";
 import { createAgentProcessController } from "./agent-process-controller";
 import { createSessionResumeController } from "./session-resume-controller";
@@ -61,10 +65,12 @@ import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
 import { createSideQuestionController } from "./side-question-controller";
+import { createSkillPickerController } from "./skill-picker-controller";
 import { createWorkspaceController } from "./workspace-controller";
 import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
+import { activateSkillForSession } from "../core/skills";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
@@ -73,6 +79,8 @@ export type AppProps = {
   dangerouslySkipPermissions?: boolean;
   initialResume?: boolean;
   bootstrapOnly?: boolean;
+  /** Effective theme-preference owner (source precedence, session override, project persistence). */
+  theme?: ThemePreferenceController;
 };
 
 export {
@@ -91,6 +99,18 @@ export type { TokenUsageSummary };
 export function App(props: AppProps = {}) {
   initDebugLogging();
   const renderer = useRenderer();
+  // The controller is constructed in runTui/setup before the first frame. Tests
+  // that mount App directly fall back to an env-only controller (no project
+  // read) so the palette and `/theme` still work without async I/O on mount.
+  const themeController: ThemePreferenceController = props.theme
+    ?? createThemePreferenceController({
+      rootDir: process.cwd(),
+      envParse: parseEnvTheme(process.env.VESICLE_THEME),
+      project: {},
+    });
+  // runTui/runGuidedSetup already applied the startup preference before render;
+  // only the test fallback controller (props.theme absent) needs it here.
+  if (!props.theme) themeController.applyStartup();
   onMount(() => {
     if (props.bootstrapOnly) process.nextTick(() => renderer.destroy());
   });
@@ -130,6 +150,11 @@ export function App(props: AppProps = {}) {
       role: "system" as const,
       content: "DANGER: --dangerously-skip-permissions enabled YOLO for this process. Tool approvals are bypassed; runtime hard guards remain active.",
     }] : []),
+    ...(() => {
+      // Surface bounded startup diagnostics (invalid env / invalid project preference).
+      const diagnostics = themeController.startupDiagnostics();
+      return diagnostics.map((text) => ({ role: "system" as const, content: text }));
+    })(),
   ]);
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
@@ -148,21 +173,35 @@ export function App(props: AppProps = {}) {
   });
   const [splashGone, setSplashGone] = createSignal(splashMode === "skip");
   const [splashForceDone, setSplashForceDone] = createSignal(false);
-  // M2: the empty-session hero shows only while the stream holds no
-  // conversation turns; system notices (e.g. the YOLO warning) render above it.
-  const showHero = createMemo(() => !restoringSession() && messages().every((message) => message.role === "system"));
+  // M2: the empty-session hero shows only while the stream holds no real
+  // conversation. The invariant (isEmptySessionTranscript) is "no user prompt,
+  // assistant reply, tool activity, or compact summary has appeared yet" —
+  // startup notices (the YOLO warning, "fresh session", etc.) are system
+  // messages without a kind and may render above the hero, but a compact summary
+  // or any turn makes this a live transcript. Deriving this from an explicit
+  // conversation contract (instead of only "every visible role is system")
+  // prevents a future system-role record from recreating the post-compact Hero
+  // regression (issue #107 PR2 addendum).
+  const showHero = createMemo(() => !restoringSession() && isEmptySessionTranscript(messages()));
 
-  // Day/night theme: the env preference wins at startup; otherwise follow the
-  // terminal's own mode (eager report, async detection, then live events).
-  // The shell re-renders reactively whenever the resolved mode changes.
-  const requestedTheme = process.env.VESICLE_THEME?.trim().toLowerCase();
-  setThemePreference(requestedTheme === "dark" || requestedTheme === "light" ? requestedTheme : "auto");
+  // Day/night theme. The effective preference (and its source) is applied
+  // before the first frame by the controller in runTui/setup. Here the shell
+  // subscribes to live terminal mode reports and owns the `auto` boundary
+  // timer; the reactive palette authority stays in theme.ts.
   const reportedTheme = renderer.themeMode;
   if (reportedTheme) reportTerminalThemeMode(reportedTheme);
   void renderer.waitForThemeMode(500).then((detected) => {
     if (detected) reportTerminalThemeMode(detected);
   });
   renderer.on("theme_mode", reportTerminalThemeMode);
+  // One owner for the `auto` boundary timer. It re-evaluates whenever the
+  // effective preference changes and cancels itself when leaving `auto`.
+  const themeScheduler = createThemeScheduler();
+  createEffect(() => {
+    themePreference();
+    themeScheduler.schedule();
+  });
+  onCleanup(() => themeScheduler.dispose());
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
@@ -364,6 +403,7 @@ export function App(props: AppProps = {}) {
   }
   const composerController = createComposerController({
     rootDir: process.cwd(),
+    activeEngine,
     terminalWidth: () => dimensions().width,
     providerRegistry,
     activeProvider,
@@ -425,17 +465,39 @@ export function App(props: AppProps = {}) {
   const qualityPickerController = createQualityPickerController({
     providerRegistry,
     ensureProviderRegistry,
+    activeProvider,
+    activeModel,
     setStatus,
     setMessages,
     reportError: (error) => turnController.reportError(error),
   });
   const {
     qualityPicker,
+    qualityRewriteConfirm,
     qualityPickerItems,
     qualityPickerTitle,
     handleQualityPickerKey,
+    handleRewriteConfirmKey,
     openQualityPicker,
+    openRewriteConfirm,
   } = qualityPickerController;
+  const skillPickerController = createSkillPickerController({
+    rootDir: process.cwd(),
+    env: process.env,
+    activeEngineProfile: () => ({ id: activeEngine() }),
+    contextWindow: () => activeModelLimits()?.contextWindow,
+    setStatus,
+    setMessages,
+    reportError: (error) => turnController.reportError(error),
+    onActivate: (name) => activateSkillCommand(name, { mode: "context-only" }),
+  });
+  const {
+    skillPicker,
+    skillPickerItems,
+    skillPickerTitle,
+    handleSkillPickerKey,
+    openSkillPicker,
+  } = skillPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
   onCleanup(() => {
     unsubscribeProcesses();
@@ -481,8 +543,10 @@ export function App(props: AppProps = {}) {
       && !pendingChildPermission()
       && !rewindPicker()
       && !sessionPicker()
+      && !skillPicker()
       && !modelPicker()
       && !qualityPicker()
+      && !qualityRewriteConfirm()
       && !yoloConfirmStage(),
     agentCards,
     setConversation,
@@ -659,6 +723,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformCursor,
     setQuestionFreeformKillBuffer,
     clearQueuedInputs,
+    clearThemeOverride: () => themeController.clearOverride(),
     onSessionActive: (id) => { void sideQuestionController.rebuildForResume(id).catch(reportError); },
   }));
   sessionActions = createSessionActionsController({
@@ -761,11 +826,19 @@ export function App(props: AppProps = {}) {
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()),
-    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
+    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()),
+    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
-      : decisionPanelMinHeight(),
+      : qualityRewriteConfirm()
+        ? Math.max(decisionPanelMinHeight(), qualityRewritePanelHeight(
+          qualityRewriteConfirm()!.stage,
+          qualityRewriteConfirm()!.candidate.providerAlias,
+          qualityRewriteConfirm()!.candidate.modelId,
+          qualityRewriteConfirm()!.candidate.judgeTimeoutMs,
+          dimensions().width,
+        ))
+        : decisionPanelMinHeight(),
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
   ));
@@ -801,8 +874,12 @@ export function App(props: AppProps = {}) {
     handleModelPickerKey,
     qualityPicker,
     handleQualityPickerKey,
+    qualityRewriteConfirm,
+    handleRewriteConfirmKey,
     sessionPicker,
     handleSessionPickerKey,
+    skillPicker,
+    handleSkillPickerKey,
     yoloConfirmStage,
     handleYoloKey,
     activePermissionRequest,
@@ -845,6 +922,37 @@ export function App(props: AppProps = {}) {
    *   /new              abandon the current session and start fresh
    *   /help             show available commands
    */
+  async function activateSkillCommand(
+    name: string,
+    options: { mode: "invoke" | "context-only"; taskText?: string },
+  ): Promise<void> {
+    const rootDir = process.cwd();
+    let sid = sessionId();
+    if (!sid) {
+      sid = crypto.randomUUID();
+      setSessionId(sid);
+      setSessionPath(join(rootDir, ".vesicle", "sessions", `${sid}.jsonl`));
+    }
+    const branchParent = nextSessionParent();
+    const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
+      profile: { id: activeEngine() },
+      mode: options.mode,
+      ...(branchParent ? { parentUuid: branchParent.uuid } : {}),
+      contextWindow: activeModelLimits()?.contextWindow,
+    });
+    const scriptInfo = activation.scripts.length > 0
+      ? ` · ${activation.scripts.length} script${activation.scripts.length > 1 ? "s" : ""}`
+      : "";
+    const card = activation.alreadyActive
+      ? `Skill "${activation.name}" already active [${activation.scope}].`
+      : `Skill "${activation.name}" activated [${activation.scope}] · ${activation.resources.length} resource${activation.resources.length === 1 ? "" : "s"}${scriptInfo}.`;
+    setMessages((prev) => [...prev, { role: "system", content: card }]);
+    if (options.mode === "invoke") {
+      const prompt = options.taskText ?? `Apply the ${activation.name} skill to the current context.`;
+      await turnController.submitPrompt(prompt);
+    }
+  }
+
   // Command execution context: the surface slash-command handlers reach
   // through. Built once from component signals/helpers; submitPrompt passes it
   // to executeCommand. See src/tui/commands/.
@@ -852,6 +960,10 @@ export function App(props: AppProps = {}) {
     setMessages,
     activeProvider,
     activeModel,
+    activeModelGeneration: () => providerRegistry()
+      ?.providers.find((provider) => provider.id === activeProvider())
+      ?.models.find((model) => model.id === activeModel())
+      ?.generation,
     activeModelLimits,
     ensureProviderRegistry,
     applyProviderSelection,
@@ -899,10 +1011,20 @@ export function App(props: AppProps = {}) {
     startStage: stageSessionController.start,
     openModelPicker,
     openQualityPicker,
+    openQualityRewriteConfirm: openRewriteConfirm,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
+    openSkillPicker,
+    activateSkill: (name, options) => activateSkillCommand(name, options),
     openWorkspaceTarget: async (relPath?: string) => {
       setFocusedArtifactPath(null);
       return workspaceController.openWorkspaceTarget(relPath);
+    },
+    theme: {
+      statusText: () => themeController.statusText(),
+      applyOverride: (pref) => themeController.applyOverride(pref),
+      clearOverride: () => themeController.clearOverride(),
+      persistProject: (pref) => themeController.persistProject(pref),
+      unsetProject: () => themeController.unsetProject(),
     },
   };
 
@@ -1061,7 +1183,9 @@ export function App(props: AppProps = {}) {
         gate={gateWithQualityWarning()}
         rewind={rewindPicker()}
         session={sessionPicker()}
+        skillPicker={skillPicker()}
         qualityPicker={qualityPicker()}
+        qualityRewriteConfirm={qualityRewriteConfirm()}
         model={modelPicker()}
         gateFocus={gateFocus()}
         gateFeedbackMode={gateFeedbackMode()}
@@ -1074,6 +1198,8 @@ export function App(props: AppProps = {}) {
         questionFreeformCursor={questionFreeformCursor()}
         modelItems={modelPickerItems()}
         modelTitle={modelPickerTitle()}
+        skillPickerItems={skillPickerItems()}
+        skillPickerTitle={skillPickerTitle()}
         qualityPickerItems={qualityPickerItems()}
         qualityPickerTitle={qualityPickerTitle()}
         commandMenuOpen={commandMenuOpen()}

@@ -30,10 +30,35 @@ describe("validateCharacterCard (Module A)", () => {
     expect(result.errors.some((e) => e.includes('"tension" is not allowed'))).toBe(true);
   });
 
+  test("rejects invalid YAML, duplicate fields, and wrong field types", () => {
+    const invalid = validateCharacterCard(VALID_CHARACTER_CARD.replace("name: 洛天依", "name: [洛天依"));
+    expect(invalid.errors.some((error) => error.includes("invalid YAML syntax"))).toBe(true);
+
+    const duplicate = validateCharacterCard(VALID_CHARACTER_CARD.replace("name: 洛天依", "name: 洛天依\nname: 言和"));
+    expect(duplicate.errors.some((error) => error.includes('field "name" is duplicated'))).toBe(true);
+
+    const wrongType = validateCharacterCard(VALID_CHARACTER_CARD.replace("archetype: 回响之心", "archetype: 42"));
+    expect(wrongType.errors.some((error) => error.includes('field "archetype" must be a non-empty string'))).toBe(true);
+  });
+
   test("rejects a missing body section", () => {
     const card = VALID_CHARACTER_CARD.replace("## Biography\n诞生于人类集体之声的数字歌姬。\n", "");
     const result = validateCharacterCard(card);
     expect(result.errors.some((e) => e.includes("## Biography"))).toBe(true);
+  });
+
+  test("rejects duplicate, out-of-order, and empty body sections", () => {
+    const duplicate = validateCharacterCard(VALID_CHARACTER_CARD.replace("## Biography", "## Biography\n## Biography"));
+    expect(duplicate.errors.some((error) => error.includes("## Biography must appear exactly once"))).toBe(true);
+
+    const outOfOrder = validateCharacterCard(VALID_CHARACTER_CARD
+      .replace("## Visual Cortex", "## Biography")
+      .replace("## Biography\n诞生", "## Visual Cortex\n诞生"));
+    expect(outOfOrder.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(outOfOrder.errors.some((error) => error.includes("is empty"))).toBe(false);
+
+    const empty = validateCharacterCard(VALID_CHARACTER_CARD.replace("## Visual Cortex\n身高约156cm，银灰色长发。", "## Visual Cortex"));
+    expect(empty.errors.some((error) => error.includes("## Visual Cortex is empty"))).toBe(true);
   });
 
   test("rejects too few Invariant Axes", () => {
@@ -51,13 +76,32 @@ describe("validateCharacterCard (Module A)", () => {
     expect(result.errors.some((e) => e.includes('"L3-A"'))).toBe(true);
   });
 
-  test("warns when no positive shift direction exists", () => {
+  test("does not guess whether Variant Axes have a positive semantic direction", () => {
     const card = VALID_CHARACTER_CARD.replace(
       /### Variant Axes[\s\S]*?### Boundary Conditions/,
-      "### Variant Axes\n- Under tension, suppression increases toward total lockdown.\n- Under tension, voice becomes clipped.\n- Under tension, trust evaporates entirely.\n\n### Boundary Conditions",
+      "### Variant Axes\n- Under tension, decisions become shared.\n- Under tension, the character begins active creation.\n- Under tension, time together is openly chosen.\n\n### Boundary Conditions",
     );
     const result = validateCharacterCard(card);
-    expect(result.warnings.some((w) => w.includes("positive"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("positive"))).toBe(false);
+  });
+
+  test("requires an explicit non-empty Hard limit item in Boundary Conditions", () => {
+    const card = VALID_CHARACTER_CARD.replace(
+      "- Hard limit: will never use voice to deceive or manipulate.",
+      "- There is no hard limit.\n\nThe Biography says Hard limit: elsewhere.",
+    );
+    const result = validateCharacterCard(card);
+    expect(result.errors).toContain('Module A: Boundary Conditions must contain a non-empty "Hard limit:" list item.');
+  });
+
+  test("rejects the standalone L4 production label without treating L4-A as L4", () => {
+    const standalone = validateCharacterCard(`${VALID_CHARACTER_CARD}\nStandalone L4 territory.`);
+    expect(standalone.errors.some((error) => error.includes('"L4"'))).toBe(true);
+
+    const sublevel = validateCharacterCard(`${VALID_CHARACTER_CARD}\nStandalone L4-A territory.`);
+    expect(sublevel.errors.filter((error) => error.includes('L-System tag'))).toEqual([
+      'Module A: L-System tag "L4-A" leaked into output. These are production-layer only.',
+    ]);
   });
 });
 
@@ -107,6 +151,46 @@ describe("validateScenarioCard (Module B)", () => {
     const result = validateScenarioCard(card);
     expect(result.errors.some((e) => e.includes('"L5"'))).toBe(true);
   });
+
+  test("rejects multiline world_state and an unrelated HTML comment", () => {
+    const card = VALID_SCENARIO_CARD
+      .replace("world_state: 深夜公寓屋顶，雨后", "world_state: |\n  深夜公寓屋顶\n  雨后")
+      .replace(/<!--[\s\S]*?-->/, "<!-- unrelated note -->");
+    const result = validateScenarioCard(card);
+    expect(result.errors.some((error) => error.includes("ordinary single-line string"))).toBe(true);
+    expect(result.errors.some((error) => error.includes('exactly one "## Scene Premise"'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('exactly one "## Neural State"'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('exactly one "## User Role"'))).toBe(true);
+  });
+
+  test("recognizes keep-chomping world_state block scalars", () => {
+    for (const indicator of ["|+", ">+"]) {
+      const card = VALID_SCENARIO_CARD.replace(
+        "world_state: 深夜公寓屋顶，雨后",
+        `world_state: ${indicator}\n  深夜公寓屋顶\n  雨后`,
+      );
+      const result = validateScenarioCard(card);
+      expect(result.errors.some((error) => error.includes("ordinary single-line string"))).toBe(true);
+    }
+  });
+
+  test("does not report populated comment sections as empty when they are out of order", () => {
+    const card = VALID_SCENARIO_CARD
+      .replace("## Scene Premise", "## User Role")
+      .replace("## User Role\n- **Identity:**", "## Scene Premise\n- **Identity:**");
+    const result = validateScenarioCard(card);
+    expect(result.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(result.errors.some((error) => error.includes("is empty"))).toBe(false);
+  });
+
+  test("rejects duplicate beat fields and non-string beat fields", () => {
+    const card = VALID_SCENARIO_CARD
+      .replace("    variant_config: suppression-active", "    label: Duplicate\n    variant_config: suppression-active")
+      .replace("    pivot_condition: 用户越过身体接近阈值", "    pivot_condition: 42");
+    const result = validateScenarioCard(card);
+    expect(result.errors.some((error) => error.includes('beat 1 field "label" is duplicated'))).toBe(true);
+    expect(result.errors.some((error) => error.includes('field "pivot_condition" must be a non-empty string'))).toBe(true);
+  });
 });
 
 describe("validateRuntimePacket (Runtime engine)", () => {
@@ -139,6 +223,23 @@ describe("validateRuntimePacket (Runtime engine)", () => {
     const result = validateRuntimePacket(VALID_STAGE_PACKET.replace("[Impression]", "[View]"));
     expect(result.errors.some((error) => error.includes("[Impression]"))).toBe(true);
   });
+
+  test("rejects Runtime tokens stacked on one line outside their structural scopes", () => {
+    const result = validateRuntimePacket(
+      "[!Neural Chain] Perception: x Instinct: y State: z Decision: q [Beat] A [Tension] 20 [Char] C [Scene] S [Turn] 1",
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((error) => error.includes("Part 1 must begin"))).toBe(true);
+    expect(result.errors.some((error) => error.includes("exactly one non-empty [Beat] line"))).toBe(true);
+  });
+
+  test("rejects Stage HUD fields in the wrong order and empty prose", () => {
+    const result = validateRuntimePacket(VALID_STAGE_PACKET
+      .replace("[Space-Time] Night | platform\n[Physical] Cold fingers | shared umbrella | worn coat", "[Physical] Cold fingers | shared umbrella | worn coat\n[Space-Time] Night | platform")
+      .replace("\n\nRain tapped softly against the umbrella.", ""));
+    expect(result.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(result.errors.some((error) => error.includes("Part 3 prose content is empty"))).toBe(true);
+  });
 });
 
 describe("validateEvaluateReport (Evaluate engine)", () => {
@@ -156,6 +257,36 @@ describe("validateEvaluateReport (Evaluate engine)", () => {
   test("rejects a missing report section", () => {
     const result = validateEvaluateReport(VALID_EVALUATE_REPORT.replace("## 3. Detailed Findings\n", ""));
     expect(result.errors.some((e) => e.includes("## 3. Detailed Findings"))).toBe(true);
+  });
+
+  test("rejects reversed, duplicate, and empty report sections", () => {
+    const result = validateEvaluateReport(`# Neuro-Integrity Report: target
+**Overall Verdict:** PASS
+
+## 5. Optimization Recommendations
+## 4. Issue List
+## 3. Detailed Findings
+## 2. Dimension Scores
+## 1. Executive Summary
+## 1. Executive Summary
+`);
+    expect(result.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(result.errors.some((error) => error.includes('exactly one section "## 1. Executive Summary"'))).toBe(true);
+
+    const empty = validateEvaluateReport(VALID_EVALUATE_REPORT.replace(
+      "## 3. Detailed Findings\nPersona Topology 的 Invariant Axes 满足两条，Topology 结构完整。",
+      "## 3. Detailed Findings",
+    ));
+    expect(empty.errors.some((error) => error.includes('section "## 3. Detailed Findings" is empty'))).toBe(true);
+  });
+
+  test("does not report populated report sections as empty when they are out of order", () => {
+    const report = VALID_EVALUATE_REPORT
+      .replace("## 2. Dimension Scores", "## 3. Detailed Findings")
+      .replace("## 3. Detailed Findings\nPersona", "## 2. Dimension Scores\nPersona");
+    const result = validateEvaluateReport(report);
+    expect(result.errors.some((error) => error.includes("out of order"))).toBe(true);
+    expect(result.errors.some((error) => error.includes("is empty"))).toBe(false);
   });
 });
 
@@ -335,6 +466,7 @@ world
 
   const scenarioCard = `---
 scenario_name: 助理的第一天
+tags: ["#office"]
 world_state: "office"
 beat_map:
   - label: A
@@ -439,6 +571,35 @@ appearance`;
     expect(runFor(scenarioCard)).toEqual({ ran: ["scenario-card"], ok: true });
     // The report triggers no validator at all.
     expect(runFor(leadingRuleReport).ran).toEqual([]);
+  });
+
+  test("the wired path warns on prohibited contrast prose only inside Module A/B artifacts", () => {
+    const characterResult = validateContent(
+      ["character-card", "scenario-card"],
+      characterCard.replace("bio", "这不是迟疑，而是她对边界的重新确认。"),
+    );
+    expect(characterResult?.results).toHaveLength(1);
+    expect(characterResult?.results[0]?.name).toBe("character-card");
+    expect(characterResult?.results[0]?.result.ok).toBe(true);
+    expect(characterResult?.results[0]?.result.warnings).toContain(
+      "Module A: artifact text matches the prohibited “不是……而是……” contrast pattern (Rule zh-f1-not-x-but-y).",
+    );
+
+    const scenarioResult = validateContent(
+      ["character-card", "scenario-card"],
+      scenarioCard.replace("opening paragraph", "这不是巧合，而是她提前安排的会面。"),
+    );
+    expect(scenarioResult?.results).toHaveLength(1);
+    expect(scenarioResult?.results[0]?.name).toBe("scenario-card");
+    expect(scenarioResult?.results[0]?.result.ok).toBe(true);
+    expect(scenarioResult?.results[0]?.result.warnings).toContain(
+      "Module B: artifact text matches the prohibited “不是……而是……” contrast pattern (Rule zh-f1-not-x-but-y).",
+    );
+
+    expect(validateContent(
+      ["character-card", "scenario-card"],
+      "这不是遗漏，而是普通 ETL 回复中目前允许的表达。",
+    )).toBeUndefined();
   });
 
   test("applicableValidators returns the matched names only", () => {

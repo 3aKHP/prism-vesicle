@@ -27,7 +27,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/stage <character-card-path> <scenario-card-path>` | Start a Stage narrative session from two cards |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | Control the model's thinking effort; `auto` restores the provider default |
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display (aliases off/preview/on) |
-| `/theme dark\|light\|auto` | Switch the interface theme; `auto` follows the terminal's own mode, session-scoped and never persisted |
+| `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | Switch the interface theme; `default` follows the terminal's own mode, `auto` follows the clock; `--persist` writes `.vesicle/preferences.yaml`, `--unset-project` removes the project preference; with no argument it reports preference/source/resolved mode |
 | `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages |
 
 ## Artifacts
@@ -37,13 +37,16 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/artifact [n\|path]` | Open an artifact in the Workspace page viewer; no args opens the latest one |
 | `/validate <n\|path>` | Validate an artifact by number or path |
 
+The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that list (only when the sidebar is visible and at least one artifact exists): `↑`/`↓` move the focus, `Enter` opens the existing `/artifact` preview, and `Esc` or `Alt+A` returns to the input box. The focused file's full relative path shows in an untruncated strip while focus is active; the sidebar rows themselves stay one line.
+
 ## Permissions and quality
 
 | Command | Purpose |
 |---|---|
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Show or set the tool approval mode |
-| `/quality [off\|observe\|rewrite …]` | Configure the experimental Semantic Judge (off by default) |
+| `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | Show or configure the experimental Semantic Judge; no arguments open guided settings. `off` disables the Judge and retains the profile; `observe`/`rewrite` without a profile use the retained or active provider/model. Selecting Review and revise (or `/quality rewrite`) opens one red confirmation panel — there is no `/quality confirm` second command |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry SubAgent delivery |
+| `/skill [name [task]]` | Activate a Skill; no args opens a picker, `<name> [task]` activates and invokes, `<name> --context-only` loads without invoking |
 
 ## Input-box keys
 
@@ -55,7 +58,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | Esc | Interrupt the current provider or tool operation and immediately process the next queued input |
 | Double Esc (empty box, within 800ms) | Open the rewind picker |
 | Double Esc (box has text) | Save the draft and clear it, without sending |
-| Alt+V | Paste a clipboard image (only vision-capable models receive it) |
+| Ctrl+V / Alt/Option+V | Paste a clipboard image (only vision-capable models receive it; terminal text paste still inserts text normally) |
 | Ctrl+Q | Exit Vesicle |
 
 After a complete tool round, queued messages are added to the active conversation before its next provider request. If the loop completes without another tool boundary, the next queued input is processed immediately. Slash commands declare their own busy-turn behavior: `/help`, `/context`, `/reasoning`, `/theme`, `/workspace`, read-only settings forms, and `/agents` inspection or stop run immediately; `/artifact` and `/validate` wait for the current tool round; configuration changes, pickers, session commands, `/compact`, `/init`, and `/agents retry` wait for the Agent Loop. A picker pauses the remaining queue, and switching or resetting the session clears it.
@@ -77,13 +80,14 @@ The Workspace page has three focus regions: the file tree, the viewer / editor, 
 | m / F2 (tree) | Move / rename (input bar prefills the directory prefix; type the new name; an existing target opens an overwrite confirm) |
 | c (tree) | Copy (same rules as `m`) |
 | d (tree) | Delete: `y` deletes (moves to the `.vesicle/trash/` recycle bin); any other key cancels; directories only when empty; unsaved edits are noted in the confirm |
-| v (tree / read-only viewer) | Validate the open file and open the findings panel |
+| v (tree) | Validate the **selection**: a selected file validates and opens findings; a directory or empty selection shows `select a file to validate`; a file with unsaved edits shows `save <path> before validating` |
+| v (read-only viewer) | Validate the open file and open findings (labelled `v findings` when a current result exists) |
 | h / j / k / l (tree/read-only viewer) | Alias for the arrow keys (inert while a text input is active) |
 | q (tree/read-only viewer) | Alias for Esc — step focus back one level |
 | r (tree) | Refresh the directory; (read-only viewer) re-read the file |
 | . (tree) | Show/hide dotfiles and noisy directories (`.git`, `node_modules`, `dist`, …) |
 | ↑ / ↓ / PgUp / PgDn / Home / End (read-only viewer) | Scroll |
-| m (Markdown preview) | Switch to the editable source |
+| m (Markdown preview / read-only source) | Toggle preview and source: an editable Markdown shows `m edit`; a read-only/oversized/truncated Markdown shows `m source` (read-only source) or `m preview`; a metadata-only symlink offers no toggle |
 
 Every file-management op stays inside the project root (rejects `..` and absolute paths). Delete is a **recycle bin** (move to `.vesicle/trash/<timestamp>-<name>`), never a permanent removal; the status line shows where it went, and recovery is a manual move back. Renaming or moving a file you are editing rekeys the buffer to the new path (the dirty flag and content survive; the undo stack resets — save first if undo matters). Move or copy onto an existing target opens an "overwrite / cancel" confirm.
 
@@ -106,9 +110,13 @@ If the file changed on disk since you opened it (by mtime), saving opens an "ove
 
 ### Validation (findings panel)
 
-Opening a file, saving, or pressing `v` in the tree / read-only viewer runs the **character-card / scenario-card** validators (the same list `/validate` and the turn-finalizer auto-check use). The status line summarises: `✓ validators passed` / `✗ N · ⚠ M · v view` / `no validator matched` (stated explicitly when nothing applies).
+Opening a file, saving, or pressing `v` in the tree or read-only viewer runs the **character-card / scenario-card** validators (the same list `/validate` and the turn-finalizer auto-check use). Each result is owned by the file it describes: the status line shows a summary only for the current focus target (tree = the selection, viewer/editor = the open file), so moving the tree selection never misattributes another file's verdict. The summary is pure state — `✓ validators passed` / `✗ N · ⚠ M` / `validation stale` / `no validator matched` (stated explicitly when nothing applies); each focus region adds its own single action hint, and an action never appears twice.
 
-The `v` findings panel owns the keyboard: each row is `✗/⚠ + finding text` (unanchored ones marked `(no anchor)`), `↑↓` selects, `Enter` jumps to the finding's line (located by pulling a `## …` section header or frontmatter key out of the message and `indexOf`-ing it; missing-field findings fall back to the frontmatter close), and `Esc` closes. In editable source `v` is an ordinary letter (it goes to the editor), so to validate manually, save first (Ctrl+S auto-validates).
+Entering the editable source does not re-run validation on every keystroke; the prior verdict is projected as a neutral `validation stale` (no old green/red/amber colour or counts). Undoing back to the saved content restores it as current; saving or reloading installs a fresh current verdict. In editable source `v` is an ordinary letter (it goes to the editor), so to validate manually, save first (Ctrl+S auto-validates).
+
+Tree-focus `v` targets the **selection**: a selected regular file validates it and opens the findings panel (consuming an already-current snapshot rather than re-running); a directory or empty selection stays closed with `select a file to validate`; a file with unsaved edits shows `save <path> before validating` instead of passing off the older disk content as current. Viewer-focus `v` targets the open file and is labelled `v findings` when a current result exists.
+
+The findings panel owns the keyboard: its header reads `findings: <path> — <summary>` to identify the target (pure state, no action hint); each row is `✗/⚠ + finding text` (unanchored ones marked `(no anchor)`), `↑↓` selects, and `Enter` jumps to the finding's line (located by pulling a `## …` section header or frontmatter key out of the message and `indexOf`-ing it; missing-field findings fall back to the frontmatter close) — but `Enter jump` is shown and executed only for a genuinely editable target (read-only, oversized, truncated, or non-admitted files do not jump), and `Esc` closes.
 
 ### External editor handoff
 

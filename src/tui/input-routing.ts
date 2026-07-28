@@ -5,8 +5,9 @@ import type { PermissionRequest } from "../core/permissions";
 import { copySelectionToClipboard } from "./clipboard";
 import { normalizeKeyName } from "./composer";
 import type { PendingQualityDecisionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
-import { resolveBottomSurfaceMode, type ModelPickerState, type QualityPickerState } from "./views/BottomSurface";
+import { resolveBottomSurfaceMode, type ModelPickerState, type QualityPickerState, type QualityRewriteConfirmState } from "./views/BottomSurface";
 import type { RewindPickerState, SessionPickerState } from "./types";
+import type { SkillPickerState } from "./skill-picker-controller";
 
 export type InputRoutingOptions = {
   renderer: ReturnType<typeof useRenderer>;
@@ -17,8 +18,12 @@ export type InputRoutingOptions = {
   handleModelPickerKey: (key: TuiKeyEvent) => boolean;
   qualityPicker: Accessor<QualityPickerState | null>;
   handleQualityPickerKey: (key: TuiKeyEvent) => boolean;
+  qualityRewriteConfirm: Accessor<QualityRewriteConfirmState | null>;
+  handleRewriteConfirmKey: (key: TuiKeyEvent) => boolean;
   sessionPicker: Accessor<SessionPickerState | null>;
   handleSessionPickerKey: (key: TuiKeyEvent) => boolean;
+  skillPicker: Accessor<SkillPickerState | null>;
+  handleSkillPickerKey: (key: TuiKeyEvent) => boolean;
   yoloConfirmStage: Accessor<1 | 2 | null>;
   handleYoloKey: (key: TuiKeyEvent) => boolean;
   activePermissionRequest: Accessor<PermissionRequest | undefined>;
@@ -56,7 +61,9 @@ export function useInputRouting(options: InputRoutingOptions): void {
     gate: options.activeGateRequest(),
     rewind: options.rewindPicker(),
     session: options.sessionPicker(),
+    skillPicker: options.skillPicker(),
     qualityPicker: options.qualityPicker(),
+    qualityRewriteConfirm: options.qualityRewriteConfirm(),
     model: options.modelPicker(),
   });
 
@@ -117,11 +124,17 @@ export function useInputRouting(options: InputRoutingOptions): void {
       case "session":
         if (options.handleSessionPickerKey(key)) consumeKey(key);
         return;
+      case "skill-picker":
+        if (options.handleSkillPickerKey(key)) consumeKey(key);
+        return;
       case "model":
         if (options.handleModelPickerKey(key)) consumeKey(key);
         return;
       case "quality-picker":
         if (options.handleQualityPickerKey(key)) consumeKey(key);
+        return;
+      case "quality-rewrite-confirm":
+        if (options.handleRewriteConfirmKey(key)) consumeKey(key);
         return;
       case "composer":
         break;
@@ -148,7 +161,7 @@ export function useInputRouting(options: InputRoutingOptions): void {
       consumeKey(key);
       return;
     }
-    if (key.name?.toLowerCase() === "v" && (key.meta || key.option)) {
+    if (isClipboardImagePasteKey(key)) {
       consumeKey(key);
       void options.pasteClipboardImage();
       return;
@@ -204,6 +217,12 @@ export function createRoutingKey(rawKey: TuiKeyEvent): TuiKeyEvent {
 export function consumeKey(key: TuiKeyEvent): void {
   key.preventDefault?.();
   key.stopPropagation?.();
+}
+
+export function isClipboardImagePasteKey(key: TuiKeyEvent): boolean {
+  return key.name?.toLowerCase() === "v"
+    && key.shift !== true
+    && (key.ctrl === true || key.meta === true || key.option === true);
 }
 
 function isComposerDirectionKey(key: TuiKeyEvent): boolean {

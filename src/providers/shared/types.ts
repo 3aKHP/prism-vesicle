@@ -45,6 +45,20 @@ export type VesicleMessage = {
   images?: VesicleImageAttachment[];
 };
 
+/**
+ * Transport retry notification, fired by `fetchProvider` immediately before it
+ * sleeps for a retry. Runtime callback only — never serialized. Lets the host
+ * UI observe the single transport-level retry loop without running its own.
+ */
+export type ProviderRetryInfo = {
+  /** 1-based index of the retry about to happen. */
+  attempt: number;
+  maxRetries: number;
+  delayMs: number;
+  /** HTTP status that triggered the retry; absent for network errors. */
+  status?: number;
+};
+
 export type VesicleRequest = {
   id: string;
   model: ModelRef;
@@ -53,6 +67,8 @@ export type VesicleRequest = {
   tools?: ToolDefinition[];
   /** Host cancellation for the in-flight provider request. Never serialized. */
   signal?: AbortSignal;
+  /** Observes transport retries (`fetchProvider`); never serialized. */
+  onRetry?: (info: ProviderRetryInfo) => void;
   generation?: {
     temperature?: number;
     maxTokens?: number;

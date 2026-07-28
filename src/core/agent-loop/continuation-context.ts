@@ -7,6 +7,7 @@ import type { EngineId } from "../engine/profile";
 import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions } from "../permissions";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
+import { bindExecutionRound, recoverActiveIdentity } from "../session/store";
 import { composeInstructionBlocks, composeSystemPromptWithInstructions } from "../instructions";
 import { freezeInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
 import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-assets";
@@ -17,6 +18,15 @@ import { mergeGeneration } from "./generation";
 import type { AgentLoopEvent, PendingUserInput } from "./types";
 import type { SideQuestionContextSnapshot } from "../side-question/types";
 import { resolveToolSurface } from "./tool-surface";
+import {
+  catalogNames,
+  composeSkillCatalogBlock,
+  deriveSessionActivations,
+  hydrateSessionActivations,
+  pruneSessionActivations,
+  resolveEngineEligibleCatalog,
+  resolveSessionSkillCatalog,
+} from "../skills";
 import {
   assertSessionHarnessIdentity,
   requireProjectHarnessRuntime,
@@ -79,13 +89,38 @@ export async function loadContinuationContext(
   if (behavior.emitAssetDrift !== false) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   }
+  // Skills (Phase 2): the session catalog freeze and the engine eligibility
+  // filter mirror bootstrapTurn, so a resumed continuation observes the same
+  // catalog, activation registry, and prompt block as the turn it continues.
+  const frozenSkillCatalog = await resolveSessionSkillCatalog(
+    rootDir,
+    process.env,
+    profile,
+    options.sessionId,
+    snapshot.skillCatalogSnapshot,
+    config.limits?.contextWindow,
+  );
+  const skillCatalog = resolveEngineEligibleCatalog(frozenSkillCatalog, profile);
+  hydrateSessionActivations(options.sessionId, deriveSessionActivations(snapshot.records));
+  pruneSessionActivations(options.sessionId, new Set(catalogNames(skillCatalog)));
+  const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
+  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
   const toolSurface = await resolveToolSurface(
     profile,
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
     permission.shellInterpreter,
+    {},
+    { catalogNames: catalogNames(skillCatalog) },
   );
   const session = await createSessionStore(rootDir, options.sessionId);
+  // Recover the logical turn + provider round the paused interaction belongs to
+  // and re-bind them as the active round, so every resolution record this
+  // continuation appends carries the original ids and a resumed pause never
+  // creates a new logical turn. Legacy sessions without identity fall back to
+  // the old append behavior (no round bound → no stamping).
+  const identity = recoverActiveIdentity(snapshot.records);
+  if (identity) bindExecutionRound(session.sessionId, identity);
   return {
     rootDir,
     permission,
@@ -96,10 +131,12 @@ export async function loadContinuationContext(
     systemPrompt,
     enginePrompt: engineAssets.systemPrompt,
     toolSurface,
+    skillCatalog,
     session,
     harness,
     assets,
     experimentalQuality,
+    ...(identity ? { identity } : {}),
   };
 }
 

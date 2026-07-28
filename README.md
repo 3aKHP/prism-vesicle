@@ -4,7 +4,7 @@
 
 Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It starts from a verified bundled V10 Harness, can select a project-pinned managed Harness Pack, connects the active runtime to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
 
-> **Alpha status:** `1.0.0-alpha.6` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
+> **Alpha status:** `1.0.0-alpha.7` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 
 New to terminals, API keys, or model providers? Start with the [step-by-step user manual](./docs/user/en/README.md) before following the condensed setup below.
 
@@ -14,7 +14,7 @@ New to terminals, API keys, or model providers? Start with the [step-by-step use
 
 Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub prerelease and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, and choose a safe permission preset without manual configuration-file editing. Project selection is optional and applies only to the one-time launch immediately after Setup; Vesicle never stores one global project directory.
 
-The Windows executable and installer for `1.0.0-alpha.6` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
+The Windows executable and installer for `1.0.0-alpha.7` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
 The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
@@ -34,7 +34,7 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10@10.1.2` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
+The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
 
 Inspect the active layers and the source of the effective manifest:
 
@@ -149,7 +149,7 @@ Useful commands:
 | `/context` | Inspect token totals and configured context limits |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry paused delivery for SubAgents using short handles such as `explore-1` |
 
-The main composer uses Enter to submit and Ctrl+Enter to insert a newline. While the Agent Loop is running, Enter queues ordinary messages; after the current complete tool round, Vesicle injects them before the next provider request. Slash commands use command-owned scheduling: safe host-only commands run immediately, artifact reads wait for the tool round, and configuration, picker, or session commands wait for the Agent Loop. The mixed queue is shown above the composer, and Up with an empty draft retrieves its latest item for editing. Escape interrupts the current provider or tool operation and immediately processes the next queued input; with an empty composer, double Escape opens rewind. Vision-capable models can receive a clipboard image through Alt+V, with Ctrl+Alt+V accepted when reported by WSL terminals.
+The main composer uses Enter to submit and Ctrl+Enter to insert a newline. While the Agent Loop is running, Enter queues ordinary messages; after the current complete tool round, Vesicle injects them before the next provider request. Slash commands use command-owned scheduling: safe host-only commands run immediately, artifact reads wait for the tool round, and configuration, picker, or session commands wait for the Agent Loop. The mixed queue is shown above the composer, and Up with an empty draft retrieves its latest item for editing. Escape interrupts the current provider or tool operation and immediately processes the next queued input; with an empty composer, double Escape opens rewind. Vision-capable models can receive a clipboard image through Ctrl+V, with Alt/Option+V retained as a compatibility shortcut. Terminal text paste and bracketed paste continue through the normal text-input path.
 
 ## What Vesicle Supports
 
@@ -206,7 +206,9 @@ Pull requests and `develop` pushes call one reusable Linux/Windows release build
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Contributor setup, repository boundaries, and documentation style |
 | [`CODE_SIGNING_POLICY.md`](./CODE_SIGNING_POLICY.md) | Windows signing scope, approval, verification, and incident handling |
 | [`PRIVACY.md`](./PRIVACY.md) | Local data, external-service transfers, uninstall behavior, and deletion |
-| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Architecture and runtime boundaries |
+| [`docs/dev/`](./docs/dev/README.md) | Public developer contracts and their complete index |
+| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | Source-code structure and maintainability rules |
+| [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) | Architecture boundaries and developer-contract navigation |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | Branching, review, release, and documentation sweep |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | Bundled V10 inventory, host extension layer, lineage, and update rules |
 | [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | Developer-only Semantic Judge measurement, caps, resume, and evidence boundary |
@@ -215,7 +217,7 @@ Repository-local AI collaborator instructions live in [`AGENTS.md`](./AGENTS.md)
 
 ## Scope And Lineage
 
-The 1.0 alpha focuses on making Vesicle a practical direct API host for Prism workflows rather than a generic coding agent. OpenAI Responses, broader MCP transports and surfaces, Skills integration, dedicated long-form engine scaffolding, and prompt-cache engineering remain deferred; consult [`STATUS.md`](./STATUS.md) before relying on an unlisted capability.
+The 1.0 alpha focuses on making Vesicle a practical direct API host for Prism workflows rather than a generic coding agent. OpenAI Responses, broader MCP transports and surfaces, dedicated long-form engine scaffolding, and prompt-cache engineering remain deferred; consult [`STATUS.md`](./STATUS.md) before relying on an unlisted capability.
 
 Prism Vesicle is a sibling of [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology), the public source for the V10 Harness Release bundled here.
 

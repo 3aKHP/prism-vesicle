@@ -66,7 +66,7 @@ Commands start with `/` in the input box; typing `/` opens a candidate menu (↑
 - `/context` — current context usage.
 - `/artifact` — open generated artifacts in the Workspace page.
 - `/workspace [path]` — open the project-file workbench and optionally locate a file.
-- `/theme dark|light|auto` — switch the interface theme temporarily.
+- `/theme dark|light|default|auto` — switch the interface theme temporarily (`default` follows the terminal, `auto` follows the clock).
 - `/engine` — show the active engine (ETL by default).
 - Ctrl+Q — exit Vesicle.
 

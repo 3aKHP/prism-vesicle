@@ -2,13 +2,14 @@ import { createSignal } from "solid-js";
 import type { TextareaRenderable } from "@opentui/core";
 import type { TuiKeyEvent } from "./decision-interaction";
 import {
-  assertProjectRelativePath,
   atomicWriteFile,
   computeFindOffsets,
   isEditablePreview,
   readEditableFile,
-  readMtimeMs,
+  readFileStamp,
+  type FileStamp,
 } from "./workspace-editor";
+import { assertProjectRelativePath } from "./workspace-paths";
 import {
   copyEntry,
   createDirectory,
@@ -57,7 +58,8 @@ import {
  * owns the buffer pool (LRU, dirty-protected), dirty tracking
  * (plainText-vs-snapshot), save / save-as with a project-root-bounded atomic
  * write, find / goto / save-as input bars, the dirty-on-close confirm, and
- * external-modification detection by mtime on save and page reactivation.
+ * external-modification detection by mtime + inode on save and page
+ * reactivation.
  *
  * Page state lives outside the component tree so switching pages keeps the
  * tree, open file, and focus; nothing here touches session JSONL,
@@ -90,11 +92,14 @@ type EditorDialog =
 type OpsBarKind = "create-file" | "create-dir" | "move" | "copy";
 type OpsBar = { kind: OpsBarKind; draft: string; source: string } | null;
 
-type EditorBufferMeta = {
+type EditorBufferMeta = FileStamp & {
   savedSnapshot: string;
-  mtimeMs: number;
   initialContent: string;
 };
+
+function sameFileStamp(left: FileStamp, right: FileStamp): boolean {
+  return left.mtimeMs === right.mtimeMs && left.ino === right.ino;
+}
 
 /** LRU cap for open editable buffers (spike §4.1 / plan §4.1). */
 const EDITOR_LRU_CAP = 8;
@@ -231,9 +236,58 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   const [opsBar, setOpsBar] = createSignal<OpsBar>(null);
 
   // —— in-page validation (B4 §5.2) ——
-  const [validationState, setValidationState] = createSignal<ValidationState>(pendingValidation);
+  // The snapshot is the retained last result plus the path it describes. The
+  // projected `validationState()` folds in the dirty-buffer staleness rule so
+  // the view never has to: a result whose owning buffer is dirty reads as the
+  // neutral `validation stale` state, and clearing the dirty flag (undo to
+  // clean, save, reload) restores it without re-running the validators.
+  const [validationSnapshot, setValidationSnapshot] = createSignal<ValidationState>(pendingValidation);
   const [findingsOpen, setFindingsOpen] = createSignal(false);
   const [findingsIndex, setFindingsIndex] = createSignal(0);
+
+  /**
+   * Displayed validation state. Reads the snapshot plus dirty-buffer truth: a
+   * result/no-match whose path is currently dirty projects to `stale` so the
+   * old verdict never reads as current over edited content. Plain function (not
+   * a memo) so callers — including tests outside a reactive root — always read
+   * the latest projection.
+   */
+  function validationState(): ValidationState {
+    const snap = validationSnapshot();
+    if ((snap.state === "result" || snap.state === "no-match") && dirtyPaths().has(snap.path)) {
+      return { state: "stale", path: snap.path };
+    }
+    return snap;
+  }
+
+  /**
+   * Disk identity (mtime+ino) of the file the snapshot was computed from. The
+   * findings panel compares this against the live file before reusing a
+   * snapshot, so a deleted-then-recreated or externally rewritten file at the
+   * same path cannot inherit the previous file's findings (Issue #118 review
+   * round 2).
+   */
+  let validationStamp: FileStamp | null = null;
+
+  /** Install a fresh snapshot for `relPath` from its content, with its disk identity. */
+  function setValidationFor(relPath: string, content: string, stamp: FileStamp | null = null): void {
+    setValidationSnapshot(runValidation(relPath, content));
+    validationStamp = stamp;
+  }
+
+  /** Clear the snapshot back to pending (close/delete of the validated file). */
+  function clearValidation(): void {
+    setValidationSnapshot(pendingValidation);
+    validationStamp = null;
+  }
+
+  /** Rekey the snapshot path after a rename/move; the underlying result is unchanged. */
+  function rekeyValidation(oldPath: string, newPath: string): void {
+    const snap = validationSnapshot();
+    if (snap.state !== "pending" && snap.path === oldPath) {
+      setValidationSnapshot({ ...snap, path: newPath } as ValidationState);
+    }
+  }
 
   async function recomputeRows(): Promise<void> {
     const version = ++flattenVersion;
@@ -319,8 +373,19 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   /** Whether the currently open file is shown in the editable textarea. */
   function isEditing(): boolean {
+    return canEditOpenFile() && viewMode() === "source";
+  }
+
+  /**
+   * Whether the open file actually has an admitted editable buffer for its
+   * path — i.e. `m edit` would really enter the editor. The file-shape check
+   * alone is not enough: the 8-buffer LRU pool can refuse a ninth file when
+   * every resident buffer is dirty, leaving the file in the read-only viewer
+   * even though `isEditablePreview` is true (Issue #118 §4).
+   */
+  function canEditOpenFile(): boolean {
     const file = openFile();
-    return Boolean(file && isEditablePreview(file) && activeEditorPath() === file.relPath && viewMode() === "source");
+    return Boolean(file && isEditablePreview(file) && activeEditorPath() === file.relPath);
   }
 
   async function openPath(relPath: string): Promise<boolean> {
@@ -330,7 +395,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setViewMode(preview.kind === "markdown" ? "preview" : "source");
     setFocusRegion("editor");
     status("");
-    setValidationState(runValidation(preview.lines?.join("\n") ?? ""));
+    setValidationFor(relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, relPath));
     if (isEditablePreview(preview)) {
       await openEditableBuffer(relPath);
     } else {
@@ -363,6 +428,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       bufferMeta.set(relPath, {
         savedSnapshot: read.content,
         mtimeMs: read.mtimeMs,
+        ino: read.ino,
         initialContent: read.content,
       });
     }
@@ -463,8 +529,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   // —— viewer actions ——
 
+  /**
+   * Toggle Markdown preview ↔ source. Requires a Markdown file with loaded
+   * text lines: a metadata-only symlink has `kind: "markdown"` but no lines,
+   * so advertising or executing a toggle there is a no-op lie (Issue #118 §4/§5).
+   */
   function toggleViewMode(): void {
-    if (openFile()?.kind !== "markdown") return;
+    const file = openFile();
+    if (!file || file.kind !== "markdown" || !file.lines) return;
     setViewMode((mode) => (mode === "source" ? "preview" : "source"));
   }
 
@@ -475,7 +547,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const preview = await readFilePreview(rootDir, file.relPath);
     if (preview) {
       setOpenFile(preview);
-      setValidationState(runValidation(preview.lines?.join("\n") ?? ""));
+      setValidationFor(file.relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, file.relPath));
       status(`reloaded ${file.relPath}`, "success");
     }
   }
@@ -552,8 +624,8 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const instance = instances.get(path);
     const meta = bufferMeta.get(path);
     if (!instance || !meta) return false;
-    const currentMtime = await readMtimeMs(rootDir, path);
-    if (currentMtime !== null && currentMtime !== meta.mtimeMs) {
+    const currentStamp = await readFileStamp(rootDir, path);
+    if (currentStamp !== null && !sameFileStamp(currentStamp, meta)) {
       setDialog({ kind: "overwrite-confirm", path });
       return false;
     }
@@ -567,6 +639,15 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
    * across buffers; choosing save-as or cancelling clears it too.
    */
   let closeAfterSave = false;
+  // Dialog actions that await filesystem I/O temporarily own keyboard input.
+  // Without this guard, the dialog disappears before the save promise settles
+  // and a fast Esc can reopen it against the same in-flight buffer.
+  let dialogActionPending = false;
+
+  function runDialogAction(action: () => Promise<unknown>): void {
+    dialogActionPending = true;
+    void action().finally(() => { dialogActionPending = false; });
+  }
 
   async function forceSaveActive(): Promise<void> {
     const path = activeEditorPath();
@@ -595,10 +676,13 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return false;
     }
     const meta = bufferMeta.get(relPath);
-    const mtime = await readMtimeMs(rootDir, relPath);
+    const stamp = await readFileStamp(rootDir, relPath);
     if (meta) {
       meta.savedSnapshot = content;
-      meta.mtimeMs = mtime ?? meta.mtimeMs;
+      if (stamp) {
+        meta.mtimeMs = stamp.mtimeMs;
+        meta.ino = stamp.ino;
+      }
     }
     setDirtyPaths((set) => {
       if (!set.has(relPath)) return set;
@@ -614,7 +698,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     });
     invalidateDirCache(relPath);
     status(`saved ${relPath}`, "success");
-    setValidationState(runValidation(content));
+    setValidationFor(relPath, content, stamp);
     return true;
   }
 
@@ -667,8 +751,13 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     // file's real mtime: a wall-clock value never matches the on-disk stat
     // and would raise a spurious overwrite confirm on the next Ctrl+S.
     closeBuffer(path);
-    const writtenMtime = await readMtimeMs(rootDir, target);
-    bufferMeta.set(target, { savedSnapshot: content, mtimeMs: writtenMtime ?? Date.now(), initialContent: content });
+    const writtenStamp = await readFileStamp(rootDir, target);
+    bufferMeta.set(target, {
+      savedSnapshot: content,
+      mtimeMs: writtenStamp?.mtimeMs ?? Date.now(),
+      ino: writtenStamp?.ino ?? 0,
+      initialContent: content,
+    });
     setEditorOrder((order) => [target, ...order.filter((p) => p !== target)]);
     setActiveEditorPath(target);
     setOpenFile(await readFilePreview(rootDir, target));
@@ -692,6 +781,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     instance.replaceText(read.content);
     meta.savedSnapshot = read.content;
     meta.mtimeMs = read.mtimeMs;
+    meta.ino = read.ino;
     setDirtyPaths((set) => {
       if (!set.has(path)) return set;
       const next = new Set(set);
@@ -704,6 +794,9 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       next.delete(path);
       return next;
     });
+    // Reload is a content change: install a fresh snapshot so the status row
+    // never reads the pre-reload verdict as current (Issue #118 §3).
+    setValidationFor(path, read.content, { mtimeMs: read.mtimeMs, ino: read.ino });
     status(`reloaded ${path}`, "success");
   }
 
@@ -777,21 +870,21 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   /**
    * React to whatever the external editor did: an open editable buffer is
-   * reloaded when its mtime moved (and revalidated, like a save); a deleted or
-   * re-linked file is closed; a file that was only in the tree just has its
-   * directory cache + index invalidated.
+   * reloaded when its disk identity changes (and revalidated, like a save); a
+   * deleted or re-linked file is closed; a file that was only in the tree just
+   * has its directory cache + index invalidated.
    */
   async function refreshAfterExternalEdit(relPath: string): Promise<void> {
     const meta = bufferMeta.get(relPath);
     if (meta) {
-      const currentMtime = await readMtimeMs(rootDir, relPath);
-      if (currentMtime === null) {
+      const currentStamp = await readFileStamp(rootDir, relPath);
+      if (currentStamp === null) {
         status(`${relPath} was removed by the external editor`, "error");
         closeBuffer(relPath);
         if (openFile()?.relPath === relPath) { setOpenFile(null); setFocusRegion("tree"); }
         return;
       }
-      if (currentMtime === meta.mtimeMs) {
+      if (sameFileStamp(currentStamp, meta)) {
         status("no changes from external editor");
         return;
       }
@@ -808,13 +901,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       }
       meta.savedSnapshot = read.content;
       meta.mtimeMs = read.mtimeMs;
+      meta.ino = read.ino;
       setExternalChanged((set) => {
         if (!set.has(relPath)) return set;
         const next = new Set(set);
         next.delete(relPath);
         return next;
       });
-      setValidationState(runValidation(read.content));
+      setValidationFor(relPath, read.content, { mtimeMs: read.mtimeMs, ino: read.ino });
       status(`reloaded ${relPath}`, "success");
       return;
     }
@@ -840,8 +934,8 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     for (const path of editorOrder()) {
       const meta = bufferMeta.get(path);
       if (!meta) continue;
-      const mtime = await readMtimeMs(rootDir, path);
-      if (mtime !== null && mtime !== meta.mtimeMs) changed.push(path);
+      const stamp = await readFileStamp(rootDir, path);
+      if (stamp !== null && !sameFileStamp(stamp, meta)) changed.push(path);
     }
     if (changed.length === 0) return;
     setExternalChanged(new Set(changed));
@@ -1020,8 +1114,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         setOpenFile(null);
         setActiveEditorPath(null);
         setFocusRegion("tree");
-        setValidationState(pendingValidation);
       }
+      // A deleted file may own the validation snapshot even when it was never
+      // opened (tree `v` validates the selection without opening it). Clear it
+      // whenever the snapshot describes the deleted path, so a recreated file
+      // at the same path — or an external rewrite — cannot inherit stale
+      // findings (Issue #118 review round 2).
+      const deletedSnap = validationSnapshot();
+      if (deletedSnap.state !== "pending" && deletedSnap.path === relPath) clearValidation();
       const trashPath = await trashEntry(rootDir, relPath);
       status(`moved ${relPath} → ${trashPath} (trash)`, "success");
       await afterTreeMutation(relPath);
@@ -1055,6 +1155,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setExternalChanged((set) => rekeySet(set, oldPath, newPath));
     const file = openFile();
     if (file?.relPath === oldPath) setOpenFile({ ...file, relPath: newPath });
+    rekeyValidation(oldPath, newPath);
   }
 
   function rekeySet(set: ReadonlySet<string>, oldPath: string, newPath: string): ReadonlySet<string> {
@@ -1088,24 +1189,106 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   // —— in-page validation (B4 §5.2) ——
 
-  function openFindings(): void {
-    const file = openFile();
-    if (!file) { status("open a file to validate", "info"); return; }
-    setValidationState(runValidation(file.lines?.join("\n") ?? ""));
+  /**
+   * Open the findings panel for a snapshot already current for `relPath`
+   * (consume, no re-run). Returns false when the caller should bail. Reuse is
+   * gated on the live file's disk identity still matching the snapshot's, so a
+   * recreated or externally rewritten file at the same path does not inherit
+   * stale findings (Issue #118 review round 2).
+   */
+  async function openFindingsForCurrent(relPath: string): Promise<boolean> {
+    const snap = validationSnapshot();
+    if ((snap.state === "result" || snap.state === "no-match") && snap.path === relPath && !dirtyPaths().has(relPath)) {
+      const current = await readFileStamp(rootDir, relPath);
+      if (validationStamp !== null && current !== null && sameFileStamp(current, validationStamp)) {
+        setFindingsIndex(0);
+        setFindingsOpen(true);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Tree-focus `v` targets the selected row, never an unrelated open file
+   * (Issue #118 §3). A directory or empty selection stays closed with a hint;
+   * a dirty buffer is not silently validated against its older disk image; a
+   * snapshot already current for the selection is consumed rather than re-run.
+   */
+  async function treeValidate(): Promise<void> {
+    const row = rows()[selectedIndex()];
+    if (!row || row.node.kind !== "file") {
+      status("select a file to validate", "info");
+      return;
+    }
+    const relPath = row.node.relPath;
+    if (dirtyPaths().has(relPath)) {
+      status(`save ${relPath} before validating`, "info");
+      return;
+    }
+    if (await openFindingsForCurrent(relPath)) return;
+    const preview = await readFilePreview(rootDir, relPath);
+    if (!preview) {
+      status(`${relPath} is not readable`, "error");
+      return;
+    }
+    const stamp = await readFileStamp(rootDir, relPath);
+    setValidationFor(relPath, preview.lines?.join("\n") ?? "", stamp);
     setFindingsIndex(0);
     setFindingsOpen(true);
   }
 
+  /**
+   * Viewer-focus `v` targets the open file. Same dirty-buffer and consume
+   * rules as the tree path; re-validates only when the snapshot is stale or
+   * for a different file.
+   */
+  async function viewerValidate(): Promise<void> {
+    const file = openFile();
+    if (!file) { status("open a file to validate", "info"); return; }
+    if (dirtyPaths().has(file.relPath)) {
+      status(`save ${file.relPath} before validating`, "info");
+      return;
+    }
+    if (await openFindingsForCurrent(file.relPath)) return;
+    const stamp = await readFileStamp(rootDir, file.relPath);
+    setValidationFor(file.relPath, file.lines?.join("\n") ?? "", stamp);
+    setFindingsIndex(0);
+    setFindingsOpen(true);
+  }
+
+  /**
+   * Whether `Enter` in the findings panel would really jump. Requires an
+   * admitted editable buffer for the open file and a selected finding with a
+   * resolvable line (Issue #118 §4 — read-only / oversized / refused-buffer
+   * targets must neither advertise nor execute a jump).
+   */
+  function canJumpToSelectedFinding(): boolean {
+    const file = openFile();
+    if (!file || !canEditOpenFile()) return false;
+    const snap = validationSnapshot();
+    if (snap.state !== "result") return false;
+    // The findings panel can describe a different file than the one open (tree
+    // `v` validates the selection without opening it). A jump must target the
+    // open buffer, so refuse — and do not advertise Enter — when the snapshot
+    // belongs to another file (Issue #118 review: cross-file jump).
+    if (snap.path !== file.relPath) return false;
+    const finding = snap.findings[findingsIndex()];
+    return Boolean(finding && finding.line !== null);
+  }
+
   function handleFindingsKey(key: TuiKeyEvent): boolean {
-    const state = validationState();
+    const state = validationSnapshot();
     const findings = state.state === "result" ? state.findings : [];
     if (key.name === "escape") { setFindingsOpen(false); return true; }
     if (findings.length === 0) return true;
     if (key.name === "up") { setFindingsIndex((i) => Math.max(0, i - 1)); return true; }
     if (key.name === "down") { setFindingsIndex((i) => Math.min(findings.length - 1, i + 1)); return true; }
     if (key.name === "enter") {
-      const finding = findings[findingsIndex()];
-      if (finding && finding.line !== null) jumpToFinding(finding);
+      if (canJumpToSelectedFinding()) {
+        const finding = findings[findingsIndex()];
+        if (finding) jumpToFinding(finding);
+      }
       return true;
     }
     return true;
@@ -1114,7 +1297,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   /** Land the active editable buffer at a finding's line and close the panel. */
   function jumpToFinding(finding: LocatedFinding): void {
     const file = openFile();
-    if (!file || !isEditablePreview(file) || finding.line === null) return;
+    // Defence-in-depth alongside canJumpToSelectedFinding: never jump a finding
+    // from another file's snapshot into the open buffer.
+    const snap = validationSnapshot();
+    if (!file || !canEditOpenFile() || finding.line === null) return;
+    if (snap.state !== "pending" && snap.path !== file.relPath) return;
     if (activeEditorPath() !== file.relPath) setActiveEditorPath(file.relPath);
     setViewMode("source");
     setFocusRegion("editor");
@@ -1249,7 +1436,8 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         // overwrite confirm keeps the buffer open and arms closeAfterSave so
         // force-overwriting completes the close — the edits are never
         // discarded under the user's feet.
-        void saveActive().then((saved) => {
+        runDialogAction(async () => {
+          const saved = await saveActive();
           if (saved) afterDirtyConfirm();
           else closeAfterSave = true;
         });
@@ -1259,7 +1447,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return true;
     }
     if (current.kind === "overwrite-confirm") {
-      if (key.name === "o") { setDialog(null); void forceSaveActive(); return true; }
+      if (key.name === "o") {
+        setDialog(null);
+        runDialogAction(forceSaveActive);
+        return true;
+      }
       // Save-as satisfies the save intent by itself; the buffer moves to the
       // new path and stays open there.
       if (key.name === "s") { closeAfterSave = false; setDialog(null); openSaveAs(); return true; }
@@ -1267,13 +1459,18 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       return true;
     }
     if (current.kind === "reload-confirm") {
-      if (key.name === "y") { setDialog(null); void reloadActiveBuffer(); return true; }
+      if (key.name === "y") { setDialog(null); runDialogAction(reloadActiveBuffer); return true; }
       if (key.name === "n") { setDialog(null); return true; }
       return true;
     }
     if (current.kind === "delete-confirm") {
       // Plan §5.1: "y deletes / anything else cancels".
-      if (key.name === "y") { const p = current.path; setDialog(null); void execDelete(p); return true; }
+      if (key.name === "y") {
+        const p = current.path;
+        setDialog(null);
+        runDialogAction(() => execDelete(p));
+        return true;
+      }
       setDialog(null);
       return true;
     }
@@ -1281,15 +1478,20 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       if (key.name === "o") {
         const { op, source, path: target } = current;
         setDialog(null);
-        if (op === "move") void execMove(source, target, true);
-        else void execCopy(source, target, true);
+        if (op === "move") runDialogAction(() => execMove(source, target, true));
+        else runDialogAction(() => execCopy(source, target, true));
         return true;
       }
       if (key.name === "c") { setDialog(null); return true; }
       return true;
     }
     if (current.kind === "save-as-overwrite") {
-      if (key.name === "o") { const p = current.path; setDialog(null); void performSaveAs(p); return true; }
+      if (key.name === "o") {
+        const p = current.path;
+        setDialog(null);
+        runDialogAction(() => performSaveAs(p));
+        return true;
+      }
       if (key.name === "c" || key.name === "escape") { setDialog(null); return true; }
       return true;
     }
@@ -1305,6 +1507,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (path) closeBuffer(path);
     setOpenFile(null);
     setFocusRegion("tree");
+    clearValidation();
   }
 
   function handleTreeKey(key: TuiKeyEvent): boolean {
@@ -1326,7 +1529,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
         if (row) setDialog({ kind: "delete-confirm", path: row.node.relPath });
         return true;
       }
-      case "v": openFindings(); return true;
+      case "v": void treeValidate(); return true;
       case "q": setFocusRegion("composer"); return true;
       case "escape": setFocusRegion("composer"); return true;
       default: return true; // focused region owns (and swallows) the rest
@@ -1339,7 +1542,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "q": setFocusRegion("tree"); return true;
       case "r": void reloadViewer(); return true;
       case "m": toggleViewMode(); return true;
-      case "v": openFindings(); return true;
+      case "v": void viewerValidate(); return true;
       case "up": viewerScrollBy?.(-1); return true;
       case "down": viewerScrollBy?.(1); return true;
       case "pageup": viewerScrollBy?.(-10); return true;
@@ -1385,6 +1588,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   /** Returns true when the key was consumed by the Workspace page. */
   function handleKey(key: TuiKeyEvent): boolean {
     if (page() !== "workspace") return false;
+    if (dialogActionPending) return true;
     if (quickOpenActive()) return handleQuickOpenKey(key);
     if (findingsOpen()) return handleFindingsKey(key);
     if (dialog()) return handleDialogKey(key);
@@ -1463,9 +1667,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     opsBar,
     // in-page validation (B4)
     validationState,
+    validationSnapshot,
     findingsOpen,
     findingsIndex,
-    openFindings,
+    canEditOpenFile,
+    canJumpToSelectedFinding,
     // quick open
     quickOpenActive,
     quickQuery,

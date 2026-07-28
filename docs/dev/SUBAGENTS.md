@@ -56,8 +56,7 @@ The continuation scheduler serializes all parent provider turns:
 
 1. A child commits its terminal state and inbox result.
 2. If the parent is busy, delivery waits without mutating the in-flight request.
-3. When the parent becomes idle, pending results are coalesced into one
-   host-owned user-role packet.
+3. When the parent becomes idle, pending results are coalesced into one host-owned user-role packet.
 4. The packet is appended durably before the provider continuation starts.
 5. Successful consumption acknowledges the delivered inbox entries.
 

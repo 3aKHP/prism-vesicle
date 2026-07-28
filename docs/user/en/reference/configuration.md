@@ -15,7 +15,7 @@ All configuration files live in one user directory:
 
 Override with environment variables: `VESICLE_CONFIG_DIR` (the whole directory) or `VESICLE_PROVIDERS_FILE` (just the providers file; its directory is used).
 
-Display variables unrelated to the config directory: `VESICLE_REDUCED_MOTION=1` freezes the startup splash as a still frame, for motion-sensitive users or low-power terminals. `VESICLE_THEME=dark|light|auto` selects the interface theme: `auto` (the default) follows the terminal's own light/dark mode, while `dark`/`light` force a theme. Inside a session, `/theme dark|light|auto` switches temporarily with higher priority than the environment variable and is never persisted.
+Display variables unrelated to the config directory: `VESICLE_REDUCED_MOTION=1` freezes the startup splash as a still frame, for motion-sensitive users or low-power terminals. `VESICLE_THEME=dark|light|default|auto` selects the interface theme, with four value semantics: `dark`/`light` force a theme; `default` follows the terminal's own light/dark mode (falling back to dark until one reports); `auto` follows the clock (light 07:00–19:00 local, dark otherwise). An invalid value surfaces a diagnostic and falls back to `default` rather than being silently treated as `auto`. Inside a session `/theme` switches temporarily (higher priority), and at launch the `--dark`/`--light` process flags select the initial preference; per-project persistence is covered [below](#project-theme-preference-optional).
 
 Files in that directory:
 
@@ -25,7 +25,7 @@ Files in that directory:
 | `.env` | Yes | The corresponding secret values |
 | `mcp.yaml` | No | Optional MCP tool servers |
 | `permissions.yaml` | No | Tool-approval default and the `shell_exec` switch (see [permissions](./permissions-and-security.md)) |
-| `quality.yaml` | No | Experimental Semantic Judge |
+| `quality.yaml` | No | Experimental Semantic Judge (`version: 2`; `mode: off` may retain a dormant provider/model/timeout tuple). See [quality guard](../advanced/quality-guard.md); `/quality` is the normal path |
 | `settings.yaml` | No | User-level host settings (`editor:` for the Workspace `Ctrl+X` external editor; reserved for future settings) |
 | `assets/` | No | User-level asset overrides |
 | `VESICLE.md` / `VESICLE.<engine>.md` | No | Persistent Instructions (user-level, applies across all projects; see below) |
@@ -73,7 +73,7 @@ Field notes:
 - `authMethod`: `x-api-key` for Anthropic, `x-goog-api-key` for Gemini.
 - `userAgent` (optional): replaces the User-Agent for this provider only; other fingerprint and auth headers stay fixed.
 - A model entry can be a string shorthand or an object with `generation` (`temperature`/`maxTokens`), `capabilities` (`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`), and `limits` (`contextWindow`/`maxOutputTokens`/`autoCompact`).
-- `limits.contextWindow` enables the context percentage in the status bar; `autoCompact` controls the auto-compact threshold and output reserve.
+- `limits.contextWindow` enables the context percentage in the status bar. `autoCompact` opts into automatic context compaction: it activates only when `enabled` is not `false`, `threshold` is strictly between 0 and 1, and `contextWindow` is a positive integer; once active, Vesicle compacts (via the portable `/compact` checkpoint) before a new top-level prompt and at safe mid-turn boundaries when the projected next request crosses the soft trigger. Every provider send is checked after queued input and completed background-process notifications are included. `reserveOutputTokens` reserves space for the next output (precedence: `reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0); provider loading rejects a statically known reserve that leaves no positive input budget. There is no hidden default threshold. Run `/context` to inspect the effective soft trigger, hard input ceiling, reserve source (including the active model's generation defaults), and activation state.
 
 ## .env
 
@@ -116,6 +116,29 @@ Instructions are appended after the engine prompt as host context (the engine co
 
 Persistent Instructions are host configuration, not guarded artifacts. `/rewind` and double-Esc do **not** restore an on-disk `VESICLE.md` / `VESICLE.<engine>.md` changed by `update_instructions`, even if the rewind removes that tool call from the conversation; the changed instruction remains active. After each successful mutation the tool result reports the single previous-state backup: project scope uses `.vesicle/instruction-backups/<scope>-<filename>.previous`, while user scope uses `instruction-backups/` in the config directory; a first creation has only the matching `.previous.json` recording that the target was absent. Recovery is currently manual: copy `.previous` back over the target, or delete a first-created target. A later mutation replaces this one backup.
 
+
+## Project theme preference (optional)
+
+If you want a particular working directory to default to a specific theme, place a `.vesicle/preferences.yaml` at the project root (local ignored state — **not** tracked in version control):
+
+```yaml
+version: 1
+theme: auto   # dark | light | default | auto
+```
+
+- `version: 1` is required; `theme` is optional and accepts `dark`/`light`/`default`/`auto`; omitting `theme` means no project override.
+- The file stores only the theme field — no secrets, providers, permissions, shell, or arbitrary environment values; unknown fields are invalid.
+- If the file is a symlink, has an unsupported version, or holds an invalid field, startup surfaces one diagnostic and falls back to lower-priority sources rather than blocking the TUI.
+
+Effective source precedence (highest first): in-session `/theme` override → launch `--dark`/`--light` flag → project `.vesicle/preferences.yaml` → `VESICLE_THEME` env → built-in `default`.
+
+`/theme` persistence grammar:
+
+- `/theme dark|light|default|auto` — temporary current-session switch, no disk write.
+- `/theme dark|light|default|auto --persist` — atomically write the project preference and apply it this session.
+- `/theme --unset-project` — remove the project `theme`, clear the session override, and recompute by the precedence above.
+
+`/new` and resuming another session clear the temporary session override and recompute the startup preference; theme never enters session JSONL.
 
 ## Path resolution order, in short
 

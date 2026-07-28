@@ -15,7 +15,7 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 
 可用环境变量覆盖:`VESICLE_CONFIG_DIR`(整个目录)或 `VESICLE_PROVIDERS_FILE`(只指定 providers 文件,取其所在目录)。
 
-与配置目录无关的显示环境变量:`VESICLE_REDUCED_MOTION=1` 关闭启动画面的动画(冻结为静帧),适合对动态画面敏感或低性能终端。`VESICLE_THEME=dark|light|auto` 指定界面主题:`auto`(默认)跟随终端自身的明暗模式,`dark`/`light` 强制对应主题;会话内也可用 `/theme dark|light|auto` 临时切换,优先级高于环境变量,且不会持久化。
+与配置目录无关的显示环境变量:`VESICLE_REDUCED_MOTION=1` 关闭启动画面的动画(冻结为静帧),适合对动态画面敏感或低性能终端。`VESICLE_THEME=dark|light|default|auto` 指定界面主题,四值语义:`dark`/`light` 强制对应主题;`default` 跟随终端自身的明暗模式(未报告时回退到深色);`auto` 按本地时间切换(07:00–19:00 浅色,其余深色)。无效值会给出一条诊断并回退到 `default`,不会被静默当成 `auto`。会话内可用 `/theme` 临时切换(优先级更高),启动时也可用 `--dark`/`--light` 进程级标志选择;项目级持久化见[下文](#项目主题偏好可选)。
 
 该目录下的文件:
 
@@ -25,7 +25,7 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 | `.env` | 是 | 上面对应的密钥值 |
 | `mcp.yaml` | 否 | 可选的 MCP 工具服务器 |
 | `permissions.yaml` | 否 | 工具批准默认与 `shell_exec` 开关(见[权限](./permissions-and-security.md)) |
-| `quality.yaml` | 否 | 实验性 Semantic Judge |
+| `quality.yaml` | 否 | 实验性 Semantic Judge(`version: 2`;`mode: off` 可保留一组休眠的 provider/model/timeout)。见[质量守卫](../advanced/quality-guard.md);常规入口是 `/quality` |
 | `settings.yaml` | 否 | 用户级宿主设置(`editor:` 用于 Workspace 页 `Ctrl+X` 外部编辑器;为后续设置项预留) |
 | `assets/` | 否 | 用户级资源覆盖 |
 | `VESICLE.md` / `VESICLE.<engine>.md` | 否 | 持久化指令(用户级,跨所有项目生效;见下文) |
@@ -73,7 +73,7 @@ providers:
 - `authMethod`:Anthropic 用 `x-api-key`,Gemini 用 `x-goog-api-key`。
 - `userAgent`(可选):只替换该供应商的 User-Agent,其它指纹与鉴权头不变。
 - 模型条目可以是字符串简写,也可以是对象,带 `generation`(`temperature`/`maxTokens`)、`capabilities`(`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`)、`limits`(`contextWindow`/`maxOutputTokens`/`autoCompact`)。
-- `limits.contextWindow` 启用底部状态栏的上下文百分比;`autoCompact` 控制自动压缩阈值与输出预留。
+- `limits.contextWindow` 启用底部状态栏的上下文百分比。`autoCompact` 用于开启自动上下文压缩:仅当 `enabled` 不为 `false`、`threshold` 严格介于 0 与 1 之间、且 `contextWindow` 为正整数时才生效;生效后,Vesicle 会在下一次顶层输入之前、以及工具循环中的安全边界处,当预测的下一请求超过软阈值时(通过 portable `/compact` checkpoint)自动压缩。每次供应商请求都会在排队输入和已完成的后台进程通知加入后再检查。`reserveOutputTokens` 为下一轮输出预留空间(优先级:`reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0);供应商配置加载会拒绝使输入预算不再为正的静态预留组合。没有隐藏默认阈值。用 `/context` 查看实际生效的软阈值、硬上限、预留来源(包括当前模型的 generation 默认值)与激活状态。
 
 ## .env
 
@@ -116,6 +116,29 @@ MCP_CLUSTER_TOKEN=
 
 持久化指令属于宿主配置,不属于受保护制品。`/rewind` 和双击 Esc 即使把包含 `update_instructions` 的对话回退掉,也**不会**还原磁盘上的 `VESICLE.md` / `VESICLE.<engine>.md`;因此对话里可能不再显示该工具调用,而新指令仍然生效。每次成功修改后,工具结果会报告唯一的上一状态备份:项目级位于 `.vesicle/instruction-backups/<scope>-<文件名>.previous`,用户级位于配置目录的 `instruction-backups/`;首次创建只有对应的 `.previous.json` 记录“原先不存在”。当前恢复只能手工完成:有 `.previous` 时将它复制回目标文件,首次创建则删除新目标。再次修改会替换这份单一备份。
 
+
+## 项目主题偏好(可选)
+
+如果你希望某个工作目录默认用特定主题,可以在项目根目录下放一个 `.vesicle/preferences.yaml`(本机忽略状态,**不会**进版本库):
+
+```yaml
+version: 1
+theme: auto   # dark | light | default | auto
+```
+
+- `version: 1` 必填;`theme` 可选,接受 `dark`/`light`/`default`/`auto` 四值;省略 `theme` 等于没有项目级偏好。
+- 该文件只存主题字段,不接受密钥、供应商、权限、shell 或任意环境值;未知字段非法。
+- 文件被符号链接、版本不符或字段非法时,启动会给出一条诊断并回退到更低优先级的来源,不会阻止 TUI 打开。
+
+主题有效来源优先级(高到低):会话内 `/theme` 临时覆盖 → 启动 `--dark`/`--light` 标志 → 项目 `.vesicle/preferences.yaml` → `VESICLE_THEME` 环境变量 → 内置 `default`。
+
+`/theme` 的持久化语法:
+
+- `/theme dark|light|default|auto` —— 仅当前会话临时切换,不写盘。
+- `/theme dark|light|default|auto --persist` —— 原子写入项目偏好,并立即在本会话生效。
+- `/theme --unset-project` —— 移除项目 `theme`,清除会话覆盖,按上面优先级重新计算。
+
+`/new` 或恢复另一个会话会清除会话级临时覆盖并重新计算启动偏好;主题从不写入会话 JSONL。
 
 ## 路径优先级速记
 

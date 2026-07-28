@@ -75,6 +75,31 @@ describe("Semantic Judge provider adapters", () => {
       }
     }
   });
+  test("surfaces transport retries for the judge provider call (#101)", async () => {
+    const retries: Array<{ attempt: number; status?: number }> = [];
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) return new Response('{"error":{"message":"rate limited"}}', { status: 429 });
+      return providerResponse("openai", false);
+    }) as unknown as typeof fetch;
+
+    const result = await runQualityJudge({
+      provider: providerAdapter("openai"),
+      providerId: "openai",
+      model: "openai-model",
+      contract,
+      candidateType: "runtime.prose",
+      targetKind: "assistant-response",
+      content: "雨水敲在铁皮棚上。",
+      onRetry: (info) => retries.push({ attempt: info.attempt, status: info.status }),
+    });
+
+    expect(result.status).toBe("valid");
+    expect(retries).toHaveLength(1);
+    expect(retries[0]!.attempt).toBe(1);
+    expect(retries[0]!.status).toBe(429);
+  });
 });
 
 function providerAdapter(protocol: "openai" | "anthropic" | "gemini"): ProviderAdapter {

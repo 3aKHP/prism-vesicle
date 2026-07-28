@@ -75,9 +75,16 @@ Keep root-document responsibilities distinct:
 - `STATUS.md` is the authoritative current implementation inventory, including tool surface, validators, verification, and known limits.
 - `CHANGELOG.md` records notable released and unreleased changes.
 - `CONTRIBUTING.md` owns contributor setup, repository boundaries, and documentation conventions.
-- `docs/dev/STYLE.md` and `docs/dev/WORKFLOW.md` own architecture and development workflow respectively.
+- `docs/dev/README.md` indexes the tracked public developer contracts and defines their maintenance boundary.
+- `docs/dev/STYLE.md` owns source-code structure and maintainability rules.
+- `docs/dev/ARCHITECTURE.md` owns layering, dependency direction, and links to the authoritative runtime contracts.
+- `docs/dev/WORKFLOW.md` owns development and publication workflow.
 
 Prefer links to the authoritative document over duplicating detailed inventories in multiple root files.
+
+Keep the two similarly named developer-document paths semantically separate. The tracked `docs/dev/` tree contains public, current, self-contained contributor and runtime contracts. The gitignored `dev/docs/` tree is an optional machine-local workbench for active plans, private reference paths, research, local decisions, and archives; it is never public authority, and public contracts must not depend on it. `AGENTS.md` and `CLAUDE.md` deliberately index the optional local `dev/docs/REFERENCE_PROJECTS.md` file for collaborator navigation; this narrow discovery exception does not make a public contract depend on local content. Promote a durable local conclusion by summarizing it without private context in the owning public contract, not by moving the local note wholesale. Once that public owner carries the effective result and it is verified against current source, archive the consumed local note under `dev/docs/archive/YYYY-MM/` with a historical-status header pointing at the public authority; do not delete it. A conclusion that remains internal, future, or not yet shipped stays in `dev/docs/decisions/` as an Internal Decision Record and must not be described as a current public contract. The local `dev/docs/README.md` defines Internal Decision Record metadata, promotion, and archive lifecycle.
+
+New files under `docs/dev/` and active files under `dev/docs/working/` or `dev/docs/decisions/` use `UPPER_SNAKE_CASE.md`; each directory entry point named `README.md`, the fixed local `REFERENCE_PROJECTS.md` path, and historical archive filenames are exceptions. Active local notes should state their status, relevant date or last source check, and the public authority they supplement.
 
 ### Documentation Languages
 
@@ -93,7 +100,7 @@ Keep commands, paths, configuration keys, code, and product identifiers unchange
 
 - Explain the behavior change and why it belongs in the current milestone.
 - Include verification commands in the PR description.
-- Update `README.md`, `STATUS.md`, `CHANGELOG.md`, or `docs/dev/STYLE.md` when the user-visible behavior, runtime contract, or architecture boundary changes.
+- Update `README.md`, `STATUS.md`, `CHANGELOG.md`, `docs/dev/ARCHITECTURE.md`, or the owning domain contract when user-visible behavior, runtime behavior, or an architecture boundary changes. Update `docs/dev/STYLE.md` only when source-code conventions change.
 - Keep generated `.vesicle/` sessions out of git.
 - Keep new or edited Markdown prose naturally wrapped.
 

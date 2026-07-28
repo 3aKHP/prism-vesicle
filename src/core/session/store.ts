@@ -8,6 +8,8 @@ import type { UserQuestionRequest } from "../user-question/types";
 import type { ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
+import type { SkillToolEvent } from "../skills/types";
+import type { SkillCatalogSnapshot } from "../skills/catalog-snapshot";
 import type { AssetFingerprint } from "../runtime/assets";
 import type { PermissionMode, PermissionRequest } from "../permissions";
 import type { HarnessDelegationDecision } from "../harness/driver";
@@ -32,6 +34,34 @@ export type { SessionRecord, SessionRole } from "./record-model";
 export { createSessionStore } from "./append-store";
 export type { SessionStore } from "./append-store";
 export type { PendingDelegationRetry } from "./interaction-recovery";
+export { FAILED_TURN_KIND } from "./history-projector";
+export { projectSessionHistory } from "./history-projector";
+export {
+  bindExecutionRound,
+  clearExecutionRound,
+  executionIdentityMetadata,
+  newLogicalTurnId,
+  newProviderRoundId,
+  readExecutionRound,
+  readLogicalTurnId,
+  readProviderRoundId,
+  recoverActiveIdentity,
+  withExecutionRound,
+} from "./execution-identity";
+export type { ExecutionRound, SessionExecutionIdentity } from "./execution-identity";
+export { COMPACT_CHECKPOINT_KIND, isCompactCheckpointRecord, parseCompactCheckpoint } from "./compact-checkpoint";
+export type {
+  CompactCheckpointPhase,
+  CompactCheckpointReason,
+  CompactCheckpointTrigger,
+  PortableCompactCheckpointV1,
+} from "./compact-checkpoint";
+export { segmentSession } from "./segmentation";
+export type {
+  SegmentedRound,
+  SegmentedTurn,
+  SessionSegmentation,
+} from "./segmentation";
 
 export type ReasoningDisplayMode = "hidden" | "collapsed" | "expanded";
 
@@ -222,6 +252,7 @@ export type ResumedMessage = {
   toolWebEvent?: WebToolEvent;
   toolMcpEvent?: McpToolEvent;
   toolProcessEvent?: ProcessToolEvent;
+  toolSkillEvent?: SkillToolEvent;
   /** Engine/model that produced an assistant record (for the per-turn marker). */
   engine?: EngineId;
   model?: string;
@@ -247,6 +278,8 @@ export type SessionSnapshot = {
   /** Asset profile/prompt fingerprint recorded when the session began. */
   assets?: AssetFingerprint;
   harness?: HarnessRuntimeIdentity;
+  /** Frozen Skill catalog snapshot persisted in the session header or a `skill-catalog` record. */
+  skillCatalogSnapshot?: SkillCatalogSnapshot;
   /** Frozen character/scenario context for a Stage session. */
   stageBootstrap?: StageBootstrapMetadata;
   pendingGate?: {
@@ -348,6 +381,7 @@ export async function loadSessionSnapshot(
     ...(projection.permissionMode ? { permissionMode: projection.permissionMode } : {}),
     ...(projection.assets ? { assets: projection.assets } : {}),
     ...(projection.harness ? { harness: projection.harness } : {}),
+    ...(projection.skillCatalogSnapshot ? { skillCatalogSnapshot: projection.skillCatalogSnapshot } : {}),
     ...(stageBootstrap ? { stageBootstrap } : {}),
     ...(pendingGate
       ? {

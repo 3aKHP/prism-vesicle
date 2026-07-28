@@ -3,7 +3,7 @@ import type { EngineId } from "../engine/profile";
 /**
  * Persistent Instructions: user-authored Markdown that survives new sessions
  * and, at user scope, applies across project roots. This is the model context
- * layer described in `docs/dev/STYLE.md` § Persistent Instructions. It is not
+ * layer described in `docs/dev/PERSISTENT_INSTRUCTIONS.md`. It is not
  * automatic memory: the host never infers, summarizes, or writes instructions
  * without a model tool call (Increment B) or a direct user edit.
  */

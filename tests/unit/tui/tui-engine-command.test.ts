@@ -39,6 +39,7 @@ describe("/engine command", () => {
       resetRewindState() {}, setSessionId() {}, setSessionPath() {}, setConversation() {}, setOutput() {},
       setLastTurnUsage() {}, setSessionUsage() {}, setPendingGate() {}, setPendingEngineSwitch() {}, setPendingUserQuestion() {}, setStatus() {},
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
+      theme: { clearOverride() {} } as unknown as CommandContext["theme"],
     } as unknown as CommandContext;
 
     await command.run(ctx, "", "/new");
@@ -171,6 +172,7 @@ describe("/engine command", () => {
     const ctx = {
       activeProvider: () => "deepseek",
       activeModel: () => "deepseek-v4-flash",
+      activeModelGeneration: () => undefined,
       activeModelLimits: () => ({
         contextWindow: 1_000_000,
         maxOutputTokens: 65536,
@@ -202,7 +204,9 @@ describe("/engine command", () => {
     expect(messages[0]).toEqual({ role: "user", content: "/context" });
     expect(messages[1]?.content).toContain("deepseek/deepseek-v4-flash");
     expect(messages[1]?.content).toContain("Used: 18.7k / 1.0M (2%)");
-    expect(messages[1]?.content).toContain("Auto compact: enabled at 85% (~850.0k)");
+    expect(messages[1]?.content).toContain("Soft trigger: 850.0k (85% of window)");
+    expect(messages[1]?.content).toContain("Hard input ceiling: 980.0k");
+    expect(messages[1]?.content).toContain("Auto compact: active · strategy portable-summary");
     expect(messages[1]?.content).toContain("Session: ↑75.3k ↓3.0k ↻ 70.1k");
   });
 
@@ -213,6 +217,7 @@ describe("/engine command", () => {
     const ctx = {
       activeProvider: () => "local",
       activeModel: () => "qwen3",
+      activeModelGeneration: () => undefined,
       activeModelLimits: () => undefined,
       lastTurnUsage: () => undefined,
       sessionUsage: () => ({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, contextInputTokens: 0 }),

@@ -4,7 +4,7 @@
 
 Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端工作流宿主。它默认启动经过验证的内置 V10 Harness，也可以选择项目固定的托管 Harness Pack，将当前运行时连接到模型供应商与宿主工具，并通过持久化会话保存对话和制品生产过程。
 
-> **Alpha 状态：**`1.0.0-alpha.6` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
+> **Alpha 状态：**`1.0.0-alpha.7` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
 
 如果你不熟悉终端、API 密钥或模型供应商，请先阅读[循序渐进的用户手册](./docs/user/zh-CN/README.md)，再使用下方的精简配置说明。
 
@@ -14,7 +14,7 @@ Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端�
 
 从对应的 GitHub 预发布下载 `PrismVesicleSetup-<version>-windows-x64.exe` 并双击运行。该安装器按用户安装，不需要管理员权限。安装完成后会启动 Prism Vesicle Setup：用户只需填写 OpenAI 兼容服务的 Base URL 与 API Key，即可自动获取并勾选模型；也可选配 Tavily、MCP 和权限偏好，全程无需手写配置文件。项目选择可以跳过；即使选择，也只用于 Setup 完成后的那一次启动，Vesicle 不会保存全局唯一项目目录。
 
-`1.0.0-alpha.6` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
+`1.0.0-alpha.7` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
 
 安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。安装器会注册原生 `vesicle.exe` 命令，并添加当前用户的资源管理器目录操作 **Open in Prism Vesicle**。再次运行安装器时会显示 **重新安装 / 修复 / 卸载** 维护选项。在终端中启动项目时，先进入目标目录：
 
@@ -34,7 +34,7 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-软件包包含预编译的 TUI 入口，以及完整、只读的 `prism-engine-v10@10.1.2` 默认运行时基线；启动时不会在 `node_modules` 内编译应用 TSX。普通使用不需要项目锁，也不需要额外安装 Harness。Vesicle 会先解析当前项目与用户级全局的稀疏 `assets/` 覆盖，然后只使用一个经过验证的完整基线：项目固定的托管 Harness Pack，或当前软件包与独立发行版附带的内置 V10 Pack。Harness 自己拥有已声明的提示词片段；受限的宿主扩展层提供五个通用 SubAgent 及其提示词。
+软件包包含预编译的 TUI 入口，以及完整、只读的 `prism-engine-v10` 默认运行时基线；启动时不会在 `node_modules` 内编译应用 TSX。普通使用不需要项目锁，也不需要额外安装 Harness。Vesicle 会先解析当前项目与用户级全局的稀疏 `assets/` 覆盖，然后只使用一个经过验证的完整基线：项目固定的托管 Harness Pack，或当前软件包与独立发行版附带的内置 V10 Pack。Harness 自己拥有已声明的提示词片段；受限的宿主扩展层提供五个通用 SubAgent 及其提示词。
 
 查看当前资产层和生效 manifest 的来源：
 
@@ -149,7 +149,7 @@ bun run dev
 | `/context` | 查看 token 总量和已配置的上下文限制 |
 | `/agents [handle\|stop <handle>\|retry]` | 使用 `explore-1` 这类短句柄列出、查看、中断 SubAgent，或重试暂停的结果投递 |
 
-主输入框使用 Enter 提交，使用 Ctrl+Enter 插入换行。Agent Loop 运行期间，Enter 会把普通消息加入队列；当前完整工具轮次结束后，Vesicle 会在下一次供应商请求前注入这些消息。Slash 命令使用命令自身声明的调度方式：安全的纯宿主命令立即执行，制品读取等待当前工具轮次，配置、选择器或会话命令等待 Agent Loop。混合队列显示在输入框上方，草稿为空时按 Up 可取回最新一条队列输入进行编辑。Escape 会中断当前供应商请求或工具操作，并立即处理下一条队列输入；输入框为空时，双击 Escape 会打开回退选择器。声明视觉能力的模型可以通过 Alt+V 接收剪贴板图像；WSL 终端上报 Ctrl+Alt+V 时同样受支持。
+主输入框使用 Enter 提交，使用 Ctrl+Enter 插入换行。Agent Loop 运行期间，Enter 会把普通消息加入队列；当前完整工具轮次结束后，Vesicle 会在下一次供应商请求前注入这些消息。Slash 命令使用命令自身声明的调度方式：安全的纯宿主命令立即执行，制品读取等待当前工具轮次，配置、选择器或会话命令等待 Agent Loop。混合队列显示在输入框上方，草稿为空时按 Up 可取回最新一条队列输入进行编辑。Escape 会中断当前供应商请求或工具操作，并立即处理下一条队列输入；输入框为空时，双击 Escape 会打开回退选择器。声明视觉能力的模型可以通过 Ctrl+V 接收剪贴板图像，并保留 Alt/Option+V 作为兼容入口。终端文本粘贴和 bracketed paste 仍走普通文本输入路径。
 
 ## Vesicle 当前支持的能力
 
@@ -206,7 +206,9 @@ Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复�
 | [`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md) | 贡献者配置、仓库边界和文档规范 |
 | [`CODE_SIGNING_POLICY.zh-CN.md`](./CODE_SIGNING_POLICY.zh-CN.md) | Windows 签名范围、批准、验证与事件处理 |
 | [`PRIVACY.zh-CN.md`](./PRIVACY.zh-CN.md) | 本地数据、外部服务传输、卸载行为与删除方式 |
-| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | 架构与运行时边界 |
+| [`docs/dev/`](./docs/dev/README.md) | 公开开发者契约及其完整索引 |
+| [`docs/dev/STYLE.md`](./docs/dev/STYLE.md) | 源代码结构与可维护性规范 |
+| [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) | 架构边界与开发者契约导航 |
 | [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) | 分支、审查、发布和文档扫描流程 |
 | [`docs/dev/ASSETS.md`](./docs/dev/ASSETS.md) | 内置 V10 清单、宿主扩展层、来源和更新规则 |
 | [`docs/dev/QUALITY_BENCHMARK.md`](./docs/dev/QUALITY_BENCHMARK.md) | 仅供开发者使用的 Semantic Judge 评测、上限、恢复和证据边界 |
@@ -215,7 +217,7 @@ Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复�
 
 ## 范围与来源
 
-1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。OpenAI Responses、更广泛的 MCP 传输与功能范围、Skills 集成、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
+1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。OpenAI Responses、更广泛的 MCP 传输与功能范围、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
 
 Prism Vesicle 是 [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology) 的姊妹项目；后者是这里内置的 V10 Harness Release 的公开来源。
 

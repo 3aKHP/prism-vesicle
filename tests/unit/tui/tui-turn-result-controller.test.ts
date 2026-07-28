@@ -72,6 +72,31 @@ describe("TUI turn result controller", () => {
     complete.handle(completeQualityResult("clean", 0));
     expect(complete.queuedInputReady()).toBe(true);
   });
+
+  test("a clean auto-validation pass adds no message-stream card (issue #111)", () => {
+    const harness = createHarness();
+    harness.handle(completeValidationResult(0, 0));
+    // The assistant reply stands alone; the passing runtime-packet check stays
+    // in the activity log instead of interrupting the stream every turn.
+    expect(harness.messages()).toEqual([
+      { role: "assistant", content: "done", engine: "etl", model: "test-model" },
+    ]);
+    expect(harness.status()).toBe("complete");
+  });
+
+  test("auto-validation warnings keep a message-stream card and a distinct status", () => {
+    const harness = createHarness();
+    harness.handle(completeValidationResult(0, 1));
+    expect(harness.messages().some((message) => message.role === "system" && message.content.includes("runtime-packet"))).toBe(true);
+    expect(harness.status()).toBe("complete with validation warnings");
+  });
+
+  test("auto-validation errors keep a message-stream card and the findings status", () => {
+    const harness = createHarness();
+    harness.handle(completeValidationResult(1, 0));
+    expect(harness.messages().some((message) => message.role === "system" && message.content.includes("runtime-packet"))).toBe(true);
+    expect(harness.status()).toBe("complete with validation findings");
+  });
 });
 
 function createHarness(lastDisplayedContent: string | null = null) {
@@ -137,6 +162,26 @@ function completeQualityResult(
     profile: permissionResult("").profile,
     response: { id: "quality-complete", content: "done" },
     quality: { outcome, findingCount },
+    messages: [],
+  };
+}
+
+// A complete turn whose `runtime-packet` validator matched. `ok` follows the
+// registry rule (errors flip it; warnings never do), so the warnings-only case
+// is `ok: true` with a finding.
+function completeValidationResult(errors: number, warnings: number): RunPromptResult {
+  const errorList = Array.from({ length: errors }, (_, index) => `error ${index + 1}`);
+  const warningList = Array.from({ length: warnings }, (_, index) => `warning ${index + 1}`);
+  return {
+    kind: "complete",
+    sessionId: "session-validation",
+    sessionPath: ".vesicle/sessions/session-validation.jsonl",
+    profile: permissionResult("").profile,
+    response: { id: "validation-complete", content: "done" },
+    validation: {
+      ok: errors === 0,
+      results: [{ name: "runtime-packet", result: { ok: errors === 0, errors: errorList, warnings: warningList } }],
+    },
     messages: [],
   };
 }

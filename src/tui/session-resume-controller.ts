@@ -89,11 +89,14 @@ export type SessionResumeControllerOptions = InteractionState & {
   refreshArtifacts: () => Promise<unknown>;
   reportError: (error: unknown) => void;
   clearQueuedInputs: () => void;
+  /** Clear a temporary `/theme` session override when activating another session. */
+  clearThemeOverride?: () => void;
   onSessionActive?: (sessionId: string) => void;
 };
 
 export function createSessionResumeController(options: SessionResumeControllerOptions) {
   async function resumeSession(target: SessionSummary, commandEcho?: string): Promise<void> {
+    options.clearThemeOverride?.();
     options.setRestoringSession(true);
     try {
       if (!options.permissionSettingsReady()) await options.loadPermissionSettings();

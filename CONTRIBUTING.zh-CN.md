@@ -75,9 +75,16 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 - `STATUS.md` 是当前实现清单的权威来源，包括工具接口、验证器、验证方式和已知限制。
 - `CHANGELOG.md` 记录值得关注的已发布和未发布变更。
 - `CONTRIBUTING.md` 负责贡献者配置、仓库边界和文档约定。
-- `docs/dev/STYLE.md` 和 `docs/dev/WORKFLOW.md` 分别负责架构与开发工作流。
+- `docs/dev/README.md` 负责索引受版本控制的公开开发者契约，并定义其维护边界。
+- `docs/dev/STYLE.md` 负责源代码结构与可维护性规范。
+- `docs/dev/ARCHITECTURE.md` 负责分层、依赖方向以及各项运行时权威契约的导航。
+- `docs/dev/WORKFLOW.md` 负责开发与发布工作流。
 
 详细清单应链接到对应的权威文档，而不是在多个根目录文件中重复维护。
+
+两个形近的开发文档路径必须保持明确的语义区分。受版本控制的 `docs/dev/` 包含公开、当前且可独立理解的贡献者与运行时契约。被 Git 忽略的 `dev/docs/` 是可选的机器本地工作区，用于活跃计划、私有参考路径、调研、本地决策与归档；它从不是公开权威，公开契约也不得依赖它。`AGENTS.md` 和 `CLAUDE.md` 会特意索引可选的本地 `dev/docs/REFERENCE_PROJECTS.md`，供协作者发现参考项目；这一狭义导航例外不会让公开契约依赖本地内容。需要晋升的长期结论应去除私有上下文并提炼到对应的公开契约，而不是把本地笔记整体移动过去。当对应的公开契约已经承载其有效结果、并经当前源码核验后，把被消费的本地笔记归档到 `dev/docs/archive/YYYY-MM/`，顶部加历史状态声明并指向公开权威；不要删除。仍属内部、远期或尚未交付的结论以 Internal Decision Record 形式留在 `dev/docs/decisions/`，不得被描述为当前公开契约。本地 `dev/docs/README.md` 定义 Internal Decision Record 的元数据、晋升与归档生命周期。
+
+`docs/dev/` 中的新文件以及 `dev/docs/working/`、`dev/docs/decisions/` 中的活跃文件使用 `UPPER_SNAKE_CASE.md`；各目录的 `README.md` 入口、固定的本地 `REFERENCE_PROJECTS.md` 路径和历史归档文件名除外。活跃本地笔记应写明状态、相关日期或最近源码核验日期，以及它所补充的公开权威。
 
 ### 文档语言
 
@@ -93,7 +100,7 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 
 - 说明行为发生了什么变化，以及它为何属于当前里程碑。
 - 在 PR 描述中列出验证命令。
-- 用户可见行为、运行时契约或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md` 或 `docs/dev/STYLE.md`。
+- 用户可见行为、运行时行为或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md`、`docs/dev/ARCHITECTURE.md` 或对应的领域契约。仅在源代码规范变化时更新 `docs/dev/STYLE.md`。
 - 不要把生成的 `.vesicle/` 会话提交到 Git。
 - 新增或编辑的 Markdown 正文应使用自然换行。
 

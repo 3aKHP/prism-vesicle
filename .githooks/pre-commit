@@ -1,0 +1,14 @@
+#!/bin/sh
+set -u
+
+if ! command -v bun >/dev/null 2>&1; then
+	echo >&2 "Markdown wrap advisory could not run: bun was not found on PATH."
+	echo >&2 "Commit was not blocked."
+	exit 0
+fi
+
+bun run scripts/check-staged-markdown-wrap.ts || {
+	echo >&2 "Markdown wrap advisory failed unexpectedly. Commit was not blocked."
+}
+
+exit 0

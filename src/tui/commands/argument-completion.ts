@@ -90,7 +90,8 @@ export function fixedArgumentOptions(command: FixedArgumentCommand): OptionItem[
     return [
       { id: "dark", label: "dark", detail: "Night mode · graphite ground" },
       { id: "light", label: "light", detail: "Day mode · locked off-white ground" },
-      { id: "auto", label: "auto", detail: "Follow the terminal's own mode" },
+      { id: "default", label: "default", detail: "Follow the terminal's own light/dark mode" },
+      { id: "auto", label: "auto", detail: "Time-based · light 07:00–19:00, dark otherwise" },
     ];
   }
   return [
@@ -227,13 +228,12 @@ export const qualityCommandCompletion: CommandCompletion = {
     const args = commandArguments(value, "quality");
     if (args === null) return null;
     const tokens = splitTokens(args);
-    const [first, second] = tokens.values;
+    const [first] = tokens.values;
     const fixedModes = [
       { id: "status", label: "status", detail: "Show Semantic Judge settings" },
-      { id: "off", label: "off", detail: "Disable the Semantic Judge" },
+      { id: "off", label: "off", detail: "Disable the Semantic Judge (retains the profile)" },
       { id: "observe", label: "observe", detail: "Record advisory Judge findings" },
-      { id: "rewrite", label: "rewrite", detail: "Configure rewrite mode" },
-      { id: "confirm", label: "confirm", detail: "Confirm rewrite mode" },
+      { id: "rewrite", label: "rewrite", detail: "Review and revise (asks once to confirm)" },
     ];
     if (!first || (!tokens.trailingSpace && tokens.values.length === 1)) {
       return completion("quality:mode", value, first ?? "", "quality modes", fixedModes, (item) => {
@@ -241,22 +241,15 @@ export const qualityCommandCompletion: CommandCompletion = {
         return `/quality ${item.id} `;
       });
     }
-    const confirmed = first === "confirm";
-    if (confirmed && (!second || (!tokens.trailingSpace && tokens.values.length === 2))) {
-      return completion("quality:confirm-mode", value, second ?? "", "rewrite confirmation", [
-        { id: "rewrite", label: "rewrite", detail: "Confirm rewrite mode" },
-      ], () => "/quality confirm rewrite ");
-    }
-    const mode = confirmed ? second : first;
-    const providerIndex = confirmed ? 2 : 1;
+    const mode = first;
     if (mode !== "observe" && mode !== "rewrite") return null;
-    const provider = tokens.values[providerIndex];
-    const model = tokens.values[providerIndex + 1];
+    const provider = tokens.values[1];
+    const model = tokens.values[2];
     const registry = context.providerRegistry();
-    const prefix = confirmed ? `/quality confirm ${mode}` : `/quality ${mode}`;
-    if (!provider || (!tokens.trailingSpace && tokens.values.length === providerIndex + 1)) {
+    const prefix = `/quality ${mode}`;
+    if (!provider || (!tokens.trailingSpace && tokens.values.length === 2)) {
       return completion(
-        `quality:${confirmed ? "confirm:" : ""}${mode}:provider`,
+        `quality:${mode}:provider`,
         value,
         provider ?? "",
         "providers",
@@ -264,9 +257,9 @@ export const qualityCommandCompletion: CommandCompletion = {
         (item) => `${prefix} ${item.id} `,
       );
     }
-    if (!model || (!tokens.trailingSpace && tokens.values.length === providerIndex + 2)) {
+    if (!model || (!tokens.trailingSpace && tokens.values.length === 3)) {
       return completion(
-        `quality:${confirmed ? "confirm:" : ""}${mode}:model:${provider}`,
+        `quality:${mode}:model:${provider}`,
         value,
         model ?? "",
         `models · ${provider}`,
@@ -341,6 +334,75 @@ export const stageCommandCompletion: CommandCompletion = {
     );
   },
 };
+
+export const skillCommandCompletion: CommandCompletion = {
+  resolve(value, context) {
+    const args = commandArguments(value, "skill");
+    if (args === null) return null;
+    const tokens = splitTokens(args);
+    if (tokens.values.length > 1) return null;
+    if (tokens.values.length === 1 && tokens.trailingSpace) return null;
+    return completion(
+      "skill:name",
+      value,
+      tokens.values[0] ?? "",
+      "skills",
+      async () => {
+        const { resolveSkillCatalog } = await import("../../core/skills");
+        const catalog = await resolveSkillCatalog(context.rootDir, process.env, { id: context.activeEngine() as import("../../core/engine/profile").EngineId });
+        return catalog.catalog.entries.map((entry) => ({
+          id: entry.name,
+          label: entry.name,
+          detail: `[${entry.scope}] ${entry.description}`,
+        }));
+      },
+      (item) => `/skill ${item.id} `,
+    );
+  },
+};
+
+export const themeCommandCompletion: CommandCompletion = {
+  resolve(value) {
+    const args = commandArguments(value, "theme");
+    if (args === null) return null;
+    const tokens = splitTokens(args);
+    const [first] = tokens.values;
+
+    const prefs: OptionItem[] = [
+      { id: "dark", label: "dark", detail: "Night mode · graphite ground" },
+      { id: "light", label: "light", detail: "Day mode · locked off-white ground" },
+      { id: "default", label: "default", detail: "Follow the terminal's own light/dark mode" },
+      { id: "auto", label: "auto", detail: "Time-based · light 07:00–19:00, dark otherwise" },
+    ];
+    const unsetProject: OptionItem = { id: "--unset-project", label: "--unset-project", detail: "Remove the project theme preference" };
+
+    // First-token stage: a preference or --unset-project.
+    if (!first || (tokens.values.length === 1 && !tokens.trailingSpace)) {
+      return completion("theme:first", value, first ?? "", "theme", [...prefs, unsetProject], (item) =>
+        item.id === "--unset-project" ? "/theme --unset-project" : `/theme ${item.id} `,
+      );
+    }
+    // After --unset-project nothing else is valid.
+    if (first === "--unset-project") return null;
+    // After a preference + space, the only continuation is --persist.
+    if (tokens.values.length === 1 && tokens.trailingSpace && isThemePreference(first)) {
+      return completion("theme:persist", value, "", "theme options", [
+        { id: "--persist", label: "--persist", detail: "Save to .vesicle/preferences.yaml" },
+      ], () => `/theme ${first} --persist`);
+    }
+    // Typing the second token (--persist).
+    if (tokens.values.length === 2 && !tokens.trailingSpace && isThemePreference(first)) {
+      return completion("theme:persist", value, tokens.values[1] ?? "", "theme options", [
+        { id: "--persist", label: "--persist", detail: "Save to .vesicle/preferences.yaml" },
+      ], () => `/theme ${first} --persist`);
+    }
+    return null;
+  },
+};
+
+function isThemePreference(value: string): boolean {
+  return value === "dark" || value === "light" || value === "default" || value === "auto";
+}
 
 /** Resolve the canonical command's completion contract, preserving aliases as input only. */
 export function resolveCommandArgumentCompletion(

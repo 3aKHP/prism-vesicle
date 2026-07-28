@@ -1,6 +1,6 @@
 # Semantic Judge Benchmarking
 
-`vesicle quality benchmark` is a developer-only measurement command for PR 6B. It runs the active verified Harness's Semantic Judge contract against a frozen corpus and explicitly selected provider/model matrix. The benchmark cannot change Runtime quality policy or enable semantic rewrite. The separately configured alpha.3 experimental host override is user-level, defaults to off, and is not calibration or promotion evidence.
+`vesicle quality benchmark` is a developer-only measurement command. It runs the active verified Harness's Semantic Judge contract against a frozen corpus and an explicitly selected provider/model matrix. The benchmark cannot change Runtime quality policy or enable semantic rewrite. The separately configured experimental Semantic Judge host override is user-level, defaults to off, and is neither calibration nor promotion evidence.
 
 The command refuses to call a provider unless `--allow-live` is present. That flag is an explicit acknowledgement that the run can send corpus text to the selected providers and incur charges.
 
@@ -52,7 +52,7 @@ Create a versioned plan outside the repository's tracked source unless it is a r
 
 Do not treat the values above as approved production defaults. Freeze them with the rule allowlist, corpus digest, and privacy/annotation governance before a live pilot. `maxInputTokensPerRequest` must be a conservative upper bound for the selected request shape. `judgeTimeoutMs` is the per-evaluation Semantic Judge deadline for this benchmark only; it must be an integer from 1,000 to 180,000 milliseconds and is part of the frozen plan hash and report. It does not change the interactive Runtime Judge's 15-second timeout. The runner reserves the possible two-request format-repair path before each evaluation, so it stops before exceeding its request, token, or cost caps.
 
-The corpus is JSONL. It accepts PR 6A calibration cases (`name`) and blinded held-out cases (`caseId`). Every record requires `text`, target/slice metadata, and either a matching `candidateSha256` or no hash, in which case the runner derives one. Dev cases may supply `expectedVerdict` and `expectedRuleIds`. Blinded cases intentionally omit them; their classification metrics are inconclusive until a separately governed labels join occurs. The current Runtime Semantic Judge benchmark accepts only `targetType: "narrative-prose"`; it rejects other target types before any provider call. Freeze a compatible corpus subset under its own digest, plan, and append-only output path rather than removing out-of-scope records from the source corpus.
+The corpus is JSONL. It accepts labeled calibration cases (`name`) and blinded held-out cases (`caseId`). Every record requires `text`, target/slice metadata, and either a matching `candidateSha256` or no hash, in which case the runner derives one. Dev cases may supply `expectedVerdict` and `expectedRuleIds`. Blinded cases intentionally omit them; their classification metrics are inconclusive until a separately governed labels join occurs. The current Runtime Semantic Judge benchmark accepts only `targetType: "narrative-prose"`; it rejects other target types before any provider call. Freeze a compatible corpus subset under its own digest, plan, and append-only output path rather than removing out-of-scope records from the source corpus.
 
 ## Run And Resume
 
@@ -73,4 +73,4 @@ The event log and report never contain candidate text or raw provider responses.
 
 ## Decision Boundary
 
-A successful dev benchmark is not authorization for a production held-out run, a Host Policy artifact, or semantic blocking. Follow the staged gates in `dev/docs/working/OUTPUT_QUALITY_GUARD_PR6_FEASIBILITY_ASSESSMENT.md`: freeze the rule/model scope and budget, complete the blinded held-out and preservation review, then perform the independent Policy handshake and Runtime promotion.
+A successful development benchmark is not authorization for a production held-out run, a Host Policy artifact, or semantic blocking. Production promotion requires separately governed rule and model scope, budget, blinded held-out evaluation, preservation review, independent Policy review, and Runtime integration evidence.

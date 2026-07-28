@@ -144,13 +144,29 @@ export function createTurnResultController(options: ResultOptions) {
     if (!result.response.toolCalls?.length && result.response.content.trim()) {
       appended.push({ ...(result.assistantRecordUuid ? { id: result.assistantRecordUuid } : {}), role: "assistant", content: result.response.content, engine: options.activeEngine(), model: options.activeModel() });
     }
-    if (result.validation) appended.push({ role: "system", content: renderValidationNotice(result.validation) });
+    // A clean auto-validation pass (no errors and no warnings) no longer gets a
+    // message-stream card: it is still recorded in the activity log and the
+    // validator still runs every turn, so a passing runtime-packet check no
+    // longer interrupts every Stage turn (issue #111). Findings keep their
+    // card. /validate renders its own notice through a separate command path.
+    let validationErrors = 0;
+    let validationWarnings = 0;
+    if (result.validation) {
+      for (const entry of result.validation.results) {
+        validationErrors += entry.result.errors.length;
+        validationWarnings += entry.result.warnings.length;
+      }
+    }
+    if (result.validation && (validationErrors > 0 || validationWarnings > 0)) {
+      appended.push({ role: "system", content: renderValidationNotice(result.validation) });
+    }
     options.setMessages((previous) => [...previous, ...appended]);
-    options.setStatus(result.validation?.ok === false ? "complete with validation findings"
-      : result.quality?.outcome === "inconclusive" ? "complete; quality check incomplete"
-        : result.quality?.outcome === "findings" ? `complete with ${result.quality.findingCount} observed style issue${result.quality.findingCount === 1 ? "" : "s"}`
-          : result.quality?.outcome === "clean" ? "complete; no blocking quality rules matched"
-            : "complete");
+    options.setStatus(validationErrors > 0 ? "complete with validation findings"
+      : validationWarnings > 0 ? "complete with validation warnings"
+        : result.quality?.outcome === "inconclusive" ? "complete; quality check incomplete"
+          : result.quality?.outcome === "findings" ? `complete with ${result.quality.findingCount} observed style issue${result.quality.findingCount === 1 ? "" : "s"}`
+            : result.quality?.outcome === "clean" ? "complete; no blocking quality rules matched"
+              : "complete");
     void options.refreshQualityWarnings(result.sessionId);
   }
 

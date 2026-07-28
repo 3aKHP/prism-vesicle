@@ -26,18 +26,13 @@ logs/
 *.log
 
 # Durable artifact roots (runtime output, not source)
-# Kept out of git so model/user-produced artifacts do not pollute history;
-# the directory structure itself is preserved via .gitkeep stubs.
-workspace/*
-!workspace/.gitkeep
-test_runs/*
-!test_runs/.gitkeep
-novels/*
-!novels/.gitkeep
-reports/*
-!reports/.gitkeep
-source_materials/*
-!source_materials/.gitkeep
+# Created on demand and kept out of git so model/user-produced artifacts do
+# not pollute history.
+/workspace/
+/test_runs/
+/novels/
+/reports/
+/source_materials/
 
 # Local non-public development notes
 /dev/

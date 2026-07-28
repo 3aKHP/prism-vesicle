@@ -21,6 +21,11 @@ if (forbidden.length > 0) {
   throw new Error(`npm package contains development-only files: ${forbidden.join(", ")}`);
 }
 
+const tempArtifacts = paths.filter((path) => /\.references-(?:staging|old)-\d+/.test(path));
+if (tempArtifacts.length > 0) {
+  throw new Error(`npm package contains sync-script temporary artifacts: ${tempArtifacts.join(", ")}`);
+}
+
 for (const required of [
   "bin/vesicle.mjs",
   "dist/npm/vesicle.mjs",
@@ -28,6 +33,12 @@ for (const required of [
   "assets/engines/etl.profile.yaml",
   "host-assets/prompts/shared/vesicle-base.md",
   "host-assets/prompts/shared/side-question.md",
+  "host-assets/skills/vesicle-docs/SKILL.md",
+  "host-assets/skills/vesicle-docs/references/index.md",
+  "host-assets/skills/vesicle-docs/references/root-readme.md",
+  "host-assets/skills/vesicle-docs/references/dev-skills.md",
+  "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-configuration.md",
+  "host-assets/skills/vesicle-docs/references/user-en-reference-configuration.md",
 ]) {
   if (!paths.includes(required)) throw new Error(`npm package is missing required runtime file: ${required}`);
 }

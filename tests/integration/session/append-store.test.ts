@@ -24,6 +24,56 @@ describe("session: append store and listSessions", () => {
     expect(snapshot.records.map((record) => record.uuid)).toEqual([system.uuid, user.uuid, checkpoint.uuid]);
   });
 
+  test("conditional append fails when another store advances the session head", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-cas-"));
+    const first = await createSessionStore(rootDir, "cas-session");
+    const second = await createSessionStore(rootDir, "cas-session");
+    const root = await first.append({ role: "system", content: "prompt" });
+    await second.append({ role: "user", content: "concurrent input" });
+
+    await expect(first.appendIfHead(root.uuid, {
+      role: "system",
+      content: "stale checkpoint",
+    })).rejects.toThrow(/Session head changed/);
+
+    const snapshot = await loadSessionSnapshot(rootDir, "cas-session");
+    expect(snapshot.records.map((record) => record.content)).toEqual(["prompt", "concurrent input"]);
+  });
+
+  test("conditional append compares and appends atomically across processes", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-cas-process-"));
+    const sessionId = "cas-process-session";
+    const store = await createSessionStore(rootDir, sessionId);
+    const root = await store.append({ role: "system", content: "prompt" });
+    const modulePath = join(import.meta.dir, "../../../src/core/session/append-store.ts");
+    const script = [
+      `import { createSessionStore } from ${JSON.stringify(modulePath)};`,
+      `const store = await createSessionStore(${JSON.stringify(rootDir)}, ${JSON.stringify(sessionId)});`,
+      "await new Promise((resolve) => setTimeout(resolve, 100));",
+      `try { await store.appendIfHead(${JSON.stringify(root.uuid)}, { role: "system", content: process.argv[1] }); console.log("appended"); }`,
+      "catch (error) { if (!String(error).includes(\"Session head changed\")) throw error; console.log(\"drift\"); }",
+    ].join("\n");
+    const children = ["first", "second"].map((label) => Bun.spawn({
+      cmd: [process.execPath, "-e", script, label],
+      stdout: "pipe",
+      stderr: "pipe",
+    }));
+    const outputs = await Promise.all(children.map(async (child) => {
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      return stdout.trim();
+    }));
+
+    expect(outputs.sort()).toEqual(["appended", "drift"]);
+    const snapshot = await loadSessionSnapshot(rootDir, sessionId);
+    expect(snapshot.records).toHaveLength(2);
+  });
+
   test("append-only session records fork from an explicit parent and resume the newest branch", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-branch-"));
     const sessionId = "2026-01-01T00-00-00-000Z-branching";

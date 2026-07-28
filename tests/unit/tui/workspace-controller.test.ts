@@ -56,6 +56,8 @@ describe("workspace controller: page and loading", () => {
     await controller.openWorkspaceTarget();
     expect(await controller.locatePath("../outside")).toBeNull();
     expect(await controller.locatePath("/abs/path")).toBeNull();
+    expect(await controller.locatePath("C:\\abs\\path")).toBeNull();
+    expect(await controller.locatePath("workspace/\0bad")).toBeNull();
     expect(await controller.locatePath("no/such/thing")).toBeNull();
 
     expect(await controller.locatePath("workspace")).toBe("dir");

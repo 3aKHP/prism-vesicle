@@ -1,6 +1,6 @@
 import { copyFile, lstat, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { assertProjectRelativePath } from "./workspace-editor";
+import { assertProjectRelativePath } from "./workspace-paths";
 
 /**
  * File-management primitives for the Workspace page tree (Scope B / #62,

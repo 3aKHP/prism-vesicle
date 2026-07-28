@@ -6,7 +6,7 @@
 // the dispatch layer.
 
 import type { ProviderRegistry, ProviderSelection } from "../../config/providers";
-import type { ModelLimits } from "../../config/env";
+import type { GenerationDefaults, ModelLimits } from "../../config/env";
 import type { EngineId } from "../../core/engine/profile";
 import type { EngineTransition } from "../../core/engine/transition";
 import type { ReasoningTier, VesicleMessage } from "../../providers/shared/types";
@@ -35,6 +35,7 @@ export type UsageTelemetrySummary = {
  */
 export type CommandCompletionContext = {
   rootDir: string;
+  activeEngine: () => string;
   providerRegistry: () => ProviderRegistry | null;
   activeProvider: () => string;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
@@ -78,6 +79,7 @@ export type CommandContext = {
   // —— provider / model ——
   activeProvider: () => string;
   activeModel: () => string;
+  activeModelGeneration: () => GenerationDefaults | undefined;
   activeModelLimits: () => ModelLimits | undefined;
   ensureProviderRegistry: () => Promise<ProviderRegistry>;
   applyProviderSelection: (selection: Partial<ProviderSelection>) => Promise<ProviderSelection>;
@@ -135,11 +137,25 @@ export type CommandContext = {
 
   // —— model picker (used by /model with no args) ——
   openModelPicker: () => Promise<void>;
-  openQualityPicker: () => Promise<void>;
+  openQualityPicker: (focusMode?: "observe" | "rewrite") => Promise<void>;
+  openQualityRewriteConfirm: (candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) => Promise<void>;
   openSideQuestion: (args: string) => Promise<void>;
+
+  // —— skills (Phase 2) ——
+  openSkillPicker: () => Promise<void>;
+  activateSkill: (name: string, options: { mode: "invoke" | "context-only"; taskText?: string }) => Promise<void>;
 
   // —— shell pages (Scope B two-page model) ——
   openWorkspaceTarget: (relPath?: string) => Promise<"file" | "dir" | null>;
+
+  // —— theme preference (#86) ——
+  theme: {
+    statusText: () => string;
+    applyOverride: (pref: import("../theme").ThemePreference) => void;
+    clearOverride: () => void;
+    persistProject: (pref: import("../theme").ThemePreference) => Promise<void>;
+    unsetProject: () => Promise<void>;
+  };
 };
 
 export type Command = {

@@ -1,0 +1,84 @@
+<!-- Generated from docs/dev/TUI.md — do not edit. -->
+
+# TUI Runtime Contract
+
+This document defines terminal layout, input ownership, transcript presentation, local commands, and tool-free side questions. Domain state remains owned by core runtime modules; the TUI renders and resolves it.
+
+## Layout And Ownership
+
+- Keep the surface dense, operational, and readable at 80 columns.
+- Hide secondary panes before squeezing the message stream below a useful width.
+- Gate, permission, question, and picker panels own the bottom area while active. Side panes may be hidden so the active controls remain legible.
+- Artifact previews appear as bounded structure-preserving cards in the message stream. The sidebar is an index rather than a duplicate preview surface.
+- The persistent artifact sidebar is deliberately narrow, so its rows stay one line and middle truncation would make long paths indistinguishable. `Alt+A` (meta/option + `a`) enters artifact focus only when the Host sidebar is visible, the host is not busy, and at least one artifact is available. While focus is active, `Up`/`Down` move the focused artifact, `Enter` opens the existing `/artifact` preview path, and `Escape` or `Alt+A` returns focus to the composer. The selected relative path renders in an untruncated, display-width-aware strip above the workspace for that one focused item; rows themselves are not widened or multi-lined. Focus is transient presentation state — it clears when the sidebar hides and does not change artifact scanning, selection syntax, session records, or tool/runtime authority.
+- Avoid changing stable layout dimensions from dynamic labels or transient content when a bounded region can scroll, clip, or reserve space.
+- Modal input routing has priority over prompt editing, command completion, history scrolling, and global key handling.
+
+## Visual And Motion Maintenance
+
+- Essential information and actions must never depend on an animation or effect completing; every animated state has an immediate non-animated fallback and `VESICLE_REDUCED_MOTION=1` freezes it to a static frame.
+- Continuous animation is confined to brand signature moments; the working area below the composer stays static so reading and editing never fight a moving surface.
+- Centralize palette, motion duration, easing, effect intensity, and terminal-capability degradation in the theme module instead of scattering animation constants through views.
+- Static rendering and component tests do not reproduce every OpenTUI effect, keyboard, mouse, streaming, or native-renderer path; visual changes that touch the renderer or worker boundary should be smoked in a live terminal, including native Windows where relevant.
+
+The brand aesthetic, palette of record, motion grammar, and anti-patterns are owned by [`brand/VISUAL_LANGUAGE.md`](../../brand/VISUAL_LANGUAGE.md). The TUI carries three signature surfaces under that language: a startup splash (ANSI mark, wordmark, one slow traveling light; degrades animated → static → frozen → skipped and never blocks startup), an empty-session hero that the first turn replaces, and the static motif wiring — a 1-cell per-message role spectrum lane, the active engine refraction accent on the header and turn markers, and a restrained `┌─ Title ─` ASCII-frame label on the sidebar's internal sections. Easing is `linear`/`steps` only.
+
+## Rendering
+
+- Markdown extension and LaTeX cleanup are display-only transformations. They must not mutate session records, provider messages, or artifact files.
+- Rendering cleanup must stay outside fenced code blocks and use readable static fallbacks for terminal-hostile constructs.
+- Thinking content renders separately from assistant prose, before the assistant body, with bounded or collapsible presentation.
+- Tool, Agent, validation, quality, and host-action records render from structured state rather than parsing natural-language result text.
+- Theme changes refresh mounted renderables whose colors are not reactively inherited from the root palette.
+
+## Prompt Editing And Keys
+
+- Main prompt editing goes through the host-owned composer rather than OpenTUI's single-line input component.
+- Ordinary editing keys never interrupt an active turn. Plain Enter submits, `Ctrl+Enter` inserts a newline, and distinctly reported `Shift+Enter` remains inert.
+- Up and Down move within soft-wrapped or explicit multiline drafts before falling back to prompt history.
+- The render layer owns visual wrapping, cursor-following viewport selection, and adaptive composer height; the keyboard state machine owns text mutation, submission, and history actions.
+- Trailing backslash plus Enter remains a compatibility newline fallback for terminals that cannot distinguish modified Enter.
+- Escape dispatches to the active modal first. At prompt level, the bounded double-press behavior distinguishes rewind, draft clearing, and request cancellation.
+- `Ctrl+C` copies an active OpenTUI selection. Without a selection, the first press arms exit and the second exits through `renderer.destroy()`.
+
+## Commands And Host Actions
+
+- Avoid shape-near singular and plural command pairs. Prefer one canonical command that lists without arguments and acts when given a target.
+- Provider/model switching, ordinary Engine switching, artifact inspection, and rewind opening are local host actions and do not call the provider.
+- `/compact` and the explicit summarize-from-here rewind action may call the provider through their dedicated no-tools summarization contract.
+- Fixed-enum command arguments use the shared completion popup and source candidates from the runtime enum when available. See [`COMMAND_COMPLETION.md`](./COMMAND_COMPLETION.md).
+- Command scheduling follows the registration and boundary rules in [`COMMAND_QUEUE.md`](./COMMAND_QUEUE.md).
+- Host actions add concise structured notices without masquerading as authored user or assistant messages.
+
+## Rewind And Compaction UI
+
+- `/rewind` and empty-input double Escape open the same selector.
+- The rewind picker defaults to a virtual current row, selects authored user prompts, and restores to immediately before the chosen prompt.
+- Host-generated handoffs, compact summaries, Agent delivery packets, and other provider-context records do not count as authored prompts.
+- `/checkpoint` remains the compatibility alias for rewind; additional synonyms require an explicit command-design decision.
+- `/compact [notes]` appends optional user instructions as plain text to the dedicated summarization request and exposes no tools.
+- Compacted transcripts retain a host display record so the empty-session presentation cannot reappear over existing history.
+
+## Side Questions
+
+- `/btw <question>` is a one-shot, tool-free side exchange over an immutable snapshot published before a main provider request.
+- The side request has one dedicated system authority and one host-rendered user reference packet containing quoted parent context as inert data.
+- Parent workflow instructions, tool protocol fields, reasoning, and thinking blocks do not become active side instructions. Images remain reference-only and materialize only for a vision-capable side request.
+- No tools are declared. Any structured tool call in the side response, including mixed text and tool output, fails the exchange.
+- Side exchanges remain in memory and never enter session JSONL, the main conversation, transcript, checkpoints, validators, gates, permissions, or tool execution.
+- A side exchange has an independent cancellation controller and cannot cancel or fail the main Agent Loop.
+- The overlay has visual priority only. Main-loop interactions remain pending and appear after dismissal.
+- Bare `/btw` reopens the latest in-memory exchange for the active session; without one it returns to the composer with a usage hint.
+
+## Verification Boundary
+
+- Static rendering tests do not prove modal transitions, raw terminal key sequences, scrolling, or production preload behavior.
+- Interaction changes should receive focused component or PTY coverage at the real boundary when the regression risk justifies it.
+- The affected workflow must remain usable at 80 columns and at the relevant wide layout before the change is considered complete.
+
+## Structured Summaries And One-Line Status
+
+- A structured state summary (validation, quality, gate, or any reusable status string) must stay **action-free**: it states a semantic outcome only (`✓ passed`, `✗ N · ⚠ M`, `validation stale`, `no validator matched`, …) and never embeds an input instruction (`v`, `view`, `Enter`, …). The component that owns the current focus decides which single action, if any, is reachable, so one key is never advertised twice and a summary never tells the user to open a panel that is already open.
+- A reusable status value must carry the identity of what it describes (e.g. the project-relative path a validation result belongs to). A surface may show it only when that identity matches the object its focus represents; a tree selection must never wear another file's verdict.
+- A dirty editor buffer projects its prior validator verdict as a neutral `validation stale` (no old pass/fail colour or counts); undo-back-to-clean, save, and reload restore or replace it. Validators are not run on every keystroke.
+- One-line action/status surfaces (the Workspace status row, input bars, confirmation dialogs) compose by **display-width priority**, not tail clipping: drop whole low-priority segments before middle-truncating a path, keep destructive/committing choices and the cursor visible, and guarantee the rendered width never exceeds the supplied content budget. A long or CJK path must not push a warning or a primary action off the row at 80 columns.

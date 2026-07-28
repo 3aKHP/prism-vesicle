@@ -1,17 +1,25 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
-import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionRecord, type SessionSnapshot } from "../session/store";
+import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionSnapshot } from "../session/store";
+import { prepareSkillCompactionReattach, removeSessionActivations, SKILL_CONTEXT_LOST_KIND } from "../skills";
+import type { SkillContextLoss } from "../skills";
+import { selectReplacement } from "./replacement-builder";
+import { formatCompactSummary, generatePortableSummary, toVesicleMessage } from "./summary-generator";
+import { buildCompactReplacementMessages, installCompactCheckpoint } from "./checkpoint-installer";
+
+export { formatCompactSummary };
 
 export const COMPACT_BOUNDARY_KIND = "compact-boundary";
 export const COMPACT_SUMMARY_KIND = "compact-summary";
 
-export const ERROR_NOT_ENOUGH_MESSAGES_TO_COMPACT = "Not enough messages to compact.";
-export const ERROR_PENDING_INTERACTION = "Resolve the pending gate, engine switch, or question before compacting.";
+export const ERROR_NOTHING_TO_COMPACT = "Nothing left to compact; the newest complete turn is already the retained tail.";
+export const ERROR_NOT_ENOUGH_MESSAGES_TO_COMPACT = ERROR_NOTHING_TO_COMPACT;
+export const ERROR_PENDING_INTERACTION = "Resolve the pending interaction before compacting.";
 
 type CompactPoint = {
   uuid: string;
@@ -38,23 +46,6 @@ CRITICAL: Respond with TEXT ONLY. Do NOT call tools.
 - Your entire response must be plain text: an <analysis> block followed by a <summary> block.
 `.trim();
 
-const FULL_COMPACT_PROMPT = `
-Your task is to create a detailed summary of the conversation so far so a
-future model can continue the work without the removed turns. Preserve the
-user's explicit intent, project decisions, relevant files and artifacts, tool
-outcomes, unresolved issues, current workflow state, and the next useful step.
-
-In <analysis>, check the conversation chronologically for:
-1. User requests and corrections.
-2. Important technical concepts and architecture decisions.
-3. Files, commands, generated artifacts, and tool outcomes.
-4. Errors encountered and how they were fixed.
-5. Pending tasks and the exact current state.
-
-In <summary>, provide a compact but specific continuation brief. Include only
-facts that are useful for continuing the session.
-`.trim();
-
 const PARTIAL_COMPACT_PROMPT = `
 Summarize the conversation context from the selected user message onward so a
 future model can continue the work without the removed turns. Preserve user
@@ -62,6 +53,187 @@ intent, decisions, generated files, tool outcomes, unresolved issues, and the
 state needed to continue. Do not call tools. Respond with plain text only in a
 single <summary>...</summary> block.
 `.trim();
+
+export type PortableCompactionTrigger = "manual" | "auto";
+export type PortableCompactionPhase = "pre-turn" | "mid-turn" | "manual";
+export type PortableCompactionReason = "requested" | "soft-threshold" | "hard-ceiling" | "model-switch";
+
+export type PortableCompactionOutcome =
+  | {
+      kind: "completed";
+      snapshot: SessionSnapshot;
+      summary: string;
+      checkpointUuid: string;
+      messagesSummarized: number;
+      retainedUnits: number;
+      contextWindow?: number;
+      projectedAfterTokens?: number;
+      /** Active Skills whose exact body compaction could not retain; they require reactivation. */
+      skillContextLoss?: SkillContextLoss[];
+    }
+  | { kind: "nothing-to-compact" }
+  | { kind: "cancelled"; error: unknown }
+  | { kind: "failed"; error: unknown };
+
+export type RunPortableCompactionOptions = {
+  rootDir: string;
+  sessionId: string;
+  engine: EngineId;
+  providerSelection?: Partial<ProviderSelection>;
+  generation?: VesicleRequest["generation"];
+  trigger: PortableCompactionTrigger;
+  phase: PortableCompactionPhase;
+  reason: PortableCompactionReason;
+  instructions?: string;
+  signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
+  automaticBudget?: {
+    beforeTokens: number;
+    beforeEstimateTokens?: number;
+    beforeSource: "provider" | "estimated";
+    softTriggerTokens: number;
+    hardInputCeilingTokens: number;
+    estimateReplacementTokens: (messages: ResumedMessage[]) => number;
+    projectReplacementTokens: (estimatedTokens: number) => number;
+  };
+};
+
+/**
+ * The shared portable-compaction pipeline used by manual `/compact` and the
+ * automatic pre-turn/mid-turn triggers. Transaction boundary (plan §3):
+ * produce + validate the summary first; the installer then builds + validates
+ * the replacement and appends one record. A provider failure, malformed
+ * payload, or append error leaves the former head active and usable — nothing
+ * is installed in memory. Returns a typed outcome so automatic callers can
+ * distinguish "nothing to compact" and "failed" without catching.
+ */
+export async function runPortableCompaction(options: RunPortableCompactionOptions): Promise<PortableCompactionOutcome> {
+  const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
+  assertNoPendingInteraction(full);
+
+  const config = await loadConfigForSelection(options.providerSelection);
+  const selection = selectReplacement(full.records, { contextWindow: config.limits?.contextWindow });
+  if (!selection) return { kind: "nothing-to-compact" };
+
+  // Active Skill procedure context is either reattached verbatim inside the
+  // replacement history or reported as lost (never silently dropped).
+  const skillReattach = await prepareSkillCompactionReattach({
+    rootDir: options.rootDir,
+    env: process.env,
+    sessionId: options.sessionId,
+    profile: { id: options.engine },
+    records: full.records,
+    persistedSnapshot: full.skillCatalogSnapshot,
+    contextWindow: config.limits?.contextWindow,
+  });
+
+  let summary: string;
+  try {
+    summary = await generatePortableSummary({
+      rootDir: options.rootDir,
+      sessionId: options.sessionId,
+      engine: options.engine,
+      providerSelection: options.providerSelection,
+      generation: options.generation,
+      evictedRecords: selection.evictedRecords,
+      ...(selection.previousSummary ? { previousSummary: selection.previousSummary } : {}),
+      instructions: options.instructions,
+      signal: options.signal,
+      onRetry: options.onRetry,
+    });
+  } catch (error) {
+    if (options.signal?.aborted || isAbortError(error)) return { kind: "cancelled", error };
+    return { kind: "failed", error };
+  }
+
+  const replacementMessages = buildCompactReplacementMessages(selection, summary, skillReattach.reattach);
+  let projectedAfterTokens: number | undefined;
+  let installed: Awaited<ReturnType<typeof installCompactCheckpoint>>;
+  try {
+    const replacementEstimateTokens = options.automaticBudget?.estimateReplacementTokens(replacementMessages);
+    projectedAfterTokens = replacementEstimateTokens === undefined
+      ? undefined
+      : options.automaticBudget!.projectReplacementTokens(replacementEstimateTokens);
+    if (
+      replacementEstimateTokens !== undefined
+      && options.automaticBudget?.beforeEstimateTokens !== undefined
+      && replacementEstimateTokens >= options.automaticBudget.beforeEstimateTokens
+    ) {
+      throw new Error(
+        `Automatic compaction did not reduce the estimated next request (${replacementEstimateTokens} replacement tokens >= ${options.automaticBudget.beforeEstimateTokens} before compaction).`,
+      );
+    }
+    if (
+      projectedAfterTokens !== undefined
+      && projectedAfterTokens > options.automaticBudget!.hardInputCeilingTokens
+    ) {
+      throw new Error(
+        `Automatic compaction could not reduce the next request below the hard ceiling (${projectedAfterTokens} projected tokens > ${options.automaticBudget!.hardInputCeilingTokens}).`,
+      );
+    }
+    const session = await createSessionStore(options.rootDir, options.sessionId);
+    installed = await installCompactCheckpoint({
+      rootDir: options.rootDir,
+      sessionId: options.sessionId,
+      session,
+      selection,
+      summary,
+      replacementMessages,
+      trigger: options.trigger,
+      phase: options.phase,
+      reason: options.reason,
+      createdWith: { providerId: config.providerId, model: config.model, engine: options.engine },
+      accounting: {
+        ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
+        ...(options.automaticBudget ? {
+          softTriggerTokens: options.automaticBudget.softTriggerTokens,
+          hardInputCeilingTokens: options.automaticBudget.hardInputCeilingTokens,
+          beforeTokens: options.automaticBudget.beforeTokens,
+          beforeSource: options.automaticBudget.beforeSource,
+        } : { beforeSource: "unknown" as const }),
+        ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
+      },
+    });
+    if (skillReattach.lost.length > 0) {
+      await session.append({
+        role: "system",
+        content: `Compaction could not retain the active context of ${skillReattach.lost.length} Skill(s): ${skillReattach.lost.map((lost) => lost.name).join(", ")}. Reactivate with activate_skill if the procedure is still needed.`,
+        metadata: { kind: SKILL_CONTEXT_LOST_KIND, skills: skillReattach.lost },
+      });
+    }
+
+  } catch (error) {
+    if (options.signal?.aborted || isAbortError(error)) return { kind: "cancelled", error };
+    return { kind: "failed", error };
+  }
+
+  // The append above is the transaction boundary. Do not turn a later reload
+  // problem into a "failed without mutation" outcome: the checkpoint is
+  // already durable and callers must see the reload error directly.
+  const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: installed.checkpointUuid });
+  // Lost Skills are no longer active: remove them from the registry so dedup
+  // cannot suppress a deliberate reactivation.
+  if (skillReattach.lost.length > 0) {
+    removeSessionActivations(options.sessionId, skillReattach.lost.map((lost) => lost.name));
+  }
+  const messagesSummarized = selection.evictedRecords.filter((record) => record.role !== "system").length;
+  const retainedUnits = selection.retainedRecords.filter((record) => record.role !== "system").length;
+  return {
+    kind: "completed",
+    snapshot,
+    summary,
+    checkpointUuid: installed.checkpointUuid,
+    messagesSummarized,
+    retainedUnits,
+    ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
+    ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
+    ...(skillReattach.lost.length > 0 ? { skillContextLoss: skillReattach.lost } : {}),
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === "AbortError" || /abort|cancel/i.test(error.message));
+}
 
 export async function compactConversation(options: {
   rootDir: string;
@@ -71,49 +243,29 @@ export async function compactConversation(options: {
   generation?: VesicleRequest["generation"];
   instructions?: string;
   signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<ConversationCompact> {
-  const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
-  assertNoPendingInteraction(full);
-  const compactableCount = countCompactableMessages(full.messages);
-  if (compactableCount < 2) throw new Error(ERROR_NOT_ENOUGH_MESSAGES_TO_COMPACT);
-
-  const summary = await generateSummary({
+  const outcome = await runPortableCompaction({
     rootDir: options.rootDir,
     sessionId: options.sessionId,
     engine: options.engine,
     providerSelection: options.providerSelection,
     generation: options.generation,
-    messages: full.messages,
-    prompt: compactPrompt(FULL_COMPACT_PROMPT, options.instructions),
+    trigger: "manual",
+    phase: "manual",
+    reason: "requested",
+    instructions: options.instructions,
     signal: options.signal,
+    onRetry: options.onRetry,
   });
-
-  const compactRoot = compactRootParent(full.records);
-  const session = await createSessionStore(options.rootDir, options.sessionId, { parentUuid: compactRoot });
-  await session.append({
-    role: "system",
-    content: "Conversation compacted.",
-    metadata: {
-      kind: COMPACT_BOUNDARY_KIND,
-      engine: options.engine,
-      messagesSummarized: compactableCount,
-    },
-  });
-  const summaryRecord = await session.append({
-    role: "user",
-    content: `[conversation summary]\n${summary}`,
-    metadata: {
-      kind: COMPACT_SUMMARY_KIND,
-      engine: options.engine,
-      messagesSummarized: compactableCount,
-    },
-  });
-  const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: summaryRecord.uuid });
+  if (outcome.kind === "nothing-to-compact") throw new Error(ERROR_NOTHING_TO_COMPACT);
+  if (outcome.kind === "cancelled") throw outcome.error;
+  if (outcome.kind === "failed") throw outcome.error;
   return {
-    snapshot,
-    summary,
-    parentUuid: summaryRecord.uuid,
-    messagesSummarized: compactableCount,
+    snapshot: outcome.snapshot,
+    summary: outcome.summary,
+    parentUuid: outcome.checkpointUuid,
+    messagesSummarized: outcome.messagesSummarized,
   };
 }
 
@@ -126,6 +278,7 @@ export async function compactConversationFromPoint(options: {
   generation?: VesicleRequest["generation"];
   instructions?: string;
   signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<ConversationCompactFromPoint> {
   const full = await loadSessionSnapshot(options.rootDir, options.sessionId);
   assertNoPendingInteraction(full);
@@ -141,6 +294,7 @@ export async function compactConversationFromPoint(options: {
     messages: full.messages,
     prompt: compactPrompt(pivotInstruction, options.instructions),
     signal: options.signal,
+    onRetry: options.onRetry,
   });
 
   const session = await createSessionStore(options.rootDir, options.sessionId, { parentUuid: options.point.parentUuid });
@@ -183,6 +337,7 @@ async function generateSummary(options: {
   messages: ResumedMessage[];
   prompt: string;
   signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<string> {
   const config = await loadConfigForSelection(options.providerSelection);
   const provider = createProvider(config);
@@ -201,6 +356,7 @@ async function generateSummary(options: {
     ],
     generation: options.generation,
     signal: options.signal,
+    onRetry: options.onRetry,
   };
   const response = await complete(provider, request);
   const summary = formatCompactSummary(response.content);
@@ -223,33 +379,17 @@ function compactPrompt(base: string, instructions: string | undefined): string {
   return trimmed ? `${base}\n\nAdditional summary instructions:\n${trimmed}` : base;
 }
 
-function toVesicleMessage(message: ResumedMessage): VesicleMessage {
-  return {
-    role: message.role,
-    content: message.content,
-    ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
-    ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
-    ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
-    ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
-  };
-}
-
-export function formatCompactSummary(content: string): string {
-  const withoutAnalysis = content.replace(/<analysis>[\s\S]*?<\/analysis>/i, "").trim();
-  const match = withoutAnalysis.match(/<summary>([\s\S]*?)<\/summary>/i);
-  return (match?.[1] ?? withoutAnalysis).trim();
-}
-
 function assertNoPendingInteraction(snapshot: SessionSnapshot): void {
-  if (snapshot.pendingGate || snapshot.pendingEngineSwitch || snapshot.pendingUserQuestion) {
+  if (
+    snapshot.pendingGate
+    || snapshot.pendingEngineSwitch
+    || snapshot.pendingUserQuestion
+    || snapshot.pendingPermission
+    || snapshot.pendingDelegationRetry
+    || snapshot.pendingDelegationDecisionRecovery
+    || snapshot.pendingQualityRewrite
+    || snapshot.pendingQualityDecision
+  ) {
     throw new Error(ERROR_PENDING_INTERACTION);
   }
-}
-
-function countCompactableMessages(messages: ResumedMessage[]): number {
-  return messages.filter((message) => message.kind !== COMPACT_SUMMARY_KIND).length;
-}
-
-function compactRootParent(records: SessionRecord[]): string | null {
-  return records.find((record) => record.role === "system")?.uuid ?? null;
 }

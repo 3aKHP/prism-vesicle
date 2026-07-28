@@ -5,7 +5,7 @@ import { ENGINE_HANDOFF_KIND, createModelEngineTransition, renderEngineHandoffPa
 import type { EngineContextPolicy } from "../engine/transition";
 import type { GateResolution } from "../gate/types";
 import type { ToolPermissionBroker } from "../permissions";
-import { createSessionStore } from "../session/store";
+import { createSessionStore, withExecutionRound } from "../session/store";
 import type { AgentLoopEvent, EngineSwitchConfirmedResult, ResolveEngineSwitchResult } from "./types";
 import type { ContinuationContextOptions } from "./continuation-context";
 import { loadContinuationContext } from "./continuation-context";
@@ -54,7 +54,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
   await session.append({
     role: "tool",
     content: toolResultContent,
-    metadata: {
+    metadata: withExecutionRound(session.sessionId, {
       engine: options.engine,
       name: "request_engine_switch",
       ok: true,
@@ -64,7 +64,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
       decision: options.resolution.decision,
       ...(options.resolution.feedback ? { feedback: options.resolution.feedback } : {}),
       transition,
-    },
+    }),
   });
 
   if (confirmed) {
@@ -81,7 +81,9 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     mcpRegistry: continuation.toolSurface.mcp,
     messages,
     session,
+    logicalTurnId: continuation.identity?.logicalTurnId,
     profile: continuation.profile,
+    skillCatalog: continuation.skillCatalog,
     generation: continuation.generation,
     checkpoint: await FileCheckpointManager.resumeLatest(continuation.rootDir, session),
     signal: options.signal,

@@ -27,7 +27,7 @@
 | `/stage <角色卡路径> <情景卡路径>` | 用两张卡开一个 Stage 叙事会话 |
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | 控制模型的思考强度;`auto` 恢复供应商默认 |
 | `/reasoning hidden\|collapsed\|expanded` | 控制推理过程的显示(别名 off/preview/on) |
-| `/theme dark\|light\|auto` | 切换界面主题;`auto` 跟随终端明暗模式,仅当前会话生效,不持久化 |
+| `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | 切换界面主题;`default` 跟随终端明暗模式,`auto` 按本地时间切换;`--persist` 写入项目 `.vesicle/preferences.yaml`,`--unset-project` 移除项目偏好;不带参数显示当前 preference/来源/解析结果 |
 | `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返 |
 
 ## 制品
@@ -37,13 +37,16 @@
 | `/artifact [n\|path]` | 在 Workspace 页的查看器中打开制品;不带参数打开最新一个 |
 | `/validate <n\|path>` | 按编号或路径校验一个制品 |
 
+Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当侧栏可见且至少存在一个制品时):`↑`/`↓` 移动焦点,`Enter` 打开既有的 `/artifact` 预览,`Esc` 或 `Alt+A` 返回输入框。聚焦期间所选文件的完整相对路径以不截断的条幅显示;侧栏行本身保持单行。
+
 ## 权限与质量
 
 | 命令 | 作用 |
 |---|---|
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | 查看或设置工具批准模式 |
-| `/quality [off\|observe\|rewrite …]` | 配置实验性 Semantic Judge(默认关) |
+| `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | 查看或配置实验性 Semantic Judge;不带参数打开引导式设置。`off` 关闭 Judge 并保留 profile;不带 profile 的 `observe`/`rewrite` 使用已保留或当前的 provider/model。选择 Review and revise(或 `/quality rewrite`)只打开一个红色确认面板——已没有 `/quality confirm` 这第二条命令 |
 | `/agents [handle\|stop <handle>\|retry]` | 查看/中断/重试 SubAgent |
+| `/skill [name [task]]` | 激活 Skill；不带参数打开选择器，`<name> [task]` 激活并调用，`<name> --context-only` 仅加载不触发 |
 
 ## 输入框按键
 
@@ -55,7 +58,7 @@
 | Esc | 中断当前供应商请求或工具操作，并立即处理下一条队列输入 |
 | 双击 Esc(输入框空,800ms 内) | 打开回退选择器 |
 | 双击 Esc(输入框有内容) | 存草稿并清空,不发送 |
-| Alt+V | 粘贴剪贴板图片(仅视觉模型接收) |
+| Ctrl+V / Alt/Option+V | 粘贴剪贴板图片(仅视觉模型接收；终端文本粘贴仍按普通文本插入) |
 | Ctrl+Q | 退出 Vesicle |
 
 当前完整工具轮次结束后，队列消息会在下一次供应商请求前加入当前对话。如果 Agent Loop 没有经过下一个工具边界便已结束，下一条队列输入会被立即处理。Slash 命令各自声明忙碌时的行为：`/help`、`/context`、`/reasoning`、`/theme`、`/workspace`、只读设置形式，以及 `/agents` 查看或停止会立即执行；`/artifact` 和 `/validate` 等待当前工具轮次；配置变更、选择器、会话命令、`/compact`、`/init` 和 `/agents retry` 等待 Agent Loop。选择器打开时会暂停剩余队列，切换或重置会话时会清空队列。
@@ -77,13 +80,14 @@ Workspace 页有三个焦点区：文件树、查看器/编辑器、输入框。
 | m / F2(文件树) | 移动/重命名:输入条预填目录部分,你续写新名;目标已存在 → 覆盖确认 |
 | c(文件树) | 复制:规则同 `m` |
 | d(文件树) | 删除:`y` 删除(移入 `.vesicle/trash/` 回收站),其余任意键取消;目录仅空时可删;有未保存编辑会在确认文案标注 |
-| v(文件树/只读查看器) | 校验当前文件并打开 findings 面板 |
+| v(文件树) | 校验**选中项**:选中文件即校验并打开 findings;目录/空行提示 `select a file to validate`;有未保存编辑提示先存盘 |
+| v(只读查看器) | 校验已打开文件并打开 findings(当前有结论时标签为 `v findings`) |
 | h / j / k / l(文件树/只读查看器) | 等同方向键(文本输入激活时不生效) |
 | q(文件树/只读查看器) | 等同 Esc,逐级回退焦点 |
 | r(文件树) | 刷新目录;(只读查看器)重新读取文件 |
 | .(文件树) | 显示/隐藏点文件和噪声目录(`.git`、`node_modules`、`dist` 等) |
 | ↑ / ↓ / PgUp / PgDn / Home / End(只读查看器) | 滚动 |
-| m(Markdown 预览) | 切换到可编辑源码 |
+| m(Markdown 预览/只读源码) | 切换预览与源码:可编辑 Markdown 显示 `m edit`;只读/超大/截断的 Markdown 显示 `m source`(只读源码)或 `m preview`;无文本的符号链接不提供此切换 |
 
 所有文件管理操作都限项目根内(拒绝 `..` / 绝对路径)。删除是**回收站**(移到 `.vesicle/trash/<时间戳>-<名>`),不是永久删除;状态行会写明去向,需要恢复就手动把文件移回。重命名/移动一个正在编辑的文件,缓冲区会平滑换到新路径(dirty 标记和内容保留,撤销栈会清空——在意撤销就先存盘再改名)。复制和移动到已存在的目标会弹"覆盖 / 取消"确认。
 
@@ -106,9 +110,13 @@ Workspace 页有三个焦点区：文件树、查看器/编辑器、输入框。
 
 ### 校验(findings 面板)
 
-打开文件、保存,或在文件树/只读查看器按 `v`,都会跑**角色卡 / 情景卡**校验(与 `/validate` 和回合结束自动校验共用同一份校验器名单)。状态行摘要(界面文案为英文):`✓ validators passed` / `✗ N · ⚠ M · v view` / `no validator matched`(无匹配校验器时明示)。
+打开文件、保存,或在文件树/只读查看器按 `v`,都会跑**角色卡 / 情景卡**校验(与 `/validate` 和回合结束自动校验共用同一份校验器名单)。校验结果带文件归属:状态行只显示属于当前焦点对象(文件树 = 选中项、查看器/编辑器 = 已打开文件)的摘要,选中项与已打开文件不一致时不会把别人的结论张冠李戴。摘要(界面文案为英文)只表达状态:`✓ validators passed` / `✗ N · ⚠ M` / `validation stale` / `no validator matched`(无匹配校验器时明示);动作提示由各焦点区单独给出,同一动作不会重复。
 
-`v` 打开的 findings 面板独占键盘:每行 `✗/⚠ + finding 文本`(无锚的标 `(no anchor)`),`↑↓` 选择,`Enter` 跳转到对应行(从 finding 文本里提取 `## …` 段落头或 frontmatter 字段名定位;找不到则跳到 frontmatter 结尾),`Esc` 关闭。在可编辑源码里 `v` 是普通字母(透传给编辑器),要手动校验就先 Ctrl+S 存盘(保存即自动校验)。
+进入源码编辑后,内容变化只更新 dirty 标记,不会重跑校验;之前的结论被投影为中性的 `validation stale`(不再沿用旧的绿/红/琥珀色或计数)。撤销回到底稿等于存盘的内容即恢复为当前结论;存盘或重新加载会装上一份新的当前结论。在可编辑源码里 `v` 是普通字母(透传给编辑器),要手动校验就先 Ctrl+S 存盘。
+
+文件树焦点下的 `v` 作用于**当前选中项**:选中普通文件即校验它并打开 findings 面板(若已有该文件的当前结论则直接复用,不重复跑);选中目录或空行则保持面板关闭并提示 `select a file to validate`;选中文件有未保存编辑则提示 `save <path> before validating`,不拿磁盘上的旧内容冒充当前结论。查看器焦点下的 `v` 作用于已打开文件,当前有结论时标签为 `v findings`。
+
+findings 面板独占键盘:标题以 `findings: <路径> — <摘要>` 标明目标(纯状态、不带动作提示);每行 `✗/⚠ + finding 文本`(无锚的标 `(no anchor)`),`↑↓` 选择;`Enter` 跳转到对应行(从 finding 文本里提取 `## …` 段落头或 frontmatter 字段名定位;找不到则跳到 frontmatter 结尾)——但只有真正可编辑的目标才显示并执行 `Enter jump`(只读、超大、截断或未进入编辑缓冲区的文件不会跳转),`Esc` 关闭。
 
 ### 外部编辑器交接
 

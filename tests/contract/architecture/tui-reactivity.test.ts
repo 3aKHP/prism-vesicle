@@ -40,7 +40,7 @@ describe("TUI reactivity static guard", () => {
   });
 
   test("bottom surface priority is explicit and modal-first", () => {
-    const empty: BottomSurfaceState = { yoloStage: null, permissionRequest: undefined, question: null, gate: null, rewind: null, session: null, model: null };
+    const empty: BottomSurfaceState = { yoloStage: null, permissionRequest: undefined, question: null, gate: null, rewind: null, session: null, skillPicker: null, model: null };
     const rewind = { points: [], selected: 0, restoreSelected: 0, summaryFeedback: "", summaryCursor: 0, busy: false };
     const permission = { toolName: "read_file" } as PermissionRequest;
     expect(resolveBottomSurfaceMode(empty).kind).toBe("composer");
@@ -96,7 +96,7 @@ describe("TUI reactivity static guard", () => {
   test("input routing shares bottom-surface priority and blocks hidden-composer paste", async () => {
     const source = await readFile(join(import.meta.dir, "..", "..", "..", "src", "tui", "input-routing.ts"), "utf8");
     const modeResolution = source.indexOf("resolveBottomSurfaceMode({");
-    const imagePaste = source.indexOf('key.name?.toLowerCase() === "v" && (key.meta || key.option)');
+    const imagePaste = source.indexOf("if (isClipboardImagePasteKey(key))");
     const composerRouting = source.indexOf("if (options.handleComposerKey(key))");
 
     expect(modeResolution).toBeGreaterThan(-1);

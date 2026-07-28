@@ -57,6 +57,7 @@ export type AgentLoopEvent =
       diagnostics: InstructionDiagnostic[];
     }
   | { type: "provider_request"; iteration: number }
+  | { type: "provider_retry"; attempt: number; maxRetries: number; delayMs: number; status?: number; iteration: number; scope?: "quality-judge" }
   | { type: "assistant_delta"; delta: string }
   | { type: "assistant_reasoning_delta"; delta: string }
   | { type: "tool_call_delta"; name?: string; argumentsDelta?: string }
@@ -69,7 +70,7 @@ export type AgentLoopEvent =
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
-  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; instructionEvent?: import("../instructions/types").InstructionToolEvent; images?: VesicleImageAttachment[] }
+  | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; instructionEvent?: import("../instructions/types").InstructionToolEvent; skillEvent?: import("../skills/types").SkillToolEvent; images?: VesicleImageAttachment[] }
   | { type: "process_update"; callId: string; processEvent: ProcessToolEvent }
   | { type: "permission_pending"; request: PermissionRequest }
   | { type: "gate_pending"; gate: string }
@@ -83,7 +84,34 @@ export type AgentLoopEvent =
       findings?: Array<QualityFindingSummary & { targetPath?: string }>;
       warningReasons?: QualityTargetWarningReason[];
     }
-  | { type: "validation"; ok: boolean };
+  | { type: "validation"; ok: boolean }
+  | {
+      type: "compact_check";
+      phase: "pre-turn" | "mid-turn";
+      result: "below" | "soft-trigger" | "hard-ceiling" | "inactive" | "degraded";
+      projectedTokens?: number;
+      usageSource?: "provider" | "estimated" | "unknown";
+      softTriggerTokens?: number;
+      hardInputCeilingTokens?: number;
+      inactiveReason?: string;
+    }
+  | { type: "compact_started"; phase: "pre-turn" | "mid-turn" | "manual"; trigger: "manual" | "auto"; reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch" }
+  | {
+      type: "compact_completed";
+      phase: "pre-turn" | "mid-turn" | "manual";
+      trigger: "manual" | "auto";
+      reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch";
+      checkpointUuid: string;
+      evictedUnits: number;
+      retainedUnits: number;
+      durationMs: number;
+      usageSource?: "provider" | "estimated" | "unknown";
+      beforeTokens?: number;
+      projectedAfterTokens?: number;
+    }
+  | { type: "compact_failed"; phase: "pre-turn" | "mid-turn" | "manual"; trigger: "manual" | "auto"; reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch"; durationMs: number; errorMessage: string }
+  | { type: "compact_cancelled"; phase: "pre-turn" | "mid-turn" | "manual"; trigger: "manual" | "auto"; reason: "requested" | "soft-threshold" | "hard-ceiling" | "model-switch"; durationMs: number }
+  | { type: "compact_deferred"; phase: "pre-turn" | "mid-turn"; reason: string };
 
 export type ValidatorOutcome = {
   ok: boolean;

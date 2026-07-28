@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/quality-guard.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.6`):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.0.0-alpha.7`):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 Output Quality Guard 是一层**面向 target** 的质量检查:在质量边界上重新读取受保护制品的完整 post-image,用 anti-ai-flavor 规则包检测"机器味",并可选用一个实验性 Semantic Judge 复核。它的目的是让产出散文更像人写的,而不是判定作者是不是 AI。
 
@@ -26,15 +26,32 @@ Output Quality Guard 是一层**面向 target** 的质量检查:在质量边界�
 
 ### 2. Semantic Judge(🟡,可选,默认关)
 
-一个用户级实验性覆盖,用**单独注册的** provider/model 复核散文。通过 `quality.yaml`(与 `providers.yaml` 同目录)或 `/quality` 命令配置,默认 `off`。
+一个用户级实验性覆盖,用**单独注册的** provider/model 复核散文。默认 `off`。
+
+常规入口是 `/quality` 命令(不带参数运行)。它会打开一个状态感知的设置选择器,显示当前模式与生效的 Judge profile,并提供三种模式加一个次要的 **Change Judge** 动作:
+
+| 标签 | 稳定值 | 效果 |
+|---|---|---|
+| `Off` | `off` | 不发任何 Judge 请求 |
+| `Review only` | `observe` | 记录实验性 finding;不触发修订 |
+| `Review and revise` | `rewrite` | 最多可请求两次 Engine 修订 |
+| `Change Judge` | — | 浏览已注册的 provider/model 列表,不开启任何模式 |
+
+`/quality` 会记住你的 profile:关闭 Judge(或运行 `/quality off`)会保留最近一次完整的 provider/model/timeout 组合作为休眠 profile,在关闭期间不发任何 Judge 请求。首次使用且无已保留 profile 时,选择器会显式预选当前注册的 provider/model——这是一个 UI 默认值加一次显式动作,绝不静默回退。不带参数的 `/quality observe` 在存在有效保留 profile 时立即开启 Observe,否则打开选择器并聚焦 `Review only`。不带参数的 `/quality rewrite` 会解析"保留或当前"候选并直接打开红色确认面板。
+
+选择 **Review and revise**(或运行 `/quality rewrite [provider model [timeout-ms]]`)会暂存候选并打开一个红色两阶段确认面板,交互仿照 `/permissions YOLO`:Enter 从 `Continue` 推进到 `Enable Review and Rewrite`,第二次 Enter 才写入设置,任意阶段按 Esc 都保持原配置不变。已不再有 `/quality confirm` 这第二条命令。
+
+用于自动化与 alpha 诊断时,同样的设置写在 `quality.yaml`(与 `providers.yaml` 同目录):
 
 ```yaml
-version: 1
+version: 2
 mode: observe          # off / observe / rewrite
 providerAlias: deepseek
 modelId: deepseek-v4-flash
 judgeTimeoutMs: 15000
 ```
+
+完整的组合也可留在 `mode: off` 下作为休眠保留 profile。version 2 是 alpha 阶段的前向迁移;较旧的 Vesicle 构建可能无法读取,首次改动设置会把 version 1 文件改写为 version 2。
 
 它只在这些条件下运行:producer 是 `runtime` 或 `stage`,**且**确定性守卫已判定 `pass`(对已经干净的候选做二次复核)。特性:
 
@@ -63,4 +80,4 @@ judgeTimeoutMs: 15000
 
 ## 状态会变
 
-本页的 🟢/🟡 标注反映 `1.0.0-alpha.6` 的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。
+本页的 🟢/🟡 标注反映 `1.0.0-alpha.7` 的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。

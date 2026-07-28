@@ -1,7 +1,9 @@
 import { loadConfigForSelection } from "../../config/providers";
+import type { VesicleConfig } from "../../config/env";
 import { loadExperimentalQualityProfile } from "../../config/quality";
 import { createProvider } from "../../providers";
-import type { VesicleMessage } from "../../providers/shared/types";
+import type { ProviderSelection } from "../../config/providers";
+import type { VesicleMessage, VesicleRequest } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
@@ -9,19 +11,36 @@ import { composeInstructionBlocks } from "../instructions";
 import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
-import { createSessionStore } from "../session/store";
+import { bindExecutionRound, createSessionStore, executionIdentityMetadata, newLogicalTurnId, newProviderRoundId } from "../session/store";
+import { AutoCompactBlockedError, runAutomaticCompaction } from "../compact/auto-compact";
+import { estimateRequestTokens } from "../compact/context-budget";
+import { toVesicleMessage } from "../compact/summary-generator";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
 import { generationMetadata, mergeGeneration } from "./generation";
 import { resolveToolSurface } from "./tool-surface";
 import type { RunLoopArgs } from "./turn-loop";
-import type { RunPromptOptions } from "./types";
+import type { AgentLoopEvent, RunPromptOptions } from "./types";
 import {
   assertSessionHarnessIdentity,
   requireProjectHarnessRuntime,
   resolveProjectHarnessRuntime,
 } from "../harness/activation";
-import { loadSessionSnapshot } from "../session/store";
+import { loadSessionSnapshot, type ResumedMessage, type SessionRecord, type SessionSnapshot } from "../session/store";
+import {
+  catalogNames,
+  composeSkillCatalogBlock,
+  deriveSessionActivations,
+  hydrateSessionActivations,
+  isMeaningfulSkillCatalogSnapshot,
+  pruneSessionActivations,
+  resolveEngineEligibleCatalog,
+  resolveSessionSkillCatalog,
+  SKILL_CATALOG_RECORD_KIND,
+  snapshotSkillCatalog,
+} from "../skills";
+import type { EngineId } from "../engine/profile";
+import type { ToolDefinition } from "../tools";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
@@ -46,27 +65,97 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const { profile } = engineAssets;
   const instructional = await composeSystemPromptWithInstructions(engine, engineAssets.systemPrompt, rootDir);
   let systemPrompt = instructional.systemPrompt;
-  const toolSurface = await resolveToolSurface(
-    profile,
-    config.capabilities?.vision === true,
-    permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
-    permission.shellInterpreter,
-  );
-  const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
+
+  // Load the existing session's snapshot before resolving the Skill catalog:
+  // the persisted catalog snapshot and the durable activation records are the
+  // resume authority for the frozen catalog and the activation registry.
+  let snapshot: SessionSnapshot | undefined;
   if (options.sessionId) {
-    const snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
+    snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
     if (engine === "stage") {
       if (!snapshot.stageBootstrap) throw new Error("Stage session is missing frozen bootstrap metadata.");
       systemPrompt = `${systemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
     }
-    await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
   }
   const session = await createSessionStore(
     rootDir,
     options.sessionId,
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
+
+  // Skills (Phase 2): freeze the session catalog (resume re-resolves by the
+  // persisted snapshot's name+hash), filter it for this engine, hydrate the
+  // activation registry from durable records, and prune entries ineligible in
+  // this engine. The catalog block appends after the composed prompt only
+  // when at least one Skill is eligible, so a Skill-less session keeps the
+  // composed prompt byte-identical.
+  const frozenSkillCatalog = await resolveSessionSkillCatalog(
+    rootDir,
+    process.env,
+    profile,
+    session.sessionId,
+    snapshot?.skillCatalogSnapshot,
+    config.limits?.contextWindow,
+  );
+  const skillCatalog = resolveEngineEligibleCatalog(frozenSkillCatalog, profile);
+  const skillCatalogSnapshot = snapshotSkillCatalog(frozenSkillCatalog);
+  if (snapshot) {
+    hydrateSessionActivations(session.sessionId, deriveSessionActivations(snapshot.records));
+    pruneSessionActivations(session.sessionId, new Set(catalogNames(skillCatalog)));
+  }
+  const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
+  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+
+  const toolSurface = await resolveToolSurface(
+    profile,
+    config.capabilities?.vision === true,
+    permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
+    permission.shellInterpreter,
+    {},
+    { catalogNames: catalogNames(skillCatalog) },
+  );
+  const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
+  let compactedSnapshot: SessionSnapshot | undefined;
+  if (options.sessionId && snapshot) {
+    await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
+    // Pre-turn auto-compaction runs only for an existing session and only when
+    // limits.autoCompact is fully configured. It evaluates the projected next
+    // request (including this incoming input) BEFORE the new user record is
+    // persisted, compacts the old head if required, and — on a hard-ceiling
+    // failure — throws before any session mutation so the caller retains the
+    // draft. New sessions and Stage (no compaction) skip it. The compact
+    // provider request is a standalone call, never a bootstrap turn, so it
+    // cannot re-enter automatic evaluation.
+    if (engine !== "stage" && config.limits?.autoCompact) {
+      const compacted = await runExistingSessionPreTurnCompaction({
+        rootDir,
+        sessionId: options.sessionId,
+        engine,
+        config,
+        tools: toolSurface.definitions,
+        composedSystemPrompt: systemPrompt,
+        snapshot,
+        input: options.input,
+        images: options.images,
+        generation,
+        turnMaxTokens: options.generation?.maxTokens,
+        providerSelection: options.providerSelection,
+        signal: options.signal,
+        onEvent: options.onEvent,
+      });
+      snapshot = compacted.snapshot;
+      if (compacted.compacted) compactedSnapshot = snapshot;
+    }
+  }
+
+  // A new top-level Agent Loop gets a fresh logical turn id, and its first
+  // provider round is allocated alongside the initiating input. The ids stamp
+  // the user record directly; the active-round map is bound only after all
+  // fallible bootstrap appends succeed (just before return) so a failed append
+  // can never leak a stale entry that runLoop's finally would never clear.
+  const logicalTurnId = newLogicalTurnId();
+  const providerRoundId = newProviderRoundId();
 
   if (isNewSession) {
     await session.append({
@@ -92,7 +181,19 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
         assets: engineAssets.assets,
         instructions: selectionToRecord(instructional.selection),
         ...(harness?.identity ? { harness: harness.identity } : {}),
+        // Bounded frozen-catalog identity (hash + name/scope/bodySha256 only);
+        // omitted entirely when the session has no Skills and no diagnostics.
+        ...(isMeaningfulSkillCatalogSnapshot(skillCatalogSnapshot) ? { skills: skillCatalogSnapshot } : {}),
       },
+    });
+  } else if (snapshot && !snapshot.skillCatalogSnapshot && isMeaningfulSkillCatalogSnapshot(skillCatalogSnapshot)) {
+    // A resumed legacy session without a persisted snapshot: make the fresh
+    // freeze durable so the next resume re-resolves by name+hash instead of
+    // re-freezing whatever the store happens to contain.
+    await session.append({
+      role: "system",
+      content: "Skill catalog frozen for this session.",
+      metadata: { kind: SKILL_CATALOG_RECORD_KIND, skills: skillCatalogSnapshot },
     });
   }
 
@@ -112,6 +213,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
       content: options.input,
       metadata: {
         ...(options.inputMetadata ?? {}),
+        ...executionIdentityMetadata({ logicalTurnId, providerRoundId }),
         engine,
         provider: config.provider,
         providerId: config.providerId,
@@ -126,11 +228,18 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   // Freeze only after bootstrap's fallible persistence work is complete. From
   // here, runLoop owns cleanup on completion or failure, while pauses retain it.
   freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
-  const messages: VesicleMessage[] = options.messages ?? [{
+  // Bind the active round last, after every fallible append above has succeeded.
+  // runLoop's finally clears it on completion/pause/error; a throw before this
+  // point leaves no leaked entry.
+  bindExecutionRound(session.sessionId, { logicalTurnId, providerRoundId });
+  const incomingMessage: VesicleMessage = {
     role: "user",
     content: options.input,
     ...(options.images ? { images: options.images } : {}),
-  }];
+  };
+  const messages: VesicleMessage[] = compactedSnapshot
+    ? [...compactedSnapshot.messages.map(toVesicleMessage), incomingMessage]
+    : options.messages ?? [incomingMessage];
 
   return {
     rootDir,
@@ -142,7 +251,10 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     mcpRegistry: toolSurface.mcp,
     messages,
     session,
+    logicalTurnId,
+    providerRoundId,
     profile,
+    skillCatalog,
     generation,
     checkpoint,
     signal: options.signal,
@@ -157,4 +269,119 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     takePendingUserInputs: options.takePendingUserInputs,
     runToolBoundaryCommands: options.runToolBoundaryCommands,
   };
+}
+
+async function runExistingSessionPreTurnCompaction(params: {
+  rootDir: string;
+  sessionId: string;
+  engine: EngineId;
+  config: VesicleConfig;
+  tools: ToolDefinition[];
+  composedSystemPrompt: string;
+  snapshot: SessionSnapshot;
+  input: string;
+  images?: VesicleMessage["images"];
+  generation?: VesicleRequest["generation"];
+  turnMaxTokens?: number;
+  providerSelection?: Partial<ProviderSelection>;
+  signal?: AbortSignal;
+  onEvent?: (event: AgentLoopEvent) => void;
+}): Promise<{ snapshot: SessionSnapshot; compacted: boolean }> {
+  // Defer compaction while an interaction is unresolved (plan §7): the snapshot
+  // of a session with a pending gate/permission/question/quality decision would
+  // make the compact's pending-interaction guard throw, so emit compact_deferred
+  // and leave the old head in place rather than attempting it.
+  if (
+    params.snapshot.pendingGate
+    || params.snapshot.pendingEngineSwitch
+    || params.snapshot.pendingUserQuestion
+    || params.snapshot.pendingPermission
+    || params.snapshot.pendingDelegationRetry
+    || params.snapshot.pendingDelegationDecisionRecovery
+    || params.snapshot.pendingQualityDecision
+    || params.snapshot.pendingQualityRewrite
+  ) {
+    params.onEvent?.({ type: "compact_deferred", phase: "pre-turn", reason: "a pending interaction must be resolved first" });
+    return { snapshot: params.snapshot, compacted: false };
+  }
+  const lastObservation = findLastContextObservation(params.snapshot.records);
+  const incoming: ResumedMessage = {
+    role: "user",
+    content: params.input,
+    ...(params.images?.length ? { images: params.images } : {}),
+  };
+  const estimatedNextRequestTokens = estimateRequestTokens(
+    [...params.snapshot.messages, incoming],
+    params.composedSystemPrompt,
+    params.tools,
+  );
+  const result = await runAutomaticCompaction({
+    rootDir: params.rootDir,
+    sessionId: params.sessionId,
+    engine: params.engine,
+    providerSelection: params.providerSelection,
+    generation: params.generation,
+    signal: params.signal,
+    onEvent: params.onEvent,
+    phase: "pre-turn",
+    estimateReplacementTokens: (replacement) => estimateRequestTokens(
+      [...replacement.map(toVesicleMessage), toVesicleMessage(incoming)],
+      params.composedSystemPrompt,
+      params.tools,
+    ),
+    budget: {
+      config: params.config.limits?.autoCompact,
+      limits: params.config.limits,
+      generation: params.config.generation,
+      turnMaxTokens: params.turnMaxTokens,
+      lastContextInputTokens: lastObservation?.contextInputTokens,
+      lastRequestObservation: lastObservation?.estimatedRequestTokens !== undefined
+        ? {
+          contextInputTokens: lastObservation.contextInputTokens,
+          estimatedRequestTokens: lastObservation.estimatedRequestTokens,
+        }
+        : undefined,
+      estimatedNextRequestTokens,
+    },
+  });
+  if (result.kind === "cancelled") throw result.error;
+  if (result.kind === "hard-failed") {
+    throw new AutoCompactBlockedError(
+      result.errorMessage,
+      result.check.kind === "hard-ceiling"
+        ? {
+          projectedTokens: result.check.projectedTokens,
+          hardInputCeilingTokens: result.check.hardInputCeilingTokens,
+          softTriggerTokens: result.check.softTriggerTokens,
+          usageSource: result.check.usageSource,
+        }
+        : undefined,
+    );
+  }
+  if (result.kind === "compacted") {
+    // Reload from the new checkpoint head so the incoming user record appends
+    // after the checkpoint rather than the old pre-compaction head.
+    return {
+      snapshot: await loadSessionSnapshot(params.rootDir, params.sessionId, { synthesizeDanglingToolResults: false }),
+      compacted: true,
+    };
+  }
+  return { snapshot: params.snapshot, compacted: false };
+}
+
+function findLastContextObservation(
+  records: SessionRecord[],
+): { contextInputTokens: number; estimatedRequestTokens?: number } | undefined {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const metadata = records[index]!.metadata;
+    const usage = metadata?.usage as { contextInputTokens?: unknown } | undefined;
+    if (usage && typeof usage.contextInputTokens === "number" && usage.contextInputTokens > 0) {
+      const estimatedRequestTokens = metadata?.requestEstimateTokens;
+      return {
+        contextInputTokens: usage.contextInputTokens,
+        ...(typeof estimatedRequestTokens === "number" && estimatedRequestTokens >= 0 ? { estimatedRequestTokens } : {}),
+      };
+    }
+  }
+  return undefined;
 }

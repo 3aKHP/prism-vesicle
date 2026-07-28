@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/solid";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { WorkspacePage } from "../../../src/tui/views/WorkspacePage";
@@ -113,6 +113,20 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("inline-renderable");
   });
 
+  test("symlink files show metadata without loading the target", async () => {
+    await symlink(join(root, "notes.txt"), join(root, "notes-link.txt"));
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes-link.txt");
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+
+    expect(frame).toContain("symbolic link");
+    expect(frame).toContain("targets are not loaded");
+    expect(frame).not.toContain("line one");
+  });
+
   test("editable source shows the editor status line with key hints", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget("notes.txt");
@@ -139,10 +153,10 @@ describe("tui: workspace page (B2)", () => {
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
 
-    // The read-only viewer path: the title flags it, and the status line says
-    // read-only (no Ctrl+S editor hint).
+    // The read-only viewer path: the title flags it as truncated, and the
+    // status line names the viewing mode (no Ctrl+S editor hint).
     expect(frame).toContain("big.txt");
-    expect(frame).toContain("read-only");
+    expect(frame).toContain("truncated");
     expect(frame).not.toContain("Ctrl+S save");
   });
 
@@ -184,9 +198,63 @@ describe("tui: workspace page (B2)", () => {
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
     // mira.md-shaped card → character-card validator applies, reports missing
-    // sections. The status line carries a ✗ summary with a `v view` affordance.
+    // sections. The status line carries a pure ✗ summary and a single
+    // `v findings` action (never the old duplicated `v view`).
     expect(frame).toContain("✗");
-    expect(frame).toContain("v view");
+    expect(frame).toContain("v findings");
+    expect(frame).not.toContain("v view");
+    // Exactly one `v findings` action — the duplicate-action bug is gone.
+    expect(frame.split("v findings").length - 1).toBe(1);
+  });
+
+  test("a non-editable oversized Markdown advertises `m source`, not `m edit`", async () => {
+    // Issue #118 §4: `m edit` must require an admitted editable buffer. An
+    // oversized Markdown is not editable, so the toggle hint degrades to the
+    // truthful `m source` (switch to a read-only source view).
+    await writeFile(join(root, "big.md"), `---\narchetype: x\n---\n${"x".repeat(600 * 1024)}\n`);
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("big.md");
+    expect(controller.canEditOpenFile()).toBe(false);
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("m source");
+    expect(frame).not.toContain("m edit");
+  });
+
+  test("a non-editable target omits `Enter jump` from the findings footer", async () => {
+    // Issue #118 §4/§7: Enter only jumps when an editable buffer is admitted.
+    await writeFile(join(root, "big.md"), `---\narchetype: x\n---\n${"x".repeat(600 * 1024)}\n`);
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("big.md");
+    controller.handleKey({ name: "v" }); // viewer-focus v opens findings (async)
+    await new Promise((r) => setTimeout(r, 30));
+    expect(controller.findingsOpen()).toBe(true);
+    expect(controller.canJumpToSelectedFinding()).toBe(false);
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).not.toContain("Enter jump");
+  });
+
+  test("the findings header keeps the verdict visible for a long card path (#118 §8)", async () => {
+    // Regression: the header budget arithmetic used the full panel width and
+    // ignored the summary, so a moderately long path clipped the ✗ verdict.
+    const longName = "a-very-long-character-card-name-exceeding-the-panel.md";
+    await writeFile(join(root, `workspace/cards/${longName}`), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget(`workspace/cards/${longName}`);
+    controller.handleKey({ name: "v" });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(controller.findingsOpen()).toBe(true);
+    const setup = await renderPage(controller, 80, 24);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("findings:");
+    expect(frame).toContain("✗");
   });
 
   test("`v` opens the findings panel with the validator findings", async () => {
@@ -198,6 +266,7 @@ describe("tui: workspace page (B2)", () => {
       controller.handleKey({ name: "f6" });
     }
     controller.handleKey({ name: "v" });
+    await new Promise((r) => setTimeout(r, 30));
     expect(controller.findingsOpen()).toBe(true);
     const setup = await renderPage(controller);
     await setup.flush();
@@ -263,6 +332,69 @@ describe("tui: workspace page (B2)", () => {
     // The full short line must be readable — without the fix, the stale offset
     // hides it entirely (line 2 is only 14 chars, all left of the offset).
     expect(frame).toContain("short top line");
+  });
+
+  test("a save confirmation surfaces in the status row (#118 review: status text restored)", async () => {
+    // The statusLine refactor had dropped the `${note}` suffix; controller
+    // status() messages (save/reload/refusal/error) must be visible again.
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes.txt");
+    // typeText does not route through onContentChange in this harness, so drive
+    // dirty + save through a mock instance the way the controller unit tests do,
+    // and set the state BEFORE rendering so the first frame already shows it.
+    const inst = {
+      get plainText() { return "line one\nline two\nEDIT\n"; },
+      setSelection: () => {}, gotoLine: () => {}, insertText: () => {}, replaceText: () => {},
+    } as unknown as import("@opentui/core").TextareaRenderable;
+    controller.registerEditorInstance("notes.txt", inst);
+    controller.markEditorContentChanged("notes.txt");
+    await controller.saveActive();
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("saved");
+  });
+
+  test("a dirty preview-mode Markdown does not advertise `v findings` (#118 review)", async () => {
+    // A dirty buffer under a read-only preview: `v` would refuse (dirty guard),
+    // so the viewer row must not advertise `v findings` as a reachable action.
+    await writeFile(join(root, "card.md"), "---\narchetype: x\n---\nbody\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("card.md");
+    const inst = {
+      get plainText() { return "---\narchetype: x\n---\nbody\nDIRTY\n"; },
+      setSelection: () => {}, gotoLine: () => {}, insertText: () => {}, replaceText: () => {},
+    } as unknown as import("@opentui/core").TextareaRenderable;
+    controller.registerEditorInstance("card.md", inst);
+    controller.markEditorContentChanged("card.md");
+    expect(controller.dirtyPaths().has("card.md")).toBe(true);
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).not.toContain("v findings");
+    expect(frame).toContain("validation stale");
+  });
+
+  test("a tree selection away from the validated file shows no verdict (#118 review r2: path-bound)", async () => {
+    // The colour and text are both bound to the focused target: selecting
+    // notes.txt while card.md holds the error verdict must not paint the tree
+    // row red or show card's ✗.
+    await writeFile(join(root, "card.md"), "---\narchetype: x\n---\nbody\n");
+    await writeFile(join(root, "notes.txt"), "plain\n");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("card.md");
+    for (let i = 0; i < 4 && controller.focusRegion() !== "tree"; i += 1) controller.handleKey({ name: "f6" });
+    const target = controller.rows().findIndex((r) => r.node.relPath === "notes.txt");
+    expect(target).toBeGreaterThanOrEqual(0);
+    while (controller.selectedIndex() < target) controller.handleKey({ name: "down" });
+    while (controller.selectedIndex() > target) controller.handleKey({ name: "up" });
+    const setup = await renderPage(controller);
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).not.toContain("✗");
   });
 
   test("a long document never paints over the shell's bottom surface", async () => {

@@ -15,6 +15,7 @@ import type { ToolRoundPlan } from "./tool-round-planner";
 import { emitToolResultEvent, failedToolResult, recordToolResult } from "./tool-result-recorder";
 import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harness/driver";
 import { isBundledHostAgentId, type AssetResolver } from "../runtime/assets";
+import type { ResolvedSkillCatalog } from "../skills";
 import { appendHarnessDelegationDecision, type DelegationPause } from "./delegation-decision";
 
 type ExecuteToolRoundOptions = {
@@ -28,6 +29,8 @@ type ExecuteToolRoundOptions = {
   parentMessagesBeforeToolCall: VesicleMessage[];
   session: SessionStore;
   profile: EngineProfile;
+  /** Engine-eligible session Skill catalog; threaded to the Skill tool executors. */
+  skillCatalog?: ResolvedSkillCatalog;
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
@@ -240,6 +243,7 @@ async function executeHostCall(
         processManager: options.processManager,
         parentSessionId: options.session.sessionId,
         activeEngine: options.profile.id,
+        skillCatalog: options.skillCatalog,
         shellInterpreter: options.permission.shellInterpreter,
         processExecutionPlan,
         onProcessProgress: (processEvent) => options.onEvent?.({ type: "process_update", callId: call.id, processEvent }),

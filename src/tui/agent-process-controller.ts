@@ -5,6 +5,7 @@ import type { BackgroundProcessEvent, BackgroundProcessState } from "../core/pro
 import type { ProcessToolEvent } from "../core/tools";
 import { processEventFromTask } from "../core/tools/shell";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
+import { providerRetryActivityLabel, providerRetryLabel } from "../providers/shared/retry-label";
 import type { ResponseUsage } from "../providers/shared/types";
 import { applyAgentEvent } from "./agent-view";
 import type { ActivityEntry, AgentCardState, Message } from "./types";
@@ -49,9 +50,44 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
     projectAgentCard(event);
     if (handleAgentLifecycle(event)) return;
     if (handleProcessOrAsset(event)) return;
+    if (handleCompactEvent(event)) return;
     if (handleProviderEvent(event)) return;
     if (handleToolEvent(event)) return;
     handleInteractionEvent(event);
+  }
+
+  function handleCompactEvent(event: AgentLoopEvent): boolean {
+    switch (event.type) {
+      case "compact_check":
+        // Surface only the states a user can act on; below/soft/hard are
+        // internal evaluations and stay out of the status line.
+        if (event.result === "degraded") {
+          options.setStatus("context usage unavailable; auto-compact idle");
+          recordActivity({ kind: "system", text: "auto-compact degraded: no provider usage or estimate" });
+        }
+        return true;
+      case "compact_started":
+        options.setStatus(`compacting context · ${event.phase}`);
+        recordActivity({ kind: "provider", text: `auto-compacting (${event.phase}, ${event.reason})` });
+        return true;
+      case "compact_completed":
+        options.setStatus(`compacted ${event.evictedUnits} units · ${event.phase}`);
+        recordActivity({ kind: "system", text: `auto-compacted ${event.evictedUnits} units, retained ${event.retainedUnits} (${event.phase})` });
+        return true;
+      case "compact_failed":
+        options.setStatus(`auto-compact failed · ${event.phase}`);
+        recordActivity({ kind: "system", text: `auto-compact failed (${event.phase}): ${event.errorMessage}` });
+        return true;
+      case "compact_cancelled":
+        options.setStatus(`auto-compact cancelled · ${event.phase}`);
+        recordActivity({ kind: "system", text: `auto-compact cancelled (${event.phase})` });
+        return true;
+      case "compact_deferred":
+        recordActivity({ kind: "system", text: `compaction deferred: ${event.reason}` });
+        return true;
+      default:
+        return false;
+    }
   }
 
   function projectAgentCard(event: AgentLoopEvent): void {
@@ -125,6 +161,16 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
         formingToolName = undefined;
         options.setStatus("sending request");
         recordActivity({ kind: "provider", text: `provider request #${event.iteration + 1}` });
+        return true;
+      case "provider_retry":
+        // The quality judge runs inside a main turn that already owns the
+        // status line; surface its retries in the activity log only.
+        if (event.scope === "quality-judge") {
+          recordActivity({ kind: "provider", text: providerRetryActivityLabel("quality review retry", event) });
+          return true;
+        }
+        options.setStatus(`retrying · ${providerRetryLabel(event)}`);
+        recordActivity({ kind: "provider", text: providerRetryActivityLabel("provider retry", event) });
         return true;
       case "assistant_delta":
         options.setStreamingAssistant((previous) => `${previous}${event.delta}`);

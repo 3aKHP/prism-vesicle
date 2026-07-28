@@ -9,15 +9,21 @@ import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
 import { getProcessManager, type ProcessManager } from "../process/manager";
 import type { SessionStore } from "../session/store";
+import { bindExecutionRound, clearExecutionRound, loadSessionSnapshot, newProviderRoundId, withExecutionRound } from "../session/store";
+import { AutoCompactBlockedError, runAutomaticCompaction } from "../compact/auto-compact";
+import { estimateRequestTokens } from "../compact/context-budget";
+import { toVesicleMessage } from "../compact/summary-generator";
 import type { ToolDefinition } from "../tools";
 import { createTurnAgentManager } from "./agent-manager";
 import { recordAssistantToolCalls } from "./assistant-recorder";
 import { resolveInteractionPause } from "./interaction-pause";
-import { completeProviderRound, emitAssistantResponse } from "./provider-round";
+import { completeProviderRound, emitAssistantResponse, materializeBackgroundProcessNotifications } from "./provider-round";
 import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
 import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
+import { composeSkillCatalogBlock, readFrozenSessionSkillCatalog, resolveEngineEligibleCatalog } from "../skills";
+import type { ResolvedSkillCatalog } from "../skills";
 import type { AgentLoopEvent, PendingUserInput, RunPromptResult } from "./types";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
@@ -65,7 +71,23 @@ export type RunLoopArgs = {
   mcpRegistry: McpRegistry;
   messages: VesicleMessage[];
   session: SessionStore;
+  /**
+   * Stable id for the whole top-level Agent Loop. Present for any turn the
+   * bootstrap started (fresh turn) or a continuation recovered from persisted
+   * records (resumed pause). Absent only for a legacy session whose records
+   * pre-date identity stamping; in that case the loop appends without stamping.
+   */
+  logicalTurnId?: string;
+  /**
+   * First provider round for iteration 0 (a fresh turn — the bootstrap
+   * allocated it with the user input). Absent for continuations, which advance
+   * to a fresh round before their first request because the resolution just
+   * completed the previous round.
+   */
+  providerRoundId?: string;
   profile: EngineProfile;
+  /** Engine-eligible session Skill catalog for the Skill tool executors. */
+  skillCatalog?: ResolvedSkillCatalog;
   generation?: VesicleRequest["generation"];
   checkpoint?: FileCheckpointManager;
   signal?: AbortSignal;
@@ -90,6 +112,12 @@ type LoopRuntime = {
   checkpoint?: FileCheckpointManager;
   checkpointMutationTail: Promise<void>;
   quality: QualityRoundState;
+  logicalTurnId: string | undefined;
+  providerRoundId: string | undefined;
+  /** Most recent provider-observed context occupancy, for mid-turn budget checks. Cleared after a compact (stale). */
+  lastContextInputTokens: number | undefined;
+  lastRequestObservation: { contextInputTokens: number; estimatedRequestTokens: number } | undefined;
+  lastRequestEstimateTokens: number | undefined;
 };
 
 export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -98,6 +126,12 @@ export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
   } catch (error) {
     clearFrozenInstructionBlocks(args.session.sessionId);
     throw error;
+  } finally {
+    // The active provider round is process-local. Clear it on every exit
+    // (completion, pause, or error): a continuation re-binds the recovered
+    // round before appending, and a non-loop append (e.g. /compact) must never
+    // inherit a stale round.
+    clearExecutionRound(args.session.sessionId);
   }
 }
 
@@ -112,7 +146,15 @@ function refreshLiveSystemPrompt(args: RunLoopArgs): void {
   if (args.profile.id === "stage") return;
   const blocks = readFrozenInstructionBlocks(args.session.sessionId);
   if (blocks === undefined) return;
-  args.systemPrompt = blocks.length > 0 ? `${args.enginePrompt}\n\n${blocks}` : args.enginePrompt;
+  let prompt = blocks.length > 0 ? `${args.enginePrompt}\n\n${blocks}` : args.enginePrompt;
+  // The recompose above rebuilds from the engine prompt, so the frozen Skill
+  // catalog block (appended by bootstrap) must be re-appended to stay stable.
+  const frozenCatalog = readFrozenSessionSkillCatalog(args.session.sessionId);
+  const catalogBlock = frozenCatalog
+    ? composeSkillCatalogBlock(resolveEngineEligibleCatalog(frozenCatalog, args.profile).catalog)
+    : "";
+  if (catalogBlock) prompt = `${prompt}\n\n${catalogBlock}`;
+  args.systemPrompt = prompt;
 }
 
 async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -120,7 +162,15 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
   let response: VesicleResponse | undefined;
   let consecutiveFailures = 0;
 
-  if (args.injectPendingBeforeFirstProvider) await processInputBoundary(args, runtime);
+  // A fresh turn reuses the provider round the bootstrap allocated with the
+  // user input. A continuation (injectPendingBeforeFirstProvider) just appended
+  // the resolution that completed the previous round, so the first request here
+  // is a new provider round; advance before draining queued inputs so they (and
+  // the request) stamp the new round id.
+  if (args.injectPendingBeforeFirstProvider) {
+    advanceProviderRound(args, runtime);
+    await processInputBoundary(args, runtime);
+  }
 
   // Recompose from the frozen instruction snapshot before the first round. This
   // matters for a MANUAL/INERTIA resume: the approved update_instructions ran
@@ -130,16 +180,42 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
 
   for (let iteration = 0; iteration < maxToolIterations; iteration++) {
     const round = await advanceRound(args, runtime, iteration);
+    if (round.blocked) {
+      if (!response) throw round.error;
+      break;
+    }
     response = round.response;
     if (round.pause) return round.pause;
     if (!round.hadToolCalls) break;
+    // The latest provider-observed context occupancy feeds the mid-turn budget
+    // checks (the host estimate covers growth since this observation).
+    const observed = response.usage?.contextInputTokens;
+    if (typeof observed === "number" && observed > 0) {
+      runtime.lastContextInputTokens = observed;
+      if (runtime.lastRequestEstimateTokens !== undefined) {
+        runtime.lastRequestObservation = {
+          contextInputTokens: observed,
+          estimatedRequestTokens: runtime.lastRequestEstimateTokens,
+        };
+      }
+    }
+    // Mid-turn soft check: after a complete assistant/tool batch (any pause has
+    // been resolved by advanceRound returning, not pausing), before queued
+    // steering is drained for the next round. At most one compact per boundary.
+    const soft = args.profile.id !== "stage" && args.config.limits?.autoCompact
+      ? await runMidTurnCompaction(args, runtime, false)
+      : { compacted: false, blocked: false };
+    if (soft.blocked) break;
     // A tool round may have refreshed the in-turn frozen instruction snapshot
     // (update_instructions). Recompose the live system prompt so the next
     // provider round observes the new instructions. Stage has no instruction
     // tools and must keep its frozen character-context suffix, so it is skipped.
     refreshLiveSystemPrompt(args);
+    // The next provider request is a new provider/tool round; advance before
+    // queued steering/background input is materialized so those injected inputs
+    // carry the next round id, then drain them.
+    advanceProviderRound(args, runtime);
     await processInputBoundary(args, runtime);
-
     consecutiveFailures = round.anyFailed ? consecutiveFailures + 1 : 0;
     if (consecutiveFailures >= maxConsecutiveFailedTools) {
       await recordNoProgressBreak(args.session, consecutiveFailures);
@@ -160,6 +236,7 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     model: args.config.model,
     onEvent: args.onEvent,
     quality: runtime.quality.lastResult,
+    requestEstimateTokens: runtime.lastRequestEstimateTokens,
   });
 }
 
@@ -167,7 +244,13 @@ async function advanceRound(
   args: RunLoopArgs,
   runtime: LoopRuntime,
   iteration: number,
-): Promise<{ response: VesicleResponse; pause?: RunPromptResult; hadToolCalls: boolean; anyFailed: boolean }> {
+): Promise<
+  | { response: VesicleResponse; pause?: RunPromptResult; hadToolCalls: boolean; anyFailed: boolean; blocked?: false }
+  | { blocked: true; error: AutoCompactBlockedError }
+> {
+  const boundary = await prepareExactProviderBoundary(args, runtime);
+  if (boundary.blocked) return { blocked: true, error: boundary.error! };
+  runtime.lastRequestEstimateTokens = estimateRequestTokens(args.messages, args.systemPrompt, args.tools);
   const response = await completeProviderRound({
     rootDir: args.rootDir,
     provider: args.provider,
@@ -187,6 +270,7 @@ async function advanceRound(
     signal: args.signal,
     onEvent: args.onEvent,
     onProviderContextSnapshot: args.onProviderContextSnapshot,
+    backgroundAlreadyMaterialized: true,
   });
   const toolCalls = response.toolCalls ?? [];
   if (toolCalls.length === 0) runtime.quality.proseParts.push(...qualityCandidateParts(response));
@@ -220,6 +304,9 @@ async function advanceRound(
     session: args.session,
     profile: args.profile,
     model: args.config.model,
+    metadata: runtime.lastRequestEstimateTokens !== undefined
+      ? { requestEstimateTokens: runtime.lastRequestEstimateTokens }
+      : undefined,
   });
   const plan = planToolRound(toolCalls, args.tools, runtime.permission);
   await recordPendingQualityCheck(
@@ -238,6 +325,7 @@ async function advanceRound(
     parentMessagesBeforeToolCall,
     session: args.session,
     profile: args.profile,
+    skillCatalog: args.skillCatalog,
     generation: args.generation,
     signal: args.signal,
     onEvent: args.onEvent,
@@ -363,7 +451,27 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
     checkpoint: args.checkpoint,
     checkpointMutationTail: Promise.resolve(),
     quality: createQualityRoundState(args.qualityState),
+    logicalTurnId: args.logicalTurnId,
+    providerRoundId: args.providerRoundId,
+    lastContextInputTokens: undefined,
+    lastRequestObservation: undefined,
+    lastRequestEstimateTokens: undefined,
   };
+}
+
+/**
+ * Allocate the next provider/tool round id and bind it as the active round so
+ * recorders and injected-input appends stamp it. The logical turn id is stable
+ * for the whole turn; only the provider round id advances. A legacy turn with
+ * no logical turn id is left unstamped so its records stay legacy.
+ */
+function advanceProviderRound(args: RunLoopArgs, runtime: LoopRuntime): void {
+  if (!runtime.logicalTurnId) return;
+  runtime.providerRoundId = newProviderRoundId();
+  bindExecutionRound(args.session.sessionId, {
+    logicalTurnId: runtime.logicalTurnId,
+    providerRoundId: runtime.providerRoundId,
+  });
 }
 
 function trackCheckpointMutation(runtime: LoopRuntime, paths: string[]): Promise<void> {
@@ -381,7 +489,7 @@ async function injectPendingUserInputs(args: RunLoopArgs, runtime: LoopRuntime):
     const record = await args.session.append({
       role: "user",
       content,
-      metadata: {
+      metadata: withExecutionRound(args.session.sessionId, {
         kind: "queued-user-message",
         engine: args.profile.id,
         provider: args.config.provider,
@@ -389,7 +497,7 @@ async function injectPendingUserInputs(args: RunLoopArgs, runtime: LoopRuntime):
         model: args.config.model,
         ...generationMetadata(args.generation),
         ...(input.images?.length ? { images: persistedImageAttachments(input.images) } : {}),
-      },
+      }),
     });
     const checkpoint = new FileCheckpointManager(args.rootDir, args.session, record.uuid);
     await checkpoint.createSnapshot();
@@ -403,10 +511,105 @@ async function processInputBoundary(args: RunLoopArgs, runtime: LoopRuntime): Pr
   await injectPendingUserInputs(args, runtime);
 }
 
+/** Materialize every request-bound input, then enforce the mandatory hard ceiling. */
+async function prepareExactProviderBoundary(
+  args: RunLoopArgs,
+  runtime: LoopRuntime,
+): Promise<{ compacted: boolean; blocked: boolean; error?: AutoCompactBlockedError }> {
+  await materializeBackgroundProcessNotifications({
+    messages: args.messages,
+    processManager: runtime.processManager,
+    session: args.session,
+  });
+  if (args.profile.id === "stage" || !args.config.limits?.autoCompact) {
+    return { compacted: false, blocked: false };
+  }
+  return runMidTurnCompaction(args, runtime, true);
+}
+
 async function recordNoProgressBreak(session: SessionStore, consecutiveFailures: number): Promise<void> {
   await session.append({
     role: "system",
     content: `Tool loop stopped after ${consecutiveFailures} consecutive rounds of failing tool results.`,
-    metadata: { kind: "no-progress-breaker" },
+    metadata: withExecutionRound(session.sessionId, { kind: "no-progress-breaker" }),
   });
+}
+
+/**
+ * One mid-turn automatic-compaction check. The soft check (onlyHardCeiling
+ * false) runs after a complete tool batch; the hard check (onlyHardCeiling true)
+ * runs after queued/background input has been drained, right before the next
+ * provider request. On a compact the active in-memory message array is rebound
+ * to the post-checkpoint history (replacement + retained frontier), and the
+ * stale provider occupancy is cleared so the next check re-estimates. On a
+ * hard-ceiling failure the loop is blocked: a system notice is appended and the
+ * caller breaks before the unsafe request. The compact provider call is a
+ * standalone request (never a bootstrap/loop turn) so it cannot re-enter this
+ * check; the outer loop signal cancels it.
+ */
+async function runMidTurnCompaction(
+  args: RunLoopArgs,
+  runtime: LoopRuntime,
+  onlyHardCeiling: boolean,
+): Promise<{ compacted: boolean; blocked: boolean; error?: AutoCompactBlockedError }> {
+  const estimatedNextRequestTokens = estimateRequestTokens(args.messages, args.systemPrompt, args.tools);
+  const result = await runAutomaticCompaction({
+    rootDir: args.rootDir,
+    sessionId: args.session.sessionId,
+    engine: args.profile.id,
+    providerSelection: { provider: args.config.providerId, model: args.config.model },
+    generation: args.generation,
+    signal: args.signal,
+    onEvent: args.onEvent,
+    phase: "mid-turn",
+    onlyHardCeiling,
+    estimateReplacementTokens: (replacement) => estimateRequestTokens(
+      replacement.map(toVesicleMessage),
+      args.systemPrompt,
+      args.tools,
+    ),
+    budget: {
+      config: args.config.limits?.autoCompact,
+      limits: args.config.limits,
+      generation: args.config.generation,
+      turnMaxTokens: args.generation?.maxTokens,
+      lastContextInputTokens: runtime.lastContextInputTokens,
+      lastRequestObservation: runtime.lastRequestObservation,
+      estimatedNextRequestTokens,
+    },
+  });
+  if (result.kind === "cancelled") throw result.error;
+  if (result.kind === "compacted") {
+    runtime.lastContextInputTokens = undefined;
+    runtime.lastRequestObservation = undefined;
+    const snapshot = await loadSessionSnapshot(args.rootDir, args.session.sessionId, { synthesizeDanglingToolResults: false });
+    const rebuilt = snapshot.messages.map(toVesicleMessage);
+    args.messages.length = 0;
+    args.messages.push(...rebuilt);
+    return { compacted: true, blocked: false };
+  }
+  if (result.kind === "hard-failed") {
+    await args.session.append({
+      role: "system",
+      content: `Context budget exceeded and automatic compaction failed: ${result.errorMessage} Run /compact manually or switch to a model with a larger context window.`,
+      metadata: { kind: "compact-blocked" },
+    });
+    return {
+      compacted: false,
+      blocked: true,
+      error: new AutoCompactBlockedError(
+        result.errorMessage,
+        result.check.kind === "hard-ceiling"
+          ? {
+            projectedTokens: result.check.projectedTokens,
+            hardInputCeilingTokens: result.check.hardInputCeilingTokens,
+            softTriggerTokens: result.check.softTriggerTokens,
+            usageSource: result.check.usageSource,
+          }
+          : undefined,
+        true,
+      ),
+    };
+  }
+  return { compacted: false, blocked: false };
 }

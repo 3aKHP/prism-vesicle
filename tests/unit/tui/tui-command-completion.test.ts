@@ -33,6 +33,7 @@ const artifacts: ArtifactEntry[] = [
 function context(overrides: Partial<CommandCompletionContext> = {}): CommandCompletionContext {
   return {
     rootDir: process.cwd(),
+    activeEngine: () => "etl",
     providerRegistry: () => registry,
     activeProvider: () => "beta",
     refreshArtifacts: async () => artifacts,
@@ -82,7 +83,7 @@ describe("command-owned argument completion", () => {
 
   test("walks the quality grammar through fixed, provider, and model stages", async () => {
     const mode = resolve("/quality ");
-    expect((await items(mode)).map((item) => item.id)).toEqual(["status", "off", "observe", "rewrite", "confirm"]);
+    expect((await items(mode)).map((item) => item.id)).toEqual(["status", "off", "observe", "rewrite"]);
     expect(mode.complete((await items(mode))[2]!)).toBe("/quality observe ");
 
     const provider = resolve("/quality observe ");
@@ -93,9 +94,9 @@ describe("command-owned argument completion", () => {
     expect((await items(model)).map((item) => item.id)).toEqual(["alpha-chat"]);
     expect(model.complete((await items(model))[0]!)).toBe("/quality observe alpha alpha-chat ");
 
-    const confirmed = resolve("/quality confirm ");
-    expect((await items(confirmed)).map((item) => item.id)).toEqual(["rewrite"]);
-    expect(confirmed.complete((await items(confirmed))[0]!)).toBe("/quality confirm rewrite ");
+    const rewriteProvider = resolve("/quality rewrite ");
+    expect((await items(rewriteProvider)).map((item) => item.id)).toEqual(["alpha", "beta"]);
+    expect(rewriteProvider.complete((await items(rewriteProvider))[0]!)).toBe("/quality rewrite alpha ");
   });
 
   test("completes artifact, validation, and resumable-session targets from refreshed stores", async () => {
@@ -119,6 +120,19 @@ describe("command-owned argument completion", () => {
     const summary = resolve("/engine runtime ");
     expect((await items(summary)).map((item) => item.id)).toEqual(["--summary"]);
     expect(summary.complete((await items(summary))[0]!)).toBe("/engine runtime --summary ");
+  });
+
+  test("completes /theme preferences, --persist, and --unset-project", async () => {
+    const first = resolve("/theme ");
+    expect((await items(first)).map((item) => item.id)).toEqual(["dark", "light", "default", "auto", "--unset-project"]);
+    expect(first.complete((await items(first))[1]!)).toBe("/theme light ");
+
+    const persist = resolve("/theme light ");
+    expect((await items(persist)).map((item) => item.id)).toEqual(["--persist"]);
+    expect(persist.complete((await items(persist))[0]!)).toBe("/theme light --persist");
+
+    // After --unset-project nothing else is offered (it takes no arguments).
+    expect(resolveCommandArgumentCompletion("/theme --unset-project ", builtinCommands, context())).toBeNull();
   });
 });
 

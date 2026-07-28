@@ -162,6 +162,20 @@ async function assertInstalledCli(executable: string, cwd: string, configDirecto
   }
   await runInherited([executable, "prompt", "shape", "--engine", "etl"], cwd, configDirectory);
   await runInherited([executable, "debug", "markdown-runtime"], cwd, configDirectory);
+  const skillsList = await runCaptured([executable, "skills", "list"], cwd, configDirectory);
+  if (skillsList.exitCode !== 0 || !skillsList.output.includes("vesicle-docs")) {
+    throw new Error(`skills list did not discover vesicle-docs:\n${skillsList.output.slice(-2000)}`);
+  }
+  if (!skillsList.output.includes("[host]")) {
+    throw new Error(`skills list did not show host scope:\n${skillsList.output.slice(-2000)}`);
+  }
+  const skillsInspect = await runCaptured([executable, "skills", "inspect", "vesicle-docs"], cwd, configDirectory);
+  if (skillsInspect.exitCode !== 0 || !skillsInspect.output.includes("Name: vesicle-docs")) {
+    throw new Error(`skills inspect vesicle-docs failed:\n${skillsInspect.output.slice(-2000)}`);
+  }
+  if (!skillsInspect.output.includes("Scope: host")) {
+    throw new Error(`skills inspect did not report host scope:\n${skillsInspect.output.slice(-2000)}`);
+  }
   if (process.platform === "win32") {
     const bootstrap = await runCaptured([executable, "debug", "tui-bootstrap"], cwd, configDirectory, 10_000);
     if (bootstrap.exitCode !== 0) {
@@ -240,7 +254,7 @@ function debugStartupCwd(debugLog: string): string | undefined {
       const detail = JSON.parse(line.slice(markerIndex + marker.length)) as { cwd?: unknown };
       if (typeof detail.cwd === "string") return detail.cwd;
     } catch {
-      return undefined;
+      continue;
     }
   }
   return undefined;

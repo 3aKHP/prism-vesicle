@@ -73,6 +73,7 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
     }, {
       providerId: this.config.providerId,
       signal: request.signal,
+      onRetry: request.onRetry,
     });
   }
 

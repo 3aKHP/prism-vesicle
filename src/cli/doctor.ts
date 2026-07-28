@@ -2,6 +2,8 @@ import { inspectProviderConfig, loadConfigForSelection, loadUserConfigEnvironmen
 import { loadExperimentalQualitySettings } from "../config/quality";
 import { inspectMcpConfig } from "../mcp/registry";
 import { inspectAssets } from "./assets";
+import { inspectSkills } from "./skills";
+import { readActiveIndex } from "../skills";
 import { loadPermissionSettings } from "../config/permissions";
 import { resolveShellProfile } from "../core/process/shell-profile";
 
@@ -23,6 +25,22 @@ export async function runDoctor(): Promise<void> {
     }
   } catch (error) {
     qualityStatus = `experimental configuration invalid: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  let skillsStatus: string;
+  try {
+    const skills = await inspectSkills();
+    const shadowed = skills.result.diagnostics.filter((diagnostic) => diagnostic.kind === "shadowed").length;
+    const base = `${skills.result.skills.length} valid, ${skills.result.invalid.length} invalid, ${shadowed} shadowed`;
+    let installed: string;
+    try {
+      installed = `${(await readActiveIndex()).entries.length} installed`;
+    } catch {
+      // A corrupted store index must not mask the harness/user scope counts.
+      installed = "installed count unavailable";
+    }
+    skillsStatus = `${base}, ${installed}`;
+  } catch (error) {
+    skillsStatus = `unavailable: ${error instanceof Error ? error.message : String(error)}`;
   }
   const bunVersion = Bun.version;
 
@@ -51,6 +69,7 @@ export async function runDoctor(): Promise<void> {
   console.log(assets.harness
     ? `Harness: ${assets.harness.selection} ${assets.harness.identity.packId}@${assets.harness.identity.packVersion}`
     : `Assets manifest: ${assets.manifest ? `${assets.manifest.source} (${assets.manifest.path})` : "missing"}`);
+  console.log(`Skills: ${skillsStatus} (host, harness, user, project, installed)`);
   if (mcp.statuses.length > 0) {
     for (const status of mcp.statuses) {
       const state = status.connected ? `connected, ${status.toolCount} tools` : status.enabled ? "error" : "disabled";

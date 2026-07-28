@@ -63,7 +63,7 @@ try {
     )
 
     $Executable = Join-Path $InstallDir "vesicle.exe"
-    foreach ($required in @($Executable, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "unins000.exe"))) {
+    foreach ($required in @($Executable, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\SKILL.md"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\references\index.md"), (Join-Path $InstallDir "unins000.exe"))) {
         if (-not (Test-Path -LiteralPath $required)) { throw "Installed payload is missing: $required" }
     }
     if (-not (Test-UserPathEntry $InstallDir)) { throw "The per-user PATH does not contain the install directory." }

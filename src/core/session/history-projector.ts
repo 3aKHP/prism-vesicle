@@ -6,9 +6,12 @@ import type { HarnessRuntimeIdentity } from "../harness/driver";
 import { reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
+import type { SkillToolEvent } from "../skills/types";
+import { parseSkillCatalogSnapshot, type SkillCatalogSnapshot } from "../skills/catalog-snapshot";
 import type { PermissionMode } from "../permissions";
 import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
+import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
 
 export type HistoryProjection = {
   messages: ResumedMessage[];
@@ -19,7 +22,48 @@ export type HistoryProjection = {
   permissionMode?: PermissionMode;
   assets?: AssetFingerprint;
   harness?: HarnessRuntimeIdentity;
+  /** Latest persisted frozen Skill catalog snapshot (session header or `skill-catalog` record). */
+  skillCatalogSnapshot?: SkillCatalogSnapshot;
 };
+
+/**
+ * Host-only marker appended after a user turn whose provider round never reached
+ * a successful assistant reply. `projectSessionHistory` reads it as the cue to
+ * drop the failed turn's input from provider-visible history so a resumed or
+ * resent turn cannot send consecutive same-role user messages (Anthropic
+ * Messages requires strict user/assistant alternation). The failed user record
+ * stays in `records` for the UI transcript and `/rewind`.
+ */
+export const FAILED_TURN_KIND = "failed-turn";
+
+/**
+ * User-role record kinds that act as a completed-operation boundary: a failed
+ * turn's input is dropped only down to one of these. A `/compact` summary is the
+ * sole such boundary — it is the terminal output of a finished compaction, never
+ * the input to a round that can fail. Every other user-role record (a prompt, a
+ * queued message, background-process results, a SubAgent delivery, an engine
+ * handoff, a gate/user-question resolution, or a quality-rewrite feedback) is
+ * the failed round's own input and must be dropped, otherwise resume/resend
+ * emits consecutive same-role user messages. (SubAgent results are re-delivered
+ * via the paused delivery; background-process results are re-drained.)
+ */
+const failedTurnBoundaryKinds = new Set(["compact-summary"]);
+
+/**
+ * Remove the trailing user messages that belong to a failed turn. A failed turn
+ * appends no assistant reply, so its input is a run of trailing user records
+ * (the prompt plus any host-injected user context such as background-process
+ * results or a quality-rewrite feedback). A completed-operation boundary
+ * (`compact-summary`) is preserved.
+ */
+function dropFailedTurnInput(messages: ResumedMessage[]): void {
+  while (messages.length > 0) {
+    const last = messages[messages.length - 1]!;
+    if (last.role !== "user") break;
+    if (last.kind && failedTurnBoundaryKinds.has(last.kind)) break;
+    messages.pop();
+  }
+}
 
 /** Projects durable records into provider history plus host-only session preferences. */
 export function projectSessionHistory(records: SessionRecord[]): HistoryProjection {
@@ -32,12 +76,17 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
   let permissionMode: PermissionMode | undefined;
   let assets: AssetFingerprint | undefined;
   let harness: HarnessRuntimeIdentity | undefined;
+  let skillCatalogSnapshot: SkillCatalogSnapshot | undefined;
 
   for (const record of records) {
     if (record.metadata && Object.hasOwn(record.metadata, "engine")) {
       const nextEngine = readEngineId(record.metadata.engine);
       if (nextEngine) engine = nextEngine;
     }
+    // The session header and any later `skill-catalog` system record carry the
+    // frozen catalog snapshot under the same `skills` key; latest wins.
+    const skills = parseSkillCatalogSnapshot(record.metadata?.skills);
+    if (skills) skillCatalogSnapshot = skills;
     const providerId = record.metadata?.providerId;
     const model = record.metadata?.model;
     if (typeof providerId === "string" && typeof model === "string") providerSelection = { provider: providerId, model };
@@ -50,6 +99,21 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         assets = parseAssetFingerprint(record.metadata?.assets);
         harness = readHarnessRuntimeIdentity(record.metadata?.harness);
         skippedFirstSystem = true;
+      }
+      if (record.metadata?.kind === FAILED_TURN_KIND) {
+        dropFailedTurnInput(messages);
+        continue;
+      }
+      if (record.metadata?.kind === COMPACT_CHECKPOINT_KIND) {
+        // A valid portable checkpoint is the durable authority for the
+        // provider-visible replacement history. Reset `messages` to its exact
+        // replacement, then keep replaying the suffix recorded after it. An
+        // unknown future version or a malformed payload throws an actionable
+        // session error rather than partially projecting or silently ignoring.
+        const checkpoint = parseCompactCheckpoint(record.metadata.checkpoint);
+        messages.length = 0;
+        messages.push(...checkpoint.replacementMessages.map((message) => ({ ...message })));
+        continue;
       }
       continue;
     }
@@ -80,12 +144,13 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
     const toolWebEvent = record.metadata?.webEvent as WebToolEvent | undefined;
     const toolMcpEvent = record.metadata?.mcpEvent as McpToolEvent | undefined;
     const toolProcessEvent = record.metadata?.processEvent as ProcessToolEvent | undefined;
+    const toolSkillEvent = record.metadata?.skillEvent as SkillToolEvent | undefined;
     const images = parseImageAttachments(record.metadata?.images);
     const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
     const usage = readResponseUsage(record.metadata?.usage);
-    messages.push({ role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
+    messages.push({ role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(toolSkillEvent ? { toolSkillEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
   }
-  return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}) };
+  return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}), ...(skillCatalogSnapshot ? { skillCatalogSnapshot } : {}) };
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode { return value === "MANUAL" || value === "INERTIA" || value === "MOMENTUM" || value === "YOLO"; }

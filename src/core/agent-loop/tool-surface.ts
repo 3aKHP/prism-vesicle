@@ -5,11 +5,18 @@ import { engineSwitchToolDefinition } from "../engine/switch";
 import { gateToolDefinition } from "../gate/types";
 import { createShellExecToolDefinition, hostToolDefinitions } from "../tools";
 import type { ToolDefinition } from "../tools";
+import { createActivateSkillToolDefinition } from "../skills/tools";
 import { resolveShellProfile, type ShellInterpreterPreference } from "../process/shell-profile";
 import { askUserQuestionToolDefinition } from "../user-question/types";
 import { instructionToolDefinitions } from "../instructions";
 
 const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
+
+/** Optional Skill catalog input for tool-surface gating (wired by the session layer). */
+export type SkillSurfaceOptions = {
+  /** Names in the session's effective Skill catalog; empty means Skill tools stay off. */
+  catalogNames: string[];
+};
 
 export type ToolSurface = {
   definitions: ToolDefinition[];
@@ -22,12 +29,13 @@ export async function resolveToolSurface(
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
   mcpOptions: McpRegistryOptions = {},
+  skills?: SkillSurfaceOptions,
 ): Promise<ToolSurface> {
   const mcp = profile.id === "stage"
     ? createEmptyMcpRegistry()
     : await createMcpRegistryForEngine(profile.id, mcpOptions);
   const shellProfile = shellExecEnabled ? resolveShellProfile(shellInterpreter) : undefined;
-  const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled, shellInterpreter);
+  const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled, shellInterpreter, skills);
   const shellTools = shellExecEnabled
     ? hostToolDefinitions
       .filter((tool) => tool.function.name === "shell_exec" || tool.function.name === "shell_output" || tool.function.name === "shell_stop")
@@ -52,6 +60,7 @@ export function resolveBuiltInTools(
   visionEnabled: boolean,
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
+  skills?: SkillSurfaceOptions,
 ): ToolDefinition[] {
   // Stage bootstrap supplies all context itself. Its published profile is
   // empty, and this explicit guard keeps that player-facing boundary intact
@@ -59,10 +68,14 @@ export function resolveBuiltInTools(
   if (profile.id === "stage") return [];
 
   const shellProfile = shellExecEnabled ? resolveShellProfile(shellInterpreter) : undefined;
+  const skillNames = skills?.catalogNames ?? [];
   const byName = new Map(hostToolDefinitions.map((definition) => [
     definition.function.name,
     definition.function.name === "shell_exec" ? createShellExecToolDefinition(shellProfile) : definition,
   ]));
+  // activate_skill's schema enum is the session's effective catalog, so the
+  // definition is built per resolution rather than held in the static pool.
+  byName.set("activate_skill", createActivateSkillToolDefinition(skillNames));
   const resolved: ToolDefinition[] = [];
 
   for (const name of profile.defaultTools) {
@@ -70,6 +83,10 @@ export function resolveBuiltInTools(
     if (name === "view_image" && !visionEnabled) continue;
     if (name === "shell_exec" && (!shellExecEnabled || !shellProfile)) continue;
     if ((name === "shell_output" || name === "shell_stop") && !shellExecEnabled) continue;
+    // Skill tools require both the Engine's opt-in and a non-empty session
+    // catalog; run_skill_script additionally requires process capability.
+    if ((name === "activate_skill" || name === "read_skill_resource") && skillNames.length === 0) continue;
+    if (name === "run_skill_script" && (skillNames.length === 0 || !shellExecEnabled || !shellProfile)) continue;
     const definition = byName.get(name);
     if (!definition) {
       throw new Error(

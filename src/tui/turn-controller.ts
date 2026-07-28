@@ -1,7 +1,8 @@
 import { runPrompt } from "../core/agent-loop/run";
+import { AutoCompactBlockedError } from "../core/compact/auto-compact";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
-import { loadSessionSnapshot } from "../core/session/store";
+import { createSessionStore, loadSessionSnapshot, FAILED_TURN_KIND } from "../core/session/store";
 import { listRewindPoints, rewindConversation } from "../core/rewind/service";
 import type { VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerElement } from "./composer";
@@ -10,6 +11,7 @@ import { setAgentDeliveryState } from "./agent-view";
 import { combineIndependentUsage } from "./telemetry";
 import { createTurnResultController } from "./turn-result-controller";
 import { createDecisionContinuations } from "./decision-continuations";
+import { ProviderError, cleanProviderMessage, providerFailureCategoryLabel, summarizeProviderFailure } from "../providers/shared/errors";
 
 export type { TurnControllerOptions } from "./turn-controller-options";
 import type { TurnControllerOptions } from "./turn-controller-options";
@@ -131,7 +133,36 @@ export function createTurnController(options: TurnControllerOptions) {
         handleResult(outcome.value);
       }
     } catch (error) {
-      if (!activeTurnSawResponse) await restoreInterruptedPrompt(originalValue, images, elements).catch(() => undefined);
+      // A hard-ceiling auto-compaction block is raised before the new user
+      // record is persisted, so the session is not mutated. Restore the draft so
+      // the user can retry, manually compact, or switch model, and drop the
+      // trailing UI user message that was optimistically added before the send
+      // (it was never persisted, so it must not linger as a ghost turn).
+      if (error instanceof AutoCompactBlockedError) {
+        if (!error.inputPersisted) {
+          options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
+          if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
+          options.setMessages((previous) => (previous.length > 0 && previous[previous.length - 1]!.role === "user" ? previous.slice(0, -1) : previous));
+        }
+        reportError(error);
+        return;
+      }
+      // A retryable provider failure leaves the user message in the transcript
+      // (issue #98) but restores the composer draft + images so the "resend"
+      // hint is actionable. Terminal failures keep the message in place; the
+      // user starts the next turn fresh.
+      if (error instanceof ProviderError && summarizeProviderFailure(error).retryable) {
+        options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
+        if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
+      }
+      // Mark the failed turn so a resume or resend never re-sends the dangling
+      // user prompt as a consecutive same-role message (#102). Best-effort: a
+      // marking failure must not mask the original error. Read the session id
+      // fresh: a new session is only assigned during runPrompt (onSessionReady),
+      // so the `id` captured at the top of this function is still undefined for
+      // a first-turn failure on a new session.
+      const currentSessionId = options.sessionId();
+      if (currentSessionId) await markFailedUserTurn(currentSessionId);
       reportError(error);
     } finally {
       options.setBusy(false);
@@ -203,14 +234,35 @@ export function createTurnController(options: TurnControllerOptions) {
   }
 
   function reportError(error: unknown): void {
-    const message = error instanceof Error ? error.message : String(error);
-    options.setStatus("error");
-    options.setOutput(message);
     options.setStreamingAssistant("");
     options.setStreamingReasoning("");
     options.queuedWork.block();
-    options.recordActivity({ kind: "system", text: `error: ${message}` });
-    options.setMessages((previous) => [...previous, { role: "assistant", content: `Error: ${message}` }]);
+    if (!(error instanceof ProviderError)) {
+      const message = cleanProviderMessage(error instanceof Error ? error.message : String(error));
+      options.setStatus("error");
+      options.recordActivity({ kind: "system", text: `error: ${message}` });
+      options.setMessages((previous) => [...previous, { role: "system", kind: "host-error", content: message }]);
+      return;
+    }
+    const failure = summarizeProviderFailure(error);
+    const title = providerFailureCategoryLabel(failure.category).title;
+    const statusParts = ["error"];
+    if (failure.providerId) statusParts.push(failure.providerId);
+    if (failure.status !== undefined) statusParts.push(String(failure.status));
+    statusParts.push(title);
+    options.setStatus(statusParts.join(" · "));
+    options.recordActivity({ kind: "system", text: `error: ${title}: ${failure.message}` });
+    options.setMessages((previous) => [...previous, {
+      role: "system",
+      kind: "provider-failure",
+      content: failure.message,
+      failure: {
+        category: failure.category,
+        ...(failure.status !== undefined ? { status: failure.status } : {}),
+        ...(failure.providerId ? { providerId: failure.providerId } : {}),
+        retryable: failure.retryable,
+      },
+    }]);
   }
 
   function handleInterruptedTurn(): void {
@@ -219,6 +271,26 @@ export function createTurnController(options: TurnControllerOptions) {
     options.setStreamingReasoning("");
     options.setLastDisplayedToolAssistantContent(null);
     options.recordActivity({ kind: "system", text: "request interrupted" });
+  }
+
+  /**
+   * Append a host-only `failed-turn` marker when a fresh user turn ends without
+   * an assistant reply. `projectSessionHistory` reads the marker to drop the
+   * failed prompt from provider-visible history, so resuming or resending does
+   * not produce consecutive same-role user messages. Only marks when the
+   * trailing session record is a user (the first provider round failed before
+   * any assistant/tool reply); a mid-loop failure already leaves a valid
+   * alternation tail and is left alone.
+   */
+  async function markFailedUserTurn(sessionId: string): Promise<void> {
+    try {
+      const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: false });
+      if (snapshot.records.at(-1)?.role !== "user") return;
+      const store = await createSessionStore(options.rootDir, sessionId);
+      await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
+    } catch {
+      // Best-effort: never mask the original turn error.
+    }
   }
 
   async function restoreInterruptedPrompt(

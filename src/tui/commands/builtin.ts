@@ -4,14 +4,20 @@
 // CommandContext `ctx`.
 
 import { engineIds } from "../../core/engine/profile";
+import { resolveAutoCompactActivation } from "../../core/compact/context-budget";
 import type { EngineId } from "../../core/engine/profile";
 import { createManualEngineTransition } from "../../core/engine/transition";
 import type { ProviderSelection } from "../../config/providers";
-import { loadConfigForSelection } from "../../config/providers";
 import {
+  assertJudgeCandidateHasKey,
+  defaultExperimentalQualityTimeoutMs,
+  judgeCandidateHasKey,
   loadExperimentalQualitySettings,
+  maxExperimentalQualityTimeoutMs,
+  minExperimentalQualityTimeoutMs,
   writeExperimentalQualitySettings,
 } from "../../config/quality";
+import { completeQualityTuple, qualityTupleResolves, resolveQualityCandidate } from "../quality-picker-controller";
 import type { Command } from "./types";
 import { permissionModes, type PermissionMode } from "../../core/permissions";
 import {
@@ -30,8 +36,10 @@ import {
   modelCommandCompletion,
   qualityCommandCompletion,
   resumeCommandCompletion,
+  skillCommandCompletion,
   splitTokens,
   stageCommandCompletion,
+  themeCommandCompletion,
 } from "./argument-completion";
 import {
   renderValidationNotice,
@@ -39,7 +47,7 @@ import {
 } from "./render";
 import { INSTRUCTION_COMBINED_BUDGET_BYTES, resolveEffectiveSelection } from "../../core/instructions";
 import type { EffectiveInstructionSelection } from "../../core/instructions";
-import { setThemePreference, themeMode, themePreference } from "../theme";
+import { type ThemePreference } from "../theme";
 
 const HELP_TEXT = [
   "Commands:",
@@ -53,14 +61,17 @@ const HELP_TEXT = [
   "  /agents [handle|stop <handle>|retry] list, inspect, interrupt, or retry SubAgent delivery",
   "  /effort <tier>    set thinking effort: off/low/medium/high/xhigh/max/auto",
   "  /reasoning <mode> show reasoning: hidden/collapsed/expanded (aliases: off/preview/on)",
-  "  /theme [dark|light|auto] show or set the colour theme (auto follows the terminal)",
+  "  /theme [dark|light|default|auto] show or set the colour theme (default follows the terminal; auto follows the clock)",
   "  /workspace [path] open the Workspace page, optionally locating a file or directory",
   "  /permissions [mode] show or set MANUAL/INERTIA/MOMENTUM/YOLO tool approval mode",
-  "  /quality [off|observe|rewrite] show or configure the experimental Semantic Judge",
+  "  /quality          show or configure the experimental Semantic Judge (no args = guided settings)",
   "  /artifact [n|path] open artifacts in the Workspace page (no args = latest)",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
   "  /btw <question>   ask a temporary side question without interrupting the turn",
+  "  /skill            list available skills (no args = picker)",
+  "  /skill <name> [task] activate a skill and optionally invoke it with a task",
+  "  /skill <name> --context-only activate without starting a provider request",
   "  /resume           list sessions",
   "  /resume <n|id>    resume a session",
   "  /new              start a fresh session",
@@ -100,6 +111,38 @@ export const builtinCommands: Command[] = [
   },
 
   {
+    name: "skill",
+    busyBehavior: (args) => {
+      const trimmed = args.trim();
+      if (!trimmed || trimmed.endsWith("--context-only")) return immediate;
+      return afterAgentLoop;
+    },
+    description: "List, activate, or invoke a Skill",
+    usage: "/skill [name [task|--context-only]]",
+    completion: skillCommandCompletion,
+    async run(ctx, args, raw) {
+      const trimmed = args.trim();
+      if (!trimmed) {
+        await ctx.openSkillPicker();
+        return;
+      }
+      const contextOnly = trimmed.endsWith("--context-only");
+      const withoutFlag = contextOnly ? trimmed.slice(0, -"--context-only".length).trim() : trimmed;
+      const spaceIndex = withoutFlag.indexOf(" ");
+      const name = spaceIndex === -1 ? withoutFlag : withoutFlag.slice(0, spaceIndex);
+      const taskText = spaceIndex === -1 ? undefined : withoutFlag.slice(spaceIndex + 1).trim() || undefined;
+      if (!name) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /skill [name [task|--context-only]]" }]);
+        return;
+      }
+      await ctx.activateSkill(name, {
+        mode: contextOnly ? "context-only" : "invoke",
+        ...(taskText ? { taskText } : {}),
+      });
+    },
+  },
+
+  {
     name: "help",
     busyBehavior: immediate,
     description: "Show available commands",
@@ -115,8 +158,8 @@ export const builtinCommands: Command[] = [
   {
     name: "quality",
     busyBehavior: (args) => args.trim() === "status" ? immediate : afterAgentLoop,
-    description: "Show or configure the experimental Semantic Judge",
-    usage: "/quality [off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]",
+    description: "Show or configure the experimental Semantic Judge (no args = guided settings)",
+    usage: "/quality [status|off|observe [provider model [timeout-ms]]|rewrite [provider model [timeout-ms]]]",
     completion: qualityCommandCompletion,
     async run(ctx, args, raw) {
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
@@ -130,43 +173,38 @@ export const builtinCommands: Command[] = [
         ctx.setMessages((prev) => [...prev, { role: "system", content: renderQualitySettings(settings) }]);
         return;
       }
+      // /quality confirm ... is no longer supported: Rewrite opens one modal
+      // confirmation panel. Reject it as invalid usage with no mutation.
+      if (parts[0] === "confirm") {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: `${QUALITY_USAGE}\nThe /quality confirm step was removed. Selecting Review and revise (or running /quality rewrite) opens one confirmation panel; no second command is needed.` }]);
+        return;
+      }
       if (parts[0] === "off" && parts.length === 1) {
-        await writeExperimentalQualitySettings({ mode: "off" });
-        ctx.setStatus("experimental Semantic Judge off");
-        ctx.recordActivity({ kind: "system", text: "experimental Semantic Judge disabled" });
-        ctx.setMessages((prev) => [...prev, { role: "system", content: "Experimental Semantic Judge is off. Future turns make no Judge request." }]);
+        await disableQuality(ctx);
         return;
       }
-      const confirm = parts[0] === "confirm";
-      const offset = confirm ? 1 : 0;
-      const mode = parts[offset];
-      const providerAlias = parts[offset + 1];
-      const modelId = parts[offset + 2];
-      const timeoutRaw = parts[offset + 3];
-      if ((mode !== "observe" && mode !== "rewrite") || !providerAlias || !modelId || parts.length > offset + 4) {
-        ctx.setMessages((prev) => [...prev, { role: "system", content: "Usage: /quality [status|off|observe <provider> <model> [timeout-ms]|rewrite <provider> <model> [timeout-ms]]." }]);
+      const mode = parts[0];
+      if (mode !== "observe" && mode !== "rewrite") {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: QUALITY_USAGE }]);
         return;
       }
-      const judgeTimeoutMs = timeoutRaw ? Number(timeoutRaw) : 15_000;
-      if (!Number.isInteger(judgeTimeoutMs)) {
-        ctx.setMessages((prev) => [...prev, { role: "system", content: "Judge timeout must be an integer number of milliseconds." }]);
+      if (parts.length === 2 || parts.length > 4) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: QUALITY_USAGE }]);
         return;
       }
-      try {
-        await ctx.ensureProviderRegistry();
-        const config = await loadConfigForSelection({ provider: providerAlias, model: modelId });
-        if (!config.apiKey) throw new Error(`Provider ${providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
-        if (mode === "rewrite" && !confirm) {
-          ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental rewrite will send eligible narrative prose to ${providerAlias}/${modelId} and may request up to two original-Engine revisions. Confirm with /quality confirm rewrite ${providerAlias} ${modelId} ${judgeTimeoutMs}.` }]);
-          return;
-        }
-        await writeExperimentalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs });
-        ctx.setStatus(`experimental Semantic Judge ${mode}`);
-        ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge ${mode} ${providerAlias}/${modelId}` });
-        ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge ${mode} is set to ${providerAlias}/${modelId} (${judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
-      } catch (error) {
-        ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+      if (parts.length === 1) {
+        await runBareQualityMode(ctx, mode);
+        return;
       }
+      // explicit advanced shortcut: /quality <mode> <provider> <model> [timeout-ms]
+      const providerAlias = parts[1]!;
+      const modelId = parts[2]!;
+      const judgeTimeoutMs = parts.length === 4 ? parseQualityTimeout(parts[3]!) : defaultExperimentalQualityTimeoutMs;
+      if (judgeTimeoutMs === undefined) {
+        ctx.setMessages((prev) => [...prev, { role: "system", content: `Judge timeout must be an integer from ${minExperimentalQualityTimeoutMs} to ${maxExperimentalQualityTimeoutMs} milliseconds.` }]);
+        return;
+      }
+      await runExplicitQualityMode(ctx, mode, providerAlias, modelId, judgeTimeoutMs);
     },
   },
 
@@ -419,26 +457,49 @@ export const builtinCommands: Command[] = [
     name: "theme",
     busyBehavior: immediate,
     description: "Show or set the colour theme",
-    usage: "/theme dark|light|auto",
-    completion: fixedCommandCompletion("theme"),
+    usage: "/theme [dark|light|default|auto] [--persist] [--unset-project]",
+    completion: themeCommandCompletion,
     async run(ctx, args, raw) {
-      if (!args) {
+      const parsed = parseThemeArgs(args);
+      if ("error" in parsed) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: parsed.error }]);
+        return;
+      }
+      if (parsed.kind === "status") {
         ctx.setMessages((prev) => [
           ...prev,
           { role: "user", content: raw },
-          { role: "system", content: `Theme: ${themePreference()} (resolved: ${themeMode()}). Use /theme dark|light|auto — auto follows the terminal.` },
+          { role: "system", content: ctx.theme.statusText() },
         ]);
         return;
       }
-      const mode = args.trim().toLowerCase();
-      if (mode !== "dark" && mode !== "light" && mode !== "auto") {
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Usage: /theme dark|light|auto" }]);
+      if (parsed.kind === "unset-project") {
+        try {
+          await ctx.theme.unsetProject();
+          ctx.setStatus("theme project preference unset");
+          ctx.recordActivity({ kind: "system", text: "theme project preference unset" });
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: "Removed the project theme preference and cleared the session override." }]);
+        } catch (error) {
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+        }
         return;
       }
-      setThemePreference(mode);
-      ctx.setStatus(`theme ${mode}`);
-      ctx.recordActivity({ kind: "system", text: `theme ${mode}` });
-      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${mode}${mode === "auto" ? ` (terminal reports ${themeMode()})` : ""}.` }]);
+      // override or persist
+      if (parsed.kind === "persist") {
+        try {
+          await ctx.theme.persistProject(parsed.pref);
+          ctx.setStatus(`theme ${parsed.pref} persisted`);
+          ctx.recordActivity({ kind: "system", text: `theme ${parsed.pref} persisted to project` });
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme ${parsed.pref} saved to .vesicle/preferences.yaml and applied for this session.` }]);
+        } catch (error) {
+          ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+        }
+        return;
+      }
+      ctx.theme.applyOverride(parsed.pref);
+      ctx.setStatus(`theme ${parsed.pref}`);
+      ctx.recordActivity({ kind: "system", text: `theme ${parsed.pref}` });
+      ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: `Theme set to ${parsed.pref} for this session.` }]);
     },
   },
 
@@ -537,6 +598,7 @@ export const builtinCommands: Command[] = [
     description: "Start a fresh session",
     async run(ctx, _args, raw) {
       ctx.resetRewindState();
+      ctx.theme.clearOverride();
       ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
       const resetStage = ctx.activeEngine() === "stage";
       if (resetStage) ctx.setActiveEngine("etl");
@@ -589,11 +651,123 @@ export const builtinCommands: Command[] = [
 ];
 
 function renderQualitySettings(settings: Awaited<ReturnType<typeof loadExperimentalQualitySettings>>): string {
-  if (settings.mode === "off") return "Experimental Semantic Judge: off. Future turns make no Judge request.";
+  const tuple = completeQualityTuple(settings);
+  if (settings.mode === "off") {
+    return tuple
+      ? `Experimental Semantic Judge: off (inactive). Retained profile: ${tuple.providerAlias}/${tuple.modelId} (${tuple.judgeTimeoutMs} ms). No Judge request is made while off.`
+      : "Experimental Semantic Judge: off. Future turns make no Judge request.";
+  }
   return `Experimental Semantic Judge: ${settings.mode} with ${settings.providerAlias}/${settings.modelId} (${settings.judgeTimeoutMs} ms). It is not calibrated production policy.`;
 }
 
-function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
+const QUALITY_USAGE = "Usage: /quality [status|off|observe [provider model [timeout-ms]]|rewrite [provider model [timeout-ms]]]. No arguments open guided settings.";
+
+function parseQualityTimeout(raw: string): number | undefined {
+  if (!/^[0-9]+$/.test(raw)) return undefined;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)
+    || value < minExperimentalQualityTimeoutMs
+    || value > maxExperimentalQualityTimeoutMs) {
+    return undefined;
+  }
+  return value;
+}
+
+async function disableQuality(ctx: Parameters<Command["run"]>[0]): Promise<void> {
+  const settings = await loadExperimentalQualitySettings();
+  const retained = completeQualityTuple(settings);
+  if (retained) {
+    await writeExperimentalQualitySettings({ mode: "off", providerAlias: retained.providerAlias, modelId: retained.modelId, judgeTimeoutMs: retained.judgeTimeoutMs });
+  } else {
+    await writeExperimentalQualitySettings({ mode: "off" });
+  }
+  ctx.setStatus("experimental Semantic Judge off");
+  ctx.recordActivity({ kind: "system", text: "experimental Semantic Judge disabled" });
+  ctx.setMessages((prev) => [...prev, {
+    role: "system",
+    content: retained
+      ? `Experimental Semantic Judge is off. The Judge profile ${retained.providerAlias}/${retained.modelId} is retained for later reuse; no Judge request is made while off.`
+      : "Experimental Semantic Judge is off. Future turns make no Judge request.",
+  }]);
+}
+
+/**
+ * Bare `/quality observe|rewrite` without an explicit profile. Observe enables
+ * immediately only when a retained VALID profile exists (resolves and has its
+ * key); a retained profile that lacks its key is not valid and falls through to
+ * the guided picker. Rewrite opens the red panel for a valid retained profile
+ * (or, on first use with no retained tuple, the active model); if a retained
+ * profile exists but is stale or keyless it routes to the picker so the user
+ * must Change Judge rather than silently enabling a substitute (plan rule 3).
+ */
+async function runBareQualityMode(ctx: Parameters<Command["run"]>[0], mode: "observe" | "rewrite"): Promise<void> {
+  if (mode === "rewrite") {
+    try {
+      const registry = await ctx.ensureProviderRegistry();
+      const settings = await loadExperimentalQualitySettings();
+      const retained = completeQualityTuple(settings);
+      const retainedResolves = retained ? qualityTupleResolves(retained, registry) : false;
+      if (retained && (!retainedResolves || !(await judgeCandidateHasKey(retained.providerAlias, retained.modelId)))) {
+        // Stale or keyless retained: require Change Judge via the picker.
+        await ctx.openQualityPicker("rewrite");
+        return;
+      }
+      // Valid retained, or first use with no retained tuple.
+      const { candidate } = resolveQualityCandidate(settings, registry, ctx.activeProvider(), ctx.activeModel());
+      await assertJudgeCandidateHasKey(candidate.providerAlias, candidate.modelId);
+      await ctx.openQualityRewriteConfirm(candidate);
+    } catch (error) {
+      ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+    }
+    return;
+  }
+  // bare observe: enable immediately only with a retained valid profile.
+  try {
+    const registry = await ctx.ensureProviderRegistry();
+    const settings = await loadExperimentalQualitySettings();
+    const retained = completeQualityTuple(settings);
+    if (retained && qualityTupleResolves(retained, registry)
+      && await judgeCandidateHasKey(retained.providerAlias, retained.modelId)) {
+      await writeExperimentalQualitySettings({ mode: "observe", providerAlias: retained.providerAlias, modelId: retained.modelId, judgeTimeoutMs: retained.judgeTimeoutMs });
+      ctx.setStatus("experimental Semantic Judge observe");
+      ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge observe ${retained.providerAlias}/${retained.modelId}` });
+      ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge observe is set to ${retained.providerAlias}/${retained.modelId} (${retained.judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
+      return;
+    }
+  } catch (error) {
+    ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+    return;
+  }
+  // No retained valid profile (absent, stale, or keyless): open the picker
+  // focused on Review only. The candidate is visibly preselected by the picker.
+  await ctx.openQualityPicker("observe");
+}
+
+/** Explicit `/quality observe|rewrite <provider> <model> [timeout]` advanced shortcut. */
+async function runExplicitQualityMode(
+  ctx: Parameters<Command["run"]>[0],
+  mode: "observe" | "rewrite",
+  providerAlias: string,
+  modelId: string,
+  judgeTimeoutMs: number,
+): Promise<void> {
+  try {
+    await ctx.ensureProviderRegistry();
+    await assertJudgeCandidateHasKey(providerAlias, modelId);
+    if (mode === "rewrite") {
+      await ctx.openQualityRewriteConfirm({ providerAlias, modelId, judgeTimeoutMs });
+      return;
+    }
+    await writeExperimentalQualitySettings({ mode, providerAlias, modelId, judgeTimeoutMs });
+    ctx.setStatus(`experimental Semantic Judge ${mode}`);
+    ctx.recordActivity({ kind: "system", text: `experimental Semantic Judge ${mode} ${providerAlias}/${modelId}` });
+    ctx.setMessages((prev) => [...prev, { role: "system", content: `Experimental Semantic Judge ${mode} is set to ${providerAlias}/${modelId} (${judgeTimeoutMs} ms). It is not a calibrated production quality policy.` }]);
+  } catch (error) {
+    ctx.setMessages((prev) => [...prev, { role: "system", content: error instanceof Error ? error.message : String(error) }]);
+  }
+}
+
+export function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
   const limits = ctx.activeModelLimits();
   const usage = ctx.lastTurnUsage();
   const contextWindow = limits?.contextWindow;
@@ -607,23 +781,30 @@ function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
     lines.push("Context window: not configured");
     lines.push("Add limits.contextWindow to this model in providers.yaml to enable footer percentages.");
   } else if (typeof contextInput === "number" && contextInput > 0) {
-    lines.push(`Used: ${formatTokenCount(contextInput)} / ${formatTokenCount(contextWindow)} (${formatPercent(contextInput, contextWindow)})`);
-    const reserve = limits.autoCompact?.reserveOutputTokens ?? limits.maxOutputTokens;
-    if (reserve && reserve < contextWindow) {
-      lines.push(`Effective budget: ${formatTokenCount(contextWindow - reserve)} after reserving ${formatTokenCount(reserve)} output`);
-    }
+    lines.push(`Used: ${formatTokenCount(contextInput)} / ${formatTokenCount(contextWindow)} (${formatPercent(contextInput, contextWindow)}) — provider usage`);
   } else {
     lines.push(`Context window: ${formatTokenCount(contextWindow)}`);
     lines.push("Used: no provider usage yet");
   }
 
-  const autoCompact = limits?.autoCompact;
-  if (contextWindow && autoCompact) {
-    const enabled = autoCompact.enabled === false ? "disabled" : "enabled";
-    const threshold = autoCompact.threshold;
-    lines.push(threshold
-      ? `Auto compact: ${enabled} at ${Math.round(threshold * 100)}% (~${formatTokenCount(contextWindow * threshold)})`
-      : `Auto compact: ${enabled}`);
+  // Truthful activation state (issue #107 §9): report active/inactive with the
+  // precise reason, the effective soft/hard limits, the reserve and its source,
+  // and the active strategy. Never claim protection without a configured
+  // window + threshold; the old "enabled at N%" line could fire with neither.
+  const activation = resolveAutoCompactActivation({
+    config: limits?.autoCompact,
+    limits,
+    generation: ctx.activeModelGeneration(),
+  });
+  if (activation.kind === "active") {
+    lines.push(`Soft trigger: ${formatTokenCount(activation.softTriggerTokens)} (${Math.round(activation.threshold * 100)}% of window)`);
+    lines.push(`Hard input ceiling: ${formatTokenCount(activation.hardInputCeilingTokens)}`);
+    lines.push(`Output reserve: ${formatTokenCount(activation.reserveTokens)} (${reserveSourceLabel(activation.reserveSource)})`);
+    lines.push("Auto compact: active · strategy portable-summary");
+  } else if (limits?.autoCompact) {
+    lines.push(`Auto compact: inactive · ${inactiveReasonLabel(activation.reason)}`);
+  } else {
+    lines.push("Auto compact: not configured");
   }
   if (usage && (usage.inputTokens > 0 || usage.outputTokens > 0 || usage.cachedInputTokens > 0)) {
     lines.push(`Turn: ↑${formatTokenCount(usage.inputTokens)} ↓${formatTokenCount(usage.outputTokens)} ↻ ${formatTokenCount(usage.cachedInputTokens)}`);
@@ -634,6 +815,26 @@ function renderContextStatus(ctx: Parameters<Command["run"]>[0]): string {
   }
   lines.push(`Source: ${usage ? "provider usage, de-duplicated by logical turn" : "model config only"}`);
   return lines.join("\n");
+}
+
+function reserveSourceLabel(source: "explicit" | "generation-maxTokens" | "model-maxOutputTokens" | "zero"): string {
+  switch (source) {
+    case "explicit": return "from autoCompact.reserveOutputTokens";
+    case "generation-maxTokens": return "from generation maxTokens";
+    case "model-maxOutputTokens": return "from limits.maxOutputTokens";
+    case "zero": return "no reserve configured";
+  }
+}
+
+function inactiveReasonLabel(reason: "missing-config" | "disabled" | "missing-threshold" | "invalid-threshold" | "missing-context-window" | "invalid-reserve"): string {
+  switch (reason) {
+    case "missing-config": return "autoCompact block absent";
+    case "disabled": return "enabled: false";
+    case "missing-threshold": return "threshold not set";
+    case "invalid-threshold": return "threshold not strictly between 0 and 1";
+    case "missing-context-window": return "limits.contextWindow not set";
+    case "invalid-reserve": return "reserveOutputTokens makes the effective input budget non-positive";
+  }
 }
 
 function formatTokenCount(value: number): string {
@@ -669,6 +870,49 @@ function renderInstructionsNotice(selection: EffectiveInstructionSelection): str
   }
   lines.push("  Instructions customize work within host capabilities; they cannot add tools, permissions, gates, validators, or filesystem authority.");
   return lines.join("\n");
+}
+
+const THEME_PREFERENCES: readonly ThemePreference[] = ["dark", "light", "default", "auto"];
+const THEME_USAGE = "Usage: /theme [dark|light|default|auto] [--persist] [--unset-project].\ndefault follows the terminal; auto follows the clock (light 07:00–19:00).";
+
+type ThemeArgs =
+  | { kind: "status" }
+  | { kind: "override"; pref: ThemePreference }
+  | { kind: "persist"; pref: ThemePreference }
+  | { kind: "unset-project" }
+  | { error: string };
+
+/**
+ * Parse the `/theme` grammar (plan §8.4):
+ *   /theme                                  status
+ *   /theme dark|light|default|auto          session override
+ *   /theme dark|light|default|auto --persist project persist + session override
+ *   /theme --unset-project                  remove project theme + clear override
+ * Extra arguments, repeated --persist, or --unset-project combined with a
+ * preference are usage errors with no mutation.
+ */
+function parseThemeArgs(args: string): ThemeArgs {
+  const tokens = args.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return { kind: "status" };
+  const persistCount = tokens.filter((token) => token === "--persist").length;
+  const hasUnset = tokens.includes("--unset-project");
+  const operands = tokens.filter((token) => token !== "--persist" && token !== "--unset-project");
+
+  if (hasUnset) {
+    if (operands.length > 0 || persistCount > 0) return { error: THEME_USAGE };
+    return { kind: "unset-project" };
+  }
+  if (persistCount > 1) return { error: THEME_USAGE };
+  if (operands.length > 1) return { error: THEME_USAGE };
+  if (persistCount === 1) {
+    if (operands.length !== 1) return { error: THEME_USAGE };
+    const pref = operands[0]!.toLowerCase();
+    if (!THEME_PREFERENCES.includes(pref as ThemePreference)) return { error: THEME_USAGE };
+    return { kind: "persist", pref: pref as ThemePreference };
+  }
+  const pref = operands[0]!.toLowerCase();
+  if (!THEME_PREFERENCES.includes(pref as ThemePreference)) return { error: THEME_USAGE };
+  return { kind: "override", pref: pref as ThemePreference };
 }
 
 function parseEngineSwitchArgs(args: string): { engine: EngineId; summary: boolean; summaryInstructions?: string } | undefined {

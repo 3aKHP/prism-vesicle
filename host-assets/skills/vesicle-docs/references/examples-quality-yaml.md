@@ -1,0 +1,17 @@
+<!-- Generated from docs/examples/quality.yaml — do not edit. -->
+
+# Experimental Semantic Judge settings. This is user-level host configuration,
+# stored beside providers.yaml and .env, never inside a project directory.
+#
+# The normal onboarding path is the /quality command (run with no arguments for
+# guided settings); this file is for automation and alpha diagnostics. version 2
+# is an alpha-era forward migration: older Vesicle builds may not read it.
+version: 2
+mode: off
+
+# A complete provider/model/timeout tuple may stay under mode: off as a dormant
+# profile: turning the Judge off no longer erases your selection. The runtime
+# makes zero Judge requests while off whether a tuple is retained or not.
+# providerAlias: deepseek
+# modelId: deepseek-v4-flash
+# judgeTimeoutMs: 15000

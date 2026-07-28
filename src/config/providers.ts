@@ -207,14 +207,16 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (!currentModel) return;
     const id = currentModel.id;
     if (!id) throw new Error(`Provider config ${path} has a model without an id.`);
+    const model: ProviderModelProfile = {
+      id,
+      ...(currentModel.generation ? { generation: currentModel.generation } : {}),
+      ...(currentModel.capabilities ? { capabilities: currentModel.capabilities } : {}),
+      ...(currentModel.limits ? { limits: currentModel.limits } : {}),
+    };
+    validateAutoCompactBudget(model, currentProvider?.id, path);
     currentProvider!.models = [
       ...(currentProvider!.models ?? []),
-      {
-        id,
-        ...(currentModel.generation ? { generation: currentModel.generation } : {}),
-        ...(currentModel.capabilities ? { capabilities: currentModel.capabilities } : {}),
-        ...(currentModel.limits ? { limits: currentModel.limits } : {}),
-      },
+      model,
     ];
     currentModel = null;
     currentModelBlock = null;
@@ -425,6 +427,27 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
   if (!registry.default.model) throw new Error(`Provider config ${path} is missing default.model.`);
   resolveProviderConfig(registry, registry.default, env);
   return registry;
+}
+
+function validateAutoCompactBudget(model: ProviderModelProfile, providerId: string | undefined, path: string): void {
+  const autoCompact = model.limits?.autoCompact;
+  const contextWindow = model.limits?.contextWindow;
+  if (!autoCompact || contextWindow === undefined) return;
+
+  const location = `Provider config ${path} model "${model.id}"${providerId ? ` in provider "${providerId}"` : ""}`;
+  const explicitReserve = autoCompact.reserveOutputTokens;
+  if (explicitReserve !== undefined && explicitReserve >= contextWindow) {
+    throw new Error(`${location} has autoCompact.reserveOutputTokens (${explicitReserve}) greater than or equal to contextWindow (${contextWindow}).`);
+  }
+  if (autoCompact.enabled === false || autoCompact.threshold === undefined) return;
+
+  const effectiveReserve = explicitReserve
+    ?? model.generation?.maxTokens
+    ?? model.limits?.maxOutputTokens
+    ?? 0;
+  if (effectiveReserve >= contextWindow) {
+    throw new Error(`${location} has an effective output reserve (${effectiveReserve}) that leaves no positive input budget within contextWindow (${contextWindow}).`);
+  }
 }
 
 function requireProvider(registry: ProviderRegistry, providerId: string): ProviderProfile {

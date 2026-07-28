@@ -7,6 +7,7 @@ import { generationMetadata } from "./generation";
 import { runLoop } from "./turn-loop";
 import type { ToolPermissionBroker } from "../permissions";
 import { FileCheckpointManager } from "../checkpoints/file-history";
+import { withExecutionRound } from "../session/store";
 import type { AgentManager } from "../agents/manager";
 
 type ResolveGateOptions = ContinuationContextOptions & {
@@ -31,7 +32,7 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
   await context.session.append({
     role: "tool",
     content: toolResultContent,
-    metadata: {
+    metadata: withExecutionRound(context.session.sessionId, {
       kind: "gate-resolution",
       engine: options.engine,
       name: "request_confirmation",
@@ -39,7 +40,7 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
       toolCallId: options.toolCallId,
       gate: options.gate.gate,
       decision: options.resolution.decision,
-    },
+    }),
   });
 
   const userFollowUp = gateFollowUpMessage(options.gate, options.resolution);
@@ -47,14 +48,14 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
   await context.session.append({
     role: "user",
     content: userFollowUp,
-    metadata: {
+    metadata: withExecutionRound(context.session.sessionId, {
       kind: "gate-resolution",
       engine: options.engine,
       provider: context.config.provider,
       providerId: context.config.providerId,
       model: context.config.model,
       ...generationMetadata(context.generation),
-    },
+    }),
   });
 
   return runLoop({
@@ -67,7 +68,9 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     mcpRegistry: context.toolSurface.mcp,
     messages,
     session: context.session,
+    logicalTurnId: context.identity?.logicalTurnId,
     profile: context.profile,
+    skillCatalog: context.skillCatalog,
     generation: context.generation,
     checkpoint: await FileCheckpointManager.resumeLatest(context.rootDir, context.session),
     signal: options.signal,
