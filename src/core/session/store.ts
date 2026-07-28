@@ -31,7 +31,7 @@ import { recoverSessionInteractions, type PendingDelegationRetry } from "./inter
 
 export { buildActiveSessionBranch } from "./record-model";
 export type { SessionRecord, SessionRole } from "./record-model";
-export { createSessionStore } from "./append-store";
+export { createSessionStore, withSessionActivationLock } from "./append-store";
 export type { SessionStore } from "./append-store";
 export type { PendingDelegationRetry } from "./interaction-recovery";
 export { FAILED_TURN_KIND } from "./history-projector";
