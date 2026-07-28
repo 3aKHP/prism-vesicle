@@ -1,6 +1,6 @@
 {
   "name": "prism-vesicle",
-  "version": "1.0.0-alpha.6",
+  "version": "1.0.0-alpha.7",
   "description": "Bun terminal host for Prism Engine prompt workflows.",
   "license": "MIT",
   "repository": {
