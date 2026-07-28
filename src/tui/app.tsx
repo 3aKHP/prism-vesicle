@@ -1,5 +1,4 @@
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
-import { join } from "node:path";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
@@ -71,6 +70,7 @@ import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
 import { activateSkillForSession } from "../core/skills";
+import { initializeSessionIdentity } from "../core/agent-loop/session-init";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
@@ -929,9 +929,32 @@ export function App(props: AppProps = {}) {
     const rootDir = process.cwd();
     let sid = sessionId();
     if (!sid) {
-      sid = crypto.randomUUID();
+      // Mirror turn-controller's ensureRuntimeReady: the identity header needs a
+      // resolved provider selection and effective permission settings, and the
+      // active provider/model signals start as "loading" before config resolves.
+      if (!providerConfigReady()) {
+        setStatus("loading provider config");
+        await loadProviderConfigOnce();
+      }
+      if (!permissionSettingsReady()) {
+        setStatus("loading permission settings");
+        await loadPermissionSettingsOnce();
+      }
+      const identity = await initializeSessionIdentity({
+        engine: activeEngine(),
+        rootDir,
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        permission: {
+          mode: permissionMode(),
+          ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true as const } : {}),
+          shellExecEnabled: shellExecEnabled(),
+          shellInterpreter: shellInterpreter(),
+        },
+      });
+      sid = identity.sessionId;
       setSessionId(sid);
-      setSessionPath(join(rootDir, ".vesicle", "sessions", `${sid}.jsonl`));
+      setSessionPath(identity.sessionPath);
     }
     const branchParent = nextSessionParent();
     const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
@@ -940,6 +963,7 @@ export function App(props: AppProps = {}) {
       ...(branchParent ? { parentUuid: branchParent.uuid } : {}),
       contextWindow: activeModelLimits()?.contextWindow,
     });
+    if (branchParent && activation.recordUuid) setNextSessionParent({ uuid: activation.recordUuid });
     const scriptInfo = activation.scripts.length > 0
       ? ` · ${activation.scripts.length} script${activation.scripts.length > 1 ? "s" : ""}`
       : "";

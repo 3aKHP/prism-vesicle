@@ -90,8 +90,27 @@ const LOCK_RETRY_MS = 10;
 const LOCK_TIMEOUT_MS = 5_000;
 
 /** Serialize the head-read + append transaction across Vesicle processes. */
-async function withSessionFileLock<T>(sessionPath: string, operation: () => Promise<T>): Promise<T> {
-  const lockPath = `${sessionPath}.lock`;
+function withSessionFileLock<T>(sessionPath: string, operation: () => Promise<T>): Promise<T> {
+  return withFileLock(`${sessionPath}.lock`, operation);
+}
+
+/**
+ * Run a read-check-append transaction under a per-session lockfile that is
+ * distinct from the append lock, so host-side callers (e.g. Skill activation
+ * dedup) can make the whole transaction atomic across processes without
+ * deadlocking against the inner append's own lock.
+ */
+export async function withSessionActivationLock<T>(
+  rootDir: string,
+  sessionId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const sessionDir = join(rootDir, ".vesicle", "sessions");
+  await mkdir(sessionDir, { recursive: true });
+  return withFileLock(join(sessionDir, `${sessionId}.skill-activation.lock`), operation);
+}
+
+async function withFileLock<T>(lockPath: string, operation: () => Promise<T>): Promise<T> {
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   let handle: Awaited<ReturnType<typeof open>>;
   while (true) {
@@ -100,7 +119,7 @@ async function withSessionFileLock<T>(sessionPath: string, operation: () => Prom
       break;
     } catch (error) {
       if (!isFileError(error, "EEXIST")) throw error;
-      if (Date.now() >= deadline) throw new Error(`Timed out waiting for the session append lock: ${sessionPath}`);
+      if (Date.now() >= deadline) throw new Error(`Timed out waiting for the file lock: ${lockPath}`);
       await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
     }
   }
