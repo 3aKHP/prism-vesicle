@@ -39,7 +39,6 @@ export type SkillToolRuntimeOptions = {
   /** Session id owning the activation registry. */
   sessionId?: string;
   signal?: AbortSignal;
-  env?: NodeJS.ProcessEnv;
   shellInterpreter?: ShellInterpreterPreference;
   platform?: NodeJS.Platform;
   /** Interpreter lookup against the filtered PATH; injectable for tests. */
@@ -285,7 +284,7 @@ export async function executeRunSkillScriptTool(
   if (!interpreter) {
     return fail(call, `No interpreter is known for "${extension || relPath}"; supported script extensions: ${Object.keys(SCRIPT_INTERPRETERS).join(", ")}.`);
   }
-  const filteredEnv = buildProcessEnvironment(options.env);
+  const filteredEnv = buildProcessEnvironment(undefined);
   const which = options.which ?? defaultWhich;
   if (!which(interpreter, filteredEnv)) {
     return fail(call, `Interpreter "${interpreter}" required by "${relPath}" was not found on the process PATH; install it or ask the user how to proceed. The script was not executed.`);
@@ -329,7 +328,7 @@ export async function executeRunSkillScriptTool(
     result = await executeProcessArgv(rootDir, [interpreter, file.absolutePath, ...scriptArgs], {
       timeoutMs: timeoutMs as number,
       signal: options.signal,
-      env: options.env,
+      env: filteredEnv,
       platform,
       onProgress: options.onProcessProgress ? (progress) => options.onProcessProgress!(progressEvent(progress)) : undefined,
     });

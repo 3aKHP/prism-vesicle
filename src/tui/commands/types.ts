@@ -35,6 +35,7 @@ export type UsageTelemetrySummary = {
  */
 export type CommandCompletionContext = {
   rootDir: string;
+  activeEngine: () => string;
   providerRegistry: () => ProviderRegistry | null;
   activeProvider: () => string;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;

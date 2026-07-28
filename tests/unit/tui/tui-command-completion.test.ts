@@ -33,6 +33,7 @@ const artifacts: ArtifactEntry[] = [
 function context(overrides: Partial<CommandCompletionContext> = {}): CommandCompletionContext {
   return {
     rootDir: process.cwd(),
+    activeEngine: () => "etl",
     providerRegistry: () => registry,
     activeProvider: () => "beta",
     refreshArtifacts: async () => artifacts,

@@ -403,6 +403,7 @@ export function App(props: AppProps = {}) {
   }
   const composerController = createComposerController({
     rootDir: process.cwd(),
+    activeEngine,
     terminalWidth: () => dimensions().width,
     providerRegistry,
     activeProvider,

@@ -349,7 +349,7 @@ export const skillCommandCompletion: CommandCompletion = {
       "skills",
       async () => {
         const { resolveSkillCatalog } = await import("../../core/skills");
-        const catalog = await resolveSkillCatalog(context.rootDir, process.env, { id: "etl" });
+        const catalog = await resolveSkillCatalog(context.rootDir, process.env, { id: context.activeEngine() as import("../../core/engine/profile").EngineId });
         return catalog.catalog.entries.map((entry) => ({
           id: entry.name,
           label: entry.name,

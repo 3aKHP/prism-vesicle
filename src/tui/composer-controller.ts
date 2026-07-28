@@ -25,6 +25,7 @@ import { composerStateFromQueuedInput, type InputQueue } from "./input-queue";
 
 export type ComposerControllerOptions = {
   rootDir: string;
+  activeEngine: Accessor<string>;
   terminalWidth: Accessor<number>;
   providerRegistry: Accessor<ProviderRegistry | null>;
   activeProvider: Accessor<string>;
@@ -61,6 +62,7 @@ export function createComposerController(options: ComposerControllerOptions) {
   const modelPickerController = createModelPickerController(options);
   const commandCompletionController = createCommandCompletionController({
     rootDir: options.rootDir,
+    activeEngine: options.activeEngine,
     inputValue,
     applyComposerState: applyState,
     clearComposer: clear,
