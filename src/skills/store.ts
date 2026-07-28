@@ -307,6 +307,20 @@ export async function uninstallSkill(name: string, env: NodeJS.ProcessEnv = proc
   }));
 }
 
+/** Toggle the enabled state of an installed skill. Throws if the skill is not installed. */
+export async function setSkillEnabled(name: string, enabled: boolean, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  assertStoreSegment(name, "name");
+  const storeRoot = skillStoreDirectory(env);
+  await updateActiveIndex(storeRoot, (index) => {
+    const entry = index.entries.find((item) => item.name === name);
+    if (!entry) throw new Error(`No installed skill named "${name}".`);
+    return {
+      schema: INDEX_SCHEMA,
+      entries: index.entries.map((item) => (item.name === name ? { ...item, enabled } : item)),
+    };
+  });
+}
+
 // --- hashing ----------------------------------------------------------------
 
 /** Deterministic SHA-256 over a sorted `path\0sha256` inventory. */

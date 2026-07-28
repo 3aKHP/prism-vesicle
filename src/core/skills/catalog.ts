@@ -1,12 +1,13 @@
 /**
  * Session-facing Skill catalog resolution.
  *
- * Builds the effective catalog a model can activate from: the Phase 0
- * discovery winners (`user`, `harness`) plus enabled Skill Store snapshots
- * (`installed` scope), which discovery itself does not cover. Collision
- * precedence is `user` > `installed` > `harness` — direct user authoring
- * outranks an installed snapshot, and an explicit installation outranks the
- * verified Harness baseline; losers produce one `shadowed` diagnostic each.
+ * Builds the effective catalog a model can activate from: the filesystem
+ * discovery winners (`project`, `user`, `harness`) plus enabled Skill Store
+ * snapshots (`installed` scope), which discovery itself does not cover.
+ * Collision precedence is `project` > `user` > `installed` > `harness` — a
+ * shared project convention outranks personal authoring, which outranks an
+ * explicit installation, which outranks the verified Harness baseline; losers
+ * produce one `shadowed` diagnostic each.
  *
  * The returned `ResolvedSkillCatalog` pairs the routing view (`SkillCatalog`:
  * name/description/scope only, never an absolute path) with the host-side
@@ -27,9 +28,12 @@ import {
   discoverSkills,
   listChildSkillRoots,
   loadSkill,
+  projectDisabledPath,
   readActiveIndex,
+  readDisabledNames,
   skillRootExists,
   skillStoreDirectory,
+  userDisabledPath,
 } from "../../skills";
 import type { LoadedSkill, SkillCatalog, SkillDiagnostic } from "../../skills";
 
@@ -55,7 +59,8 @@ export async function resolveSkillCatalog(
   const diagnostics: SkillDiagnostic[] = [];
   const harnessRoots = await resolveHarnessSkillRoots(rootDir, env);
   const userRoots = await listChildSkillRoots(join(userConfigDirectory(env), "skills"));
-  const discovery = await discoverSkills({ harnessRoots, userRoots });
+  const projectRoots = await listChildSkillRoots(join(rootDir, ".agents", "skills"));
+  const discovery = await discoverSkills({ harnessRoots, userRoots, projectRoots });
   diagnostics.push(...discovery.diagnostics);
 
   const winners = new Map<string, LoadedSkill>(discovery.skills.map((skill) => [skill.name, skill]));
@@ -67,6 +72,18 @@ export async function resolveSkillCatalog(
     }
     if (existing) diagnostics.push(shadowedDiagnostic(existing, installed));
     winners.set(installed.name, installed);
+  }
+
+  const userDisabled = await readDisabledNames(userDisabledPath(env)).catch(() => new Set<string>());
+  const projectDisabled = await readDisabledNames(projectDisabledPath(rootDir)).catch(() => new Set<string>());
+  for (const [name, skill] of winners) {
+    if (skill.scope === "user" && userDisabled.has(name)) {
+      winners.delete(name);
+      diagnostics.push({ kind: "shadowed", message: `Skill "${name}" in scope "user" is disabled and excluded from the catalog.` });
+    } else if (skill.scope === "project" && projectDisabled.has(name)) {
+      winners.delete(name);
+      diagnostics.push({ kind: "shadowed", message: `Skill "${name}" in scope "project" is disabled and excluded from the catalog.` });
+    }
   }
 
   const catalog = buildCatalog([...winners.values()], { contextWindow });

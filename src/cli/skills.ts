@@ -1,10 +1,11 @@
-import { resolve } from "node:path";
+import { copyFile, mkdir } from "node:fs/promises";
 import { userConfigDirectory } from "../config/paths";
 import { resolveProjectHarnessRuntime } from "../core/harness";
 import { createAssetResolver } from "../core/runtime/assets";
-import { dirname, join } from "node:path";
-import { discoverSkills, listChildSkillRoots, loadSkill, readActiveIndex, readProvenance, rollbackSkill, uninstallSkill } from "../skills";
-import type { DiscoveryResult, LoadedSkill } from "../skills";
+import { writableProjectRoots } from "../core/artifacts/roots";
+import { dirname, join, resolve } from "node:path";
+import { assertSafeRelativePath, createSkill, discoverSkills, listChildSkillRoots, loadSkill, projectDisabledPath, readActiveIndex, readProvenance, rollbackSkill, setDisabled, setSkillEnabled, skillStoreDirectory, uninstallSkill, userDisabledPath } from "../skills";
+import type { CreateSkillScope, DiscoveryResult, LoadedSkill } from "../skills";
 import { installFromSource, updateSkill } from "./skills-source";
 import type { InstallSourceOptions } from "./skills-source";
 
@@ -32,13 +33,14 @@ export interface SkillsInspection {
   result: DiscoveryResult;
   harnessRootCount: number;
   userRootCount: number;
+  projectRootCount: number;
 }
 
 /**
- * Discover skills across the Phase 0 scopes for the active project. Used by both
- * `vesicle skills list` and `vesicle doctor`. Best-effort: a Harness resolution
- * failure falls back to the default asset resolver so user-scope skills still
- * surface.
+ * Discover skills across the filesystem scopes for the active project. Used by
+ * both `vesicle skills list` and `vesicle doctor`. Best-effort: a Harness
+ * resolution failure falls back to the default asset resolver so user-scope
+ * skills still surface.
  */
 export async function inspectSkills(
   projectRoot = process.cwd(),
@@ -46,8 +48,9 @@ export async function inspectSkills(
 ): Promise<SkillsInspection> {
   const harnessRoots = await resolveHarnessSkillRoots(projectRoot, env);
   const userRoots = await listChildSkillRoots(join(userConfigDirectory(env), "skills"));
-  const result = await discoverSkills({ harnessRoots, userRoots });
-  return { result, harnessRootCount: harnessRoots.length, userRootCount: userRoots.length };
+  const projectRoots = await listChildSkillRoots(join(projectRoot, ".agents", "skills"));
+  const result = await discoverSkills({ harnessRoots, userRoots, projectRoots });
+  return { result, harnessRootCount: harnessRoots.length, userRootCount: userRoots.length, projectRootCount: projectRoots.length };
 }
 
 export async function runSkillsCommand(args: string[]): Promise<void> {
@@ -78,6 +81,22 @@ export async function runSkillsCommand(args: string[]): Promise<void> {
   }
   if (command === "uninstall" && args.length === 2) {
     await runUninstall(args[1]!);
+    return;
+  }
+  if (command === "create" && args.length >= 2) {
+    await runCreate(args.slice(1));
+    return;
+  }
+  if (command === "enable" && args.length === 2) {
+    await runEnableDisable(args[1]!, true);
+    return;
+  }
+  if (command === "disable" && args.length === 2) {
+    await runEnableDisable(args[1]!, false);
+    return;
+  }
+  if (command === "copy-template" && args.length >= 3) {
+    await runCopyTemplate(args.slice(1));
     return;
   }
   printUsage();
@@ -179,7 +198,7 @@ async function runInspect(name: string): Promise<void> {
     await printInstalledInspection(entry.name, entry.version);
     return;
   }
-  console.error(`No skill named "${name}" found in the harness, user, or installed scope.`);
+  console.error(`No skill named "${name}" found in the harness, user, project, or installed scope.`);
   process.exitCode = 1;
 }
 
@@ -222,6 +241,10 @@ function printUsage(): void {
   console.error("  vesicle skills list");
   console.error("  vesicle skills validate <skill-directory>");
   console.error("  vesicle skills inspect <name>");
+  console.error("  vesicle skills create <name> [--scope user|project] [--force]");
+  console.error("  vesicle skills enable <name>");
+  console.error("  vesicle skills disable <name>");
+  console.error("  vesicle skills copy-template <skill-name> <resource-path> <dest-path>");
   console.error("  vesicle skills install <path-or-url> [--ref <ref>] [--path <root>] [--all] [--include-worktree]");
   console.error("  vesicle skills update <name>");
   console.error("  vesicle skills rollback <name>");
@@ -330,6 +353,141 @@ async function runUninstall(name: string): Promise<void> {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
+}
+
+interface ParsedCreateArgs {
+  name?: string;
+  scope: CreateSkillScope;
+  force: boolean;
+}
+
+function parseCreateArgs(rest: string[]): ParsedCreateArgs {
+  let name: string | undefined;
+  let scope: CreateSkillScope = "user";
+  let force = false;
+  for (let index = 0; index < rest.length; index++) {
+    const arg = rest[index]!;
+    if (arg === "--force") force = true;
+    else if (arg === "--scope") {
+      const value = rest[++index];
+      if (value !== "user" && value !== "project") throw new Error(`--scope must be "user" or "project", got "${value}".`);
+      scope = value;
+    } else if (!arg.startsWith("--") && name === undefined) name = arg;
+    else throw new Error(`Unexpected argument: ${arg}`);
+  }
+  return { name, scope, force };
+}
+
+async function runCreate(rest: string[]): Promise<void> {
+  let parsed: ParsedCreateArgs;
+  try {
+    parsed = parseCreateArgs(rest);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
+  if (!parsed.name) {
+    console.error("Usage: vesicle skills create <name> [--scope user|project] [--force]");
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    const result = await createSkill(parsed.name, process.cwd(), { scope: parsed.scope, force: parsed.force });
+    if (result.backupPath) console.log(`Backed up existing skill to ${result.backupPath}.`);
+    console.log(`Created ${result.name} [${result.scope}] at ${result.root}.`);
+    console.log("Edit SKILL.md to add instructions, then run: vesicle skills validate " + result.root);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function runEnableDisable(name: string, enabled: boolean): Promise<void> {
+  const action = enabled ? "Enabled" : "Disabled";
+  try {
+    const inspection = await inspectSkills();
+    const discovered = [...inspection.result.skills, ...inspection.result.invalid].find((skill) => skill.name === name);
+    if (discovered) {
+      if (discovered.scope === "harness") {
+        console.error(`Harness-scope skill "${name}" cannot be disabled; it is part of the verified Harness baseline.`);
+        process.exitCode = 1;
+        return;
+      }
+      const path = discovered.scope === "project" ? projectDisabledPath(process.cwd()) : userDisabledPath();
+      await setDisabled(path, name, !enabled);
+      console.log(`${action} ${discovered.scope}-scope skill "${name}".`);
+      return;
+    }
+    const index = await readActiveIndex();
+    const installed = index.entries.find((entry) => entry.name === name);
+    if (installed) {
+      await setSkillEnabled(name, enabled);
+      console.log(`${action} installed skill "${name}".`);
+      return;
+    }
+    console.error(`No skill named "${name}" found in any scope.`);
+    process.exitCode = 1;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function runCopyTemplate(rest: string[]): Promise<void> {
+  const [skillName, resourcePath, destPath] = rest;
+  if (!skillName || !resourcePath || !destPath) {
+    console.error("Usage: vesicle skills copy-template <skill-name> <resource-path> <dest-path>");
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    assertSafeRelativePath(resourcePath);
+    const normalizedDest = destPath.replace(/\\/g, "/");
+    const destRoot = normalizedDest.split("/", 1)[0]!;
+    if (!writableProjectRoots.includes(destRoot as (typeof writableProjectRoots)[number])) {
+      console.error(`Destination must be under a writable root (${writableProjectRoots.join(", ")}). Got: "${destRoot}".`);
+      process.exitCode = 1;
+      return;
+    }
+    if (normalizedDest.includes("..")) {
+      console.error("Destination must not contain \"..\".");
+      process.exitCode = 1;
+      return;
+    }
+
+    const skill = await resolveSkillByName(skillName);
+    if (!skill) {
+      console.error(`No skill named "${skillName}" found in any scope.`);
+      process.exitCode = 1;
+      return;
+    }
+    const sourceAbsolute = join(skill.rootDirectory, resourcePath);
+    const projectRoot = process.cwd();
+    const destAbsolute = resolve(projectRoot, normalizedDest);
+    await mkdir(dirname(destAbsolute), { recursive: true });
+    await copyFile(sourceAbsolute, destAbsolute);
+    console.log(`Copied ${skillName}/${resourcePath} -> ${normalizedDest}`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function resolveSkillByName(name: string): Promise<LoadedSkill | undefined> {
+  const inspection = await inspectSkills();
+  const discovered = inspection.result.skills.find((skill) => skill.name === name);
+  if (discovered) return discovered;
+  const index = await readActiveIndex().catch(() => undefined);
+  if (index) {
+    const entry = index.entries.find((item) => item.name === name && item.enabled);
+    if (entry) {
+      const root = join(skillStoreDirectory(), name, entry.version);
+      const loaded = await loadSkill(root, "installed", { expectedName: name });
+      if (loaded.parsed.ok) return loaded;
+    }
+  }
+  return undefined;
 }
 
 async function printInstalledInspection(name: string, version: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {

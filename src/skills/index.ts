@@ -28,7 +28,7 @@ export type {
   SkillResourceKind,
   SkillScope,
 } from "./types";
-export { PHASE0_DISCOVERY_SCOPES } from "./types";
+export { DISCOVERY_SCOPES } from "./types";
 
 export {
   MAX_DESCRIPTION_CHARS,
@@ -46,13 +46,18 @@ export {
   skillRootExists,
 } from "./loader";
 
+export { createSkill } from "./create";
+export type { CreateSkillOptions, CreateSkillResult, CreateSkillScope } from "./create";
+
+export { disabledPathForScope, projectDisabledPath, readDisabledNames, setDisabled, userDisabledPath } from "./disabled";
+
 export { assertSafeRelativePath, classifyResource, enumerateSkillResources, isTextReference } from "./paths";
 
 export { detectSkillRepo } from "./repo";
 export type { DetectSkillRepoOptions, SkillRepoShape, SkillRepoShapeKind } from "./repo";
 
 export {
-  PHASE0_PRECEDENCE,
+  DISCOVERY_PRECEDENCE,
   discoverSkills,
 } from "./discovery";
 export type { DiscoveryResult, DiscoverSkillsOptions } from "./discovery";
@@ -68,6 +73,7 @@ export {
   readProvenance,
   rollbackSkill,
   setActiveVersion,
+  setSkillEnabled,
   skillStoreDirectory,
   uninstallSkill,
 } from "./store";

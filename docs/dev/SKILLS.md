@@ -43,6 +43,17 @@ Phase 2 adds **model-visible activation, resources, scripts, and the `/skill` co
 
 Phase 2 does **not** add project `.agents/skills/` scope, Skill authoring workflows, registries, or broader distribution.
 
+## Phase 3 scope
+
+Phase 3 adds **project scope, authoring, enable/disable, and template copy**:
+
+- Project `.agents/skills/` discovery: Skills under `<project-root>/.agents/skills/<name>/SKILL.md` enter the catalog with visible `project` scope attribution. No separate project-trust gate; installation into the project directory is the authorization. Precedence: `project` > `user` > `installed` > `harness`.
+- `vesicle skills create <name> [--scope user|project] [--force]`: scaffolds a standard Agent Skills directory (`SKILL.md` + `scripts/` + `references/` + `assets/`) with a valid template. Refuses to overwrite without `--force`; with `--force`, backs up the existing directory first.
+- `vesicle skills enable <name>` / `disable <name>`: toggles availability. Installed Skills use the store active-index `enabled` flag; user and project filesystem Skills use line-delimited disabled-names files (`<user-config>/skills/.disabled` and `<project-root>/.vesicle/disabled-skills`). Disabled Skills are excluded at catalog resolution; the frozen-per-session contract is unchanged.
+- `vesicle skills copy-template <skill> <resource-path> <dest-path>`: copies a Skill resource into an approved writable root. Path hardening applies to the source; the destination must be under `source_materials/`, `workspace/`, `novels/`, `reports/`, or `test_runs/`.
+
+Phase 3 does **not** add registries, broader distribution, or SubAgent Skill inheritance.
+
 ## What a Skill is (and is not)
 
 | Surface | Responsibility | Loaded when | May grant capability |
@@ -58,16 +69,18 @@ A useful test: if a feature needs a new network service, tool schema, credential
 
 ## Discovery scopes
 
-Phase 0 discovers two deterministic, non-merging scopes, lowest to highest precedence:
+Discovery resolves three deterministic, non-merging filesystem scopes plus the installed Skill Store, from lowest to highest precedence:
 
 1. **Harness** — logical `assets/skills/<name>/SKILL.md`, resolved through the active verified Harness asset resolver.
-2. **User** — `<user-config>/skills/<name>/SKILL.md`, direct filesystem.
+2. **Installed** — enabled Skill Store snapshots (`<user-config>/skill-store/<name>/<version>/`), resolved from the active index.
+3. **User** — `<user-config>/skills/<name>/SKILL.md`, direct filesystem.
+4. **Project** — `<project-root>/.agents/skills/<name>/SKILL.md`, direct filesystem with visible project provenance. No separate trust gate.
 
-The `src/skills` module takes **pre-resolved roots** and does not import the asset resolver, providers, harness runtime, or TUI. The CLI (`src/cli/skills.ts`) owns Harness-root resolution and passes both root lists to `discoverSkills`.
+The `src/skills` module takes **pre-resolved roots** and does not import the asset resolver, providers, harness runtime, or TUI. The CLI (`src/cli/skills.ts`) and the session catalog (`src/core/skills/catalog.ts`) own root resolution and pass root lists to `discoverSkills`.
 
-On a name collision, exactly one winner is selected by precedence (`user` outranks `harness`); lower-precedence entries produce one `shadowed` diagnostic each. Bodies and resources are never merged. Catalog and diagnostic shapes never carry an absolute host path — only logical source scopes and skill-relative paths.
+On a name collision, exactly one winner is selected by precedence (`project` > `user` > `installed` > `harness`); lower-precedence entries produce one `shadowed` diagnostic each. Bodies and resources are never merged. Catalog and diagnostic shapes never carry an absolute host path — only logical source scopes and skill-relative paths.
 
-Reserved for later phases: host-bundled Skills, project `.agents/skills/`, and the installed Skill Store as a **model-visible** discovery source. (Phase 1 lists installed Skills in the CLI; they are not yet part of the model-facing catalog.) Project Skills may enter the catalog when their project is opened; their source scope must remain visible, without a separate project-trust state.
+Filesystem-scope Skills (user, project) support disable state via line-delimited names files (`<user-config>/skills/.disabled` and `<project-root>/.vesicle/disabled-skills`). Installed Skills use the active-index `enabled` flag. Disabled Skills are excluded from the session catalog at resolution time; the catalog remains frozen per session.
 
 ## Parsing and validation
 
@@ -116,13 +129,17 @@ Phase 0 shipped the storage mechanism (`installSnapshot`) and read APIs; Phase 1
 vesicle skills list
 vesicle skills validate <skill-directory>
 vesicle skills inspect <name>
+vesicle skills create <name> [--scope user|project] [--force]
+vesicle skills enable <name>
+vesicle skills disable <name>
+vesicle skills copy-template <skill-name> <resource-path> <dest-path>
 vesicle skills install <path-or-url> [--ref <ref>] [--path <root>] [--all] [--include-worktree]
 vesicle skills update <name>
 vesicle skills rollback <name>
 vesicle skills uninstall <name>
 ```
 
-`vesicle skills list` and `inspect` also show installed Skills (scope `installed`) with their version and source kind. `vesicle doctor` reports valid/invalid/shadowed counts over the Harness and user scopes plus the installed count. `inspect` of an installed Skill shows its provenance (source kind and identity, requested ref, resolved commit, dirty-source marker, bundle hash); for local sources the source identity is the local path, shown only in this user-facing CLI output and never in model-facing catalog or diagnostic shapes.
+`vesicle skills list` and `inspect` show Skills from all scopes (harness, user, project, installed) with their scope label. `vesicle doctor` reports valid/invalid/shadowed counts plus the installed count. `create` scaffolds a standard Agent Skills directory with a valid `SKILL.md` template; `--force` backs up and replaces an existing Skill. `enable`/`disable` toggle availability across all scopes (installed uses the store index; user/project use line-delimited disabled-names files). `copy-template` copies a Skill resource into an approved writable root (`source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`). `inspect` of an installed Skill shows its provenance (source kind and identity, requested ref, resolved commit, dirty-source marker, bundle hash); for local sources the source identity is the local path, shown only in this user-facing CLI output and never in model-facing catalog or diagnostic shapes.
 
 ## Risk disclosure and runtime boundaries
 
@@ -143,9 +160,8 @@ Static scanning may produce useful warnings, but it cannot certify Markdown or c
 
 ## Current boundary
 
-The shipped runtime covers format, inventory, the Skill Store, repository installation with lifecycle, and model-visible activation with resources, scripts, and the `/skill` TUI command. The Skill Store is both CLI-listable and a model-visible catalog source (scope `installed`). The following are **not** part of the current contract and must not be implied by any current surface:
+The shipped runtime covers format, inventory, the Skill Store, repository installation with lifecycle, model-visible activation with resources, scripts, and the `/skill` TUI command, project `.agents/skills/` discovery with visible provenance, Skill authoring (`create`), enable/disable across all scopes, and text template copy into approved writable roots. The Skill Store is both CLI-listable and a model-visible catalog source (scope `installed`). The following are **not** part of the current contract and must not be implied by any current surface:
 
-- project `.agents/skills/` scope and Skill authoring workflows;
 - registries or broader distribution; and
 - SubAgent Skill inheritance (children do not receive parent Skills).
 

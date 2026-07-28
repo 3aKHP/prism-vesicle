@@ -22,11 +22,14 @@
 export type SkillScope = "harness" | "user" | "host" | "project" | "installed";
 
 /**
- * The phases of Skills delivery. Phase 0 (`format`) only discovers, validates,
- * and stores; no scope is model-visible yet. This const is the authoritative
- * Phase 0 set so a later phase can widen it without searching for literals.
+ * The active filesystem discovery scopes. Phase 0 shipped `harness` and `user`;
+ * Phase 3 adds `project` (`.agents/skills/`). The `installed` scope is resolved
+ * separately by the session catalog from the Skill Store, not by filesystem
+ * discovery. This const controls which scopes are iterated during discovery;
+ * collision resolution order is governed by `DISCOVERY_PRECEDENCE` in
+ * `discovery.ts`. Both must be updated together when adding a new scope.
  */
-export const PHASE0_DISCOVERY_SCOPES: readonly SkillScope[] = ["harness", "user"];
+export const DISCOVERY_SCOPES: readonly SkillScope[] = ["harness", "user", "project"];
 
 /**
  * Stable diagnostic identifiers. `message` is human-readable and carries no
