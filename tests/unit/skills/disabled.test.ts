@@ -39,6 +39,25 @@ describe("skill disabled state", () => {
     });
   });
 
+  test("setDisabled initializes a missing parent directory", async () => {
+    await withTemp(async (dir) => {
+      const path = join(dir, "missing", ".disabled");
+      await setDisabled(path, "my-skill", true);
+      expect(await readDisabledNames(path)).toEqual(new Set(["my-skill"]));
+    });
+  });
+
+  test("concurrent updates to one file preserve every name", async () => {
+    await withTemp(async (dir) => {
+      const path = join(dir, ".disabled");
+      await Promise.all([
+        setDisabled(path, "alpha", true),
+        setDisabled(path, "beta", true),
+      ]);
+      expect(await readDisabledNames(path)).toEqual(new Set(["alpha", "beta"]));
+    });
+  });
+
   test("setDisabled removes a name", async () => {
     await withTemp(async (dir) => {
       const path = join(dir, ".disabled");

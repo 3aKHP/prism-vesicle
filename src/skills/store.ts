@@ -401,7 +401,7 @@ async function ensureActiveIndexEntry(
     const existing = index.entries.find((entry) => entry.name === name);
     if (existing && existing.version === version) return index;
     const without = index.entries.filter((entry) => entry.name !== name);
-    without.push({ name, version, enabled, installedAt });
+    without.push(existing ? { ...existing, version } : { name, version, enabled, installedAt });
     without.sort((left, right) => left.name.localeCompare(right.name));
     return { schema: INDEX_SCHEMA, entries: without };
   });

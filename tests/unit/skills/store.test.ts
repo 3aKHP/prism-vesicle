@@ -87,6 +87,24 @@ mutated body
     });
   });
 
+  test("reinstalling identical content repairs a missing active index", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "repair-index", "same");
+      const first = await installSnapshot({ sourceDirectory: source, env });
+      await rm(join(skillStoreDirectory(env), "index.json"));
+
+      await installSnapshot({ sourceDirectory: source, env });
+
+      const entry = (await readActiveIndex(env)).entries.find((item) => item.name === "repair-index");
+      expect(entry).toEqual({
+        name: "repair-index",
+        version: first.version,
+        enabled: true,
+        installedAt: first.installedAt,
+      });
+    });
+  });
+
   test("same version label with different content is a hard conflict", async () => {
     await withEnv(async (env, scratch) => {
       const sourceA = await makeSource(scratch, "conflict", "a");
@@ -199,6 +217,23 @@ v2 body
       const target = await rollbackSkill("rolling", env);
       expect(target).toBe("v1");
       expect((await readActiveIndex(env)).entries.find((entry) => entry.name === "rolling")?.version).toBe("v1");
+    });
+  });
+
+  test("reinstalling a retained version preserves active-index state", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "retained", "v1");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      await writeFile(join(source, "references", "glossary.md"), "v2", "utf8");
+      await installSnapshot({ sourceDirectory: source, version: "v2", env });
+      await setSkillEnabled("retained", false, env);
+      await rollbackSkill("retained", env);
+      const rolledBack = (await readActiveIndex(env)).entries.find((item) => item.name === "retained")!;
+
+      await installSnapshot({ sourceDirectory: source, version: "v2", env });
+
+      const reactivated = (await readActiveIndex(env)).entries.find((item) => item.name === "retained");
+      expect(reactivated).toEqual({ ...rolledBack, version: "v2" });
     });
   });
 

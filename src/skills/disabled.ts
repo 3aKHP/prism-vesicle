@@ -64,8 +64,9 @@ function withDisabledLock<T>(path: string, critical: () => Promise<T>): Promise<
   return next;
 }
 
-function withDisabledCrossProcessLock<T>(path: string, critical: () => Promise<T>): Promise<T> {
+async function withDisabledCrossProcessLock<T>(path: string, critical: () => Promise<T>): Promise<T> {
   const lockDir = dirname(path);
+  await mkdir(lockDir, { recursive: true });
   const database = new Database(join(lockDir, ".disabled-lock.sqlite"), { create: true });
   let transactionOpen = false;
   const deadline = Date.now() + DISABLED_LOCK_TIMEOUT_MS;
@@ -83,7 +84,6 @@ function withDisabledCrossProcessLock<T>(path: string, critical: () => Promise<T
   };
   return (async () => {
     try {
-      await mkdir(lockDir, { recursive: true });
       tryBegin();
       transactionOpen = true;
       const result = await critical();
