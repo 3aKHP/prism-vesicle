@@ -43,6 +43,8 @@
     "dev": "bun run src/cli/main.ts",
     "doctor": "bun run src/cli/main.ts doctor",
     "docs:check:staged": "bun run scripts/check-staged-markdown-wrap.ts",
+    "skills:docs:sync": "bun run scripts/sync-bundled-skill-references.ts",
+    "skills:docs:check": "bun run scripts/sync-bundled-skill-references.ts --check",
     "hooks:install": "git config core.hooksPath .githooks",
     "lint": "biome lint .",
     "typecheck": "tsc --noEmit",

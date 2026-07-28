@@ -1,19 +1,20 @@
 /**
  * Skill discovery: load roots grouped by scope and resolve name collisions.
  *
- * Discovers three filesystem scopes (`harness`, `user`, `project`). Roots are
- * supplied by the caller — the CLI resolves Harness roots through the asset
- * resolver (so they come from the active verified Harness baseline under logical
- * `assets/skills/`), user roots from `<user-config>/skills/`, and project roots
- * from `<project-root>/.agents/skills/`. Keeping the resolver out of this module
+ * Discovers four filesystem scopes (`harness`, `user`, `project`, `host`).
+ * Roots are supplied by the caller — the shared core source resolver
+ * (`src/core/skills/catalog-sources.ts`) resolves Harness roots through the
+ * asset resolver, user roots from `<user-config>/skills/`, project roots from
+ * `<project-root>/.agents/skills/`, and Host roots from the package-owned
+ * `host-assets/skills/` directory. Keeping the resolver out of this module
  * keeps `skills/` decoupled from `core/runtime/assets` and `core/harness` and
  * makes discovery unit-testable with temporary directories.
  *
  * Collisions are resolved by deterministic scope precedence: `project` outranks
- * `user`, which outranks `harness`. Exactly one winner is selected per name;
- * lower-precedence entries are reported as `shadowed` and their bodies/resources
- * are never merged. Diagnostics name only safe logical scope labels, never an
- * absolute host path.
+ * `user`, which outranks `harness`, which outranks `host`. Exactly one winner
+ * is selected per name; lower-precedence entries are reported as `shadowed` and
+ * their bodies/resources are never merged. Diagnostics name only safe logical
+ * scope labels, never an absolute host path.
  */
 
 import { loadSkill } from "./loader";
@@ -22,9 +23,10 @@ import { DISCOVERY_SCOPES, type LoadedSkill, type SkillDiagnostic, type SkillSco
 /**
  * Filesystem discovery precedence, highest first. Project-scope Skills
  * (`.agents/skills/`) outrank user authoring so a shared project convention
- * wins; user authoring outranks the verified Harness baseline.
+ * wins; user authoring outranks the verified Harness baseline; Harness
+ * outranks package-owned Host Skills.
  */
-export const DISCOVERY_PRECEDENCE: readonly SkillScope[] = ["project", "user", "harness"];
+export const DISCOVERY_PRECEDENCE: readonly SkillScope[] = ["project", "user", "harness", "host"];
 
 export interface DiscoverSkillsOptions {
   /** Skill roots resolved from the active verified Harness (`assets/skills/<name>/`). */
@@ -33,6 +35,8 @@ export interface DiscoverSkillsOptions {
   userRoots?: string[];
   /** Skill roots under the project's `.agents/skills/<name>/` directory. */
   projectRoots?: string[];
+  /** Skill roots from the package-owned `host-assets/skills/<name>/` directory. */
+  hostRoots?: string[];
 }
 
 export interface DiscoveryResult {
@@ -53,6 +57,7 @@ export async function discoverSkills(options: DiscoverSkillsOptions = {}): Promi
     harness: options.harnessRoots ?? [],
     user: options.userRoots ?? [],
     project: options.projectRoots ?? [],
+    host: options.hostRoots ?? [],
   };
   const rootsByScope: Array<{ scope: SkillScope; roots: string[] }> = DISCOVERY_SCOPES.map((scope) => ({
     scope,

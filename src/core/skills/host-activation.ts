@@ -19,6 +19,7 @@ import { hydrateSessionActivations, isDuplicateActivation, pruneSessionActivatio
 import { resolveEngineEligibleCatalog, resolveSessionSkillCatalog } from "./catalog-context";
 import { formatSkillActivationBlock, type ValidSkill } from "./tools";
 import { SKILL_ACTIVATION_KIND } from "./types";
+import type { ResolveFilesystemSkillsOptions } from "./catalog-sources";
 
 export type SkillActivationMode = "invoke" | "context-only";
 
@@ -31,6 +32,8 @@ export type ActivateSkillForSessionOptions = {
   parentUuid?: string | null;
   /** Model context window in tokens, for the catalog budget on a fresh freeze. */
   contextWindow?: number;
+  /** Narrow test-only overrides for filesystem source resolution. */
+  filesystemOptions?: ResolveFilesystemSkillsOptions;
 };
 
 export type HostSkillActivation = {
@@ -65,6 +68,7 @@ export async function activateSkillForSession(
     sessionId,
     snapshot?.skillCatalogSnapshot,
     options.contextWindow,
+    options.filesystemOptions,
   );
   const eligible = resolveEngineEligibleCatalog(frozen, options.profile);
   const skill = eligible.byName.get(name);

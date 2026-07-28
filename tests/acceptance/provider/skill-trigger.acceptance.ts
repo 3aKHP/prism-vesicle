@@ -90,6 +90,25 @@ const researchSynthesisCases: TriggerCase[] = [
   { prompt: "Compact the conversation to free context." },
 ];
 
+const vesicleDocsCases: TriggerCase[] = [
+  // Positive Chinese
+  { prompt: "Vesicle 的 auto-compact 怎么配置？", expectSkill: "vesicle-docs" },
+  { prompt: "为什么我看不到 shell_exec？", expectSkill: "vesicle-docs" },
+  { prompt: "Gemini provider 的 providers.yaml 应该怎么写？", expectSkill: "vesicle-docs" },
+  { prompt: "rewind、compact 和 resume 有什么区别？", expectSkill: "vesicle-docs" },
+  { prompt: "怎么安装、调用和禁用一个 Skill？", expectSkill: "vesicle-docs" },
+  { prompt: "Stage 为什么不能使用 Skills？", expectSkill: "vesicle-docs" },
+  // Positive English
+  { prompt: "How do I configure MCP in Vesicle?", expectSkill: "vesicle-docs" },
+  { prompt: "Where does Vesicle store provider secrets?", expectSkill: "vesicle-docs" },
+  { prompt: "How does the session Skill catalog behave after an upgrade?", expectSkill: "vesicle-docs" },
+  // Near-miss: ordinary Prism creative work and generic technical questions
+  { prompt: "帮我写一张角色卡。" },
+  { prompt: "继续这个场景。" },
+  { prompt: "Review this chapter for continuity." },
+  { prompt: "How does YAML parsing work in general?" },
+];
+
 let rootDir: string | undefined;
 beforeEach(async () => {
   if (!precondition.ok) return;
@@ -116,7 +135,22 @@ function collectSkillActivations(events: AgentLoopEvent[]): string[] {
   return names;
 }
 
-async function runTriggerCase(triggerCase: TriggerCase): Promise<string[]> {
+function collectResourceReads(events: AgentLoopEvent[]): string[] {
+  const paths: string[] = [];
+  for (const event of events) {
+    if (event.type === "tool_result" && "skillEvent" in event && event.skillEvent?.kind === "skill_resource_read") {
+      paths.push((event.skillEvent as { path: string }).path);
+    }
+  }
+  return paths;
+}
+
+interface TriggerResult {
+  activations: string[];
+  resourceReads: string[];
+}
+
+async function runTriggerCase(triggerCase: TriggerCase): Promise<TriggerResult> {
   if (!rootDir) throw new Error("acceptance rootDir was not initialized");
   const events: AgentLoopEvent[] = [];
   await runPrompt({
@@ -126,7 +160,7 @@ async function runTriggerCase(triggerCase: TriggerCase): Promise<string[]> {
     messages: [{ role: "user", content: triggerCase.prompt }],
     onEvent: (event) => { events.push(event); },
   });
-  return collectSkillActivations(events);
+  return { activations: collectSkillActivations(events), resourceReads: collectResourceReads(events) };
 }
 
 describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
@@ -134,8 +168,8 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
     const positives = reviewRubricCases.filter((c) => c.expectSkill);
     let hits = 0;
     for (const triggerCase of positives) {
-      const activations = await runTriggerCase(triggerCase);
-      if (activations.includes("review-rubric")) hits += 1;
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("review-rubric")) hits += 1;
     }
     summarize("trigger-review-rubric-positive", { total: positives.length, hits });
     expect(hits).toBeGreaterThanOrEqual(Math.ceil(positives.length * 0.6));
@@ -145,8 +179,8 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
     const negatives = reviewRubricCases.filter((c) => !c.expectSkill);
     let falsePositives = 0;
     for (const triggerCase of negatives) {
-      const activations = await runTriggerCase(triggerCase);
-      if (activations.includes("review-rubric")) falsePositives += 1;
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("review-rubric")) falsePositives += 1;
     }
     summarize("trigger-review-rubric-negative", { total: negatives.length, falsePositives });
     expect(falsePositives).toBeLessThanOrEqual(Math.floor(negatives.length * 0.25));
@@ -156,8 +190,8 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
     const positives = artifactHandoffCases.filter((c) => c.expectSkill);
     let hits = 0;
     for (const triggerCase of positives) {
-      const activations = await runTriggerCase(triggerCase);
-      if (activations.includes("artifact-handoff")) hits += 1;
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("artifact-handoff")) hits += 1;
     }
     summarize("trigger-artifact-handoff-positive", { total: positives.length, hits });
     expect(hits).toBeGreaterThanOrEqual(Math.ceil(positives.length * 0.6));
@@ -167,8 +201,8 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
     const negatives = artifactHandoffCases.filter((c) => !c.expectSkill);
     let falsePositives = 0;
     for (const triggerCase of negatives) {
-      const activations = await runTriggerCase(triggerCase);
-      if (activations.includes("artifact-handoff")) falsePositives += 1;
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("artifact-handoff")) falsePositives += 1;
     }
     summarize("trigger-artifact-handoff-negative", { total: negatives.length, falsePositives });
     expect(falsePositives).toBeLessThanOrEqual(Math.floor(negatives.length * 0.25));
@@ -178,8 +212,8 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
     const positives = researchSynthesisCases.filter((c) => c.expectSkill);
     let hits = 0;
     for (const triggerCase of positives) {
-      const activations = await runTriggerCase(triggerCase);
-      if (activations.includes("research-synthesis")) hits += 1;
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("research-synthesis")) hits += 1;
     }
     summarize("trigger-research-synthesis-positive", { total: positives.length, hits });
     expect(hits).toBeGreaterThanOrEqual(Math.ceil(positives.length * 0.6));
@@ -189,10 +223,37 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
     const negatives = researchSynthesisCases.filter((c) => !c.expectSkill);
     let falsePositives = 0;
     for (const triggerCase of negatives) {
-      const activations = await runTriggerCase(triggerCase);
-      if (activations.includes("research-synthesis")) falsePositives += 1;
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("research-synthesis")) falsePositives += 1;
     }
     summarize("trigger-research-synthesis-negative", { total: negatives.length, falsePositives });
     expect(falsePositives).toBeLessThanOrEqual(Math.floor(negatives.length * 0.25));
   });
+
+  test("vesicle-docs: positive triggers activate the skill and read resources", async () => {
+    const positives = vesicleDocsCases.filter((c) => c.expectSkill);
+    let hits = 0;
+    let resourceHits = 0;
+    for (const triggerCase of positives) {
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("vesicle-docs")) {
+        hits += 1;
+        if (result.resourceReads.length > 0) resourceHits += 1;
+      }
+    }
+    summarize("trigger-vesicle-docs-positive", { total: positives.length, hits, resourceHits });
+    expect(hits).toBeGreaterThanOrEqual(Math.ceil(positives.length * 0.6));
+    expect(resourceHits).toBe(hits);
+  }, 180_000);
+
+  test("vesicle-docs: near-miss prompts do not activate", async () => {
+    const negatives = vesicleDocsCases.filter((c) => !c.expectSkill);
+    let falsePositives = 0;
+    for (const triggerCase of negatives) {
+      const result = await runTriggerCase(triggerCase);
+      if (result.activations.includes("vesicle-docs")) falsePositives += 1;
+    }
+    summarize("trigger-vesicle-docs-negative", { total: negatives.length, falsePositives });
+    expect(falsePositives).toBeLessThanOrEqual(Math.floor(negatives.length * 0.25));
+  }, 120_000);
 });

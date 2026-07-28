@@ -33,6 +33,9 @@ export { deriveSessionActivations } from "./activation-derivation";
 export { catalogNames, resolveSkillCatalog } from "./catalog";
 export type { ResolvedSkillCatalog } from "./catalog";
 
+export { resolveFilesystemSkills } from "./catalog-sources";
+export type { FilesystemSkillInspection, ResolveFilesystemSkillsOptions } from "./catalog-sources";
+
 export {
   clearSessionSkillCatalog,
   composeSkillCatalogBlock,

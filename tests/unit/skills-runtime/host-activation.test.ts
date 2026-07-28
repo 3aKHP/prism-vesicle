@@ -27,6 +27,7 @@ afterEach(async () => {
 });
 
 const env = (): NodeJS.ProcessEnv => ({ VESICLE_CONFIG_DIR: join(scratch, "config") });
+const noHost = () => ({ hostAssetsDirectory: join(scratch, "no-host") });
 
 async function writeUserSkill(name: string, body?: string): Promise<void> {
   const root = join(scratch, "config", "skills", name);
@@ -49,7 +50,7 @@ describe("activateSkillForSession", () => {
     const sessionId = randomUUID();
     await createSession(sessionId);
 
-    const first = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" } });
+    const first = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" }, filesystemOptions: noHost() });
     expect(first.alreadyActive).toBe(false);
     expect(first.name).toBe("alpha");
     expect(first.scope).toBe("user");
@@ -65,7 +66,7 @@ describe("activateSkillForSession", () => {
     expect(activation?.content).toContain("[/skill_activation]");
     expect(activation?.content).not.toContain(scratch);
 
-    const second = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" } });
+    const second = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" }, filesystemOptions: noHost() });
     expect(second.alreadyActive).toBe(true);
     expect((await loadSessionRecords(scratch, sessionId)).length).toBe(records.length);
     clearSessionActivations(sessionId);
@@ -76,7 +77,7 @@ describe("activateSkillForSession", () => {
     await writeUserSkill("alpha");
     const sessionId = randomUUID();
     await createSession(sessionId);
-    await expect(activateSkillForSession(scratch, env(), sessionId, "missing", { profile: { id: "etl" } }))
+    await expect(activateSkillForSession(scratch, env(), sessionId, "missing", { profile: { id: "etl" }, filesystemOptions: noHost() }))
       .rejects.toThrow('Unknown skill "missing". Available skills: alpha.');
     clearSessionSkillCatalog(sessionId);
   });
@@ -85,7 +86,7 @@ describe("activateSkillForSession", () => {
     await writeUserSkill("alpha");
     const sessionId = randomUUID();
     await createSession(sessionId);
-    await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" } });
+    await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" }, filesystemOptions: noHost() });
 
     const records = await loadSessionRecords(scratch, sessionId);
     const activation = records.find((record) => record.metadata?.kind === "skill-activation")!;
@@ -102,7 +103,7 @@ describe("activateSkillForSession", () => {
     await writeUserSkill("alpha");
     const sessionId = randomUUID();
     await createSession(sessionId);
-    const first = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" } });
+    const first = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" }, filesystemOptions: noHost() });
 
     // Simulate a restart: drop every in-memory registry, keep only the JSONL.
     clearSessionActivations(sessionId);
@@ -113,7 +114,7 @@ describe("activateSkillForSession", () => {
     hydrateSessionActivations(sessionId, deriveSessionActivations(records));
     expect(isDuplicateActivation(sessionId, "alpha", first.contentHash)).toBe(true);
 
-    const second = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" } });
+    const second = await activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" }, filesystemOptions: noHost() });
     expect(second.alreadyActive).toBe(true);
     clearSessionActivations(sessionId);
     clearSessionSkillCatalog(sessionId);
@@ -122,7 +123,7 @@ describe("activateSkillForSession", () => {
   test("a persisted catalog snapshot never substitutes a changed Skill on resume", async () => {
     await writeUserSkill("alpha");
     // Freeze the catalog snapshot into the session header, as bootstrap does.
-    const catalog = await resolveSkillCatalog(scratch, env(), { id: "etl" });
+    const catalog = await resolveSkillCatalog(scratch, env(), { id: "etl" }, undefined, noHost());
     const snapshot = snapshotSkillCatalog(catalog);
     const sessionId = randomUUID();
     await createSession(sessionId, { skills: snapshot });
@@ -132,7 +133,7 @@ describe("activateSkillForSession", () => {
 
     // After a restart the catalog re-resolves by name+hash: alpha is dropped,
     // so host activation fails instead of injecting different content.
-    await expect(activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" } }))
+    await expect(activateSkillForSession(scratch, env(), sessionId, "alpha", { profile: { id: "etl" }, filesystemOptions: noHost() }))
       .rejects.toThrow('Unknown skill "alpha". Available skills: (none).');
     clearSessionSkillCatalog(sessionId);
   });

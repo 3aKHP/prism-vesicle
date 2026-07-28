@@ -69,7 +69,7 @@ export async function runDoctor(): Promise<void> {
   console.log(assets.harness
     ? `Harness: ${assets.harness.selection} ${assets.harness.identity.packId}@${assets.harness.identity.packVersion}`
     : `Assets manifest: ${assets.manifest ? `${assets.manifest.source} (${assets.manifest.path})` : "missing"}`);
-  console.log(`Skills: ${skillsStatus} (harness, user, installed)`);
+  console.log(`Skills: ${skillsStatus} (host, harness, user, project, installed)`);
   if (mcp.statuses.length > 0) {
     for (const status of mcp.statuses) {
       const state = status.connected ? `connected, ${status.toolCount} tools` : status.enabled ? "error" : "disabled";

@@ -69,16 +69,17 @@ async function writeDisabledNames(path: string, names: Set<string>): Promise<voi
 }
 
 /**
- * Resolve the disabled-names file path for a filesystem scope. Returns
- * undefined for scopes that do not use file-based disable state (harness,
- * installed, host).
+ * Resolve the disabled-names file path for a filesystem scope. Host Skills
+ * use the user-level disabled-names file (package-owned Skills are toggled
+ * per-user). Returns undefined for scopes that do not use file-based disable
+ * state (harness, installed).
  */
 export function disabledPathForScope(
   scope: SkillScope,
   projectRoot: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
-  if (scope === "user") return userDisabledPath(env);
+  if (scope === "user" || scope === "host") return userDisabledPath(env);
   if (scope === "project") return projectDisabledPath(projectRoot);
   return undefined;
 }

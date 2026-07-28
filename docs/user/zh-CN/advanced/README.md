@@ -14,6 +14,7 @@
 | [Output Quality Guard](./quality-guard.md) | 🟢 守卫主体 · 🟡 Judge/Policy 实验性 | 制品 post-image 的确定性检查、文档指标、可选 Semantic Judge |
 | [SubAgents](./subagents.md) | 🟢 已实现 | 前台/后台子任务;generic 与 Driver-contract 两类 Agent |
 | [Stage 消费引擎](./stage.md) | 🟢 已实现 | 用角色卡 + 情景卡开一个连续叙事会话 |
+| [Skills](./skills.md) | 🟢 已实现 | 按需过程性上下文：发现、激活、资源读取、`/skill` 命令 |
 
 ## 前置
 

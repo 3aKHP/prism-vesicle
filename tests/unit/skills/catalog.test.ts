@@ -74,4 +74,23 @@ describe("skill catalog", () => {
     const v2 = fakeSkill("s", "user", "desc", "2".repeat(64));
     expect(buildCatalog([v1]).hash).not.toBe(buildCatalog([v2]).hash);
   });
+
+  test("budget omission drops host before harness, installed, user, and project", () => {
+    const skills = [
+      fakeSkill("a-host", "host", "host skill description text"),
+      fakeSkill("b-harness", "harness", "harness skill description text"),
+      fakeSkill("c-installed", "installed", "installed skill description text"),
+      fakeSkill("d-user", "user", "user skill description text"),
+      fakeSkill("e-project", "project", "project skill description text"),
+    ];
+    const catalog = buildCatalog(skills, { budgetBytes: 120 });
+    const omittedNames = catalog.omitted.map((o) => o.name);
+    expect(omittedNames).toContain("a-host");
+    const keptNames = catalog.entries.map((e) => e.name);
+    expect(keptNames).toContain("e-project");
+    const omittedScopes = catalog.omitted.map((o) => o.scope);
+    if (omittedScopes.includes("harness")) {
+      expect(omittedScopes).toContain("host");
+    }
+  });
 });

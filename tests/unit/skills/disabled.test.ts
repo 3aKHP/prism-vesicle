@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readDisabledNames, setDisabled } from "../../../src/skills";
+import { disabledPathForScope, readDisabledNames, setDisabled, userDisabledPath } from "../../../src/skills";
 
 async function withTemp<T>(work: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "vesicle-skill-disabled-"));
@@ -67,5 +67,17 @@ describe("skill disabled state", () => {
       const content = await readFile(path, "utf8");
       expect(content).toBe("alpha\nzeta\n");
     });
+  });
+
+  test("disabledPathForScope maps host to the user disabled-names file", () => {
+    const env = { HOME: "/fake-home", XDG_CONFIG_HOME: "" };
+    const hostPath = disabledPathForScope("host", "/project", env as NodeJS.ProcessEnv);
+    const userPath = userDisabledPath(env as NodeJS.ProcessEnv);
+    expect(hostPath).toBe(userPath);
+  });
+
+  test("disabledPathForScope returns undefined for harness", () => {
+    const env = { HOME: "/fake-home", XDG_CONFIG_HOME: "" };
+    expect(disabledPathForScope("harness", "/project", env as NodeJS.ProcessEnv)).toBeUndefined();
   });
 });

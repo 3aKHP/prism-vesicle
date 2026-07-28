@@ -128,4 +128,46 @@ body`, "utf8");
       expect(loaded.parsed.diagnostics.map((d) => d.kind)).toContain("not-a-regular-file");
     });
   });
+
+  test("host scope loses to harness on a name collision", async () => {
+    await withTemp(async (dir) => {
+      const hostRoot = await makeSkill(join(dir, "host"), "shared", "host version");
+      const harnessRoot = await makeSkill(join(dir, "harness"), "shared", "harness version");
+      const result = await discoverSkills({ harnessRoots: [harnessRoot], hostRoots: [hostRoot] });
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]!.scope).toBe("harness");
+      expect(result.diagnostics.filter((d) => d.kind === "shadowed")).toHaveLength(1);
+      expect(result.diagnostics[0]!.message).toContain('"host"');
+    });
+  });
+
+  test("four-scope collision selects project and produces three shadow diagnostics", async () => {
+    await withTemp(async (dir) => {
+      const hostRoot = await makeSkill(join(dir, "ho"), "quad", "host version");
+      const harnessRoot = await makeSkill(join(dir, "ha"), "quad", "harness version");
+      const userRoot = await makeSkill(join(dir, "u"), "quad", "user version");
+      const projectRoot = await makeSkill(join(dir, "p"), "quad", "project version");
+      const result = await discoverSkills({
+        harnessRoots: [harnessRoot],
+        userRoots: [userRoot],
+        projectRoots: [projectRoot],
+        hostRoots: [hostRoot],
+      });
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]!.scope).toBe("project");
+      expect(result.diagnostics.filter((d) => d.kind === "shadowed")).toHaveLength(3);
+    });
+  });
+
+  test("a malformed host sibling does not hide valid host skills", async () => {
+    await withTemp(async (dir) => {
+      const good = await makeSkill(join(dir, "host"), "good-host");
+      const badRoot = join(dir, "host", "bad-host");
+      await mkdir(badRoot, { recursive: true });
+      await writeFile(join(badRoot, "SKILL.md"), "not valid frontmatter", "utf8");
+      const result = await discoverSkills({ hostRoots: [good, badRoot] });
+      expect(result.skills.map((s) => s.name)).toEqual(["good-host"]);
+      expect(result.invalid).toHaveLength(1);
+    });
+  });
 });

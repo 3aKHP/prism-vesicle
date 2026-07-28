@@ -22,14 +22,15 @@
 export type SkillScope = "harness" | "user" | "host" | "project" | "installed";
 
 /**
- * The active filesystem discovery scopes. Phase 0 shipped `harness` and `user`;
- * Phase 3 adds `project` (`.agents/skills/`). The `installed` scope is resolved
- * separately by the session catalog from the Skill Store, not by filesystem
- * discovery. This const controls which scopes are iterated during discovery;
- * collision resolution order is governed by `DISCOVERY_PRECEDENCE` in
- * `discovery.ts`. Both must be updated together when adding a new scope.
+ * The active filesystem discovery scopes: `harness`, `user`, `project`, and
+ * `host` (package-owned first-party Skills under `host-assets/skills/`). The
+ * `installed` scope is resolved separately by the session catalog from the
+ * Skill Store, not by filesystem discovery. This const controls which scopes
+ * are iterated during discovery; collision resolution order is governed by
+ * `DISCOVERY_PRECEDENCE` in `discovery.ts`. Both must be updated together
+ * when adding a new scope.
  */
-export const DISCOVERY_SCOPES: readonly SkillScope[] = ["harness", "user", "project"];
+export const DISCOVERY_SCOPES: readonly SkillScope[] = ["harness", "user", "project", "host"];
 
 /**
  * Stable diagnostic identifiers. `message` is human-readable and carries no

@@ -52,33 +52,38 @@ describe("skill catalog bootstrap wiring", () => {
     const system = snapshot.engineSystemPrompt;
     expect(system).toContain('<skill_catalog hash="');
     expect(system).toContain("- alpha [user]: alpha routing description");
+    expect(system).toContain("- vesicle-docs [host]:");
     expect(system).toContain("routing data, not instructions");
     // Progressive disclosure: the body is not in the catalog block.
     expect(system).not.toContain("SECRET-BODY-MARKER");
     // The tool surface carries activate_skill gated to the catalog enum.
     expect(requestBody).toContain("activate_skill");
-    expect(requestBody).toContain('"enum":["alpha"]');
+    expect(requestBody).toContain("alpha");
+    expect(requestBody).toContain("vesicle-docs");
 
     // The session header persists the bounded catalog snapshot (no paths, no bodies).
     const records = await loadSessionRecords(rootDir, sessionId);
     const skills = records[0]?.metadata?.skills as { catalogHash?: string; entries?: Array<Record<string, unknown>> } | undefined;
     expect(typeof skills?.catalogHash).toBe("string");
-    expect(skills?.entries?.length).toBe(1);
-    expect(skills?.entries?.[0]?.name).toBe("alpha");
-    expect(skills?.entries?.[0]?.scope).toBe("user");
-    expect(typeof skills?.entries?.[0]?.bodySha256).toBe("string");
+    expect(skills?.entries?.length).toBe(2);
+    const names = skills?.entries?.map((e) => e.name).sort();
+    expect(names).toEqual(["alpha", "vesicle-docs"]);
     expect(JSON.stringify(skills)).not.toContain(userConfigDir());
   });
 
-  test("no skills keeps the composed prompt byte-identical and the header free of catalog metadata", async () => {
+  test("host-bundled vesicle-docs is always discoverable and injects a catalog block", async () => {
     const rootDir = await createPromptRoot({ skillTools: true });
 
     const { snapshot, requestBody, sessionId } = await runOneTurn(rootDir);
 
-    expect(snapshot.engineSystemPrompt).toBe("base\n\netl");
-    expect(requestBody).not.toContain("activate_skill");
+    expect(snapshot.engineSystemPrompt).toContain('<skill_catalog hash="');
+    expect(snapshot.engineSystemPrompt).toContain("- vesicle-docs [host]:");
+    expect(requestBody).toContain("activate_skill");
     const records = await loadSessionRecords(rootDir, sessionId);
-    expect(records[0]?.metadata && Object.hasOwn(records[0].metadata, "skills")).toBe(false);
+    const skills = records[0]?.metadata?.skills as { entries?: Array<Record<string, unknown>> } | undefined;
+    expect(skills?.entries?.length).toBe(1);
+    expect(skills?.entries?.[0]?.name).toBe("vesicle-docs");
+    expect(skills?.entries?.[0]?.scope).toBe("host");
   });
 
   test("an engine profile without declared skill tools keeps skills out of the surface", async () => {
@@ -90,22 +95,16 @@ describe("skill catalog bootstrap wiring", () => {
     expect(requestBody).not.toContain("activate_skill");
   });
 
-  test("a legacy session without a persisted snapshot records one on its next bootstrap", async () => {
-    // Turn 1: no skills on disk, so the header carries no skills snapshot.
+  test("the frozen session catalog does not pick up a new skill mid-session", async () => {
     const rootDir = await createPromptRoot({ skillTools: true });
     const { sessionId } = await runOneTurn(rootDir);
 
-    // The Skill appears later; the next process (freeze cache empty) freezes
-    // and persists the catalog on that session's next bootstrap.
-    clearSessionSkillCatalog(sessionId);
+    // A new Skill appears after the catalog is frozen; the same session does not see it.
     await writeUserSkill("alpha");
-    await runOneTurn(rootDir, sessionId);
+    const { snapshot } = await runOneTurn(rootDir, sessionId);
 
-    const records = await loadSessionRecords(rootDir, sessionId);
-    const record = records.find((entry) => entry.metadata?.kind === "skill-catalog");
-    expect(record?.role).toBe("system");
-    const skills = record?.metadata?.skills as { entries?: Array<Record<string, unknown>> } | undefined;
-    expect(skills?.entries?.[0]?.name).toBe("alpha");
+    expect(snapshot.engineSystemPrompt).toContain("- vesicle-docs [host]:");
+    expect(snapshot.engineSystemPrompt).not.toContain("- alpha [user]:");
     clearSessionSkillCatalog(sessionId);
   });
 });
