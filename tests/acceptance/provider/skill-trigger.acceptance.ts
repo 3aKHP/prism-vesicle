@@ -243,7 +243,7 @@ describe.skipIf(!precondition.ok)(`skill trigger evaluation [${label}]`, () => {
     }
     summarize("trigger-vesicle-docs-positive", { total: positives.length, hits, resourceHits });
     expect(hits).toBeGreaterThanOrEqual(Math.ceil(positives.length * 0.6));
-    expect(resourceHits).toBeGreaterThanOrEqual(Math.ceil(hits * 0.5));
+    expect(resourceHits).toBe(hits);
   }, 180_000);
 
   test("vesicle-docs: near-miss prompts do not activate", async () => {

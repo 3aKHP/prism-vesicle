@@ -250,23 +250,28 @@ async function run(): Promise<void> {
   }
 
   const stagingDir = join(SKILL_ROOT, `.references-staging-${process.pid}`);
-  await rm(stagingDir, { recursive: true, force: true });
-  await mkdir(stagingDir, { recursive: true });
-  for (const [name, content] of [...contents.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    await writeFile(join(stagingDir, name), content, "utf8");
-  }
   const oldDir = join(SKILL_ROOT, `.references-old-${process.pid}`);
+  await rm(stagingDir, { recursive: true, force: true });
   await rm(oldDir, { recursive: true, force: true });
-  const hadOld = await stat(REFERENCES_DIR).catch(() => undefined);
-  if (hadOld) await rename(REFERENCES_DIR, oldDir);
   try {
-    await rename(stagingDir, REFERENCES_DIR);
-  } catch (error) {
-    if (hadOld) await rename(oldDir, REFERENCES_DIR).catch(() => {});
-    throw error;
+    await mkdir(stagingDir, { recursive: true });
+    for (const [name, content] of [...contents.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      await writeFile(join(stagingDir, name), content, "utf8");
+    }
+    const hadOld = await stat(REFERENCES_DIR).catch(() => undefined);
+    if (hadOld) await rename(REFERENCES_DIR, oldDir);
+    try {
+      await rename(stagingDir, REFERENCES_DIR);
+    } catch (error) {
+      if (hadOld) await rename(oldDir, REFERENCES_DIR).catch(() => {});
+      throw error;
+    }
+    await rm(oldDir, { recursive: true, force: true });
+    console.log(`Synced ${contents.size} references to host-assets/skills/vesicle-docs/references/.`);
+  } finally {
+    await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    await rm(oldDir, { recursive: true, force: true }).catch(() => {});
   }
-  await rm(oldDir, { recursive: true, force: true });
-  console.log(`Synced ${contents.size} references to host-assets/skills/vesicle-docs/references/.`);
 }
 
 run().catch((error) => {

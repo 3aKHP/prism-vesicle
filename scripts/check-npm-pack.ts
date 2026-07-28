@@ -21,6 +21,11 @@ if (forbidden.length > 0) {
   throw new Error(`npm package contains development-only files: ${forbidden.join(", ")}`);
 }
 
+const tempArtifacts = paths.filter((path) => /\.references-(?:staging|old)-\d+/.test(path));
+if (tempArtifacts.length > 0) {
+  throw new Error(`npm package contains sync-script temporary artifacts: ${tempArtifacts.join(", ")}`);
+}
+
 for (const required of [
   "bin/vesicle.mjs",
   "dist/npm/vesicle.mjs",
