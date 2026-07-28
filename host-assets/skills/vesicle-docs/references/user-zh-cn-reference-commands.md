@@ -48,6 +48,7 @@ Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当�
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | 查看或设置工具批准模式 |
 | `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | 查看或配置实验性 Semantic Judge;不带参数打开引导式设置。`off` 关闭 Judge 并保留 profile;不带 profile 的 `observe`/`rewrite` 使用已保留或当前的 provider/model。选择 Review and revise(或 `/quality rewrite`)只打开一个红色确认面板——已没有 `/quality confirm` 这第二条命令 |
 | `/agents [handle\|stop <handle>\|retry]` | 查看/中断/重试 SubAgent |
+| `/skill [name [task]]` | 激活 Skill；不带参数打开选择器，`<name> [task]` 激活并调用，`<name> --context-only` 仅加载不触发 |
 
 ## 输入框按键
 
