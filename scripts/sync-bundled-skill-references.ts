@@ -12,8 +12,7 @@
  * atomically via staging + rename. Check mode exits non-zero on any drift.
  */
 
-import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, lstat, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "..");
@@ -51,11 +50,15 @@ async function collectRegularFiles(dir: string): Promise<string[]> {
   const files: string[] = [];
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const full = join(dir, entry.name);
-    if (entry.isSymbolicLink()) continue;
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Symbolic link rejected in public source: ${full}`);
+    }
     if (entry.isDirectory()) {
       files.push(...await collectRegularFiles(full));
     } else if (entry.isFile()) {
       files.push(full);
+    } else {
+      throw new Error(`Non-regular file rejected in public source: ${full}`);
     }
   }
   return files;
@@ -66,7 +69,8 @@ async function buildInventory(): Promise<SourceEntry[]> {
   const seen = new Set<string>();
 
   const readmePath = join(PROJECT_ROOT, "README.md");
-  const readmeStat = await stat(readmePath).catch(() => undefined);
+  const readmeStat = await lstat(readmePath).catch(() => undefined);
+  if (readmeStat?.isSymbolicLink()) throw new Error("README.md must not be a symbolic link.");
   if (readmeStat?.isFile()) {
     const name = resourcePathToName("README.md");
     if (seen.has(name)) throw new Error(`Resource name collision: ${name}`);
@@ -75,7 +79,8 @@ async function buildInventory(): Promise<SourceEntry[]> {
   }
 
   for (const source of SOURCE_ALLOWLIST.slice(1)) {
-    const rootStat = await stat(source.root).catch(() => undefined);
+    const rootStat = await lstat(source.root).catch(() => undefined);
+    if (rootStat?.isSymbolicLink()) throw new Error(`Source root must not be a symbolic link: ${source.root}`);
     if (!rootStat?.isDirectory()) continue;
     const files = await collectRegularFiles(source.root);
     for (const abs of files) {
@@ -96,8 +101,15 @@ function generatedMarker(publicPath: string): string {
 }
 
 async function generateResourceContent(entry: SourceEntry): Promise<string> {
-  const raw = await readFile(entry.absolutePath, "utf8");
-  return `${generatedMarker(entry.publicPath)}\n\n${raw}`;
+  const buffer = await readFile(entry.absolutePath);
+  if (buffer.includes(0)) {
+    throw new Error(`Binary content (NUL byte) rejected: ${entry.publicPath}`);
+  }
+  const text = buffer.toString("utf8");
+  if (text.includes("\uFFFD")) {
+    throw new Error(`Invalid UTF-8 content rejected: ${entry.publicPath}`);
+  }
+  return `${generatedMarker(entry.publicPath)}\n\n${text}`;
 }
 
 function extractTitle(content: string, fallback: string): string {

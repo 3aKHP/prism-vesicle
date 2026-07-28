@@ -3,7 +3,7 @@ import { writableProjectRoots } from "../core/artifacts/roots";
 import { resolveFilesystemSkills } from "../core/skills/catalog-sources";
 import type { FilesystemSkillInspection } from "../core/skills/catalog-sources";
 import { dirname, join, resolve } from "node:path";
-import { assertSafeRelativePath, createSkill, loadSkill, projectDisabledPath, readActiveIndex, readProvenance, rollbackSkill, setDisabled, setSkillEnabled, skillStoreDirectory, uninstallSkill, userDisabledPath } from "../skills";
+import { assertSafeRelativePath, createSkill, loadSkill, projectDisabledPath, readActiveIndex, readDisabledNames, readProvenance, rollbackSkill, setDisabled, setSkillEnabled, skillStoreDirectory, uninstallSkill, userDisabledPath } from "../skills";
 import type { CreateSkillScope, DiscoveryResult, LoadedSkill } from "../skills";
 import { installFromSource, updateSkill } from "./skills-source";
 import type { InstallSourceOptions } from "./skills-source";
@@ -107,9 +107,15 @@ async function runList(): Promise<void> {
     console.log("No skills discovered or installed.");
     return;
   }
+  const userDisabled = await readDisabledNames(userDisabledPath()).catch(() => new Set<string>());
+  const projectDisabled = await readDisabledNames(projectDisabledPath(process.cwd())).catch(() => new Set<string>());
   for (const skill of result.skills) {
     const description = skill.parsed.ok ? skill.parsed.metadata.description : "";
-    console.log(`  ${skill.name}  [${skill.scope}]  ${truncate(description, 64)}`);
+    const isDisabled = (skill.scope === "user" || skill.scope === "host") ? userDisabled.has(skill.name)
+      : skill.scope === "project" ? projectDisabled.has(skill.name)
+      : false;
+    const flag = isDisabled ? " (disabled)" : "";
+    console.log(`  ${skill.name}  [${skill.scope}]${flag}  ${truncate(description, 64)}`);
   }
   if (result.invalid.length > 0) {
     console.log("Invalid:");
