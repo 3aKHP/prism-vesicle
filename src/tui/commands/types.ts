@@ -140,6 +140,10 @@ export type CommandContext = {
   openQualityRewriteConfirm: (candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) => Promise<void>;
   openSideQuestion: (args: string) => Promise<void>;
 
+  // —— skills (Phase 2) ——
+  openSkillPicker: () => Promise<void>;
+  activateSkill: (name: string, options: { mode: "invoke" | "context-only"; taskText?: string }) => Promise<void>;
+
   // —— shell pages (Scope B two-page model) ——
   openWorkspaceTarget: (relPath?: string) => Promise<"file" | "dir" | null>;
 

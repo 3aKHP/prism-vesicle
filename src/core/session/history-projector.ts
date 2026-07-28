@@ -6,6 +6,8 @@ import type { HarnessRuntimeIdentity } from "../harness/driver";
 import { reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
+import type { SkillToolEvent } from "../skills/types";
+import { parseSkillCatalogSnapshot, type SkillCatalogSnapshot } from "../skills/catalog-snapshot";
 import type { PermissionMode } from "../permissions";
 import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
@@ -20,6 +22,8 @@ export type HistoryProjection = {
   permissionMode?: PermissionMode;
   assets?: AssetFingerprint;
   harness?: HarnessRuntimeIdentity;
+  /** Latest persisted frozen Skill catalog snapshot (session header or `skill-catalog` record). */
+  skillCatalogSnapshot?: SkillCatalogSnapshot;
 };
 
 /**
@@ -72,12 +76,17 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
   let permissionMode: PermissionMode | undefined;
   let assets: AssetFingerprint | undefined;
   let harness: HarnessRuntimeIdentity | undefined;
+  let skillCatalogSnapshot: SkillCatalogSnapshot | undefined;
 
   for (const record of records) {
     if (record.metadata && Object.hasOwn(record.metadata, "engine")) {
       const nextEngine = readEngineId(record.metadata.engine);
       if (nextEngine) engine = nextEngine;
     }
+    // The session header and any later `skill-catalog` system record carry the
+    // frozen catalog snapshot under the same `skills` key; latest wins.
+    const skills = parseSkillCatalogSnapshot(record.metadata?.skills);
+    if (skills) skillCatalogSnapshot = skills;
     const providerId = record.metadata?.providerId;
     const model = record.metadata?.model;
     if (typeof providerId === "string" && typeof model === "string") providerSelection = { provider: providerId, model };
@@ -135,12 +144,13 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
     const toolWebEvent = record.metadata?.webEvent as WebToolEvent | undefined;
     const toolMcpEvent = record.metadata?.mcpEvent as McpToolEvent | undefined;
     const toolProcessEvent = record.metadata?.processEvent as ProcessToolEvent | undefined;
+    const toolSkillEvent = record.metadata?.skillEvent as SkillToolEvent | undefined;
     const images = parseImageAttachments(record.metadata?.images);
     const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
     const usage = readResponseUsage(record.metadata?.usage);
-    messages.push({ role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
+    messages.push({ role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(toolSkillEvent ? { toolSkillEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
   }
-  return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}) };
+  return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}), ...(skillCatalogSnapshot ? { skillCatalogSnapshot } : {}) };
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode { return value === "MANUAL" || value === "INERTIA" || value === "MOMENTUM" || value === "YOLO"; }

@@ -30,6 +30,19 @@ Phase 1 adds **repository installation and lifecycle** on top of the Phase 0 sto
 
 Phase 1 does **not** add `activate_skill` / `read_skill_resource` tools, a `/skill` command, project `.agents/skills/` scope, script execution, or any prompt-composition, session, compaction, or Engine-switch behavior. Those remain Phase 2 and must not be implied by Phase 1 surfaces.
 
+## Phase 2 scope
+
+Phase 2 adds **model-visible activation, resources, scripts, and the `/skill` command**:
+
+- `activate_skill(name)` tool: registered only when the active Engine declares Skill capability and at least one Skill is in the session catalog. Its `name` schema is an enum of valid catalog names. The result is a tagged `skill_activation` event containing the exact body (without frontmatter), resource inventory, content hash, scope, and authority disclosure.
+- `read_skill_resource(skill, path, startLine?, endLine?)` tool: reads any bundled file (references, assets, and script sources) from a previously activated Skill. Path hardening reuses `src/skills/paths.ts`. Script sources are readable without the active Engine being process-capable; only execution is gated.
+- `run_skill_script(skill, path, args[])` tool: executes a bundled script through the Process Runtime as structured argv (no shell interpolation). Available only when the active Engine already exposes process capability. Uses the same environment filtering, timeout, output cap, cancellation, process-group cleanup, and Tool Permission Runtime approval as any equivalent process action. No Skill-specific confirmation layer exists.
+- `/skill` TUI command: bare `/skill` opens a compact picker; `/skill <name> [task]` activates and invokes; `/skill <name> --context-only` activates without a provider request.
+- Session semantics: the catalog is frozen per session (resume re-resolves by name+hash, never silently substituting changed content). Activation records persist as user records with `kind: "skill-activation"`. Compaction reattaches active Skill bodies within a 16 KiB budget or reports loss. Rewind removes activation state only when the record is beyond the new head. Engine switching recomputes eligibility and prunes the activation registry.
+- Authority ordering: Vesicle host enforcement > Engine/Harness contract > user request and persistent instructions > activated Skill procedure > Skill references. A Skill cannot add tools, change permissions, widen writable roots, or override gates.
+
+Phase 2 does **not** add project `.agents/skills/` scope, Skill authoring workflows, registries, or broader distribution.
+
 ## What a Skill is (and is not)
 
 | Surface | Responsibility | Loaded when | May grant capability |
@@ -130,11 +143,10 @@ Static scanning may produce useful warnings, but it cannot certify Markdown or c
 
 ## Current boundary
 
-The shipped runtime covers format, inventory, the Skill Store, and repository installation with lifecycle (`install | update | rollback | uninstall`). The Skill Store is CLI-listable but not yet model-visible. The following are **not** part of the current contract and must not be implied by any current surface:
+The shipped runtime covers format, inventory, the Skill Store, repository installation with lifecycle, and model-visible activation with resources, scripts, and the `/skill` TUI command. The Skill Store is both CLI-listable and a model-visible catalog source (scope `installed`). The following are **not** part of the current contract and must not be implied by any current surface:
 
-- model-visible activation — `activate_skill` / `read_skill_resource` tools, a `/skill` command, and any prompt-composition, session, compaction, or Engine-switch behavior;
-- script execution through Process/Permission Runtime;
-- project `.agents/skills/` scope and Skill authoring workflows; and
-- registries or broader distribution.
+- project `.agents/skills/` scope and Skill authoring workflows;
+- registries or broader distribution; and
+- SubAgent Skill inheritance (children do not receive parent Skills).
 
 Current capability state and known limits belong in [`STATUS.md`](../../STATUS.md). Later delivery phases are internal planning; they do not change this boundary until their runtime contract lands and is documented here.

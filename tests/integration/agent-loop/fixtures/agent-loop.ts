@@ -12,7 +12,7 @@ export async function restoreAgentLoopTestState(): Promise<void> {
   const dirs = providerConfigDirs.splice(0);
   await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
 }
-export async function createPromptRoot(options: { stopGates?: string[]; validators?: string[] } = {}): Promise<string> {
+export async function createPromptRoot(options: { stopGates?: string[]; validators?: string[]; skillTools?: boolean } = {}): Promise<string> {
   const rootDir = await mkdtemp(join(tmpdir(), "vesicle-agent-loop-"));
   const sharedDir = join(rootDir, "assets", "prompts", "shared");
   const engineDir = join(rootDir, "assets", "prompts", "engines");
@@ -34,6 +34,10 @@ export async function createPromptRoot(options: { stopGates?: string[]; validato
     ? `validators:\n${(options.validators ?? []).map((name) => `  - ${name}`).join("\n")}`
     : "validators: []";
 
+  const skillToolsBlock = options.skillTools
+    ? "  - activate_skill\n  - read_skill_resource\n  - run_skill_script\n"
+    : "";
+
   const profileYaml = [
     "id: etl",
     "displayName: Test ETL",
@@ -51,7 +55,7 @@ export async function createPromptRoot(options: { stopGates?: string[]; validato
     "  - read_file",
     "  - view_image",
     "  - write_file",
-    validatorsBlock,
+    `${skillToolsBlock}${validatorsBlock}`,
     stopGatesBlock,
     "stateRoots:",
     "  - workspace",

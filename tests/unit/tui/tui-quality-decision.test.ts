@@ -33,6 +33,7 @@ describe("TUI quality decision", () => {
       gate: { gate: "runtime-turn", summary: "Later" },
       rewind: null,
       session: null,
+      skillPicker: null,
       model: null,
     })).toEqual({ kind: "quality", pending });
   });

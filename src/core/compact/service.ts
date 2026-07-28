@@ -6,6 +6,8 @@ import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionSnapshot } from "../session/store";
+import { prepareSkillCompactionReattach, removeSessionActivations, SKILL_CONTEXT_LOST_KIND } from "../skills";
+import type { SkillContextLoss } from "../skills";
 import { selectReplacement } from "./replacement-builder";
 import { formatCompactSummary, generatePortableSummary, toVesicleMessage } from "./summary-generator";
 import { buildCompactReplacementMessages, installCompactCheckpoint } from "./checkpoint-installer";
@@ -66,6 +68,8 @@ export type PortableCompactionOutcome =
       retainedUnits: number;
       contextWindow?: number;
       projectedAfterTokens?: number;
+      /** Active Skills whose exact body compaction could not retain; they require reactivation. */
+      skillContextLoss?: SkillContextLoss[];
     }
   | { kind: "nothing-to-compact" }
   | { kind: "cancelled"; error: unknown }
@@ -111,6 +115,18 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
   const selection = selectReplacement(full.records, { contextWindow: config.limits?.contextWindow });
   if (!selection) return { kind: "nothing-to-compact" };
 
+  // Active Skill procedure context is either reattached verbatim inside the
+  // replacement history or reported as lost (never silently dropped).
+  const skillReattach = await prepareSkillCompactionReattach({
+    rootDir: options.rootDir,
+    env: process.env,
+    sessionId: options.sessionId,
+    profile: { id: options.engine },
+    records: full.records,
+    persistedSnapshot: full.skillCatalogSnapshot,
+    contextWindow: config.limits?.contextWindow,
+  });
+
   let summary: string;
   try {
     summary = await generatePortableSummary({
@@ -130,7 +146,7 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     return { kind: "failed", error };
   }
 
-  const replacementMessages = buildCompactReplacementMessages(selection, summary);
+  const replacementMessages = buildCompactReplacementMessages(selection, summary, skillReattach.reattach);
   let projectedAfterTokens: number | undefined;
   let installed: Awaited<ReturnType<typeof installCompactCheckpoint>>;
   try {
@@ -178,6 +194,13 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
         ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
       },
     });
+    if (skillReattach.lost.length > 0) {
+      await session.append({
+        role: "system",
+        content: `Compaction could not retain the active context of ${skillReattach.lost.length} Skill(s): ${skillReattach.lost.map((lost) => lost.name).join(", ")}. Reactivate with activate_skill if the procedure is still needed.`,
+        metadata: { kind: SKILL_CONTEXT_LOST_KIND, skills: skillReattach.lost },
+      });
+    }
 
   } catch (error) {
     if (options.signal?.aborted || isAbortError(error)) return { kind: "cancelled", error };
@@ -188,6 +211,11 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
   // problem into a "failed without mutation" outcome: the checkpoint is
   // already durable and callers must see the reload error directly.
   const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, { headUuid: installed.checkpointUuid });
+  // Lost Skills are no longer active: remove them from the registry so dedup
+  // cannot suppress a deliberate reactivation.
+  if (skillReattach.lost.length > 0) {
+    removeSessionActivations(options.sessionId, skillReattach.lost.map((lost) => lost.name));
+  }
   const messagesSummarized = selection.evictedRecords.filter((record) => record.role !== "system").length;
   const retainedUnits = selection.retainedRecords.filter((record) => record.role !== "system").length;
   return {
@@ -199,6 +227,7 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     retainedUnits,
     ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
     ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
+    ...(skillReattach.lost.length > 0 ? { skillContextLoss: skillReattach.lost } : {}),
   };
 }
 

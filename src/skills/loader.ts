@@ -26,12 +26,22 @@ export const SKILL_FILE_NAME = "SKILL.md";
 export type LoadSkillOptions = {
   /** Override the entry file name (default `SKILL.md`). Used by tests and fixtures. */
   skillFileName?: string;
+  /**
+   * Override the expected Skill name instead of deriving it from the directory
+   * basename. Required for Skill Store snapshots, which live under
+   * `<name>/<version>/` — the version directory cannot carry the name identity
+   * the open standard expects of an authoring root. The standard's
+   * name-matches-directory check was already enforced at install time against
+   * the source root, so the active-index entry is the identity here.
+   */
+  expectedName?: string;
 };
 
 /**
- * Load one skill root. `name` is the directory basename and the parser's
- * expected `name`. The returned `rootDirectory` is internal host state and
- * must not appear in catalog entries or diagnostics.
+ * Load one skill root. `name` is the directory basename (or `expectedName`
+ * when provided) and the parser's expected `name`. The returned
+ * `rootDirectory` is internal host state and must not appear in catalog
+ * entries or diagnostics.
  */
 export async function loadSkill(
   rootDirectory: string,
@@ -39,7 +49,7 @@ export async function loadSkill(
   options: LoadSkillOptions = {},
 ): Promise<LoadedSkill> {
   const skillFileName = options.skillFileName ?? SKILL_FILE_NAME;
-  const name = basename(rootDirectory);
+  const name = options.expectedName ?? basename(rootDirectory);
 
   const rootInfo = await lstat(rootDirectory).catch((error: unknown) => error as NodeJS.ErrnoException);
   if (rootInfo instanceof Error) {

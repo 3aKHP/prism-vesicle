@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
+import { join } from "node:path";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
@@ -64,10 +65,12 @@ import { ArtifactFocusPreview } from "./widgets/ArtifactFocusPreview";
 import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
 import { createSideQuestionController } from "./side-question-controller";
+import { createSkillPickerController } from "./skill-picker-controller";
 import { createWorkspaceController } from "./workspace-controller";
 import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
+import { activateSkillForSession } from "../core/skills";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
@@ -477,6 +480,23 @@ export function App(props: AppProps = {}) {
     openQualityPicker,
     openRewriteConfirm,
   } = qualityPickerController;
+  const skillPickerController = createSkillPickerController({
+    rootDir: process.cwd(),
+    env: process.env,
+    activeEngineProfile: () => ({ id: activeEngine() }),
+    contextWindow: () => activeModelLimits()?.contextWindow,
+    setStatus,
+    setMessages,
+    reportError: (error) => turnController.reportError(error),
+    onActivate: (name) => activateSkillCommand(name, { mode: "context-only" }),
+  });
+  const {
+    skillPicker,
+    skillPickerItems,
+    skillPickerTitle,
+    handleSkillPickerKey,
+    openSkillPicker,
+  } = skillPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
   onCleanup(() => {
     unsubscribeProcesses();
@@ -522,6 +542,7 @@ export function App(props: AppProps = {}) {
       && !pendingChildPermission()
       && !rewindPicker()
       && !sessionPicker()
+      && !skillPicker()
       && !modelPicker()
       && !qualityPicker()
       && !qualityRewriteConfirm()
@@ -805,7 +826,7 @@ export function App(props: AppProps = {}) {
     dimensions().width,
     dimensions().height,
     Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()),
-    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
+    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
       : qualityRewriteConfirm()
@@ -856,6 +877,8 @@ export function App(props: AppProps = {}) {
     handleRewriteConfirmKey,
     sessionPicker,
     handleSessionPickerKey,
+    skillPicker,
+    handleSkillPickerKey,
     yoloConfirmStage,
     handleYoloKey,
     activePermissionRequest,
@@ -898,6 +921,37 @@ export function App(props: AppProps = {}) {
    *   /new              abandon the current session and start fresh
    *   /help             show available commands
    */
+  async function activateSkillCommand(
+    name: string,
+    options: { mode: "invoke" | "context-only"; taskText?: string },
+  ): Promise<void> {
+    const rootDir = process.cwd();
+    let sid = sessionId();
+    if (!sid) {
+      sid = crypto.randomUUID();
+      setSessionId(sid);
+      setSessionPath(join(rootDir, ".vesicle", "sessions", `${sid}.jsonl`));
+    }
+    const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
+      profile: { id: activeEngine() },
+      mode: options.mode,
+      parentUuid: nextSessionParent()?.uuid ?? null,
+      contextWindow: activeModelLimits()?.contextWindow,
+    });
+    const scriptInfo = activation.scripts.length > 0
+      ? ` · ${activation.scripts.length} script${activation.scripts.length > 1 ? "s" : ""}`
+      : "";
+    const card = activation.alreadyActive
+      ? `Skill "${activation.name}" already active [${activation.scope}].`
+      : `Skill "${activation.name}" activated [${activation.scope}] · ${activation.resources.length} resource${activation.resources.length === 1 ? "" : "s"}${scriptInfo}.`;
+    setMessages((prev) => [...prev, { role: "system", content: card }]);
+    if (activation.alreadyActive) return;
+    if (options.mode === "invoke") {
+      const prompt = options.taskText ?? `Apply the ${activation.name} skill to the current context.`;
+      await turnController.submitPrompt(prompt);
+    }
+  }
+
   // Command execution context: the surface slash-command handlers reach
   // through. Built once from component signals/helpers; submitPrompt passes it
   // to executeCommand. See src/tui/commands/.
@@ -958,6 +1012,8 @@ export function App(props: AppProps = {}) {
     openQualityPicker,
     openQualityRewriteConfirm: openRewriteConfirm,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
+    openSkillPicker,
+    activateSkill: (name, options) => activateSkillCommand(name, options),
     openWorkspaceTarget: async (relPath?: string) => {
       setFocusedArtifactPath(null);
       return workspaceController.openWorkspaceTarget(relPath);
@@ -1126,6 +1182,7 @@ export function App(props: AppProps = {}) {
         gate={gateWithQualityWarning()}
         rewind={rewindPicker()}
         session={sessionPicker()}
+        skillPicker={skillPicker()}
         qualityPicker={qualityPicker()}
         qualityRewriteConfirm={qualityRewriteConfirm()}
         model={modelPicker()}
@@ -1140,6 +1197,8 @@ export function App(props: AppProps = {}) {
         questionFreeformCursor={questionFreeformCursor()}
         modelItems={modelPickerItems()}
         modelTitle={modelPickerTitle()}
+        skillPickerItems={skillPickerItems()}
+        skillPickerTitle={skillPickerTitle()}
         qualityPickerItems={qualityPickerItems()}
         qualityPickerTitle={qualityPickerTitle()}
         commandMenuOpen={commandMenuOpen()}

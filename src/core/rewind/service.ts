@@ -12,6 +12,7 @@ import {
   type SessionSnapshot,
 } from "../session/store";
 import { ENGINE_HANDOFF_KIND } from "../engine/transition";
+import { SKILL_ACTIVATION_KIND } from "../skills/types";
 import { parseImageAttachments } from "../attachments/store";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 export { summarizeConversationFrom } from "./summarize";
@@ -131,6 +132,7 @@ export function isSelectableUserRecord(record: SessionRecord): boolean {
     || kind === "background-process-results"
     || kind === "subagent-results"
     || kind === "quality-rewrite-feedback"
+    || kind === SKILL_ACTIVATION_KIND
     || kind === ENGINE_HANDOFF_KIND
   ) return false;
   return record.content.trim().length > 0;

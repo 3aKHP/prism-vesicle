@@ -27,6 +27,18 @@ import {
   resolveProjectHarnessRuntime,
 } from "../harness/activation";
 import { loadSessionSnapshot, type ResumedMessage, type SessionRecord, type SessionSnapshot } from "../session/store";
+import {
+  catalogNames,
+  composeSkillCatalogBlock,
+  deriveSessionActivations,
+  hydrateSessionActivations,
+  isMeaningfulSkillCatalogSnapshot,
+  pruneSessionActivations,
+  resolveEngineEligibleCatalog,
+  resolveSessionSkillCatalog,
+  SKILL_CATALOG_RECORD_KIND,
+  snapshotSkillCatalog,
+} from "../skills";
 import type { EngineId } from "../engine/profile";
 import type { ToolDefinition } from "../tools";
 
@@ -53,21 +65,59 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const { profile } = engineAssets;
   const instructional = await composeSystemPromptWithInstructions(engine, engineAssets.systemPrompt, rootDir);
   let systemPrompt = instructional.systemPrompt;
-  const toolSurface = await resolveToolSurface(
-    profile,
-    config.capabilities?.vision === true,
-    permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
-    permission.shellInterpreter,
-  );
-  const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
-  let compactedSnapshot: SessionSnapshot | undefined;
+
+  // Load the existing session's snapshot before resolving the Skill catalog:
+  // the persisted catalog snapshot and the durable activation records are the
+  // resume authority for the frozen catalog and the activation registry.
+  let snapshot: SessionSnapshot | undefined;
   if (options.sessionId) {
-    let snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
+    snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
     if (engine === "stage") {
       if (!snapshot.stageBootstrap) throw new Error("Stage session is missing frozen bootstrap metadata.");
       systemPrompt = `${systemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
     }
+  }
+  const session = await createSessionStore(
+    rootDir,
+    options.sessionId,
+    Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
+  );
+
+  // Skills (Phase 2): freeze the session catalog (resume re-resolves by the
+  // persisted snapshot's name+hash), filter it for this engine, hydrate the
+  // activation registry from durable records, and prune entries ineligible in
+  // this engine. The catalog block appends after the composed prompt only
+  // when at least one Skill is eligible, so a Skill-less session keeps the
+  // composed prompt byte-identical.
+  const frozenSkillCatalog = await resolveSessionSkillCatalog(
+    rootDir,
+    process.env,
+    profile,
+    session.sessionId,
+    snapshot?.skillCatalogSnapshot,
+    config.limits?.contextWindow,
+  );
+  const skillCatalog = resolveEngineEligibleCatalog(frozenSkillCatalog, profile);
+  const skillCatalogSnapshot = snapshotSkillCatalog(frozenSkillCatalog);
+  if (snapshot) {
+    hydrateSessionActivations(session.sessionId, deriveSessionActivations(snapshot.records));
+    pruneSessionActivations(session.sessionId, new Set(catalogNames(skillCatalog)));
+  }
+  const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
+  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+
+  const toolSurface = await resolveToolSurface(
+    profile,
+    config.capabilities?.vision === true,
+    permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
+    permission.shellInterpreter,
+    {},
+    { catalogNames: catalogNames(skillCatalog) },
+  );
+  const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
+  let compactedSnapshot: SessionSnapshot | undefined;
+  if (options.sessionId && snapshot) {
     await emitAssetDriftIfNeeded(rootDir, options.sessionId, engineAssets.assets, options.onEvent);
     // Pre-turn auto-compaction runs only for an existing session and only when
     // limits.autoCompact is fully configured. It evaluates the projected next
@@ -98,11 +148,6 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
       if (compacted.compacted) compactedSnapshot = snapshot;
     }
   }
-  const session = await createSessionStore(
-    rootDir,
-    options.sessionId,
-    Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
-  );
 
   // A new top-level Agent Loop gets a fresh logical turn id, and its first
   // provider round is allocated alongside the initiating input. The ids stamp
@@ -136,7 +181,19 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
         assets: engineAssets.assets,
         instructions: selectionToRecord(instructional.selection),
         ...(harness?.identity ? { harness: harness.identity } : {}),
+        // Bounded frozen-catalog identity (hash + name/scope/bodySha256 only);
+        // omitted entirely when the session has no Skills and no diagnostics.
+        ...(isMeaningfulSkillCatalogSnapshot(skillCatalogSnapshot) ? { skills: skillCatalogSnapshot } : {}),
       },
+    });
+  } else if (snapshot && !snapshot.skillCatalogSnapshot && isMeaningfulSkillCatalogSnapshot(skillCatalogSnapshot)) {
+    // A resumed legacy session without a persisted snapshot: make the fresh
+    // freeze durable so the next resume re-resolves by name+hash instead of
+    // re-freezing whatever the store happens to contain.
+    await session.append({
+      role: "system",
+      content: "Skill catalog frozen for this session.",
+      metadata: { kind: SKILL_CATALOG_RECORD_KIND, skills: skillCatalogSnapshot },
     });
   }
 
@@ -197,6 +254,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     logicalTurnId,
     providerRoundId,
     profile,
+    skillCatalog,
     generation,
     checkpoint,
     signal: options.signal,

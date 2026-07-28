@@ -22,6 +22,8 @@ import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { finalizeTurn } from "./turn-finalizer";
 import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
+import { composeSkillCatalogBlock, readFrozenSessionSkillCatalog, resolveEngineEligibleCatalog } from "../skills";
+import type { ResolvedSkillCatalog } from "../skills";
 import type { AgentLoopEvent, PendingUserInput, RunPromptResult } from "./types";
 import type { HarnessRuntimeContext } from "../harness/driver";
 import type { AssetResolver } from "../runtime/assets";
@@ -84,6 +86,8 @@ export type RunLoopArgs = {
    */
   providerRoundId?: string;
   profile: EngineProfile;
+  /** Engine-eligible session Skill catalog for the Skill tool executors. */
+  skillCatalog?: ResolvedSkillCatalog;
   generation?: VesicleRequest["generation"];
   checkpoint?: FileCheckpointManager;
   signal?: AbortSignal;
@@ -142,7 +146,15 @@ function refreshLiveSystemPrompt(args: RunLoopArgs): void {
   if (args.profile.id === "stage") return;
   const blocks = readFrozenInstructionBlocks(args.session.sessionId);
   if (blocks === undefined) return;
-  args.systemPrompt = blocks.length > 0 ? `${args.enginePrompt}\n\n${blocks}` : args.enginePrompt;
+  let prompt = blocks.length > 0 ? `${args.enginePrompt}\n\n${blocks}` : args.enginePrompt;
+  // The recompose above rebuilds from the engine prompt, so the frozen Skill
+  // catalog block (appended by bootstrap) must be re-appended to stay stable.
+  const frozenCatalog = readFrozenSessionSkillCatalog(args.session.sessionId);
+  const catalogBlock = frozenCatalog
+    ? composeSkillCatalogBlock(resolveEngineEligibleCatalog(frozenCatalog, args.profile).catalog)
+    : "";
+  if (catalogBlock) prompt = `${prompt}\n\n${catalogBlock}`;
+  args.systemPrompt = prompt;
 }
 
 async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
@@ -313,6 +325,7 @@ async function advanceRound(
     parentMessagesBeforeToolCall,
     session: args.session,
     profile: args.profile,
+    skillCatalog: args.skillCatalog,
     generation: args.generation,
     signal: args.signal,
     onEvent: args.onEvent,

@@ -20,6 +20,7 @@ import type { PendingQualityDecisionState } from "../decision-interaction";
 import { QualityDecisionPrompt } from "../QualityDecisionPrompt";
 import { palette } from "../theme";
 import type { OptionItem, RewindPickerState, SessionPickerState } from "../types";
+import type { SkillPickerState } from "../skill-picker-controller";
 import { queuedInputText, type QueuedInput } from "../input-queue";
 import { truncateLine } from "../format";
 import { ArgumentMenu } from "../widgets/ArgumentMenu";
@@ -65,6 +66,7 @@ export type BottomSurfaceMode =
   | { kind: "gate"; gate: GateRequest }
   | { kind: "rewind"; picker: RewindPickerState }
   | { kind: "session"; picker: SessionPickerState }
+  | { kind: "skill-picker"; picker: SkillPickerState }
   | { kind: "quality-rewrite-confirm"; state: QualityRewriteConfirmState }
   | { kind: "quality-picker"; picker: QualityPickerState }
   | { kind: "model"; picker: ModelPickerState }
@@ -78,6 +80,7 @@ export type BottomSurfaceState = {
   gate: GateRequest | null;
   rewind: RewindPickerState | null;
   session: SessionPickerState | null;
+  skillPicker: SkillPickerState | null;
   qualityRewriteConfirm?: QualityRewriteConfirmState | null;
   qualityPicker?: QualityPickerState | null;
   model: ModelPickerState | null;
@@ -91,6 +94,7 @@ export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfa
   if (state.gate) return { kind: "gate", gate: state.gate };
   if (state.rewind) return { kind: "rewind", picker: state.rewind };
   if (state.session) return { kind: "session", picker: state.session };
+  if (state.skillPicker) return { kind: "skill-picker", picker: state.skillPicker };
   if (state.qualityRewriteConfirm) return { kind: "quality-rewrite-confirm", state: state.qualityRewriteConfirm };
   if (state.qualityPicker) return { kind: "quality-picker", picker: state.qualityPicker };
   if (state.model) return { kind: "model", picker: state.model };
@@ -110,6 +114,8 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   questionFreeformCursor: number;
   modelItems: OptionItem[];
   modelTitle: string;
+  skillPickerItems: OptionItem[];
+  skillPickerTitle: string;
   qualityPickerItems: OptionItem[];
   qualityPickerTitle: string;
   qualityRewriteConfirm: QualityRewriteConfirmState | null;
@@ -217,6 +223,20 @@ export function BottomSurface(props: BottomSurfaceProps) {
         {(current) => (
           <box height={props.layout.bottomHeight}>
             <SessionPicker sessions={current().picker.sessions} selected={current().picker.selected} width={props.layout.width} />
+          </box>
+        )}
+      </Match>
+      <Match when={mode().kind === "skill-picker" && mode() as Extract<BottomSurfaceMode, { kind: "skill-picker" }> }>
+        {(current) => (
+          <box height={props.layout.bottomHeight}>
+            <OptionPicker
+              title={props.skillPickerTitle}
+              items={props.skillPickerItems}
+              selected={current().picker.selected}
+              width={props.layout.width}
+              hint="↑/↓ choose · Enter activate · Esc close"
+              maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
+            />
           </box>
         )}
       </Match>

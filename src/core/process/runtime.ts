@@ -105,6 +105,37 @@ export async function executeProcessPlan(
   return startProcessPlan(rootDir, plan, options).result;
 }
 
+export type ProcessArgvOptions = {
+  /** Wall-clock timeout; defaults to DEFAULT_PROCESS_TIMEOUT_MS, capped at MAX_PROCESS_TIMEOUT_MS. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  onProgress?: (progress: ProcessExecutionProgress) => void;
+};
+
+/**
+ * Spawn one structured-argv process with the exact semantics of the shell-plan
+ * path (filtered environment, timeout, stream caps, cancellation, and
+ * process-tree cleanup), but without any shell: `argv[0]` is the executable
+ * and every later entry reaches it as one verbatim argument. The host never
+ * interpolates a shell string, so arguments cannot be reinterpreted by a
+ * shell. Used by `run_skill_script`; callers own any display-only command
+ * string they show alongside the result.
+ */
+export async function executeProcessArgv(
+  rootDir: string,
+  argv: string[],
+  options: ProcessArgvOptions = {},
+): Promise<ProcessExecutionResult> {
+  if (argv.length === 0 || !argv[0]) throw new Error("executeProcessArgv requires a non-empty argv.");
+  const timeoutMs = options.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_PROCESS_TIMEOUT_MS) {
+    throw new Error(`timeoutMs must be an integer from 1 to ${MAX_PROCESS_TIMEOUT_MS}.`);
+  }
+  return startProcessSpawn(rootDir, argv, timeoutMs, options).result;
+}
+
 export function startProcessPlan(
   rootDir: string,
   plan: ProcessExecutionPlan,
@@ -115,8 +146,26 @@ export function startProcessPlan(
     onProgress?: (progress: ProcessExecutionProgress) => void;
   } = {},
 ): ProcessExecutionHandle {
+  return startProcessSpawn(rootDir, buildProcessCommand(plan), plan.timeoutMs, options);
+}
+
+/**
+ * Shared spawn/capture/timeout/abort/cleanup core for both the shell-plan and
+ * the structured-argv entry points. Everything about lifetime semantics lives
+ * here so the two paths cannot drift apart.
+ */
+function startProcessSpawn(
+  rootDir: string,
+  command: string[],
+  timeoutMs: number,
+  options: {
+    signal?: AbortSignal;
+    env?: NodeJS.ProcessEnv;
+    platform?: NodeJS.Platform;
+    onProgress?: (progress: ProcessExecutionProgress) => void;
+  } = {},
+): ProcessExecutionHandle {
   const platform = options.platform ?? process.platform;
-  const command = buildProcessCommand(plan);
   const started = performance.now();
   const child = Bun.spawn(command, {
     cwd: rootDir,
@@ -167,7 +216,7 @@ export function startProcessPlan(
   if (options.signal?.aborted) abortListener();
   else options.signal?.addEventListener("abort", abortListener, { once: true });
 
-  timeout = setTimeout(() => stop("timeout"), plan.timeoutMs);
+  timeout = setTimeout(() => stop("timeout"), timeoutMs);
   const result = (async (): Promise<ProcessExecutionResult> => {
     let exitCode: number | undefined;
     let stdout: Awaited<ReturnType<typeof captureStream>>;

@@ -70,6 +70,7 @@ export async function runQualityContinuation(input: {
     session: context.session,
     logicalTurnId: context.identity?.logicalTurnId,
     profile: context.profile,
+    skillCatalog: context.skillCatalog,
     generation: context.generation,
     checkpoint: await FileCheckpointManager.resumeLatest(context.rootDir, context.session),
     signal: options.signal,

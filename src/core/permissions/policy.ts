@@ -20,6 +20,7 @@ const observeTools = new Set([
   "wait_agent",
   "shell_output",
   "read_instructions",
+  "read_skill_resource",
 ]);
 
 const interactionTools = new Set([
@@ -35,7 +36,9 @@ const interactionTools = new Set([
  */
 export function permissionClassForTool(toolName: string): PermissionClass {
   if (interactionTools.has(toolName)) return "interaction";
-  if (toolName === "shell_exec") return "arbitrary_exec";
+  // run_skill_script executes bundled code with the user's process authority,
+  // so it shares shell_exec's class; no Skill-specific approval layer exists.
+  if (toolName === "shell_exec" || toolName === "run_skill_script") return "arbitrary_exec";
   if (observeTools.has(toolName)) return "observe";
   return "mutate";
 }
