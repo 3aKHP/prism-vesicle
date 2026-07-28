@@ -58,6 +58,30 @@ describe("skill disabled state", () => {
     });
   });
 
+  test("cross-process updates to one file preserve every name", async () => {
+    await withTemp(async (dir) => {
+      const path = join(dir, "missing", ".disabled");
+      const disabledModule = join(import.meta.dir, "../../../src/skills/disabled.ts");
+      const workerScript = [
+        `import { setDisabled } from ${JSON.stringify(disabledModule)};`,
+        "await setDisabled(process.env.DISABLED_PATH!, process.env.SKILL_NAME!, true);",
+      ].join("\n");
+      const expected = Array.from({ length: 16 }, (_, index) => `skill-${index}`);
+      const workers = expected.map((name) => Bun.spawn({
+        cmd: [process.execPath, "-e", workerScript],
+        env: { ...process.env, DISABLED_PATH: path, SKILL_NAME: name },
+        stdout: "pipe",
+        stderr: "pipe",
+      }));
+      const results = await Promise.all(workers.map(async (worker) => ({
+        exitCode: await worker.exited,
+        stderr: await new Response(worker.stderr).text(),
+      })));
+      expect(results).toEqual(expected.map(() => ({ exitCode: 0, stderr: "" })));
+      expect(await readDisabledNames(path)).toEqual(new Set(expected));
+    });
+  });
+
   test("setDisabled removes a name", async () => {
     await withTemp(async (dir) => {
       const path = join(dir, ".disabled");

@@ -70,10 +70,10 @@ async function withDisabledCrossProcessLock<T>(path: string, critical: () => Pro
   const database = new Database(join(lockDir, ".disabled-lock.sqlite"), { create: true });
   let transactionOpen = false;
   const deadline = Date.now() + DISABLED_LOCK_TIMEOUT_MS;
-  const tryBegin = (): void => {
+  const execWithBusyRetry = (statement: "BEGIN IMMEDIATE" | "COMMIT"): void => {
     while (true) {
       try {
-        database.exec("BEGIN IMMEDIATE");
+        database.exec(statement);
         return;
       } catch (error) {
         if (!(error instanceof Error) || !/database is locked|database is busy/i.test(error.message)) throw error;
@@ -84,10 +84,10 @@ async function withDisabledCrossProcessLock<T>(path: string, critical: () => Pro
   };
   return (async () => {
     try {
-      tryBegin();
+      execWithBusyRetry("BEGIN IMMEDIATE");
       transactionOpen = true;
       const result = await critical();
-      database.exec("COMMIT");
+      execWithBusyRetry("COMMIT");
       transactionOpen = false;
       return result;
     } catch (error) {
