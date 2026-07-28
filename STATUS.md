@@ -167,12 +167,14 @@ Engines with empty `stopGates` never offer `request_confirmation`, so their mode
 
 | Validator | Engine | Checks |
 |-----------|--------|--------|
-| `character-card` | etl | Module A v9: frontmatter allowlist, seven sections, Persona Topology subsections, axis counts, L-System leakage |
-| `scenario-card` | etl | Module B v9: 3–5 beat map, per-beat fields, tension range, trajectory, legacy field rejection |
-| `runtime-packet` | runtime, stage | Three-part turn packet: Hidden Neural Chain (`[!Neural Chain]`), five-line Dynamic HUD markers, L-System leakage (thin MVP; output contract owned by Neural-Narratology) |
-| `evaluate-report` | evaluate | Audit report Overall Verdict (PASS/CONDITIONAL/FAIL) and five numbered sections; inline only — file-written reports are not read yet |
+| `character-card` | etl | Module A v9: parsed YAML field contract, ordered/non-empty sections and Persona Topology subsections, axis counts, scoped `Hard limit:`, artifact lexical-policy warnings, L-System leakage |
+| `scenario-card` | etl | Module B v9: parsed YAML field and beat-map contract, single-line `world_state`, trajectory, visible opening, ordered/non-empty logic-comment sections, artifact lexical-policy warnings, L-System leakage |
+| `runtime-packet` | runtime, stage | Ordered three-part packet: scoped Hidden Neural Chain fields, standalone ordered Dynamic HUD lines, non-empty prose, Runtime/Stage marker separation, L-System leakage |
+| `evaluate-report` | evaluate | One independent Overall Verdict (PASS/CONDITIONAL/FAIL) and five exactly-once, ordered, non-empty sections; inline only — file-written reports are not read yet |
 
 Validator findings are advisory: they surface in the TUI and session log but never abort a turn. Each validator runs only when its own applicable content shape matches — Module A/B YAML-frontmatter artifacts for `character-card` and `scenario-card`, the three-part turn packet for `runtime-packet` on Runtime and Stage, or an inline audit report for `evaluate-report` — never on ordinary phase-transition prose.
+
+The Module A/B artifact Validators intentionally mirror the verified `zh-f1-not-x-but-y` matcher as a transitional lexical-policy warning. It applies only after artifact-shape routing, reports the matched prohibited `不是……而是……` pattern without inferring authorship, and does not add an ETL Quality Guard binding, provider call, rewrite, or delivery gate.
 
 ## Known Limits & Deferred Work
 
