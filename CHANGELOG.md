@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/skill` as the first input of a fresh session no longer trips the Harness identity guard (#131).** Leading a brand-new TUI session with `/skill <name>`, `/skill <name> --context-only`, or a bare `/skill` picker selection previously failed with "Session Harness identity does not match the active verified project baseline": the host path minted a session id and persisted the `skill-activation` record as the session's first record, so the first provider turn saw an "existing" session with no system header and the identity guard correctly rejected it. The host path now persists a complete session identity first — a new core `initializeSessionIdentity` (shared with the turn bootstrap via a common `buildSessionHeaderRecord`) writes the full system header, including Engine/profile, provider/model, permission, generation, assets, instructions, Harness identity, and the frozen Skill catalog, before any activation record is appended; the TUI only adopts the session id once that header is durable, gates on provider-config/permission readiness like a normal first turn, and advances the branch head after a branched activation so the next turn chains after it. The activation registry is marked only after the durable append succeeds, and the hydrate/dedup/append/record transaction runs under a per-session lock that is atomic across processes, so concurrent identical activations — whether rapid repeated submission in one process or two separate processes — cannot both pass the hash dedup check (one activation lands, not two). Headerless legacy or corrupted sessions still fail closed: the guard is unchanged and nothing auto-writes a header for an existing session.
+
 ## [1.0.0-alpha.7] - 2026-07-28
 
 ### Added
