@@ -52,13 +52,18 @@ export async function activateSkillForSession(
   name: string,
   options: ActivateSkillForSessionOptions,
 ): Promise<HostSkillActivation> {
-  const snapshot = await loadSessionSnapshot(rootDir, sessionId, { synthesizeDanglingToolResults: false });
+  let snapshot: Awaited<ReturnType<typeof loadSessionSnapshot>> | undefined;
+  try {
+    snapshot = await loadSessionSnapshot(rootDir, sessionId, { synthesizeDanglingToolResults: false });
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   const frozen = await resolveSessionSkillCatalog(
     rootDir,
     env,
     options.profile,
     sessionId,
-    snapshot.skillCatalogSnapshot,
+    snapshot?.skillCatalogSnapshot,
     options.contextWindow,
   );
   const eligible = resolveEngineEligibleCatalog(frozen, options.profile);
@@ -71,7 +76,7 @@ export async function activateSkillForSession(
   // Re-derive the registry from durable history before dedup so a host
   // activation that precedes any bootstrap in this process still honors
   // activations recorded by earlier turns or processes.
-  hydrateSessionActivations(sessionId, deriveSessionActivations(snapshot.records));
+  hydrateSessionActivations(sessionId, deriveSessionActivations(snapshot?.records ?? []));
   pruneSessionActivations(sessionId, new Set(eligible.byName.keys()));
 
   const valid = skill as ValidSkill;
