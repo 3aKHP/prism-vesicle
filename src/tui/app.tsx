@@ -933,10 +933,11 @@ export function App(props: AppProps = {}) {
       setSessionId(sid);
       setSessionPath(join(rootDir, ".vesicle", "sessions", `${sid}.jsonl`));
     }
+    const branchParent = nextSessionParent();
     const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
       profile: { id: activeEngine() },
       mode: options.mode,
-      parentUuid: nextSessionParent()?.uuid ?? null,
+      ...(branchParent ? { parentUuid: branchParent.uuid } : {}),
       contextWindow: activeModelLimits()?.contextWindow,
     });
     const scriptInfo = activation.scripts.length > 0
@@ -946,7 +947,6 @@ export function App(props: AppProps = {}) {
       ? `Skill "${activation.name}" already active [${activation.scope}].`
       : `Skill "${activation.name}" activated [${activation.scope}] · ${activation.resources.length} resource${activation.resources.length === 1 ? "" : "s"}${scriptInfo}.`;
     setMessages((prev) => [...prev, { role: "system", content: card }]);
-    if (activation.alreadyActive) return;
     if (options.mode === "invoke") {
       const prompt = options.taskText ?? `Apply the ${activation.name} skill to the current context.`;
       await turnController.submitPrompt(prompt);

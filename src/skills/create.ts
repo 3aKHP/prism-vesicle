@@ -64,7 +64,12 @@ export async function createSkill(
         `Skill "${name}" already exists in the ${options.scope} scope. Use --force to back it up and replace it.`,
       );
     }
-    backupPath = `${root}.backup-${Date.now()}`;
+    const backupDir =
+      options.scope === "project"
+        ? join(projectRoot, ".vesicle", "skill-backups")
+        : join(userConfigDirectory(env), "skill-backups");
+    await mkdir(backupDir, { recursive: true });
+    backupPath = join(backupDir, `${name}.${Date.now()}`);
     await rename(root, backupPath);
   }
 

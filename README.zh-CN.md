@@ -217,7 +217,7 @@ Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复�
 
 ## 范围与来源
 
-1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。OpenAI Responses、更广泛的 MCP 传输与功能范围、Skills 对话内激活、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
+1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。OpenAI Responses、更广泛的 MCP 传输与功能范围、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
 
 Prism Vesicle 是 [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology) 的姊妹项目；后者是这里内置的 V10 Harness Release 的公开来源。
 
