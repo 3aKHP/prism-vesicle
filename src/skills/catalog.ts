@@ -16,8 +16,14 @@
  */
 
 import { createHash } from "node:crypto";
-import { PHASE0_PRECEDENCE } from "./discovery";
 import type { LoadedSkill, SkillCatalog, SkillCatalogEntry, SkillDiagnostic, SkillScope } from "./types";
+
+/**
+ * Full catalog omission precedence, highest first. When the budget forces
+ * omission, lowest-precedence skills are dropped first: `harness` before
+ * `installed`, `installed` before `user`, `user` before `project`.
+ */
+const CATALOG_PRECEDENCE: readonly SkillScope[] = ["project", "user", "installed", "harness"];
 
 const FALLBACK_BUDGET_BYTES = 8 * 1024;
 const SHORTENED_DESCRIPTION_CHARS = 160;
@@ -155,6 +161,6 @@ function deriveBudgetBytes(contextWindow: number | undefined): number {
 }
 
 function precedenceRank(scope: SkillScope): number {
-  const rank = PHASE0_PRECEDENCE.indexOf(scope);
+  const rank = CATALOG_PRECEDENCE.indexOf(scope);
   return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
 }
