@@ -1217,6 +1217,7 @@ export function App(props: AppProps = {}) {
       <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>
         <BottomSurface
         layout={layout()}
+        composerFocused={!workspaceActive() || workspaceController.focusRegion() === "composer"}
         yoloStage={yoloConfirmStage()}
         permissionRequest={activePermissionRequest()}
         question={pendingUserQuestion()}

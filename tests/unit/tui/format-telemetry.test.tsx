@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { contextUsageTelemetryLine, footerLine, latestTurnUsage, sessionUsageTelemetryLine, sumSessionUsage, turnUsageTelemetryLine } from "../../../src/tui/app";
-import { renderComposerLines } from "../../../src/tui/PromptComposer";
 import { sharedSyntaxStyle } from "../../../src/tui/theme";
 import { displayWidth, padDisplayEnd, truncateLine, truncateMiddle, wrapDisplayLines } from "../../../src/tui/format";
-import { layoutComposerText } from "../../../src/tui/composer-layout";
+import { composerCursorCoords, layoutComposerText } from "../../../src/tui/composer-layout";
 
 describe("tui: format and telemetry", () => {
   test("truncates mixed CJK text by terminal columns", () => {
@@ -16,7 +15,9 @@ describe("tui: format and telemetry", () => {
     expect(truncateMiddle(`123456789${family}`, 8)).toEndWith(family);
     expect(wrapDisplayLines(`AB${family}CD`, 4)).toEqual([`AB${family}`, "CD"]);
     expect(layoutComposerText(`AB${family}CD`, 0, 4, 4).lines.map((line) => line.text)).toEqual([`AB${family}`, "CD"]);
-    expect(renderComposerLines(`A${family}B`, 1, "", 20, 2, true)[0]?.cursorChar).toBe(family);
+    const zwjValue = `A${family}B`;
+    const zwjLayout = layoutComposerText(zwjValue, 0, 20, 2);
+    expect(composerCursorCoords(zwjValue, 1 + family.length, zwjLayout).col).toBe(1 + displayWidth(family));
     expect(truncateLine("plain ASCII", 20)).toBe("plain ASCII");
     expect(wrapDisplayLines("word     continuation", 8).slice(1).every((line) => !line.startsWith(" "))).toBe(true);
   });

@@ -57,6 +57,24 @@ export function moveComposerCursorVisual(value: string, cursor: number, directio
   return offsetForColumn(value, target.start, target.end, desiredColumn);
 }
 
+export type ComposerCursorCoords = {
+  row: number;
+  col: number;
+};
+
+export function composerCursorCoords(
+  value: string,
+  cursor: number,
+  layout: ComposerLayout,
+): ComposerCursorCoords {
+  const safeCursor = clamp(cursor, 0, value.length);
+  const row = layout.cursorLine - layout.visibleStart;
+  const line = layout.lines[layout.cursorLine];
+  if (!line) return { row: Math.max(0, row), col: 0 };
+  const col = displayWidth(value.slice(line.start, safeCursor));
+  return { row: Math.max(0, row), col };
+}
+
 function wrapComposerText(value: string, columns: number): ComposerVisualLine[] {
   const lines: ComposerVisualLine[] = [];
   let logicalStart = 0;
