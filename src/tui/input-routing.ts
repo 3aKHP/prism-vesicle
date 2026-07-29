@@ -48,6 +48,7 @@ export type InputRoutingOptions = {
   handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
   togglePage?: () => void;
   workspaceActive?: Accessor<boolean>;
+  workspaceFocusRegion?: Accessor<string>;
   handleWorkspaceKey?: (key: TuiKeyEvent) => boolean;
 };
 
@@ -147,11 +148,13 @@ export function useInputRouting(options: InputRoutingOptions): void {
       consumeKey(key);
       return;
     }
-    // The Workspace page owns keys next (tree/viewer/quick-open/focus); its
-    // composer region returns false and falls through to the shared composer.
+    // The Workspace page owns keys next (tree/viewer/quick-open/focus).
+    // Tri-state routing: consumed → done; false + composer focus → fall
+    // through to shared composer (image paste, text keys); false + other
+    // region → native widget (textarea) handles the key, stop here.
     if (options.workspaceActive?.() && options.handleWorkspaceKey) {
-      if (options.handleWorkspaceKey(key)) consumeKey(key);
-      return;
+      if (options.handleWorkspaceKey(key)) { consumeKey(key); return; }
+      if (options.workspaceFocusRegion?.() !== "composer") return;
     }
     if (options.artifactFocusActive?.()) {
       if (options.handleArtifactFocusKey?.(key)) consumeKey(key);

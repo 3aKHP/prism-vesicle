@@ -30,6 +30,30 @@ describe("TUI prompt composer", () => {
     expect(removedFirst.state.value).toBe(" [Image #1]");
     expect(removedFirst.state.elements).toEqual([expect.objectContaining({ attachmentId: "img_2", placeholder: "[Image #1]" })]);
   });
+  test("reverse-order image insertion renumbers placeholders to match visual order", () => {
+    // Paste first image at the end of a multiline draft.
+    let state = setComposerValue("first line\nsecond line", 22);
+    state = insertComposerImage(state, "img_first", "[Image #0]");
+    expect(state.elements).toHaveLength(1);
+    expect(state.elements![0].placeholder).toBe("[Image #1]");
+
+    // Move cursor to the beginning and paste a second image there.
+    state = { ...state, cursor: 0 };
+    state = insertComposerImage(state, "img_second", "[Image #0]");
+    expect(state.elements).toHaveLength(2);
+
+    // Visual order: img_second is earlier → #1, img_first is later → #2.
+    expect(state.elements![0].attachmentId).toBe("img_second");
+    expect(state.elements![0].placeholder).toBe("[Image #1]");
+    expect(state.elements![1].attachmentId).toBe("img_first");
+    expect(state.elements![1].placeholder).toBe("[Image #2]");
+
+    // The text contains correctly ordered placeholders.
+    expect(state.value).toContain("[Image #1]");
+    expect(state.value).toContain("[Image #2]");
+    expect(state.value.indexOf("[Image #1]")).toBeLessThan(state.value.indexOf("[Image #2]"));
+  });
+
   test("backspace edits the draft without submitting", () => {
     const result = applyComposerKey(setComposerValue("runtime"), { name: "backspace" });
 

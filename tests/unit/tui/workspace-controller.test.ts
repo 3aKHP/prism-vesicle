@@ -110,6 +110,21 @@ describe("workspace controller: keyboard focus model", () => {
     expect(controller.focusRegion()).toBe("tree");
   });
 
+  test("Ctrl+V falls through in composer focus but is swallowed in tree focus (image paste routing)", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget();
+    // Tree focus: Ctrl+V is consumed by the tree (no image paste leak).
+    expect(controller.focusRegion()).toBe("tree");
+    expect(controller.handleKey(key("v", { ctrl: true }))).toBe(true);
+    // Composer focus: Ctrl+V falls through to the shared composer layer
+    // where isClipboardImagePasteKey recognizes it.
+    controller.handleKey(key("escape"));
+    expect(controller.focusRegion()).toBe("composer");
+    expect(controller.handleKey(key("v", { ctrl: true }))).toBe(false);
+    // Alt+V (Option+V) also falls through in composer focus.
+    expect(controller.handleKey(key("v", { meta: true }))).toBe(false);
+  });
+
   test("editable markdown: m is one-way (preview→source); Esc unwinds source→preview→tree", async () => {
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget();
