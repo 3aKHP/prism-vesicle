@@ -54,6 +54,23 @@ describe("TUI prompt composer", () => {
     expect(state.value.indexOf("[Image #1]")).toBeLessThan(state.value.indexOf("[Image #2]"));
   });
 
+  test("pasting the same image twice reuses its id but keeps distinct, correctly numbered elements", () => {
+    // Attachment ids are content-hash derived, so an identical image pasted
+    // twice yields the same attachmentId for both elements.
+    let state = setComposerValue("a b", 1);
+    state = insertComposerImage(state, "img_same", "[Image #0]");
+    state = { ...state, cursor: state.value.length };
+    state = insertComposerImage(state, "img_same", "[Image #0]");
+
+    expect(state.elements).toHaveLength(2);
+    expect(state.elements![0].attachmentId).toBe("img_same");
+    expect(state.elements![1].attachmentId).toBe("img_same");
+    expect(state.elements![0].placeholder).toBe("[Image #1]");
+    expect(state.elements![1].placeholder).toBe("[Image #2]");
+    // The two placeholders occupy distinct, ordered ranges.
+    expect(state.elements![0].start).toBeLessThan(state.elements![1].start);
+  });
+
   test("backspace edits the draft without submitting", () => {
     const result = applyComposerKey(setComposerValue("runtime"), { name: "backspace" });
 

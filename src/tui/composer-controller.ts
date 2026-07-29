@@ -229,11 +229,16 @@ export function createComposerController(options: ComposerControllerOptions) {
       const bytes = await readImageFromClipboard();
       if (!bytes) throw new Error("No supported image was found in the clipboard.");
       const image = await ingestImageBytes(options.rootDir, bytes, { source: "clipboard", filename: "clipboard.png" });
-      const withImage = insertComposerImage(currentState(), image.id, "[Image #0]");
+      const before = currentState();
+      // Attachment ids are content-hash derived and reused for identical
+      // images, so the new element's visual index must come from its
+      // insertion position (count of elements at/before the cursor), not an
+      // id lookup.
+      const number = (before.elements ?? []).filter((element) => element.start <= before.cursor).length + 1;
+      const withImage = insertComposerImage(before, image.id, "[Image #0]");
       applyState(insertComposerText(withImage, " "));
       setInputImages((current) => [...current, image]);
       setHistoryIndex(null);
-      const number = (withImage.elements ?? []).findIndex((element) => element.attachmentId === image.id) + 1;
       options.setStatus(options.activeModelCapabilities()?.vision === true
         ? `attached Image #${number}`
         : `attached Image #${number}; current model does not declare vision support`);
