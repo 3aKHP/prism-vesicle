@@ -376,6 +376,21 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     return canEditOpenFile() && viewMode() === "source";
   }
 
+  /** Whether paste may fall through to the focused editable textarea. */
+  function editableSourcePasteActive(): boolean {
+    return page() === "workspace"
+      && focusRegion() === "editor"
+      && isEditing()
+      && !dialogActionPending
+      && !quickOpenActive()
+      && !findingsOpen()
+      && !findActive()
+      && !gotoActive()
+      && !saveAsActive()
+      && !dialog()
+      && !opsBar();
+  }
+
   /**
    * Whether the open file actually has an admitted editable buffer for its
    * path — i.e. `m edit` would really enter the editor. The file-shape check
@@ -1645,6 +1660,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     editorStatusTone,
     editorInitialContent,
     isEditing,
+    editableSourcePasteActive,
     registerEditorInstance,
     unregisterEditorInstance,
     markEditorContentChanged,

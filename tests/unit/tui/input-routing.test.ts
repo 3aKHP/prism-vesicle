@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { KeyEvent } from "@opentui/core";
+import { InternalKeyHandler, KeyEvent } from "@opentui/core";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -49,24 +49,26 @@ describe("TUI input routing", () => {
   });
 });
 
-describe("TUI input routing: workspace image paste ownership (#134)", () => {
+describe("TUI input routing: workspace paste ownership", () => {
   let root: string;
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "vesicle-routing-"));
     await mkdir(join(root, "workspace"), { recursive: true });
     await writeFile(join(root, "notes.txt"), "line one\n");
+    await writeFile(join(root, "data.bin"), Buffer.from([0x00, 0x01, 0x02, 0xff]));
   });
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  // Builds routing options whose modal/picker accessors all resolve to null so
-  // the bottom surface is "composer" and keys reach the workspace/composer
-  // layer. pasteClipboardImage is a spy; the workspace controller is real.
-  function buildRouter(workspace: ReturnType<typeof createWorkspaceController>) {
-    let pastes = 0;
+  function buildRouter(
+    workspace: ReturnType<typeof createWorkspaceController>,
+    overrides: Partial<InputRoutingOptions> = {},
+  ) {
+    let imagePastes = 0;
+    const textPastes: string[] = [];
     const router = createInputRouter({
       renderer: {} as InputRoutingOptions["renderer"],
       setStatus: () => {},
@@ -89,61 +91,227 @@ describe("TUI input routing: workspace image paste ownership (#134)", () => {
       handleQuestionKey: () => false,
       activeGateRequest: () => null,
       handleGateKey: () => false,
-      pasteClipboardImage: async () => { pastes += 1; },
+      pasteClipboardImage: async () => { imagePastes += 1; },
       handleComposerKey: () => true,
       handlePromptEscape: () => {},
       handleDecisionPaste: () => false,
-      insertComposerPaste: () => {},
+      insertComposerPaste: (text) => { textPastes.push(text); },
       workspaceActive: () => workspace.activePage() === "workspace",
       workspaceFocusRegion: workspace.focusRegion,
+      workspaceEditableSourcePasteActive: workspace.editableSourcePasteActive,
       handleWorkspaceKey: workspace.handleKey,
+      ...overrides,
     });
-    return { router, pasteCount: () => pastes };
+    return { router, imagePasteCount: () => imagePastes, textPastes };
+  }
+
+  function pasteEvent(text: string) {
+    let prevented = 0;
+    const event = {
+      bytes: new TextEncoder().encode(text),
+      preventDefault: () => { prevented += 1; },
+    };
+    return { event, preventCount: () => prevented };
   }
 
   test("workspace composer focus routes Ctrl+V and Alt/Option+V to pasteClipboardImage", async () => {
     const workspace = createWorkspaceController(root);
     await workspace.openWorkspaceTarget();
-    const { router, pasteCount } = buildRouter(workspace);
+    const { router, imagePasteCount } = buildRouter(workspace);
 
     workspace.handleKey({ name: "escape" } as TuiKeyEvent); // tree -> composer
     expect(workspace.focusRegion()).toBe("composer");
 
     router.handleKey(keyEvent("v", { ctrl: true }));
-    expect(pasteCount()).toBe(1);
+    expect(imagePasteCount()).toBe(1);
     router.handleKey(keyEvent("v", { meta: true }));
-    expect(pasteCount()).toBe(2);
+    expect(imagePasteCount()).toBe(2);
     router.handleKey(keyEvent("v", { option: true }));
-    expect(pasteCount()).toBe(3);
+    expect(imagePasteCount()).toBe(3);
   });
 
   test("workspace tree focus swallows Ctrl+V without image paste", async () => {
     const workspace = createWorkspaceController(root);
     await workspace.openWorkspaceTarget();
-    const { router, pasteCount } = buildRouter(workspace);
+    const { router, imagePasteCount } = buildRouter(workspace);
 
     expect(workspace.focusRegion()).toBe("tree");
     router.handleKey(keyEvent("v", { ctrl: true }));
-    expect(pasteCount()).toBe(0);
+    expect(imagePasteCount()).toBe(0);
   });
 
   test("workspace editor focus does not trigger image paste", async () => {
     const workspace = createWorkspaceController(root);
     await workspace.openWorkspaceTarget("notes.txt");
-    const { router, pasteCount } = buildRouter(workspace);
+    const { router, imagePasteCount } = buildRouter(workspace);
 
     expect(workspace.focusRegion()).toBe("editor");
     router.handleKey(keyEvent("v", { ctrl: true }));
-    expect(pasteCount()).toBe(0);
+    expect(imagePasteCount()).toBe(0);
   });
 
   test("chat page (workspace inactive) still routes Ctrl+V to image paste", async () => {
     const workspace = createWorkspaceController(root);
-    const { router, pasteCount } = buildRouter(workspace);
+    const { router, imagePasteCount } = buildRouter(workspace);
 
     expect(workspace.activePage()).toBe("chat");
     router.handleKey(keyEvent("v", { ctrl: true }));
-    expect(pasteCount()).toBe(1);
+    expect(imagePasteCount()).toBe(1);
+  });
+
+  test("editable editor focus leaves paste unconsumed for the native textarea", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget("notes.txt");
+    const { router, textPastes } = buildRouter(workspace);
+
+    expect(workspace.focusRegion()).toBe("editor");
+    expect(workspace.isEditing()).toBe(true);
+
+    const { event, preventCount } = pasteEvent("PASTE-LINE-1\nPASTE-LINE-2");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual([]);
+    expect(preventCount()).toBe(0);
+  });
+
+  test("tree focus blocks paste without touching the composer", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget();
+    const { router, textPastes } = buildRouter(workspace);
+
+    expect(workspace.focusRegion()).toBe("tree");
+
+    const { event, preventCount } = pasteEvent("stray text");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual([]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("non-editable viewer focus blocks paste without touching the composer", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget("data.bin");
+    const { router, textPastes } = buildRouter(workspace);
+
+    expect(workspace.focusRegion()).toBe("editor");
+    expect(workspace.isEditing()).toBe(false);
+
+    const { event, preventCount } = pasteEvent("stray text");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual([]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("missing Workspace focus data fails closed", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget("notes.txt");
+    const { router, textPastes } = buildRouter(workspace, {
+      workspaceFocusRegion: undefined,
+    });
+
+    const { event, preventCount } = pasteEvent("stray text");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual([]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("workspace composer focus inserts paste text exactly once and consumes the event", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget();
+    const { router, textPastes } = buildRouter(workspace);
+
+    workspace.handleKey({ name: "escape" } as TuiKeyEvent); // tree -> composer
+    expect(workspace.focusRegion()).toBe("composer");
+
+    const { event, preventCount } = pasteEvent("multi\nline paste");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual(["multi\nline paste"]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("chat page inserts paste text exactly once and consumes the event", async () => {
+    const workspace = createWorkspaceController(root);
+    const { router, textPastes } = buildRouter(workspace);
+
+    expect(workspace.activePage()).toBe("chat");
+
+    const { event, preventCount } = pasteEvent("chat paste");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual(["chat paste"]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("non-composer bottom surface outranks the editable editor", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget("notes.txt");
+    const { router, textPastes } = buildRouter(workspace, {
+      yoloConfirmStage: () => 1,
+    });
+
+    expect(workspace.isEditing()).toBe(true);
+
+    const { event, preventCount } = pasteEvent("modal text");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual([]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("workspace-local panel blocks paste from the covered editor", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget("notes.txt");
+    const { router, textPastes } = buildRouter(workspace);
+
+    workspace.handleKey({ name: "p", ctrl: true } as TuiKeyEvent);
+    expect(workspace.quickOpenActive()).toBe(true);
+    expect(workspace.isEditing()).toBe(true);
+    expect(workspace.editableSourcePasteActive()).toBe(false);
+
+    const { event, preventCount } = pasteEvent("hidden editor text");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual([]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("side-question overlay blocks paste before Workspace or composer routing", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget("notes.txt");
+    const { router, textPastes } = buildRouter(workspace, {
+      sideQuestionOverlay: () => ({ kind: "answer" }),
+    });
+
+    const { event, preventCount } = pasteEvent("overlay text");
+    router.handlePaste(event);
+
+    expect(textPastes).toEqual([]);
+    expect(preventCount()).toBe(1);
+  });
+
+  test("OpenTUI dispatch delivers unconsumed paste to the internal handler only for the editable editor", async () => {
+    const workspace = createWorkspaceController(root);
+    await workspace.openWorkspaceTarget("notes.txt");
+    const { router, textPastes } = buildRouter(workspace);
+
+    const keys = new InternalKeyHandler();
+    let internal = 0;
+    keys.on("paste", router.handlePaste);
+    keys.onInternal("paste", () => { internal += 1; });
+
+    keys.processPaste(new TextEncoder().encode("editor text"));
+    expect(internal).toBe(1);
+    expect(textPastes).toEqual([]);
+
+    // Composer focus: the global handler consumes the event, internal never fires.
+    workspace.cycleFocus(1); // editor -> composer
+    expect(workspace.focusRegion()).toBe("composer");
+    keys.processPaste(new TextEncoder().encode("composer text"));
+    expect(internal).toBe(1);
+    expect(textPastes).toEqual(["composer text"]);
   });
 });
 
