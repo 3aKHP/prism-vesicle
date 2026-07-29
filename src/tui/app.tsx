@@ -903,6 +903,7 @@ export function App(props: AppProps = {}) {
     togglePage: switchPage,
     workspaceActive,
     workspaceFocusRegion: workspaceController.focusRegion,
+    workspaceEditableSourcePasteActive: workspaceController.editableSourcePasteActive,
     handleWorkspaceKey: workspaceController.handleKey,
   });
   /**

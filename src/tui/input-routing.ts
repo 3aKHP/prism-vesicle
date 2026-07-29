@@ -49,6 +49,7 @@ export type InputRoutingOptions = {
   togglePage?: () => void;
   workspaceActive?: Accessor<boolean>;
   workspaceFocusRegion?: Accessor<string>;
+  workspaceEditableSourcePasteActive?: Accessor<boolean>;
   handleWorkspaceKey?: (key: TuiKeyEvent) => boolean;
 };
 
@@ -56,6 +57,18 @@ export type InputRouter = {
   handleKey: (rawKey: TuiKeyEvent) => void;
   handlePaste: (event: { bytes: Uint8Array; preventDefault: () => void }) => void;
 };
+
+type WorkspacePasteOwnership = "shared-composer" | "native-editor" | "blocked";
+
+function resolveWorkspacePasteOwnership(options: InputRoutingOptions): WorkspacePasteOwnership {
+  if (!options.workspaceActive?.()) return "shared-composer";
+  const region = options.workspaceFocusRegion?.();
+  if (region === "composer") return "shared-composer";
+  if (region === "editor" && options.workspaceEditableSourcePasteActive?.() === true) {
+    return "native-editor";
+  }
+  return "blocked";
+}
 
 /**
  * Pure routing decisions, factored out of the SolidJS hooks so they can be
@@ -205,12 +218,26 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       event.preventDefault();
       return;
     }
+    if (options.sideQuestionOverlay?.()) {
+      event.preventDefault();
+      return;
+    }
     const text = new TextDecoder().decode(event.bytes);
     if (options.handleDecisionPaste(text)) {
       event.preventDefault();
       return;
     }
     if (bottomSurfaceMode().kind !== "composer") {
+      event.preventDefault();
+      return;
+    }
+    const workspaceOwnership = resolveWorkspacePasteOwnership(options);
+    if (workspaceOwnership === "native-editor") {
+      // Leave the event unconsumed so OpenTUI delivers it to the focused
+      // Workspace textarea's own paste handler.
+      return;
+    }
+    if (workspaceOwnership === "blocked") {
       event.preventDefault();
       return;
     }

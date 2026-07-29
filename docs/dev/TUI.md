@@ -38,6 +38,7 @@ The brand aesthetic, palette of record, motion grammar, and anti-patterns are ow
 - Trailing backslash plus Enter remains a compatibility newline fallback for terminals that cannot distinguish modified Enter.
 - Escape dispatches to the active modal first. At prompt level, the bounded double-press behavior distinguishes rewind, draft clearing, and request cancellation.
 - `Ctrl+C` copies an active OpenTUI selection. Without a selection, the first press arms exit and the second exits through `renderer.destroy()`.
+- Global paste handlers must leave an unobscured editable native control unconsumed so OpenTUI delivers the bracketed paste to the focused textarea, and must block non-composer Workspace surfaces (tree, read-only viewer, missing focus data) so their paste never falls into the shared composer. Global overlays, Workspace-local panels, input bars, dialogs, and bottom-surface ownership still outrank Workspace editor delivery.
 
 ## Commands And Host Actions
 
