@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import type { ToolCall } from "./types";
 
@@ -32,9 +33,8 @@ export function validateToolCallArguments(calls: ToolCall[]): ValidatedToolCalls
   for (const call of calls) {
     const reason = malformedReason(call.arguments);
     if (!reason) {
-      const copy = { ...call };
-      replayable.push(copy);
-      executable.push(copy);
+      replayable.push({ ...call });
+      executable.push({ ...call });
       continue;
     }
 
@@ -60,7 +60,7 @@ export function replayableToolArguments(value: string): string {
 function malformedReason(value: string): MalformedToolArguments["reason"] | undefined {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(value || "{}");
+    parsed = JSON.parse(value);
   } catch {
     return "invalid-json";
   }
