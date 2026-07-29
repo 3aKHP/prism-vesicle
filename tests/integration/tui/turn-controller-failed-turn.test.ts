@@ -71,3 +71,64 @@ test("turn failure appends a failed-turn marker to the session", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("mid-turn failure refreshes the in-memory conversation from durable history", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vesicle-tui-durable-refresh-"));
+  try {
+    const store = await createSessionStore(root, "durable-refresh-session");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "write files" });
+    let conversation: VesicleMessage[] = [{ role: "user", content: "stale" }];
+    let busy = false;
+    const controller = createTurnController({
+      rootDir: root,
+      busy: () => busy,
+      setBusy: (value: boolean | ((current: boolean) => boolean)) => {
+        busy = typeof value === "function" ? value(busy) : value;
+        return busy;
+      },
+      sessionId: () => store.sessionId,
+      conversation: () => conversation,
+      setConversation: (value: VesicleMessage[] | ((current: VesicleMessage[]) => VesicleMessage[])) => {
+        conversation = typeof value === "function" ? value(conversation) : value;
+        return conversation;
+      },
+      setMessages: () => undefined,
+      providerConfigReady: () => true,
+      permissionSettingsReady: () => true,
+      pausedAgentDeliveries: new Set<string>(),
+      queuedWork: { prepareTurn: () => {}, block: () => {}, takePendingUserInputs: () => [], runToolBoundaryCommands: async () => {} },
+      recordPromptHistory: () => undefined,
+      setHistoryIndex: () => undefined,
+      setSessionPicker: () => undefined,
+      setLastDisplayedToolAssistantContent: () => undefined,
+      setStatus: () => undefined,
+      recordActivity: () => undefined,
+      beginUsageTurn: () => undefined,
+      setStreamingAssistant: () => undefined,
+      setStreamingReasoning: () => undefined,
+      nextSessionParent: () => null,
+      setNextSessionParent: () => undefined,
+      runCancellable: async () => {
+        await store.append({
+          role: "assistant",
+          content: "",
+          metadata: { toolCalls: [{ id: "bad", name: "write_file", arguments: "{}" }] },
+        });
+        await store.append({
+          role: "tool",
+          content: JSON.stringify({ ok: false, result: "invalid arguments" }),
+          metadata: { toolCallId: "bad", name: "write_file", ok: false },
+        });
+        throw new Error("continuation failed");
+      },
+    } as any);
+
+    await controller.submitPrompt("write files", [], []);
+
+    expect(conversation.map((message) => message.role)).toEqual(["user", "assistant", "tool"]);
+    expect(conversation.at(-1)).toMatchObject({ toolCallId: "bad", toolOk: false });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

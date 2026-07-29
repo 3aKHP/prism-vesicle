@@ -1,4 +1,3 @@
-import { ProviderError } from "../shared/errors";
 import type { ProviderThinkingBlock, ReasoningTier, VesicleRequest } from "../shared/types";
 import type { GeminiContent, GeminiPart } from "./types";
 
@@ -225,11 +224,10 @@ function sanitizeGeminiSchema(schema: unknown): unknown {
 
 function parseToolArguments(value: string): unknown {
   try {
-    return JSON.parse(value || "{}");
+    const parsed: unknown = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
-    throw new ProviderError("Cannot serialize malformed tool-call arguments for Gemini generateContent.", {
-      kind: "malformed_response",
-    });
+    return {};
   }
 }
 

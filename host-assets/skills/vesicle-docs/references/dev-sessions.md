@@ -13,6 +13,7 @@ This document defines durable conversation history, provider projection, file ch
 - The initial session system record stores SHA-256 hashes, logical asset paths, safe layer ids for the effective merged tree, and the exact bundled or managed Pack, manifest, source, and Adapter identity. It never stores prompt text, image bytes, secrets, or absolute paths.
 - Resume and continuation reverify the active Harness identity against that initial record and block continuation on mismatch rather than silently switching runtime contracts; see [`ASSETS.md`](./ASSETS.md).
 - Host-only metadata may support replay and rendering but must not be forwarded to providers unless its record kind explicitly defines provider-visible context.
+- Malformed tool arguments persist only as a replay-safe `{}` in provider-visible tool-call metadata. A separate host-only diagnostic may retain the call id/name, failure class, UTF-8 length, SHA-256, and a bounded prefix; the original unbounded malformed string is not replay authority.
 - Child-session ownership uses separate parent session and parent tool-call identity; `parentUuid` remains an intra-session branch edge. See [`SUBAGENTS.md`](./SUBAGENTS.md).
 
 ## Provider History Projection
@@ -22,6 +23,7 @@ This document defines durable conversation history, provider projection, file ch
 - Usage metadata is host-only and must not be sent back as conversational content.
 - Host packets such as Engine handoffs and compact summaries use explicit record kinds so the provider projection, transcript, rewind accounting, and empty-session UI can treat them consistently.
 - Projection must fail with an actionable session error when it encounters an unknown durable replacement format that cannot be interpreted safely.
+- Projection sanitizes malformed tool arguments in legacy assistant records to `{}` so an existing paired failure result remains protocol-replayable instead of trapping resume in a serialization loop.
 
 ## Attachments And File Checkpoints
 
@@ -38,6 +40,7 @@ This document defines durable conversation history, provider projection, file ch
 - Provider projection excludes the failed round's unmatched user tail so resume or resend cannot create invalid consecutive same-role messages.
 - A completed compact checkpoint remains a valid replacement boundary even when a later provider round fails.
 - A mid-loop failure after an assistant response retains the already valid alternation tail and is not rewritten as a failed top-level turn.
+- After any main-turn exception, the TUI rebuilds its in-memory provider conversation from the durable session projection. Records already appended by a partial tool round therefore remain in the next request instead of being hidden by a stale pre-turn snapshot.
 - Continuation state must be persisted before another provider request so cancellation, provider failure, or restart cannot silently lose or replay a gate, question, permission, Agent delivery, or quality decision.
 
 ## Compact Checkpoints

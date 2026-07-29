@@ -107,6 +107,31 @@ describe("Anthropic Messages request shaping", () => {
       },
     ]);
   });
+
+  test("replays legacy malformed arguments safely and marks failed tool results", () => {
+    const body = toAnthropicMessagesBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "toolu_bad", name: "write_file", arguments: "{\"path\":\"truncated" }],
+        },
+        { role: "tool", toolCallId: "toolu_bad", toolOk: false, content: "{\"ok\":false}" },
+      ],
+    });
+
+    expect(body.messages).toEqual([
+      {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "toolu_bad", name: "write_file", input: {} }],
+      },
+      {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_bad", content: "{\"ok\":false}", is_error: true }],
+      },
+    ]);
+  });
 });
 
 describe("Anthropic Messages adapter", () => {

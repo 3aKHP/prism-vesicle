@@ -152,6 +152,29 @@ describe("session: message history", () => {
     expect(messages.filter((m) => m.role === "tool")).toHaveLength(1);
   });
 
+  test("sanitizes malformed tool arguments from legacy sessions for provider replay", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-malformed-history-"));
+    const store = await createSessionStore(rootDir, "malformed-history");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "write a file" });
+    await store.append({
+      role: "assistant",
+      content: "",
+      metadata: {
+        toolCalls: [{ id: "call-bad", name: "write_file", arguments: "{\"path\":\"truncated" }],
+      },
+    });
+    await store.append({
+      role: "tool",
+      content: '{"ok":false,"result":"invalid arguments"}',
+      metadata: { toolCallId: "call-bad", ok: false },
+    });
+
+    const messages = await loadSessionMessages(rootDir, "malformed-history");
+    expect(messages[1]?.toolCalls).toEqual([{ id: "call-bad", name: "write_file", arguments: "{}" }]);
+    expect(messages[2]).toMatchObject({ toolCallId: "call-bad", toolOk: false });
+  });
+
   // A provider failure leaves the user prompt persisted with no assistant reply
   // (#98). The host appends a failed-turn marker so projection can drop that
   // prompt from provider-visible history; otherwise resume + a new send would

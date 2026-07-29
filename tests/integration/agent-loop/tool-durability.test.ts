@@ -1,4 +1,4 @@
-import { readFile, } from "node:fs/promises";
+import { readFile, stat, } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolvePermission, runPrompt } from "../../../src/core/agent-loop/run";
@@ -184,6 +184,76 @@ describe("agent loop: tool durability", () => {
         path: "workspace/tool-test.md",
       }),
     }));
+  });
+
+  test("fails malformed tool arguments without replaying successful siblings", async () => {
+    const rootDir = await createPromptRoot();
+    const requestBodies: any[] = [];
+
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      requestBodies.push(JSON.parse(String(init.body)));
+      if (requestBodies.length === 1) {
+        return Response.json({
+          id: "chatcmpl-malformed-tools",
+          choices: [{ message: {
+            content: "",
+            tool_calls: [
+              {
+                id: "call-good",
+                type: "function",
+                function: {
+                  name: "write_file",
+                  arguments: JSON.stringify({ path: "workspace/good.md", content: "written once" }),
+                },
+              },
+              {
+                id: "call-bad",
+                type: "function",
+                function: {
+                  name: "write_file",
+                  arguments: "{\"path\":\"workspace/bad.md\",\"content\":\"truncated",
+                },
+              },
+            ],
+          } }],
+        });
+      }
+      return Response.json({ id: "chatcmpl-recovered", choices: [{ message: { content: "Recovered." } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({ input: "write both files", rootDir, permission: { mode: "MOMENTUM" } });
+    if (result.kind !== "complete") throw new Error("expected complete");
+
+    expect(await readFile(join(rootDir, "workspace", "good.md"), "utf8")).toBe("written once");
+    await expect(stat(join(rootDir, "workspace", "bad.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    const replayedAssistant = requestBodies[1].messages.find((message: any) => message.role === "assistant");
+    expect(replayedAssistant.tool_calls).toEqual([
+      expect.objectContaining({ id: "call-good", function: expect.objectContaining({ arguments: expect.stringContaining("good.md") }) }),
+      expect.objectContaining({ id: "call-bad", function: expect.objectContaining({ arguments: "{}" }) }),
+    ]);
+    expect(requestBodies[1].messages.filter((message: any) => message.role === "tool")).toHaveLength(2);
+
+    const records = (await readFile(result.sessionPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const assistant = records.find((record) => record.role === "assistant" && record.metadata?.providerResponseId === "chatcmpl-malformed-tools");
+    expect(assistant.metadata.toolCalls[1].arguments).toBe("{}");
+    expect(assistant.metadata.malformedToolArguments).toEqual([
+      expect.objectContaining({
+        toolCallId: "call-bad",
+        name: "write_file",
+        reason: "invalid-json",
+        originalLength: expect.any(Number),
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    ]);
+    expect(records.filter((record) => record.role === "tool" && record.metadata?.toolCallId === "call-good")).toHaveLength(1);
+    expect(records.find((record) => record.role === "tool" && record.metadata?.toolCallId === "call-bad")?.metadata).toMatchObject({
+      ok: false,
+      reason: "malformed-tool-arguments",
+    });
+    expect(records.filter((record) => record.role === "tool").map((record) => record.metadata.toolCallId)).toEqual([
+      "call-good",
+      "call-bad",
+    ]);
   });
 
   test("does not run artifact validators on ordinary assistant prose", async () => {

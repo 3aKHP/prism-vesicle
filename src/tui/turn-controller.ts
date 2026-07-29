@@ -12,6 +12,7 @@ import { combineIndependentUsage } from "./telemetry";
 import { createTurnResultController } from "./turn-result-controller";
 import { createDecisionContinuations } from "./decision-continuations";
 import { ProviderError, cleanProviderMessage, providerFailureCategoryLabel, summarizeProviderFailure } from "../providers/shared/errors";
+import { vesicleMessagesFromResumed } from "./session-presenter";
 
 export type { TurnControllerOptions } from "./turn-controller-options";
 import type { TurnControllerOptions } from "./turn-controller-options";
@@ -162,7 +163,10 @@ export function createTurnController(options: TurnControllerOptions) {
       // so the `id` captured at the top of this function is still undefined for
       // a first-turn failure on a new session.
       const currentSessionId = options.sessionId();
-      if (currentSessionId) await markFailedUserTurn(currentSessionId);
+      if (currentSessionId) {
+        await markFailedUserTurn(currentSessionId);
+        await refreshConversationFromSession(currentSessionId);
+      }
       reportError(error);
     } finally {
       options.setBusy(false);
@@ -290,6 +294,15 @@ export function createTurnController(options: TurnControllerOptions) {
       await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
     } catch {
       // Best-effort: never mask the original turn error.
+    }
+  }
+
+  async function refreshConversationFromSession(sessionId: string): Promise<void> {
+    try {
+      const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: true });
+      options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+    } catch {
+      // Best-effort: preserve the original error when durable reload also fails.
     }
   }
 

@@ -12,6 +12,7 @@ import type { PermissionMode } from "../permissions";
 import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
 import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
+import { replayableToolArguments } from "../tools/arguments";
 
 export type HistoryProjection = {
   messages: ResumedMessage[];
@@ -119,7 +120,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
     }
 
     if (record.role === "assistant") {
-      const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
+      const toolCalls = readReplayableToolCalls(record.metadata?.toolCalls);
       const reasoningContent = record.metadata?.reasoningContent as string | undefined;
       const thinkingBlocks = readThinkingBlocks(record.metadata?.thinkingBlocks);
       const messageEngine = readEngineId(record.metadata?.engine);
@@ -151,6 +152,17 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
     messages.push({ role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(toolSkillEvent ? { toolSkillEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
   }
   return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}), ...(skillCatalogSnapshot ? { skillCatalogSnapshot } : {}) };
+}
+
+function readReplayableToolCalls(value: unknown): ResumedToolCall[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const calls = value.flatMap((entry): ResumedToolCall[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const call = entry as Record<string, unknown>;
+    if (typeof call.id !== "string" || typeof call.name !== "string" || typeof call.arguments !== "string") return [];
+    return [{ id: call.id, name: call.name, arguments: replayableToolArguments(call.arguments) }];
+  });
+  return calls.length > 0 ? calls : undefined;
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode { return value === "MANUAL" || value === "INERTIA" || value === "MOMENTUM" || value === "YOLO"; }

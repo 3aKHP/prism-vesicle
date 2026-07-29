@@ -103,6 +103,7 @@ export function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
     ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+    ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
     ...(message.images?.length ? { images: message.images } : {}),
   };

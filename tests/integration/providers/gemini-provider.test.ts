@@ -136,6 +136,34 @@ describe("Gemini generateContent request shaping", () => {
       thinkingConfig: { thinkingLevel: "medium", includeThoughts: true },
     });
   });
+
+  test("replays legacy malformed tool arguments as an empty object", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_bad", name: "write_file", arguments: "{\"path\":\"truncated" }],
+        },
+        { role: "tool", toolCallId: "call_bad", toolOk: false, content: "{\"ok\":false}" },
+      ],
+    });
+
+    expect(body.contents).toEqual([
+      { role: "model", parts: [{ functionCall: { id: "call_bad", name: "write_file", args: {} } }] },
+      {
+        role: "user",
+        parts: [{
+          functionResponse: {
+            id: "call_bad",
+            name: "write_file",
+            response: { content: "{\"ok\":false}" },
+          },
+        }],
+      },
+    ]);
+  });
 });
 
 describe("Gemini generateContent adapter", () => {

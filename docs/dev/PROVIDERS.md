@@ -7,6 +7,7 @@ This document defines how Vesicle selects providers, translates normalized reque
 - Adapters receive a normalized `VesicleRequest` and return a normalized `VesicleResponse`.
 - Adapters must not read or write project files, mutate sessions, execute host tools, render TUI state, or know Prism Engine phases.
 - Tool definitions and calls remain normalized. The agent loop discovers built-in and MCP tools, exposes ordinary function definitions to adapters, and dispatches returned calls through the owning host registry.
+- At the completed normalized-response boundary, every tool-call argument must parse as a JSON object. A malformed call is never dispatched: core replaces its provider-visible arguments with `{}`, preserves only bounded host diagnostics, and emits a paired failed tool result so valid sibling calls and their results remain replayable without repeating side effects. This check is based on argument validity, not the provider finish reason.
 - Core materializes durable image references before invoking an adapter. Adapters translate already-materialized data to provider-native image blocks and never read attachment files.
 - Core and TUI may select normalized generation controls. Only adapters map those controls to provider wire fields; adapters do not invent host defaults.
 
@@ -31,8 +32,9 @@ This document defines how Vesicle selects providers, translates normalized reque
 ## Protocol Mapping
 
 - OpenAI-compatible adapters preserve normalized reasoning content, assistant tool calls, and tool-result pairing without leaking OpenAI-specific message shapes into core session logic.
-- Anthropic Messages adapters emit thinking blocks before text and tool-use blocks, represent tool results as user messages containing `tool_result`, and reconstruct streamed blocks by provider content-block index.
+- Anthropic Messages adapters emit thinking blocks before text and tool-use blocks, represent tool results as user messages containing `tool_result` (including native `is_error: true` for failed results), and reconstruct streamed blocks by provider content-block index.
 - Gemini adapters map the system prompt to `systemInstruction`, conversation to `contents`, and tool results to `functionResponse` parts.
+- Anthropic and Gemini history serializers must degrade legacy malformed tool arguments to an empty object rather than throwing before the paired failed result can reach the provider. New records are normalized before persistence; serializer fallback exists for already-written sessions and portable checkpoints.
 - Gemini `thought` and `thoughtSignature` metadata remain attached to the original provider-native parts and are replayed as those parts on the next request instead of being reconstructed from assistant prose.
 - Provider-native thinking metadata is preserved for protocol continuity and display but must not be merged into ordinary assistant prose.
 

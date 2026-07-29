@@ -61,6 +61,7 @@ describe("agent loop tool round", () => {
     expect(messages).toEqual([{
       role: "tool",
       toolCallId: "call",
+      toolOk: true,
       content: JSON.stringify({ ok: true, result: "contents" }),
     }]);
     expect(order).toEqual(["session", "event"]);
