@@ -48,10 +48,22 @@ export type InputRoutingOptions = {
   handleArtifactFocusKey?: (key: TuiKeyEvent) => boolean;
   togglePage?: () => void;
   workspaceActive?: Accessor<boolean>;
+  workspaceFocusRegion?: Accessor<string>;
   handleWorkspaceKey?: (key: TuiKeyEvent) => boolean;
 };
 
-export function useInputRouting(options: InputRoutingOptions): void {
+export type InputRouter = {
+  handleKey: (rawKey: TuiKeyEvent) => void;
+  handlePaste: (event: { bytes: Uint8Array; preventDefault: () => void }) => void;
+};
+
+/**
+ * Pure routing decisions, factored out of the SolidJS hooks so they can be
+ * exercised directly in tests (the headless testRender harness never fires
+ * `useKeyboard`'s onMount, so the mounted hook itself is not testable).
+ * `useInputRouting` wires this into `useKeyboard` / `usePaste` unchanged.
+ */
+export function createInputRouter(options: InputRoutingOptions): InputRouter {
   let lastCtrlCAt = 0;
   const bottomSurfaceMode = () => resolveBottomSurfaceMode({
     yoloStage: options.yoloConfirmStage(),
@@ -67,7 +79,7 @@ export function useInputRouting(options: InputRoutingOptions): void {
     model: options.modelPicker(),
   });
 
-  useKeyboard((rawKey) => {
+  function handleKey(rawKey: TuiKeyEvent): void {
     const key = createRoutingKey(rawKey);
     if (key.ctrl && key.name === "c") {
       consumeKey(key);
@@ -147,11 +159,13 @@ export function useInputRouting(options: InputRoutingOptions): void {
       consumeKey(key);
       return;
     }
-    // The Workspace page owns keys next (tree/viewer/quick-open/focus); its
-    // composer region returns false and falls through to the shared composer.
+    // The Workspace page owns keys next (tree/viewer/quick-open/focus).
+    // Tri-state routing: consumed → done; false + composer focus → fall
+    // through to shared composer (image paste, text keys); false + other
+    // region → native widget (textarea) handles the key, stop here.
     if (options.workspaceActive?.() && options.handleWorkspaceKey) {
-      if (options.handleWorkspaceKey(key)) consumeKey(key);
-      return;
+      if (options.handleWorkspaceKey(key)) { consumeKey(key); return; }
+      if (options.workspaceFocusRegion?.() !== "composer") return;
     }
     if (options.artifactFocusActive?.()) {
       if (options.handleArtifactFocusKey?.(key)) consumeKey(key);
@@ -183,9 +197,9 @@ export function useInputRouting(options: InputRoutingOptions): void {
       options.handlePromptEscape();
       consumeKey(key);
     }
-  });
+  }
 
-  usePaste((event) => {
+  function handlePaste(event: { bytes: Uint8Array; preventDefault: () => void }): void {
     if (options.splashActive?.()) {
       options.dismissSplash?.();
       event.preventDefault();
@@ -202,7 +216,15 @@ export function useInputRouting(options: InputRoutingOptions): void {
     }
     options.insertComposerPaste(text);
     event.preventDefault();
-  });
+  }
+
+  return { handleKey, handlePaste };
+}
+
+export function useInputRouting(options: InputRoutingOptions): void {
+  const router = createInputRouter(options);
+  useKeyboard(router.handleKey);
+  usePaste(router.handlePaste);
 }
 
 export function createRoutingKey(rawKey: TuiKeyEvent): TuiKeyEvent {

@@ -902,6 +902,7 @@ export function App(props: AppProps = {}) {
     handleArtifactFocusKey,
     togglePage: switchPage,
     workspaceActive,
+    workspaceFocusRegion: workspaceController.focusRegion,
     handleWorkspaceKey: workspaceController.handleKey,
   });
   /**
