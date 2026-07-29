@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderComposerLines } from "../../../src/tui/PromptComposer";
 import { composerCursorCoords, layoutComposerText } from "../../../src/tui/composer-layout";
+import { displayWidth } from "../../../src/tui/format";
 
 describe("tui: prompt composer", () => {
   test("prompt composer soft-wraps long input instead of truncating it", () => {
@@ -74,5 +75,15 @@ describe("tui: composer cursor coords", () => {
     const layout = layoutComposerText(value, 1, 20, 4);
     const coords = composerCursorCoords(value, 1, layout);
     expect(coords.col).toBe(1);
+  });
+
+  test("CJK cursor with hidden prefix adjusts for replaced graphemes", () => {
+    // 4 CJK lines, maxLines=1 forces scrolling; cursor on first visible line
+    const value = "ab\n你好世界test\nij";
+    const layout = layoutComposerText(value, 7, 20, 1);
+    expect(layout.hiddenBefore).toBeGreaterThan(0);
+    const coords = composerCursorCoords(value, 7, layout);
+    // "你好" (4 cols) replaced by "⋯ " (2 cols), then "世界" = 4 cols → col 6
+    expect(coords.col).toBe(displayWidth("⋯ ") + displayWidth("世界"));
   });
 });

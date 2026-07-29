@@ -41,10 +41,10 @@ export function PromptComposer(props: PromptComposerProps) {
     const x = anchor.screenX + coords.col;
     const y = anchor.screenY + coords.row;
     renderer.setCursorPosition(x, y, true);
-    renderer.setCursorStyle({ style: "line", blinking: true });
   };
 
   onMount(() => {
+    renderer.setCursorStyle({ style: "line", blinking: true });
     renderer.addPostProcessFn(postProcess);
   });
   onCleanup(() => {
