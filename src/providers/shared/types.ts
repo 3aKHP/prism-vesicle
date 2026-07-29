@@ -41,6 +41,8 @@ export type VesicleMessage = {
   reasoningContent?: string;
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
+  /** Host-derived tool outcome used by adapters with a native error flag. */
+  toolOk?: boolean;
   toolCalls?: ToolCall[];
   images?: VesicleImageAttachment[];
 };

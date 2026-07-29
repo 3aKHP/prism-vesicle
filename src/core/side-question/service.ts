@@ -154,6 +154,7 @@ function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     role: message.role,
     content: message.content,
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+    ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
     ...(message.images ? { images: message.images.map(({ data: _data, ...image }) => image) } : {}),
   };

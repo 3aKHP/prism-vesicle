@@ -41,6 +41,7 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
       pendingToolResults.push({
         type: "tool_result",
         tool_use_id: message.toolCallId ?? "",
+        ...(message.toolOk === false ? { is_error: true } : {}),
         content: message.images?.length
           ? anthropicUserBlocks(message.content, message.images)
           : message.content,
@@ -163,10 +164,9 @@ function thinkingBudgetForTier(tier: Exclude<ReasoningTier, "off">): number {
 
 function parseToolArguments(value: string): unknown {
   try {
-    return JSON.parse(value || "{}");
+    const parsed: unknown = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
-    throw new ProviderError("Cannot serialize malformed tool-call arguments for Anthropic Messages.", {
-      kind: "malformed_response",
-    });
+    return {};
   }
 }
