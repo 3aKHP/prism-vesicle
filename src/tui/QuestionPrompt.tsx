@@ -62,6 +62,7 @@ export function QuestionPrompt(props: QuestionPromptProps) {
                   placeholder="Type your answer..."
                   width={Math.max(12, width() - 4)}
                   maxLines={2}
+                  focused={true}
                 />
               </box>
         )}

@@ -1,6 +1,7 @@
-import { For } from "solid-js";
-import { TextAttributes, createTextAttributes } from "@opentui/core";
-import { layoutComposerText } from "./composer-layout";
+import { createEffect, createMemo, For, onCleanup } from "solid-js";
+import type { BoxRenderable, CliRenderer } from "@opentui/core";
+import { useRenderer } from "@opentui/solid";
+import { composerCursorCoords, layoutComposerText } from "./composer-layout";
 import { displayWidth, segmentGraphemes } from "./format";
 import { palette } from "./theme";
 
@@ -10,34 +11,69 @@ export type PromptComposerProps = {
   placeholder: string;
   width: number;
   maxLines: number;
-  focused?: boolean;
+  focused: boolean;
 };
 
 export function PromptComposer(props: PromptComposerProps) {
-  const renderedLines = () => renderComposerLines(
+  const renderer = useRenderer();
+  let anchor: BoxRenderable | undefined;
+  let postProcessRegistered = false;
+  let cursorStyleOwned = false;
+
+  const focused = () => props.focused;
+
+  const contentWidth = () => Math.max(8, props.width);
+  const maxLines = () => Math.max(1, props.maxLines);
+  const safeCursor = () => Math.max(0, Math.min(props.value.length, props.cursor));
+  const layout = createMemo(() => layoutComposerText(
     props.value,
-    props.cursor,
-    props.placeholder,
-    Math.max(8, props.width),
-    Math.max(1, props.maxLines),
-    props.focused !== false,
-  );
+    safeCursor(),
+    contentWidth(),
+    maxLines(),
+  ));
+  const lines = createMemo(() => renderComposerLayout(props.value, props.placeholder, contentWidth(), layout()));
+
+  const postProcess = () => {
+    if (!focused() || !anchor) return;
+    const coords = composerCursorCoords(props.value, safeCursor(), layout());
+    // Renderable screen coordinates are zero-based; the native cursor API is
+    // one-based, matching OpenTUI's TextareaRenderable cursor implementation.
+    const x = anchor.screenX + coords.col + 1;
+    const y = anchor.screenY + coords.row + 1;
+    renderer.setCursorPosition(x, y, true);
+  };
+
+  const setAnchor = (value: BoxRenderable) => {
+    anchor = value;
+    if (postProcessRegistered) return;
+    renderer.addPostProcessFn(postProcess);
+    postProcessRegistered = true;
+    if (focused()) {
+      cursorStyleOwned = updateComposerCursorOwnership(renderer, true);
+    } else {
+      renderer.requestRender();
+    }
+  };
+  createEffect(() => {
+    const shouldOwn = focused();
+    if (shouldOwn === cursorStyleOwned) return;
+    cursorStyleOwned = updateComposerCursorOwnership(renderer, shouldOwn);
+  });
+  onCleanup(() => {
+    if (postProcessRegistered) renderer.removePostProcessFn(postProcess);
+    if (cursorStyleOwned) updateComposerCursorOwnership(renderer, false);
+  });
 
   return (
-    <box flexDirection="column" width="100%">
-      <For each={renderedLines()}>
+    <box ref={setAnchor} flexDirection="column" width="100%">
+      <For each={lines()}>
         {(line) => (
           <box height={1} flexDirection="row">
-            <text content={line.prefix} fg={line.placeholder ? palette.textDim : palette.textPrimary} attributes={TextAttributes.NONE} wrapMode="none" />
-            {line.cursor ? (
-              <text
-                content={line.cursorChar}
-                fg={palette.textPrimary}
-                attributes={cursorAttributes}
-                wrapMode="none"
-              />
-            ) : null}
-            <text content={line.suffix} fg={line.placeholder ? palette.textDim : palette.textPrimary} attributes={TextAttributes.NONE} wrapMode="none" />
+            <text
+              content={line.text || " "}
+              fg={line.placeholder ? palette.textDim : palette.textPrimary}
+              wrapMode="none"
+            />
           </box>
         )}
       </For>
@@ -45,15 +81,23 @@ export function PromptComposer(props: PromptComposerProps) {
   );
 }
 
-export type RenderedComposerLine = {
-  prefix: string;
-  suffix: string;
-  cursorChar: string;
-  placeholder?: boolean;
-  cursor?: boolean;
-};
+type ComposerCursorRenderer = Pick<CliRenderer, "requestRender" | "setCursorPosition" | "setCursorStyle">;
 
-const cursorAttributes = createTextAttributes({ inverse: true });
+export function updateComposerCursorOwnership(renderer: ComposerCursorRenderer, focused: boolean): boolean {
+  if (focused) {
+    renderer.setCursorStyle({ style: "line", blinking: true });
+    renderer.requestRender();
+    return true;
+  }
+  renderer.setCursorPosition(0, 0, false);
+  renderer.setCursorStyle({ style: "default" });
+  return false;
+}
+
+export type RenderedComposerLine = {
+  text: string;
+  placeholder?: boolean;
+};
 
 export function renderComposerLines(
   value: string,
@@ -61,69 +105,32 @@ export function renderComposerLines(
   placeholder: string,
   width: number,
   maxLines: number,
-  focused: boolean,
 ): RenderedComposerLine[] {
-  const contentWidth = Math.max(4, width);
-  if (value.length === 0) {
-    const placeholderText = clipToChars(placeholder, Math.max(1, contentWidth - (focused ? 1 : 0)));
-    return [{
-      prefix: "",
-      cursor: focused,
-      cursorChar: " ",
-      suffix: placeholderText,
-      placeholder: true,
-    }];
-  }
-
+  const contentWidth = Math.max(8, width);
   const safeCursor = Math.max(0, Math.min(value.length, cursor));
   const layout = layoutComposerText(value, safeCursor, contentWidth, maxLines);
-  const rendered = layout.visibleLines.map((line, index) => renderLineSegments(
-    line,
-    contentWidth,
-    layout.visibleStart + index === layout.cursorLine ? safeCursor : undefined,
-    layout.hiddenBefore > 0 && index === 0,
-    focused,
-  ));
-  return rendered.length > 0
-    ? rendered
-    : [{ prefix: "", suffix: "", cursorChar: " ", cursor: focused }];
+  return renderComposerLayout(value, placeholder, contentWidth, layout);
 }
 
-type ComposerLine = {
-  text: string;
-  start: number;
-  end: number;
-};
-
-function renderLineSegments(line: ComposerLine, width: number, cursor: number | undefined, hiddenPrefix: boolean, focused: boolean): RenderedComposerLine {
-  const rawText = hiddenPrefix && cursor === undefined ? withHiddenPrefix(line.text) : line.text;
-  const cursorColumn = cursor === undefined ? undefined : Math.max(0, Math.min(line.text.length, cursor - line.start));
-  if (!focused || cursorColumn === undefined) {
-    return {
-      prefix: rawText || " ",
-      suffix: "",
-      cursorChar: " ",
-    };
+function renderComposerLayout(
+  value: string,
+  placeholder: string,
+  contentWidth: number,
+  layout: ReturnType<typeof layoutComposerText>,
+): RenderedComposerLine[] {
+  if (value.length === 0) {
+    return [{ text: clipToChars(placeholder, contentWidth), placeholder: true }];
   }
 
-  const safeColumn = Math.max(0, Math.min(rawText.length, cursorColumn));
-  if (safeColumn >= rawText.length && displayWidth(rawText) >= width) {
-    const previous = charBeforeOffset(rawText, safeColumn);
-    return {
-      prefix: rawText.slice(0, previous.start),
-      cursor: true,
-      cursorChar: previous.char,
-      suffix: rawText.slice(previous.end),
-    };
-  }
-
-  const { char: cursorChar, start: cursorStart, end: cursorEnd } = charAtOffset(rawText, safeColumn);
-  return {
-    prefix: rawText.slice(0, cursorStart),
-    cursor: true,
-    cursorChar,
-    suffix: rawText.slice(cursorEnd),
-  };
+  const rendered = layout.visibleLines.map((line, index) => {
+    const text = layout.hiddenBefore > 0
+      && index === 0
+      && layout.visibleStart !== layout.cursorLine
+      ? withHiddenPrefix(line.text)
+      : line.text;
+    return { text: text || " " };
+  });
+  return rendered.length > 0 ? rendered : [{ text: " " }];
 }
 
 function clipToChars(value: string, width: number): string {
@@ -144,24 +151,4 @@ function withHiddenPrefix(value: string): string {
   const graphemes = segmentGraphemes(value);
   if (graphemes.length <= 2) return "⋯";
   return `⋯ ${graphemes.slice(2).join("")}`;
-}
-
-function charAtOffset(value: string, offset: number): { char: string; start: number; end: number } {
-  if (offset >= value.length) return { char: " ", start: offset, end: offset };
-  let start = 0;
-  for (const grapheme of segmentGraphemes(value)) {
-    const end = start + grapheme.length;
-    if (offset < end) return { char: grapheme, start, end };
-    start = end;
-  }
-  return { char: " ", start: offset, end: offset };
-}
-
-function charBeforeOffset(value: string, offset: number): { char: string; start: number; end: number } {
-  const safeOffset = Math.max(0, Math.min(value.length, offset));
-  if (safeOffset <= 0) return { char: " ", start: 0, end: 0 };
-  const chars = segmentGraphemes(value.slice(0, safeOffset));
-  const char = chars.at(-1) ?? " ";
-  const start = safeOffset - char.length;
-  return { char, start, end: safeOffset };
 }

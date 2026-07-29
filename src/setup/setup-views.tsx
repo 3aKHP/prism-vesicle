@@ -65,6 +65,7 @@ function InputPageView(props: { state: SetupState; width: number }) {
           placeholder={inputPlaceholder(step())}
           width={Math.max(4, props.width - 4)}
           maxLines={1}
+          focused={true}
         />
       </box>
       <text content={truncateLine("Enter continues · Esc goes back", props.width)} wrapMode="none" fg={palette.textDim} />

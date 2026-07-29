@@ -103,6 +103,7 @@ export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfa
 
 export type BottomSurfaceProps = BottomSurfaceState & {
   layout: ResponsiveTuiLayout;
+  composerFocused: boolean;
   gateFocus: GateFocusTarget;
   gateFeedbackMode: GateFocusTarget | null;
   gateFeedback: string;
@@ -317,6 +318,7 @@ export function BottomSurface(props: BottomSurfaceProps) {
             placeholder={props.busy ? "Type input, Enter queue, Up edit last" : !props.providerConfigReady ? "Loading provider config..." : "Type prompt, Enter send, Ctrl+Enter newline, /help commands"}
             width={props.inputWidth}
             maxLines={Math.max(1, props.layout.bottomHeight - queuedRows().length - (props.composerPopupOpen ? props.composerPopupMaxRows + 3 : 2))}
+            focused={props.composerFocused}
           />
         </box>
       </Match>
