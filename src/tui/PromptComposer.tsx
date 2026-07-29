@@ -35,10 +35,6 @@ export function PromptComposer(props: PromptComposerProps) {
 
   const postProcess = () => {
     if (!focused() || !anchor) return;
-    if (!cursorStyleOwned) {
-      renderer.setCursorStyle({ style: "line", blinking: true });
-      cursorStyleOwned = true;
-    }
     const coords = composerCursorCoords(props.value, safeCursor(), layout());
     // Renderable screen coordinates are zero-based; the native cursor API is
     // one-based, matching OpenTUI's TextareaRenderable cursor implementation.
@@ -52,15 +48,20 @@ export function PromptComposer(props: PromptComposerProps) {
     if (postProcessRegistered) return;
     renderer.addPostProcessFn(postProcess);
     postProcessRegistered = true;
-    renderer.requestRender();
+    if (focused()) {
+      cursorStyleOwned = updateComposerCursorOwnership(renderer, true);
+    } else {
+      renderer.requestRender();
+    }
   };
   createEffect(() => {
-    cursorStyleOwned = updateComposerCursorOwnership(renderer, focused());
+    const shouldOwn = focused();
+    if (shouldOwn === cursorStyleOwned) return;
+    cursorStyleOwned = updateComposerCursorOwnership(renderer, shouldOwn);
   });
   onCleanup(() => {
     if (postProcessRegistered) renderer.removePostProcessFn(postProcess);
-    renderer.setCursorPosition(0, 0, false);
-    renderer.setCursorStyle({ style: "default" });
+    if (cursorStyleOwned) updateComposerCursorOwnership(renderer, false);
   });
 
   return (
@@ -105,7 +106,7 @@ export function renderComposerLines(
   width: number,
   maxLines: number,
 ): RenderedComposerLine[] {
-  const contentWidth = Math.max(4, width);
+  const contentWidth = Math.max(8, width);
   const safeCursor = Math.max(0, Math.min(value.length, cursor));
   const layout = layoutComposerText(value, safeCursor, contentWidth, maxLines);
   return renderComposerLayout(value, placeholder, contentWidth, layout);

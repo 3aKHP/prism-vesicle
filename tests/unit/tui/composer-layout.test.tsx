@@ -4,28 +4,28 @@ import { composerCursorCoords, layoutComposerText } from "../../../src/tui/compo
 
 describe("tui: prompt composer", () => {
   test("prompt composer soft-wraps long input instead of truncating it", () => {
-    const rendered = renderComposerLines("abcdefghijkl", 12, "placeholder", 5, 4);
+    const rendered = renderComposerLines("abcdefghijkl", 12, "placeholder", 8, 4);
 
-    expect(rendered.map((line) => line.text)).toEqual(["abcde", "fghij", "kl"]);
+    expect(rendered.map((line) => line.text)).toEqual(["abcdefgh", "ijkl"]);
     expect(rendered.some((line) => line.text.includes("..."))).toBe(false);
   });
 
   test("prompt composer wraps long text after an explicit newline", () => {
-    const rendered = renderComposerLines("one\nabcdefghijkl", 16, "placeholder", 5, 5);
+    const rendered = renderComposerLines("one\nabcdefghijkl", 16, "placeholder", 8, 5);
 
-    expect(rendered.map((line) => line.text)).toEqual(["one", "abcde", "fghij", "kl"]);
+    expect(rendered.map((line) => line.text)).toEqual(["one", "abcdefgh", "ijkl"]);
   });
 
   test("prompt composer renders full-width visual line without truncation", () => {
-    const rendered = renderComposerLines("abcde", 5, "placeholder", 5, 2);
+    const rendered = renderComposerLines("abcdefgh", 8, "placeholder", 8, 2);
 
-    expect(rendered.map((line) => line.text)).toEqual(["abcde"]);
+    expect(rendered.map((line) => line.text)).toEqual(["abcdefgh"]);
   });
 
   test("prompt composer follows the cursor when wrapped input exceeds visible height", () => {
-    const rendered = renderComposerLines("abcdefghijklmnop", 16, "placeholder", 4, 2);
+    const rendered = renderComposerLines("abcdefghijklmnopqrstuvwx", 24, "placeholder", 8, 2);
 
-    expect(rendered.map((line) => line.text)).toEqual(["⋯ kl", "mnop"]);
+    expect(rendered.map((line) => line.text)).toEqual(["⋯ klmnop", "qrstuvwx"]);
   });
 
   test("prompt composer preserves the cursor line when it is the only visible line", () => {
@@ -38,6 +38,12 @@ describe("tui: prompt composer", () => {
     const rendered = renderComposerLines("", 0, "Type here", 20, 2);
 
     expect(rendered).toEqual([{ text: "Type here", placeholder: true }]);
+  });
+
+  test("prompt composer preserves a ZWJ grapheme in rendered text", () => {
+    const family = "👨‍👩‍👧‍👦";
+    expect(renderComposerLines(`A${family}B`, 1 + family.length, "", 20, 2))
+      .toEqual([{ text: `A${family}B` }]);
   });
 });
 
@@ -85,6 +91,13 @@ describe("tui: composer cursor coords", () => {
     const layout = layoutComposerText(value, 1, 20, 4);
     const coords = composerCursorCoords(value, 1, layout);
     expect(coords.col).toBe(1);
+  });
+
+  test("ZWJ cursor uses display width", () => {
+    const family = "👨‍👩‍👧‍👦";
+    const value = `A${family}B`;
+    const layout = layoutComposerText(value, 1 + family.length, 20, 4);
+    expect(composerCursorCoords(value, 1 + family.length, layout)).toEqual({ row: 0, col: 3 });
   });
 
   test("combining grapheme cursor uses its terminal display width", () => {
