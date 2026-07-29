@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderComposerLines } from "../../../src/tui/PromptComposer";
 import { composerCursorCoords, layoutComposerText } from "../../../src/tui/composer-layout";
-import { displayWidth } from "../../../src/tui/format";
 
 describe("tui: prompt composer", () => {
   test("prompt composer soft-wraps long input instead of truncating it", () => {
@@ -27,6 +26,12 @@ describe("tui: prompt composer", () => {
     const rendered = renderComposerLines("abcdefghijklmnop", 16, "placeholder", 4, 2);
 
     expect(rendered.map((line) => line.text)).toEqual(["⋯ kl", "mnop"]);
+  });
+
+  test("prompt composer preserves the cursor line when it is the only visible line", () => {
+    const rendered = renderComposerLines("ab\n你好世界test\nij", 7, "placeholder", 20, 1);
+
+    expect(rendered.map((line) => line.text)).toEqual(["你好世界test"]);
   });
 
   test("empty value renders placeholder", () => {
@@ -57,6 +62,11 @@ describe("tui: composer cursor coords", () => {
     expect(composerCursorCoords("abcdefgh", 6, layout)).toEqual({ row: 1, col: 2 });
   });
 
+  test("cursor at a full-width line end stays after the final grapheme", () => {
+    const layout = layoutComposerText("abcde", 5, 5, 2);
+    expect(composerCursorCoords("abcde", 5, layout)).toEqual({ row: 0, col: 5 });
+  });
+
   test("cursor on empty line after explicit newline", () => {
     const layout = layoutComposerText("ab\n", 3, 20, 4);
     expect(composerCursorCoords("ab\n", 3, layout)).toEqual({ row: 1, col: 0 });
@@ -77,13 +87,10 @@ describe("tui: composer cursor coords", () => {
     expect(coords.col).toBe(1);
   });
 
-  test("CJK cursor with hidden prefix adjusts for replaced graphemes", () => {
-    // 4 CJK lines, maxLines=1 forces scrolling; cursor on first visible line
-    const value = "ab\n你好世界test\nij";
-    const layout = layoutComposerText(value, 7, 20, 1);
-    expect(layout.hiddenBefore).toBeGreaterThan(0);
-    const coords = composerCursorCoords(value, 7, layout);
-    // "你好" (4 cols) replaced by "⋯ " (2 cols), then "世界" = 4 cols → col 6
-    expect(coords.col).toBe(displayWidth("⋯ ") + displayWidth("世界"));
+  test("combining grapheme cursor uses its terminal display width", () => {
+    const value = `Ae\u0301B`;
+    const layout = layoutComposerText(value, 3, 20, 4);
+    expect(composerCursorCoords(value, 3, layout)).toEqual({ row: 0, col: 2 });
   });
+
 });

@@ -204,6 +204,7 @@ function FeedbackLine(props: { placeholder: string; value: string; cursor: numbe
         placeholder={props.placeholder}
         width={props.width}
         maxLines={1}
+        focused={true}
       />
     </box>
   );

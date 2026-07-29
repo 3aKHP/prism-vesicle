@@ -76,6 +76,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
           placeholder="Optional feedback for the model"
           width={contentWidth()}
           maxLines={2}
+          focused={true}
         />
       ) : null}
       <text content={hint()} fg={palette.textDim} wrapMode="none" />

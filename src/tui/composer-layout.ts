@@ -72,19 +72,6 @@ export function composerCursorCoords(
   const line = layout.lines[layout.cursorLine];
   if (!line) return { row: Math.max(0, row), col: 0 };
 
-  if (layout.hiddenBefore > 0 && layout.cursorLine === layout.visibleStart) {
-    const graphemes = segmentGraphemes(line.text);
-    if (graphemes.length <= 2) return { row: Math.max(0, row), col: displayWidth("⋯") };
-    const replacedWidth = displayWidth(graphemes[0]!) + displayWidth(graphemes[1]!);
-    const prefixEnd = graphemes[0]!.length + graphemes[1]!.length;
-    const cursorOffsetInLine = safeCursor - line.start;
-    if (cursorOffsetInLine <= prefixEnd) {
-      return { row: Math.max(0, row), col: displayWidth("⋯ ") };
-    }
-    const originalCol = displayWidth(value.slice(line.start, safeCursor));
-    return { row: Math.max(0, row), col: originalCol - replacedWidth + displayWidth("⋯ ") };
-  }
-
   const col = displayWidth(value.slice(line.start, safeCursor));
   return { row: Math.max(0, row), col };
 }
