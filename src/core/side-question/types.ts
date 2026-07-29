@@ -40,6 +40,7 @@ export function cloneSideQuestionMessages(messages: VesicleMessage[]): VesicleMe
       ? { thinkingBlocks: message.thinkingBlocks.map((block) => ({ ...block })) }
       : {}),
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+    ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
     ...(message.images ? { images: message.images.map(stripImageBytes) } : {}),
   }));
