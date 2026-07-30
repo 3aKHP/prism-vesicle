@@ -122,6 +122,21 @@ describe("config loading", () => {
     expect(config.apiKey).toBe("secret");
   });
 
+  test("loads the independent OpenAI Responses protocol", async () => {
+    const { env } = await writeProvidersFile([
+      "default:", "  provider: responses", "  model: gpt-test", "providers:",
+      "  responses:", "    protocol: openai-responses", "    baseUrl: https://api.example.test/v1",
+      "    apiKeyEnv: RESPONSES_KEY", "    models:", "      - gpt-test", "",
+    ], ["RESPONSES_KEY=secret"]);
+
+    await expect(loadConfigForSelection(undefined, env)).resolves.toMatchObject({
+      provider: "openai-responses",
+      providerId: "responses",
+      model: "gpt-test",
+      apiKey: "secret",
+    });
+  });
+
   test("loads a provider-level User-Agent override", async () => {
     const { env } = await writeProvidersFile([
       "default:",

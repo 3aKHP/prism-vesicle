@@ -1,6 +1,6 @@
 # OpenAI Responses Conformance Profile
 
-This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. It records evidence and exclusions; it does not claim that the adapter is shipped. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
+This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. The HTTPS/non-stream JSON and typed-SSE baseline is implemented; later WebSocket, compaction, third-party exposure, and product-documentation phases remain incomplete. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
 
 ## Claim Boundary
 
@@ -44,3 +44,11 @@ Profile updates are reviewed fixture changes:
 6. Run `bun test tests/contract/providers/openai-responses-conformance.test.ts`, then the normal repository gates.
 
 Changing this profile does not silently migrate persisted sessions or enable a runtime feature. Runtime delivery and user-facing exposure remain separately reviewed phases.
+
+## Implemented HTTPS/SSE Baseline
+
+The `src/providers/openai-responses/` module owns one deterministic request representation and one final response parser for both HTTPS JSON and typed SSE. It sends `store: false`, retains ordered output Items in the bounded provider-state envelope, replays same-owner Items at JSON-value fidelity, maps function results by exact `call_id`, and fails before network I/O for missing or duplicate result identities.
+
+Every SSE transport attempt uses a fresh accumulator. Deltas, tool candidates, usage, and native state stay private to that attempt until `response.completed` validates the final ordered Items; failed attempts are discarded and may be retried at most five times. This intentionally buffers visible deltas at the HTTP baseline so a retry cannot duplicate provisional TUI text. Cancellation is never retried, semantic unknown events fail closed, and the generic fetch retry loop is disabled inside the Responses stream retry loop so attempt counts cannot multiply.
+
+The real-endpoint acceptance exercised `doro-gpt` with a streamed function call, exact `call_id` result, retained native reasoning/message Items, and a final text response. This evidence proves the current HTTPS/SSE boundary only; it does not authorize an OpenAI-conformance claim for that third-party service or imply WebSocket support.

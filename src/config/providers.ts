@@ -463,7 +463,7 @@ function requireModel(profile: ProviderProfile, modelId: string): ProviderModelP
 }
 
 function readProtocol(value: string, field: string): ProviderProtocol {
-  if (value !== "openai-chat-compatible" && value !== "anthropic-messages" && value !== "gemini-generate-content") {
+  if (value !== "openai-chat-compatible" && value !== "openai-responses" && value !== "anthropic-messages" && value !== "gemini-generate-content") {
     throw new Error(`Unsupported provider protocol "${value}" in ${field}.`);
   }
   return value;

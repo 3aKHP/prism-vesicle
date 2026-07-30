@@ -1,4 +1,5 @@
 import type { EngineId } from "../engine/profile";
+import type { VesicleProvider } from "../../config/env";
 import type { HarnessQualityMode, VerifiedHarnessPack } from "../harness/types";
 import type { ProviderStateEnvelope, ProviderThinkingBlock, ResponseUsage } from "../../providers/shared/types";
 
@@ -89,7 +90,7 @@ export type QualityJudgeContract = {
 };
 
 export type QualitySemanticRewriteModelScope = {
-  protocol: "openai-chat-compatible" | "anthropic-messages" | "gemini-generate-content";
+  protocol: VesicleProvider;
   modelFamily: string;
   modelIds: string[];
 };
@@ -212,7 +213,7 @@ export type ExperimentalQualityProfileSnapshot = {
   mode: "observe" | "rewrite";
   providerId: string;
   modelId: string;
-  protocol: "openai-chat-compatible" | "anthropic-messages" | "gemini-generate-content";
+  protocol: VesicleProvider;
   judgeTimeoutMs: number;
   configIdentity: string;
 };

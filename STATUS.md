@@ -188,7 +188,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ### Providers & Streaming
 
-- OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini `generateContent` are implemented. **OpenAI Responses is deferred.**
+- OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini `generateContent` remain the supported user-facing protocols. The independent OpenAI Responses HTTPS/non-stream JSON and typed-SSE correctness baseline is implemented behind the `openai-responses` protocol, including ordered native Items, encrypted-reasoning pass-through, exact `call_id` pairing, bounded retry, and terminal commit. WebSocket lifecycle, continuation, remote compact, third-party capability profiles, Setup/examples, and supported user-facing exposure remain deferred under #122.
 - Model discovery currently targets the OpenAI-compatible `GET /v1/models` response shape. Anthropic and Gemini use their existing profiles plus exact manual model ids until their native discovery APIs receive separate adapters. Discovery never infers capabilities from names.
 - Mid-stream SSE disconnect replay is deferred: replaying partial assistant/tool deltas requires explicit UI and tool-loop reconciliation. Transport and retryable-HTTP retry is implemented; see [`docs/dev/PROVIDERS.md`](./docs/dev/PROVIDERS.md).
 
