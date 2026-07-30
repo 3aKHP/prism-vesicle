@@ -412,6 +412,24 @@ describe("OpenAI Responses typed SSE", () => {
     expect(complete.response.providerState?.endpointFingerprint).not.toContain("api.openai.com");
   });
 
+  test("accepts the official empty reasoning content placeholder", async () => {
+    const response = responseStream([event(0, "response.completed", { response: {
+      id: "resp_empty_reasoning_content", status: "completed",
+      output: [
+        { type: "reasoning", encrypted_content: "opaque", content: [], summary: [] },
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] },
+      ],
+    } })]);
+    const events = await collect(readResponsesStream(response, streamContext()));
+    expect(events).toMatchObject([
+      { type: "attempt_started", attempt: 1 },
+      { type: "complete", response: { content: "ok" } },
+    ]);
+    const complete = events.at(-1);
+    if (complete?.type !== "complete") throw new Error("Missing completed response.");
+    expect(complete.response.reasoningContent).toBeUndefined();
+  });
+
   test("rejects premature EOF after a complete function Item", async () => {
     const response = responseStream([
       event(0, "response.output_item.done", { item: {
