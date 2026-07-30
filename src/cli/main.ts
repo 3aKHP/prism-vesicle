@@ -2,9 +2,14 @@
 import packageJson from "../../package.json";
 import { isCompiledBinaryRuntime } from "./runtime";
 import { parseCliInvocation } from "./args";
+import { installHostShutdownHooks, registerHostShutdownCleanup } from "../core/process/shutdown";
+import { closeAllProviderSessions } from "../providers/lifecycle";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 declare const VESICLE_NPM_BUNDLE: boolean | undefined;
+
+installHostShutdownHooks();
+registerHostShutdownCleanup(closeAllProviderSessions, 100);
 
 // Bun's compiled single-file executable reports Bun.main from the bundled
 // virtual root. Keep the invocation cwd unchanged: it is the project root for

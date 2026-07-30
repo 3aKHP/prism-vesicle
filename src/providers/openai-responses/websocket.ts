@@ -21,7 +21,6 @@ type SessionSocketOptions = {
 };
 
 const sessionSockets = new Map<string, ResponsesWebSocketSession>();
-let exitHookInstalled = false;
 const rotateAfterMs = 55 * 60 * 1_000;
 
 export class ResponsesWebSocketSession {
@@ -173,7 +172,6 @@ export class ResponsesWebSocketSession {
 }
 
 export function responsesWebSocketSession(options: SessionSocketOptions): ResponsesWebSocketSession {
-  installExitHook();
   const existing = sessionSockets.get(options.sessionId);
   if (existing?.matches(options)) return existing;
   existing?.close(1000, "provider owner changed");
@@ -288,20 +286,4 @@ function failure(message: string, providerId: string): ProviderError {
 
 function abortError(signal?: AbortSignal): DOMException {
   return new DOMException(typeof signal?.reason === "string" ? signal.reason : "The operation was aborted.", "AbortError");
-}
-
-function installExitHook(): void {
-  if (exitHookInstalled) return;
-  exitHookInstalled = true;
-  const shutdown = () => closeAllResponsesWebSocketSessions();
-  process.once("beforeExit", shutdown);
-  process.once("exit", shutdown);
-  process.once("SIGINT", () => {
-    shutdown();
-    process.exit(130);
-  });
-  process.once("SIGTERM", () => {
-    shutdown();
-    process.exit(143);
-  });
 }

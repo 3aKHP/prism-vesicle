@@ -75,6 +75,7 @@ import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
 import { closeAllProviderSessions, closeProviderSession } from "../providers/lifecycle";
+import { registerHostShutdownCleanup } from "../core/process/shutdown";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -512,10 +513,18 @@ export function App(props: AppProps = {}) {
     openSkillPicker,
   } = skillPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
-  onCleanup(() => {
+  let disposed = false;
+  const shutdownHostResources = async () => {
+    if (disposed) return;
+    disposed = true;
     unsubscribeProcesses();
-    void processManager.shutdown();
+    await processManager.shutdown();
     sideQuestionController.dispose();
+  };
+  const unregisterHostShutdown = registerHostShutdownCleanup(shutdownHostResources);
+  onCleanup(() => {
+    unregisterHostShutdown();
+    void shutdownHostResources();
     closeAllProviderSessions();
   });
   const permissionBroker = new ToolPermissionBroker();

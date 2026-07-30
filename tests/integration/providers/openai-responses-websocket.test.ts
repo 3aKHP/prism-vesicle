@@ -440,7 +440,7 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(socket.closeCount).toBe(1);
   });
 
-  test.skipIf(process.platform === "win32")("SIGTERM releases an active native socket and exits", async () => {
+  test.skipIf(process.platform === "win32")("host SIGTERM cleanup releases an active native socket before exit", async () => {
     let opened!: () => void;
     const socketOpened = new Promise<void>((resolveOpen) => { opened = resolveOpen; });
     const server = Bun.serve({
@@ -455,11 +455,18 @@ describe("OpenAI Responses WebSocket transport", () => {
       },
     });
     const moduleUrl = pathToFileURL(resolve(import.meta.dir, "../../../src/providers/openai-responses/websocket.ts")).href;
+    const lifecycleUrl = pathToFileURL(resolve(import.meta.dir, "../../../src/providers/lifecycle.ts")).href;
+    const shutdownUrl = pathToFileURL(resolve(import.meta.dir, "../../../src/core/process/shutdown.ts")).href;
     const baseUrl = `http://127.0.0.1:${server.port}/v1`;
     const script = `import { responsesWebSocketSession } from ${JSON.stringify(moduleUrl)};\n`
+      + `import { closeAllProviderSessions } from ${JSON.stringify(lifecycleUrl)};\n`
+      + `import { installHostShutdownHooks, registerHostShutdownCleanup } from ${JSON.stringify(shutdownUrl)};\n`
+      + "installHostShutdownHooks();\n"
+      + "registerHostShutdownCleanup(async () => { await Bun.sleep(25); console.log(\"host-cleanup\"); });\n"
+      + "registerHostShutdownCleanup(closeAllProviderSessions, 100);\n"
       + `const session = responsesWebSocketSession({sessionId:"child",owner:"owner",baseUrl:${JSON.stringify(baseUrl)},providerId:"test",headers:{authorization:"Bearer test"}});\n`
       + "void session.request({type:\"response.create\"});";
-    const child = Bun.spawn([process.execPath, "-e", script], { stdout: "ignore", stderr: "ignore" });
+    const child = Bun.spawn([process.execPath, "-e", script], { stdout: "pipe", stderr: "ignore" });
     try {
       await Promise.race([
         socketOpened,
@@ -470,6 +477,7 @@ describe("OpenAI Responses WebSocket transport", () => {
         child.exited,
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("child did not exit")), 2_000)),
       ])).resolves.toBe(143);
+      expect(await new Response(child.stdout).text()).toContain("host-cleanup");
     } finally {
       child.kill("SIGKILL");
       server.stop(true);
