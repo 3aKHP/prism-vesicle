@@ -150,6 +150,17 @@ describe("guided Setup configuration writer", () => {
       responsesProfile: "codex-http-relay",
       responsesTransport: "http",
     });
+
+    await expect(writeSetupConfiguration({
+      providerPreset: "chat-compatible",
+      baseUrl: "https://relay.example/v1",
+      apiKey: "new-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir })).rejects.toThrow(
+      "will not replace existing Responses provider",
+    );
   });
 
   test("preserves an existing shell capability and interpreter selection", async () => {
