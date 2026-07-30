@@ -5,6 +5,7 @@ import { validateResponsesOutputItems } from "./items";
 import { openAIResponsesProtocol, type ResponsesOutputItem } from "./types";
 
 type RequestContext = { providerId: string; endpointFingerprint: string };
+export type ResponsesContinuation = { responseId: string; afterMessageIndex: number; pendingCallIds: string[] };
 
 export function toResponsesBody(request: VesicleRequest, context: RequestContext, stream: boolean): Record<string, unknown> {
   const tools = request.tools?.map(toResponsesTool);
@@ -27,9 +28,78 @@ export function toResponsesBody(request: VesicleRequest, context: RequestContext
   };
 }
 
-function serializeResponsesInput(messages: VesicleMessage[], model: string, context: RequestContext): unknown[] {
+export function toResponsesWebSocketMessage(
+  request: VesicleRequest,
+  context: RequestContext,
+  continuation?: ResponsesContinuation,
+  generate = true,
+  profile: "openai-public" | "codex-beta-2026-02-06" = "openai-public",
+): Record<string, unknown> {
+  const base = toResponsesBody(request, context, false);
+  const tools = base.tools;
+  const input = continuation
+    ? serializeResponsesInput(
+        request.messages.slice(continuation.afterMessageIndex),
+        request.model.model,
+        context,
+        continuation.pendingCallIds,
+      )
+    : base.input;
+  return {
+    type: "response.create",
+    model: base.model,
+    instructions: base.instructions,
+    previous_response_id: continuation?.responseId,
+    input,
+    tools,
+    tool_choice: base.tool_choice,
+    parallel_tool_calls: base.parallel_tool_calls,
+    reasoning: base.reasoning,
+    store: base.store,
+    stream: profile === "codex-beta-2026-02-06" ? true : undefined,
+    stream_options: profile === "codex-beta-2026-02-06" ? { include_obfuscation: false } : undefined,
+    include: base.include,
+    service_tier: base.service_tier,
+    prompt_cache_key: base.prompt_cache_key,
+    text: base.text,
+    max_output_tokens: base.max_output_tokens,
+    generate: generate ? undefined : false,
+  };
+}
+
+export function findResponsesContinuation(
+  request: VesicleRequest,
+  context: RequestContext,
+  expectedResponseId: string | undefined,
+): ResponsesContinuation | undefined {
+  if (!expectedResponseId) return undefined;
+  for (let index = request.messages.length - 1; index >= 0; index--) {
+    const message = request.messages[index];
+    if (message.role !== "assistant" || !message.providerState) continue;
+    const native = nativeOutputItems(message.providerState, request.model.model, context);
+    if (!native) return undefined;
+    const payload = message.providerState.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.responseId !== expectedResponseId) return undefined;
+    return {
+      responseId: expectedResponseId,
+      afterMessageIndex: index + 1,
+      pendingCallIds: native.flatMap((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item) || item.type !== "function_call") return [];
+        return typeof item.call_id === "string" ? [item.call_id] : [];
+      }),
+    };
+  }
+  return undefined;
+}
+
+function serializeResponsesInput(
+  messages: VesicleMessage[],
+  model: string,
+  context: RequestContext,
+  initialCallIds: readonly string[] = [],
+): unknown[] {
   const input: unknown[] = [];
-  const declaredCallIds = new Set<string>();
+  const declaredCallIds = new Set(initialCallIds);
   const answeredCallIds = new Set<string>();
   for (const message of messages) {
     if (message.role === "assistant" && message.providerState) {

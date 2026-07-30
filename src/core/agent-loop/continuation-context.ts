@@ -56,7 +56,6 @@ export async function loadContinuationContext(
   const permission = options.permission ?? defaultPermissionRuntime;
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
-  const provider = createProvider(config);
   const projectHarness = !options.assets && !options.harness
     ? requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir))
     : undefined;
@@ -114,6 +113,7 @@ export async function loadContinuationContext(
     { catalogNames: catalogNames(skillCatalog) },
   );
   const session = await createSessionStore(rootDir, options.sessionId);
+  const provider = createProvider(config, { sessionId: session.sessionId });
   // Recover the logical turn + provider round the paused interaction belongs to
   // and re-bind them as the active round, so every resolution record this
   // continuation appends carries the original ids and a resumed pause never

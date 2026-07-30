@@ -12,6 +12,7 @@ type StreamContext = {
   endpointFingerprint: string;
   attempt?: number;
   profile?: ResponsesProfile;
+  allowEmptyOutput?: boolean;
 };
 
 export async function* readResponsesStream(response: Response, context: StreamContext): AsyncIterable<ProviderStreamEvent> {
@@ -78,7 +79,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
           kind: "http_error", providerId: context.providerId,
         });
       case "error":
-        throw new ProviderError(`Provider stream failed: ${event.error?.message ?? "unknown error"}.`, {
+        throw new ProviderError(`Provider stream failed${event.error?.code ? ` (${event.error.code})` : ""}: ${event.error?.message ?? "unknown error"}.`, {
           kind: "stream_error", providerId: context.providerId,
         });
       default:

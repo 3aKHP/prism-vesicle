@@ -11,6 +11,8 @@ type ResponseContext = {
   providerId: string;
   model: string;
   endpointFingerprint: string;
+  /** WebSocket generate=false is successful with an empty output array. */
+  allowEmptyOutput?: boolean;
 };
 
 export function responseFromResponsesBody(body: ResponsesBody | undefined, context: ResponseContext): VesicleResponse {
@@ -43,7 +45,9 @@ export function responseFromResponsesBody(body: ResponsesBody | undefined, conte
     callIds.add(item.call_id);
     return { id: item.call_id, name: item.name, arguments: item.arguments };
   });
-  if (!content && toolCalls.length === 0) return malformed("Provider response did not include assistant content or function calls.", context);
+  if (!context.allowEmptyOutput && !content && toolCalls.length === 0) {
+    return malformed("Provider response did not include assistant content or function calls.", context);
+  }
 
   const providerState = parseProviderStateEnvelope({
     version: providerStateEnvelopeVersion,

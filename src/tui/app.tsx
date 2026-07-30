@@ -74,6 +74,7 @@ import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-l
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
+import { closeAllProviderSessions, closeProviderSession } from "../providers/lifecycle";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -159,6 +160,14 @@ export function App(props: AppProps = {}) {
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
+  let providerResourceSessionId: string | undefined;
+  createEffect(() => {
+    const current = sessionId();
+    if (providerResourceSessionId && providerResourceSessionId !== current) {
+      closeProviderSession(providerResourceSessionId);
+    }
+    providerResourceSessionId = current;
+  });
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
   const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -503,6 +512,7 @@ export function App(props: AppProps = {}) {
     unsubscribeProcesses();
     void processManager.shutdown();
     sideQuestionController.dispose();
+    closeAllProviderSessions();
   });
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
