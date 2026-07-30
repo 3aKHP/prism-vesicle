@@ -95,7 +95,7 @@ export class ResponsesWebSocketSession {
 
   markCompleted(responseId: string | undefined): void {
     const socket = this.socket;
-    if (!socket || socket.readyState !== 1) {
+    if (!responseId || !socket || socket.readyState !== 1) {
       this.clearContinuation();
       return;
     }

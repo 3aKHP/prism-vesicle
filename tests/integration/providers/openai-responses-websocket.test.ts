@@ -664,6 +664,7 @@ describe("OpenAI Responses WebSocket transport", () => {
       + `const session = responsesWebSocketSession({sessionId:"once",owner:"owner",baseUrl:${JSON.stringify(baseUrl)},providerId:"test",headers:{authorization:"Bearer test"}});\n`
       + "await session.request({type:\"response.create\"});\n"
       + "await runHostShutdownCleanups();\n"
+      + "try { registerHostShutdownCleanup(() => undefined); } catch (error) { console.log(error.message); }\n"
       + "console.log(\"completed\");";
     const child = Bun.spawn([process.execPath, "-e", script], { stdout: "pipe", stderr: "pipe" });
     try {
@@ -675,7 +676,9 @@ describe("OpenAI Responses WebSocket transport", () => {
         socketClosed,
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("socket did not close")), 2_000)),
       ])).resolves.toBeUndefined();
-      expect(await new Response(child.stdout).text()).toContain("completed");
+      const stdout = await new Response(child.stdout).text();
+      expect(stdout).toContain("completed");
+      expect(stdout).toContain("Cannot register a host cleanup after process shutdown has started.");
       expect(await new Response(child.stderr).text()).toBe("");
     } finally {
       child.kill("SIGKILL");
