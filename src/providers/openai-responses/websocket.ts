@@ -35,6 +35,7 @@ export class ResponsesWebSocketSession {
   private connectPromise?: Promise<ResponsesSocket>;
   private cancelConnect?: (reason: string) => void;
   private requestController?: AbortController;
+  private idleCleanup?: () => void;
   private inFlight = false;
   private openedAt = 0;
   private prewarmRequired = true;
@@ -63,6 +64,7 @@ export class ResponsesWebSocketSession {
     try {
       const socket = await this.connect(signal);
       try {
+        this.disarmIdleLifecycle();
         const requestController = new AbortController();
         this.requestController = requestController;
         const requestSignal = signal
@@ -92,8 +94,14 @@ export class ResponsesWebSocketSession {
   }
 
   markCompleted(responseId: string | undefined): void {
+    const socket = this.socket;
+    if (!socket || socket.readyState !== 1) {
+      this.clearContinuation();
+      return;
+    }
     this.lastResponseId = responseId;
     this.prewarmRequired = false;
+    this.armIdleLifecycle(socket);
   }
 
   needsPrewarm(): boolean {
@@ -115,16 +123,19 @@ export class ResponsesWebSocketSession {
     const pendingSocket = this.pendingSocket;
     const cancelConnect = this.cancelConnect;
     const requestController = this.requestController;
+    const idleCleanup = this.idleCleanup;
     this.socket = undefined;
     this.pendingSocket = undefined;
     this.connectPromise = undefined;
     this.cancelConnect = undefined;
     this.requestController = undefined;
+    this.idleCleanup = undefined;
     this.openedAt = 0;
     this.lastResponseId = undefined;
     this.prewarmRequired = true;
     // The active request owns `inFlight` until its abort rejection reaches the
     // request `finally`. Clearing it here would permit overlapping requests.
+    runCleanup(() => idleCleanup?.());
     runCleanup(() => cancelConnect?.(reason));
     runCleanup(() => requestController?.abort(reason));
     runCleanup(() => socket?.close(code, reason));
@@ -211,6 +222,30 @@ export class ResponsesWebSocketSession {
 
   private now(): number {
     return this.options.now?.() ?? Date.now();
+  }
+
+  private armIdleLifecycle(socket: ResponsesSocket): void {
+    this.disarmIdleLifecycle();
+    const invalidated = () => {
+      this.disarmIdleLifecycle();
+      if (this.socket !== socket) return;
+      this.socket = undefined;
+      this.openedAt = 0;
+      this.clearContinuation();
+      runCleanup(() => socket.close(1000, "idle connection lost"));
+    };
+    socket.addEventListener("close", invalidated, { once: true });
+    socket.addEventListener("error", invalidated, { once: true });
+    this.idleCleanup = () => {
+      socket.removeEventListener("close", invalidated);
+      socket.removeEventListener("error", invalidated);
+    };
+  }
+
+  private disarmIdleLifecycle(): void {
+    const cleanup = this.idleCleanup;
+    this.idleCleanup = undefined;
+    runCleanup(() => cleanup?.());
   }
 }
 

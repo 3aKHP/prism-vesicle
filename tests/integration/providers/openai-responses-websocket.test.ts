@@ -547,6 +547,24 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(socket.closeCount).toBe(1);
   });
 
+  test("clears connection-local continuation when an idle socket disconnects", async () => {
+    const sockets: FakeSocket[] = [];
+    const session = responsesWebSocketSession(sessionOptions("idle-close", "owner", () => {
+      const socket = new FakeSocket((_message, current) => current.completed(`resp_${sockets.length + 1}`));
+      sockets.push(socket);
+      return socket;
+    }));
+    await session.request({ type: "response.create" });
+    session.markCompleted("resp_1");
+
+    sockets[0]!.close();
+
+    expect(session.lastResponseId).toBeUndefined();
+    expect(session.needsPrewarm()).toBe(true);
+    await session.request({ type: "response.create" });
+    expect(sockets).toHaveLength(2);
+  });
+
   test("continues pending-socket cleanup when listener removal throws", async () => {
     let closeCount = 0;
     const socket: ResponsesSocket = {
