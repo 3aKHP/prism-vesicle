@@ -131,11 +131,10 @@ export class ResponsesWebSocketSession {
       };
       const failed = () => {
         cleanup();
-        if (this.pendingSocket === socket) {
-          this.pendingSocket = undefined;
-          this.connectPromise = undefined;
-          this.cancelConnect = undefined;
-        }
+        if (this.pendingSocket !== socket) return;
+        this.pendingSocket = undefined;
+        this.connectPromise = undefined;
+        this.cancelConnect = undefined;
         socket.close(1000, "connection failed");
         reject(failure("Responses WebSocket connection failed before opening.", this.options.providerId));
       };

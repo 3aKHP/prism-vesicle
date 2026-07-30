@@ -77,6 +77,8 @@ export function findResponsesContinuation(
     const message = request.messages[index];
     if (message.role !== "assistant" || !message.providerState) continue;
     const native = nativeOutputItems(message.providerState, request.model.model, context);
+    // The newest native assistant state owns the continuation frontier. An
+    // owner mismatch must not jump backward across a provider/model switch.
     if (!native) return undefined;
     const payload = message.providerState.payload;
     if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.responseId !== expectedResponseId) return undefined;

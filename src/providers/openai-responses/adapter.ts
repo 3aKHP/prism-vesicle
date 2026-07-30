@@ -146,9 +146,11 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       } catch (error) {
         if (request.signal?.aborted) {
           session.resetConnection("request canceled");
-          throw error;
+          throw abortError(request.signal);
         }
         const missingContinuation = error instanceof ProviderError && error.code === "previous_response_not_found";
+        // Any uncommitted WebSocket terminal invalidates connection-local
+        // continuation, including a non-retryable malformed/failed response.
         session.resetConnection("request recovery");
         if (!missingContinuation && !isRetryableResponsesFailure(error)) throw error;
         yield { type: "attempt_started", attempt };

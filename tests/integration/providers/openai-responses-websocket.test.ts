@@ -374,11 +374,12 @@ describe("OpenAI Responses WebSocket transport", () => {
       });
     };
     const events: ProviderStreamEvent[] = [];
-    await expect((async () => {
+    const canceled = (async () => {
       for await (const item of websocketAdapter(factory).stream({
         ...request([{ role: "user", content: "abort" }]), signal: controller.signal,
       })) events.push(item);
-    })()).rejects.toThrow("stop");
+    })();
+    await expect(canceled).rejects.toMatchObject({ name: "AbortError", message: "stop" });
     expect(sockets).toBe(1);
     expect(events).toEqual([]);
   });
