@@ -384,6 +384,33 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(events).toEqual([]);
   });
 
+  test("times out a socket that never sends a terminal event", async () => {
+    const socket = new FakeSocket(() => undefined);
+    const session = responsesWebSocketSession({
+      ...sessionOptions("timeout", "owner", () => socket),
+      requestTimeoutMs: 5,
+    });
+
+    await expect(session.request({ type: "response.create" })).rejects.toMatchObject({
+      name: "ProviderError",
+      retryable: true,
+      message: "Responses WebSocket timed out before a terminal event.",
+    });
+    expect(socket.closeCount).toBe(1);
+  });
+
+  test("marks a session disabled after exhaustion as non-retryable", async () => {
+    const session = responsesWebSocketSession(sessionOptions(
+      "disabled", "owner", () => new FakeSocket(() => undefined),
+    ));
+    session.disable();
+
+    await expect(session.request({ type: "response.create" })).rejects.toMatchObject({
+      name: "ProviderError",
+      retryable: false,
+    });
+  });
+
   test("derives the endpoint without query credentials and closes all sessions", async () => {
     expect(responsesWebSocketUrl("https://api.openai.com/v1")).toBe("wss://api.openai.com/v1/responses");
     expect(responsesWebSocketUrl("https://api.openai.com/v1/responses?secret=nope")).toBe("wss://api.openai.com/v1/responses");

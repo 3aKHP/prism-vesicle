@@ -18,10 +18,12 @@ type SessionSocketOptions = {
   headers: Record<string, string>;
   factory?: ResponsesSocketFactory;
   now?: () => number;
+  requestTimeoutMs?: number;
 };
 
 const sessionSockets = new Map<string, ResponsesWebSocketSession>();
 const rotateAfterMs = 55 * 60 * 1_000;
+const defaultRequestTimeoutMs = 120_000;
 
 export class ResponsesWebSocketSession {
   readonly sessionId: string;
@@ -42,18 +44,30 @@ export class ResponsesWebSocketSession {
   }
 
   matches(options: SessionSocketOptions): boolean {
-    return this.owner === options.owner && headersEqual(this.options.headers, options.headers);
+    return this.owner === options.owner
+      && headersEqual(this.options.headers, options.headers)
+      && this.options.requestTimeoutMs === options.requestTimeoutMs;
   }
 
   async request(message: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-    if (this.unavailable) throw failure("Responses WebSocket is disabled for this session after retry exhaustion.", this.options.providerId);
+    if (this.unavailable) throw failure(
+      "Responses WebSocket is disabled for this session after retry exhaustion.",
+      this.options.providerId,
+      false,
+    );
     if (this.inFlight) throw failure("Responses WebSocket permits only one in-flight response per session.", this.options.providerId);
     this.prepareForRequest();
     this.inFlight = true;
     try {
       const socket = await this.connect(signal);
       try {
-        const payloads = await receiveTerminal(socket, JSON.stringify(message), signal, this.options.providerId);
+        const payloads = await receiveTerminal(
+          socket,
+          JSON.stringify(message),
+          signal,
+          this.options.providerId,
+          this.options.requestTimeoutMs ?? defaultRequestTimeoutMs,
+        );
         return sseResponse(payloads);
       } catch (error) {
         this.resetConnection("request failure");
@@ -191,8 +205,7 @@ export function closeResponsesWebSocketSession(sessionId: string): void {
 }
 
 export function resetResponsesWebSocketSessionsForTest(): void {
-  for (const socket of sessionSockets.values()) socket.close();
-  sessionSockets.clear();
+  closeAllResponsesWebSocketSessions();
 }
 
 export function closeAllResponsesWebSocketSessions(): void {
@@ -224,9 +237,11 @@ function receiveTerminal(
   message: string,
   signal: AbortSignal | undefined,
   providerId: string,
+  timeoutMs: number,
 ): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const payloads: string[] = [];
+    let settled = false;
     const received = (event: SocketEvent) => {
       const payload = typeof event.data === "string" ? event.data : String(event.data ?? "");
       let type: string | undefined;
@@ -240,6 +255,8 @@ function receiveTerminal(
       }
       payloads.push(payload);
       if (type === "response.completed" || type === "response.failed" || type === "response.incomplete" || type === "error") {
+        if (settled) return;
+        settled = true;
         cleanup();
         resolve(payloads);
       }
@@ -251,14 +268,21 @@ function receiveTerminal(
       socket.close(1000, "aborted");
     };
     const finishReject = (error: unknown) => {
+      if (settled) return;
+      settled = true;
       cleanup();
       reject(error);
     };
+    const timeout = setTimeout(() => {
+      finishReject(failure("Responses WebSocket timed out before a terminal event.", providerId));
+      socket.close(1000, "response timeout");
+    }, timeoutMs);
     const cleanup = () => {
       socket.removeEventListener("message", received);
       socket.removeEventListener("close", closed);
       socket.removeEventListener("error", errored);
       signal?.removeEventListener("abort", aborted);
+      clearTimeout(timeout);
     };
     socket.addEventListener("message", received);
     socket.addEventListener("close", closed, { once: true });
@@ -279,8 +303,8 @@ function sseResponse(payloads: string[]): Response {
   }), { headers: { "content-type": "text/event-stream" } });
 }
 
-function failure(message: string, providerId: string): ProviderError {
-  return new ProviderError(message, { kind: "stream_error", providerId, retryable: true });
+function failure(message: string, providerId: string, retryable = true): ProviderError {
+  return new ProviderError(message, { kind: "stream_error", providerId, retryable });
 }
 
 function abortError(signal?: AbortSignal): DOMException {

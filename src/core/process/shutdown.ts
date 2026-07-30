@@ -24,7 +24,6 @@ export function installHostShutdownHooks(): void {
   if (hooksInstalled) return;
   hooksInstalled = true;
   process.once("beforeExit", () => { void runHostShutdownCleanups(); });
-  process.once("exit", () => { void runHostShutdownCleanups(); });
   process.once("SIGINT", () => { void shutdownForSignal(130); });
   process.once("SIGTERM", () => { void shutdownForSignal(143); });
 }

@@ -18,6 +18,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     private readonly runtime: {
       sessionId?: string;
       webSocketFactory?: ResponsesSocketFactory;
+      webSocketRequestTimeoutMs?: number;
       retryDelay?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
     } = {},
   ) {}
@@ -56,8 +57,9 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         }
         if (response.headers.get("content-type")?.includes("application/json")) {
           const body = await response.json().catch(() => undefined) as ResponsesBody | undefined;
+          const completed = responseFromResponsesBody(body, this.context(request));
           yield { type: "attempt_started", attempt };
-          yield { type: "complete", attempt, response: responseFromResponsesBody(body, this.context(request)) };
+          yield { type: "complete", attempt, response: completed };
           return;
         }
 
@@ -92,6 +94,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       providerId: this.config.providerId,
       headers: this.webSocketHeaders(),
       factory: this.runtime.webSocketFactory,
+      requestTimeoutMs: this.runtime.webSocketRequestTimeoutMs,
     });
     if (session.unavailable) {
       yield* this.streamHttp(request);
