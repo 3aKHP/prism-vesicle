@@ -457,7 +457,8 @@ describe("OpenAI Responses typed SSE", () => {
     const events = [
       event(0, "codex.rate_limits", { limits: {} }),
       event(1, "codex.response.metadata", { metadata: {} }),
-      event(2, "response.completed", { response: {
+      event(2, "responsesapi.websocket_timing", { timing_metrics: {} }),
+      event(3, "response.completed", { response: {
         id: "resp_relay", status: "completed",
         output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }],
       } }),
@@ -481,7 +482,7 @@ describe("OpenAI Responses typed SSE", () => {
       event(3, "response.completed", { response: {
         id: "resp_mimo", status: "completed",
         output: [
-          { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }] },
+          { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }], summary: [] },
           { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
         ],
       } }),

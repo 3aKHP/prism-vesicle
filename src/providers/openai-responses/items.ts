@@ -21,7 +21,8 @@ export function validateResponsesOutputItems(
         break;
       case "reasoning":
         if (profile === "mimo-subset-2026-07-30") {
-          if (item.summary !== undefined || item.encrypted_content !== undefined
+          if ((item.summary !== undefined && (!Array.isArray(item.summary) || item.summary.length > 0))
+            || item.encrypted_content !== undefined
             || !Array.isArray(item.content)
             || item.content.some((part) => part.type !== "reasoning_text" || typeof part.text !== "string")) {
             fail("Provider response included unsupported MiMo reasoning content.", providerId);

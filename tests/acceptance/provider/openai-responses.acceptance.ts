@@ -70,11 +70,15 @@ liveTest("official OpenAI non-stream JSON and standalone compact", async () => {
 liveTest("official OpenAI public WebSocket prewarm, continuation, and tool loop", async () => {
   const config = precondition.config!;
   const sessionId = `acceptance-${crypto.randomUUID()}`;
+  const originalFetch = globalThis.fetch;
   const adapter = new OpenAIResponsesAdapter({
     ...config,
     responsesTransport: "websocket",
   }, { sessionId });
   try {
+    globalThis.fetch = (async () => {
+      throw new Error("Official OpenAI WebSocket acceptance attempted HTTP fallback.");
+    }) as unknown as typeof fetch;
     const result = await runResponsesFunctionLoop(adapter, config);
     expect(result.first.toolCalls).toHaveLength(1);
     expect(result.second.content.length).toBeGreaterThan(0);
@@ -86,6 +90,7 @@ liveTest("official OpenAI public WebSocket prewarm, continuation, and tool loop"
       callIdShape: result.callId.startsWith("call_"),
     });
   } finally {
+    globalThis.fetch = originalFetch;
     closeResponsesWebSocketSession(sessionId);
   }
 }, 120_000);
