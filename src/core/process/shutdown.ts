@@ -8,6 +8,7 @@ type RegisteredCleanup = {
 const cleanups = new Set<RegisteredCleanup>();
 let hooksInstalled = false;
 let shutdownPromise: Promise<void> | undefined;
+const signalShutdownTimeoutMs = 10_000;
 
 /** Register host-owned cleanup. Lower priorities run first. */
 export function registerHostShutdownCleanup(
@@ -45,9 +46,14 @@ export function runHostShutdownCleanups(): Promise<void> {
 }
 
 async function shutdownForSignal(exitCode: number): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    await runHostShutdownCleanups();
+    await Promise.race([
+      runHostShutdownCleanups(),
+      new Promise<void>((resolve) => { timeout = setTimeout(resolve, signalShutdownTimeoutMs); }),
+    ]);
   } finally {
+    if (timeout) clearTimeout(timeout);
     process.exit(exitCode);
   }
 }

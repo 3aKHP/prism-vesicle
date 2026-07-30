@@ -34,6 +34,7 @@ export class ResponsesWebSocketSession {
   private pendingSocket?: ResponsesSocket;
   private connectPromise?: Promise<ResponsesSocket>;
   private cancelConnect?: (reason: string) => void;
+  private requestController?: AbortController;
   private inFlight = false;
   private openedAt = 0;
   private prewarmRequired = true;
@@ -61,10 +62,15 @@ export class ResponsesWebSocketSession {
     try {
       const socket = await this.connect(signal);
       try {
+        const requestController = new AbortController();
+        this.requestController = requestController;
+        const requestSignal = signal
+          ? AbortSignal.any([signal, requestController.signal])
+          : requestController.signal;
         const payloads = await receiveTerminal(
           socket,
           JSON.stringify(message),
-          signal,
+          requestSignal,
           this.options.providerId,
           this.options.requestTimeoutMs ?? defaultRequestTimeoutMs,
         );
@@ -72,6 +78,8 @@ export class ResponsesWebSocketSession {
       } catch (error) {
         this.resetConnection("request failure");
         throw error;
+      } finally {
+        this.requestController = undefined;
       }
     } finally {
       this.inFlight = false;
@@ -105,14 +113,17 @@ export class ResponsesWebSocketSession {
     const socket = this.socket;
     const pendingSocket = this.pendingSocket;
     const cancelConnect = this.cancelConnect;
+    const requestController = this.requestController;
     this.socket = undefined;
     this.pendingSocket = undefined;
     this.connectPromise = undefined;
     this.cancelConnect = undefined;
+    this.requestController = undefined;
     this.openedAt = 0;
     this.lastResponseId = undefined;
     this.prewarmRequired = true;
     cancelConnect?.(reason);
+    requestController?.abort(reason);
     socket?.close(code, reason);
     if (pendingSocket && pendingSocket !== socket) pendingSocket.close(code, reason);
   }

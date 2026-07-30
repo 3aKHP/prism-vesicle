@@ -148,6 +148,20 @@ describe("OpenAI Responses WebSocket transport", () => {
     await expect(pending).rejects.toThrow("connection closed before opening: provider owner changed");
   });
 
+  test("session close aborts an active request even when the socket never emits close", async () => {
+    let sent!: () => void;
+    const messageSent = new Promise<void>((resolveSent) => { sent = resolveSent; });
+    const socket = new FakeSocket(() => sent());
+    const session = responsesWebSocketSession(sessionOptions("active-close", "owner", () => socket));
+    const pending = session.request({ type: "response.create" });
+    await messageSent;
+
+    session.close(1000, "host teardown");
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError", message: "host teardown" });
+    expect(socket.closeCount).toBeGreaterThanOrEqual(1);
+  });
+
   test("discards text and tool candidates from a broken attempt before retrying", async () => {
     let sockets = 0;
     const factory: ResponsesSocketFactory = () => {
@@ -424,7 +438,7 @@ describe("OpenAI Responses WebSocket transport", () => {
     const pending = session.request({ type: "response.create" });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     closeAllResponsesWebSocketSessions();
-    await expect(pending).rejects.toThrow("closed before a terminal event");
+    await expect(pending).rejects.toMatchObject({ name: "AbortError", message: "session close" });
     expect(sockets[0].closeCount).toBe(1);
   });
 
