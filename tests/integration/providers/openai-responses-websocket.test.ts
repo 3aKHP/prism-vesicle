@@ -518,6 +518,23 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(socket.closeCount).toBe(1);
   });
 
+  test("continues pending-socket cleanup when listener removal throws", async () => {
+    let closeCount = 0;
+    const socket: ResponsesSocket = {
+      readyState: 0,
+      send: () => undefined,
+      close: () => { closeCount += 1; },
+      addEventListener: () => undefined,
+      removeEventListener: () => { throw new Error("listener cleanup failed"); },
+    };
+    const session = responsesWebSocketSession(sessionOptions("cleanup-error", "owner", () => socket));
+    const pending = session.request({ type: "response.create" });
+
+    expect(() => session.close(1000, "external close")).not.toThrow();
+    await expect(pending).rejects.toThrow("external close");
+    expect(closeCount).toBe(1);
+  });
+
   test("rejects and cleans up when socket send throws synchronously", async () => {
     const socket = new FakeSocket(() => { throw new Error("send failed"); });
     const session = responsesWebSocketSession(sessionOptions("send-error", "owner", () => socket));

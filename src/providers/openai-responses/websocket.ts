@@ -125,10 +125,12 @@ export class ResponsesWebSocketSession {
     this.prewarmRequired = true;
     // The active request owns `inFlight` until its abort rejection reaches the
     // request `finally`. Clearing it here would permit overlapping requests.
-    cancelConnect?.(reason);
-    requestController?.abort(reason);
-    socket?.close(code, reason);
-    if (pendingSocket && pendingSocket !== socket) pendingSocket.close(code, reason);
+    runCleanup(() => cancelConnect?.(reason));
+    runCleanup(() => requestController?.abort(reason));
+    runCleanup(() => socket?.close(code, reason));
+    if (pendingSocket && pendingSocket !== socket) {
+      runCleanup(() => pendingSocket.close(code, reason));
+    }
   }
 
   resetConnection(reason: string): void {
@@ -181,7 +183,7 @@ export class ResponsesWebSocketSession {
         signal?.removeEventListener("abort", aborted);
       };
       this.cancelConnect = (reason) => {
-        cleanup();
+        runCleanup(cleanup);
         reject(failure(`Responses WebSocket connection closed before opening: ${reason}.`, this.options.providerId));
       };
       socket.addEventListener("open", opened, { once: true });
@@ -211,6 +213,15 @@ function headersEqual(left: Record<string, string>, right: Record<string, string
   const leftKeys = Object.keys(left);
   const rightKeys = Object.keys(right);
   return leftKeys.length === rightKeys.length && leftKeys.every((key) => left[key] === right[key]);
+}
+
+function runCleanup(action: () => void): void {
+  try {
+    action();
+  } catch {
+    // Session teardown is best effort: one faulty native cleanup must not
+    // prevent the remaining abort and socket-close actions from running.
+  }
 }
 
 export function closeResponsesWebSocketSession(sessionId: string): void {
