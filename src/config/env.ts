@@ -1,5 +1,6 @@
 export type VesicleProvider = "openai-chat-compatible" | "openai-responses" | "anthropic-messages" | "gemini-generate-content";
 export type ProviderAuthMethod = "bearer" | "x-api-key" | "x-goog-api-key";
+export type ResponsesProfile = "openai-public" | "codex-http-relay";
 
 export type GenerationDefaults = {
   temperature?: number;
@@ -37,6 +38,7 @@ export type VesicleConfig = {
   apiKeyLabel?: string;
   authMethod?: ProviderAuthMethod;
   userAgent?: string;
+  responsesProfile?: ResponsesProfile;
   generation?: GenerationDefaults;
   capabilities?: ModelCapabilities;
   limits?: ModelLimits;

@@ -1,6 +1,7 @@
 import { ProviderError } from "../shared/errors";
 import { readSseEvents } from "../shared/sse";
 import type { ProviderStreamEvent } from "../shared/types";
+import type { ResponsesProfile } from "../../config/env";
 import { responseFromResponsesBody } from "./response";
 import type { ResponsesBody, ResponsesEvent } from "./types";
 
@@ -10,6 +11,7 @@ type StreamContext = {
   model: string;
   endpointFingerprint: string;
   attempt?: number;
+  profile?: ResponsesProfile;
 };
 
 export async function* readResponsesStream(response: Response, context: StreamContext): AsyncIterable<ProviderStreamEvent> {
@@ -21,6 +23,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
   let terminal: ResponsesBody | undefined;
   let streamedContent = "";
   let streamedReasoning = "";
+  const streamedArguments = new Map<number, string>();
   let expectedSequence = 0;
   for await (const block of readSseEvents(response.body)) {
     const event = parseEvent(block.data, context.providerId);
@@ -47,6 +50,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
         if (typeof event.output_index !== "number" || typeof event.delta !== "string") {
           throw malformed("Function argument delta was malformed.", context.providerId);
         }
+        streamedArguments.set(event.output_index, `${streamedArguments.get(event.output_index) ?? ""}${event.delta}`);
         yield { type: "tool_call_delta", index: event.output_index, argumentsDelta: event.delta };
         break;
       case "response.output_item.done":
@@ -78,6 +82,8 @@ export async function* readResponsesStream(response: Response, context: StreamCo
           kind: "stream_error", providerId: context.providerId,
         });
       default:
+        if (context.profile === "codex-http-relay"
+          && (event.type === "codex.rate_limits" || event.type === "codex.response.metadata")) break;
         if (!isKnownAdditiveEvent(event.type)) throw malformed(`Unsupported semantic Responses event: ${event.type}.`, context.providerId);
     }
   }
@@ -90,6 +96,13 @@ export async function* readResponsesStream(response: Response, context: StreamCo
   }
   if (streamedReasoning && streamedReasoning !== completed.reasoningContent) {
     throw malformed("Streamed reasoning did not match the completed response Items.", context.providerId);
+  }
+  const output = terminal.output ?? [];
+  for (const [outputIndex, argumentsText] of streamedArguments) {
+    const item = output[outputIndex];
+    if (item?.type !== "function_call" || item.arguments !== argumentsText) {
+      throw malformed(`Streamed function arguments at output index ${outputIndex} did not match the completed response Item.`, context.providerId);
+    }
   }
   yield { type: "complete", attempt, response: completed };
 }

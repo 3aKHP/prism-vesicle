@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { VesicleConfig, VesicleProvider } from "./env";
+import type { ResponsesProfile, VesicleConfig, VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
@@ -27,6 +27,7 @@ export type ProviderProfile = {
   apiKeyEnv: string;
   authMethod?: ProviderAuthMethod;
   userAgent?: string;
+  responsesProfile?: ResponsesProfile;
   defaultModel?: string;
   models: ProviderModelProfile[];
 };
@@ -140,6 +141,7 @@ export function resolveProviderConfig(
     apiKeyLabel: profile.apiKeyEnv,
     ...(profile.authMethod ? { authMethod: profile.authMethod } : {}),
     ...(profile.userAgent ? { userAgent: profile.userAgent } : {}),
+    ...(profile.responsesProfile ? { responsesProfile: profile.responsesProfile } : {}),
     ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
     ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
     ...(modelProfile.limits ? { limits: modelProfile.limits } : {}),
@@ -244,6 +246,12 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (defaultModel && !models.some((model) => model.id === defaultModel)) {
       throw new Error(`Provider "${id}" defaultModel "${defaultModel}" is not declared in models.`);
     }
+    if (protocol === "openai-responses" && !currentProvider.responsesProfile) {
+      throw new Error(`Provider "${id}" using openai-responses must declare responsesProfile.`);
+    }
+    if (protocol !== "openai-responses" && currentProvider.responsesProfile) {
+      throw new Error(`Provider "${id}" cannot declare responsesProfile with protocol ${protocol}.`);
+    }
     registry.providers.push({
       id,
       protocol,
@@ -251,6 +259,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       apiKeyEnv,
       ...(currentProvider.authMethod ? { authMethod: currentProvider.authMethod } : {}),
       ...(currentProvider.userAgent ? { userAgent: currentProvider.userAgent } : {}),
+      ...(currentProvider.responsesProfile ? { responsesProfile: currentProvider.responsesProfile } : {}),
       ...(defaultModel ? { defaultModel } : {}),
       models,
     });
@@ -318,6 +327,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       else if (key === "apiKeyEnv") currentProvider.apiKeyEnv = value;
       else if (key === "authMethod") currentProvider.authMethod = readAuthMethod(value, `provider ${currentProvider.id}`);
       else if (key === "userAgent") currentProvider.userAgent = readUserAgent(value, `provider ${currentProvider.id}`);
+      else if (key === "responsesProfile") currentProvider.responsesProfile = readResponsesProfile(value, `provider ${currentProvider.id}`);
       else if (key === "defaultModel") currentProvider.defaultModel = value;
       else if (key === "apiKey") throw new Error(`Provider config parse error on line ${index + 1}: use apiKeyEnv instead of inline apiKey.`);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown provider field "${key}".`);
@@ -465,6 +475,13 @@ function requireModel(profile: ProviderProfile, modelId: string): ProviderModelP
 function readProtocol(value: string, field: string): ProviderProtocol {
   if (value !== "openai-chat-compatible" && value !== "openai-responses" && value !== "anthropic-messages" && value !== "gemini-generate-content") {
     throw new Error(`Unsupported provider protocol "${value}" in ${field}.`);
+  }
+  return value;
+}
+
+function readResponsesProfile(value: string, field: string): ResponsesProfile {
+  if (value !== "openai-public" && value !== "codex-http-relay") {
+    throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
   }
   return value;
 }

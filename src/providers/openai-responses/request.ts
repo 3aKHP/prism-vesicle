@@ -1,8 +1,8 @@
 import type { ToolDefinition } from "../../core/tools";
 import { parseProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
 import type { ReasoningTier, VesicleMessage, VesicleRequest } from "../shared/types";
-
-export const openAIResponsesProtocol = "openai-responses";
+import { validateResponsesOutputItems } from "./items";
+import { openAIResponsesProtocol, type ResponsesOutputItem } from "./types";
 
 type RequestContext = { providerId: string; endpointFingerprint: string };
 
@@ -75,7 +75,7 @@ function nativeOutputItems(state: VesicleMessage["providerState"], model: string
   if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1 || !Array.isArray(payload.outputItems)) {
     throw new Error("OpenAI Responses native state is malformed.");
   }
-  return payload.outputItems;
+  return validateResponsesOutputItems(payload.outputItems as ResponsesOutputItem[], context.providerId) as ProviderStateJson[];
 }
 
 function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {

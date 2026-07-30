@@ -7,6 +7,7 @@ import { toResponsesBody } from "./request";
 import { readResponsesErrorMessage, responseFromResponsesBody } from "./response";
 import { readResponsesStream } from "./stream";
 import type { ResponsesBody } from "./types";
+import { responsesEndpointFingerprint } from "./owner";
 
 export class OpenAIResponsesAdapter implements ProviderAdapter {
   readonly id = "openai-responses";
@@ -15,6 +16,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
 
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     this.requireApiKey();
+    this.requireProfile();
     const response = await this.fetchResponses(request, false);
     const body = await response.json().catch(() => undefined) as ResponsesBody | undefined;
     if (!response.ok) this.throwHttp(response, body?.error?.message);
@@ -23,6 +25,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
 
   async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
     this.requireApiKey();
+    this.requireProfile();
     const maxRetries = 5;
     for (let retry = 0; ; retry++) {
       const attempt = retry + 1;
@@ -42,7 +45,9 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         // response.completed avoids duplicate provisional output when an SSE
         // body fails after accepting text or function Items.
         const committed: ProviderStreamEvent[] = [];
-        for await (const event of readResponsesStream(response, { ...this.context(request), attempt })) committed.push(event);
+        for await (const event of readResponsesStream(response, {
+          ...this.context(request), attempt, profile: this.config.responsesProfile,
+        })) committed.push(event);
         for (const event of committed) yield event;
         return;
       } catch (error) {
@@ -69,11 +74,11 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private requestContext() {
-    return { providerId: this.config.providerId, endpointFingerprint: this.config.baseUrl };
+    return { providerId: this.config.providerId, endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl) };
   }
 
   private context(request: VesicleRequest) {
-    return { requestId: request.id, providerId: this.config.providerId, model: request.model.model, endpointFingerprint: this.config.baseUrl };
+    return { requestId: request.id, providerId: this.config.providerId, model: request.model.model, endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl) };
   }
 
   private throwHttp(response: Response, detail?: string): never {
@@ -86,6 +91,13 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     if (this.config.apiKey) return;
     throw new ProviderError(`${this.config.apiKeyLabel ?? "provider API key"} is required before making a provider request.`, {
       kind: "missing_credentials", providerId: this.config.providerId,
+    });
+  }
+
+  private requireProfile(): void {
+    if (this.config.responsesProfile === "openai-public" || this.config.responsesProfile === "codex-http-relay") return;
+    throw new ProviderError("OpenAI Responses requires an explicit supported responsesProfile.", {
+      kind: "malformed_response", providerId: this.config.providerId,
     });
   }
 }

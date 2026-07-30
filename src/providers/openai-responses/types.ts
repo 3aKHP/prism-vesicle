@@ -40,3 +40,4 @@ export type ResponsesEvent = {
   response?: ResponsesBody;
   error?: { message?: string; code?: string };
 };
+export const openAIResponsesProtocol = "openai-responses";

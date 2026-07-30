@@ -2,8 +2,8 @@ import { ProviderError } from "../shared/errors";
 import { parseProviderStateEnvelope, providerStateEnvelopeVersion } from "../shared/state";
 import { thinkingBlocksFromReasoningContent } from "../shared/thinking";
 import type { VesicleResponse } from "../shared/types";
-import { openAIResponsesProtocol } from "./request";
-import type { ResponsesBody, ResponsesOutputItem } from "./types";
+import { validateResponsesOutputItems } from "./items";
+import { openAIResponsesProtocol, type ResponsesBody, type ResponsesOutputItem } from "./types";
 import { usageFromResponses } from "./usage";
 
 type ResponseContext = {
@@ -23,10 +23,11 @@ export function responseFromResponsesBody(body: ResponsesBody | undefined, conte
     });
   }
 
-  const content = messageText(body.output);
-  const reasoningContent = reasoningText(body.output);
+  const output = validateResponsesOutputItems(body.output, context.providerId);
+  const content = messageText(output);
+  const reasoningContent = reasoningText(output);
   const callIds = new Set<string>();
-  const toolCalls = body.output.filter((item) => item.type === "function_call").map((item) => {
+  const toolCalls = output.filter((item) => item.type === "function_call").map((item) => {
     if (!item.call_id || !item.name || typeof item.arguments !== "string") {
       throw new ProviderError("Provider response included a malformed function_call Item.", {
         kind: "malformed_response",
@@ -50,7 +51,7 @@ export function responseFromResponsesBody(body: ResponsesBody | undefined, conte
     providerId: context.providerId,
     model: context.model,
     endpointFingerprint: context.endpointFingerprint,
-    payload: { version: 1, responseId: body.id, outputItems: body.output },
+    payload: { version: 1, responseId: body.id, outputItems: output },
   });
   return {
     id: body.id ?? context.requestId,

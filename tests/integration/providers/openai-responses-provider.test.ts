@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/adapter";
+import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
 import { toResponsesBody } from "../../../src/providers/openai-responses/request";
 import { readResponsesStream } from "../../../src/providers/openai-responses/stream";
 import { providerStateEnvelopeVersion, type ProviderStateJson } from "../../../src/providers/shared/state";
@@ -78,7 +79,7 @@ describe("OpenAI Responses request codec", () => {
           protocol: "openai-responses",
           providerId: "openai",
           model: "gpt-5.2-codex",
-          endpointFingerprint: "https://api.openai.com/v1",
+          endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
           payload: { version: 1, responseId: "resp_1", outputItems },
         },
       }],
@@ -130,6 +131,10 @@ describe("OpenAI Responses typed SSE", () => {
         usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, reasoningTokens: 2 },
       },
     });
+    const complete = events.at(-1);
+    if (complete?.type !== "complete") throw new Error("Missing completed response.");
+    expect(complete.response.providerState?.endpointFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(complete.response.providerState?.endpointFingerprint).not.toContain("api.openai.com");
   });
 
   test("rejects premature EOF after a complete function Item", async () => {
@@ -149,6 +154,50 @@ describe("OpenAI Responses typed SSE", () => {
     expect(seen.some((item) => item.type === "complete")).toBe(false);
   });
 
+  test("rejects unknown semantic output Items instead of persisting and replaying them", async () => {
+    const response = responseStream([event(0, "response.completed", { response: {
+      id: "resp_unknown", status: "completed",
+      output: [
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "unsafe" }] },
+        { type: "computer_call", id: "computer_1" },
+      ],
+    } })]);
+    await expect(collect(readResponsesStream(response, streamContext())))
+      .rejects.toThrow("unsupported semantic Item computer_call");
+  });
+
+  test("requires streamed function arguments to match the terminal Item", async () => {
+    const response = responseStream([
+      event(0, "response.function_call_arguments.delta", { output_index: 0, delta: "{\"wrong\":true}" }),
+      event(1, "response.completed", { response: {
+        id: "resp_args", status: "completed",
+        output: [{ type: "function_call", call_id: "call_1", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" }],
+      } }),
+    ]);
+    await expect(collect(readResponsesStream(response, streamContext())))
+      .rejects.toThrow("did not match the completed response Item");
+  });
+
+  test("accepts only declared non-semantic relay diagnostics", async () => {
+    const events = [
+      event(0, "codex.rate_limits", { limits: {} }),
+      event(1, "codex.response.metadata", { metadata: {} }),
+      event(2, "response.completed", { response: {
+        id: "resp_relay", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }],
+      } }),
+    ];
+    await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "codex-http-relay",
+    }))).resolves.toMatchObject([
+      { type: "attempt_started" },
+      { type: "complete", response: { content: "ok" } },
+    ]);
+    await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "openai-public",
+    }))).rejects.toThrow("Unsupported semantic Responses event: codex.rate_limits");
+  });
+
   test("uses the same final parser for non-streaming JSON", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => Response.json({
@@ -158,9 +207,28 @@ describe("OpenAI Responses typed SSE", () => {
     try {
       const adapter = new OpenAIResponsesAdapter({
         provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
-        model: "gpt-5.2-codex", apiKey: "test-key",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
       });
       await expect(adapter.complete(request())).resolves.toMatchObject({ id: "resp_json", content: "json" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("requires explicit OpenAI capability profile before network I/O", async () => {
+    let fetched = false;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      fetched = true;
+      return Response.json({});
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "unknown", baseUrl: "https://provider.test/v1",
+        model: "model", apiKey: "test-key",
+      });
+      await expect(adapter.complete(request())).rejects.toThrow("requires an explicit supported responsesProfile");
+      expect(fetched).toBe(false);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -186,7 +254,7 @@ describe("OpenAI Responses typed SSE", () => {
     try {
       const adapter = new OpenAIResponsesAdapter({
         provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
-        model: "gpt-5.2-codex", apiKey: "test-key",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
       });
       const events = await collect(adapter.stream!({ ...request(), onRetry: (info) => retries.push(info.attempt) }));
       expect(events).toEqual([
@@ -207,11 +275,14 @@ function request(): VesicleRequest {
 }
 
 function context() {
-  return { providerId: "openai", endpointFingerprint: "https://api.openai.com/v1" };
+  return { providerId: "openai", endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1") };
 }
 
 function streamContext() {
-  return { requestId: "req_1", providerId: "openai", model: "gpt-5.2-codex", endpointFingerprint: "https://api.openai.com/v1" };
+  return {
+    requestId: "req_1", providerId: "openai", model: "gpt-5.2-codex",
+    endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+  };
 }
 
 function event(sequence: number, type: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
