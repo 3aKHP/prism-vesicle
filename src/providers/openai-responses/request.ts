@@ -29,17 +29,23 @@ export function toResponsesBody(request: VesicleRequest, context: RequestContext
 
 function serializeResponsesInput(messages: VesicleMessage[], model: string, context: RequestContext): unknown[] {
   const input: unknown[] = [];
+  const declaredCallIds = new Set<string>();
   const answeredCallIds = new Set<string>();
   for (const message of messages) {
     if (message.role === "assistant" && message.providerState) {
       const native = nativeOutputItems(message.providerState, model, context);
       if (native) {
+        for (const item of native) {
+          if (!item || typeof item !== "object" || Array.isArray(item) || item.type !== "function_call") continue;
+          declareCallId(item.call_id, declaredCallIds);
+        }
         input.push(...native);
         continue;
       }
     }
     if (message.role === "tool") {
       if (!message.toolCallId) throw new Error("OpenAI Responses tool output is missing its call_id.");
+      if (!declaredCallIds.has(message.toolCallId)) throw new Error(`OpenAI Responses function output has no preceding call_id ${message.toolCallId}.`);
       if (answeredCallIds.has(message.toolCallId)) throw new Error(`OpenAI Responses call_id ${message.toolCallId} was answered more than once.`);
       answeredCallIds.add(message.toolCallId);
       input.push({ type: "function_call_output", call_id: message.toolCallId, output: message.content });
@@ -47,12 +53,10 @@ function serializeResponsesInput(messages: VesicleMessage[], model: string, cont
     }
     if (message.role === "assistant" && message.toolCalls?.length) {
       if (message.content) input.push({ role: "assistant", content: message.content });
-      input.push(...message.toolCalls.map((call) => ({
-        type: "function_call",
-        call_id: call.id,
-        name: call.name,
-        arguments: call.arguments,
-      })));
+      input.push(...message.toolCalls.map((call) => {
+        declareCallId(call.id, declaredCallIds);
+        return { type: "function_call", call_id: call.id, name: call.name, arguments: call.arguments };
+      }));
       continue;
     }
     input.push({
@@ -62,7 +66,15 @@ function serializeResponsesInput(messages: VesicleMessage[], model: string, cont
         : message.content,
     });
   }
+  const unanswered = [...declaredCallIds].find((callId) => !answeredCallIds.has(callId));
+  if (unanswered) throw new Error(`OpenAI Responses function call_id ${unanswered} has no result.`);
   return input;
+}
+
+function declareCallId(value: ProviderStateJson | string, declared: Set<string>): void {
+  if (typeof value !== "string" || !value) throw new Error("OpenAI Responses function call is missing its call_id.");
+  if (declared.has(value)) throw new Error(`OpenAI Responses function call_id ${value} was declared more than once.`);
+  declared.add(value);
 }
 
 function nativeOutputItems(state: VesicleMessage["providerState"], model: string, context: RequestContext): ProviderStateJson[] | undefined {

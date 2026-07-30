@@ -2,6 +2,7 @@ import { ProviderError } from "../shared/errors";
 import type { ResponsesOutputItem } from "./types";
 
 export function validateResponsesOutputItems(items: ResponsesOutputItem[], providerId?: string): ResponsesOutputItem[] {
+  const callIds = new Set<string>();
   for (const item of items) {
     if (!item || typeof item !== "object") fail("Provider response included a malformed output Item.", providerId);
     switch (item.type) {
@@ -26,6 +27,8 @@ export function validateResponsesOutputItems(items: ResponsesOutputItem[], provi
         if (!item.call_id || !item.name || typeof item.arguments !== "string") {
           fail("Provider response included a malformed function_call Item.", providerId);
         }
+        if (callIds.has(item.call_id)) fail(`Provider response repeated function call_id ${item.call_id}.`, providerId);
+        callIds.add(item.call_id);
         break;
       default:
         fail(`Provider response included unsupported semantic Item ${item.type ?? "unknown"}.`, providerId);

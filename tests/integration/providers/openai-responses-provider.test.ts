@@ -3,7 +3,11 @@ import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/
 import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
 import { toResponsesBody } from "../../../src/providers/openai-responses/request";
 import { readResponsesStream } from "../../../src/providers/openai-responses/stream";
-import { providerStateEnvelopeVersion, type ProviderStateJson } from "../../../src/providers/shared/state";
+import {
+  providerStateEnvelopeVersion,
+  type ProviderStateEnvelope,
+  type ProviderStateJson,
+} from "../../../src/providers/shared/state";
 import type { ProviderStreamEvent, VesicleRequest } from "../../../src/providers/shared/types";
 import { bytesFromChunks } from "../../support/providers/sse";
 import captures from "../../fixtures/openai-responses/request-captures-v1.json";
@@ -91,10 +95,32 @@ describe("OpenAI Responses request codec", () => {
     expect(() => toResponsesBody({
       ...request(),
       messages: [
+        { role: "assistant", content: "", toolCalls: [{ id: "call_1", name: "read_file", arguments: "{}" }] },
         { role: "tool", toolCallId: "call_1", content: "first" },
         { role: "tool", toolCallId: "call_1", content: "second" },
       ],
     }, context(), true)).toThrow("call_id call_1 was answered more than once");
+  });
+
+  test("rejects duplicate native calls and orphan results before network I/O", () => {
+    const duplicateState: ProviderStateEnvelope = {
+      version: providerStateEnvelopeVersion,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.2-codex",
+      endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+      payload: { version: 1, outputItems: [
+        { type: "function_call", call_id: "dup", name: "read_file", arguments: "{}" },
+        { type: "function_call", call_id: "dup", name: "read_file", arguments: "{}" },
+      ] },
+    };
+    expect(() => toResponsesBody({
+      ...request(),
+      messages: [{ role: "assistant", content: "", providerState: duplicateState }],
+    }, context(), true)).toThrow("repeated function call_id dup");
+    expect(() => toResponsesBody({
+      ...request(), messages: [{ role: "tool", toolCallId: "orphan", content: "result" }],
+    }, context(), true)).toThrow("no preceding call_id orphan");
   });
 });
 
