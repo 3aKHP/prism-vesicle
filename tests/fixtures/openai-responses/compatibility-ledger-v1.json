@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "ws-stream-field",
+      "codex": "Frozen Codex sends stream=true in response.create and the responses_websockets=2026-02-06 beta header.",
+      "public": "Public WebSocket mode says transport-specific stream and background fields are not used.",
+      "selected": "openai-public omits stream and background; codex-beta-2026-02-06 sends stream=true and its beta header.",
+      "test": "openai-public and codex-beta captures differ only by declared profile fields",
+      "allowedCaptureDifferences": ["$.headers.openai-beta", "$.body.stream", "$.body.stream_options", "$.orderedBodyKeys", "$.id", "$.profile", "$.provenance", "$.sanitization"]
+    },
+    {
+      "id": "encrypted-reasoning-include",
+      "codex": "Frozen Codex requests reasoning.encrypted_content in include for stateless replay.",
+      "public": "As checked on 2026-07-30, stateless responses return encrypted_content by default; include remains accepted for compatibility.",
+      "selected": "The first conformance profile sends include for Codex application parity, while subset profiles must declare support before sending it.",
+      "test": "every optional request field is capability classified"
+    },
+    {
+      "id": "tool-commit-barrier",
+      "codex": "Frozen Codex queues a tool future on output_item.done and drains queued futures after the receive loop exits, including after premature EOF.",
+      "public": "response.completed is the successful terminal event, but the API does not own host side-effect scheduling.",
+      "selected": "Vesicle deliberately strengthens safety: no host tool begins until a structurally valid response.completed commits the attempt; failed attempts discard pending calls before retry.",
+      "test": "premature EOF after a function-call Item commits nothing and dispatches zero tools"
+    },
+    {
+      "id": "websocket-owner",
+      "codex": "The frozen client uses a turn-scoped wrapper but caches and returns WebsocketSession through the session-scoped ModelClient, allowing an eligible socket to survive across turns while turn-state metadata does not.",
+      "public": "One persistent socket may carry multiple sequential response.create messages; no multiplexing; lifetime is 60 minutes.",
+      "selected": "Vesicle owns one eligible socket per active session and exact provider owner, closes it on lifecycle changes, and permits one in-flight response.",
+      "test": "later lifecycle tests must prove two user turns reuse one eligible socket and teardown on owner change"
+    },
+    {
+      "id": "private-identity",
+      "codex": "Codex attaches product identity, sticky routing, telemetry and private client_metadata fields.",
+      "public": "Public Responses does not require Codex identity or attestation.",
+      "selected": "Vesicle never copies x-codex headers, session/thread/turn ids, attestation or private client_metadata.",
+      "test": "fixtures reject private field names and secret material in captures"
+    },
+    {
+      "id": "mimo-subset",
+      "codex": "Codex exercises OpenAI continuation, encrypted reasoning and WebSocket beta behavior.",
+      "public": "OpenAI exposes these as separately observable capabilities.",
+      "selected": "MiMo is a Responses-compatible subset with full replay, no previous_response_id/remote compact/WebSocket, and explicit response.reasoning_text.* mapping.",
+      "test": "MiMo profile omits unsupported request fields and declares its reasoning event family"
+    },
+    {
+      "id": "network-fingerprint",
+      "codex": "Codex Rust dependencies own TLS, HTTP/2 and WebSocket transport bytes.",
+      "public": "Responses specifies application semantics, not a Codex network fingerprint.",
+      "selected": "The TypeScript/Bun implementation claims application-layer conformance only; literal network identity requires a separately approved byte-owning component.",
+      "test": "profile claim lists the excluded network layers"
+    }
+  ]
+}

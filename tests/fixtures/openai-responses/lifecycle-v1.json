@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "retry": {
+    "maxRetriesBeforeWebSocketDowngrade": 5,
+    "counterMeaning": "retries after the triggering attempt",
+    "attemptAccumulatorsAreIsolated": true,
+    "fallbackTransport": "http",
+    "fallbackScope": "active-session",
+    "cancellationRetries": false,
+    "sources": [
+      "codex-rs/core/src/responses_retry.rs:20-73",
+      "codex-rs/core/src/client.rs:1847-1863",
+      "codex-rs/core/src/session/turn.rs:1335-1404",
+      "codex-rs/model-provider-info/src/lib.rs:26-31,311-315"
+    ]
+  },
+  "websocket": {
+    "oneInFlight": true,
+    "multiplexing": false,
+    "connectionLimitMinutes": 60,
+    "prewarmGenerate": false,
+    "continuationField": "previous_response_id",
+    "missingContinuationRecovery": "clear-chain-and-replay-full-context",
+    "expiryRecovery": "open-new-socket-and-replay-full-context-when-store-false",
+    "terminalCommitEvent": "response.completed",
+    "sources": [
+      "codex-rs/codex-api/src/endpoint/responses_websocket.rs:148-162,608-635",
+      "codex-rs/core/src/client.rs:1217-1252,1640-1651,1674-1692"
+    ]
+  },
+  "commitBarrier": {
+    "pendingEvent": "response.output_item.done",
+    "commitEvent": "response.completed",
+    "codexFrozenBehavior": {
+      "toolDispatchMayBeginBeforeCommit": true,
+      "source": "codex-rs/core/src/session/turn.rs:2244-2365,2685-2702"
+    },
+    "vesicleSelectedBehavior": {
+      "toolDispatchBeforeCommit": false,
+      "failedAttemptDurableOutput": false,
+      "retrySideEffectCount": 1,
+      "status": "phase-2-required-safety-divergence"
+    }
+  },
+  "eventEvidenceFixture": "event-captures-v1.json",
+  "terminalEvents": [
+    "response.completed",
+    "response.failed",
+    "response.incomplete",
+    "error",
+    "premature-eof"
+  ]
+}

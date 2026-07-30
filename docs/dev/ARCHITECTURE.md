@@ -84,6 +84,7 @@ Installer, onboarding, model-discovery, configuration-write, and project-launch 
 |---|---|
 | [`STYLE.md`](./STYLE.md) | Source-code structure, maintainability, types, errors, naming, comments, and test design |
 | [`PROVIDERS.md`](./PROVIDERS.md) | Normalized provider boundary, protocol mapping, transport, usage, and provider configuration |
+| [`OPENAI_RESPONSES_CONFORMANCE.md`](./OPENAI_RESPONSES_CONFORMANCE.md) | Frozen Responses/Codex application-layer target and structured evidence contract |
 | [`TOOLS.md`](./TOOLS.md) | Model-visible tools, path guards, permissions, process authority, gates, questions, and MCP execution |
 | [`SESSIONS.md`](./SESSIONS.md) | Session persistence, projection, checkpoints, rewind, compaction, and recovery |
 | [`PERSISTENT_INSTRUCTIONS.md`](./PERSISTENT_INSTRUCTIONS.md) | Instruction resolution, prompt composition, mutation, and capability limits |

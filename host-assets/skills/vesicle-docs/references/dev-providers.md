@@ -51,3 +51,5 @@ This document defines how Vesicle selects providers, translates normalized reque
 - Vision is capability-gated. A non-vision model receives neither image content nor the model-visible image inspection tool.
 
 Current protocol availability and known limitations belong in [`STATUS.md`](../../STATUS.md). Example configuration shapes live under [`docs/examples/`](../examples/).
+
+The independent OpenAI Responses adapter is governed by the versioned application-layer evidence and exclusions in [`OPENAI_RESPONSES_CONFORMANCE.md`](./OPENAI_RESPONSES_CONFORMANCE.md). That profile does not make Responses available before the runtime adapter ships.

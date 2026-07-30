@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "profileId": "openai-responses-codex-8f00b9a-v1",
+  "claim": {
+    "layer": "application",
+    "authentication": "api-key",
+    "endpoint": "/v1/responses",
+    "store": false,
+    "excluded": [
+      "TLS ClientHello and ALPN",
+      "HTTP/2 framing and HPACK",
+      "TCP behavior",
+      "runtime-owned WebSocket handshake bytes",
+      "Codex private product identity and attestation"
+    ]
+  },
+  "evidence": {
+    "codex": {
+      "repository": "https://github.com/openai/codex",
+      "commit": "8f00b9a04cb542ad19a79f9f6c32348421741602",
+      "sources": [
+        { "claimId": "request-field-order", "path": "codex-rs/codex-api/src/common.rs", "lines": "252-274" },
+        { "claimId": "ws-response-create", "path": "codex-rs/codex-api/src/common.rs", "lines": "277-358" },
+        { "claimId": "request-construction", "path": "codex-rs/core/src/client.rs", "lines": "907-923" },
+        { "claimId": "ws-owner", "path": "codex-rs/core/src/client.rs", "lines": "200-217,240-301,1115-1120" },
+        { "claimId": "beta-header", "path": "codex-rs/core/src/client.rs", "lines": "1080-1111" },
+        { "claimId": "private-headers", "path": "codex-rs/core/src/client.rs", "lines": "1080-1111" },
+        { "claimId": "private-conditional-headers", "path": "codex-rs/core/src/client.rs", "lines": "754-790,1907-1914" },
+        { "claimId": "private-client-metadata", "path": "codex-rs/core/src/responses_metadata.rs", "lines": "215-245" },
+        { "claimId": "private-ws-trace-metadata", "path": "codex-rs/codex-api/src/common.rs", "lines": "23-24,331-350" },
+        { "claimId": "private-ws-runtime-metadata", "path": "codex-rs/core/src/client.rs", "lines": "771-783,1640-1651,1870-1878" },
+        { "claimId": "private-session-headers", "path": "codex-rs/codex-api/src/requests/headers.rs", "lines": "5-13" },
+        { "claimId": "default-five-retries", "path": "codex-rs/model-provider-info/src/lib.rs", "lines": "26-31,311-315" },
+        { "claimId": "retry-counter", "path": "codex-rs/core/src/responses_retry.rs", "lines": "20-73" },
+        { "claimId": "retry-callsite", "path": "codex-rs/core/src/session/turn.rs", "lines": "1335-1404" },
+        { "claimId": "codex-tool-before-terminal", "path": "codex-rs/core/src/session/turn.rs", "lines": "2244-2365,2685-2702" },
+        { "claimId": "ws-prewarm", "path": "codex-rs/core/src/client.rs", "lines": "1640-1651" },
+        { "claimId": "http-downgrade", "path": "codex-rs/core/src/responses_retry.rs", "lines": "20-73" },
+        { "claimId": "stream-terminal", "path": "codex-rs/core/src/client.rs", "lines": "1970-2078" },
+        { "claimId": "ws-terminal", "path": "codex-rs/codex-api/src/endpoint/responses_websocket.rs", "lines": "675-819" },
+        { "claimId": "ws-limit", "path": "codex-rs/codex-api/src/endpoint/responses_websocket.rs", "lines": "148-162,608-635" },
+        { "claimId": "missing-continuation-retryable", "path": "codex-rs/codex-api/src/endpoint/responses_websocket.rs", "lines": "158-162,608-635" },
+        { "claimId": "missing-continuation-full-replay", "path": "codex-rs/core/src/client.rs", "lines": "1217-1252,1674-1692" }
+      ],
+      "sourceEvidenceFixture": "codex-source-evidence-v1.json"
+    },
+    "publicDocs": {
+      "checkedAt": "2026-07-30",
+      "urls": [
+        "https://developers.openai.com/api/docs/guides/migrate-to-responses",
+        "https://developers.openai.com/api/docs/guides/reasoning",
+        "https://developers.openai.com/api/docs/guides/conversation-state",
+        "https://developers.openai.com/api/docs/guides/streaming-responses",
+        "https://developers.openai.com/api/docs/guides/function-calling",
+        "https://developers.openai.com/api/docs/guides/websocket-mode",
+        "https://developers.openai.com/api/reference/resources/responses/methods/compact",
+        "https://developers.openai.com/api/docs/guides/compaction"
+      ]
+    },
+    "thirdPartyDocs": {
+      "checkedAt": "2026-07-30",
+      "urls": [
+        "https://mimo.mi.com/docs/zh-CN/api/chat/responses"
+      ]
+    }
+  },
+  "profiles": {
+    "openaiPublic": {
+      "tier": "openai-public-conformance",
+      "streaming": true,
+      "functionCalling": true,
+      "parallelToolCalls": true,
+      "reasoningItems": "encrypted",
+      "previousResponseId": true,
+      "remoteCompact": true,
+      "websocket": {
+        "profile": "openai-public",
+        "prewarm": true
+      },
+      "supportedRequestFields": [
+        "model",
+        "instructions",
+        "input",
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "reasoning",
+        "store",
+        "stream",
+        "stream_options",
+        "include",
+        "service_tier",
+        "prompt_cache_key",
+        "text",
+        "previous_response_id",
+        "generate",
+        "max_output_tokens"
+      ],
+      "supportedEventFamilies": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.*",
+        "response.content_part.*",
+        "response.output_text.*",
+        "response.refusal.*",
+        "response.reasoning_summary_*",
+        "response.function_call_arguments.*",
+        "response.completed",
+        "response.failed",
+        "response.incomplete",
+        "error"
+      ]
+    },
+    "codexBeta20260206": {
+      "tier": "codex-application-fingerprint",
+      "streaming": true,
+      "functionCalling": true,
+      "parallelToolCalls": true,
+      "reasoningItems": "encrypted",
+      "previousResponseId": true,
+      "remoteCompact": true,
+      "websocket": {
+        "profile": "codex-beta-2026-02-06",
+        "prewarm": true
+      },
+      "supportedRequestFields": [
+        "model", "instructions", "input", "tools", "tool_choice", "parallel_tool_calls",
+        "reasoning", "store", "stream", "stream_options", "include", "service_tier",
+        "prompt_cache_key", "text", "previous_response_id", "generate"
+      ],
+      "excludedPrivateFields": [
+        "client_metadata", "x-codex-*", "x-openai-subagent", "x-oai-attestation",
+        "session-id", "thread-id", "x-client-request-id"
+      ],
+      "supportedEventFamilies": [
+        "response.created", "response.in_progress", "response.output_item.*",
+        "response.content_part.*", "response.output_text.*", "response.refusal.*",
+        "response.reasoning_summary_*", "response.function_call_arguments.*",
+        "response.completed", "response.failed", "response.incomplete", "error"
+      ]
+    },
+    "mimoSubset20260730": {
+      "tier": "responses-compatible-subset",
+      "streaming": true,
+      "functionCalling": true,
+      "parallelToolCalls": false,
+      "reasoningItems": "plaintext",
+      "previousResponseId": false,
+      "remoteCompact": false,
+      "websocket": false,
+      "supportedRequestFields": [
+        "model",
+        "instructions",
+        "input",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "stream",
+        "max_output_tokens",
+        "temperature",
+        "top_p",
+        "text"
+      ],
+      "supportedEventFamilies": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.*",
+        "response.content_part.*",
+        "response.output_text.*",
+        "response.function_call_arguments.*",
+        "response.reasoning_text.*",
+        "response.completed",
+        "response.failed",
+        "response.incomplete",
+        "error"
+      ],
+      "unsupportedRequestFields": [
+        "background",
+        "context_management",
+        "previous_response_id",
+        "parallel_tool_calls",
+        "store"
+      ]
+    }
+  }
+}
