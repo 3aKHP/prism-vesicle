@@ -84,7 +84,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private async *streamWebSocket(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
-    const stableRequest = snapshotRequest(request);
+    const stableRequest = snapshotRequest(request, this.config.providerId);
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
     const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
@@ -243,10 +243,20 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 }
 
-function snapshotRequest(request: VesicleRequest): VesicleRequest {
+function snapshotRequest(request: VesicleRequest, providerId: string): VesicleRequest {
   const { signal, onRetry, ...serializable } = request;
+  let snapshot: typeof serializable;
+  try {
+    snapshot = structuredClone(serializable);
+  } catch (cause) {
+    throw new ProviderError("OpenAI Responses WebSocket request contains data that cannot be snapshotted safely.", {
+      kind: "malformed_response",
+      providerId,
+      cause,
+    });
+  }
   return {
-    ...structuredClone(serializable),
+    ...snapshot,
     ...(signal ? { signal } : {}),
     ...(onRetry ? { onRetry } : {}),
   };

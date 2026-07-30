@@ -342,6 +342,20 @@ describe("OpenAI Responses WebSocket transport", () => {
     }
   });
 
+  test("classifies a non-cloneable retry frontier before opening a socket", async () => {
+    let sockets = 0;
+    const adapter = websocketAdapter(() => {
+      sockets += 1;
+      return new FakeSocket(() => undefined);
+    });
+    const input = request([{ role: "user", content: "snapshot" }]);
+    input.metadata = { callback: () => undefined };
+
+    await expect(complete(adapter, input))
+      .rejects.toThrow("OpenAI Responses WebSocket request contains data that cannot be snapshotted safely.");
+    expect(sockets).toBe(0);
+  });
+
   test("rejects prewarm output instead of silently continuing from it", async () => {
     let sends = 0;
     const adapter = websocketAdapter(() => new FakeSocket((_message, socket) => {

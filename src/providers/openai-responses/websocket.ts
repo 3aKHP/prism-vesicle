@@ -241,6 +241,7 @@ export class ResponsesWebSocketSession {
       socket.removeEventListener("close", invalidated);
       socket.removeEventListener("error", invalidated);
     };
+    if (socket.readyState !== 1) invalidated();
   }
 
   private disarmIdleLifecycle(): void {
