@@ -137,7 +137,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         const message = toResponsesWebSocketMessage(
           stableRequest, this.requestContext(), continuation, true, this.webSocketProfile(),
         );
-        const response = await session.request(message, stableRequest.signal);
+        const response = await session.request(message, stableRequest.signal, continuation?.responseId);
         const committed: ProviderStreamEvent[] = [];
         for await (const event of readResponsesStream(response, {
           ...this.context(stableRequest), attempt, profile: this.config.responsesProfile,

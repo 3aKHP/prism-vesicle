@@ -53,7 +53,11 @@ export class ResponsesWebSocketSession {
       && this.options.requestTimeoutMs === options.requestTimeoutMs;
   }
 
-  async request(message: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  async request(
+    message: Record<string, unknown>,
+    signal?: AbortSignal,
+    expectedResponseId?: string,
+  ): Promise<Response> {
     if (this.unavailable) throw failure(
       "Responses WebSocket is disabled for this session after retry exhaustion.",
       this.options.providerId,
@@ -65,6 +69,9 @@ export class ResponsesWebSocketSession {
     try {
       const socket = await this.connect(signal);
       try {
+        if (expectedResponseId && this.lastResponseId !== expectedResponseId) {
+          throw failure("Responses WebSocket continuation changed before request dispatch.", this.options.providerId);
+        }
         this.disarmIdleLifecycle();
         const requestController = new AbortController();
         this.requestController = requestController;

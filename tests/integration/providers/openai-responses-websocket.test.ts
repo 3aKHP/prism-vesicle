@@ -581,6 +581,26 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(sockets).toHaveLength(2);
   });
 
+  test("does not send a stale continuation when the idle socket closes before dispatch", async () => {
+    let sends = 0;
+    const socket = new FakeSocket((_message, current) => {
+      sends += 1;
+      current.completed("resp_race");
+    });
+    const session = responsesWebSocketSession(sessionOptions("idle-race", "owner", () => socket));
+    await session.request({ type: "response.create" });
+    session.markCompleted("resp_race");
+
+    const pending = session.request({
+      type: "response.create",
+      previous_response_id: "resp_race",
+    }, undefined, "resp_race");
+    socket.close();
+
+    await expect(pending).rejects.toThrow("continuation changed before request dispatch");
+    expect(sends).toBe(1);
+  });
+
   test("continues pending-socket cleanup when listener removal throws", async () => {
     let closeCount = 0;
     const socket: ResponsesSocket = {
