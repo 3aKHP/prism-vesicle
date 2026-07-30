@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { VesicleConfig } from "../../../src/config/env";
 import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/adapter";
+import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
+import { toResponsesWebSocketMessage } from "../../../src/providers/openai-responses/request";
 import type { ResponsesSocket, ResponsesSocketFactory } from "../../../src/providers/openai-responses/websocket";
 import {
   closeAllResponsesWebSocketSessions,
@@ -10,10 +12,58 @@ import {
 } from "../../../src/providers/openai-responses/websocket";
 import type { ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../../../src/providers/shared/types";
 import { bytesFromChunks } from "../../support/providers/sse";
+import captures from "../../fixtures/openai-responses/request-captures-v1.json";
+import { compareStructuredCapture, requireJsonValue } from "../../support/providers/responses-conformance";
 
 afterEach(() => resetResponsesWebSocketSessionsForTest());
 
 describe("OpenAI Responses WebSocket transport", () => {
+  test("matches the frozen public, Codex-beta, and prewarm request captures", () => {
+    const context = {
+      providerId: "openai",
+      endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+    };
+    const fixtureRequest: VesicleRequest = {
+      id: "<dynamic:prompt-cache-key>",
+      model: { provider: "openai", model: "gpt-5.6" },
+      system: ["fixture instructions"],
+      messages: [{ role: "user", content: "incremental fixture prompt" }],
+      tools: [{ type: "function", function: {
+        name: "read_fixture", description: "Read fixture data",
+        parameters: { type: "object", properties: {}, additionalProperties: false },
+      } }],
+      generation: { reasoningTier: "high" },
+    };
+    const continuation = {
+      responseId: "<dynamic:response-id>", afterMessageIndex: 0, pendingCallIds: [],
+    };
+    const cases = [
+      {
+        id: "openai-public-ws-generate",
+        actual: toResponsesWebSocketMessage(fixtureRequest, context, continuation, true, "openai-public"),
+      },
+      {
+        id: "codex-beta-ws-generate",
+        actual: toResponsesWebSocketMessage(fixtureRequest, context, continuation, true, "codex-beta-2026-02-06"),
+      },
+      {
+        id: "openai-public-ws-prewarm",
+        actual: toResponsesWebSocketMessage({
+          ...fixtureRequest,
+          messages: [{ role: "user", content: "fixture prompt" }],
+        }, context, undefined, false, "openai-public"),
+      },
+    ];
+    for (const fixtureCase of cases) {
+      const expected = captures.captures.find((capture) => capture.id === fixtureCase.id);
+      if (!expected) throw new Error(`Missing frozen capture ${fixtureCase.id}.`);
+      expect(compareStructuredCapture(
+        requireJsonValue(expected.body),
+        requireJsonValue(JSON.parse(JSON.stringify(fixtureCase.actual))),
+      )).toEqual([]);
+    }
+  });
+
   test("prewarms once, reuses the session socket, and continues with only new input", async () => {
     const sent: Array<Record<string, unknown>> = [];
     let sockets = 0;
