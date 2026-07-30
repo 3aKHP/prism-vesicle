@@ -311,7 +311,7 @@ describe("OpenAI Responses request codec", () => {
     }, context(), true)).toThrow("call_id call_1 was answered more than once");
   });
 
-  test("rejects duplicate native calls and orphan results before network I/O", () => {
+  test("falls back from corrupt native calls and rejects orphan portable results before network I/O", () => {
     const duplicateState: ProviderStateEnvelope = {
       version: providerStateEnvelopeVersion,
       protocol: "openai-responses",
@@ -323,10 +323,10 @@ describe("OpenAI Responses request codec", () => {
         { type: "function_call", call_id: "dup", name: "read_file", arguments: "{}" },
       ] },
     };
-    expect(() => toResponsesBody({
+    expect(toResponsesBody({
       ...request(),
-      messages: [{ role: "assistant", content: "", providerState: duplicateState }],
-    }, context(), true)).toThrow("repeated function call_id dup");
+      messages: [{ role: "assistant", content: "portable", providerState: duplicateState }],
+    }, context(), true).input).toEqual([{ role: "assistant", content: "portable" }]);
     expect(() => toResponsesBody({
       ...request(), messages: [{ role: "tool", toolCallId: "orphan", content: "result" }],
     }, context(), true)).toThrow("no preceding call_id orphan");

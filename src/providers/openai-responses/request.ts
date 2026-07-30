@@ -223,22 +223,25 @@ function declareCallId(value: ProviderStateJson | string, declared: Set<string>)
 }
 
 function nativeOutputItems(state: VesicleMessage["providerState"], model: string, context: RequestContext): ProviderStateJson[] | undefined {
-  const envelope = parseProviderStateEnvelope(state);
-  if (envelope.protocol !== openAIResponsesProtocol
-    || envelope.providerId !== context.providerId
-    || envelope.model !== model
-    || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
-  const payload = envelope.payload;
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1
-    || payload.profile !== (context.profile ?? "openai-public")) return undefined;
-  if (!Array.isArray(payload.outputItems)) {
-    throw new Error("OpenAI Responses native state is malformed.");
+  try {
+    const envelope = parseProviderStateEnvelope(state);
+    if (envelope.protocol !== openAIResponsesProtocol
+      || envelope.providerId !== context.providerId
+      || envelope.model !== model
+      || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
+    const payload = envelope.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1
+      || payload.profile !== (context.profile ?? "openai-public") || !Array.isArray(payload.outputItems)) return undefined;
+    return validateResponsesOutputItems(
+      payload.outputItems as ResponsesOutputItem[],
+      context.providerId,
+      context.profile,
+    ) as ProviderStateJson[];
+  } catch {
+    // Provider-native replay is optional. Corrupt or rejected state selects
+    // portable assistant history instead of making the session unreadable.
+    return undefined;
   }
-  return validateResponsesOutputItems(
-    payload.outputItems as ResponsesOutputItem[],
-    context.providerId,
-    context.profile,
-  ) as ProviderStateJson[];
 }
 
 function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {

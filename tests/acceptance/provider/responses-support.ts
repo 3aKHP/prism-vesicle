@@ -35,8 +35,8 @@ export async function resolveResponsesAcceptance(options: {
       return { reason: `${providerId}/${config.model} does not explicitly enable remoteCompact` };
     }
     return { config, reason: "ok" };
-  } catch (error) {
-    return { reason: error instanceof Error ? error.message : String(error) };
+  } catch {
+    return { reason: "provider configuration could not be loaded" };
   }
 }
 

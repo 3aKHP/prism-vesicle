@@ -337,9 +337,11 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private webSocketProfile(): "openai-public" | "codex-beta-2026-02-06" {
-    return this.config.responsesProfile === "codex-beta-2026-02-06"
-      ? "codex-beta-2026-02-06"
-      : "openai-public";
+    if (this.config.responsesProfile === "openai-public") return "openai-public";
+    if (this.config.responsesProfile === "codex-beta-2026-02-06") return "codex-beta-2026-02-06";
+    throw new ProviderError(`Responses profile ${this.config.responsesProfile ?? "missing"} does not support WebSocket.`, {
+      kind: "malformed_response", providerId: this.config.providerId,
+    });
   }
 
   private webSocketHeaders(): Record<string, string> {
