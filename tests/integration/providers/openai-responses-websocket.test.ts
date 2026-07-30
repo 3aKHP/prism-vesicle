@@ -535,6 +535,18 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(socket.closeCount).toBe(1);
   });
 
+  test("times out and closes a socket that never completes its handshake", async () => {
+    const socket = new FakeSocket(() => undefined, false);
+    const session = responsesWebSocketSession({
+      ...sessionOptions("connect-timeout", "owner", () => socket),
+      requestTimeoutMs: 5,
+    });
+
+    await expect(session.request({ type: "response.create" }))
+      .rejects.toThrow("Responses WebSocket timed out before opening.");
+    expect(socket.closeCount).toBe(1);
+  });
+
   test("continues pending-socket cleanup when listener removal throws", async () => {
     let closeCount = 0;
     const socket: ResponsesSocket = {

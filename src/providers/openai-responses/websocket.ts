@@ -176,11 +176,25 @@ export class ResponsesWebSocketSession {
         socket.close(1000, "aborted");
         reject(abortError(signal));
       };
+      const timedOut = () => {
+        cleanup();
+        if (this.pendingSocket !== socket) return;
+        this.pendingSocket = undefined;
+        this.connectPromise = undefined;
+        this.cancelConnect = undefined;
+        socket.close(1000, "connection timeout");
+        reject(failure("Responses WebSocket timed out before opening.", this.options.providerId));
+      };
+      const timeout = setTimeout(
+        timedOut,
+        this.options.requestTimeoutMs ?? defaultRequestTimeoutMs,
+      );
       const cleanup = () => {
         socket.removeEventListener("open", opened);
         socket.removeEventListener("error", failed);
         socket.removeEventListener("close", failed);
         signal?.removeEventListener("abort", aborted);
+        clearTimeout(timeout);
       };
       this.cancelConnect = (reason) => {
         runCleanup(cleanup);
