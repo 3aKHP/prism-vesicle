@@ -297,7 +297,7 @@ describe("OpenAI Responses typed SSE", () => {
     }
   });
 
-  test("retries response.failed server errors but not fatal request failures", async () => {
+  test("retries response.failed server errors but not the frozen fatal codes", async () => {
     const originalFetch = globalThis.fetch;
     let fetches = 0;
     globalThis.fetch = (async () => {
@@ -328,18 +328,27 @@ describe("OpenAI Responses typed SSE", () => {
       ]);
       expect(fetches).toBe(2);
 
-      fetches = 0;
-      globalThis.fetch = (async () => {
-        fetches += 1;
-        return responseStream([
-          event(0, "response.failed", { response: {
-            id: "resp_fatal", status: "failed",
-            error: { code: "context_length_exceeded", message: "The input is too long." },
-          } }),
-        ]);
-      }) as unknown as typeof fetch;
-      await expect(collect(adapter.stream!(request()))).rejects.toThrow("The input is too long.");
-      expect(fetches).toBe(1);
+      for (const code of [
+        "context_length_exceeded",
+        "insufficient_quota",
+        "usage_not_included",
+        "cyber_policy",
+        "invalid_prompt",
+        "bio_policy",
+      ]) {
+        fetches = 0;
+        globalThis.fetch = (async () => {
+          fetches += 1;
+          return responseStream([
+            event(0, "response.failed", { response: {
+              id: `resp_fatal_${code}`, status: "failed",
+              error: { code, message: `fatal ${code}` },
+            } }),
+          ]);
+        }) as unknown as typeof fetch;
+        await expect(collect(adapter.stream!(request()))).rejects.toThrow(`fatal ${code}`);
+        expect(fetches).toBe(1);
+      }
     } finally {
       globalThis.fetch = originalFetch;
     }
