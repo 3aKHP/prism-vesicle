@@ -301,16 +301,26 @@ describe("OpenAI Responses WebSocket transport", () => {
       return responseStream([event(0, "response.completed", { response: responseBody("http_1", "http") })]);
     }) as unknown as typeof fetch;
     try {
+      const input = request(messages);
+      input.tools = [{
+        type: "function",
+        function: { name: "original_tool", description: "original", parameters: { type: "object" } },
+      }];
+      input.generation = { maxTokens: 321 };
       const adapter = websocketAdapter(() => {
         sockets += 1;
         return new FakeSocket((message) => {
           socketBodies.push(JSON.parse(message) as Record<string, unknown>);
-          if (socketBodies.length === 1) messages.push({ role: "user", content: "mutated" });
+          if (socketBodies.length === 1) {
+            messages.push({ role: "user", content: "mutated" });
+            input.tools![0]!.function.name = "mutated_tool";
+            input.generation!.maxTokens = 999;
+          }
           throw new Error("synchronous send failure");
         });
       });
 
-      const events = await collect(adapter.stream(request(messages)));
+      const events = await collect(adapter.stream(input));
 
       expect(sockets).toBe(6);
       expect(socketBodies).toHaveLength(6);
@@ -318,9 +328,13 @@ describe("OpenAI Responses WebSocket transport", () => {
       expect(events.at(-1)).toMatchObject({ type: "complete", attempt: 7, response: { content: "http" } });
       expect(socketBodies.every((body) => JSON.stringify(body).includes("original"))).toBeTrue();
       expect(socketBodies.every((body) => !JSON.stringify(body).includes("mutated"))).toBeTrue();
+      expect(socketBodies.every((body) => JSON.stringify(body).includes("original_tool"))).toBeTrue();
+      expect(socketBodies.every((body) => body.max_output_tokens === 321)).toBeTrue();
       expect(httpBodies).toHaveLength(1);
       expect(JSON.stringify(httpBodies[0])).toContain("original");
       expect(JSON.stringify(httpBodies[0])).not.toContain("mutated");
+      expect(JSON.stringify(httpBodies[0])).toContain("original_tool");
+      expect(httpBodies[0]!.max_output_tokens).toBe(321);
     } finally {
       globalThis.fetch = originalFetch;
     }

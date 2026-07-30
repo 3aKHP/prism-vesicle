@@ -84,7 +84,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private async *streamWebSocket(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
-    const stableRequest: VesicleRequest = { ...request, messages: [...request.messages] };
+    const stableRequest = snapshotRequest(request);
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
     const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
@@ -242,6 +242,15 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         : {}),
     };
   }
+}
+
+function snapshotRequest(request: VesicleRequest): VesicleRequest {
+  const { signal, onRetry, ...serializable } = request;
+  return {
+    ...structuredClone(serializable),
+    ...(signal ? { signal } : {}),
+    ...(onRetry ? { onRetry } : {}),
+  };
 }
 
 function isRetryableResponsesFailure(error: unknown): boolean {
