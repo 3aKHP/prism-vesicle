@@ -35,8 +35,7 @@ export function validateResponsesOutputItems(
         if (item.encrypted_content !== undefined && typeof item.encrypted_content !== "string") {
           fail("Provider response included malformed encrypted reasoning content.", providerId);
         }
-        if (item.content !== undefined && (!Array.isArray(item.content)
-          || item.content.some((part) => part.type !== "reasoning_text" || typeof part.text !== "string"))) {
+        if (item.content !== undefined) {
           fail("Provider response included unsupported reasoning content.", providerId);
         }
         break;

@@ -495,6 +495,18 @@ describe("OpenAI Responses typed SSE", () => {
     }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_text.delta");
 
     await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.completed", { response: {
+        id: "resp_openai_mimo_item", status: "completed",
+        output: [
+          { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }] },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+        ],
+      } }),
+    ]), {
+      ...streamContext(), profile: "openai-public",
+    }))).rejects.toThrow("unsupported reasoning content");
+
+    await expect(collect(readResponsesStream(responseStream([
       event(0, "response.reasoning_summary_text.delta", { delta: "thinking" }),
     ]), {
       ...streamContext(), profile: "mimo-subset-2026-07-30",
