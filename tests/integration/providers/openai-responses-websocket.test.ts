@@ -74,6 +74,10 @@ describe("OpenAI Responses WebSocket transport", () => {
         requireJsonValue(JSON.parse(JSON.stringify(fixtureCase.actual))),
       )).toEqual([]);
     }
+    expect(toResponsesWebSocketMessage({
+      ...fixtureRequest,
+      generation: { ...fixtureRequest.generation, temperature: 0.3 },
+    }, context, continuation, true, "openai-public").temperature).toBe(0.3);
   });
 
   test("prewarms once, reuses the session socket, and continues with only new input", async () => {

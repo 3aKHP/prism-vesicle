@@ -90,6 +90,7 @@ export function toResponsesWebSocketMessage(
     include: base.include,
     service_tier: base.service_tier,
     prompt_cache_key: base.prompt_cache_key,
+    temperature: base.temperature,
     text: base.text,
     max_output_tokens: base.max_output_tokens,
     generate: generate ? undefined : false,
