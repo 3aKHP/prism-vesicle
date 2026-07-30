@@ -8,7 +8,7 @@ import {
   type ProviderStateEnvelope,
   type ProviderStateJson,
 } from "../../../src/providers/shared/state";
-import type { ProviderStreamEvent, VesicleRequest } from "../../../src/providers/shared/types";
+import type { ProviderStreamEvent, ReasoningTier, VesicleRequest } from "../../../src/providers/shared/types";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND } from "../../../src/providers/shared/types";
 import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
 import { bytesFromChunks } from "../../support/providers/sse";
@@ -29,7 +29,7 @@ describe("OpenAI Responses request codec", () => {
         parameters: { type: "object", properties: {}, additionalProperties: false },
       } }],
       generation: { reasoningTier: "high" },
-    }, context(), true);
+    }, context(), true, "openai-public");
     expect(compareStructuredCapture(
       requireJsonValue(expected.body),
       requireJsonValue(JSON.parse(JSON.stringify(body))),
@@ -45,7 +45,7 @@ describe("OpenAI Responses request codec", () => {
       ],
       tools: [{ type: "function", function: { name: "read_file", description: "Read", parameters: { type: "object" } } }],
       generation: { reasoningTier: "high", maxTokens: 1234 },
-    }, context(), true);
+    }, context(), true, "openai-public");
 
     expect(Object.keys(body)).toEqual([
       "model", "instructions", "input", "tools", "tool_choice", "parallel_tool_calls", "reasoning",
@@ -68,6 +68,9 @@ describe("OpenAI Responses request codec", () => {
       { type: "function_call", call_id: "call_read", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" },
       { type: "function_call_output", call_id: "call_read", output: "{\"ok\":true}" },
     ]);
+    expect(() => toResponsesBody({
+      ...request(), generation: { reasoningTier: "invalid" as ReasoningTier },
+    }, context(), false, "openai-public")).toThrow("Unsupported reasoning tier: invalid");
   });
 
   test("replays same-owner native Items without reconstructing encrypted reasoning", () => {
@@ -89,7 +92,7 @@ describe("OpenAI Responses request codec", () => {
           payload: { version: 1, profile: "openai-public", responseId: "resp_1", outputItems },
         },
       }],
-    }, context(), false);
+    }, context(), false, "openai-public");
     expect(body.input).toEqual(outputItems);
   });
 
@@ -174,7 +177,7 @@ describe("OpenAI Responses request codec", () => {
       ],
     };
 
-    expect(toResponsesBody(compactedRequest, context(), true).input).toEqual([
+    expect(toResponsesBody(compactedRequest, context(), true, "openai-public").input).toEqual([
       ...compactedInput,
       { role: "user", content: "continue" },
     ]);
@@ -184,7 +187,7 @@ describe("OpenAI Responses request codec", () => {
       ...compactedRequest,
       model: { provider: "openai", model: "different-model" },
     };
-    expect(toResponsesBody(switched, context(), true).input).toEqual([
+    expect(toResponsesBody(switched, context(), true, "openai-public").input).toEqual([
       { role: "user", content: "[conversation summary]\nportable" },
       { role: "assistant", content: "retained" },
       { role: "user", content: "continue" },
@@ -196,7 +199,7 @@ describe("OpenAI Responses request codec", () => {
         ? { ...message, providerState: { ...marker.providerState, version: 99 as 1 } }
         : message),
     };
-    expect(toResponsesBody(corrupt, context(), true).input).toEqual([
+    expect(toResponsesBody(corrupt, context(), true, "openai-public").input).toEqual([
       { role: "user", content: "[conversation summary]\nportable" },
       { role: "assistant", content: "retained" },
       { role: "user", content: "continue" },
@@ -308,7 +311,7 @@ describe("OpenAI Responses request codec", () => {
         { role: "tool", toolCallId: "call_1", content: "first" },
         { role: "tool", toolCallId: "call_1", content: "second" },
       ],
-    }, context(), true)).toThrow("call_id call_1 was answered more than once");
+    }, context(), true, "openai-public")).toThrow("call_id call_1 was answered more than once");
   });
 
   test("falls back from corrupt native calls and rejects orphan portable results before network I/O", () => {
@@ -326,10 +329,10 @@ describe("OpenAI Responses request codec", () => {
     expect(toResponsesBody({
       ...request(),
       messages: [{ role: "assistant", content: "portable", providerState: duplicateState }],
-    }, context(), true).input).toEqual([{ role: "assistant", content: "portable" }]);
+    }, context(), true, "openai-public").input).toEqual([{ role: "assistant", content: "portable" }]);
     expect(() => toResponsesBody({
       ...request(), messages: [{ role: "tool", toolCallId: "orphan", content: "result" }],
-    }, context(), true)).toThrow("no preceding call_id orphan");
+    }, context(), true, "openai-public")).toThrow("no preceding call_id orphan");
   });
 
   test("omits unsupported OpenAI fields from the frozen MiMo subset", () => {

@@ -12,7 +12,7 @@ export function toResponsesBody(
   request: VesicleRequest,
   context: RequestContext,
   stream: boolean,
-  profile: ResponsesProfile = "openai-public",
+  profile: ResponsesProfile,
 ): Record<string, unknown> {
   const tools = request.tools?.map(toResponsesTool);
   if (profile === "mimo-subset-2026-07-30") {
@@ -256,10 +256,23 @@ function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {
 function reasoningControl(tier: ReasoningTier | undefined, summary: boolean): Record<string, unknown> | undefined {
   if (!tier) return undefined;
   if (tier === "off") return summary ? undefined : { effort: "none" };
-  return {
-    effort: tier === "max" ? (summary ? "xhigh" : "high") : (!summary && tier === "xhigh" ? "high" : tier),
-    ...(summary ? { summary: "auto" } : {}),
-  };
+  let effort: "low" | "medium" | "high" | "xhigh";
+  switch (tier) {
+    case "low":
+    case "medium":
+    case "high":
+      effort = tier;
+      break;
+    case "xhigh":
+      effort = summary ? "xhigh" : "high";
+      break;
+    case "max":
+      effort = summary ? "xhigh" : "high";
+      break;
+    default:
+      throw new Error(`Unsupported reasoning tier: ${String(tier)}.`);
+  }
+  return { effort, ...(summary ? { summary: "auto" } : {}) };
 }
 
 function userContent(message: VesicleMessage): Array<Record<string, unknown>> {
