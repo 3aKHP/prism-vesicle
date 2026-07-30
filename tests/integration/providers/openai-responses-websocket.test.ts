@@ -617,6 +617,54 @@ describe("OpenAI Responses WebSocket transport", () => {
     }
   });
 
+  test("explicit noninteractive cleanup releases a completed native socket before exit", async () => {
+    let closed!: () => void;
+    const socketClosed = new Promise<void>((resolveClose) => { closed = resolveClose; });
+    const server = Bun.serve({
+      port: 0,
+      fetch(requestValue, bunServer) {
+        if (bunServer.upgrade(requestValue)) return undefined;
+        return new Response("upgrade required", { status: 426 });
+      },
+      websocket: {
+        message(socket) {
+          socket.send(JSON.stringify(event(0, "response.completed", {
+            response: responseBody("resp_noninteractive", "done"),
+          })));
+        },
+        close() { closed(); },
+      },
+    });
+    const moduleUrl = pathToFileURL(resolve(import.meta.dir, "../../../src/providers/openai-responses/websocket.ts")).href;
+    const lifecycleUrl = pathToFileURL(resolve(import.meta.dir, "../../../src/providers/lifecycle.ts")).href;
+    const shutdownUrl = pathToFileURL(resolve(import.meta.dir, "../../../src/core/process/shutdown.ts")).href;
+    const baseUrl = `http://127.0.0.1:${server.port}/v1`;
+    const script = `import { responsesWebSocketSession } from ${JSON.stringify(moduleUrl)};\n`
+      + `import { closeAllProviderSessions } from ${JSON.stringify(lifecycleUrl)};\n`
+      + `import { registerHostShutdownCleanup, runHostShutdownCleanups } from ${JSON.stringify(shutdownUrl)};\n`
+      + "registerHostShutdownCleanup(closeAllProviderSessions, 100);\n"
+      + `const session = responsesWebSocketSession({sessionId:"once",owner:"owner",baseUrl:${JSON.stringify(baseUrl)},providerId:"test",headers:{authorization:"Bearer test"}});\n`
+      + "await session.request({type:\"response.create\"});\n"
+      + "await runHostShutdownCleanups();\n"
+      + "console.log(\"completed\");";
+    const child = Bun.spawn([process.execPath, "-e", script], { stdout: "pipe", stderr: "pipe" });
+    try {
+      await expect(Promise.race([
+        child.exited,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("child did not exit")), 2_000)),
+      ])).resolves.toBe(0);
+      await expect(Promise.race([
+        socketClosed,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("socket did not close")), 2_000)),
+      ])).resolves.toBeUndefined();
+      expect(await new Response(child.stdout).text()).toContain("completed");
+      expect(await new Response(child.stderr).text()).toBe("");
+    } finally {
+      child.kill("SIGKILL");
+      server.stop(true);
+    }
+  });
+
   test("rotates before the 60-minute limit and clears connection-local continuation", async () => {
     let now = 1;
     const sockets: FakeSocket[] = [];
