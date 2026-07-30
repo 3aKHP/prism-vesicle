@@ -472,6 +472,16 @@ describe("OpenAI Responses typed SSE", () => {
     await expect(collect(readResponsesStream(responseStream(events), {
       ...streamContext(), profile: "openai-public",
     }))).rejects.toThrow("Unsupported semantic Responses event: codex.rate_limits");
+    const timingOnlyEvents = [
+      event(0, "responsesapi.websocket_timing", { timing_metrics: {} }),
+      event(1, "response.completed", { response: {
+        id: "resp_timing", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }],
+      } }),
+    ];
+    await expect(collect(readResponsesStream(responseStream(timingOnlyEvents), {
+      ...streamContext(), profile: "openai-public",
+    }))).rejects.toThrow("Unsupported semantic Responses event: responsesapi.websocket_timing");
   });
 
   test("maps MiMo reasoning events and Items only under its explicit subset profile", async () => {
