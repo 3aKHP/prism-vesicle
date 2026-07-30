@@ -5,12 +5,12 @@ import { OpenAIChatCompatibleAdapter } from "./openai-chat/adapter";
 import { OpenAIResponsesAdapter } from "./openai-responses/adapter";
 import type { ProviderAdapter } from "./shared/types";
 
-export function createProvider(config: VesicleConfig): ProviderAdapter {
+export function createProvider(config: VesicleConfig, context: { sessionId?: string } = {}): ProviderAdapter {
   switch (config.provider) {
     case "openai-chat-compatible":
       return new OpenAIChatCompatibleAdapter(config);
     case "openai-responses":
-      return new OpenAIResponsesAdapter(config);
+      return new OpenAIResponsesAdapter(config, context);
     case "anthropic-messages":
       return new AnthropicMessagesAdapter(config);
     case "gemini-generate-content":

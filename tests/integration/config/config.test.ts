@@ -126,13 +126,15 @@ describe("config loading", () => {
     const { env } = await writeProvidersFile([
       "default:", "  provider: responses", "  model: gpt-test", "providers:",
       "  responses:", "    protocol: openai-responses", "    baseUrl: https://api.example.test/v1",
-      "    apiKeyEnv: RESPONSES_KEY", "    responsesProfile: openai-public", "    models:", "      - gpt-test", "",
+      "    apiKeyEnv: RESPONSES_KEY", "    responsesProfile: openai-public", "    responsesTransport: websocket",
+      "    models:", "      - gpt-test", "",
     ], ["RESPONSES_KEY=secret"]);
 
     await expect(loadConfigForSelection(undefined, env)).resolves.toMatchObject({
       provider: "openai-responses",
       providerId: "responses",
       responsesProfile: "openai-public",
+      responsesTransport: "websocket",
       model: "gpt-test",
       apiKey: "secret",
     });

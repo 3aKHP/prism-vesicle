@@ -2,9 +2,18 @@
 import packageJson from "../../package.json";
 import { isCompiledBinaryRuntime } from "./runtime";
 import { parseCliInvocation } from "./args";
+import {
+  installHostShutdownHooks,
+  registerHostShutdownCleanup,
+  runHostShutdownCleanups,
+} from "../core/process/shutdown";
+import { closeAllProviderSessions } from "../providers/lifecycle";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 declare const VESICLE_NPM_BUNDLE: boolean | undefined;
+
+installHostShutdownHooks();
+registerHostShutdownCleanup(closeAllProviderSessions, 100);
 
 // Bun's compiled single-file executable reports Bun.main from the bundled
 // virtual root. Keep the invocation cwd unchanged: it is the project root for
@@ -155,21 +164,28 @@ switch (parsed.kind) {
           console.error("Usage: vesicle once <prompt>");
           process.exit(1);
         }
-        const result = await runPrompt({
-          input,
-          permission: dangerouslySkipPermissions
-            ? {
-              mode: "YOLO",
-              dangerouslySkipPermissions: true,
-              shellExecEnabled: true,
-              shellInterpreter: permissionSettings.shellInterpreter,
-            }
-            : {
-              mode: permissionSettings.defaultMode,
-              shellExecEnabled: permissionSettings.shellExec,
-              shellInterpreter: permissionSettings.shellInterpreter,
-            },
-        });
+        let result: Awaited<ReturnType<typeof runPrompt>>;
+        try {
+          result = await runPrompt({
+            input,
+            permission: dangerouslySkipPermissions
+              ? {
+                mode: "YOLO",
+                dangerouslySkipPermissions: true,
+                shellExecEnabled: true,
+                shellInterpreter: permissionSettings.shellInterpreter,
+              }
+              : {
+                mode: permissionSettings.defaultMode,
+                shellExecEnabled: permissionSettings.shellExec,
+                shellInterpreter: permissionSettings.shellInterpreter,
+              },
+          });
+        } finally {
+          // An open session socket itself prevents `beforeExit`; noninteractive
+          // completion must therefore run host cleanup explicitly.
+          await runHostShutdownCleanups();
+        }
         if (result.kind === "needs_user") {
           console.log(result.assistantContent);
           console.log(`\n[gate:${result.gate.gate}] This turn needs user confirmation; the 'once' subcommand is non-interactive.`);

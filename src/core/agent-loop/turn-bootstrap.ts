@@ -53,7 +53,6 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const permission = options.permission ?? defaultPermissionRuntime;
-  const provider = createProvider(config);
   const projectHarness = !options.assets && !options.harness
     ? requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir))
     : undefined;
@@ -84,6 +83,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     options.sessionId,
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
+  const provider = createProvider(config, { sessionId: session.sessionId });
 
   // Skills (Phase 2): freeze the session catalog (resume re-resolves by the
   // persisted snapshot's name+hash), filter it for this engine, hydrate the

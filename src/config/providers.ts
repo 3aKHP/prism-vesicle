@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ResponsesProfile, VesicleConfig, VesicleProvider } from "./env";
+import type { ResponsesProfile, ResponsesTransport, VesicleConfig, VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
@@ -28,6 +28,7 @@ export type ProviderProfile = {
   authMethod?: ProviderAuthMethod;
   userAgent?: string;
   responsesProfile?: ResponsesProfile;
+  responsesTransport?: ResponsesTransport;
   defaultModel?: string;
   models: ProviderModelProfile[];
 };
@@ -142,6 +143,7 @@ export function resolveProviderConfig(
     ...(profile.authMethod ? { authMethod: profile.authMethod } : {}),
     ...(profile.userAgent ? { userAgent: profile.userAgent } : {}),
     ...(profile.responsesProfile ? { responsesProfile: profile.responsesProfile } : {}),
+    ...(profile.responsesTransport ? { responsesTransport: profile.responsesTransport } : {}),
     ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
     ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
     ...(modelProfile.limits ? { limits: modelProfile.limits } : {}),
@@ -252,6 +254,15 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (protocol !== "openai-responses" && currentProvider.responsesProfile) {
       throw new Error(`Provider "${id}" cannot declare responsesProfile with protocol ${protocol}.`);
     }
+    if (protocol !== "openai-responses" && currentProvider.responsesTransport) {
+      throw new Error(`Provider "${id}" cannot declare responsesTransport with protocol ${protocol}.`);
+    }
+    if (currentProvider.responsesProfile === "codex-http-relay" && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use codex-http-relay with responsesTransport websocket.`);
+    }
+    if (currentProvider.responsesProfile === "codex-beta-2026-02-06" && currentProvider.responsesTransport !== "websocket") {
+      throw new Error(`Provider "${id}" must use responsesTransport websocket with codex-beta-2026-02-06.`);
+    }
     registry.providers.push({
       id,
       protocol,
@@ -260,6 +271,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       ...(currentProvider.authMethod ? { authMethod: currentProvider.authMethod } : {}),
       ...(currentProvider.userAgent ? { userAgent: currentProvider.userAgent } : {}),
       ...(currentProvider.responsesProfile ? { responsesProfile: currentProvider.responsesProfile } : {}),
+      ...(currentProvider.responsesTransport ? { responsesTransport: currentProvider.responsesTransport } : {}),
       ...(defaultModel ? { defaultModel } : {}),
       models,
     });
@@ -328,6 +340,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       else if (key === "authMethod") currentProvider.authMethod = readAuthMethod(value, `provider ${currentProvider.id}`);
       else if (key === "userAgent") currentProvider.userAgent = readUserAgent(value, `provider ${currentProvider.id}`);
       else if (key === "responsesProfile") currentProvider.responsesProfile = readResponsesProfile(value, `provider ${currentProvider.id}`);
+      else if (key === "responsesTransport") currentProvider.responsesTransport = readResponsesTransport(value, `provider ${currentProvider.id}`);
       else if (key === "defaultModel") currentProvider.defaultModel = value;
       else if (key === "apiKey") throw new Error(`Provider config parse error on line ${index + 1}: use apiKeyEnv instead of inline apiKey.`);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown provider field "${key}".`);
@@ -480,8 +493,15 @@ function readProtocol(value: string, field: string): ProviderProtocol {
 }
 
 function readResponsesProfile(value: string, field: string): ResponsesProfile {
-  if (value !== "openai-public" && value !== "codex-http-relay") {
+  if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06") {
     throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
+  }
+  return value;
+}
+
+function readResponsesTransport(value: string, field: string): ResponsesTransport {
+  if (value !== "http" && value !== "websocket") {
+    throw new Error(`Unsupported Responses transport "${value}" in ${field}.`);
   }
   return value;
 }

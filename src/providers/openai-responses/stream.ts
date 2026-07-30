@@ -12,6 +12,7 @@ type StreamContext = {
   endpointFingerprint: string;
   attempt?: number;
   profile?: ResponsesProfile;
+  allowEmptyOutput?: boolean;
 };
 
 export async function* readResponsesStream(response: Response, context: StreamContext): AsyncIterable<ProviderStreamEvent> {
@@ -70,16 +71,20 @@ export async function* readResponsesStream(response: Response, context: StreamCo
         terminal = event.response;
         break;
       case "response.failed":
-        throw new ProviderError(`Provider stream terminated with ${event.type}: ${event.response?.error?.message ?? event.response?.incomplete_details?.reason ?? "unknown"}.`, {
-          kind: "http_error", providerId: context.providerId,
-        });
+        {
+          const code = event.response?.error?.code;
+          throw new ProviderError(`Provider stream terminated with ${event.type}: ${event.response?.error?.message ?? event.response?.incomplete_details?.reason ?? "unknown"}.`, {
+            kind: "http_error", providerId: context.providerId, code,
+            retryable: event.response?.error != null && !isFatalResponseFailure(code),
+          });
+        }
       case "response.incomplete":
         throw new ProviderError(`Provider stream terminated with ${event.type}: ${event.response?.incomplete_details?.reason ?? "unknown"}.`, {
           kind: "http_error", providerId: context.providerId,
         });
       case "error":
-        throw new ProviderError(`Provider stream failed: ${event.error?.message ?? "unknown error"}.`, {
-          kind: "stream_error", providerId: context.providerId,
+        throw new ProviderError(`Provider stream failed${event.error?.code ? ` (${event.error.code})` : ""}: ${event.error?.message ?? "unknown error"}.`, {
+          kind: "stream_error", providerId: context.providerId, code: event.error?.code,
         });
       default:
         if (context.profile === "codex-http-relay"
@@ -125,6 +130,15 @@ function isKnownAdditiveEvent(type: string): boolean {
     || type === "response.reasoning_summary_part.added" || type === "response.reasoning_summary_part.done"
     || type === "response.reasoning_summary_text.done" || type === "response.reasoning_text.done"
     || type === "response.function_call_arguments.done";
+}
+
+function isFatalResponseFailure(code: string | undefined): boolean {
+  return code === "context_length_exceeded"
+    || code === "insufficient_quota"
+    || code === "usage_not_included"
+    || code === "cyber_policy"
+    || code === "invalid_prompt"
+    || code === "bio_policy";
 }
 
 function malformed(message: string, providerId: string): never {

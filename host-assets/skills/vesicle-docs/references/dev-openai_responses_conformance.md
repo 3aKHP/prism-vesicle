@@ -2,7 +2,7 @@
 
 # OpenAI Responses Conformance Profile
 
-This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. The HTTPS/non-stream JSON and typed-SSE baseline is implemented; later WebSocket, compaction, third-party exposure, and product-documentation phases remain incomplete. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
+This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. The HTTPS/non-stream JSON, typed-SSE, and session-scoped WebSocket transports are implemented; later compaction, third-party exposure, and product-documentation phases remain incomplete. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
 
 ## Claim Boundary
 
@@ -46,6 +46,14 @@ Profile updates are reviewed fixture changes:
 6. Run `bun test tests/contract/providers/openai-responses-conformance.test.ts`, then the normal repository gates.
 
 Changing this profile does not silently migrate persisted sessions or enable a runtime feature. Runtime delivery and user-facing exposure remain separately reviewed phases.
+
+## Implemented WebSocket Lifecycle
+
+`responsesTransport: websocket` selects one process-owned socket for the exact active session and provider/model/endpoint/profile owner. `openai-public` follows the public application message shape; `codex-beta-2026-02-06` is a separate frozen profile with its beta header and declared stream fields. The narrow `codex-http-relay` profile remains HTTP-only. No profile, transport, or capability is inferred from a provider name, URL, hostname, or model.
+
+The first eligible request sends the same codec output with `generate: false`, validates the empty completed response, then generates from its returned response ID without duplicating input. A same-owner completed assistant state permits later user/tool input to continue incrementally. An owner mismatch, rewind/branch divergence, socket rotation, disconnect, or `previous_response_not_found` clears the connection-local chain; with `store: false`, the next attempt prewarms from full portable history and begins a new chain. Live sockets, headers, credentials, callbacks, and connection state never enter the provider-state envelope or session JSONL.
+
+The transport enforces one in-flight response and no multiplexing, rotates before the public 60-minute limit, and closes on owner change, active-session change, or process shutdown. Every WebSocket event stream enters the same typed accumulator and final parser as SSE. Accepted deltas and function Items remain attempt-private; premature close publishes only discard markers, and no tool candidate can cross the Agent Loop commit barrier. Retryable failures receive five retries after the triggering attempt. Exhaustion closes the socket and permanently routes later requests in that active session through HTTP; cancellation closes without retry.
 
 ## Implemented HTTPS/SSE Baseline
 
