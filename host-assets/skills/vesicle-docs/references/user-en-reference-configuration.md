@@ -45,7 +45,7 @@ default:               # provider and model selected at startup
 
 providers:
   deepseek:
-    protocol: openai-chat-compatible   # or anthropic-messages / gemini-generate-content
+    protocol: openai-chat-compatible   # or openai-responses / Anthropic / Gemini
     baseUrl: https://api.deepseek.com/v1
     apiKeyEnv: DEEPSEEK_API_KEY        # the variable name only; the secret itself goes in .env
     defaultModel: deepseek-v4-flash    # optional: what /model deepseek switches to
@@ -70,12 +70,22 @@ providers:
 
 Field notes:
 
-- `protocol`: one of `openai-chat-compatible`, `anthropic-messages`, `gemini-generate-content`.
+- `protocol`: one of `openai-chat-compatible`, `openai-responses`, `anthropic-messages`, `gemini-generate-content`.
 - `apiKeyEnv`: **the environment-variable name only**; the real secret goes in `.env`. `providers.yaml` itself never holds secrets.
-- `authMethod`: `x-api-key` for Anthropic, `x-goog-api-key` for Gemini.
+- `authMethod`: Anthropic or MiMo Responses may use `x-api-key`; Gemini uses `x-goog-api-key`. OpenAI-family protocols default to Bearer authentication when this field is omitted.
 - `userAgent` (optional): replaces the User-Agent for this provider only; other fingerprint and auth headers stay fixed.
 - A model entry can be a string shorthand or an object with `generation` (`temperature`/`maxTokens`), `capabilities` (`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`), and `limits` (`contextWindow`/`maxOutputTokens`/`autoCompact`).
 - `limits.contextWindow` enables the context percentage in the status bar. `autoCompact` opts into automatic context compaction: it activates only when `enabled` is not `false`, `threshold` is strictly between 0 and 1, and `contextWindow` is a positive integer; once active, Vesicle compacts (via the portable `/compact` checkpoint) before a new top-level prompt and at safe mid-turn boundaries when the projected next request crosses the soft trigger. Every provider send is checked after queued input and completed background-process notifications are included. `reserveOutputTokens` reserves space for the next output (precedence: `reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0); provider loading rejects a statically known reserve that leaves no positive input budget. There is no hidden default threshold. Run `/context` to inspect the effective soft trigger, hard input ceiling, reserve source (including the active model's generation defaults), and activation state.
+
+### OpenAI Responses profiles
+
+`openai-responses` also requires an explicit `responsesProfile`; Vesicle never guesses capabilities from a URL, provider id, or model name. Guided Setup can select either OpenAI Responses or the MiMo Responses subset and writes a conservative HTTP configuration. Complete copyable examples live in [`docs/examples/providers.yaml`](../../../examples/providers.yaml).
+
+- `openai-public` is the public protocol profile for the official `api.openai.com` endpoint. It supports HTTP/typed SSE and an explicit `responsesTransport: websocket` selection. It preserves ordered Items, exact `call_id` values, stateless encrypted reasoning, session-scoped WebSocket continuation, and `/responses/compact` when the model entry declares `capabilities.remoteCompact: true`. This is an application-layer protocol claim, not a claim of Codex-identical TLS or HTTP/2 fingerprints.
+- `mimo-subset-2026-07-30` is a dated third-party compatibility subset and is HTTP-only. It omits MiMo-undeclared or explicitly unsupported `background`, `context_management`, `previous_response_id`, `parallel_tool_calls`, `store`, remote-compaction, and WebSocket fields, fully replays context on every round, and explicitly maps `response.reasoning_text.*` into Vesicle reasoning. It is not OpenAI or Codex conformance.
+- `codex-http-relay` and `codex-beta-2026-02-06` are narrow acceptance/frozen compatibility profiles, not general third-party templates. The latter requires WebSocket. Never copy private identity, attestation, or `x-codex-*` headers merely to resemble Codex.
+
+`responsesTransport` is `http` or `websocket`; when omitted, runtime behavior is HTTP. Only `openai-public` and the frozen Codex beta profile permit WebSocket. Portable `/compact` checkpoints remain the recovery authority whether or not remote compaction is enabled; an unavailable remote endpoint never makes an existing session unreadable. Run `vesicle doctor` to inspect the selected Responses profile, tier, transport, and remote-compaction declaration.
 
 ## .env
 
@@ -83,6 +93,8 @@ Put values here for every `apiKeyEnv` named in `providers.yaml`. Start from [`do
 
 ```text
 DEEPSEEK_API_KEY=
+OPENAI_API_KEY=
+MIMO_API_KEY=
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 LOCAL_OPENAI_COMPAT_API_KEY=

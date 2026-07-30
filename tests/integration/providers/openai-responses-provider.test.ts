@@ -278,6 +278,39 @@ describe("OpenAI Responses request codec", () => {
       ...request(), messages: [{ role: "tool", toolCallId: "orphan", content: "result" }],
     }, context(), true)).toThrow("no preceding call_id orphan");
   });
+
+  test("omits unsupported OpenAI fields from the frozen MiMo subset", () => {
+    const body = toResponsesBody({
+      ...request(),
+      messages: [{ role: "user", content: "hello" }],
+      tools: [{ type: "function", function: {
+        name: "echo", description: "Echo", parameters: { type: "object" },
+      } }],
+      generation: { reasoningTier: "high", temperature: 0.2, maxTokens: 512 },
+    }, context(), true, "mimo-subset-2026-07-30");
+
+    expect(Object.keys(body)).toEqual([
+      "model", "instructions", "input", "tools", "tool_choice", "reasoning",
+      "stream", "max_output_tokens", "temperature", "text",
+    ]);
+    expect(body).toMatchObject({
+      reasoning: { effort: "high" },
+      stream: true,
+      max_output_tokens: 512,
+      temperature: 0.2,
+    });
+    for (const unsupported of [
+      "background", "context_management", "previous_response_id", "parallel_tool_calls",
+      "store", "stream_options", "include", "service_tier", "prompt_cache_key",
+    ]) expect(body).not.toHaveProperty(unsupported);
+
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "off" },
+    }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "none" });
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "max" },
+    }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "high" });
+  });
 });
 
 describe("OpenAI Responses typed SSE", () => {
@@ -378,6 +411,56 @@ describe("OpenAI Responses typed SSE", () => {
     await expect(collect(readResponsesStream(responseStream(events), {
       ...streamContext(), profile: "openai-public",
     }))).rejects.toThrow("Unsupported semantic Responses event: codex.rate_limits");
+  });
+
+  test("maps MiMo reasoning events and Items only under its explicit subset profile", async () => {
+    const events = [
+      event(0, "response.reasoning_text.delta", { delta: "thinking" }),
+      event(1, "response.reasoning_text.done", { text: "thinking" }),
+      event(2, "response.output_text.delta", { delta: "answer" }),
+      event(3, "response.completed", { response: {
+        id: "resp_mimo", status: "completed",
+        output: [
+          { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }] },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+        ],
+      } }),
+    ];
+    await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "mimo-subset-2026-07-30",
+    }))).resolves.toMatchObject([
+      { type: "attempt_started" },
+      { type: "reasoning_delta", delta: "thinking" },
+      { type: "content_delta", delta: "answer" },
+      { type: "complete", response: { reasoningContent: "thinking", content: "answer" } },
+    ]);
+    await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "openai-public",
+    }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_text.delta");
+  });
+
+  test("uses the configured MiMo x-api-key authentication header", async () => {
+    const originalFetch = globalThis.fetch;
+    let headers = new Headers();
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      headers = new Headers(init?.headers);
+      return Response.json({
+        id: "resp_mimo", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }],
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "mimo", baseUrl: "https://api.xiaomimimo.com/v1",
+        model: "mimo-v2.5-pro", apiKey: "test-key", authMethod: "x-api-key",
+        responsesProfile: "mimo-subset-2026-07-30", responsesTransport: "http",
+      });
+      await expect(adapter.complete(request())).resolves.toMatchObject({ content: "ok" });
+      expect(headers.get("x-api-key")).toBe("test-key");
+      expect(headers.has("authorization")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   test("uses the same final parser for non-streaming JSON", async () => {

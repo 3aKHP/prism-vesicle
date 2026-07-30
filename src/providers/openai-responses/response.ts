@@ -2,6 +2,7 @@ import { ProviderError } from "../shared/errors";
 import { parseProviderStateEnvelope, providerStateEnvelopeVersion } from "../shared/state";
 import { thinkingBlocksFromReasoningContent } from "../shared/thinking";
 import type { VesicleResponse } from "../shared/types";
+import type { ResponsesProfile } from "../../config/env";
 import { validateResponsesOutputItems } from "./items";
 import { openAIResponsesProtocol, type ResponsesBody, type ResponsesOutputItem } from "./types";
 import { usageFromResponses } from "./usage";
@@ -13,6 +14,7 @@ type ResponseContext = {
   endpointFingerprint: string;
   /** WebSocket generate=false is successful with an empty output array. */
   allowEmptyOutput?: boolean;
+  profile?: ResponsesProfile;
 };
 
 export function responseFromResponsesBody(body: ResponsesBody | undefined, context: ResponseContext): VesicleResponse {
@@ -25,9 +27,9 @@ export function responseFromResponsesBody(body: ResponsesBody | undefined, conte
     });
   }
 
-  const output = validateResponsesOutputItems(body.output, context.providerId);
+  const output = validateResponsesOutputItems(body.output, context.providerId, context.profile);
   const content = messageText(output);
-  const reasoningContent = reasoningText(output);
+  const reasoningContent = reasoningText(output, context.profile);
   const callIds = new Set<string>();
   const toolCalls = output.filter((item) => item.type === "function_call").map((item) => {
     if (!item.call_id || !item.name || typeof item.arguments !== "string") {
@@ -75,8 +77,10 @@ function messageText(items: ResponsesOutputItem[]): string {
     .map((part) => part.type === "refusal" ? part.refusal ?? "" : part.text ?? "").join("");
 }
 
-function reasoningText(items: ResponsesOutputItem[]): string {
-  return items.filter((item) => item.type === "reasoning").flatMap((item) => item.summary ?? [])
+function reasoningText(items: ResponsesOutputItem[], profile: ResponsesProfile | undefined): string {
+  return items.filter((item) => item.type === "reasoning").flatMap((item) => (
+    profile === "mimo-subset-2026-07-30" ? item.content ?? [] : item.summary ?? []
+  ))
     .map((part) => part.text ?? "").join("");
 }
 

@@ -3,6 +3,7 @@
 # Copy this file to the same user-level directory as providers.yaml.
 # Put provider API keys and optional host-tool credentials here.
 DEEPSEEK_API_KEY=
+OPENAI_API_KEY=
 MIMO_API_KEY=
 LOCAL_OPENAI_COMPAT_API_KEY=
 ANTHROPIC_API_KEY=

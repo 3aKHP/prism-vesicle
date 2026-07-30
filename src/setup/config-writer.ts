@@ -26,6 +26,7 @@ export type SetupMcpServer = {
 };
 
 export type SetupConfiguration = {
+  providerPreset?: SetupProviderPreset;
   baseUrl: string;
   apiKey: string;
   modelIds: string[];
@@ -35,6 +36,8 @@ export type SetupConfiguration = {
   permissionMode: Exclude<PermissionMode, "YOLO">;
   projectDirectory?: string;
 };
+
+export type SetupProviderPreset = "chat-compatible" | "openai-responses" | "mimo-responses";
 
 export type SetupWriteResult = {
   providerId: string;
@@ -146,6 +149,8 @@ export function serializeProviderRegistry(registry: ProviderRegistry): string {
     lines.push(`    apiKeyEnv: ${provider.apiKeyEnv}`);
     if (provider.authMethod) lines.push(`    authMethod: ${provider.authMethod}`);
     if (provider.userAgent) lines.push(`    userAgent: ${yamlScalar(provider.userAgent)}`);
+    if (provider.responsesProfile) lines.push(`    responsesProfile: ${provider.responsesProfile}`);
+    if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
     if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
     lines.push("    models:");
     for (const model of provider.models) serializeModel(lines, model);
@@ -163,13 +168,24 @@ function mergeProvider(
   const providerId = current?.id ?? uniqueId(providerIdFromBaseUrl(baseUrl), usedIds);
   const apiKeyEnv = current?.apiKeyEnv ?? `${providerId.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}_API_KEY`;
   const existingModels = new Map(current?.models.map((model) => [model.id, model]) ?? []);
+  const preset = input.providerPreset ?? presetFromProvider(current) ?? "chat-compatible";
   const models = [...new Set(input.modelIds.map((model) => model.trim()).filter(Boolean))]
     .map((id) => existingModels.get(id) ?? { id });
   const profile: ProviderProfile = {
     id: providerId,
-    protocol: "openai-chat-compatible",
+    protocol: preset === "chat-compatible" ? "openai-chat-compatible" : "openai-responses",
     baseUrl,
     apiKeyEnv,
+    ...(preset === "openai-responses"
+      ? { responsesProfile: "openai-public" as const, responsesTransport: "http" as const }
+      : {}),
+    ...(preset === "mimo-responses"
+      ? {
+          authMethod: "x-api-key" as const,
+          responsesProfile: "mimo-subset-2026-07-30" as const,
+          responsesTransport: "http" as const,
+        }
+      : {}),
     defaultModel: input.defaultModel,
     models,
   };
@@ -187,6 +203,14 @@ function mergeProvider(
       providers,
     },
   };
+}
+
+function presetFromProvider(provider: ProviderProfile | undefined): SetupProviderPreset | undefined {
+  if (!provider) return undefined;
+  if (provider.protocol === "openai-chat-compatible") return "chat-compatible";
+  if (provider.responsesProfile === "openai-public") return "openai-responses";
+  if (provider.responsesProfile === "mimo-subset-2026-07-30") return "mimo-responses";
+  return undefined;
 }
 
 function serializeModel(lines: string[], model: ProviderModelProfile): void {

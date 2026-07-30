@@ -49,6 +49,12 @@ export async function runDoctor(): Promise<void> {
   console.log(`Project: ${process.cwd()}`);
   console.log(`Provider: ${config.providerId}`);
   console.log(`Protocol: ${config.provider}`);
+  if (config.provider === "openai-responses") {
+    console.log(`Responses profile: ${config.responsesProfile ?? "missing"}`);
+    console.log(`Responses tier: ${responsesTier(config.responsesProfile)}`);
+    console.log(`Responses transport: ${config.responsesTransport ?? "http (default)"}`);
+    console.log(`Responses remote compact: ${config.capabilities?.remoteCompact === true ? "enabled" : "not declared"}`);
+  }
   console.log(`Base URL: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
   console.log(`Vision input: ${config.capabilities?.vision === true ? "available" : "not declared"}`);
@@ -78,4 +84,12 @@ export async function runDoctor(): Promise<void> {
     }
   }
   console.log(`Missing: ${config.missing.length > 0 ? config.missing.join(", ") : "none"}`);
+}
+
+function responsesTier(profile: string | undefined): string {
+  if (profile === "mimo-subset-2026-07-30") return "third-party compatible subset";
+  if (profile === "codex-beta-2026-02-06") return "frozen Codex application profile";
+  if (profile === "codex-http-relay") return "narrow third-party relay profile";
+  if (profile === "openai-public") return "OpenAI public conformance profile";
+  return "unknown";
 }

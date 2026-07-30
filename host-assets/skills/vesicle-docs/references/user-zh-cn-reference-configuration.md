@@ -45,7 +45,7 @@ default:               # 启动时默认选中的供应商与模型
 
 providers:
   deepseek:
-    protocol: openai-chat-compatible   # 或 anthropic-messages / gemini-generate-content
+    protocol: openai-chat-compatible   # 也可选 openai-responses / Anthropic / Gemini
     baseUrl: https://api.deepseek.com/v1
     apiKeyEnv: DEEPSEEK_API_KEY        # 只写变量名,密钥本身放 .env
     defaultModel: deepseek-v4-flash    # 可选:/model deepseek 切到哪个模型
@@ -70,12 +70,22 @@ providers:
 
 字段说明:
 
-- `protocol`:`openai-chat-compatible`、`anthropic-messages`、`gemini-generate-content` 三选一。
+- `protocol`:`openai-chat-compatible`、`openai-responses`、`anthropic-messages`、`gemini-generate-content` 四选一。
 - `apiKeyEnv`:**只填环境变量名**;真正的密钥放在 `.env`。`providers.yaml` 本身不含密钥。
-- `authMethod`:Anthropic 用 `x-api-key`,Gemini 用 `x-goog-api-key`。
+- `authMethod`:Anthropic 或 MiMo Responses 可用 `x-api-key`,Gemini 用 `x-goog-api-key`;不填时 OpenAI 系协议使用 Bearer token。
 - `userAgent`(可选):只替换该供应商的 User-Agent,其它指纹与鉴权头不变。
 - 模型条目可以是字符串简写,也可以是对象,带 `generation`(`temperature`/`maxTokens`)、`capabilities`(`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`)、`limits`(`contextWindow`/`maxOutputTokens`/`autoCompact`)。
 - `limits.contextWindow` 启用底部状态栏的上下文百分比。`autoCompact` 用于开启自动上下文压缩:仅当 `enabled` 不为 `false`、`threshold` 严格介于 0 与 1 之间、且 `contextWindow` 为正整数时才生效;生效后,Vesicle 会在下一次顶层输入之前、以及工具循环中的安全边界处,当预测的下一请求超过软阈值时(通过 portable `/compact` checkpoint)自动压缩。每次供应商请求都会在排队输入和已完成的后台进程通知加入后再检查。`reserveOutputTokens` 为下一轮输出预留空间(优先级:`reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0);供应商配置加载会拒绝使输入预算不再为正的静态预留组合。没有隐藏默认阈值。用 `/context` 查看实际生效的软阈值、硬上限、预留来源(包括当前模型的 generation 默认值)与激活状态。
+
+### OpenAI Responses 档案
+
+`openai-responses` 必须再明确写出 `responsesProfile`;Vesicle 不会根据 URL、供应商 id 或模型名猜测能力。Guided Setup 可直接选择 OpenAI Responses 或 MiMo Responses 子集,并写入保守的 HTTP 配置。完整可复制示例在 [`docs/examples/providers.yaml`](../../../examples/providers.yaml)。
+
+- `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
+- `mimo-subset-2026-07-30` 是固定日期的第三方兼容子集,只支持 HTTP。它会省略 MiMo 未声明或明确不支持的 `background`、`context_management`、`previous_response_id`、`parallel_tool_calls`、`store`、远程压缩和 WebSocket 字段,每轮回放完整上下文,并把 `response.reasoning_text.*` 显式映射为 Vesicle reasoning。它不是 OpenAI 或 Codex conformance。
+- `codex-http-relay` 与 `codex-beta-2026-02-06` 是窄化的验收/冻结兼容档案,不是通用第三方模板。后者必须配合 WebSocket;不要为了“像 Codex”而复制私有身份、attestation 或 `x-codex-*` 头。
+
+`responsesTransport` 可为 `http` 或 `websocket`;不写时运行时走 HTTP。只有 `openai-public` 与冻结 Codex beta 档案允许 WebSocket。无论是否启用远程压缩,portable `/compact` checkpoint 都是恢复权威;远程端点不可用不会让已有会话不可读。运行 `vesicle doctor` 可查看当前 Responses 档案、层级、传输和远程压缩声明。
 
 ## .env
 
@@ -83,6 +93,8 @@ providers:
 
 ```text
 DEEPSEEK_API_KEY=
+OPENAI_API_KEY=
+MIMO_API_KEY=
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 LOCAL_OPENAI_COMPAT_API_KEY=

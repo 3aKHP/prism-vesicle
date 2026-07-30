@@ -1,6 +1,10 @@
 export type VesicleProvider = "openai-chat-compatible" | "openai-responses" | "anthropic-messages" | "gemini-generate-content";
 export type ProviderAuthMethod = "bearer" | "x-api-key" | "x-goog-api-key";
-export type ResponsesProfile = "openai-public" | "codex-http-relay" | "codex-beta-2026-02-06";
+export type ResponsesProfile =
+  | "openai-public"
+  | "codex-http-relay"
+  | "codex-beta-2026-02-06"
+  | "mimo-subset-2026-07-30";
 export type ResponsesTransport = "http" | "websocket";
 
 export type GenerationDefaults = {

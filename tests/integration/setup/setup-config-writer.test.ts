@@ -87,6 +87,30 @@ describe("guided Setup configuration writer", () => {
     expect(await readFile(join(configDir, "setup-state.json"), "utf8")).toBe(legacyState);
   });
 
+  test("writes an explicit Responses profile selected by Setup", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await writeSetupConfiguration({
+      providerPreset: "mimo-responses",
+      baseUrl: "https://api.xiaomimimo.com/v1",
+      apiKey: "secret",
+      modelIds: ["mimo-v2.5-pro"],
+      defaultModel: "mimo-v2.5-pro",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      authMethod: "x-api-key",
+      responsesProfile: "mimo-subset-2026-07-30",
+      responsesTransport: "http",
+    });
+    const source = await readFile(join(configDir, "providers.yaml"), "utf8");
+    expect(source).toContain("responsesProfile: mimo-subset-2026-07-30");
+    expect(source).toContain("responsesTransport: http");
+  });
+
   test("preserves an existing shell capability and interpreter selection", async () => {
     const root = await tempRoot();
     const configDir = join(root, "config");

@@ -47,6 +47,46 @@ providers:
     models:
       - qwen3
 
+  openai:
+    protocol: openai-responses
+    baseUrl: https://api.openai.com/v1
+    apiKeyEnv: OPENAI_API_KEY
+    # The public OpenAI profile is a conformance tier, not a generic
+    # "Responses-compatible" switch. HTTP is the conservative default;
+    # set websocket only when this exact provider/model supports it.
+    responsesProfile: openai-public
+    responsesTransport: http
+    defaultModel: gpt-5.6
+    models:
+      - id: gpt-5.6
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
+          remoteCompact: true
+
+  mimo-responses:
+    protocol: openai-responses
+    baseUrl: https://api.xiaomimimo.com/v1
+    apiKeyEnv: MIMO_API_KEY
+    authMethod: x-api-key
+    # This dated profile omits unsupported OpenAI fields and maps MiMo's
+    # response.reasoning_text.* events. It is not OpenAI conformance.
+    responsesProfile: mimo-subset-2026-07-30
+    responsesTransport: http
+    defaultModel: mimo-v2.5-pro
+    models:
+      - id: mimo-v2.5-pro
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
+          temperature: true
+          maxTokens: true
+          remoteCompact: false
+
   anthropic:
     protocol: anthropic-messages
     baseUrl: https://api.anthropic.com/v1

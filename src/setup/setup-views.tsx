@@ -125,7 +125,7 @@ function MultiSelectPageView(props: { state: SetupState; width: number; height: 
 function ReviewPageView(props: { state: SetupState; width: number; compact: boolean }) {
   return (
     <box flexDirection="column">
-      <text content={truncateLine(`Provider  ${props.state.baseUrl}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
+      <text content={truncateLine(`Provider  ${props.state.providerPreset} · ${props.state.baseUrl}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
       <text content={truncateLine(`Models    ${props.state.selectedModels.length} selected · default ${props.state.defaultModel}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
       <Show when={!props.compact} fallback={
         <text content={truncateLine(`Permission ${props.state.permissionMode} · Tavily ${props.state.tavilyApiKey ? "on" : "off"} · MCP ${props.state.mcpServers.length}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
@@ -212,6 +212,7 @@ function inputPlaceholder(step: SetupInputStep): string {
 function pageTitle(step: SetupStep): string {
   const titles: Record<SetupStep, string> = {
     welcome: "Welcome",
+    "provider-protocol": "Choose the provider protocol",
     "base-url": "Connect a model provider",
     "api-key": "Authenticate securely",
     discovering: "Discovering models",
@@ -254,7 +255,7 @@ function pageDescription(step: SetupStep): string {
 }
 
 function progressLabel(step: SetupStep): string {
-  const order: SetupStep[] = ["welcome", "base-url", "api-key", "models", "default-model", "tavily-choice", "mcp-choice", "permissions", "project-choice", "review", "complete"];
+  const order: SetupStep[] = ["welcome", "provider-protocol", "base-url", "api-key", "models", "default-model", "tavily-choice", "mcp-choice", "permissions", "project-choice", "review", "complete"];
   const aliases: Partial<Record<SetupStep, SetupStep>> = {
     discovering: "api-key",
     "discovery-error": "api-key",

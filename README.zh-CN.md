@@ -103,7 +103,7 @@ Vesicle 从用户级配置中读取供应商和模型配置档，而不是从项
 
 不要把密钥写入 `providers.yaml`，也不要依赖项目根目录的 `.env`。如果早期 Vesicle 配置仍留下了根目录 `.env`，请将其中的值迁移到用户级密钥文件，然后删除或重命名旧文件。
 
-当前支持的供应商协议包括 OpenAI-compatible Chat Completions、Anthropic Messages 和 Gemini `generateContent`。模型条目可以声明生成默认值、视觉能力等能力元数据以及上下文限制。规范格式请参阅带注释的示例注册表。
+当前支持的供应商协议包括 OpenAI-compatible Chat Completions、独立的 OpenAI Responses 适配器、Anthropic Messages 和 Gemini `generateContent`。Responses 配置必须显式声明:`openai-public` 是官方应用层档案,`mimo-subset-2026-07-30` 是请求/事件族更窄的 HTTP-only 第三方子集;Vesicle 不会根据 URL 或模型名猜测层级。模型条目可以声明生成默认值、视觉或远程压缩等能力元数据以及上下文限制。规范格式与限制请参阅带注释的示例注册表和[供应商配置参考](./docs/user/zh-CN/reference/configuration.md#openai-responses-档案)。
 
 可选的 Streamable HTTP MCP 服务器通过同目录的 `mcp.yaml` 配置；[`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) 说明了请求头变量展开、工具前缀、过滤器、引擎作用域和超时设置。在用户级 `.env` 中设置 `TAVILY_API_KEY`，即可为 ETL 和 Evaluate 引擎启用 Vesicle 的 Web 研究工具。
 
@@ -155,7 +155,7 @@ bun run dev
 
 - 由配置档驱动的 Prism 引擎；其提示、工具、验证器和确认门通过项目/用户覆盖以及托管 Harness 或内置恢复基线解析。
 - 面向消费者的 Stage 引擎：将提供的 Module A/B 卡片冻结为以叙述为先的叙事引导，不暴露模型可见的工具或确认门。质量强制默认为 observe；只有显式启用的宿主质量配置可触发实验性的有界 rewrite。
-- 支持流式输出的 OpenAI-compatible、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
+- 支持流式输出的 OpenAI-compatible Chat、显式 OpenAI Responses、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
 - 持久化指令：项目根目录与供应商配置目录旁的 `VESICLE.md` / `VESICLE.<engine>.md`，每会话自动加载进系统 prompt，支持用户级 + 项目级双作用域与引擎专属替换，让可复用的子工作流与规范跨会话保留而无需重述。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
@@ -217,7 +217,7 @@ Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复�
 
 ## 范围与来源
 
-1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。OpenAI Responses、更广泛的 MCP 传输与功能范围、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
+1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。更广泛的 MCP 传输与功能范围、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
 
 Prism Vesicle 是 [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology) 的姊妹项目；后者是这里内置的 V10 Harness Release 的公开来源。
 

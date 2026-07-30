@@ -1,14 +1,34 @@
 import type { ToolDefinition } from "../../core/tools";
+import type { ResponsesProfile } from "../../config/env";
 import { parseProviderStateEnvelope, type ProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderCompactRequest, type ReasoningTier, type VesicleMessage, type VesicleRequest } from "../shared/types";
 import { validateResponsesCompactItems, validateResponsesOutputItems } from "./items";
 import { openAIResponsesProtocol, type ResponsesOutputItem } from "./types";
 
-type RequestContext = { providerId: string; endpointFingerprint: string };
+type RequestContext = { providerId: string; endpointFingerprint: string; profile?: ResponsesProfile };
 export type ResponsesContinuation = { responseId: string; afterMessageIndex: number; pendingCallIds: string[] };
 
-export function toResponsesBody(request: VesicleRequest, context: RequestContext, stream: boolean): Record<string, unknown> {
+export function toResponsesBody(
+  request: VesicleRequest,
+  context: RequestContext,
+  stream: boolean,
+  profile: ResponsesProfile = "openai-public",
+): Record<string, unknown> {
   const tools = request.tools?.map(toResponsesTool);
+  if (profile === "mimo-subset-2026-07-30") {
+    return {
+      model: request.model.model,
+      instructions: request.system.join("\n\n") || undefined,
+      input: serializeResponsesInput(request.messages, request.model.model, context),
+      tools: tools?.length ? tools : undefined,
+      tool_choice: tools?.length ? "auto" : undefined,
+      reasoning: reasoningControl(request.generation?.reasoningTier, false),
+      stream,
+      max_output_tokens: request.generation?.maxTokens,
+      temperature: request.generation?.temperature,
+      text: { verbosity: "medium" },
+    };
+  }
   return {
     model: request.model.model,
     instructions: request.system.join("\n\n") || undefined,
@@ -16,7 +36,7 @@ export function toResponsesBody(request: VesicleRequest, context: RequestContext
     tools: tools?.length ? tools : undefined,
     tool_choice: tools?.length ? "auto" : undefined,
     parallel_tool_calls: true,
-    reasoning: reasoningControl(request.generation?.reasoningTier),
+    reasoning: reasoningControl(request.generation?.reasoningTier, true),
     store: false,
     stream,
     stream_options: stream ? { include_obfuscation: false } : undefined,
@@ -42,7 +62,7 @@ export function toResponsesWebSocketMessage(
   generate = true,
   profile: "openai-public" | "codex-beta-2026-02-06" = "openai-public",
 ): Record<string, unknown> {
-  const base = toResponsesBody(request, context, false);
+  const base = toResponsesBody(request, context, false, profile);
   const tools = base.tools;
   const input = continuation
     ? serializeResponsesInput(
@@ -211,7 +231,11 @@ function nativeOutputItems(state: VesicleMessage["providerState"], model: string
   if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1 || !Array.isArray(payload.outputItems)) {
     throw new Error("OpenAI Responses native state is malformed.");
   }
-  return validateResponsesOutputItems(payload.outputItems as ResponsesOutputItem[], context.providerId) as ProviderStateJson[];
+  return validateResponsesOutputItems(
+    payload.outputItems as ResponsesOutputItem[],
+    context.providerId,
+    context.profile,
+  ) as ProviderStateJson[];
 }
 
 function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {
@@ -223,9 +247,13 @@ function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {
   };
 }
 
-function reasoningControl(tier: ReasoningTier | undefined): Record<string, unknown> | undefined {
-  if (!tier || tier === "off") return undefined;
-  return { effort: tier === "max" ? "xhigh" : tier, summary: "auto" };
+function reasoningControl(tier: ReasoningTier | undefined, summary: boolean): Record<string, unknown> | undefined {
+  if (!tier) return undefined;
+  if (tier === "off") return summary ? undefined : { effort: "none" };
+  return {
+    effort: tier === "max" ? (summary ? "xhigh" : "high") : tier,
+    ...(summary ? { summary: "auto" } : {}),
+  };
 }
 
 function userContent(message: VesicleMessage): Array<Record<string, unknown>> {

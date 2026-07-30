@@ -127,6 +127,17 @@ describe("guided Setup UI", () => {
     expect(frame).not.toContain("model-00");
   });
 
+  test("exposes explicit Chat, OpenAI Responses, and MiMo subset protocol choices", async () => {
+    const state: SetupState = { ...createInitialSetupState(), step: "provider-protocol" };
+    const setup = await testRender(() => <SetupView state={state} width={80} height={24} />, { width: 80, height: 24 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("OpenAI-compatible Chat");
+    expect(frame).toContain("OpenAI Responses");
+    expect(frame).toContain("MiMo Responses subset");
+  });
+
   test("offers explicit Back actions and resets review navigation to a valid project choice", () => {
     expect(setupChoiceSupportsBack("discovery-error")).toBe(true);
     expect(setupChoiceSupportsBack("review")).toBe(true);
