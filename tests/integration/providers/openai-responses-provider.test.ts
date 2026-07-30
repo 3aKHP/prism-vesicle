@@ -296,6 +296,54 @@ describe("OpenAI Responses typed SSE", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("retries response.failed server errors but not fatal request failures", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      if (fetches === 1) return responseStream([
+        event(0, "response.failed", { response: {
+          id: "resp_failed", status: "failed",
+          error: { code: "server_error", message: "The model failed to generate a response." },
+        } }),
+      ]);
+      return responseStream([
+        event(0, "response.completed", { response: {
+          id: "resp_recovered", status: "completed",
+          output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "recovered" }] }],
+        } }),
+      ]);
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
+      }, { retryDelay: async () => undefined });
+      await expect(collect(adapter.stream!(request()))).resolves.toMatchObject([
+        { type: "attempt_started", attempt: 1 },
+        { type: "attempt_discarded", attempt: 1 },
+        { type: "attempt_started", attempt: 2 },
+        { type: "complete", attempt: 2, response: { content: "recovered" } },
+      ]);
+      expect(fetches).toBe(2);
+
+      fetches = 0;
+      globalThis.fetch = (async () => {
+        fetches += 1;
+        return responseStream([
+          event(0, "response.failed", { response: {
+            id: "resp_fatal", status: "failed",
+            error: { code: "context_length_exceeded", message: "The input is too long." },
+          } }),
+        ]);
+      }) as unknown as typeof fetch;
+      await expect(collect(adapter.stream!(request()))).rejects.toThrow("The input is too long.");
+      expect(fetches).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 function request(): VesicleRequest {
