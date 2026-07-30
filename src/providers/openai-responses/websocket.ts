@@ -1,4 +1,4 @@
-import { ProviderError } from "../shared/errors";
+import { abortError, ProviderError } from "../shared/errors";
 
 type SocketEvent = Event & { data?: unknown; code?: number; reason?: string };
 export type ResponsesSocket = {
@@ -305,8 +305,4 @@ function sseResponse(payloads: string[]): Response {
 
 function failure(message: string, providerId: string, retryable = true): ProviderError {
   return new ProviderError(message, { kind: "stream_error", providerId, retryable });
-}
-
-function abortError(signal?: AbortSignal): DOMException {
-  return new DOMException(typeof signal?.reason === "string" ? signal.reason : "The operation was aborted.", "AbortError");
 }

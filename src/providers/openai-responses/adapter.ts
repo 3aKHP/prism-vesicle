@@ -1,5 +1,5 @@
 import type { VesicleConfig } from "../../config/env";
-import { ProviderError, summarizeProviderFailure } from "../shared/errors";
+import { abortError, ProviderError, summarizeProviderFailure } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
 import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../shared/types";
@@ -262,8 +262,4 @@ function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
       reject(abortError(signal));
     }
   });
-}
-
-function abortError(signal?: AbortSignal): DOMException {
-  return new DOMException(typeof signal?.reason === "string" ? signal.reason : "The operation was aborted.", "AbortError");
 }

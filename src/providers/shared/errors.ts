@@ -36,6 +36,13 @@ export class ProviderError extends Error {
   }
 }
 
+export function abortError(signal?: AbortSignal): DOMException {
+  return new DOMException(
+    typeof signal?.reason === "string" ? signal.reason : "The operation was aborted.",
+    "AbortError",
+  );
+}
+
 /**
  * Collapse control characters and excessive whitespace and cap length so a
  * provider-supplied error string can never break TUI layout or pour an

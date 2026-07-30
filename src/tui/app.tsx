@@ -513,22 +513,26 @@ export function App(props: AppProps = {}) {
     openSkillPicker,
   } = skillPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
-  let disposed = false;
-  const shutdownHostResources = async () => {
-    if (disposed) return;
-    disposed = true;
-    unsubscribeProcesses();
-    try {
-      await processManager.shutdown();
-    } finally {
-      sideQuestionController.dispose();
-    }
+  let shutdownHostResourcesPromise: Promise<void> | undefined;
+  const shutdownHostResources = () => {
+    shutdownHostResourcesPromise ??= (async () => {
+      unsubscribeProcesses();
+      try {
+        await processManager.shutdown();
+      } finally {
+        sideQuestionController.dispose();
+      }
+    })();
+    return shutdownHostResourcesPromise;
   };
   const unregisterHostShutdown = registerHostShutdownCleanup(shutdownHostResources);
   onCleanup(() => {
-    unregisterHostShutdown();
-    void shutdownHostResources().catch(() => undefined);
-    closeAllProviderSessions();
+    void shutdownHostResources()
+      .catch(() => undefined)
+      .finally(() => {
+        unregisterHostShutdown();
+        closeAllProviderSessions();
+      });
   });
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));

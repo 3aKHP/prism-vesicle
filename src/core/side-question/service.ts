@@ -34,6 +34,9 @@ export async function askSideQuestion(options: {
 }): Promise<{ content: string; usage?: ResponseUsage }> {
   const { context } = options;
   const config = await loadConfigForSelection(context.providerSelection);
+  // `/btw` is an independent, tool-free side request. It intentionally omits
+  // session ownership so it cannot contend with the main turn's one-in-flight
+  // Responses WebSocket or mutate its continuation chain.
   const provider = createProvider(config);
   const sidePrompt = await loadSideQuestionPrompt(options.rootDir);
   const projection = projectSideQuestionReference(context, options.question);
