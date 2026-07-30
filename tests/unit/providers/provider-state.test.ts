@@ -35,7 +35,8 @@ describe("provider-neutral durable state", () => {
     expect(() => parseProviderStateEnvelope({ ...state(), payload: { date: new Date() } })).toThrow(/not JSON-safe/);
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
-    expect(() => parseProviderStateEnvelope({ ...state(), payload: cyclic })).toThrow(/not JSON-safe/);
+    expect(() => parseProviderStateEnvelope({ ...state(), payload: cyclic })).toThrow(/not JSON-safe: contains a cycle/);
+    expect(() => parseProviderStateEnvelope({ ...state(), payload: { value: Number.NaN } })).toThrow(/non-finite number/);
     expect(() => parseProviderStateEnvelope(state("x".repeat(maxProviderStateEnvelopeBytes)))).toThrow(/durable-state limit/);
   });
 
@@ -90,5 +91,12 @@ describe("provider attempt commit barrier", () => {
     barrier.start(1);
     expect(() => barrier.commit({ id: "response", content: "" })).toThrow(/must identify/);
     expect(() => barrier.discard(2)).toThrow(/not pending/);
+  });
+
+  test("closes permanently after its one terminal commit", () => {
+    const barrier = new ProviderAttemptCommitBarrier();
+    barrier.commit({ id: "response", content: "done" });
+    expect(() => barrier.start(1)).toThrow(/already committed/);
+    expect(() => barrier.commit({ id: "second", content: "again" })).toThrow(/already committed/);
   });
 });

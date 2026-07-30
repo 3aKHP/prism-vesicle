@@ -10,8 +10,10 @@ import type { VesicleResponse } from "./types";
 export class ProviderAttemptCommitBarrier {
   private readonly attempts = new Map<number, ToolCall[]>();
   private readonly seenAttempts = new Set<number>();
+  private closed = false;
 
   start(attempt: number): void {
+    this.requireOpen();
     requireAttempt(attempt);
     if (this.seenAttempts.has(attempt)) throw new Error(`Provider attempt ${attempt} was already started.`);
     if (this.attempts.size > 0) throw new Error("A provider attempt is already pending and must be discarded before another attempt starts.");
@@ -20,6 +22,7 @@ export class ProviderAttemptCommitBarrier {
   }
 
   addCandidate(attempt: number, toolCall: ToolCall): void {
+    this.requireOpen();
     const pending = this.attempts.get(attempt);
     if (!pending) throw new Error(`Provider attempt ${attempt} was not started before a tool candidate arrived.`);
     if (pending.some((call) => call.id === toolCall.id)) {
@@ -29,12 +32,14 @@ export class ProviderAttemptCommitBarrier {
   }
 
   discard(attempt: number): void {
+    this.requireOpen();
     requireAttempt(attempt);
     if (!this.attempts.has(attempt)) throw new Error(`Provider attempt ${attempt} is not pending and cannot be discarded.`);
     this.attempts.delete(attempt);
   }
 
   commit(response: VesicleResponse, attempt?: number): VesicleResponse {
+    this.requireOpen();
     if (attempt === undefined && this.attempts.size > 0) {
       throw new Error("A terminal provider response must identify its pending attempt transaction.");
     }
@@ -52,7 +57,12 @@ export class ProviderAttemptCommitBarrier {
       ...(response.providerState ? { providerState: cloneProviderStateEnvelope(response.providerState) } : {}),
     };
     this.attempts.clear();
+    this.closed = true;
     return committed;
+  }
+
+  private requireOpen(): void {
+    if (this.closed) throw new Error("Provider attempt transaction is already committed.");
   }
 }
 

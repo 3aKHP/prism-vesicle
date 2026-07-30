@@ -41,7 +41,7 @@ export function parseProviderStateEnvelope(value: unknown, label = "Provider sta
   const providerId = requireBoundedString(value.providerId, `${label}.providerId`, 256);
   const model = requireBoundedString(value.model, `${label}.model`, 256);
   const endpointFingerprint = requireBoundedString(value.endpointFingerprint, `${label}.endpointFingerprint`, 512);
-  if (!isJsonValue(value.payload)) throw new Error(`${label}.payload is not JSON-safe.`);
+  assertJsonValue(value.payload, `${label}.payload`);
   const envelope: ProviderStateEnvelope = {
     version: providerStateEnvelopeVersion,
     protocol,
@@ -74,14 +74,32 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function isJsonValue(value: unknown, ancestors = new Set<object>(), depth = 0): value is ProviderStateJson {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
-  if (typeof value === "number") return Number.isFinite(value);
-  if (typeof value !== "object" || ancestors.has(value) || depth >= maxProviderStateJsonDepth) return false;
+function assertJsonValue(value: unknown, label: string): asserts value is ProviderStateJson {
+  const failure = jsonValueFailure(value);
+  if (failure) throw new Error(`${label} is not JSON-safe: ${failure}.`);
+}
+
+function jsonValueFailure(value: unknown, ancestors = new Set<object>(), depth = 0): string | undefined {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return undefined;
+  if (typeof value === "number") return Number.isFinite(value) ? undefined : "contains a non-finite number";
+  if (typeof value !== "object") return `contains an unsupported ${typeof value} value`;
+  if (ancestors.has(value)) return "contains a cycle";
+  if (depth >= maxProviderStateJsonDepth) return `exceeds the maximum depth of ${maxProviderStateJsonDepth}`;
   const nextAncestors = new Set(ancestors).add(value);
-  if (Array.isArray(value)) return value.every((entry) => isJsonValue(entry, nextAncestors, depth + 1));
-  if (!isPlainObject(value) || Object.getOwnPropertySymbols(value).length > 0) return false;
-  return Object.values(value).every((entry) => isJsonValue(entry, nextAncestors, depth + 1));
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const failure = jsonValueFailure(entry, nextAncestors, depth + 1);
+      if (failure) return failure;
+    }
+    return undefined;
+  }
+  if (!isPlainObject(value)) return "contains a non-plain object";
+  if (Object.getOwnPropertySymbols(value).length > 0) return "contains a symbol-keyed property";
+  for (const entry of Object.values(value)) {
+    const failure = jsonValueFailure(entry, nextAncestors, depth + 1);
+    if (failure) return failure;
+  }
+  return undefined;
 }
 
 function cloneJsonValue(value: ProviderStateJson): ProviderStateJson {

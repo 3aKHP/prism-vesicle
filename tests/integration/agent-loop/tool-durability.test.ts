@@ -2,7 +2,10 @@ import { readFile, stat, } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolvePermission, runPrompt } from "../../../src/core/agent-loop/run";
+import { bootstrapTurn } from "../../../src/core/agent-loop/turn-bootstrap";
+import { runLoop } from "../../../src/core/agent-loop/turn-loop";
 import type { AgentLoopEvent } from "../../../src/core/agent-loop/run";
+import type { ProviderAdapter, ProviderStreamEvent } from "../../../src/providers/shared/types";
 import { listSessions, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
 
@@ -46,6 +49,59 @@ describe("agent loop: tool durability", () => {
     expect(await readFile(join(rootDir, "workspace", "commit-barrier.md"), "utf8")).toBe("written once");
     const retryRecords = await loadSessionRecords(rootDir, retried.sessionId);
     expect(retryRecords.filter((record) => record.role === "tool" && record.metadata?.toolCallId === call.id)).toHaveLength(1);
+  });
+
+  test("discards a failed attempt and executes the successful same-request retry exactly once", async () => {
+    const rootDir = await createPromptRoot();
+    const call = {
+      id: "call-attempt-retry",
+      name: "write_file",
+      arguments: JSON.stringify({ path: "workspace/attempt-retry.md", content: "committed once" }),
+    };
+    let round = 0;
+    const provider: ProviderAdapter = {
+      id: "attempt-retry-fixture",
+      complete: async () => { throw new Error("unexpected non-stream request"); },
+      stream: async function* (): AsyncIterable<ProviderStreamEvent> {
+        round += 1;
+        if (round === 1) {
+          yield { type: "attempt_started", attempt: 1 };
+          yield { type: "tool_call_candidate", attempt: 1, toolCall: call };
+          yield { type: "attempt_discarded", attempt: 1 };
+          yield { type: "attempt_started", attempt: 2 };
+          yield { type: "tool_call_candidate", attempt: 2, toolCall: call };
+          yield {
+            type: "complete",
+            attempt: 2,
+            response: {
+              id: "response-attempt-2",
+              content: "",
+              toolCalls: [call],
+              providerState: {
+                version: 1,
+                protocol: "fixture-responses",
+                providerId: "test",
+                model: "test-model",
+                endpointFingerprint: "sha256:fixture",
+                payload: { responseId: "response-attempt-2" },
+              },
+            },
+          };
+          return;
+        }
+        yield { type: "complete", response: { id: "response-final", content: "done" } };
+      },
+    };
+    const bootstrapped = await bootstrapTurn({ input: "write once", rootDir });
+    const result = await runLoop({ ...bootstrapped, provider });
+
+    expect(result.kind).toBe("complete");
+    expect(await readFile(join(rootDir, "workspace", "attempt-retry.md"), "utf8")).toBe("committed once");
+    const records = await loadSessionRecords(rootDir, result.sessionId);
+    expect(records.filter((record) => record.role === "tool" && record.metadata?.toolCallId === call.id)).toHaveLength(1);
+    const assistant = records.find((record) => record.metadata?.providerResponseId === "response-attempt-2");
+    expect(assistant?.metadata?.providerState).toEqual(expect.objectContaining({ payload: { responseId: "response-attempt-2" } }));
+    expect(JSON.stringify(records)).not.toContain("response-attempt-1");
   });
 
   test.skipIf(process.platform === "win32")("keeps a durable tool result resolved when the provider continuation fails", async () => {
