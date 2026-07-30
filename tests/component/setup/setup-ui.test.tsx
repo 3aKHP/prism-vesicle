@@ -109,8 +109,17 @@ describe("guided Setup UI", () => {
     const inputState: SetupState = { ...createInitialSetupState(), step: "base-url" };
     const input = await testRender(() => <SetupView state={inputState} width={80} height={24} />, { width: 80, height: 24 });
     await input.flush();
-    expect(input.captureCharFrame()).toContain("OpenAI-compatible Base URL");
+    expect(input.captureCharFrame()).toContain("OpenAI-compatible Chat Base URL");
     input.renderer.destroy();
+
+    const mimoInput = await testRender(() => <SetupView
+      state={{ ...inputState, providerPreset: "mimo-responses" }}
+      width={80}
+      height={24}
+    />, { width: 80, height: 24 });
+    await mimoInput.flush();
+    expect(mimoInput.captureCharFrame()).toContain("MiMo Responses subset Base URL");
+    mimoInput.renderer.destroy();
 
     const modelState: SetupState = {
       ...createInitialSetupState(),

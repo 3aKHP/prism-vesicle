@@ -58,7 +58,7 @@ function InputPageView(props: { state: SetupState; width: number }) {
   const step = () => props.state.step as SetupInputStep;
   return (
     <>
-      <text content={truncateLine(inputLabel(step()), props.width)} wrapMode="none" fg={palette.textSecondary} />
+      <text content={truncateLine(inputLabel(step(), props.state.providerPreset), props.width)} wrapMode="none" fg={palette.textSecondary} />
       <box marginTop={1} border borderColor={palette.brandDim} paddingX={1} height={3}>
         <PromptComposer
           value={isSetupSecretStep(step()) ? maskValue(props.state.input.value) : props.state.input.value}
@@ -180,9 +180,9 @@ export function maskValue(value: string): string {
   return value.replace(/[\s\S]/g, "•");
 }
 
-function inputLabel(step: SetupInputStep): string {
+function inputLabel(step: SetupInputStep, providerPreset: SetupState["providerPreset"]): string {
   const labels: Record<SetupInputStep, string> = {
-    "base-url": "OpenAI-compatible Base URL",
+    "base-url": `${setupProviderPresetLabel(providerPreset)} Base URL`,
     "api-key": "Provider API key",
     "add-model": "Exact model id",
     "tavily-key": "Tavily API key",

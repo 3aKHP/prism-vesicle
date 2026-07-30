@@ -44,6 +44,7 @@ export function toResponsesBody(
     include: ["reasoning.encrypted_content"],
     service_tier: "auto",
     prompt_cache_key: request.id,
+    temperature: request.generation?.temperature,
     text: { verbosity: "medium" },
     max_output_tokens: request.generation?.maxTokens,
   };

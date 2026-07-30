@@ -44,12 +44,12 @@ describe("OpenAI Responses request codec", () => {
         { role: "tool", toolCallId: "call_read", content: "{\"ok\":true}" },
       ],
       tools: [{ type: "function", function: { name: "read_file", description: "Read", parameters: { type: "object" } } }],
-      generation: { reasoningTier: "high", maxTokens: 1234 },
+      generation: { reasoningTier: "high", temperature: 0.3, maxTokens: 1234 },
     }, context(), true, "openai-public");
 
     expect(Object.keys(body)).toEqual([
       "model", "instructions", "input", "tools", "tool_choice", "parallel_tool_calls", "reasoning",
-      "store", "stream", "stream_options", "include", "service_tier", "prompt_cache_key", "text", "max_output_tokens",
+      "store", "stream", "stream_options", "include", "service_tier", "prompt_cache_key", "temperature", "text", "max_output_tokens",
     ]);
     expect(body).toMatchObject({
       model: "gpt-5.2-codex",
@@ -62,6 +62,7 @@ describe("OpenAI Responses request codec", () => {
       stream: true,
       service_tier: "auto",
       prompt_cache_key: "req_1",
+      temperature: 0.3,
       text: { verbosity: "medium" },
     });
     expect(body.input).toEqual([

@@ -1,4 +1,4 @@
-import type { VesicleConfig } from "../../config/env";
+import type { ResponsesProfile, VesicleConfig } from "../../config/env";
 import { abortError, ProviderError, summarizeProviderFailure } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
@@ -249,10 +249,11 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private fetchResponses(request: VesicleRequest, stream: boolean, maxRetries = 5): Promise<Response> {
+    const profile = this.requireProfile();
     return fetchProvider(`${this.config.baseUrl}/responses`, {
       method: "POST",
       headers: { ...openAIResponsesHeaders(stream, this.config.userAgent), ...this.authHeaders() },
-      body: JSON.stringify(toResponsesBody(request, this.requestContext(), stream, this.config.responsesProfile!)),
+      body: JSON.stringify(toResponsesBody(request, this.requestContext(), stream, profile)),
       signal: request.signal,
     }, {
       providerId: this.config.providerId,
@@ -300,7 +301,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     });
   }
 
-  private requireProfile(): void {
+  private requireProfile(): ResponsesProfile {
     if (this.config.authMethod === "x-goog-api-key") {
       throw new ProviderError("OpenAI Responses supports bearer or x-api-key authentication only.", {
         kind: "malformed_response", providerId: this.config.providerId,
@@ -330,7 +331,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     if (this.config.responsesProfile === "openai-public"
       || this.config.responsesProfile === "codex-http-relay"
       || this.config.responsesProfile === "codex-beta-2026-02-06"
-      || this.config.responsesProfile === "mimo-subset-2026-07-30") return;
+      || this.config.responsesProfile === "mimo-subset-2026-07-30") return this.config.responsesProfile;
     throw new ProviderError("OpenAI Responses requires an explicit supported responsesProfile.", {
       kind: "malformed_response", providerId: this.config.providerId,
     });
