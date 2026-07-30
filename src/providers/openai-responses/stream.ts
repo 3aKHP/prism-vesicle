@@ -123,7 +123,8 @@ function isKnownAdditiveEvent(type: string): boolean {
     || type === "response.content_part.done" || type === "response.output_text.done"
     || type === "response.refusal.done"
     || type === "response.reasoning_summary_part.added" || type === "response.reasoning_summary_part.done"
-    || type === "response.reasoning_summary_text.done" || type === "response.function_call_arguments.done";
+    || type === "response.reasoning_summary_text.done" || type === "response.reasoning_text.done"
+    || type === "response.function_call_arguments.done";
 }
 
 function malformed(message: string, providerId: string): never {

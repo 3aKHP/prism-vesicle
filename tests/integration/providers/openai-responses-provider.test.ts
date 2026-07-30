@@ -258,6 +258,8 @@ describe("OpenAI Responses typed SSE", () => {
       });
       const events = await collect(adapter.stream!({ ...request(), onRetry: (info) => retries.push(info.attempt) }));
       expect(events).toEqual([
+        { type: "attempt_started", attempt: 1 },
+        { type: "attempt_discarded", attempt: 1 },
         { type: "attempt_started", attempt: 2 },
         { type: "content_delta", delta: "committed" },
         expect.objectContaining({ type: "complete", attempt: 2, response: expect.objectContaining({ content: "committed" }) }),

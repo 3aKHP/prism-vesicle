@@ -23,9 +23,9 @@ export function openAIChatHeaders(userAgent?: string): Record<string, string> {
   };
 }
 
-export function openAIResponsesHeaders(userAgent?: string): Record<string, string> {
+export function openAIResponsesHeaders(stream: boolean, userAgent?: string): Record<string, string> {
   return {
-    "accept": "text/event-stream",
+    "accept": stream ? "text/event-stream" : "application/json",
     "content-type": "application/json",
     "user-agent": userAgent ?? defaultUserAgent(),
   };

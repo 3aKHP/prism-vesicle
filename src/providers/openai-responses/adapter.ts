@@ -37,7 +37,8 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         }
         if (response.headers.get("content-type")?.includes("application/json")) {
           const body = await response.json().catch(() => undefined) as ResponsesBody | undefined;
-          yield { type: "complete", response: responseFromResponsesBody(body, this.context(request)) };
+          yield { type: "attempt_started", attempt };
+          yield { type: "complete", attempt, response: responseFromResponsesBody(body, this.context(request)) };
           return;
         }
 
@@ -52,6 +53,8 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         return;
       } catch (error) {
         if (request.signal?.aborted || !isRetryableResponsesFailure(error) || retry >= maxRetries) throw error;
+        yield { type: "attempt_started", attempt };
+        yield { type: "attempt_discarded", attempt };
         const delayMs = Math.min(4_000, 250 * (2 ** retry));
         request.onRetry?.({ attempt: retry + 1, maxRetries, delayMs });
         await abortableDelay(delayMs, request.signal);
@@ -62,7 +65,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   private fetchResponses(request: VesicleRequest, stream: boolean, maxRetries = 5): Promise<Response> {
     return fetchProvider(`${this.config.baseUrl}/responses`, {
       method: "POST",
-      headers: { ...openAIResponsesHeaders(this.config.userAgent), authorization: `Bearer ${this.config.apiKey}` },
+      headers: { ...openAIResponsesHeaders(stream, this.config.userAgent), authorization: `Bearer ${this.config.apiKey}` },
       body: JSON.stringify(toResponsesBody(request, this.requestContext(), stream)),
       signal: request.signal,
     }, {
