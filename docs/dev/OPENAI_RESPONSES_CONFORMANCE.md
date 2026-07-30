@@ -1,6 +1,6 @@
 # OpenAI Responses Conformance Profile
 
-This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. The HTTPS/non-stream JSON, typed-SSE, session-scoped WebSocket, and dual portable/provider-native compaction lifecycle are implemented; later third-party exposure and product-documentation work remains incomplete. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
+This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. HTTPS/non-stream JSON, typed SSE, session-scoped WebSocket, dual portable/provider-native compaction, and explicit official/MiMo product profiles are implemented. Current protocol availability remains in [`STATUS.md`](../../STATUS.md); copyable configuration lives in the bilingual user reference and [`docs/examples/providers.yaml`](../examples/providers.yaml).
 
 ## Claim Boundary
 
@@ -43,7 +43,17 @@ Profile updates are reviewed fixture changes:
 5. Add a compatibility-ledger entry for every public/Codex divergence and choose behavior per explicit transport/capability profile.
 6. Run `bun test tests/contract/providers/openai-responses-conformance.test.ts`, then the normal repository gates.
 
-Changing this profile does not silently migrate persisted sessions or enable a runtime feature. Runtime delivery and user-facing exposure remain separately reviewed phases.
+Changing this profile does not silently migrate persisted sessions or infer a runtime feature. Each user-facing profile remains explicit configuration and a separately reviewed compatibility claim.
+
+## Product Profiles And Acceptance
+
+`openai-public` is the official public application-layer tier. It sends the frozen public field set, admits only public semantic event families, uses Bearer authentication, and may opt into public WebSocket continuation and model-declared standalone compact. It does not claim Codex product identity or network-stack fingerprint equality.
+
+`mimo-subset-2026-07-30` is a third-party Responses-compatible subset. Its HTTP encoder omits `background`, `context_management`, `previous_response_id`, `parallel_tool_calls`, `store`, `stream_options`, encrypted-reasoning `include`, service tier, prompt cache key, WebSocket, and remote compact. It supports Bearer or `x-api-key`, replays full provider-visible context, omits OpenAI reasoning-summary controls that MiMo does not distinguish, maps Vesicle `off` to MiMo's documented `effort: none`, normalizes `xhigh`/`max` to `high`, and maps reasoning only from the profile-owned `response.reasoning_text.*` events and `reasoning_text` Items. Other profiles reject that event/Item family.
+
+Both profiles remain opt-in experimental until their real-provider acceptance gates succeed. The 2026-07-30 Phase 6 run had no configured official OpenAI credential, and both MiMo cases reached the endpoint but returned HTTP 402 with `0` passed. These results are unavailable, not accepted; deterministic conformance and relay evidence do not replace the missing tier-specific acceptance.
+
+Deterministic integration tests own omission and event-admission evidence. The opt-in real-provider lanes are separate: `test:acceptance:responses:openai` requires an explicitly selected `openai-public` profile at `api.openai.com` with credentials and `remoteCompact`, then exercises HTTP/SSE, non-stream JSON, standalone compact, and public WebSocket; `test:acceptance:responses:mimo` requires the dated MiMo profile and exercises reasoning plus a function loop. Missing selectors, credentials, required capabilities, or exact endpoints define skipped/unavailable tests, never passing tests. A third-party success is compatibility evidence only and cannot satisfy official OpenAI acceptance.
 
 ## Implemented WebSocket Lifecycle
 

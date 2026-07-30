@@ -103,7 +103,7 @@ Start from [`docs/examples/providers.yaml`](./docs/examples/providers.yaml) and 
 
 Do not place secrets in `providers.yaml`, and do not depend on a project-root `.env`. If one remains from an early Vesicle setup, migrate its values to the user-level secret file and remove or rename it.
 
-The current provider protocols are OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini `generateContent`. Model entries may declare generation defaults, capability metadata such as vision support, and context limits. See the annotated example registry for the canonical shape.
+The current provider protocols are OpenAI-compatible Chat Completions, Anthropic Messages, Gemini `generateContent`, and an opt-in experimental OpenAI Responses adapter pending successful official and MiMo real-provider acceptance. Responses configuration is explicit: `openai-public` is the official application-layer profile, while `mimo-subset-2026-07-30` is an HTTP-only third-party subset with narrower request and event families. Vesicle never infers either tier from a URL or model name. Model entries may declare generation defaults, capability metadata such as vision or remote-compaction support, and context limits. See the annotated example registry and the [provider configuration reference](./docs/user/en/reference/configuration.md#openai-responses-profiles) for the canonical shape and limitations.
 
 Optional Streamable HTTP MCP servers are configured in a sibling `mcp.yaml`; [`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) documents header expansion, tool prefixes, filters, engine scoping, and timeouts. `TAVILY_API_KEY` in the user-level `.env` enables Vesicle's web research tools for the ETL and Evaluate engines.
 
@@ -155,7 +155,7 @@ The main composer uses Enter to submit and Ctrl+Enter to insert a newline. While
 
 - Profile-driven Prism engines whose prompts, tools, validators, and stop gates resolve through project/user overrides over a managed Harness or bundled recovery baseline.
 - A consumer-grade Stage engine that freezes supplied Module A/B cards into a prose-first narrative bootstrap with no model-visible tools or gates. Quality enforcement defaults to observe; only an explicitly enabled host quality configuration can trigger an experimental bounded rewrite.
-- Streaming OpenAI-compatible, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
+- Streaming OpenAI-compatible Chat, explicit OpenAI Responses, Anthropic, and Gemini provider adapters with native tool calls, thinking controls, usage normalization, cancellation, and bounded retry.
 - A responsive OpenTUI interface with durable sessions, command completion, provider/model switching, engine handoff, user questions, and confirmation gates.
 - Persistent Instructions: user-authored `VESICLE.md` / `VESICLE.<engine>.md` at the project root and beside `providers.yaml`, auto-loaded into the system prompt each session with user + project scope and engine-specific replacement, so reusable sub-workflows and specs survive new sessions without re-stating them.
 - Guarded filesystem tools, artifact previews and validation, append-only conversation rewind, and Vesicle-managed file checkpoints.
@@ -217,7 +217,7 @@ Repository-local AI collaborator instructions live in [`AGENTS.md`](./AGENTS.md)
 
 ## Scope And Lineage
 
-The 1.0 alpha focuses on making Vesicle a practical direct API host for Prism workflows rather than a generic coding agent. OpenAI Responses, broader MCP transports and surfaces, dedicated long-form engine scaffolding, and prompt-cache engineering remain deferred; consult [`STATUS.md`](./STATUS.md) before relying on an unlisted capability.
+The 1.0 alpha focuses on making Vesicle a practical direct API host for Prism workflows rather than a generic coding agent. Broader MCP transports and surfaces, dedicated long-form engine scaffolding, and prompt-cache engineering remain deferred; consult [`STATUS.md`](./STATUS.md) before relying on an unlisted capability.
 
 Prism Vesicle is a sibling of [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology), the public source for the V10 Harness Release bundled here.
 

@@ -8,7 +8,7 @@ import {
   type ProviderStateEnvelope,
   type ProviderStateJson,
 } from "../../../src/providers/shared/state";
-import type { ProviderStreamEvent, VesicleRequest } from "../../../src/providers/shared/types";
+import type { ProviderStreamEvent, ReasoningTier, VesicleRequest } from "../../../src/providers/shared/types";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND } from "../../../src/providers/shared/types";
 import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
 import { bytesFromChunks } from "../../support/providers/sse";
@@ -29,7 +29,7 @@ describe("OpenAI Responses request codec", () => {
         parameters: { type: "object", properties: {}, additionalProperties: false },
       } }],
       generation: { reasoningTier: "high" },
-    }, context(), true);
+    }, context(), true, "openai-public");
     expect(compareStructuredCapture(
       requireJsonValue(expected.body),
       requireJsonValue(JSON.parse(JSON.stringify(body))),
@@ -44,12 +44,12 @@ describe("OpenAI Responses request codec", () => {
         { role: "tool", toolCallId: "call_read", content: "{\"ok\":true}" },
       ],
       tools: [{ type: "function", function: { name: "read_file", description: "Read", parameters: { type: "object" } } }],
-      generation: { reasoningTier: "high", maxTokens: 1234 },
-    }, context(), true);
+      generation: { reasoningTier: "high", temperature: 0.3, maxTokens: 1234 },
+    }, context(), true, "openai-public");
 
     expect(Object.keys(body)).toEqual([
       "model", "instructions", "input", "tools", "tool_choice", "parallel_tool_calls", "reasoning",
-      "store", "stream", "stream_options", "include", "service_tier", "prompt_cache_key", "text", "max_output_tokens",
+      "store", "stream", "stream_options", "include", "service_tier", "prompt_cache_key", "temperature", "text", "max_output_tokens",
     ]);
     expect(body).toMatchObject({
       model: "gpt-5.2-codex",
@@ -62,12 +62,16 @@ describe("OpenAI Responses request codec", () => {
       stream: true,
       service_tier: "auto",
       prompt_cache_key: "req_1",
+      temperature: 0.3,
       text: { verbosity: "medium" },
     });
     expect(body.input).toEqual([
       { type: "function_call", call_id: "call_read", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" },
       { type: "function_call_output", call_id: "call_read", output: "{\"ok\":true}" },
     ]);
+    expect(() => toResponsesBody({
+      ...request(), generation: { reasoningTier: "invalid" as ReasoningTier },
+    }, context(), false, "openai-public")).toThrow("Unsupported reasoning tier: invalid");
   });
 
   test("replays same-owner native Items without reconstructing encrypted reasoning", () => {
@@ -86,11 +90,64 @@ describe("OpenAI Responses request codec", () => {
           providerId: "openai",
           model: "gpt-5.2-codex",
           endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-          payload: { version: 1, responseId: "resp_1", outputItems },
+          payload: { version: 1, profile: "openai-public", responseId: "resp_1", outputItems },
         },
       }],
-    }, context(), false);
+    }, context(), false, "openai-public");
     expect(body.input).toEqual(outputItems);
+  });
+
+  test("uses portable history when the Responses profile changes at the same endpoint", () => {
+    const openAIState: ProviderStateEnvelope = {
+      version: providerStateEnvelopeVersion,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.2-codex",
+      endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+      payload: { version: 1, profile: "openai-public", outputItems: [
+        { type: "reasoning", encrypted_content: "opaque", summary: [] },
+      ] },
+    };
+    const mimoState: ProviderStateEnvelope = {
+      ...openAIState,
+      payload: { version: 1, profile: "mimo-subset-2026-07-30", outputItems: [
+        { type: "reasoning", content: [{ type: "reasoning_text", text: "private" }] },
+      ] },
+    };
+
+    expect(toResponsesBody({
+      ...request(), messages: [{ role: "assistant", content: "portable OpenAI", providerState: mimoState }],
+    }, context(), false, "openai-public").input).toEqual([
+      { role: "assistant", content: "portable OpenAI" },
+    ]);
+    expect(toResponsesBody({
+      ...request(), messages: [{ role: "assistant", content: "portable MiMo", providerState: openAIState }],
+    }, context(), false, "mimo-subset-2026-07-30").input).toEqual([
+      { role: "assistant", content: "portable MiMo" },
+    ]);
+
+    const compactMarker = {
+      role: "user" as const,
+      content: "",
+      kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+      providerState: {
+        ...openAIState,
+        payload: { version: 1, profile: "openai-public", compactedInput: [
+          { type: "compaction", encrypted_content: "opaque" },
+        ] },
+      },
+    };
+    expect(toResponsesBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "portable checkpoint", kind: "compact-summary" },
+        compactMarker,
+        { role: "user", content: "continue" },
+      ],
+    }, context(), false, "mimo-subset-2026-07-30").input).toEqual([
+      { role: "user", content: "portable checkpoint" },
+      { role: "user", content: "continue" },
+    ]);
   });
 
   test("replaces portable history with an owner-compatible compact window and starts a new chain", () => {
@@ -108,7 +165,7 @@ describe("OpenAI Responses request codec", () => {
         providerId: "openai",
         model: "gpt-5.2-codex",
         endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-        payload: { version: 1, compactedInput },
+        payload: { version: 1, profile: "openai-public", compactedInput },
       },
     };
     const compactedRequest = {
@@ -121,7 +178,7 @@ describe("OpenAI Responses request codec", () => {
       ],
     };
 
-    expect(toResponsesBody(compactedRequest, context(), true).input).toEqual([
+    expect(toResponsesBody(compactedRequest, context(), true, "openai-public").input).toEqual([
       ...compactedInput,
       { role: "user", content: "continue" },
     ]);
@@ -131,7 +188,7 @@ describe("OpenAI Responses request codec", () => {
       ...compactedRequest,
       model: { provider: "openai", model: "different-model" },
     };
-    expect(toResponsesBody(switched, context(), true).input).toEqual([
+    expect(toResponsesBody(switched, context(), true, "openai-public").input).toEqual([
       { role: "user", content: "[conversation summary]\nportable" },
       { role: "assistant", content: "retained" },
       { role: "user", content: "continue" },
@@ -143,7 +200,7 @@ describe("OpenAI Responses request codec", () => {
         ? { ...message, providerState: { ...marker.providerState, version: 99 as 1 } }
         : message),
     };
-    expect(toResponsesBody(corrupt, context(), true).input).toEqual([
+    expect(toResponsesBody(corrupt, context(), true, "openai-public").input).toEqual([
       { role: "user", content: "[conversation summary]\nportable" },
       { role: "assistant", content: "retained" },
       { role: "user", content: "continue" },
@@ -181,7 +238,7 @@ describe("OpenAI Responses request codec", () => {
       expect(body).toEqual({ model: "gpt-5.2-codex", input: [] });
       expect(result.providerState).toMatchObject({
         protocol: "openai-responses",
-        payload: { version: 1, compactedInput: [
+        payload: { version: 1, profile: "openai-public", compactedInput: [
           { type: "web_search_call", action: { query: "canonical context" } },
           { type: "message" },
           { type: "compaction" },
@@ -255,28 +312,64 @@ describe("OpenAI Responses request codec", () => {
         { role: "tool", toolCallId: "call_1", content: "first" },
         { role: "tool", toolCallId: "call_1", content: "second" },
       ],
-    }, context(), true)).toThrow("call_id call_1 was answered more than once");
+    }, context(), true, "openai-public")).toThrow("call_id call_1 was answered more than once");
   });
 
-  test("rejects duplicate native calls and orphan results before network I/O", () => {
+  test("falls back from corrupt native calls and rejects orphan portable results before network I/O", () => {
     const duplicateState: ProviderStateEnvelope = {
       version: providerStateEnvelopeVersion,
       protocol: "openai-responses",
       providerId: "openai",
       model: "gpt-5.2-codex",
       endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-      payload: { version: 1, outputItems: [
+      payload: { version: 1, profile: "openai-public", outputItems: [
         { type: "function_call", call_id: "dup", name: "read_file", arguments: "{}" },
         { type: "function_call", call_id: "dup", name: "read_file", arguments: "{}" },
       ] },
     };
-    expect(() => toResponsesBody({
+    expect(toResponsesBody({
       ...request(),
-      messages: [{ role: "assistant", content: "", providerState: duplicateState }],
-    }, context(), true)).toThrow("repeated function call_id dup");
+      messages: [{ role: "assistant", content: "portable", providerState: duplicateState }],
+    }, context(), true, "openai-public").input).toEqual([{ role: "assistant", content: "portable" }]);
     expect(() => toResponsesBody({
       ...request(), messages: [{ role: "tool", toolCallId: "orphan", content: "result" }],
-    }, context(), true)).toThrow("no preceding call_id orphan");
+    }, context(), true, "openai-public")).toThrow("no preceding call_id orphan");
+  });
+
+  test("omits unsupported OpenAI fields from the frozen MiMo subset", () => {
+    const body = toResponsesBody({
+      ...request(),
+      messages: [{ role: "user", content: "hello" }],
+      tools: [{ type: "function", function: {
+        name: "echo", description: "Echo", parameters: { type: "object" },
+      } }],
+      generation: { reasoningTier: "high", temperature: 0.2, maxTokens: 512 },
+    }, context(), true, "mimo-subset-2026-07-30");
+
+    expect(Object.keys(body)).toEqual([
+      "model", "instructions", "input", "tools", "tool_choice", "reasoning",
+      "stream", "max_output_tokens", "temperature", "text",
+    ]);
+    expect(body).toMatchObject({
+      reasoning: { effort: "high" },
+      stream: true,
+      max_output_tokens: 512,
+      temperature: 0.2,
+    });
+    for (const unsupported of [
+      "background", "context_management", "previous_response_id", "parallel_tool_calls",
+      "store", "stream_options", "include", "service_tier", "prompt_cache_key",
+    ]) expect(body).not.toHaveProperty(unsupported);
+
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "off" },
+    }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "none" });
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "max" },
+    }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "high" });
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "xhigh" },
+    }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "high" });
   });
 });
 
@@ -378,6 +471,112 @@ describe("OpenAI Responses typed SSE", () => {
     await expect(collect(readResponsesStream(responseStream(events), {
       ...streamContext(), profile: "openai-public",
     }))).rejects.toThrow("Unsupported semantic Responses event: codex.rate_limits");
+  });
+
+  test("maps MiMo reasoning events and Items only under its explicit subset profile", async () => {
+    const events = [
+      event(0, "response.reasoning_text.delta", { delta: "thinking" }),
+      event(1, "response.reasoning_text.done", { text: "thinking" }),
+      event(2, "response.output_text.delta", { delta: "answer" }),
+      event(3, "response.completed", { response: {
+        id: "resp_mimo", status: "completed",
+        output: [
+          { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }] },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+        ],
+      } }),
+    ];
+    await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "mimo-subset-2026-07-30",
+    }))).resolves.toMatchObject([
+      { type: "attempt_started" },
+      { type: "reasoning_delta", delta: "thinking" },
+      { type: "content_delta", delta: "answer" },
+      { type: "complete", response: { reasoningContent: "thinking", content: "answer" } },
+    ]);
+    await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "openai-public",
+    }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_text.delta");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.completed", { response: {
+        id: "resp_openai_mimo_item", status: "completed",
+        output: [
+          { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }] },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+        ],
+      } }),
+    ]), {
+      ...streamContext(), profile: "openai-public",
+    }))).rejects.toThrow("unsupported reasoning content");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.reasoning_summary_text.delta", { delta: "thinking" }),
+    ]), {
+      ...streamContext(), profile: "mimo-subset-2026-07-30",
+    }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_summary_text.delta");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.completed", { response: {
+        id: "resp_mimo_mixed", status: "completed",
+        output: [
+          {
+            type: "reasoning",
+            content: [{ type: "reasoning_text", text: "thinking" }],
+            summary: [{ type: "summary_text", text: "OpenAI-only" }],
+          },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+        ],
+      } }),
+    ]), {
+      ...streamContext(), profile: "mimo-subset-2026-07-30",
+    }))).rejects.toThrow("unsupported MiMo reasoning content");
+  });
+
+  test("uses the configured MiMo x-api-key authentication header", async () => {
+    const originalFetch = globalThis.fetch;
+    let headers = new Headers();
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      headers = new Headers(init?.headers);
+      return Response.json({
+        id: "resp_mimo", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }],
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "mimo", baseUrl: "https://api.xiaomimimo.com/v1",
+        model: "mimo-v2.5-pro", apiKey: "test-key", authMethod: "x-api-key",
+        responsesProfile: "mimo-subset-2026-07-30", responsesTransport: "http",
+      });
+      await expect(adapter.complete(request())).resolves.toMatchObject({ content: "ok" });
+      expect(headers.get("x-api-key")).toBe("test-key");
+      expect(headers.has("authorization")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("rejects x-api-key outside the MiMo profile before network I/O", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      throw new Error("unexpected fetch");
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", authMethod: "x-api-key",
+        responsesProfile: "openai-public", responsesTransport: "http",
+      });
+      await expect(adapter.complete(request())).rejects.toThrow(
+        "x-api-key authentication requires mimo-subset-2026-07-30",
+      );
+      expect(fetches).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   test("uses the same final parser for non-streaming JSON", async () => {
@@ -538,7 +737,7 @@ describe("OpenAI Responses typed SSE", () => {
             providerState: {
               version: 1, protocol: "openai-responses", providerId: "openai", model: "gpt-5.2-codex",
               endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-              payload: { version: 1, compactedInput },
+              payload: { version: 1, profile: "openai-public", compactedInput },
             },
           },
           { role: "user", content: "continue" },

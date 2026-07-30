@@ -1,4 +1,5 @@
-import { stat } from "node:fs/promises";
+import { stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { runCli, seedProvidersConfig, withTempProject } from "./support";
 import packageJson from "../../../package.json";
@@ -20,6 +21,24 @@ describe("CLI source journey: non-interactive commands", () => {
       // Behavioural chdir invariant: the process reports the invocation cwd,
       // proving main.ts did not redirect it.
       expect(result.stdout).toContain(`Project: ${projectDir}`);
+    });
+  });
+
+  test("doctor reports the exact Responses tier, transport, and compact capability", async () => {
+    await withTempProject("vesicle-cli-responses-doctor-", async (projectDir, configDir) => {
+      await writeFile(join(configDir, "providers.yaml"), [
+        "default:", "  provider: mimo", "  model: mimo-v2.5-pro", "providers:",
+        "  mimo:", "    protocol: openai-responses", "    baseUrl: https://api.xiaomimimo.com/v1",
+        "    apiKeyEnv: MIMO_API_KEY", "    authMethod: x-api-key",
+        "    responsesProfile: mimo-subset-2026-07-30", "    responsesTransport: http",
+        "    models:", "      - mimo-v2.5-pro", "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["doctor"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Responses profile: mimo-subset-2026-07-30");
+      expect(result.stdout).toContain("Responses tier: third-party compatible subset");
+      expect(result.stdout).toContain("Responses transport: http");
+      expect(result.stdout).toContain("Responses remote compact: not declared");
     });
   });
 

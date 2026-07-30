@@ -138,6 +138,43 @@ describe("config loading", () => {
       model: "gpt-test",
       apiKey: "secret",
     });
+
+    const invalid = await writeProvidersFile([
+      "default:", "  provider: responses", "  model: gpt-test", "providers:",
+      "  responses:", "    protocol: openai-responses", "    baseUrl: https://api.example.test/v1",
+      "    apiKeyEnv: RESPONSES_KEY", "    authMethod: x-api-key",
+      "    responsesProfile: openai-public", "    responsesTransport: http",
+      "    models:", "      - gpt-test", "",
+    ], ["RESPONSES_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, invalid.env)).rejects.toThrow(
+      "can use authMethod x-api-key only with mimo-subset-2026-07-30",
+    );
+  });
+
+  test("loads the frozen MiMo Responses subset and rejects unsupported capabilities", async () => {
+    const valid = [
+      "default:", "  provider: mimo", "  model: mimo-v2.5-pro", "providers:",
+      "  mimo:", "    protocol: openai-responses", "    baseUrl: https://api.xiaomimimo.com/v1",
+      "    apiKeyEnv: MIMO_API_KEY", "    authMethod: x-api-key",
+      "    responsesProfile: mimo-subset-2026-07-30", "    responsesTransport: http",
+      "    models:", "      - mimo-v2.5-pro", "",
+    ];
+    const { env } = await writeProvidersFile(valid, ["MIMO_API_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, env)).resolves.toMatchObject({
+      provider: "openai-responses",
+      responsesProfile: "mimo-subset-2026-07-30",
+      responsesTransport: "http",
+      authMethod: "x-api-key",
+      apiKey: "secret",
+    });
+
+    const unsupported = valid.flatMap((line) => line === "      - mimo-v2.5-pro"
+      ? ["      - id: mimo-v2.5-pro", "        capabilities:", "          remoteCompact: true"]
+      : [line]);
+    const invalid = await writeProvidersFile(unsupported, ["MIMO_API_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, invalid.env)).rejects.toThrow(
+      "cannot enable remoteCompact with mimo-subset-2026-07-30",
+    );
   });
 
   test("loads a provider-level User-Agent override", async () => {

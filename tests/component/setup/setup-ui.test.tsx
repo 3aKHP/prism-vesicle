@@ -109,8 +109,17 @@ describe("guided Setup UI", () => {
     const inputState: SetupState = { ...createInitialSetupState(), step: "base-url" };
     const input = await testRender(() => <SetupView state={inputState} width={80} height={24} />, { width: 80, height: 24 });
     await input.flush();
-    expect(input.captureCharFrame()).toContain("OpenAI-compatible Base URL");
+    expect(input.captureCharFrame()).toContain("OpenAI-compatible Chat Base URL");
     input.renderer.destroy();
+
+    const mimoInput = await testRender(() => <SetupView
+      state={{ ...inputState, providerPreset: "mimo-responses" }}
+      width={80}
+      height={24}
+    />, { width: 80, height: 24 });
+    await mimoInput.flush();
+    expect(mimoInput.captureCharFrame()).toContain("MiMo Responses subset Base URL");
+    mimoInput.renderer.destroy();
 
     const modelState: SetupState = {
       ...createInitialSetupState(),
@@ -125,6 +134,17 @@ describe("guided Setup UI", () => {
     multi.renderer.destroy();
     expect(frame).toContain("model-09");
     expect(frame).not.toContain("model-00");
+  });
+
+  test("exposes explicit Chat, OpenAI Responses, and MiMo subset protocol choices", async () => {
+    const state: SetupState = { ...createInitialSetupState(), step: "provider-protocol" };
+    const setup = await testRender(() => <SetupView state={state} width={80} height={24} />, { width: 80, height: 24 });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("OpenAI-compatible Chat");
+    expect(frame).toContain("OpenAI Responses");
+    expect(frame).toContain("MiMo Responses subset");
   });
 
   test("offers explicit Back actions and resets review navigation to a valid project choice", () => {

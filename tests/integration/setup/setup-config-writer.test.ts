@@ -87,6 +87,82 @@ describe("guided Setup configuration writer", () => {
     expect(await readFile(join(configDir, "setup-state.json"), "utf8")).toBe(legacyState);
   });
 
+  test("writes an explicit Responses profile selected by Setup", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await writeSetupConfiguration({
+      providerPreset: "mimo-responses",
+      baseUrl: "https://api.xiaomimimo.com/v1",
+      apiKey: "secret",
+      modelIds: ["mimo-v2.5-pro"],
+      defaultModel: "mimo-v2.5-pro",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      authMethod: "x-api-key",
+      responsesProfile: "mimo-subset-2026-07-30",
+      responsesTransport: "http",
+    });
+    const source = await readFile(join(configDir, "providers.yaml"), "utf8");
+    expect(source).toContain("responsesProfile: mimo-subset-2026-07-30");
+    expect(source).toContain("responsesTransport: http");
+  });
+
+  test("preserves a legacy Codex Responses profile when no replacement preset is selected", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await Bun.write(join(configDir, "providers.yaml"), [
+      "default:",
+      "  provider: relay",
+      "  model: codex-model",
+      "",
+      "providers:",
+      "  relay:",
+      "    protocol: openai-responses",
+      "    baseUrl: https://relay.example/v1",
+      "    apiKeyEnv: RELAY_API_KEY",
+      "    authMethod: bearer",
+      "    userAgent: legacy-agent",
+      "    responsesProfile: codex-http-relay",
+      "    responsesTransport: http",
+      "    models:",
+      "      - codex-model",
+      "",
+    ].join("\n"));
+    await writeFile(join(configDir, ".env"), "RELAY_API_KEY=old-secret\n", "utf8");
+
+    await writeSetupConfiguration({
+      baseUrl: "https://relay.example/v1",
+      apiKey: "new-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      authMethod: "bearer",
+      userAgent: "legacy-agent",
+      responsesProfile: "codex-http-relay",
+      responsesTransport: "http",
+    });
+
+    await expect(writeSetupConfiguration({
+      providerPreset: "chat-compatible",
+      baseUrl: "https://relay.example/v1",
+      apiKey: "new-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir })).rejects.toThrow(
+      "will not replace existing Responses provider",
+    );
+  });
+
   test("preserves an existing shell capability and interpreter selection", async () => {
     const root = await tempRoot();
     const configDir = join(root, "config");

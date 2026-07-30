@@ -1,4 +1,4 @@
-import type { VesicleConfig } from "../../config/env";
+import type { ResponsesProfile, VesicleConfig } from "../../config/env";
 import { abortError, ProviderError, summarizeProviderFailure } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
@@ -40,6 +40,11 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   async compact(request: ProviderCompactRequest): Promise<ProviderCompactResult> {
     this.requireApiKey();
     this.requireProfile();
+    if (this.config.responsesProfile === "mimo-subset-2026-07-30") {
+      throw new ProviderError("mimo-subset-2026-07-30 does not support remote Responses compaction.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
     if (this.config.capabilities?.remoteCompact !== true) {
       throw new ProviderError("Remote Responses compaction is not enabled for this model profile.", {
         kind: "malformed_response", providerId: this.config.providerId,
@@ -47,7 +52,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     }
     const response = await fetchProvider(`${this.config.baseUrl}/responses/compact`, {
       method: "POST",
-      headers: { ...openAIResponsesHeaders(false, this.config.userAgent), authorization: `Bearer ${this.config.apiKey}` },
+      headers: { ...openAIResponsesHeaders(false, this.config.userAgent), ...this.authHeaders() },
       body: JSON.stringify(toResponsesCompactBody(request, this.requestContext())),
       signal: request.signal,
     }, {
@@ -70,7 +75,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       providerId: this.config.providerId,
       model: request.model.model,
       endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl),
-      payload: { version: 1, compactedInput },
+      payload: { version: 1, profile: this.config.responsesProfile, compactedInput },
     });
     const usage = usageFromResponses(body.usage);
     return { providerState, ...(usage ? { usage } : {}) };
@@ -244,10 +249,11 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private fetchResponses(request: VesicleRequest, stream: boolean, maxRetries = 5): Promise<Response> {
+    const profile = this.requireProfile();
     return fetchProvider(`${this.config.baseUrl}/responses`, {
       method: "POST",
-      headers: { ...openAIResponsesHeaders(stream, this.config.userAgent), authorization: `Bearer ${this.config.apiKey}` },
-      body: JSON.stringify(toResponsesBody(request, this.requestContext(), stream)),
+      headers: { ...openAIResponsesHeaders(stream, this.config.userAgent), ...this.authHeaders() },
+      body: JSON.stringify(toResponsesBody(request, this.requestContext(), stream, profile)),
       signal: request.signal,
     }, {
       providerId: this.config.providerId,
@@ -265,11 +271,21 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private requestContext() {
-    return { providerId: this.config.providerId, endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl) };
+    return {
+      providerId: this.config.providerId,
+      endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl),
+      profile: this.config.responsesProfile,
+    };
   }
 
   private context(request: VesicleRequest) {
-    return { requestId: request.id, providerId: this.config.providerId, model: request.model.model, endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl) };
+    return {
+      requestId: request.id,
+      providerId: this.config.providerId,
+      model: request.model.model,
+      endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl),
+      profile: this.config.responsesProfile,
+    };
   }
 
   private throwHttp(response: Response, detail?: string): never {
@@ -285,7 +301,18 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     });
   }
 
-  private requireProfile(): void {
+  private requireProfile(): ResponsesProfile {
+    if (this.config.authMethod === "x-goog-api-key") {
+      throw new ProviderError("OpenAI Responses supports bearer or x-api-key authentication only.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
+    if (this.config.authMethod === "x-api-key"
+      && this.config.responsesProfile !== "mimo-subset-2026-07-30") {
+      throw new ProviderError("OpenAI Responses x-api-key authentication requires mimo-subset-2026-07-30.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
     if (this.config.responsesProfile === "codex-http-relay" && this.config.responsesTransport === "websocket") {
       throw new ProviderError("codex-http-relay supports HTTP only; select openai-public or codex-beta-2026-02-06 for WebSocket.", {
         kind: "malformed_response", providerId: this.config.providerId,
@@ -296,28 +323,42 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
+    if (this.config.responsesProfile === "mimo-subset-2026-07-30" && this.config.responsesTransport === "websocket") {
+      throw new ProviderError("mimo-subset-2026-07-30 supports HTTP only.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
     if (this.config.responsesProfile === "openai-public"
       || this.config.responsesProfile === "codex-http-relay"
-      || this.config.responsesProfile === "codex-beta-2026-02-06") return;
+      || this.config.responsesProfile === "codex-beta-2026-02-06"
+      || this.config.responsesProfile === "mimo-subset-2026-07-30") return this.config.responsesProfile;
     throw new ProviderError("OpenAI Responses requires an explicit supported responsesProfile.", {
       kind: "malformed_response", providerId: this.config.providerId,
     });
   }
 
   private webSocketProfile(): "openai-public" | "codex-beta-2026-02-06" {
-    return this.config.responsesProfile === "codex-beta-2026-02-06"
-      ? "codex-beta-2026-02-06"
-      : "openai-public";
+    if (this.config.responsesProfile === "openai-public") return "openai-public";
+    if (this.config.responsesProfile === "codex-beta-2026-02-06") return "codex-beta-2026-02-06";
+    throw new ProviderError(`Responses profile ${this.config.responsesProfile ?? "missing"} does not support WebSocket.`, {
+      kind: "malformed_response", providerId: this.config.providerId,
+    });
   }
 
   private webSocketHeaders(): Record<string, string> {
     return {
-      authorization: `Bearer ${this.config.apiKey}`,
+      ...this.authHeaders(),
       "user-agent": this.config.userAgent ?? defaultUserAgent(),
       ...(this.webSocketProfile() === "codex-beta-2026-02-06"
         ? { "openai-beta": "responses_websockets=2026-02-06" }
         : {}),
     };
+  }
+
+  private authHeaders(): Record<string, string> {
+    return this.config.authMethod === "x-api-key"
+      ? { "x-api-key": this.config.apiKey! }
+      : { authorization: `Bearer ${this.config.apiKey}` };
   }
 }
 

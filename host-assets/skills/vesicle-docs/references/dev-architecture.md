@@ -55,6 +55,7 @@ host-assets/  # restricted Vesicle prompts and generic Agent extensions
 ## Cross-Cutting Boundaries
 
 - Provider adapters translate normalized requests and responses; they do not own host policy. See [`PROVIDERS.md`](./PROVIDERS.md).
+- Responses capability profiles are explicit configuration data consumed only by the Responses adapter. Core/session/TUI own normalized effects and opaque state, never OpenAI or MiMo wire fields; Setup may write reviewed profiles but must not infer them from provider or model identity. See [`OPENAI_RESPONSES_CONFORMANCE.md`](./OPENAI_RESPONSES_CONFORMANCE.md).
 - Model-visible tools remain behind host capability, path, permission, and process enforcement. See [`TOOLS.md`](./TOOLS.md).
 - Sessions are append-only durable history. Projection, rewind, checkpoints, compaction, and continuation recovery must preserve that invariant. See [`SESSIONS.md`](./SESSIONS.md).
 - Prompt assets are runtime files resolved through the active verified asset stack; Engine prompts are not TypeScript literals. See [`ASSETS.md`](./ASSETS.md).

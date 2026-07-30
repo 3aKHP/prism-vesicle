@@ -1,7 +1,12 @@
 import { ProviderError } from "../shared/errors";
+import type { ResponsesProfile } from "../../config/env";
 import type { ResponsesOutputItem } from "./types";
 
-export function validateResponsesOutputItems(items: ResponsesOutputItem[], providerId?: string): ResponsesOutputItem[] {
+export function validateResponsesOutputItems(
+  items: ResponsesOutputItem[],
+  providerId?: string,
+  profile?: ResponsesProfile,
+): ResponsesOutputItem[] {
   const callIds = new Set<string>();
   for (const item of items) {
     if (!item || typeof item !== "object") fail("Provider response included a malformed output Item.", providerId);
@@ -15,12 +20,23 @@ export function validateResponsesOutputItems(items: ResponsesOutputItem[], provi
         }
         break;
       case "reasoning":
+        if (profile === "mimo-subset-2026-07-30") {
+          if (item.summary !== undefined || item.encrypted_content !== undefined
+            || !Array.isArray(item.content)
+            || item.content.some((part) => part.type !== "reasoning_text" || typeof part.text !== "string")) {
+            fail("Provider response included unsupported MiMo reasoning content.", providerId);
+          }
+          break;
+        }
         if (item.summary !== undefined && (!Array.isArray(item.summary)
           || item.summary.some((part) => part.type !== "summary_text" || typeof part.text !== "string"))) {
           fail("Provider response included malformed reasoning summary content.", providerId);
         }
         if (item.encrypted_content !== undefined && typeof item.encrypted_content !== "string") {
           fail("Provider response included malformed encrypted reasoning content.", providerId);
+        }
+        if (item.content !== undefined) {
+          fail("Provider response included unsupported reasoning content.", providerId);
         }
         break;
       case "function_call":

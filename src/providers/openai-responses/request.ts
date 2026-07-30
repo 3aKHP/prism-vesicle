@@ -1,28 +1,50 @@
 import type { ToolDefinition } from "../../core/tools";
+import type { ResponsesProfile } from "../../config/env";
+import { ProviderError } from "../shared/errors";
 import { parseProviderStateEnvelope, type ProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderCompactRequest, type ReasoningTier, type VesicleMessage, type VesicleRequest } from "../shared/types";
 import { validateResponsesCompactItems, validateResponsesOutputItems } from "./items";
 import { openAIResponsesProtocol, type ResponsesOutputItem } from "./types";
 
-type RequestContext = { providerId: string; endpointFingerprint: string };
+type RequestContext = { providerId: string; endpointFingerprint: string; profile?: ResponsesProfile };
 export type ResponsesContinuation = { responseId: string; afterMessageIndex: number; pendingCallIds: string[] };
 
-export function toResponsesBody(request: VesicleRequest, context: RequestContext, stream: boolean): Record<string, unknown> {
+export function toResponsesBody(
+  request: VesicleRequest,
+  context: RequestContext,
+  stream: boolean,
+  profile: ResponsesProfile,
+): Record<string, unknown> {
   const tools = request.tools?.map(toResponsesTool);
+  if (profile === "mimo-subset-2026-07-30") {
+    return {
+      model: request.model.model,
+      instructions: request.system.join("\n\n") || undefined,
+      input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
+      tools: tools?.length ? tools : undefined,
+      tool_choice: tools?.length ? "auto" : undefined,
+      reasoning: reasoningControl(request.generation?.reasoningTier, false, context.providerId),
+      stream,
+      max_output_tokens: request.generation?.maxTokens,
+      temperature: request.generation?.temperature,
+      text: { verbosity: "medium" },
+    };
+  }
   return {
     model: request.model.model,
     instructions: request.system.join("\n\n") || undefined,
-    input: serializeResponsesInput(request.messages, request.model.model, context),
+    input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
     tools: tools?.length ? tools : undefined,
     tool_choice: tools?.length ? "auto" : undefined,
     parallel_tool_calls: true,
-    reasoning: reasoningControl(request.generation?.reasoningTier),
+    reasoning: reasoningControl(request.generation?.reasoningTier, true, context.providerId),
     store: false,
     stream,
     stream_options: stream ? { include_obfuscation: false } : undefined,
     include: ["reasoning.encrypted_content"],
     service_tier: "auto",
     prompt_cache_key: request.id,
+    temperature: request.generation?.temperature,
     text: { verbosity: "medium" },
     max_output_tokens: request.generation?.maxTokens,
   };
@@ -42,7 +64,7 @@ export function toResponsesWebSocketMessage(
   generate = true,
   profile: "openai-public" | "codex-beta-2026-02-06" = "openai-public",
 ): Record<string, unknown> {
-  const base = toResponsesBody(request, context, false);
+  const base = toResponsesBody(request, context, false, profile);
   const tools = base.tools;
   const input = continuation
     ? serializeResponsesInput(
@@ -68,6 +90,7 @@ export function toResponsesWebSocketMessage(
     include: base.include,
     service_tier: base.service_tier,
     prompt_cache_key: base.prompt_cache_key,
+    temperature: base.temperature,
     text: base.text,
     max_output_tokens: base.max_output_tokens,
     generate: generate ? undefined : false,
@@ -185,7 +208,8 @@ function nativeCompactInput(state: VesicleMessage["providerState"], model: strin
     || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
   const payload = envelope.payload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)
-    || payload.version !== 1 || !Array.isArray(payload.compactedInput)) return undefined;
+    || payload.version !== 1 || payload.profile !== (context.profile ?? "openai-public")
+    || !Array.isArray(payload.compactedInput)) return undefined;
   try {
     return validateResponsesCompactItems(payload.compactedInput as ResponsesOutputItem[], context.providerId);
   } catch {
@@ -202,16 +226,25 @@ function declareCallId(value: ProviderStateJson | string, declared: Set<string>)
 }
 
 function nativeOutputItems(state: VesicleMessage["providerState"], model: string, context: RequestContext): ProviderStateJson[] | undefined {
-  const envelope = parseProviderStateEnvelope(state);
-  if (envelope.protocol !== openAIResponsesProtocol
-    || envelope.providerId !== context.providerId
-    || envelope.model !== model
-    || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
-  const payload = envelope.payload;
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1 || !Array.isArray(payload.outputItems)) {
-    throw new Error("OpenAI Responses native state is malformed.");
+  try {
+    const envelope = parseProviderStateEnvelope(state);
+    if (envelope.protocol !== openAIResponsesProtocol
+      || envelope.providerId !== context.providerId
+      || envelope.model !== model
+      || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
+    const payload = envelope.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1
+      || payload.profile !== (context.profile ?? "openai-public") || !Array.isArray(payload.outputItems)) return undefined;
+    return validateResponsesOutputItems(
+      payload.outputItems as ResponsesOutputItem[],
+      context.providerId,
+      context.profile,
+    ) as ProviderStateJson[];
+  } catch {
+    // Provider-native replay is optional. Corrupt or rejected state selects
+    // portable assistant history instead of making the session unreadable.
+    return undefined;
   }
-  return validateResponsesOutputItems(payload.outputItems as ResponsesOutputItem[], context.providerId) as ProviderStateJson[];
 }
 
 function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {
@@ -223,9 +256,32 @@ function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {
   };
 }
 
-function reasoningControl(tier: ReasoningTier | undefined): Record<string, unknown> | undefined {
-  if (!tier || tier === "off") return undefined;
-  return { effort: tier === "max" ? "xhigh" : tier, summary: "auto" };
+function reasoningControl(
+  tier: ReasoningTier | undefined,
+  summary: boolean,
+  providerId: string,
+): Record<string, unknown> | undefined {
+  if (!tier) return undefined;
+  if (tier === "off") return summary ? undefined : { effort: "none" };
+  let effort: "low" | "medium" | "high" | "xhigh";
+  switch (tier) {
+    case "low":
+    case "medium":
+    case "high":
+      effort = tier;
+      break;
+    case "xhigh":
+      effort = summary ? "xhigh" : "high";
+      break;
+    case "max":
+      effort = summary ? "xhigh" : "high";
+      break;
+    default:
+      throw new ProviderError(`Unsupported reasoning tier: ${String(tier)}.`, {
+        kind: "malformed_response", providerId,
+      });
+  }
+  return { effort, ...(summary ? { summary: "auto" } : {}) };
 }
 
 function userContent(message: VesicleMessage): Array<Record<string, unknown>> {

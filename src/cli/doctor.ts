@@ -1,4 +1,5 @@
 import { inspectProviderConfig, loadConfigForSelection, loadUserConfigEnvironment } from "../config/providers";
+import type { ResponsesProfile } from "../config/env";
 import { loadExperimentalQualitySettings } from "../config/quality";
 import { inspectMcpConfig } from "../mcp/registry";
 import { inspectAssets } from "./assets";
@@ -49,6 +50,12 @@ export async function runDoctor(): Promise<void> {
   console.log(`Project: ${process.cwd()}`);
   console.log(`Provider: ${config.providerId}`);
   console.log(`Protocol: ${config.provider}`);
+  if (config.provider === "openai-responses") {
+    console.log(`Responses profile: ${config.responsesProfile ?? "missing"}`);
+    console.log(`Responses tier: ${responsesTier(config.responsesProfile)}`);
+    console.log(`Responses transport: ${config.responsesTransport ?? "http (default)"}`);
+    console.log(`Responses remote compact: ${config.capabilities?.remoteCompact === true ? "enabled" : "not declared"}`);
+  }
   console.log(`Base URL: ${config.baseUrl}`);
   console.log(`Model: ${config.model}`);
   console.log(`Vision input: ${config.capabilities?.vision === true ? "available" : "not declared"}`);
@@ -78,4 +85,15 @@ export async function runDoctor(): Promise<void> {
     }
   }
   console.log(`Missing: ${config.missing.length > 0 ? config.missing.join(", ") : "none"}`);
+}
+
+const responsesTierLabels: Record<ResponsesProfile, string> = {
+  "openai-public": "OpenAI public conformance profile",
+  "codex-http-relay": "narrow third-party relay profile",
+  "codex-beta-2026-02-06": "frozen Codex application profile",
+  "mimo-subset-2026-07-30": "third-party compatible subset",
+};
+
+function responsesTier(profile: ResponsesProfile | undefined): string {
+  return profile ? responsesTierLabels[profile] : "unknown";
 }

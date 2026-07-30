@@ -263,6 +263,20 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (currentProvider.responsesProfile === "codex-beta-2026-02-06" && currentProvider.responsesTransport !== "websocket") {
       throw new Error(`Provider "${id}" must use responsesTransport websocket with codex-beta-2026-02-06.`);
     }
+    if (currentProvider.responsesProfile === "mimo-subset-2026-07-30" && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use mimo-subset-2026-07-30 with responsesTransport websocket.`);
+    }
+    if (protocol === "openai-responses" && currentProvider.authMethod === "x-goog-api-key") {
+      throw new Error(`Provider "${id}" using openai-responses cannot use authMethod x-goog-api-key.`);
+    }
+    if (protocol === "openai-responses" && currentProvider.authMethod === "x-api-key"
+      && currentProvider.responsesProfile !== "mimo-subset-2026-07-30") {
+      throw new Error(`Provider "${id}" can use authMethod x-api-key only with mimo-subset-2026-07-30.`);
+    }
+    if (currentProvider.responsesProfile === "mimo-subset-2026-07-30"
+      && models.some((model) => model.capabilities?.remoteCompact === true)) {
+      throw new Error(`Provider "${id}" cannot enable remoteCompact with mimo-subset-2026-07-30.`);
+    }
     registry.providers.push({
       id,
       protocol,
@@ -493,7 +507,8 @@ function readProtocol(value: string, field: string): ProviderProtocol {
 }
 
 function readResponsesProfile(value: string, field: string): ResponsesProfile {
-  if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06") {
+  if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06"
+    && value !== "mimo-subset-2026-07-30") {
     throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
   }
   return value;

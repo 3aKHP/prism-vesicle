@@ -56,6 +56,7 @@ This document defines how Vesicle selects providers, translates normalized reque
 - Anthropic and Gemini history serializers must degrade legacy malformed tool arguments to an empty object rather than throwing before the paired failed result can reach the provider. New records are normalized before persistence; serializer fallback exists for already-written sessions and portable checkpoints.
 - Gemini `thought` and `thoughtSignature` metadata remain attached to the original provider-native parts and are replayed as those parts on the next request instead of being reconstructed from assistant prose.
 - Provider-native thinking metadata is preserved for protocol continuity and display but must not be merged into ordinary assistant prose.
+- The Responses adapter applies request omission, semantic-event admission, and native Item/compact-state ownership by exact `responsesProfile`. Changing profile at the same provider/model/endpoint selects portable history rather than replaying incompatible native state. `openai-public` owns the public OpenAI field/event families; `mimo-subset-2026-07-30` omits unsupported storage, continuation, parallel-call, WebSocket, and compaction fields and alone admits MiMo `response.reasoning_text.*`. Unknown semantic events remain fail-closed.
 
 ## Provider Configuration
 
@@ -67,7 +68,8 @@ This document defines how Vesicle selects providers, translates normalized reque
 - `generation.maxTokens` is a request default. `limits.contextWindow` and related limits describe model capacity and context policy; adapters receive the resulting normalized request rather than interpreting host configuration.
 - Vision is capability-gated. A non-vision model receives neither image content nor the model-visible image inspection tool.
 - Remote provider compaction is capability-gated per model. Capability support does not make it a recovery dependency: portable compaction still runs first and remains authoritative.
+- Every `openai-responses` provider declares `responsesProfile`; transport defaults to HTTP and may be set to WebSocket only for a profile that supports it. The dated MiMo subset is HTTP-only, may select Bearer or `x-api-key`, and cannot enable `remoteCompact`. Other Responses profiles use Bearer authentication; other protocols retain their existing auth rules.
 
 Current protocol availability and known limitations belong in [`STATUS.md`](../../STATUS.md). Example configuration shapes live under [`docs/examples/`](../examples/).
 
-The independent OpenAI Responses adapter is governed by the versioned application-layer evidence and exclusions in [`OPENAI_RESPONSES_CONFORMANCE.md`](./OPENAI_RESPONSES_CONFORMANCE.md). That profile does not make Responses available before the runtime adapter ships.
+The independent OpenAI Responses adapter is governed by the versioned application-layer evidence, tier boundary, and exclusions in [`OPENAI_RESPONSES_CONFORMANCE.md`](./OPENAI_RESPONSES_CONFORMANCE.md). Supported user configuration is mirrored in the bilingual provider reference; setup and examples must write the same validated schema rather than maintaining an alternate interpretation.

@@ -9,6 +9,7 @@ import {
   isSetupSecretStep,
   setupChoiceItems,
   setupMultiSelectChoices,
+  setupProviderPresetLabel,
   type SetupChoiceItem,
   type SetupInputStep,
   type SetupState,
@@ -57,7 +58,7 @@ function InputPageView(props: { state: SetupState; width: number }) {
   const step = () => props.state.step as SetupInputStep;
   return (
     <>
-      <text content={truncateLine(inputLabel(step()), props.width)} wrapMode="none" fg={palette.textSecondary} />
+      <text content={truncateLine(inputLabel(step(), props.state.providerPreset), props.width)} wrapMode="none" fg={palette.textSecondary} />
       <box marginTop={1} border borderColor={palette.brandDim} paddingX={1} height={3}>
         <PromptComposer
           value={isSetupSecretStep(step()) ? maskValue(props.state.input.value) : props.state.input.value}
@@ -125,7 +126,7 @@ function MultiSelectPageView(props: { state: SetupState; width: number; height: 
 function ReviewPageView(props: { state: SetupState; width: number; compact: boolean }) {
   return (
     <box flexDirection="column">
-      <text content={truncateLine(`Provider  ${props.state.baseUrl}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
+      <text content={truncateLine(`Provider  ${setupProviderPresetLabel(props.state.providerPreset)} · ${props.state.baseUrl}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
       <text content={truncateLine(`Models    ${props.state.selectedModels.length} selected · default ${props.state.defaultModel}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
       <Show when={!props.compact} fallback={
         <text content={truncateLine(`Permission ${props.state.permissionMode} · Tavily ${props.state.tavilyApiKey ? "on" : "off"} · MCP ${props.state.mcpServers.length}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
@@ -179,9 +180,9 @@ export function maskValue(value: string): string {
   return value.replace(/[\s\S]/g, "•");
 }
 
-function inputLabel(step: SetupInputStep): string {
+function inputLabel(step: SetupInputStep, providerPreset: SetupState["providerPreset"]): string {
   const labels: Record<SetupInputStep, string> = {
-    "base-url": "OpenAI-compatible Base URL",
+    "base-url": `${setupProviderPresetLabel(providerPreset)} Base URL`,
     "api-key": "Provider API key",
     "add-model": "Exact model id",
     "tavily-key": "Tavily API key",
@@ -212,6 +213,7 @@ function inputPlaceholder(step: SetupInputStep): string {
 function pageTitle(step: SetupStep): string {
   const titles: Record<SetupStep, string> = {
     welcome: "Welcome",
+    "provider-protocol": "Choose the provider protocol",
     "base-url": "Connect a model provider",
     "api-key": "Authenticate securely",
     discovering: "Discovering models",
@@ -254,7 +256,7 @@ function pageDescription(step: SetupStep): string {
 }
 
 function progressLabel(step: SetupStep): string {
-  const order: SetupStep[] = ["welcome", "base-url", "api-key", "models", "default-model", "tavily-choice", "mcp-choice", "permissions", "project-choice", "review", "complete"];
+  const order: SetupStep[] = ["welcome", "provider-protocol", "base-url", "api-key", "models", "default-model", "tavily-choice", "mcp-choice", "permissions", "project-choice", "review", "complete"];
   const aliases: Partial<Record<SetupStep, SetupStep>> = {
     discovering: "api-key",
     "discovery-error": "api-key",
