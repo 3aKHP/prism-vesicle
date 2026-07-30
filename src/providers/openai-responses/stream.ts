@@ -98,7 +98,9 @@ export async function* readResponsesStream(response: Response, context: StreamCo
         });
       default:
         if (context.profile === "codex-http-relay"
-          && (event.type === "codex.rate_limits" || event.type === "codex.response.metadata")) break;
+          && (event.type === "codex.rate_limits"
+            || event.type === "codex.response.metadata"
+            || event.type === "responsesapi.websocket_timing")) break;
         if (!isKnownAdditiveEvent(event.type, context.profile)) throw malformed(`Unsupported semantic Responses event: ${event.type}.`, context.providerId);
     }
   }
