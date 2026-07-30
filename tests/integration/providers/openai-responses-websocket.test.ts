@@ -482,6 +482,14 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(socket.closeCount).toBe(1);
   });
 
+  test("rejects and cleans up when socket send throws synchronously", async () => {
+    const socket = new FakeSocket(() => { throw new Error("send failed"); });
+    const session = responsesWebSocketSession(sessionOptions("send-error", "owner", () => socket));
+
+    await expect(session.request({ type: "response.create" })).rejects.toThrow("send failed");
+    expect(socket.closeCount).toBe(1);
+  });
+
   test.skipIf(process.platform === "win32")("host SIGTERM cleanup releases an active native socket before exit", async () => {
     let opened!: () => void;
     const socketOpened = new Promise<void>((resolveOpen) => { opened = resolveOpen; });

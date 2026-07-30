@@ -84,9 +84,10 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private async *streamWebSocket(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
+    const stableRequest: VesicleRequest = { ...request, messages: [...request.messages] };
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
-    const owner = `${this.config.providerId}\u0000${request.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
+    const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
     const session = responsesWebSocketSession({
       sessionId: this.runtime.sessionId!,
       owner,
@@ -97,23 +98,23 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       requestTimeoutMs: this.runtime.webSocketRequestTimeoutMs,
     });
     if (session.unavailable) {
-      yield* this.streamHttp(request);
+      yield* this.streamHttp(stableRequest);
       return;
     }
     for (let retry = 0; ; retry++) {
       const attempt = retry + 1;
       try {
         session.prepareForRequest();
-        let continuation = findResponsesContinuation(request, this.requestContext(), session.lastResponseId);
+        let continuation = findResponsesContinuation(stableRequest, this.requestContext(), session.lastResponseId);
         if (session.lastResponseId && !continuation) session.clearContinuation();
         if (!continuation && session.needsPrewarm()) {
           const prewarm = toResponsesWebSocketMessage(
-            request, this.requestContext(), undefined, false, this.webSocketProfile(),
+            stableRequest, this.requestContext(), undefined, false, this.webSocketProfile(),
           );
-          const prewarmResponse = await session.request(prewarm, request.signal);
+          const prewarmResponse = await session.request(prewarm, stableRequest.signal);
           const prewarmEvents: ProviderStreamEvent[] = [];
           for await (const event of readResponsesStream(prewarmResponse, {
-            ...this.context(request), attempt, profile: this.config.responsesProfile, allowEmptyOutput: true,
+            ...this.context(stableRequest), attempt, profile: this.config.responsesProfile, allowEmptyOutput: true,
           })) prewarmEvents.push(event);
           const completed = prewarmEvents.find((event) => event.type === "complete");
           if (!completed || completed.type !== "complete" || !completed.response.id) {
@@ -130,26 +131,26 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           session.markCompleted(completed.response.id);
           continuation = {
             responseId: completed.response.id,
-            afterMessageIndex: request.messages.length,
+            afterMessageIndex: stableRequest.messages.length,
             pendingCallIds: [],
           };
         }
         const message = toResponsesWebSocketMessage(
-          request, this.requestContext(), continuation, true, this.webSocketProfile(),
+          stableRequest, this.requestContext(), continuation, true, this.webSocketProfile(),
         );
-        const response = await session.request(message, request.signal);
+        const response = await session.request(message, stableRequest.signal);
         const committed: ProviderStreamEvent[] = [];
         for await (const event of readResponsesStream(response, {
-          ...this.context(request), attempt, profile: this.config.responsesProfile,
+          ...this.context(stableRequest), attempt, profile: this.config.responsesProfile,
         })) committed.push(event);
         const completed = committed.find((event) => event.type === "complete");
         if (completed?.type === "complete") session.markCompleted(completed.response.id);
         for (const event of committed) yield event;
         return;
       } catch (error) {
-        if (request.signal?.aborted) {
+        if (stableRequest.signal?.aborted) {
           session.resetConnection("request canceled");
-          throw abortError(request.signal);
+          throw abortError(stableRequest.signal);
         }
         const missingContinuation = error instanceof ProviderError && error.code === "previous_response_not_found";
         // Any uncommitted WebSocket terminal invalidates connection-local
@@ -162,12 +163,12 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           session.disable();
           // The downgrade is the final attempt in this logical request. It does
           // not receive a second HTTP retry budget after six WS attempts.
-          yield* this.streamHttp(request, maxRetries + 1, 0);
+          yield* this.streamHttp(stableRequest, maxRetries + 1, 0);
           return;
         }
         const delayMs = Math.min(4_000, 250 * (2 ** retry));
-        request.onRetry?.({ attempt: retry + 1, maxRetries, delayMs });
-        await (this.runtime.retryDelay ?? abortableDelay)(delayMs, request.signal);
+        stableRequest.onRetry?.({ attempt: retry + 1, maxRetries, delayMs });
+        await (this.runtime.retryDelay ?? abortableDelay)(delayMs, stableRequest.signal);
       }
     }
   }

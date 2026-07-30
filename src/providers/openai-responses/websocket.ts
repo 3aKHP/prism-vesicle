@@ -45,7 +45,8 @@ export class ResponsesWebSocketSession {
   }
 
   matches(options: SessionSocketOptions): boolean {
-    return this.owner === options.owner
+    return this.sessionId === options.sessionId
+      && this.owner === options.owner
       && headersEqual(this.options.headers, options.headers)
       && this.options.requestTimeoutMs === options.requestTimeoutMs;
   }
@@ -122,6 +123,8 @@ export class ResponsesWebSocketSession {
     this.openedAt = 0;
     this.lastResponseId = undefined;
     this.prewarmRequired = true;
+    // The active request owns `inFlight` until its abort rejection reaches the
+    // request `finally`. Clearing it here would permit overlapping requests.
     cancelConnect?.(reason);
     requestController?.abort(reason);
     socket?.close(code, reason);
@@ -300,7 +303,13 @@ function receiveTerminal(
     socket.addEventListener("error", errored, { once: true });
     signal?.addEventListener("abort", aborted, { once: true });
     if (signal?.aborted) aborted();
-    else socket.send(message);
+    else {
+      try {
+        socket.send(message);
+      } catch (error) {
+        finishReject(error);
+      }
+    }
   });
 }
 
