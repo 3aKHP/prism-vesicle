@@ -17,13 +17,17 @@ export function compareStructuredCapture(
   );
 }
 
+export function requireJsonValue(value: unknown, label = "value"): JsonValue {
+  if (!isJsonValue(value)) throw new Error(`${label} is not JSON-safe.`);
+  return value;
+}
+
 function compareAtPath(
   expected: JsonValue | undefined,
   actual: JsonValue | undefined,
   path: string,
   allowedPaths: ReadonlySet<string>,
 ): CaptureDifference[] {
-  if (isAllowed(path, allowedPaths)) return [];
   if (expected === undefined) return [{ path, kind: "unexpected", actual }];
   if (actual === undefined) return [{ path, kind: "missing", expected }];
   if (Array.isArray(expected) || Array.isArray(actual)) {
@@ -64,4 +68,15 @@ function isAllowed(path: string, allowedPaths: ReadonlySet<string>): boolean {
     if (path === allowedPath || path.startsWith(`${allowedPath}.`) || path.startsWith(`${allowedPath}[`)) return true;
   }
   return false;
+}
+
+function isJsonValue(value: unknown, ancestors = new Set<object>()): value is JsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value !== "object" || ancestors.has(value)) return false;
+  const nextAncestors = new Set(ancestors).add(value);
+  if (Array.isArray(value)) return value.every((entry) => isJsonValue(entry, nextAncestors));
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  return Object.values(value).every((entry) => isJsonValue(entry, nextAncestors));
 }

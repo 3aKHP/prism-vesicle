@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "commit": "8f00b9a04cb542ad19a79f9f6c32348421741602",
+  "entries": [
+    { "claimId": "request-field-order", "path": "codex-rs/codex-api/src/common.rs", "lines": "252-274", "excerpt": "pub struct ResponsesApiRequest { model, instructions, input, tools, tool_choice, parallel_tool_calls, reasoning, store, stream, stream_options, include, service_tier, prompt_cache_key, text, client_metadata }" },
+    { "claimId": "ws-response-create", "path": "codex-rs/codex-api/src/common.rs", "lines": "277-358", "excerpt": "ResponseCreateWsRequest carries previous_response_id and generate; ResponsesWsRequest serializes with type response.create" },
+    { "claimId": "request-construction", "path": "codex-rs/core/src/client.rs", "lines": "907-923", "excerpt": "build_responses_request constructs ordered model, instructions, input, tools, controls, store, stream, include, cache, text and client metadata" },
+    { "claimId": "beta-header", "path": "codex-rs/core/src/client.rs", "lines": "1080-1111", "excerpt": "headers.insert(OPENAI_BETA_HEADER, HeaderValue::from_static(RESPONSES_WEBSOCKETS_V2_BETA_HEADER_VALUE))" },
+    { "claimId": "private-headers", "path": "codex-rs/core/src/client.rs", "lines": "1080-1111", "excerpt": "WebSocket headers add x-client-request-id, session/thread headers, compatibility headers, optional attestation and the beta header" },
+    { "claimId": "private-conditional-headers", "path": "codex-rs/core/src/client.rs", "lines": "754-790,1907-1914", "excerpt": "memory consolidation and Responses Lite conditionally add Codex-owned request headers" },
+    { "claimId": "private-client-metadata", "path": "codex-rs/core/src/responses_metadata.rs", "lines": "215-245", "excerpt": "client_metadata contains x-codex-installation-id, session_id, thread_id, x-codex-window-id, turn_id, subagent, parent-thread and turn metadata" },
+    { "claimId": "private-ws-trace-metadata", "path": "codex-rs/codex-api/src/common.rs", "lines": "23-24,331-350", "excerpt": "WebSocket traceparent and tracestate are copied into client_metadata under ws_request_header-prefixed keys" },
+    { "claimId": "private-ws-runtime-metadata", "path": "codex-rs/core/src/client.rs", "lines": "771-783,1640-1651,1870-1878", "excerpt": "Responses Lite, trace context, and request-start timing conditionally enrich WebSocket client_metadata" },
+    { "claimId": "private-session-headers", "path": "codex-rs/codex-api/src/requests/headers.rs", "lines": "5-13", "excerpt": "build_session_headers inserts session-id and thread-id" },
+    { "claimId": "default-five-retries", "path": "codex-rs/model-provider-info/src/lib.rs", "lines": "26-31,311-315", "excerpt": "DEFAULT_STREAM_MAX_RETRIES is 5 and stream_max_retries defaults to it" },
+    { "claimId": "retry-counter", "path": "codex-rs/core/src/responses_retry.rs", "lines": "20-73", "excerpt": "retry counter increments before backoff until max_retries, then WebSocket fallback may reset it" },
+    { "claimId": "retry-callsite", "path": "codex-rs/core/src/session/turn.rs", "lines": "1335-1404", "excerpt": "sampling retries use provider stream_max_retries and handle_retryable_response_stream_error" },
+    { "claimId": "codex-tool-before-terminal", "path": "codex-rs/core/src/session/turn.rs", "lines": "2244-2365,2685-2702", "excerpt": "OutputItemDone queues tool_future; stream failure exits the event loop; drain_in_flight then runs before returning the loop outcome" },
+    { "claimId": "ws-prewarm", "path": "codex-rs/core/src/client.rs", "lines": "1640-1651", "excerpt": "ResponseCreateWsRequest sets generate to Some(false) for warmup and carries previous_response_id" },
+    { "claimId": "http-downgrade", "path": "codex-rs/core/src/responses_retry.rs", "lines": "20-73", "excerpt": "after retry exhaustion try_switch_fallback_transport resets retries and continues over fallback" },
+    { "claimId": "ws-owner", "path": "codex-rs/core/src/client.rs", "lines": "200-217,240-301,1115-1120", "excerpt": "ModelClient owns cached_websocket_session; a turn wrapper takes and returns WebsocketSession so the eligible connection survives across turns" },
+    { "claimId": "ws-terminal", "path": "codex-rs/codex-api/src/endpoint/responses_websocket.rs", "lines": "675-819", "excerpt": "WebSocket processing stops only on Completed and treats EOF, binary, close, malformed terminal processing and idle timeout as errors" },
+    { "claimId": "stream-terminal", "path": "codex-rs/core/src/client.rs", "lines": "1970-2078", "excerpt": "stream collector records output Items, commits LastResponse on Completed, records errors, and fails premature EOF" },
+    { "claimId": "ws-limit", "path": "codex-rs/codex-api/src/endpoint/responses_websocket.rs", "lines": "148-162,608-635", "excerpt": "the 60 minute connection-limit code is recognized and mapped to ApiError::Retryable" },
+    { "claimId": "missing-continuation-retryable", "path": "codex-rs/codex-api/src/endpoint/responses_websocket.rs", "lines": "158-162,608-635", "excerpt": "previous_response_not_found is recognized and mapped to ApiError::Retryable" },
+    { "claimId": "missing-continuation-full-replay", "path": "codex-rs/core/src/client.rs", "lines": "1217-1252,1674-1692", "excerpt": "incremental state is accepted only with a usable last response; each sent full or incremental request replaces last_request for later continuation" }
+  ]
+}

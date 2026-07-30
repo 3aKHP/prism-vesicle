@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "dynamicValuePaths": [
+    "captures[].events[].response_id",
+    "captures[].events[].item.id",
+    "captures[].events[].item.encrypted_content",
+    "captures[].events[].item_id",
+    "captures[].events[].response.id",
+    "captures[].events[].response.output[].id",
+    "captures[].events[].response.output[].encrypted_content"
+  ],
+  "captures": [
+    {
+      "id": "completed-function-call",
+      "provenance": { "kind": "public-spec-and-codex-source-derived", "sources": ["OpenAI streaming events checked 2026-07-30", "codex-rs/core/src/client.rs:1970-2078"] },
+      "attempt": 1,
+      "events": [
+        { "sequence": 0, "type": "response.created", "response_id": "<dynamic:response-id>" },
+        { "sequence": 1, "type": "response.output_item.added", "output_index": 0, "item": { "type": "reasoning", "id": "<dynamic:item-id>" } },
+        { "sequence": 2, "type": "response.output_item.done", "output_index": 0, "item": { "type": "reasoning", "id": "<dynamic:item-id>", "encrypted_content": "<dynamic:encrypted-reasoning>" } },
+        { "sequence": 3, "type": "response.output_item.added", "output_index": 1, "item": { "type": "function_call", "id": "<dynamic:item-id>", "call_id": "call_fixture", "name": "read_fixture", "arguments": "" } },
+        { "sequence": 4, "type": "response.function_call_arguments.delta", "output_index": 1, "item_id": "<dynamic:item-id>", "delta": "{}" },
+        { "sequence": 5, "type": "response.function_call_arguments.done", "output_index": 1, "item_id": "<dynamic:item-id>", "arguments": "{}" },
+        { "sequence": 6, "type": "response.output_item.done", "output_index": 1, "item": { "type": "function_call", "id": "<dynamic:item-id>", "call_id": "call_fixture", "name": "read_fixture", "arguments": "{}" } },
+        { "sequence": 7, "type": "response.completed", "response": { "id": "<dynamic:response-id>", "status": "completed", "output": [{ "type": "reasoning", "id": "<dynamic:item-id>", "encrypted_content": "<dynamic:encrypted-reasoning>" }, { "type": "function_call", "id": "<dynamic:item-id>", "call_id": "call_fixture", "name": "read_fixture", "arguments": "{}" }], "usage": { "input_tokens": 100, "output_tokens": 20, "total_tokens": 120 } } }
+      ],
+      "nextRequestInput": [
+        { "type": "function_call_output", "call_id": "call_fixture", "output": "fixture output" }
+      ],
+      "relationships": { "functionCallId": "call_fixture", "toolOutputMustUseCallId": "call_fixture", "terminalCommitSequence": 7 }
+    },
+    {
+      "id": "codex-premature-eof-after-function-item",
+      "provenance": { "kind": "codex-source-derived", "sources": ["codex-rs/core/src/session/turn.rs:2244-2365,2685-2702"] },
+      "attempt": 1,
+      "events": [
+        { "sequence": 0, "type": "response.output_item.done", "item": { "type": "function_call", "id": "<dynamic:item-id>", "call_id": "call_fixture", "name": "write_fixture", "arguments": "{}" } },
+        { "sequence": 1, "type": "premature-eof" }
+      ],
+      "codexObserved": { "toolFutureQueuedAtSequence": 0, "toolDrainAfterStreamExit": true },
+      "vesicleSelected": { "committed": false, "toolDispatchCount": 0, "durableAssistantCount": 0, "retryEligible": true }
+    },
+    {
+      "id": "failed-incomplete-and-error-terminals",
+      "provenance": { "kind": "public-spec-derived", "sources": ["OpenAI streaming events checked 2026-07-30"] },
+      "terminalVariants": [
+        { "type": "response.failed", "commits": false, "error": { "code": "fixture_failure", "message": "sanitized fixture failure" } },
+        { "type": "response.incomplete", "commits": false, "incomplete_details": { "reason": "max_output_tokens" } },
+        { "type": "error", "commits": false, "error": { "code": "fixture_error", "message": "sanitized fixture error" } },
+        { "type": "premature-eof", "commits": false }
+      ]
+    }
+  ]
+}

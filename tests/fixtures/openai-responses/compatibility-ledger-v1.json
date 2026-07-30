@@ -6,7 +6,8 @@
       "codex": "Frozen Codex sends stream=true in response.create and the responses_websockets=2026-02-06 beta header.",
       "public": "Public WebSocket mode says transport-specific stream and background fields are not used.",
       "selected": "openai-public omits stream and background; codex-beta-2026-02-06 sends stream=true and its beta header.",
-      "test": "openai-public and codex-beta captures differ only by declared profile fields"
+      "test": "openai-public and codex-beta captures differ only by declared profile fields",
+      "allowedCaptureDifferences": ["$.headers.openai-beta", "$.body.stream", "$.body.stream_options", "$.orderedBodyKeys", "$.id", "$.profile", "$.provenance", "$.sanitization"]
     },
     {
       "id": "encrypted-reasoning-include",
@@ -16,8 +17,15 @@
       "test": "every optional request field is capability classified"
     },
     {
+      "id": "tool-commit-barrier",
+      "codex": "Frozen Codex queues a tool future on output_item.done and drains queued futures after the receive loop exits, including after premature EOF.",
+      "public": "response.completed is the successful terminal event, but the API does not own host side-effect scheduling.",
+      "selected": "Vesicle deliberately strengthens safety: no host tool begins until a structurally valid response.completed commits the attempt; failed attempts discard pending calls before retry.",
+      "test": "premature EOF after a function-call Item commits nothing and dispatches zero tools"
+    },
+    {
       "id": "websocket-owner",
-      "codex": "The frozen client has session-wide HTTP fallback but creates a turn-scoped ModelClientSession whose socket is reused within a turn.",
+      "codex": "The frozen client uses a turn-scoped wrapper but caches and returns WebsocketSession through the session-scoped ModelClient, allowing an eligible socket to survive across turns while turn-state metadata does not.",
       "public": "One persistent socket may carry multiple sequential response.create messages; no multiplexing; lifetime is 60 minutes.",
       "selected": "Vesicle owns one eligible socket per active session and exact provider owner, closes it on lifecycle changes, and permits one in-flight response.",
       "test": "later lifecycle tests must prove two user turns reuse one eligible socket and teardown on owner change"
