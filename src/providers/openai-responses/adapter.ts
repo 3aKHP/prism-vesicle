@@ -306,6 +306,12 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
+    if (this.config.authMethod === "x-api-key"
+      && this.config.responsesProfile !== "mimo-subset-2026-07-30") {
+      throw new ProviderError("OpenAI Responses x-api-key authentication requires mimo-subset-2026-07-30.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
     if (this.config.responsesProfile === "codex-http-relay" && this.config.responsesTransport === "websocket") {
       throw new ProviderError("codex-http-relay supports HTTP only; select openai-public or codex-beta-2026-02-06 for WebSocket.", {
         kind: "malformed_response", providerId: this.config.providerId,

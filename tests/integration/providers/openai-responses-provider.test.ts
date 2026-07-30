@@ -525,6 +525,28 @@ describe("OpenAI Responses typed SSE", () => {
     }
   });
 
+  test("rejects x-api-key outside the MiMo profile before network I/O", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      throw new Error("unexpected fetch");
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", authMethod: "x-api-key",
+        responsesProfile: "openai-public", responsesTransport: "http",
+      });
+      await expect(adapter.complete(request())).rejects.toThrow(
+        "x-api-key authentication requires mimo-subset-2026-07-30",
+      );
+      expect(fetches).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("uses the same final parser for non-streaming JSON", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => Response.json({
