@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "profileId": "openai-responses-codex-8f00b9a-v1",
+  "claim": {
+    "layer": "application",
+    "authentication": "api-key",
+    "endpoint": "/v1/responses",
+    "store": false,
+    "excluded": [
+      "TLS ClientHello and ALPN",
+      "HTTP/2 framing and HPACK",
+      "TCP behavior",
+      "runtime-owned WebSocket handshake bytes",
+      "Codex private product identity and attestation"
+    ]
+  },
+  "evidence": {
+    "codex": {
+      "repository": "https://github.com/openai/codex",
+      "commit": "8f00b9a04cb542ad19a79f9f6c32348421741602",
+      "sources": [
+        {
+          "path": "codex-rs/codex-api/src/common.rs",
+          "lines": "252-358",
+          "owns": "ordered HTTP and WebSocket request fields"
+        },
+        {
+          "path": "codex-rs/core/src/client.rs",
+          "lines": "240-360,907-923,1640-1651,1847-1863,1987-2078",
+          "owns": "request construction, incremental WebSocket state, fallback, terminal lifecycle"
+        },
+        {
+          "path": "codex-rs/core/src/responses_retry.rs",
+          "lines": "20-73",
+          "owns": "retry count and HTTP downgrade"
+        },
+        {
+          "path": "codex-rs/codex-api/src/endpoint/responses_websocket.rs",
+          "lines": "148-168,675-819",
+          "owns": "connection cleanup, terminal events, connection limit and missing continuation"
+        }
+      ]
+    },
+    "publicDocs": {
+      "checkedAt": "2026-07-30",
+      "urls": [
+        "https://developers.openai.com/api/docs/guides/migrate-to-responses",
+        "https://developers.openai.com/api/docs/guides/reasoning",
+        "https://developers.openai.com/api/docs/guides/conversation-state",
+        "https://developers.openai.com/api/docs/guides/streaming-responses",
+        "https://developers.openai.com/api/docs/guides/function-calling",
+        "https://developers.openai.com/api/docs/guides/websocket-mode",
+        "https://developers.openai.com/api/reference/resources/responses/methods/compact",
+        "https://developers.openai.com/api/docs/guides/compaction"
+      ]
+    },
+    "thirdPartyDocs": {
+      "checkedAt": "2026-07-29",
+      "urls": [
+        "https://mimo.mi.com/docs/zh-CN/api/chat/responses"
+      ]
+    }
+  },
+  "profiles": {
+    "openaiPublic": {
+      "tier": "codex-conformance",
+      "streaming": true,
+      "functionCalling": true,
+      "parallelToolCalls": true,
+      "reasoningItems": "encrypted",
+      "previousResponseId": true,
+      "remoteCompact": true,
+      "websocket": {
+        "profile": "openai-public",
+        "prewarm": true
+      },
+      "supportedRequestFields": [
+        "model",
+        "instructions",
+        "input",
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "reasoning",
+        "store",
+        "stream",
+        "stream_options",
+        "include",
+        "service_tier",
+        "prompt_cache_key",
+        "text",
+        "previous_response_id",
+        "generate"
+      ],
+      "supportedEventFamilies": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.*",
+        "response.content_part.*",
+        "response.output_text.*",
+        "response.refusal.*",
+        "response.reasoning_summary_*",
+        "response.function_call_arguments.*",
+        "response.completed",
+        "response.failed",
+        "response.incomplete",
+        "error"
+      ]
+    },
+    "mimoSubset20260729": {
+      "tier": "responses-compatible-subset",
+      "streaming": true,
+      "functionCalling": true,
+      "parallelToolCalls": false,
+      "reasoningItems": "plaintext",
+      "previousResponseId": false,
+      "remoteCompact": false,
+      "websocket": false,
+      "supportedRequestFields": [
+        "model",
+        "instructions",
+        "input",
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "store",
+        "stream",
+        "max_output_tokens"
+      ],
+      "supportedEventFamilies": [
+        "response.created",
+        "response.output_item.*",
+        "response.output_text.*",
+        "response.function_call_arguments.*",
+        "response.reasoning_text.*",
+        "response.completed",
+        "response.failed",
+        "response.incomplete",
+        "error"
+      ],
+      "unsupportedRequestFields": [
+        "background",
+        "context_management",
+        "previous_response_id"
+      ]
+    }
+  }
+}

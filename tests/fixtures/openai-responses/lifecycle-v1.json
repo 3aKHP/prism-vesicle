@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "retry": {
+    "maxRetriesBeforeWebSocketDowngrade": 5,
+    "counterMeaning": "retries after the triggering attempt",
+    "attemptAccumulatorsAreIsolated": true,
+    "fallbackTransport": "http",
+    "fallbackScope": "active-session",
+    "cancellationRetries": false,
+    "sources": [
+      "codex-rs/core/src/responses_retry.rs:20-73",
+      "codex-rs/core/src/client.rs:1847-1863"
+    ]
+  },
+  "websocket": {
+    "oneInFlight": true,
+    "multiplexing": false,
+    "connectionLimitMinutes": 60,
+    "prewarmGenerate": false,
+    "continuationField": "previous_response_id",
+    "missingContinuationRecovery": "clear-chain-and-replay-full-context",
+    "expiryRecovery": "open-new-socket-and-replay-full-context-when-store-false",
+    "terminalCommitEvent": "response.completed"
+  },
+  "commitBarrier": {
+    "pendingEvent": "response.output_item.done",
+    "commitEvent": "response.completed",
+    "toolDispatchBeforeCommit": false,
+    "failedAttemptDurableOutput": false,
+    "retrySideEffectCount": 1
+  },
+  "terminalEvents": [
+    "response.completed",
+    "response.failed",
+    "response.incomplete",
+    "error",
+    "premature-eof"
+  ]
+}

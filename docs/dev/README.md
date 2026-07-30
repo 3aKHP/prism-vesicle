@@ -32,6 +32,7 @@ Promotion flows in one direction. An internal conclusion becomes public only by 
 |----------|----------------|
 | [`ASSETS.md`](./ASSETS.md) | Bundled and managed Harness assets, host extensions, verification, and Quality Guard bindings |
 | [`PROVIDERS.md`](./PROVIDERS.md) | Provider selection, normalized protocol boundary, transport, usage, and configuration |
+| [`OPENAI_RESPONSES_CONFORMANCE.md`](./OPENAI_RESPONSES_CONFORMANCE.md) | Versioned Responses/Codex application-layer profile, evidence fixtures, and update procedure |
 | [`TOOLS.md`](./TOOLS.md) | Model-visible tools, path guards, permissions, process authority, gates, questions, and MCP execution |
 | [`SESSIONS.md`](./SESSIONS.md) | Session persistence, projection, checkpoints, rewind, compaction, and recovery |
 | [`PERSISTENT_INSTRUCTIONS.md`](./PERSISTENT_INSTRUCTIONS.md) | Instruction resolution, prompt composition, mutation, and capability limits |
