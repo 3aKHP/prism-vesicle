@@ -202,10 +202,10 @@ export class ResponsesWebSocketSession {
         this.options.requestTimeoutMs ?? defaultRequestTimeoutMs,
       );
       const cleanup = () => {
-        socket.removeEventListener("open", opened);
-        socket.removeEventListener("error", failed);
-        socket.removeEventListener("close", failed);
-        signal?.removeEventListener("abort", aborted);
+        runCleanup(() => socket.removeEventListener("open", opened));
+        runCleanup(() => socket.removeEventListener("error", failed));
+        runCleanup(() => socket.removeEventListener("close", failed));
+        runCleanup(() => signal?.removeEventListener("abort", aborted));
         clearTimeout(timeout);
       };
       this.cancelConnect = (reason) => {
@@ -238,8 +238,8 @@ export class ResponsesWebSocketSession {
     socket.addEventListener("close", invalidated, { once: true });
     socket.addEventListener("error", invalidated, { once: true });
     this.idleCleanup = () => {
-      socket.removeEventListener("close", invalidated);
-      socket.removeEventListener("error", invalidated);
+      runCleanup(() => socket.removeEventListener("close", invalidated));
+      runCleanup(() => socket.removeEventListener("error", invalidated));
     };
     if (socket.readyState !== 1) invalidated();
   }
@@ -351,10 +351,10 @@ function receiveTerminal(
       socket.close(1000, "response timeout");
     }, timeoutMs);
     const cleanup = () => {
-      socket.removeEventListener("message", received);
-      socket.removeEventListener("close", closed);
-      socket.removeEventListener("error", errored);
-      signal?.removeEventListener("abort", aborted);
+      runCleanup(() => socket.removeEventListener("message", received));
+      runCleanup(() => socket.removeEventListener("close", closed));
+      runCleanup(() => socket.removeEventListener("error", errored));
+      runCleanup(() => signal?.removeEventListener("abort", aborted));
       clearTimeout(timeout);
     };
     socket.addEventListener("message", received);

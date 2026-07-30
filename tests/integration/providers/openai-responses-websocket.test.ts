@@ -590,11 +590,15 @@ describe("OpenAI Responses WebSocket transport", () => {
       addEventListener: () => undefined,
       removeEventListener: () => { throw new Error("listener cleanup failed"); },
     };
-    const session = responsesWebSocketSession(sessionOptions("cleanup-error", "owner", () => socket));
+    const session = responsesWebSocketSession({
+      ...sessionOptions("cleanup-error", "owner", () => socket),
+      requestTimeoutMs: 5,
+    });
     const pending = session.request({ type: "response.create" });
 
     expect(() => session.close(1000, "external close")).not.toThrow();
     await expect(pending).rejects.toThrow("external close");
+    await Bun.sleep(10);
     expect(closeCount).toBe(1);
   });
 
