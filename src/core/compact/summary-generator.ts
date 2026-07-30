@@ -6,6 +6,7 @@ import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import { projectSessionHistory, type ResumedMessage, type SessionRecord } from "../session/store";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 
 const NO_TOOLS_COMPACT_PREAMBLE = `
 CRITICAL: Respond with TEXT ONLY. Do NOT call tools.
@@ -105,6 +106,7 @@ export function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images?.length ? { images: message.images } : {}),
   };
 }

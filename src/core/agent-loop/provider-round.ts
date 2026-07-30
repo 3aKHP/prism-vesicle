@@ -9,6 +9,8 @@ import type { ProcessManager } from "../process/manager";
 import type { AgentLoopEvent } from "./types";
 import { renderBackgroundProcessNotifications } from "./background-process";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "../side-question/types";
+import { ProviderAttemptCommitBarrier } from "../../providers/shared/attempt-commit";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 
 type ProviderRoundOptions = {
   rootDir: string;
@@ -53,7 +55,8 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
 
   options.onEvent?.({ type: "provider_request", iteration: options.iteration });
   const messages = await prepareProviderMessages(options.rootDir, options.messages, options.visionEnabled);
-  return completeWithStreaming(options.provider, {
+  const barrier = new ProviderAttemptCommitBarrier();
+  const response = await completeWithStreaming(options.provider, {
     id: options.session.sessionId,
     model: { provider: options.providerId, model: options.model },
     system: [options.systemPrompt],
@@ -69,7 +72,8 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
       ...(info.status !== undefined ? { status: info.status } : {}),
       iteration: options.iteration,
     }) : undefined,
-  }, options.onEvent, options.bufferAssistant === true);
+  }, options.onEvent, options.bufferAssistant === true, barrier);
+  return response;
 }
 
 export async function materializeBackgroundProcessNotifications(
@@ -113,7 +117,11 @@ async function prepareProviderMessages(
   }
   return Promise.all(messages.map(async (message) => {
     const images = await materializeMessageImages(rootDir, message.images);
-    return { ...message, ...(images ? { images } : {}) };
+    return {
+      ...message,
+      ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
+      ...(images ? { images } : {}),
+    };
   }));
 }
 
@@ -122,10 +130,10 @@ async function completeWithStreaming(
   request: VesicleRequest,
   onEvent?: (event: AgentLoopEvent) => void,
   bufferAssistant = false,
+  barrier = new ProviderAttemptCommitBarrier(),
 ): Promise<VesicleResponse> {
-  if (!provider.stream) return provider.complete(request);
+  if (!provider.stream) return barrier.commit(await provider.complete(request));
 
-  let response: VesicleResponse | undefined;
   for await (const event of provider.stream(request)) {
     switch (event.type) {
       case "content_delta":
@@ -137,11 +145,18 @@ async function completeWithStreaming(
       case "tool_call_delta":
         onEvent?.({ type: "tool_call_delta", name: event.name, argumentsDelta: event.argumentsDelta });
         break;
-      case "complete":
-        response = event.response;
+      case "attempt_started":
+        barrier.start(event.attempt);
         break;
+      case "tool_call_candidate":
+        barrier.addCandidate(event.attempt, event.toolCall);
+        break;
+      case "attempt_discarded":
+        barrier.discard(event.attempt);
+        break;
+      case "complete":
+        return barrier.commit(event.response, event.attempt);
     }
   }
-  if (!response) throw new Error("Provider stream ended without a final response.");
-  return response;
+  throw new Error("Provider stream ended without a final response.");
 }

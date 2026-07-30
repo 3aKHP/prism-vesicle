@@ -20,6 +20,21 @@ This document defines how Vesicle selects providers, translates normalized reque
 - Provider-specific usage details may be retained under bounded provider metadata, but raw requests, headers, URLs, credentials, and secrets must never enter that metadata.
 - Pricing and billing policy live outside adapters.
 
+## Provider-Owned Durable State
+
+- A completed normalized response may carry one owner-qualified `ProviderStateEnvelope`. The envelope binds state to a protocol, provider id, model, and endpoint fingerprint while leaving its `payload` opaque to generic core, session, and TUI code.
+- Envelope version 1 accepts JSON-safe data only and is limited to 256 KiB after JSON encoding. Cycles, non-finite numbers, class instances, unknown envelope fields, and unknown required versions fail with an actionable error rather than being stripped or coerced.
+- Core may validate, clone, persist, project, rewind, branch, and retain the envelope. Only the matching adapter may interpret its payload or decide whether it is eligible for a later request.
+- Provider-owned state must contain only the bounded continuity data required by the adapter. Credentials, authorization or request headers, full request bodies, sockets, callbacks, private identity material, and unbounded diagnostics are forbidden.
+- Normalized assistant text, tool calls/results, usage, and display thinking remain their existing authorities. Opaque state must not duplicate them as a competing host truth.
+
+## Attempt Commitment
+
+- Each logical provider generation has a host-side commit barrier. Streamed tool-call candidates remain attempt-local and cannot reach Agent Loop dispatch until a structurally valid terminal response commits that attempt.
+- A discarded or prematurely ended attempt publishes no tool calls or provider-owned state. Its pending candidates are removed, and a later retry begins a distinct attempt.
+- When an adapter reports pending candidates, the terminal response must contain the same ordered calls. A mismatch fails closed. The terminal response remains the sole authority for committed tool calls and durable state.
+- Non-streaming responses cross the same commit boundary before Agent Loop observes them. Tool permissions and execution continue only after the committed normalized response returns.
+
 ## Transport
 
 - Provider HTTP calls share one retry policy under `providers/shared`.

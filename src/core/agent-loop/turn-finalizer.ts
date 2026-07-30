@@ -5,6 +5,7 @@ import { withExecutionRound } from "../session/store";
 import { validateContent } from "../validators/registry";
 import type { AgentLoopEvent, RunPromptResult, ValidatorOutcome } from "./types";
 import type { QualityOutcome } from "../quality";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 
 export async function finalizeTurn(options: {
   response: VesicleResponse;
@@ -19,11 +20,13 @@ export async function finalizeTurn(options: {
   const { response } = options;
   let assistantRecordUuid: string | undefined;
   if ((response.toolCalls?.length ?? 0) === 0) {
+    const providerState = response.providerState ? cloneProviderStateEnvelope(response.providerState) : undefined;
     options.messages.push({
       role: "assistant",
       content: response.content,
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
       ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
+      ...(providerState ? { providerState: cloneProviderStateEnvelope(providerState) } : {}),
     });
     const record = await options.session.append({
       role: "assistant",
@@ -35,6 +38,7 @@ export async function finalizeTurn(options: {
         ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
         ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
         ...(response.usage ? { usage: response.usage } : {}),
+        ...(providerState ? { providerState } : {}),
         ...(options.requestEstimateTokens !== undefined ? { requestEstimateTokens: options.requestEstimateTokens } : {}),
       }),
     });

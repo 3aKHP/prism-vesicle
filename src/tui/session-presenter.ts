@@ -4,6 +4,7 @@ import type { VesicleMessage } from "../providers/shared/types";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
 import { renderResumedToolResultSummary } from "./tool-summary";
 import type { AgentCardState, Message } from "./types";
+import { cloneProviderStateEnvelope } from "../providers/shared/state";
 
 export function unresolvedToolCalls(messages: ResumedMessage[], activeToolCallId: string) {
   const answered = new Set(messages.flatMap((message) => message.toolCallId ? [message.toolCallId] : []));
@@ -25,6 +26,7 @@ export function vesicleMessagesFromResumed(messages: ResumedMessage[]): VesicleM
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+    ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images.map((image) => ({ ...image })) } : {}),
   }));
 }

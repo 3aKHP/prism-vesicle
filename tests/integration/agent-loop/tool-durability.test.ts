@@ -3,13 +3,51 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolvePermission, runPrompt } from "../../../src/core/agent-loop/run";
 import type { AgentLoopEvent } from "../../../src/core/agent-loop/run";
-import { loadSessionSnapshot } from "../../../src/core/session/store";
+import { listSessions, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);
 afterEach(restoreAgentLoopTestState);
 
 describe("agent loop: tool durability", () => {
+  test("does not dispatch a completed streamed tool call before the terminal commit", async () => {
+    const rootDir = await createPromptRoot();
+    const call = {
+      id: "call-commit-barrier",
+      type: "function",
+      function: {
+        name: "write_file",
+        arguments: JSON.stringify({ path: "workspace/commit-barrier.md", content: "written once" }),
+      },
+    };
+    let request = 0;
+    globalThis.fetch = (async () => {
+      request += 1;
+      if (request === 1) {
+        return new Response(`data: ${JSON.stringify({
+          id: "attempt-before-terminal",
+          choices: [{ delta: { tool_calls: [{ index: 0, ...call }] }, finish_reason: "tool_calls" }],
+        })}\n\n`);
+      }
+      if (request === 2) {
+        return Response.json({ id: "attempt-committed", choices: [{ message: { content: "", tool_calls: [call] } }] });
+      }
+      return Response.json({ id: "attempt-final", choices: [{ message: { content: "done" } }] });
+    }) as unknown as typeof fetch;
+
+    await expect(runPrompt({ input: "write", rootDir })).rejects.toThrow("ended before [DONE]");
+    await expect(stat(join(rootDir, "workspace", "commit-barrier.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    const failedSession = (await listSessions(rootDir))[0]!;
+    const failedRecords = await loadSessionRecords(rootDir, failedSession.sessionId);
+    expect(failedRecords.filter((record) => record.role === "assistant" || record.role === "tool")).toEqual([]);
+
+    const retried = await runPrompt({ input: "retry", rootDir });
+    expect(retried.kind).toBe("complete");
+    expect(await readFile(join(rootDir, "workspace", "commit-barrier.md"), "utf8")).toBe("written once");
+    const retryRecords = await loadSessionRecords(rootDir, retried.sessionId);
+    expect(retryRecords.filter((record) => record.role === "tool" && record.metadata?.toolCallId === call.id)).toHaveLength(1);
+  });
+
   test.skipIf(process.platform === "win32")("keeps a durable tool result resolved when the provider continuation fails", async () => {
     const rootDir = await createPromptRoot();
     globalThis.fetch = (async () => Response.json({

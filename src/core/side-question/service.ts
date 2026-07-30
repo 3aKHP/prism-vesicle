@@ -18,6 +18,7 @@ import type { ProviderRetryInfo, ReasoningTier, ResponseUsage, VesicleImageAttac
 import { materializeMessageImages } from "../attachments/store";
 import { createAssetResolver } from "../runtime/assets";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "./types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import { projectSideQuestionReference } from "./reference";
 
 const SIDE_QUESTION_PROMPT_PATH = "assets/prompts/shared/side-question.md";
@@ -156,6 +157,7 @@ function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+    ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images.map(({ data: _data, ...image }) => image) } : {}),
   };
 }

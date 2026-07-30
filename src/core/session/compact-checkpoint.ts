@@ -1,4 +1,5 @@
 import type { ResumedMessage } from "./store";
+import { parseProviderStateEnvelope } from "../../providers/shared/state";
 
 /**
  * The durable, versioned replacement-history checkpoint installed by every
@@ -60,6 +61,7 @@ const MESSAGE_KEYS = new Set([
   "thinkingBlocks",
   "toolCallId",
   "toolCalls",
+  "providerState",
   "toolOk",
   "toolFileEvent",
   "toolWebEvent",
@@ -81,6 +83,7 @@ const MESSAGE_KEYS_BY_ROLE: Record<ResumedMessage["role"], Set<string>> = {
     "reasoningContent",
     "thinkingBlocks",
     "toolCalls",
+    "providerState",
     "engine",
     "model",
     "usage",
@@ -236,6 +239,9 @@ function parseReplacementMessage(entry: unknown, index: number): ResumedMessage 
   copyOptionalBoolean(entry, message as unknown as Record<string, unknown>, "toolOk", label);
 
   if (Object.hasOwn(entry, "toolCalls")) message.toolCalls = parseToolCalls(entry.toolCalls, label);
+  if (Object.hasOwn(entry, "providerState")) {
+    message.providerState = parseProviderStateEnvelope(entry.providerState, `Session compact checkpoint ${label}.providerState`);
+  }
   if (Object.hasOwn(entry, "thinkingBlocks")) message.thinkingBlocks = parseThinkingBlocks(entry.thinkingBlocks, label);
   if (Object.hasOwn(entry, "images")) message.images = parseImages(entry.images, label);
   if (Object.hasOwn(entry, "usage")) message.usage = parseUsage(entry.usage, label);

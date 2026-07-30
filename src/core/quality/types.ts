@@ -1,6 +1,6 @@
 import type { EngineId } from "../engine/profile";
 import type { HarnessQualityMode, VerifiedHarnessPack } from "../harness/types";
-import type { ProviderThinkingBlock, ResponseUsage } from "../../providers/shared/types";
+import type { ProviderStateEnvelope, ProviderThinkingBlock, ResponseUsage } from "../../providers/shared/types";
 
 export type QualityCandidateType =
   | "runtime.prose"
@@ -305,6 +305,7 @@ export type QualityDecisionCandidate = {
   toolCalls: Array<{ id: string; name: string; arguments: string }>;
   reasoningContent?: string;
   thinkingBlocks?: ProviderThinkingBlock[];
+  providerState?: ProviderStateEnvelope;
   finishReason?: string;
   usage?: ResponseUsage;
 };

@@ -1,4 +1,5 @@
 import type { ResponseUsage, VesicleMessage, VesicleResponse } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import type { PermissionDecisionSource, PermissionMode } from "../permissions";
 import {
   evaluateBoundQuality,
@@ -58,11 +59,13 @@ export async function recordChildResponse(
   const calls = response.toolCalls ?? [];
   if (calls.length === 0) state.qualityProseParts.push(...qualityCandidateParts(response));
   state.toolUses += calls.length;
+  const providerState = response.providerState ? cloneProviderStateEnvelope(response.providerState) : undefined;
   state.messages.push({
     role: "assistant",
     content: response.content,
     ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
     ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
+    ...(providerState ? { providerState: cloneProviderStateEnvelope(providerState) } : {}),
     ...(calls.length > 0 ? { toolCalls: calls } : {}),
   });
   await session.append({
@@ -74,6 +77,7 @@ export async function recordChildResponse(
       handle,
       providerResponseId: response.id,
       ...(response.usage ? { usage: response.usage } : {}),
+      ...(providerState ? { providerState } : {}),
       ...(calls.length > 0 ? { toolCalls: calls } : {}),
     },
   });

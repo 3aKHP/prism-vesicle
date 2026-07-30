@@ -1,4 +1,5 @@
 import type { VesicleMessage } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import {
   type QualityDecisionPoint,
   type QualityEvent,
@@ -139,7 +140,12 @@ async function appendRejectedCandidate(
   const answered = durableAnsweredCallIds(snapshot);
   const records: Parameters<typeof session.appendMany>[0] = [];
   if (!calls.every((call) => recordedAssistantCalls.has(call.id))) {
-    messages.push({ role: "assistant", content: point.candidate.content, toolCalls: calls });
+    messages.push({
+      role: "assistant",
+      content: point.candidate.content,
+      ...(point.candidate.providerState ? { providerState: cloneProviderStateEnvelope(point.candidate.providerState) } : {}),
+      toolCalls: calls,
+    });
     records.push({
       role: "assistant",
       content: point.candidate.content,
@@ -147,6 +153,7 @@ async function appendRejectedCandidate(
         kind: "quality-rejected-candidate",
         engine: point.request.producer,
         providerResponseId: point.candidate.responseId,
+        ...(point.candidate.providerState ? { providerState: cloneProviderStateEnvelope(point.candidate.providerState) } : {}),
         warningId: point.warning.id,
         toolCalls: calls,
       },
@@ -304,6 +311,7 @@ function assistantCandidateRecord(candidate: QualityDecisionPoint["candidate"]) 
       providerResponseId: candidate.responseId,
       ...(candidate.reasoningContent ? { reasoningContent: candidate.reasoningContent } : {}),
       ...(candidate.thinkingBlocks ? { thinkingBlocks: candidate.thinkingBlocks } : {}),
+      ...(candidate.providerState ? { providerState: cloneProviderStateEnvelope(candidate.providerState) } : {}),
       ...(candidate.usage ? { usage: candidate.usage } : {}),
       ...(candidate.toolCalls.length > 0 ? { toolCalls: candidate.toolCalls } : {}),
     },
