@@ -159,7 +159,7 @@ describe("OpenAI Responses WebSocket transport", () => {
     session.close(1000, "host teardown");
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError", message: "host teardown" });
-    expect(socket.closeCount).toBeGreaterThanOrEqual(1);
+    expect(socket.closeCount).toBe(1);
   });
 
   test("discards text and tool candidates from a broken attempt before retrying", async () => {
@@ -428,14 +428,16 @@ describe("OpenAI Responses WebSocket transport", () => {
 
   test("cancellation closes the socket without retrying", async () => {
     let sockets = 0;
+    let activeSocket: FakeSocket | undefined;
     const controller = new AbortController();
     const factory: ResponsesSocketFactory = () => {
       sockets += 1;
-      return new FakeSocket((message, socket) => {
+      activeSocket = new FakeSocket((message, socket) => {
         const payload = JSON.parse(message) as Record<string, unknown>;
         if (payload.generate === false) socket.completed("warm_abort");
         else queueMicrotask(() => controller.abort("stop"));
       });
+      return activeSocket;
     };
     const events: ProviderStreamEvent[] = [];
     const canceled = (async () => {
@@ -445,6 +447,7 @@ describe("OpenAI Responses WebSocket transport", () => {
     })();
     await expect(canceled).rejects.toMatchObject({ name: "AbortError", message: "stop" });
     expect(sockets).toBe(1);
+    expect(activeSocket?.closeCount).toBe(1);
     expect(events).toEqual([]);
   });
 

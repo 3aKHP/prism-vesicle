@@ -104,7 +104,6 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     for (let retry = 0; ; retry++) {
       const attempt = retry + 1;
       try {
-        session.prepareForRequest();
         let continuation = findResponsesContinuation(stableRequest, this.requestContext(), session.lastResponseId);
         if (session.lastResponseId && !continuation) session.clearContinuation();
         if (!continuation && session.needsPrewarm()) {

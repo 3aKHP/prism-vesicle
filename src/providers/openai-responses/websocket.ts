@@ -288,10 +288,7 @@ function receiveTerminal(
     };
     const closed = () => finishReject(failure("Responses WebSocket closed before a terminal event.", providerId));
     const errored = () => finishReject(failure("Responses WebSocket failed before a terminal event.", providerId));
-    const aborted = () => {
-      finishReject(abortError(signal));
-      socket.close(1000, "aborted");
-    };
+    const aborted = () => finishReject(abortError(signal));
     const finishReject = (error: unknown) => {
       if (settled) return;
       settled = true;
