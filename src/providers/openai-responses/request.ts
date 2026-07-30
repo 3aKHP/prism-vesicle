@@ -1,5 +1,6 @@
 import type { ToolDefinition } from "../../core/tools";
 import type { ResponsesProfile } from "../../config/env";
+import { ProviderError } from "../shared/errors";
 import { parseProviderStateEnvelope, type ProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderCompactRequest, type ReasoningTier, type VesicleMessage, type VesicleRequest } from "../shared/types";
 import { validateResponsesCompactItems, validateResponsesOutputItems } from "./items";
@@ -22,7 +23,7 @@ export function toResponsesBody(
       input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
       tools: tools?.length ? tools : undefined,
       tool_choice: tools?.length ? "auto" : undefined,
-      reasoning: reasoningControl(request.generation?.reasoningTier, false),
+      reasoning: reasoningControl(request.generation?.reasoningTier, false, context.providerId),
       stream,
       max_output_tokens: request.generation?.maxTokens,
       temperature: request.generation?.temperature,
@@ -36,7 +37,7 @@ export function toResponsesBody(
     tools: tools?.length ? tools : undefined,
     tool_choice: tools?.length ? "auto" : undefined,
     parallel_tool_calls: true,
-    reasoning: reasoningControl(request.generation?.reasoningTier, true),
+    reasoning: reasoningControl(request.generation?.reasoningTier, true, context.providerId),
     store: false,
     stream,
     stream_options: stream ? { include_obfuscation: false } : undefined,
@@ -253,7 +254,11 @@ function toResponsesTool(tool: ToolDefinition): Record<string, unknown> {
   };
 }
 
-function reasoningControl(tier: ReasoningTier | undefined, summary: boolean): Record<string, unknown> | undefined {
+function reasoningControl(
+  tier: ReasoningTier | undefined,
+  summary: boolean,
+  providerId: string,
+): Record<string, unknown> | undefined {
   if (!tier) return undefined;
   if (tier === "off") return summary ? undefined : { effort: "none" };
   let effort: "low" | "medium" | "high" | "xhigh";
@@ -270,7 +275,9 @@ function reasoningControl(tier: ReasoningTier | undefined, summary: boolean): Re
       effort = summary ? "xhigh" : "high";
       break;
     default:
-      throw new Error(`Unsupported reasoning tier: ${String(tier)}.`);
+      throw new ProviderError(`Unsupported reasoning tier: ${String(tier)}.`, {
+        kind: "malformed_response", providerId,
+      });
   }
   return { effort, ...(summary ? { summary: "auto" } : {}) };
 }

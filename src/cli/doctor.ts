@@ -1,4 +1,5 @@
 import { inspectProviderConfig, loadConfigForSelection, loadUserConfigEnvironment } from "../config/providers";
+import type { ResponsesProfile } from "../config/env";
 import { loadExperimentalQualitySettings } from "../config/quality";
 import { inspectMcpConfig } from "../mcp/registry";
 import { inspectAssets } from "./assets";
@@ -86,10 +87,13 @@ export async function runDoctor(): Promise<void> {
   console.log(`Missing: ${config.missing.length > 0 ? config.missing.join(", ") : "none"}`);
 }
 
-function responsesTier(profile: string | undefined): string {
-  if (profile === "mimo-subset-2026-07-30") return "third-party compatible subset";
-  if (profile === "codex-beta-2026-02-06") return "frozen Codex application profile";
-  if (profile === "codex-http-relay") return "narrow third-party relay profile";
-  if (profile === "openai-public") return "OpenAI public conformance profile";
-  return "unknown";
+const responsesTierLabels: Record<ResponsesProfile, string> = {
+  "openai-public": "OpenAI public conformance profile",
+  "codex-http-relay": "narrow third-party relay profile",
+  "codex-beta-2026-02-06": "frozen Codex application profile",
+  "mimo-subset-2026-07-30": "third-party compatible subset",
+};
+
+function responsesTier(profile: ResponsesProfile | undefined): string {
+  return profile ? responsesTierLabels[profile] : "unknown";
 }

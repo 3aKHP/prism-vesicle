@@ -165,6 +165,7 @@ describe("config loading", () => {
       responsesProfile: "mimo-subset-2026-07-30",
       responsesTransport: "http",
       authMethod: "x-api-key",
+      apiKey: "secret",
     });
 
     const unsupported = valid.flatMap((line) => line === "      - mimo-v2.5-pro"
