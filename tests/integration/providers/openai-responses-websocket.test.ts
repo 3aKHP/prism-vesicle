@@ -1,8 +1,14 @@
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { VesicleConfig } from "../../../src/config/env";
+import { bootstrapTurn } from "../../../src/core/agent-loop/turn-bootstrap";
+import { runLoop } from "../../../src/core/agent-loop/turn-loop";
 import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/adapter";
 import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
 import { toResponsesWebSocketMessage } from "../../../src/providers/openai-responses/request";
+import { readResponsesStream } from "../../../src/providers/openai-responses/stream";
 import type { ResponsesSocket, ResponsesSocketFactory } from "../../../src/providers/openai-responses/websocket";
 import {
   closeAllResponsesWebSocketSessions,
@@ -13,7 +19,13 @@ import {
 import type { ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../../../src/providers/shared/types";
 import { bytesFromChunks } from "../../support/providers/sse";
 import captures from "../../fixtures/openai-responses/request-captures-v1.json";
+import eventCaptures from "../../fixtures/openai-responses/event-captures-v1.json";
 import { compareStructuredCapture, requireJsonValue } from "../../support/providers/responses-conformance";
+import {
+  configureTestProviderEnv,
+  createPromptRoot,
+  restoreAgentLoopTestState,
+} from "../agent-loop/fixtures/agent-loop";
 
 afterEach(() => resetResponsesWebSocketSessionsForTest());
 
@@ -103,7 +115,7 @@ describe("OpenAI Responses WebSocket transport", () => {
       return new FakeSocket((message, socket) => {
         const payload = JSON.parse(message) as Record<string, unknown>;
         sent.push(payload);
-        socket.completed(payload.generate === false ? "warm_beta" : "resp_beta", "ok");
+        socket.completed(payload.generate === false ? "warm_beta" : "resp_beta", payload.generate === false ? "" : "ok");
       });
     };
     const adapter = websocketAdapter(factory, { responsesProfile: "codex-beta-2026-02-06" });
@@ -133,7 +145,7 @@ describe("OpenAI Responses WebSocket transport", () => {
 
     expect(second).not.toBe(first);
     expect(sockets[0].closeCount).toBe(1);
-    await expect(pending).rejects.toThrow("connection failed before opening");
+    await expect(pending).rejects.toThrow("connection closed before opening: provider owner changed");
   });
 
   test("discards text and tool candidates from a broken attempt before retrying", async () => {
@@ -237,6 +249,119 @@ describe("OpenAI Responses WebSocket transport", () => {
     }
   });
 
+  test("does not grant the HTTP downgrade a second retry budget", async () => {
+    const originalFetch = globalThis.fetch;
+    let sockets = 0;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      return new Response("fallback failed", { status: 500 });
+    }) as unknown as typeof fetch;
+    const events: ProviderStreamEvent[] = [];
+    try {
+      const adapter = websocketAdapter(() => {
+        sockets += 1;
+        return new FakeSocket((_message, socket) => socket.close());
+      });
+      await expect((async () => {
+        for await (const item of adapter.stream(request([{ role: "user", content: "fallback failure" }]))) {
+          events.push(item);
+        }
+      })()).rejects.toThrow("Provider request failed (500)");
+      expect(sockets).toBe(6);
+      expect(fetches).toBe(1);
+      expect(events.filter((item) => item.type === "attempt_discarded")).toHaveLength(6);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("rejects prewarm output instead of silently continuing from it", async () => {
+    let sends = 0;
+    const adapter = websocketAdapter(() => new FakeSocket((_message, socket) => {
+      sends += 1;
+      socket.terminal({
+        id: "resp_bad_warm", status: "completed",
+        output: [{ type: "function_call", call_id: "call_bad", name: "write_file", arguments: "{}" }],
+      });
+    }));
+
+    await expect(complete(adapter, request([{ role: "user", content: "prewarm" }])))
+      .rejects.toThrow("prewarm returned unexpected output Items");
+    expect(sends).toBe(1);
+  });
+
+  test("normalizes the canonical event fixture identically over SSE and WebSocket", async () => {
+    const capture = eventCaptures.captures.find((item) => item.id === "completed-function-call");
+    if (!capture?.events) throw new Error("Missing completed function-call event capture.");
+    const fixtureEvents = capture.events.map((item) => {
+      const { sequence, ...rest } = item;
+      return { sequence_number: sequence, ...rest };
+    });
+    const factory: ResponsesSocketFactory = () => new FakeSocket((message, socket) => {
+      const payload = JSON.parse(message) as Record<string, unknown>;
+      if (payload.generate === false) socket.completed("resp_fixture_warm");
+      else for (const item of fixtureEvents) socket.message(item);
+    });
+    const wsEvents = await collect(websocketAdapter(factory).stream(request([{ role: "user", content: "fixture" }])));
+    const sseEvents = await collect(readResponsesStream(responseStream(fixtureEvents), {
+      requestId: "request-1", providerId: "openai", model: "gpt-5.6",
+      endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+      profile: "openai-public",
+    }));
+
+    expect(completedResponse(wsEvents)).toEqual(completedResponse(sseEvents));
+  });
+
+  test("completes a real Agent Loop WebSocket tool round on one socket", async () => {
+    await configureTestProviderEnv();
+    try {
+      const rootDir = await createPromptRoot();
+      let sockets = 0;
+      const sent: Array<Record<string, unknown>> = [];
+      const factory: ResponsesSocketFactory = () => {
+        sockets += 1;
+        return new FakeSocket((message, socket) => {
+          const payload = JSON.parse(message) as Record<string, unknown>;
+          sent.push(payload);
+          if (payload.generate === false) return socket.completed("resp_agent_warm");
+          if (sent.length === 2) {
+            socket.terminal({
+              id: "resp_agent_call", status: "completed",
+              output: [{
+                type: "function_call", call_id: "call_agent_write", name: "write_file",
+                arguments: JSON.stringify({ path: "workspace/ws-agent.md", content: "written once" }),
+              }],
+            });
+            return;
+          }
+          socket.terminal(responseBody("resp_agent_final", "done"));
+        });
+      };
+      const bootstrapped = await bootstrapTurn({ input: "write once", rootDir });
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "test", baseUrl: "https://provider.test/v1",
+        model: "test-model", apiKey: "test-key", responsesProfile: "openai-public",
+        responsesTransport: "websocket",
+      }, {
+        sessionId: bootstrapped.session.sessionId,
+        webSocketFactory: factory,
+        retryDelay: async () => undefined,
+      });
+      const result = await runLoop({ ...bootstrapped, provider: adapter });
+
+      expect(result.kind).toBe("complete");
+      expect(sockets).toBe(1);
+      expect(await readFile(join(rootDir, "workspace", "ws-agent.md"), "utf8")).toBe("written once");
+      expect(sent[2]).toMatchObject({
+        previous_response_id: "resp_agent_call",
+        input: [{ type: "function_call_output", call_id: "call_agent_write" }],
+      });
+    } finally {
+      await restoreAgentLoopTestState();
+    }
+  });
+
   test("cancellation closes the socket without retrying", async () => {
     let sockets = 0;
     const controller = new AbortController();
@@ -273,6 +398,82 @@ describe("OpenAI Responses WebSocket transport", () => {
     closeAllResponsesWebSocketSessions();
     await expect(pending).rejects.toThrow("closed before a terminal event");
     expect(sockets[0].closeCount).toBe(1);
+  });
+
+  test("Bun's native client sends handshake headers without a cast", async () => {
+    const handshake = { authorization: null as string | null };
+    const server = Bun.serve({
+      port: 0,
+      fetch(requestValue, bunServer) {
+        handshake.authorization = requestValue.headers.get("authorization");
+        if (bunServer.upgrade(requestValue)) return undefined;
+        return new Response("upgrade required", { status: 426 });
+      },
+      websocket: {
+        message(socket) {
+          socket.send(JSON.stringify(event(0, "response.completed", {
+            response: responseBody("resp_native", "native"),
+          })));
+        },
+      },
+    });
+    try {
+      const session = responsesWebSocketSession({
+        sessionId: "native", owner: "owner", baseUrl: `http://127.0.0.1:${server.port}/v1`,
+        providerId: "openai", headers: { authorization: "Bearer native-key" },
+      });
+      await session.request({ type: "response.create" });
+      expect(handshake.authorization).toBe("Bearer native-key");
+    } finally {
+      closeAllResponsesWebSocketSessions();
+      server.stop(true);
+    }
+  });
+
+  test("closes a failed opening socket even when it never emits close", async () => {
+    const socket = new FakeSocket(() => undefined, false);
+    const session = responsesWebSocketSession(sessionOptions("open-error", "owner", () => socket));
+    const pending = session.request({ type: "response.create" });
+    socket.error();
+
+    await expect(pending).rejects.toThrow("connection failed before opening");
+    expect(socket.closeCount).toBe(1);
+  });
+
+  test.skipIf(process.platform === "win32")("SIGTERM releases an active native socket and exits", async () => {
+    let opened!: () => void;
+    const socketOpened = new Promise<void>((resolveOpen) => { opened = resolveOpen; });
+    const server = Bun.serve({
+      port: 0,
+      fetch(requestValue, bunServer) {
+        if (bunServer.upgrade(requestValue)) return undefined;
+        return new Response("upgrade required", { status: 426 });
+      },
+      websocket: {
+        open() { opened(); },
+        message() { /* Keep the request in flight until the process signal. */ },
+      },
+    });
+    const moduleUrl = pathToFileURL(resolve(import.meta.dir, "../../../src/providers/openai-responses/websocket.ts")).href;
+    const baseUrl = `http://127.0.0.1:${server.port}/v1`;
+    const script = `import { responsesWebSocketSession } from ${JSON.stringify(moduleUrl)};\n`
+      + `const session = responsesWebSocketSession({sessionId:"child",owner:"owner",baseUrl:${JSON.stringify(baseUrl)},providerId:"test",headers:{authorization:"Bearer test"}});\n`
+      + "void session.request({type:\"response.create\"});";
+    const child = Bun.spawn([process.execPath, "-e", script], { stdout: "ignore", stderr: "ignore" });
+    try {
+      await Promise.race([
+        socketOpened,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("child socket did not open")), 2_000)),
+      ]);
+      child.kill("SIGTERM");
+      await expect(Promise.race([
+        child.exited,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("child did not exit")), 2_000)),
+      ])).resolves.toBe(143);
+    } finally {
+      child.kill("SIGKILL");
+      server.stop(true);
+    }
   });
 
   test("rotates before the 60-minute limit and clears connection-local continuation", async () => {
@@ -339,8 +540,16 @@ class FakeSocket implements ResponsesSocket {
     this.emit("message", { data: JSON.stringify(value) });
   }
 
+  error(): void {
+    this.emit("error", {});
+  }
+
   completed(id: string, text = "", sequence = 0): void {
     queueMicrotask(() => this.message(event(sequence, "response.completed", { response: responseBody(id, text) })));
+  }
+
+  terminal(body: Record<string, unknown>, sequence = 0): void {
+    queueMicrotask(() => this.message(event(sequence, "response.completed", { response: body })));
   }
 
   private emit(type: string, eventValue: { data?: unknown }): void {
@@ -408,6 +617,12 @@ async function collect(iterable: AsyncIterable<ProviderStreamEvent>): Promise<Pr
 async function complete(adapter: OpenAIResponsesAdapter, input: VesicleRequest): Promise<VesicleResponse> {
   const events = await collect(adapter.stream(input));
   const completed = [...events].reverse().find((eventValue) => eventValue.type === "complete");
+  if (!completed || completed.type !== "complete") throw new Error("Missing completed response.");
+  return completed.response;
+}
+
+function completedResponse(events: ProviderStreamEvent[]): VesicleResponse {
+  const completed = [...events].reverse().find((item) => item.type === "complete");
   if (!completed || completed.type !== "complete") throw new Error("Missing completed response.");
   return completed.response;
 }

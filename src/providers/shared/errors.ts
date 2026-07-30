@@ -11,6 +11,8 @@ export type ProviderErrorOptions = {
   status?: number;
   retryable?: boolean;
   attempts?: number;
+  /** Provider-owned machine-readable error code; never inferred from prose. */
+  code?: string;
   cause?: unknown;
 };
 
@@ -20,6 +22,7 @@ export class ProviderError extends Error {
   readonly status?: number;
   readonly retryable: boolean;
   readonly attempts?: number;
+  readonly code?: string;
 
   constructor(message: string, options: ProviderErrorOptions) {
     super(message, { cause: options.cause });
@@ -29,6 +32,7 @@ export class ProviderError extends Error {
     this.status = options.status;
     this.retryable = options.retryable ?? false;
     this.attempts = options.attempts;
+    this.code = options.code;
   }
 }
 

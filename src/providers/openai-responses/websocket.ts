@@ -32,6 +32,7 @@ export class ResponsesWebSocketSession {
   private socket?: ResponsesSocket;
   private pendingSocket?: ResponsesSocket;
   private connectPromise?: Promise<ResponsesSocket>;
+  private cancelConnect?: (reason: string) => void;
   private inFlight = false;
   private openedAt = 0;
   private prewarmRequired = true;
@@ -90,12 +91,15 @@ export class ResponsesWebSocketSession {
   close(code = 1000, reason = "session close"): void {
     const socket = this.socket;
     const pendingSocket = this.pendingSocket;
+    const cancelConnect = this.cancelConnect;
     this.socket = undefined;
     this.pendingSocket = undefined;
     this.connectPromise = undefined;
+    this.cancelConnect = undefined;
     this.openedAt = 0;
     this.lastResponseId = undefined;
     this.prewarmRequired = true;
+    cancelConnect?.(reason);
     socket?.close(code, reason);
     if (pendingSocket && pendingSocket !== socket) pendingSocket.close(code, reason);
   }
@@ -112,23 +116,35 @@ export class ResponsesWebSocketSession {
     this.pendingSocket = socket;
     this.connectPromise = new Promise((resolve, reject) => {
       const opened = () => {
+        if (this.pendingSocket !== socket) {
+          cleanup();
+          socket.close(1000, "stale connection");
+          reject(failure("Responses WebSocket connection was closed before opening.", this.options.providerId));
+          return;
+        }
         cleanup();
         this.pendingSocket = undefined;
         this.connectPromise = undefined;
+        this.cancelConnect = undefined;
         this.socket = socket;
         this.openedAt = this.now();
         resolve(socket);
       };
       const failed = () => {
         cleanup();
-        this.pendingSocket = undefined;
-        this.connectPromise = undefined;
+        if (this.pendingSocket === socket) {
+          this.pendingSocket = undefined;
+          this.connectPromise = undefined;
+          this.cancelConnect = undefined;
+        }
+        socket.close(1000, "connection failed");
         reject(failure("Responses WebSocket connection failed before opening.", this.options.providerId));
       };
       const aborted = () => {
         cleanup();
         this.pendingSocket = undefined;
         this.connectPromise = undefined;
+        this.cancelConnect = undefined;
         socket.close(1000, "aborted");
         reject(abortError(signal));
       };
@@ -137,6 +153,10 @@ export class ResponsesWebSocketSession {
         socket.removeEventListener("error", failed);
         socket.removeEventListener("close", failed);
         signal?.removeEventListener("abort", aborted);
+      };
+      this.cancelConnect = (reason) => {
+        cleanup();
+        reject(failure(`Responses WebSocket connection closed before opening: ${reason}.`, this.options.providerId));
       };
       socket.addEventListener("open", opened, { once: true });
       socket.addEventListener("error", failed, { once: true });
@@ -193,7 +213,13 @@ export function responsesWebSocketUrl(baseUrl: string): string {
 }
 
 function defaultSocketFactory(url: string, headers: Record<string, string>): ResponsesSocket {
-  return new WebSocket(url, { headers } as never) as unknown as ResponsesSocket;
+  // This repository includes lib.dom for browser-shaped types, whose standard
+  // constructor hides Bun's documented WebSocketOptions overload. Name that
+  // Bun-native overload explicitly instead of casting the options to `never`.
+  const BunWebSocket = WebSocket as unknown as {
+    new(url: string, options: Bun.WebSocketOptions): WebSocket;
+  };
+  return new BunWebSocket(url, { headers }) as unknown as ResponsesSocket;
 }
 
 function receiveTerminal(
@@ -267,7 +293,15 @@ function abortError(signal?: AbortSignal): DOMException {
 function installExitHook(): void {
   if (exitHookInstalled) return;
   exitHookInstalled = true;
-  process.once("beforeExit", () => {
-    closeAllResponsesWebSocketSessions();
+  const shutdown = () => closeAllResponsesWebSocketSessions();
+  process.once("beforeExit", shutdown);
+  process.once("exit", shutdown);
+  process.once("SIGINT", () => {
+    shutdown();
+    process.exit(130);
+  });
+  process.once("SIGTERM", () => {
+    shutdown();
+    process.exit(143);
   });
 }

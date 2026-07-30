@@ -1,7 +1,12 @@
 import { createSignal, type Accessor, type Setter } from "solid-js";
 import type { ModelCapabilities, ModelLimits } from "../config/env";
 import { loadPermissionSettings } from "../config/permissions";
-import { inspectProviderConfig, type ProviderRegistry, type ProviderSelection } from "../config/providers";
+import {
+  inspectProviderConfig,
+  type ProviderConfigStatus,
+  type ProviderRegistry,
+  type ProviderSelection,
+} from "../config/providers";
 import { inspectMcpConfig } from "../mcp/registry";
 import type { ReasoningTier } from "../providers/shared/types";
 import type { PermissionMode } from "../core/permissions";
@@ -29,6 +34,9 @@ export type ProviderConfigControllerOptions = {
   activeModel: Accessor<string>;
   setStatus: Setter<string>;
   recordActivity: (entry: ActivityEntry) => void;
+  /** Release session-scoped provider resources before config identity changes. */
+  closeActiveProviderSession?: () => void;
+  inspectProvider?: (selection?: Partial<ProviderSelection>) => Promise<ProviderConfigStatus>;
 };
 
 export function createProviderState(dangerouslySkipPermissions: boolean) {
@@ -77,13 +85,15 @@ export function createProviderConfigController(options: ProviderConfigController
   let permissionSettingsLoad: Promise<void> | null = null;
 
   async function refreshProviderConfig(selection?: Partial<ProviderSelection>): Promise<void> {
-    const inspected = await inspectProviderConfig(selection);
+    const inspected = await (options.inspectProvider ?? inspectProviderConfig)(selection);
+    options.closeActiveProviderSession?.();
     applyInspectedProvider(inspected);
     options.recordActivity({ kind: "provider", text: `active ${inspected.providerId}/${inspected.model} (${inspected.registry.source})` });
   }
 
   async function applyProviderSelection(selection: Partial<ProviderSelection>): Promise<ProviderSelection> {
-    const inspected = await inspectProviderConfig(selection);
+    const inspected = await (options.inspectProvider ?? inspectProviderConfig)(selection);
+    options.closeActiveProviderSession?.();
     applyInspectedProvider(inspected);
     options.recordActivity({ kind: "provider", text: `switched to ${inspected.providerId}/${inspected.model}` });
     return { provider: inspected.providerId, model: inspected.model };

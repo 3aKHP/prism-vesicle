@@ -370,6 +370,10 @@ export function App(props: AppProps = {}) {
     activeModel,
     setStatus,
     recordActivity,
+    closeActiveProviderSession: () => {
+      const id = sessionId();
+      if (id) closeProviderSession(id);
+    },
   });
   const {
     activeGeneration,

@@ -41,8 +41,11 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     yield* this.streamHttp(request);
   }
 
-  private async *streamHttp(request: VesicleRequest, attemptOffset = 0): AsyncIterable<ProviderStreamEvent> {
-    const maxRetries = 5;
+  private async *streamHttp(
+    request: VesicleRequest,
+    attemptOffset = 0,
+    maxRetries = 5,
+  ): AsyncIterable<ProviderStreamEvent> {
     for (let retry = 0; ; retry++) {
       const attempt = attemptOffset + retry + 1;
       try {
@@ -115,6 +118,12 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
               kind: "malformed_response", providerId: this.config.providerId,
             });
           }
+          const prewarmBody = completed.response.raw as ResponsesBody | undefined;
+          if (!prewarmBody || prewarmBody.output?.length !== 0) {
+            throw new ProviderError("Responses WebSocket prewarm returned unexpected output Items.", {
+              kind: "malformed_response", providerId: this.config.providerId,
+            });
+          }
           session.markCompleted(completed.response.id);
           continuation = {
             responseId: completed.response.id,
@@ -139,14 +148,16 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           session.resetConnection("request canceled");
           throw error;
         }
-        const missingContinuation = String(error).includes("previous_response_not_found");
+        const missingContinuation = error instanceof ProviderError && error.code === "previous_response_not_found";
         session.resetConnection("request recovery");
         if (!missingContinuation && !isRetryableResponsesFailure(error)) throw error;
         yield { type: "attempt_started", attempt };
         yield { type: "attempt_discarded", attempt };
         if (retry >= maxRetries) {
           session.disable();
-          yield* this.streamHttp(request, maxRetries + 1);
+          // The downgrade is the final attempt in this logical request. It does
+          // not receive a second HTTP retry budget after six WS attempts.
+          yield* this.streamHttp(request, maxRetries + 1, 0);
           return;
         }
         const delayMs = Math.min(4_000, 250 * (2 ** retry));

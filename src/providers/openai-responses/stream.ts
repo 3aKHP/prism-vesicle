@@ -80,7 +80,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
         });
       case "error":
         throw new ProviderError(`Provider stream failed${event.error?.code ? ` (${event.error.code})` : ""}: ${event.error?.message ?? "unknown error"}.`, {
-          kind: "stream_error", providerId: context.providerId,
+          kind: "stream_error", providerId: context.providerId, code: event.error?.code,
         });
       default:
         if (context.profile === "codex-http-relay"
