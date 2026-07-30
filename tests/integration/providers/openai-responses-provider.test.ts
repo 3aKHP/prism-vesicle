@@ -499,6 +499,22 @@ describe("OpenAI Responses typed SSE", () => {
     ]), {
       ...streamContext(), profile: "mimo-subset-2026-07-30",
     }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_summary_text.delta");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.completed", { response: {
+        id: "resp_mimo_mixed", status: "completed",
+        output: [
+          {
+            type: "reasoning",
+            content: [{ type: "reasoning_text", text: "thinking" }],
+            summary: [{ type: "summary_text", text: "OpenAI-only" }],
+          },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+        ],
+      } }),
+    ]), {
+      ...streamContext(), profile: "mimo-subset-2026-07-30",
+    }))).rejects.toThrow("unsupported MiMo reasoning content");
   });
 
   test("uses the configured MiMo x-api-key authentication header", async () => {

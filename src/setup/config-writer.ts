@@ -172,7 +172,8 @@ function mergeProvider(
     throw new Error(`Setup will not replace existing Responses provider "${current.id}" with Chat Completions. Select its Responses protocol or use a different endpoint.`);
   }
   const preset = input.providerPreset ?? presetFromProvider(current) ?? "chat-compatible";
-  const preservedResponses = input.providerPreset === undefined && current?.protocol === "openai-responses"
+  const preserveExistingResponses = input.providerPreset === undefined && current?.protocol === "openai-responses";
+  const preservedResponses = preserveExistingResponses
     ? {
         ...(current.authMethod ? { authMethod: current.authMethod } : {}),
         ...(current.userAgent ? { userAgent: current.userAgent } : {}),
@@ -187,17 +188,17 @@ function mergeProvider(
     protocol: preset === "chat-compatible" ? "openai-chat-compatible" : "openai-responses",
     baseUrl,
     apiKeyEnv,
-    ...(preset === "openai-responses"
-      ? { responsesProfile: "openai-public" as const, responsesTransport: "http" as const }
-      : {}),
-    ...(preset === "mimo-responses"
-      ? {
-          authMethod: "x-api-key" as const,
-          responsesProfile: "mimo-subset-2026-07-30" as const,
-          responsesTransport: "http" as const,
-        }
-      : {}),
-    ...preservedResponses,
+    ...(preserveExistingResponses
+      ? preservedResponses
+      : preset === "openai-responses"
+        ? { responsesProfile: "openai-public" as const, responsesTransport: "http" as const }
+        : preset === "mimo-responses"
+          ? {
+              authMethod: "x-api-key" as const,
+              responsesProfile: "mimo-subset-2026-07-30" as const,
+              responsesTransport: "http" as const,
+            }
+          : {}),
     defaultModel: input.defaultModel,
     models,
   };

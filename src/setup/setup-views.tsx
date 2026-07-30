@@ -9,6 +9,7 @@ import {
   isSetupSecretStep,
   setupChoiceItems,
   setupMultiSelectChoices,
+  setupProviderPresetLabel,
   type SetupChoiceItem,
   type SetupInputStep,
   type SetupState,
@@ -125,7 +126,7 @@ function MultiSelectPageView(props: { state: SetupState; width: number; height: 
 function ReviewPageView(props: { state: SetupState; width: number; compact: boolean }) {
   return (
     <box flexDirection="column">
-      <text content={truncateLine(`Provider  ${props.state.providerPreset} · ${props.state.baseUrl}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
+      <text content={truncateLine(`Provider  ${setupProviderPresetLabel(props.state.providerPreset)} · ${props.state.baseUrl}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
       <text content={truncateLine(`Models    ${props.state.selectedModels.length} selected · default ${props.state.defaultModel}`, props.width)} wrapMode="none" fg={palette.textSecondary} />
       <Show when={!props.compact} fallback={
         <text content={truncateLine(`Permission ${props.state.permissionMode} · Tavily ${props.state.tavilyApiKey ? "on" : "off"} · MCP ${props.state.mcpServers.length}`, props.width)} wrapMode="none" fg={palette.textSecondary} />

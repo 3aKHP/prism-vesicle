@@ -184,6 +184,12 @@ export function setupChoiceItems(state: SetupState): SetupChoiceItem[] {
     : items;
 }
 
+export function setupProviderPresetLabel(preset: SetupProviderPreset): string {
+  if (preset === "chat-compatible") return "OpenAI-compatible Chat";
+  if (preset === "openai-responses") return "OpenAI Responses";
+  return "MiMo Responses subset";
+}
+
 function baseChoiceItems(state: SetupState): SetupChoiceItem[] {
   switch (state.step) {
     case "welcome": return [
@@ -191,9 +197,9 @@ function baseChoiceItems(state: SetupState): SetupChoiceItem[] {
       { label: "Exit", detail: "You can reopen Setup from the Start Menu" },
     ];
     case "provider-protocol": return [
-      { label: "OpenAI-compatible Chat", detail: "Broadest third-party compatibility" },
-      { label: "OpenAI Responses", detail: "Official public profile over HTTP" },
-      { label: "MiMo Responses subset", detail: "Pinned 2026-07-30 subset over HTTP" },
+      { label: setupProviderPresetLabel("chat-compatible"), detail: "Broadest third-party compatibility" },
+      { label: setupProviderPresetLabel("openai-responses"), detail: "Official public profile over HTTP" },
+      { label: setupProviderPresetLabel("mimo-responses"), detail: "Pinned 2026-07-30 subset over HTTP" },
     ];
     case "discovery-error": return [
       { label: "Retry model discovery" },
