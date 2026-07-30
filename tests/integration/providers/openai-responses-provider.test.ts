@@ -86,11 +86,64 @@ describe("OpenAI Responses request codec", () => {
           providerId: "openai",
           model: "gpt-5.2-codex",
           endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-          payload: { version: 1, responseId: "resp_1", outputItems },
+          payload: { version: 1, profile: "openai-public", responseId: "resp_1", outputItems },
         },
       }],
     }, context(), false);
     expect(body.input).toEqual(outputItems);
+  });
+
+  test("uses portable history when the Responses profile changes at the same endpoint", () => {
+    const openAIState: ProviderStateEnvelope = {
+      version: providerStateEnvelopeVersion,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.2-codex",
+      endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+      payload: { version: 1, profile: "openai-public", outputItems: [
+        { type: "reasoning", encrypted_content: "opaque", summary: [] },
+      ] },
+    };
+    const mimoState: ProviderStateEnvelope = {
+      ...openAIState,
+      payload: { version: 1, profile: "mimo-subset-2026-07-30", outputItems: [
+        { type: "reasoning", content: [{ type: "reasoning_text", text: "private" }] },
+      ] },
+    };
+
+    expect(toResponsesBody({
+      ...request(), messages: [{ role: "assistant", content: "portable OpenAI", providerState: mimoState }],
+    }, context(), false, "openai-public").input).toEqual([
+      { role: "assistant", content: "portable OpenAI" },
+    ]);
+    expect(toResponsesBody({
+      ...request(), messages: [{ role: "assistant", content: "portable MiMo", providerState: openAIState }],
+    }, context(), false, "mimo-subset-2026-07-30").input).toEqual([
+      { role: "assistant", content: "portable MiMo" },
+    ]);
+
+    const compactMarker = {
+      role: "user" as const,
+      content: "",
+      kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+      providerState: {
+        ...openAIState,
+        payload: { version: 1, profile: "openai-public", compactedInput: [
+          { type: "compaction", encrypted_content: "opaque" },
+        ] },
+      },
+    };
+    expect(toResponsesBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "portable checkpoint", kind: "compact-summary" },
+        compactMarker,
+        { role: "user", content: "continue" },
+      ],
+    }, context(), false, "mimo-subset-2026-07-30").input).toEqual([
+      { role: "user", content: "portable checkpoint" },
+      { role: "user", content: "continue" },
+    ]);
   });
 
   test("replaces portable history with an owner-compatible compact window and starts a new chain", () => {
@@ -108,7 +161,7 @@ describe("OpenAI Responses request codec", () => {
         providerId: "openai",
         model: "gpt-5.2-codex",
         endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-        payload: { version: 1, compactedInput },
+        payload: { version: 1, profile: "openai-public", compactedInput },
       },
     };
     const compactedRequest = {
@@ -181,7 +234,7 @@ describe("OpenAI Responses request codec", () => {
       expect(body).toEqual({ model: "gpt-5.2-codex", input: [] });
       expect(result.providerState).toMatchObject({
         protocol: "openai-responses",
-        payload: { version: 1, compactedInput: [
+        payload: { version: 1, profile: "openai-public", compactedInput: [
           { type: "web_search_call", action: { query: "canonical context" } },
           { type: "message" },
           { type: "compaction" },
@@ -265,7 +318,7 @@ describe("OpenAI Responses request codec", () => {
       providerId: "openai",
       model: "gpt-5.2-codex",
       endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-      payload: { version: 1, outputItems: [
+      payload: { version: 1, profile: "openai-public", outputItems: [
         { type: "function_call", call_id: "dup", name: "read_file", arguments: "{}" },
         { type: "function_call", call_id: "dup", name: "read_file", arguments: "{}" },
       ] },
@@ -309,6 +362,9 @@ describe("OpenAI Responses request codec", () => {
     }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "none" });
     expect(toResponsesBody({
       ...request(), generation: { reasoningTier: "max" },
+    }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "high" });
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "xhigh" },
     }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "high" });
   });
 });
@@ -437,6 +493,12 @@ describe("OpenAI Responses typed SSE", () => {
     await expect(collect(readResponsesStream(responseStream(events), {
       ...streamContext(), profile: "openai-public",
     }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_text.delta");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.reasoning_summary_text.delta", { delta: "thinking" }),
+    ]), {
+      ...streamContext(), profile: "mimo-subset-2026-07-30",
+    }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_summary_text.delta");
   });
 
   test("uses the configured MiMo x-api-key authentication header", async () => {
@@ -621,7 +683,7 @@ describe("OpenAI Responses typed SSE", () => {
             providerState: {
               version: 1, protocol: "openai-responses", providerId: "openai", model: "gpt-5.2-codex",
               endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-              payload: { version: 1, compactedInput },
+              payload: { version: 1, profile: "openai-public", compactedInput },
             },
           },
           { role: "user", content: "continue" },

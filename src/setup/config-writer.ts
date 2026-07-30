@@ -169,6 +169,14 @@ function mergeProvider(
   const apiKeyEnv = current?.apiKeyEnv ?? `${providerId.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}_API_KEY`;
   const existingModels = new Map(current?.models.map((model) => [model.id, model]) ?? []);
   const preset = input.providerPreset ?? presetFromProvider(current) ?? "chat-compatible";
+  const preservedResponses = input.providerPreset === undefined && current?.protocol === "openai-responses"
+    ? {
+        ...(current.authMethod ? { authMethod: current.authMethod } : {}),
+        ...(current.userAgent ? { userAgent: current.userAgent } : {}),
+        responsesProfile: current.responsesProfile,
+        responsesTransport: current.responsesTransport,
+      }
+    : {};
   const models = [...new Set(input.modelIds.map((model) => model.trim()).filter(Boolean))]
     .map((id) => existingModels.get(id) ?? { id });
   const profile: ProviderProfile = {
@@ -186,6 +194,7 @@ function mergeProvider(
           responsesTransport: "http" as const,
         }
       : {}),
+    ...preservedResponses,
     defaultModel: input.defaultModel,
     models,
   };
@@ -210,6 +219,9 @@ function presetFromProvider(provider: ProviderProfile | undefined): SetupProvide
   if (provider.protocol === "openai-chat-compatible") return "chat-compatible";
   if (provider.responsesProfile === "openai-public") return "openai-responses";
   if (provider.responsesProfile === "mimo-subset-2026-07-30") return "mimo-responses";
+  if (provider.responsesProfile === "codex-http-relay" || provider.responsesProfile === "codex-beta-2026-02-06") {
+    return "openai-responses";
+  }
   return undefined;
 }
 

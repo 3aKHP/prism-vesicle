@@ -19,7 +19,7 @@ export function toResponsesBody(
     return {
       model: request.model.model,
       instructions: request.system.join("\n\n") || undefined,
-      input: serializeResponsesInput(request.messages, request.model.model, context),
+      input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
       tools: tools?.length ? tools : undefined,
       tool_choice: tools?.length ? "auto" : undefined,
       reasoning: reasoningControl(request.generation?.reasoningTier, false),
@@ -32,7 +32,7 @@ export function toResponsesBody(
   return {
     model: request.model.model,
     instructions: request.system.join("\n\n") || undefined,
-    input: serializeResponsesInput(request.messages, request.model.model, context),
+    input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
     tools: tools?.length ? tools : undefined,
     tool_choice: tools?.length ? "auto" : undefined,
     parallel_tool_calls: true,
@@ -205,7 +205,8 @@ function nativeCompactInput(state: VesicleMessage["providerState"], model: strin
     || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
   const payload = envelope.payload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)
-    || payload.version !== 1 || !Array.isArray(payload.compactedInput)) return undefined;
+    || payload.version !== 1 || payload.profile !== (context.profile ?? "openai-public")
+    || !Array.isArray(payload.compactedInput)) return undefined;
   try {
     return validateResponsesCompactItems(payload.compactedInput as ResponsesOutputItem[], context.providerId);
   } catch {
@@ -228,7 +229,9 @@ function nativeOutputItems(state: VesicleMessage["providerState"], model: string
     || envelope.model !== model
     || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
   const payload = envelope.payload;
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1 || !Array.isArray(payload.outputItems)) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.version !== 1
+    || payload.profile !== (context.profile ?? "openai-public")) return undefined;
+  if (!Array.isArray(payload.outputItems)) {
     throw new Error("OpenAI Responses native state is malformed.");
   }
   return validateResponsesOutputItems(
@@ -251,7 +254,7 @@ function reasoningControl(tier: ReasoningTier | undefined, summary: boolean): Re
   if (!tier) return undefined;
   if (tier === "off") return summary ? undefined : { effort: "none" };
   return {
-    effort: tier === "max" ? (summary ? "xhigh" : "high") : tier,
+    effort: tier === "max" ? (summary ? "xhigh" : "high") : (!summary && tier === "xhigh" ? "high" : tier),
     ...(summary ? { summary: "auto" } : {}),
   };
 }

@@ -75,7 +75,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       providerId: this.config.providerId,
       model: request.model.model,
       endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl),
-      payload: { version: 1, compactedInput },
+      payload: { version: 1, profile: this.config.responsesProfile, compactedInput },
     });
     const usage = usageFromResponses(body.usage);
     return { providerState, ...(usage ? { usage } : {}) };

@@ -138,6 +138,17 @@ describe("config loading", () => {
       model: "gpt-test",
       apiKey: "secret",
     });
+
+    const invalid = await writeProvidersFile([
+      "default:", "  provider: responses", "  model: gpt-test", "providers:",
+      "  responses:", "    protocol: openai-responses", "    baseUrl: https://api.example.test/v1",
+      "    apiKeyEnv: RESPONSES_KEY", "    authMethod: x-api-key",
+      "    responsesProfile: openai-public", "    responsesTransport: http",
+      "    models:", "      - gpt-test", "",
+    ], ["RESPONSES_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, invalid.env)).rejects.toThrow(
+      "can use authMethod x-api-key only with mimo-subset-2026-07-30",
+    );
   });
 
   test("loads the frozen MiMo Responses subset and rejects unsupported capabilities", async () => {

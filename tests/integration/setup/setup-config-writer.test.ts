@@ -111,6 +111,47 @@ describe("guided Setup configuration writer", () => {
     expect(source).toContain("responsesTransport: http");
   });
 
+  test("preserves a legacy Codex Responses profile when no replacement preset is selected", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await Bun.write(join(configDir, "providers.yaml"), [
+      "default:",
+      "  provider: relay",
+      "  model: codex-model",
+      "",
+      "providers:",
+      "  relay:",
+      "    protocol: openai-responses",
+      "    baseUrl: https://relay.example/v1",
+      "    apiKeyEnv: RELAY_API_KEY",
+      "    authMethod: bearer",
+      "    userAgent: legacy-agent",
+      "    responsesProfile: codex-http-relay",
+      "    responsesTransport: http",
+      "    models:",
+      "      - codex-model",
+      "",
+    ].join("\n"));
+    await writeFile(join(configDir, ".env"), "RELAY_API_KEY=old-secret\n", "utf8");
+
+    await writeSetupConfiguration({
+      baseUrl: "https://relay.example/v1",
+      apiKey: "new-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      authMethod: "bearer",
+      userAgent: "legacy-agent",
+      responsesProfile: "codex-http-relay",
+      responsesTransport: "http",
+    });
+  });
+
   test("preserves an existing shell capability and interpreter selection", async () => {
     const root = await tempRoot();
     const configDir = join(root, "config");

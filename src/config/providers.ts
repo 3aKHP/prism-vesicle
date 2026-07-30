@@ -269,6 +269,10 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (protocol === "openai-responses" && currentProvider.authMethod === "x-goog-api-key") {
       throw new Error(`Provider "${id}" using openai-responses cannot use authMethod x-goog-api-key.`);
     }
+    if (protocol === "openai-responses" && currentProvider.authMethod === "x-api-key"
+      && currentProvider.responsesProfile !== "mimo-subset-2026-07-30") {
+      throw new Error(`Provider "${id}" can use authMethod x-api-key only with mimo-subset-2026-07-30.`);
+    }
     if (currentProvider.responsesProfile === "mimo-subset-2026-07-30"
       && models.some((model) => model.capabilities?.remoteCompact === true)) {
       throw new Error(`Provider "${id}" cannot enable remoteCompact with mimo-subset-2026-07-30.`);

@@ -6,14 +6,14 @@ _Snapshot: 1.0.0-alpha.7 release candidate (2026-07-30)._
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-alpha.7**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.7 GitHub Release and npm package once the accepted candidate is tagged; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-alpha.7**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.7 GitHub Release and npm package once the accepted candidate is tagged; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
 | Assets | Bundled V10 Harness (`prism-engine-v10`, verified 73-file inventory) | released |
 | Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
-| Providers | Explicit OpenAI Responses profiles: official public HTTP/SSE/WebSocket + remote compact, and frozen MiMo HTTP subset | released |
+| Providers | Explicit OpenAI Responses profiles: official public HTTP/SSE/WebSocket + remote compact, and frozen MiMo HTTP subset | experimental |
 | Providers | Multi-provider registry with generation defaults and capability/limits metadata | released |
 | Providers | Cross-provider usage normalization and de-duplicated TUI footer counters | released |
 | Providers | Thinking-effort controls and reasoning-block visibility | released |
@@ -189,7 +189,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ### Providers & Streaming
 
-- OpenAI-compatible Chat Completions, the independent OpenAI Responses adapter, Anthropic Messages, and Gemini `generateContent` are supported user-facing protocols. Responses selection is explicit and never inferred from a URL or model name. `openai-public` is the official application-layer profile with HTTPS/non-stream JSON, typed SSE, opt-in session-scoped WebSocket, stateless ordered/encrypted Items, exact `call_id` pairing, terminal commit, full replay recovery, and model-capability-gated `/responses/compact`. `mimo-subset-2026-07-30` is an HTTP-only third-party compatibility tier: unsupported OpenAI continuation, storage, parallel-call, WebSocket, and compaction fields are omitted, full context is replayed, and `response.reasoning_text.*` is mapped explicitly. The narrow `codex-http-relay` and frozen `codex-beta-2026-02-06` profiles remain acceptance/fingerprint fixtures rather than general provider templates. Portable compaction remains recovery authority. Application conformance excludes TLS/HTTP2 fingerprint identity and all Codex-private headers, identity, and attestation. Official OpenAI and MiMo real-provider suites are opt-in and report missing configuration or credentials as skipped/unavailable, never passed.
+- OpenAI-compatible Chat Completions, Anthropic Messages, and Gemini `generateContent` are supported user-facing protocols. The independent OpenAI Responses adapter is an explicit opt-in experimental protocol until its official and MiMo real-provider acceptance gates succeed. Responses selection is never inferred from a URL or model name. `openai-public` is the official application-layer profile with HTTPS/non-stream JSON, typed SSE, opt-in session-scoped WebSocket, stateless ordered/encrypted Items, exact `call_id` pairing, terminal commit, full replay recovery, and model-capability-gated `/responses/compact`. `mimo-subset-2026-07-30` is an HTTP-only third-party compatibility tier: unsupported OpenAI continuation, storage, parallel-call, WebSocket, and compaction fields are omitted, full context is replayed, and `response.reasoning_text.*` is mapped explicitly. The narrow `codex-http-relay` and frozen `codex-beta-2026-02-06` profiles remain acceptance/fingerprint fixtures rather than general provider templates. Portable compaction remains recovery authority. Application conformance excludes TLS/HTTP2 fingerprint identity and all Codex-private headers, identity, and attestation. Official OpenAI and MiMo real-provider suites are opt-in and report missing configuration or credentials as skipped/unavailable, never passed; the 2026-07-30 Phase 6 run had no official credential and MiMo returned HTTP 402, so neither tier has a successful real-provider acceptance result yet.
 - Model discovery currently targets the OpenAI-compatible `GET /v1/models` response shape. Anthropic and Gemini use their existing profiles plus exact manual model ids until their native discovery APIs receive separate adapters. Discovery never infers capabilities from names.
 - Mid-stream SSE disconnect replay is deferred: replaying partial assistant/tool deltas requires explicit UI and tool-loop reconciliation. Transport and retryable-HTTP retry is implemented; see [`docs/dev/PROVIDERS.md`](./docs/dev/PROVIDERS.md).
 

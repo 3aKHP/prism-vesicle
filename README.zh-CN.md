@@ -103,7 +103,7 @@ Vesicle 从用户级配置中读取供应商和模型配置档，而不是从项
 
 不要把密钥写入 `providers.yaml`，也不要依赖项目根目录的 `.env`。如果早期 Vesicle 配置仍留下了根目录 `.env`，请将其中的值迁移到用户级密钥文件，然后删除或重命名旧文件。
 
-当前支持的供应商协议包括 OpenAI-compatible Chat Completions、独立的 OpenAI Responses 适配器、Anthropic Messages 和 Gemini `generateContent`。Responses 配置必须显式声明:`openai-public` 是官方应用层档案,`mimo-subset-2026-07-30` 是请求/事件族更窄的 HTTP-only 第三方子集;Vesicle 不会根据 URL 或模型名猜测层级。模型条目可以声明生成默认值、视觉或远程压缩等能力元数据以及上下文限制。规范格式与限制请参阅带注释的示例注册表和[供应商配置参考](./docs/user/zh-CN/reference/configuration.md#openai-responses-档案)。
+当前供应商协议包括 OpenAI-compatible Chat Completions、Anthropic Messages、Gemini `generateContent`,以及在 OpenAI 官方与 MiMo 真实供应商验收成功前保持 opt-in experimental 的独立 OpenAI Responses 适配器。Responses 配置必须显式声明:`openai-public` 是官方应用层档案,`mimo-subset-2026-07-30` 是请求/事件族更窄的 HTTP-only 第三方子集;Vesicle 不会根据 URL 或模型名猜测层级。模型条目可以声明生成默认值、视觉或远程压缩等能力元数据以及上下文限制。规范格式与限制请参阅带注释的示例注册表和[供应商配置参考](./docs/user/zh-CN/reference/configuration.md#openai-responses-档案)。
 
 可选的 Streamable HTTP MCP 服务器通过同目录的 `mcp.yaml` 配置；[`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) 说明了请求头变量展开、工具前缀、过滤器、引擎作用域和超时设置。在用户级 `.env` 中设置 `TAVILY_API_KEY`，即可为 ETL 和 Evaluate 引擎启用 Vesicle 的 Web 研究工具。
 

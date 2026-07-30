@@ -81,11 +81,13 @@ Field notes:
 
 `openai-responses` also requires an explicit `responsesProfile`; Vesicle never guesses capabilities from a URL, provider id, or model name. Guided Setup can select either OpenAI Responses or the MiMo Responses subset and writes a conservative HTTP configuration. Complete copyable examples live in [`docs/examples/providers.yaml`](../../../examples/providers.yaml).
 
+These profiles are opt-in experimental until both official OpenAI and MiMo real-provider acceptance succeeds. The 2026-07-30 run had no official credential and MiMo returned HTTP 402 in both cases (`0` passed), so neither unavailable tier is reported as accepted.
+
 - `openai-public` is the public protocol profile for the official `api.openai.com` endpoint. It supports HTTP/typed SSE and an explicit `responsesTransport: websocket` selection. It preserves ordered Items, exact `call_id` values, stateless encrypted reasoning, session-scoped WebSocket continuation, and `/responses/compact` when the model entry declares `capabilities.remoteCompact: true`. This is an application-layer protocol claim, not a claim of Codex-identical TLS or HTTP/2 fingerprints.
 - `mimo-subset-2026-07-30` is a dated third-party compatibility subset and is HTTP-only. It omits MiMo-undeclared or explicitly unsupported `background`, `context_management`, `previous_response_id`, `parallel_tool_calls`, `store`, remote-compaction, and WebSocket fields, fully replays context on every round, and explicitly maps `response.reasoning_text.*` into Vesicle reasoning. It is not OpenAI or Codex conformance.
 - `codex-http-relay` and `codex-beta-2026-02-06` are narrow acceptance/frozen compatibility profiles, not general third-party templates. The latter requires WebSocket. Never copy private identity, attestation, or `x-codex-*` headers merely to resemble Codex.
 
-`responsesTransport` is `http` or `websocket`; when omitted, runtime behavior is HTTP. Only `openai-public` and the frozen Codex beta profile permit WebSocket. Portable `/compact` checkpoints remain the recovery authority whether or not remote compaction is enabled; an unavailable remote endpoint never makes an existing session unreadable. Run `vesicle doctor` to inspect the selected Responses profile, tier, transport, and remote-compaction declaration.
+`responsesTransport` is `http` or `websocket`; when omitted, runtime behavior is HTTP. Only `openai-public` and the frozen Codex beta profile permit WebSocket. Native Items and compact state are owned by the exact profile; changing profiles at one endpoint falls back to portable history. Portable `/compact` checkpoints remain the recovery authority whether or not remote compaction is enabled; an unavailable remote endpoint never makes an existing session unreadable. Run `vesicle doctor` to inspect the selected Responses profile, tier, transport, and remote-compaction declaration.
 
 ## .env
 

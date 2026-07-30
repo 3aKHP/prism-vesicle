@@ -57,7 +57,7 @@ export function responseFromResponsesBody(body: ResponsesBody | undefined, conte
     providerId: context.providerId,
     model: context.model,
     endpointFingerprint: context.endpointFingerprint,
-    payload: { version: 1, responseId: body.id, outputItems: output },
+    payload: { version: 1, profile: context.profile ?? "openai-public", responseId: body.id, outputItems: output },
   });
   return {
     id: body.id ?? context.requestId,

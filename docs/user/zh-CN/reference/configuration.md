@@ -79,11 +79,13 @@ providers:
 
 `openai-responses` 必须再明确写出 `responsesProfile`;Vesicle 不会根据 URL、供应商 id 或模型名猜测能力。Guided Setup 可直接选择 OpenAI Responses 或 MiMo Responses 子集,并写入保守的 HTTP 配置。完整可复制示例在 [`docs/examples/providers.yaml`](../../../examples/providers.yaml)。
 
+在 OpenAI 官方与 MiMo 两个真实供应商验收都成功前,这些档案保持 opt-in experimental。2026-07-30 的运行没有配置 OpenAI 官方凭据,MiMo 两个用例都返回 HTTP 402(`0` pass),因此两个 unavailable 层级都不能记为 accepted。
+
 - `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
 - `mimo-subset-2026-07-30` 是固定日期的第三方兼容子集,只支持 HTTP。它会省略 MiMo 未声明或明确不支持的 `background`、`context_management`、`previous_response_id`、`parallel_tool_calls`、`store`、远程压缩和 WebSocket 字段,每轮回放完整上下文,并把 `response.reasoning_text.*` 显式映射为 Vesicle reasoning。它不是 OpenAI 或 Codex conformance。
 - `codex-http-relay` 与 `codex-beta-2026-02-06` 是窄化的验收/冻结兼容档案,不是通用第三方模板。后者必须配合 WebSocket;不要为了“像 Codex”而复制私有身份、attestation 或 `x-codex-*` 头。
 
-`responsesTransport` 可为 `http` 或 `websocket`;不写时运行时走 HTTP。只有 `openai-public` 与冻结 Codex beta 档案允许 WebSocket。无论是否启用远程压缩,portable `/compact` checkpoint 都是恢复权威;远程端点不可用不会让已有会话不可读。运行 `vesicle doctor` 可查看当前 Responses 档案、层级、传输和远程压缩声明。
+`responsesTransport` 可为 `http` 或 `websocket`;不写时运行时走 HTTP。只有 `openai-public` 与冻结 Codex beta 档案允许 WebSocket。原生 Items 与 compact state 由精确档案拥有;同一端点切换档案时会回退到 portable history。无论是否启用远程压缩,portable `/compact` checkpoint 都是恢复权威;远程端点不可用不会让已有会话不可读。运行 `vesicle doctor` 可查看当前 Responses 档案、层级、传输和远程压缩声明。
 
 ## .env
 
