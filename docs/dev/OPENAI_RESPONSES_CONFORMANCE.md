@@ -1,6 +1,6 @@
 # OpenAI Responses Conformance Profile
 
-This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. It records evidence and exclusions; it does not claim that the adapter is shipped. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
+This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. The HTTPS/non-stream JSON and typed-SSE baseline is implemented; later WebSocket, compaction, third-party exposure, and product-documentation phases remain incomplete. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
 
 ## Claim Boundary
 
@@ -44,3 +44,13 @@ Profile updates are reviewed fixture changes:
 6. Run `bun test tests/contract/providers/openai-responses-conformance.test.ts`, then the normal repository gates.
 
 Changing this profile does not silently migrate persisted sessions or enable a runtime feature. Runtime delivery and user-facing exposure remain separately reviewed phases.
+
+## Implemented HTTPS/SSE Baseline
+
+The `src/providers/openai-responses/` module owns one deterministic request representation and one final response parser for both HTTPS JSON and typed SSE. It sends `store: false`, retains ordered output Items in the bounded provider-state envelope, replays same-owner Items at JSON-value fidelity, maps function results by exact `call_id`, and fails before network I/O for missing or duplicate result identities.
+
+Runtime selection is explicit. `openai-public` accepts only the frozen public request and event families. The narrow `codex-http-relay` acceptance profile uses the same public request semantics but permits two observed non-semantic server diagnostics, `codex.rate_limits` and `codex.response.metadata`; neither enters normalized output or durable state. Other unknown events and every unknown output Item fail closed. No profile is inferred from provider id, hostname, URL, or model.
+
+Every SSE transport attempt uses a fresh accumulator. Deltas, tool candidates, usage, and native state stay private to that attempt until `response.completed` validates the final ordered Items; failed attempts are discarded and may be retried at most five times. This intentionally buffers visible deltas at the HTTP baseline so a retry cannot duplicate provisional TUI text. Cancellation is never retried, semantic unknown events fail closed, and the generic fetch retry loop is disabled inside the Responses stream retry loop so attempt counts cannot multiply.
+
+The opt-in `bun run test:acceptance:responses` gate exercised `doro-gpt` with a streamed function call, exact `call_id` result, retained native reasoning/message Items, and a final text response. It prints only provider/model identity, event types, counts, id shape, content length, and usage presence. This evidence proves the current HTTPS/SSE relay boundary only; it does not authorize an OpenAI-conformance claim for that third-party service or imply WebSocket support. An official OpenAI acceptance remains unavailable when no official API credential is configured and must be reported as unavailable rather than passed.

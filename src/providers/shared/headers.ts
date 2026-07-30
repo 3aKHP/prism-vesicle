@@ -23,6 +23,14 @@ export function openAIChatHeaders(userAgent?: string): Record<string, string> {
   };
 }
 
+export function openAIResponsesHeaders(stream: boolean, userAgent?: string): Record<string, string> {
+  return {
+    "accept": stream ? "text/event-stream" : "application/json",
+    "content-type": "application/json",
+    "user-agent": userAgent ?? defaultUserAgent(),
+  };
+}
+
 export function anthropicMessagesHeaders(userAgent?: string): Record<string, string> {
   return {
     "accept": "application/json",
