@@ -290,6 +290,42 @@ describe("OpenAI Responses WebSocket transport", () => {
     }
   });
 
+  test("retries synchronous send failures with one frozen request frontier before HTTP downgrade", async () => {
+    const originalFetch = globalThis.fetch;
+    const messages: VesicleRequest["messages"] = [{ role: "user", content: "original" }];
+    const socketBodies: Array<Record<string, unknown>> = [];
+    const httpBodies: Array<Record<string, unknown>> = [];
+    let sockets = 0;
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+      httpBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responseStream([event(0, "response.completed", { response: responseBody("http_1", "http") })]);
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = websocketAdapter(() => {
+        sockets += 1;
+        return new FakeSocket((message) => {
+          socketBodies.push(JSON.parse(message) as Record<string, unknown>);
+          if (socketBodies.length === 1) messages.push({ role: "user", content: "mutated" });
+          throw new Error("synchronous send failure");
+        });
+      });
+
+      const events = await collect(adapter.stream(request(messages)));
+
+      expect(sockets).toBe(6);
+      expect(socketBodies).toHaveLength(6);
+      expect(events.filter((item) => item.type === "attempt_discarded")).toHaveLength(6);
+      expect(events.at(-1)).toMatchObject({ type: "complete", attempt: 7, response: { content: "http" } });
+      expect(socketBodies.every((body) => JSON.stringify(body).includes("original"))).toBeTrue();
+      expect(socketBodies.every((body) => !JSON.stringify(body).includes("mutated"))).toBeTrue();
+      expect(httpBodies).toHaveLength(1);
+      expect(JSON.stringify(httpBodies[0])).toContain("original");
+      expect(JSON.stringify(httpBodies[0])).not.toContain("mutated");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("rejects prewarm output instead of silently continuing from it", async () => {
     let sends = 0;
     const adapter = websocketAdapter(() => new FakeSocket((_message, socket) => {
@@ -486,7 +522,8 @@ describe("OpenAI Responses WebSocket transport", () => {
     const socket = new FakeSocket(() => { throw new Error("send failed"); });
     const session = responsesWebSocketSession(sessionOptions("send-error", "owner", () => socket));
 
-    await expect(session.request({ type: "response.create" })).rejects.toThrow("send failed");
+    await expect(session.request({ type: "response.create" }))
+      .rejects.toThrow("Responses WebSocket failed while sending a request.");
     expect(socket.closeCount).toBe(1);
   });
 

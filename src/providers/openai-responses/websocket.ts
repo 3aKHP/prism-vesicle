@@ -307,7 +307,12 @@ function receiveTerminal(
       try {
         socket.send(message);
       } catch (error) {
-        finishReject(error);
+        finishReject(new ProviderError("Responses WebSocket failed while sending a request.", {
+          kind: "stream_error",
+          providerId,
+          retryable: true,
+          cause: error,
+        }));
       }
     }
   });
