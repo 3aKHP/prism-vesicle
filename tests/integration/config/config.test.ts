@@ -204,6 +204,7 @@ describe("config loading", () => {
       "          reasoningTier: true",
       "          reasoningContent: true",
       "          vision: true",
+      "          remoteCompact: true",
       "        limits:",
       "          contextWindow: 1000000",
       "          autoCompact:",
@@ -225,6 +226,7 @@ describe("config loading", () => {
       reasoningTier: true,
       reasoningContent: true,
       vision: true,
+      remoteCompact: true,
     });
     expect(config.limits).toEqual({
       contextWindow: 1000000,

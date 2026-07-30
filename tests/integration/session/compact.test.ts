@@ -13,6 +13,7 @@ import {
   loadSessionSnapshot,
   parseCompactCheckpoint,
 } from "../../../src/core/session/store";
+import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -90,6 +91,93 @@ describe("conversation compact", () => {
     expect(records.at(-1)?.metadata?.kind).toBe(COMPACT_CHECKPOINT_KIND);
     // The original append-only transcript is intact above the checkpoint.
     expect(records.filter((record) => record.role === "user").map((record) => record.content)).toEqual(["first", "second"]);
+  });
+
+  test("installs portable and native projections from the same source head", async () => {
+    await writeFile(join(configDir!, "providers.yaml"), [
+      "default:", "  provider: openai", "  model: gpt-5.6", "providers:",
+      "  openai:", "    protocol: openai-responses", "    baseUrl: https://api.openai.com/v1",
+      "    apiKeyEnv: TEST_PROVIDER_API_KEY", "    responsesProfile: openai-public", "    responsesTransport: http",
+      "    models:", "      - id: gpt-5.6", "        capabilities:", "          remoteCompact: true", "",
+    ].join("\n"), "utf8");
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-dual");
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first", metadata: { logicalTurnId: "t1", providerRoundId: "r1" } });
+    await store.append({ role: "assistant", content: "answer one", metadata: { logicalTurnId: "t1", providerRoundId: "r1" } });
+    await store.append({ role: "user", content: "second", metadata: { logicalTurnId: "t2", providerRoundId: "r2" } });
+    const sourceHead = await store.append({ role: "assistant", content: "answer two", metadata: { logicalTurnId: "t2", providerRoundId: "r2" } });
+
+    const requestedPaths: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const path = new URL(String(input)).pathname;
+      requestedPaths.push(path);
+      if (path.endsWith("/responses/compact")) {
+        return Response.json({
+          id: "compact-native",
+          object: "response.compaction",
+          output: [
+            { id: "msg_compact", type: "message", role: "user", content: [{ type: "input_text", text: "canonical context" }] },
+            { id: "cmp_1", type: "compaction", encrypted_content: "opaque-compact" },
+          ],
+        });
+      }
+      return Response.json({
+        id: "summary-response",
+        status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "<summary>Portable fallback.</summary>" }] }],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" });
+    expect(requestedPaths).toEqual(["/v1/responses", "/v1/responses/compact"]);
+    expect(result.snapshot.messages.map((message) => message.content)).toEqual([
+      "[conversation summary]\nPortable fallback.",
+      "second",
+      "answer two",
+      "",
+    ]);
+    const checkpointRecord = (await loadSessionRecords(rootDir, store.sessionId)).at(-1)!;
+    const checkpoint = parseCompactCheckpoint(checkpointRecord.metadata?.checkpoint);
+    expect(checkpoint.sourceHeadUuid).toBe(sourceHead.uuid);
+    expect(checkpoint.nativeProjection?.sourceHeadUuid).toBe(sourceHead.uuid);
+    expect(checkpoint.nativeProjection?.state).toMatchObject({
+      protocol: "openai-responses",
+      payload: { compactedInput: [{ type: "message" }, { type: "compaction" }] },
+    });
+  });
+
+  test("keeps the portable checkpoint usable when remote compaction fails", async () => {
+    await writeFile(join(configDir!, "providers.yaml"), [
+      "default:", "  provider: openai", "  model: gpt-5.6", "providers:",
+      "  openai:", "    protocol: openai-responses", "    baseUrl: https://api.openai.com/v1",
+      "    apiKeyEnv: TEST_PROVIDER_API_KEY", "    responsesProfile: openai-public", "    responsesTransport: http",
+      "    models:", "      - id: gpt-5.6", "        capabilities:", "          remoteCompact: true", "",
+    ].join("\n"), "utf8");
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-native-fallback");
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first" });
+    await store.append({ role: "assistant", content: "answer one" });
+    await store.append({ role: "user", content: "second" });
+    await store.append({ role: "assistant", content: "answer two" });
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      if (new URL(String(input)).pathname.endsWith("/responses/compact")) {
+        return Response.json({ error: { message: "compact unavailable" } }, { status: 400 });
+      }
+      return Response.json({
+        id: "summary-response",
+        status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "<summary>Portable only.</summary>" }] }],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" });
+    expect(result.snapshot.messages.map((message) => message.content)).toEqual([
+      "[conversation summary]\nPortable only.", "second", "answer two",
+    ]);
+    const checkpoint = parseCompactCheckpoint((await loadSessionRecords(rootDir, store.sessionId)).at(-1)?.metadata?.checkpoint);
+    expect(checkpoint.nativeProjection).toBeUndefined();
   });
 
   test("surfaces transport retries for the compact provider call (#101)", async () => {
@@ -289,6 +377,57 @@ describe("conversation compact", () => {
     const records = await loadSessionRecords(rootDir, store.sessionId);
     expect(records.at(-1)?.content).toBe("concurrent suffix");
     expect(records.some((record) => record.metadata?.kind === COMPACT_CHECKPOINT_KIND)).toBe(false);
+  });
+
+  test("does not install either projection when the session head advances during remote compaction", async () => {
+    await writeFile(join(configDir!, "providers.yaml"), [
+      "default:", "  provider: openai", "  model: gpt-5.6", "providers:",
+      "  openai:", "    protocol: openai-responses", "    baseUrl: https://api.openai.com/v1",
+      "    apiKeyEnv: TEST_PROVIDER_API_KEY", "    responsesProfile: openai-public", "    responsesTransport: http",
+      "    models:", "      - id: gpt-5.6", "        capabilities:", "          remoteCompact: true", "",
+    ].join("\n"), "utf8");
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-native-head-drift");
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first" });
+    await store.append({ role: "assistant", content: "answer one" });
+    await store.append({ role: "user", content: "second" });
+    await store.append({ role: "assistant", content: "answer two" });
+    const providerSession = responsesWebSocketSession({
+      sessionId: store.sessionId, owner: "existing-owner", baseUrl: "https://api.openai.com/v1",
+      providerId: "openai", headers: { authorization: "Bearer test" },
+      factory: () => { throw new Error("socket should not open"); },
+    });
+    providerSession.lastResponseId = "resp_before_failed_compact";
+
+    let requests = 0;
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      requests += 1;
+      if (!new URL(String(input)).pathname.endsWith("/responses/compact")) {
+        return Response.json({
+          id: "summary-response", status: "completed",
+          output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "<summary>Stale portable.</summary>" }] }],
+        });
+      }
+      const concurrent = await createSessionStore(rootDir, store.sessionId);
+      await concurrent.append({ role: "user", content: "concurrent suffix" });
+      return Response.json({
+        id: "compact-native", object: "response.compaction",
+        output: [{ id: "cmp_1", type: "compaction", encrypted_content: "stale-native" }],
+      });
+    }) as unknown as typeof fetch;
+
+    try {
+      await expect(compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" }))
+        .rejects.toThrow(/Session head changed/);
+      expect(requests).toBe(2);
+      const records = await loadSessionRecords(rootDir, store.sessionId);
+      expect(records.at(-1)?.content).toBe("concurrent suffix");
+      expect(records.some((record) => record.metadata?.kind === COMPACT_CHECKPOINT_KIND)).toBe(false);
+      expect(providerSession.lastResponseId).toBe("resp_before_failed_compact");
+    } finally {
+      closeResponsesWebSocketSession(store.sessionId);
+    }
   });
 
   test("a retained tool round keeps its tool-call/result pairing and reasoning intact", async () => {

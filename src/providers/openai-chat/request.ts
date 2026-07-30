@@ -1,4 +1,4 @@
-import type { ReasoningTier, VesicleRequest } from "../shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ReasoningTier, type VesicleRequest } from "../shared/types";
 import { reasoningContentFromThinkingBlocks } from "../shared/thinking";
 
 export function toChatCompletionBody(request: VesicleRequest, stream: boolean, includeUsage = false): Record<string, unknown> {
@@ -29,6 +29,7 @@ function serializeOpenAIMessages(messages: VesicleRequest["messages"]): Record<s
   };
 
   for (const message of messages) {
+    if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) continue;
     if (message.role === "tool") {
       const toolMessage = {
         role: "tool",

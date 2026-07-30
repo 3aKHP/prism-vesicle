@@ -1,5 +1,5 @@
 import { ProviderError } from "../shared/errors";
-import type { ProviderThinkingBlock, ReasoningTier, VesicleRequest } from "../shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderThinkingBlock, type ReasoningTier, type VesicleRequest } from "../shared/types";
 import type { AnthropicContentBlock, AnthropicMessage } from "./types";
 
 const defaultMaxTokens = 4096;
@@ -36,6 +36,7 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
   };
 
   for (const message of messages) {
+    if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) continue;
     if (message.role === "system") continue;
     if (message.role === "tool") {
       pendingToolResults.push({

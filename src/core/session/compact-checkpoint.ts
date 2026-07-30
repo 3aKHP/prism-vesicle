@@ -1,4 +1,5 @@
 import type { ResumedMessage } from "./store";
+import type { ProviderStateEnvelope } from "../../providers/shared/state";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
 
 /**
@@ -42,6 +43,10 @@ export type PortableCompactCheckpointV1 = {
     beforeTokens?: number;
     beforeSource: "provider" | "estimated" | "unknown";
     projectedAfterTokens?: number;
+  };
+  nativeProjection?: {
+    sourceHeadUuid: string;
+    state: ProviderStateEnvelope;
   };
 };
 
@@ -180,6 +185,28 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
   requireEnum(accounting, "beforeSource", BEFORE_SOURCES, "checkpoint beforeSource");
   const projectedAfterTokens = optionalPositiveInteger(accounting, "projectedAfterTokens");
 
+  let nativeProjection: PortableCompactCheckpointV1["nativeProjection"];
+  if (Object.hasOwn(source, "nativeProjection")) {
+    const value = source.nativeProjection;
+    const native = value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : undefined;
+    if (typeof native?.sourceHeadUuid === "string" && native.sourceHeadUuid !== source.sourceHeadUuid) {
+      throw new Error("Session compact checkpoint native projection source head does not match the portable projection.");
+    }
+    if (native && native.sourceHeadUuid === source.sourceHeadUuid) {
+      try {
+        nativeProjection = {
+          sourceHeadUuid: native.sourceHeadUuid as string,
+          state: parseProviderStateEnvelope(native.state, "Session compact checkpoint native projection state"),
+        };
+      } catch {
+        // Provider-native state is optional. Corruption drops only this
+        // projection; the validated portable replacement remains readable.
+      }
+    }
+  }
+
   return {
     version: 1,
     strategy: "portable-summary",
@@ -210,6 +237,7 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
       beforeSource: accounting.beforeSource as "provider" | "estimated" | "unknown",
       ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
     },
+    ...(nativeProjection ? { nativeProjection } : {}),
   };
 }
 

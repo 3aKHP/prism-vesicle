@@ -3,7 +3,7 @@ import { parseImageAttachments } from "../attachments/store";
 import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets";
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
-import { reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { SkillToolEvent } from "../skills/types";
@@ -115,6 +115,14 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         const checkpoint = parseCompactCheckpoint(record.metadata.checkpoint);
         messages.length = 0;
         messages.push(...checkpoint.replacementMessages.map((message) => ({ ...message })));
+        if (checkpoint.nativeProjection) {
+          messages.push({
+            role: "user",
+            content: "",
+            kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+            providerState: checkpoint.nativeProjection.state,
+          });
+        }
         continue;
       }
       continue;

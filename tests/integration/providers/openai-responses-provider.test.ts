@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/adapter";
 import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
-import { toResponsesBody } from "../../../src/providers/openai-responses/request";
+import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody } from "../../../src/providers/openai-responses/request";
 import { readResponsesStream } from "../../../src/providers/openai-responses/stream";
 import {
   providerStateEnvelopeVersion,
@@ -9,6 +9,8 @@ import {
   type ProviderStateJson,
 } from "../../../src/providers/shared/state";
 import type { ProviderStreamEvent, VesicleRequest } from "../../../src/providers/shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND } from "../../../src/providers/shared/types";
+import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
 import { bytesFromChunks } from "../../support/providers/sse";
 import captures from "../../fixtures/openai-responses/request-captures-v1.json";
 import { compareStructuredCapture, requireJsonValue } from "../../support/providers/responses-conformance";
@@ -89,6 +91,160 @@ describe("OpenAI Responses request codec", () => {
       }],
     }, context(), false);
     expect(body.input).toEqual(outputItems);
+  });
+
+  test("replaces portable history with an owner-compatible compact window and starts a new chain", () => {
+    const compactedInput: ProviderStateJson[] = [
+      { id: "msg_compact", type: "message", role: "user", content: [{ type: "input_text", text: "canonical" }] },
+      { id: "cmp_1", type: "compaction", encrypted_content: "opaque-compact" },
+    ];
+    const marker = {
+      role: "user" as const,
+      content: "",
+      kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+      providerState: {
+        version: 1 as const,
+        protocol: "openai-responses",
+        providerId: "openai",
+        model: "gpt-5.2-codex",
+        endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+        payload: { version: 1, compactedInput },
+      },
+    };
+    const compactedRequest = {
+      ...request(),
+      messages: [
+        { role: "user" as const, content: "[conversation summary]\nportable", kind: "compact-summary" },
+        { role: "assistant" as const, content: "retained" },
+        marker,
+        { role: "user" as const, content: "continue" },
+      ],
+    };
+
+    expect(toResponsesBody(compactedRequest, context(), true).input).toEqual([
+      ...compactedInput,
+      { role: "user", content: "continue" },
+    ]);
+    expect(findResponsesContinuation(compactedRequest, context(), "resp_before_compact")).toBeUndefined();
+
+    const switched = {
+      ...compactedRequest,
+      model: { provider: "openai", model: "different-model" },
+    };
+    expect(toResponsesBody(switched, context(), true).input).toEqual([
+      { role: "user", content: "[conversation summary]\nportable" },
+      { role: "assistant", content: "retained" },
+      { role: "user", content: "continue" },
+    ]);
+
+    const corrupt = {
+      ...compactedRequest,
+      messages: compactedRequest.messages.map((message) => message === marker
+        ? { ...message, providerState: { ...marker.providerState, version: 99 as 1 } }
+        : message),
+    };
+    expect(toResponsesBody(corrupt, context(), true).input).toEqual([
+      { role: "user", content: "[conversation summary]\nportable" },
+      { role: "assistant", content: "retained" },
+      { role: "user", content: "continue" },
+    ]);
+  });
+
+  test("encodes and validates standalone remote compaction without a response continuation", async () => {
+    const originalFetch = globalThis.fetch;
+    let url = "";
+    let body: Record<string, unknown> = {};
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      url = String(input);
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({
+        id: "compact_1",
+        object: "response.compaction",
+        output: [
+          { id: "search_1", type: "web_search_call", status: "completed", action: { type: "search", query: "canonical context" } },
+          { id: "msg_1", type: "message", role: "user", content: [{ type: "input_text", text: "canonical" }] },
+          { id: "cmp_1", type: "compaction", encrypted_content: "opaque" },
+        ],
+        usage: { input_tokens: 20, output_tokens: 4, total_tokens: 24 },
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
+        capabilities: { remoteCompact: true },
+      });
+      const compactRequest = { id: "compact-request", model: request().model, messages: request().messages };
+      expect(toResponsesCompactBody(compactRequest, context())).not.toHaveProperty("previous_response_id");
+      const result = await adapter.compact!(compactRequest);
+      expect(url).toBe("https://api.openai.com/v1/responses/compact");
+      expect(body).toEqual({ model: "gpt-5.2-codex", input: [] });
+      expect(result.providerState).toMatchObject({
+        protocol: "openai-responses",
+        payload: { version: 1, compactedInput: [
+          { type: "web_search_call", action: { query: "canonical context" } },
+          { type: "message" },
+          { type: "compaction" },
+        ] },
+      });
+      expect(result.usage).toMatchObject({ inputTokens: 20, outputTokens: 4, totalTokens: 24 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("rejects a standalone compact response without its encrypted compaction Item", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => Response.json({
+      id: "compact_missing_marker",
+      object: "response.compaction",
+      output: [{ id: "msg_1", type: "message", role: "user", content: [{ type: "input_text", text: "not compacted" }] }],
+    })) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
+        capabilities: { remoteCompact: true },
+      });
+      await expect(adapter.compact!({ id: "compact", model: request().model, messages: [] }))
+        .rejects.toThrow("exactly one encrypted compaction Item");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("committed standalone compaction invalidates the old session continuation", async () => {
+    const originalFetch = globalThis.fetch;
+    const sessionId = "compact-continuation";
+    const session = responsesWebSocketSession({
+      sessionId,
+      owner: "fixture-owner",
+      baseUrl: "https://api.openai.com/v1",
+      providerId: "openai",
+      headers: { authorization: "Bearer test-key" },
+      factory: () => { throw new Error("socket should not open"); },
+    });
+    session.lastResponseId = "resp_before_compact";
+    globalThis.fetch = (async () => Response.json({
+      id: "compact_1",
+      object: "response.compaction",
+      output: [{ id: "cmp_1", type: "compaction", encrypted_content: "opaque" }],
+    })) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
+        responsesTransport: "websocket", capabilities: { remoteCompact: true },
+      }, { sessionId });
+      await adapter.compact!({ id: "compact", model: request().model, messages: [] });
+      expect(session.lastResponseId).toBe("resp_before_compact");
+      adapter.commitCompact();
+      expect(session.lastResponseId).toBeUndefined();
+      expect(session.needsPrewarm()).toBe(true);
+    } finally {
+      closeResponsesWebSocketSession(sessionId);
+      globalThis.fetch = originalFetch;
+    }
   });
 
   test("rejects duplicate function outputs before network I/O", () => {
@@ -349,6 +505,90 @@ describe("OpenAI Responses typed SSE", () => {
         await expect(collect(adapter.stream!(request()))).rejects.toThrow(`fatal ${code}`);
         expect(fetches).toBe(1);
       }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("falls back to the portable projection when native compact state is rejected", async () => {
+    const originalFetch = globalThis.fetch;
+    const bodies: Array<{ input?: unknown[] }> = [];
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as { input?: unknown[] });
+      if (bodies.length === 1) {
+        return Response.json({ error: { message: "expired compact state" } }, { status: 400 });
+      }
+      return Response.json({
+        id: "portable-recovery", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "recovered" }] }],
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const compactedInput = [{ type: "compaction", encrypted_content: "expired" }];
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
+      });
+      const events = await collect(adapter.stream!({
+        ...request(),
+        messages: [
+          { role: "user", content: "[conversation summary]\nportable", kind: "compact-summary" },
+          {
+            role: "user", content: "", kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+            providerState: {
+              version: 1, protocol: "openai-responses", providerId: "openai", model: "gpt-5.2-codex",
+              endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+              payload: { version: 1, compactedInput },
+            },
+          },
+          { role: "user", content: "continue" },
+        ],
+      }));
+      expect(events).toMatchObject([
+        { type: "attempt_started", attempt: 1 },
+        { type: "attempt_discarded", attempt: 1 },
+        { type: "attempt_started", attempt: 2 },
+        { type: "complete", attempt: 2, response: { content: "recovered" } },
+      ]);
+      expect(bodies.map((body) => body.input)).toEqual([
+        [...compactedInput, { role: "user", content: "continue" }],
+        [
+          { role: "user", content: "[conversation summary]\nportable" },
+          { role: "user", content: "continue" },
+        ],
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("does not retry a non-retryable failure when an incompatible native marker already selected portable history", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      return Response.json({ error: { message: "bad portable request" } }, { status: 400 });
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "openai", baseUrl: "https://api.openai.com/v1",
+        model: "gpt-5.2-codex", apiKey: "test-key", responsesProfile: "openai-public",
+      });
+      await expect(adapter.complete({
+        ...request(),
+        messages: [
+          { role: "user", content: "portable" },
+          {
+            role: "user", content: "", kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+            providerState: {
+              version: 1, protocol: "openai-responses", providerId: "openai", model: "different-model",
+              endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+              payload: { version: 1, compactedInput: [{ type: "compaction", encrypted_content: "other-owner" }] },
+            },
+          },
+        ],
+      })).rejects.toThrow("bad portable request");
+      expect(fetches).toBe(1);
     } finally {
       globalThis.fetch = originalFetch;
     }

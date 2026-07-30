@@ -52,6 +52,9 @@ export type VesicleMessage = {
   images?: VesicleImageAttachment[];
 };
 
+/** Host-only checkpoint marker consumed only by its owning provider adapter. */
+export const PROVIDER_NATIVE_CHECKPOINT_KIND = "provider-native-checkpoint";
+
 /**
  * Transport retry notification, fired by `fetchProvider` immediately before it
  * sleeps for a retry. Runtime callback only — never serialized. Lets the host
@@ -97,6 +100,19 @@ export type VesicleResponse = {
   usage?: ResponseUsage;
 };
 
+export type ProviderCompactRequest = {
+  id: string;
+  model: ModelRef;
+  messages: VesicleMessage[];
+  signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
+};
+
+export type ProviderCompactResult = {
+  providerState: ProviderStateEnvelope;
+  usage?: ResponseUsage;
+};
+
 export type ResponseUsage = {
   /**
    * Input tokens occupying the provider context window for this request.
@@ -129,4 +145,7 @@ export interface ProviderAdapter {
   id: string;
   complete(request: VesicleRequest): Promise<VesicleResponse>;
   stream?(request: VesicleRequest): AsyncIterable<ProviderStreamEvent>;
+  compact?(request: ProviderCompactRequest): Promise<ProviderCompactResult>;
+  /** Commit provider-local lifecycle changes only after the host durably installs compact state. */
+  commitCompact?(): void;
 }

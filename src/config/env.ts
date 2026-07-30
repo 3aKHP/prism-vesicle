@@ -16,6 +16,7 @@ export type ModelCapabilities = {
   temperature?: boolean;
   maxTokens?: boolean;
   vision?: boolean;
+  remoteCompact?: boolean;
 };
 
 export type AutoCompactLimits = {

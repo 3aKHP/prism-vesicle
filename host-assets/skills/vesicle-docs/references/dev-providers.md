@@ -12,6 +12,7 @@ This document defines how Vesicle selects providers, translates normalized reque
 - At the completed normalized-response boundary, every tool-call argument must parse as a JSON object. A malformed call is never dispatched: core replaces its provider-visible arguments with `{}`, preserves only bounded host diagnostics, and emits a paired failed tool result so valid sibling calls and their results remain replayable without repeating side effects. This check is based on argument validity, not the provider finish reason.
 - Core materializes durable image references before invoking an adapter. Adapters translate already-materialized data to provider-native image blocks and never read attachment files.
 - Core and TUI may select normalized generation controls. Only adapters map those controls to provider wire fields; adapters do not invent host defaults.
+- An adapter may implement the optional provider-neutral compact operation. Core supplies normalized messages from one recorded source head; the adapter returns only bounded owner-qualified state and must not mutate the session or reinterpret portable summary text.
 
 ## Usage And Metadata
 
@@ -27,6 +28,7 @@ This document defines how Vesicle selects providers, translates normalized reque
 - Core may validate, clone, persist, project, rewind, branch, and retain the envelope. Only the matching adapter may interpret its payload or decide whether it is eligible for a later request.
 - Provider-owned state must contain only the bounded continuity data required by the adapter. Credentials, authorization or request headers, full request bodies, sockets, callbacks, private identity material, and unbounded diagnostics are forbidden.
 - Normalized assistant text, tool calls/results, usage, and display thinking remain their existing authorities. Opaque state must not duplicate them as a competing host truth.
+- Provider-native compact state is an optional optimization. Its matching adapter may replay the canonical provider-returned Item window exactly; an owner mismatch or unusable native payload selects the portable checkpoint instead.
 
 ## Attempt Commitment
 
@@ -64,6 +66,7 @@ This document defines how Vesicle selects providers, translates normalized reque
 - String model entries cover the common case. Object entries may declare `id`, `generation`, `capabilities`, and `limits`.
 - `generation.maxTokens` is a request default. `limits.contextWindow` and related limits describe model capacity and context policy; adapters receive the resulting normalized request rather than interpreting host configuration.
 - Vision is capability-gated. A non-vision model receives neither image content nor the model-visible image inspection tool.
+- Remote provider compaction is capability-gated per model. Capability support does not make it a recovery dependency: portable compaction still runs first and remains authoritative.
 
 Current protocol availability and known limitations belong in [`STATUS.md`](../../STATUS.md). Example configuration shapes live under [`docs/examples/`](../examples/).
 

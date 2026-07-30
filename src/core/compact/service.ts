@@ -1,7 +1,7 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderAdapter, ProviderCompactResult, ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
@@ -68,6 +68,7 @@ export type PortableCompactionOutcome =
       retainedUnits: number;
       contextWindow?: number;
       projectedAfterTokens?: number;
+      nativeProjectionInstalled: boolean;
       /** Active Skills whose exact body compaction could not retain; they require reactivation. */
       skillContextLoss?: SkillContextLoss[];
     }
@@ -146,6 +147,29 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     return { kind: "failed", error };
   }
 
+  let nativeProjection: ProviderCompactResult["providerState"] | undefined;
+  let compactProvider: ProviderAdapter | undefined;
+  if (config.capabilities?.remoteCompact === true) {
+    try {
+      const provider = createProvider(config, { sessionId: options.sessionId });
+      if (provider.compact) {
+        compactProvider = provider;
+        const compacted = await provider.compact({
+          id: `${options.sessionId}:compact:${selection.sourceHeadUuid}`,
+          model: { provider: config.providerId, model: config.model },
+          messages: full.messages.map(toVesicleMessage),
+          signal: options.signal,
+          onRetry: options.onRetry,
+        });
+        nativeProjection = compacted.providerState;
+      }
+    } catch (error) {
+      if (options.signal?.aborted || isAbortError(error)) return { kind: "cancelled", error };
+      // The portable projection remains authoritative. Remote compact is an
+      // optional same-source optimization and never blocks local recovery.
+    }
+  }
+
   const replacementMessages = buildCompactReplacementMessages(selection, summary, skillReattach.reattach);
   let projectedAfterTokens: number | undefined;
   let installed: Awaited<ReturnType<typeof installCompactCheckpoint>>;
@@ -179,6 +203,7 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
       selection,
       summary,
       replacementMessages,
+      ...(nativeProjection ? { nativeProjection } : {}),
       trigger: options.trigger,
       phase: options.phase,
       reason: options.reason,
@@ -194,6 +219,15 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
         ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
       },
     });
+    if (nativeProjection && compactProvider?.commitCompact) {
+      // The checkpoint is already durable. Provider-local continuation cleanup
+      // is best effort and must not turn a committed append into a failed result.
+      try {
+        compactProvider.commitCompact();
+      } catch {
+        // The next request still sees the native marker and starts a new chain.
+      }
+    }
     if (skillReattach.lost.length > 0) {
       await session.append({
         role: "system",
@@ -225,6 +259,7 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     checkpointUuid: installed.checkpointUuid,
     messagesSummarized,
     retainedUnits,
+    nativeProjectionInstalled: Boolean(nativeProjection),
     ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
     ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
     ...(skillReattach.lost.length > 0 ? { skillContextLoss: skillReattach.lost } : {}),
@@ -340,7 +375,7 @@ async function generateSummary(options: {
   onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<string> {
   const config = await loadConfigForSelection(options.providerSelection);
-  const provider = createProvider(config);
+  const provider = createProvider(config, { sessionId: options.sessionId });
   const profile = await loadEngineProfile(options.engine, options.rootDir);
   const enginePrompt = composeSystemPrompt(await loadPromptBundle(profile, options.rootDir));
   const systemPrompt = (

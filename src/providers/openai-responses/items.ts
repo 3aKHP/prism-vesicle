@@ -37,6 +37,26 @@ export function validateResponsesOutputItems(items: ResponsesOutputItem[], provi
   return items;
 }
 
+/** Validate the canonical input window returned by `/responses/compact`. */
+export function validateResponsesCompactItems(items: ResponsesOutputItem[], providerId?: string): ResponsesOutputItem[] {
+  let compactionItems = 0;
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item) || typeof item.type !== "string" || !item.type) {
+      fail("Provider compaction included a malformed Item.", providerId);
+    }
+    if (item.type === "compaction") {
+      if (typeof item.encrypted_content !== "string" || item.encrypted_content.length === 0) {
+        fail("Provider compaction included a malformed compaction Item.", providerId);
+      }
+      compactionItems += 1;
+    }
+  }
+  if (compactionItems !== 1) {
+    fail("Provider compaction did not return exactly one encrypted compaction Item.", providerId);
+  }
+  return items;
+}
+
 function fail(message: string, providerId?: string): never {
   throw new ProviderError(message, { kind: "malformed_response", providerId });
 }

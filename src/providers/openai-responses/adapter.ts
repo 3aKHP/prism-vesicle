@@ -2,13 +2,16 @@ import type { VesicleConfig } from "../../config/env";
 import { abortError, ProviderError, summarizeProviderFailure } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
-import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../shared/types";
-import { findResponsesContinuation, toResponsesBody, toResponsesWebSocketMessage } from "./request";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderAdapter, type ProviderCompactRequest, type ProviderCompactResult, type ProviderStreamEvent, type VesicleRequest, type VesicleResponse } from "../shared/types";
+import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesWebSocketMessage, usesResponsesNativeCheckpoint } from "./request";
 import { readResponsesErrorMessage, responseFromResponsesBody } from "./response";
 import { readResponsesStream } from "./stream";
-import type { ResponsesBody } from "./types";
+import type { ResponsesBody, ResponsesCompactBody } from "./types";
 import { responsesEndpointFingerprint } from "./owner";
-import { responsesWebSocketSession, type ResponsesSocketFactory } from "./websocket";
+import { invalidateResponsesWebSocketContinuation, responsesWebSocketSession, type ResponsesSocketFactory } from "./websocket";
+import { parseProviderStateEnvelope, providerStateEnvelopeVersion } from "../shared/state";
+import { validateResponsesCompactItems } from "./items";
+import { usageFromResponses } from "./usage";
 
 export class OpenAIResponsesAdapter implements ProviderAdapter {
   readonly id = "openai-responses";
@@ -26,10 +29,55 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     this.requireApiKey();
     this.requireProfile();
-    const response = await this.fetchResponses(request, false);
-    const body = await response.json().catch(() => undefined) as ResponsesBody | undefined;
+    try {
+      return await this.completeOnce(request);
+    } catch (error) {
+      if (!usesResponsesNativeCheckpoint(request, this.requestContext()) || isRetryableResponsesFailure(error)) throw error;
+      return this.completeOnce(portableCheckpointRequest(request));
+    }
+  }
+
+  async compact(request: ProviderCompactRequest): Promise<ProviderCompactResult> {
+    this.requireApiKey();
+    this.requireProfile();
+    if (this.config.capabilities?.remoteCompact !== true) {
+      throw new ProviderError("Remote Responses compaction is not enabled for this model profile.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
+    const response = await fetchProvider(`${this.config.baseUrl}/responses/compact`, {
+      method: "POST",
+      headers: { ...openAIResponsesHeaders(false, this.config.userAgent), authorization: `Bearer ${this.config.apiKey}` },
+      body: JSON.stringify(toResponsesCompactBody(request, this.requestContext())),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
+      onRetry: request.onRetry,
+      policy: { maxRetries: 5 },
+    });
+    const body = await response.json().catch(() => undefined) as ResponsesCompactBody | undefined;
     if (!response.ok) this.throwHttp(response, body?.error?.message);
-    return responseFromResponsesBody(body, this.context(request));
+    if (!body || body.object !== "response.compaction" || !Array.isArray(body.output)) {
+      throw new ProviderError("Provider compaction did not return a canonical output window.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
+    const compactedInput = validateResponsesCompactItems(body.output, this.config.providerId);
+    const providerState = parseProviderStateEnvelope({
+      version: providerStateEnvelopeVersion,
+      protocol: "openai-responses",
+      providerId: this.config.providerId,
+      model: request.model.model,
+      endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl),
+      payload: { version: 1, compactedInput },
+    });
+    const usage = usageFromResponses(body.usage);
+    return { providerState, ...(usage ? { usage } : {}) };
+  }
+
+  commitCompact(): void {
+    if (this.runtime.sessionId) invalidateResponsesWebSocketContinuation(this.runtime.sessionId);
   }
 
   async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
@@ -46,6 +94,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     request: VesicleRequest,
     attemptOffset = 0,
     maxRetries = 5,
+    allowNativeFallback = true,
   ): AsyncIterable<ProviderStreamEvent> {
     for (let retry = 0; ; retry++) {
       const attempt = attemptOffset + retry + 1;
@@ -73,6 +122,17 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         for (const event of committed) yield event;
         return;
       } catch (error) {
+        if (allowNativeFallback && usesResponsesNativeCheckpoint(request, this.requestContext()) && !isRetryableResponsesFailure(error)) {
+          yield { type: "attempt_started", attempt };
+          yield { type: "attempt_discarded", attempt };
+          yield* this.streamHttp(
+            portableCheckpointRequest(request),
+            attempt,
+            Math.max(0, maxRetries - retry),
+            false,
+          );
+          return;
+        }
         if (request.signal?.aborted || !isRetryableResponsesFailure(error) || retry >= maxRetries) throw error;
         yield { type: "attempt_started", attempt };
         yield { type: "attempt_discarded", attempt };
@@ -84,7 +144,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private async *streamWebSocket(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
-    const stableRequest = snapshotRequest(request, this.config.providerId);
+    let stableRequest = snapshotRequest(request, this.config.providerId);
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
     const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
@@ -155,6 +215,17 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         // Any uncommitted WebSocket terminal invalidates connection-local
         // continuation, including a non-retryable malformed/failed response.
         session.resetConnection("request recovery");
+        if (!missingContinuation && usesResponsesNativeCheckpoint(stableRequest, this.requestContext()) && !isRetryableResponsesFailure(error)) {
+          yield { type: "attempt_started", attempt };
+          yield { type: "attempt_discarded", attempt };
+          stableRequest = portableCheckpointRequest(stableRequest);
+          if (retry >= maxRetries) {
+            session.disable();
+            yield* this.streamHttp(stableRequest, maxRetries + 1, 0, false);
+            return;
+          }
+          continue;
+        }
         if (!missingContinuation && !isRetryableResponsesFailure(error)) throw error;
         yield { type: "attempt_started", attempt };
         yield { type: "attempt_discarded", attempt };
@@ -184,6 +255,13 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       onRetry: request.onRetry,
       policy: { maxRetries },
     });
+  }
+
+  private async completeOnce(request: VesicleRequest): Promise<VesicleResponse> {
+    const response = await this.fetchResponses(request, false);
+    const body = await response.json().catch(() => undefined) as ResponsesBody | undefined;
+    if (!response.ok) this.throwHttp(response, body?.error?.message);
+    return responseFromResponsesBody(body, this.context(request));
   }
 
   private requestContext() {
@@ -241,6 +319,13 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         : {}),
     };
   }
+}
+
+function portableCheckpointRequest(request: VesicleRequest): VesicleRequest {
+  return {
+    ...request,
+    messages: request.messages.filter((message) => message.kind !== PROVIDER_NATIVE_CHECKPOINT_KIND),
+  };
 }
 
 function snapshotRequest(request: VesicleRequest, providerId: string): VesicleRequest {

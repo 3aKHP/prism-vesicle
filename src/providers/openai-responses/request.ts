@@ -1,7 +1,7 @@
 import type { ToolDefinition } from "../../core/tools";
-import { parseProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
-import type { ReasoningTier, VesicleMessage, VesicleRequest } from "../shared/types";
-import { validateResponsesOutputItems } from "./items";
+import { parseProviderStateEnvelope, type ProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderCompactRequest, type ReasoningTier, type VesicleMessage, type VesicleRequest } from "../shared/types";
+import { validateResponsesCompactItems, validateResponsesOutputItems } from "./items";
 import { openAIResponsesProtocol, type ResponsesOutputItem } from "./types";
 
 type RequestContext = { providerId: string; endpointFingerprint: string };
@@ -25,6 +25,13 @@ export function toResponsesBody(request: VesicleRequest, context: RequestContext
     prompt_cache_key: request.id,
     text: { verbosity: "medium" },
     max_output_tokens: request.generation?.maxTokens,
+  };
+}
+
+export function toResponsesCompactBody(request: ProviderCompactRequest, context: RequestContext): Record<string, unknown> {
+  return {
+    model: request.model.model,
+    input: serializeResponsesInput(request.messages, request.model.model, context),
   };
 }
 
@@ -75,6 +82,7 @@ export function findResponsesContinuation(
   if (!expectedResponseId) return undefined;
   for (let index = request.messages.length - 1; index >= 0; index--) {
     const message = request.messages[index];
+    if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) return undefined;
     if (message.role !== "assistant" || !message.providerState) continue;
     const native = nativeOutputItems(message.providerState, request.model.model, context);
     // The newest native assistant state owns the continuation frontier. An
@@ -94,6 +102,12 @@ export function findResponsesContinuation(
   return undefined;
 }
 
+export function usesResponsesNativeCheckpoint(request: VesicleRequest, context: RequestContext): boolean {
+  return request.messages.some((message) =>
+    message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND
+    && nativeCompactInput(message.providerState, request.model.model, context) !== undefined);
+}
+
 function serializeResponsesInput(
   messages: VesicleMessage[],
   model: string,
@@ -104,6 +118,20 @@ function serializeResponsesInput(
   const declaredCallIds = new Set(initialCallIds);
   const answeredCallIds = new Set<string>();
   for (const message of messages) {
+    if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) {
+      const compacted = nativeCompactInput(message.providerState, model, context);
+      if (compacted) {
+        input.length = 0;
+        declaredCallIds.clear();
+        answeredCallIds.clear();
+        for (const item of compacted) {
+          if (item.type === "function_call" && typeof item.call_id === "string") declaredCallIds.add(item.call_id);
+          if (item.type === "function_call_output" && typeof item.call_id === "string") answeredCallIds.add(item.call_id);
+        }
+        input.push(...compacted);
+      }
+      continue;
+    }
     if (message.role === "assistant" && message.providerState) {
       const native = nativeOutputItems(message.providerState, model, context);
       if (native) {
@@ -141,6 +169,30 @@ function serializeResponsesInput(
   const unanswered = [...declaredCallIds].find((callId) => !answeredCallIds.has(callId));
   if (unanswered) throw new Error(`OpenAI Responses function call_id ${unanswered} has no result.`);
   return input;
+}
+
+function nativeCompactInput(state: VesicleMessage["providerState"], model: string, context: RequestContext): ResponsesOutputItem[] | undefined {
+  if (!state) return undefined;
+  let envelope: ProviderStateEnvelope;
+  try {
+    envelope = parseProviderStateEnvelope(state);
+  } catch {
+    return undefined;
+  }
+  if (envelope.protocol !== openAIResponsesProtocol
+    || envelope.providerId !== context.providerId
+    || envelope.model !== model
+    || envelope.endpointFingerprint !== context.endpointFingerprint) return undefined;
+  const payload = envelope.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)
+    || payload.version !== 1 || !Array.isArray(payload.compactedInput)) return undefined;
+  try {
+    return validateResponsesCompactItems(payload.compactedInput as ResponsesOutputItem[], context.providerId);
+  } catch {
+    // Native compaction is optional. A corrupted provider-owned projection
+    // selects the portable summary instead of making the session unreadable.
+    return undefined;
+  }
 }
 
 function declareCallId(value: ProviderStateJson | string, declared: Set<string>): void {
