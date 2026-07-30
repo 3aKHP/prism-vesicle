@@ -5,7 +5,7 @@ import type { EngineId } from "../engine/profile";
 import type { EngineSwitchRequest } from "../engine/switch";
 import type { ProviderSelection } from "../../config/providers";
 import type { UserQuestionRequest } from "../user-question/types";
-import type { ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
+import type { ProviderStateEnvelope, ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { SkillToolEvent } from "../skills/types";
@@ -247,6 +247,8 @@ export type ResumedMessage = {
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
   toolCalls?: ResumedToolCall[];
+  /** Validated provider-owned durable state attached to an assistant message. */
+  providerState?: ProviderStateEnvelope;
   toolOk?: boolean;
   toolFileEvent?: FileToolEvent;
   toolWebEvent?: WebToolEvent;

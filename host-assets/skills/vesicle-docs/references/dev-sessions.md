@@ -14,6 +14,7 @@ This document defines durable conversation history, provider projection, file ch
 - Resume and continuation reverify the active Harness identity against that initial record and block continuation on mismatch rather than silently switching runtime contracts; see [`ASSETS.md`](./ASSETS.md).
 - Host-only metadata may support replay and rendering but must not be forwarded to providers unless its record kind explicitly defines provider-visible context.
 - Malformed tool arguments persist only as a replay-safe `{}` in provider-visible tool-call metadata. A separate host-only diagnostic may retain the call id/name, failure class, UTF-8 length, SHA-256, and a bounded prefix; the original unbounded malformed string is not replay authority.
+- A completed assistant record may persist one validated, owner-qualified provider-state envelope. Session code treats its bounded JSON payload as opaque and never interprets provider wire semantics.
 - Child-session ownership uses separate parent session and parent tool-call identity; `parentUuid` remains an intra-session branch edge. See [`SUBAGENTS.md`](./SUBAGENTS.md).
 
 ## Provider History Projection
@@ -24,6 +25,8 @@ This document defines durable conversation history, provider projection, file ch
 - Host packets such as Engine handoffs and compact summaries use explicit record kinds so the provider projection, transcript, rewind accounting, and empty-session UI can treat them consistently.
 - Projection must fail with an actionable session error when it encounters an unknown durable replacement format that cannot be interpreted safely.
 - Projection sanitizes malformed tool arguments in legacy assistant records to `{}` so an existing paired failure result remains protocol-replayable instead of trapping resume in a serialization loop.
+- Provider-owned state is cloned across load and every provider-message conversion. Resume, rewind, and append-only branching therefore reproduce the envelope attached to the selected assistant ancestor without sharing mutable payload objects.
+- An unknown required provider-state version or malformed envelope fails projection actionably. Legacy records with no provider state remain compatible and project unchanged.
 
 ## Attachments And File Checkpoints
 
@@ -47,6 +50,7 @@ This document defines durable conversation history, provider projection, file ch
 
 - Manual and automatic compaction install one atomic `compact-checkpoint-v1` system record at the active head. The original transcript remains intact for display, rewind, and audit.
 - A portable compact checkpoint contains a summary of the evicted prefix, a verbatim retained recent tail, and the active frontier when compaction occurs mid-turn.
+- Verbatim retained assistant messages may carry their validated provider-state envelopes through a portable checkpoint. Generated summaries never fabricate, merge, or reinterpret provider-native state.
 - Provider-visible history resets at the newest valid checkpoint and replays its suffix. The selected-pivot rewind summary keeps its separate branch behavior.
 - Records use stable logical-turn and provider-round identity so compaction evicts only complete units and never separates a tool call from its result. Legacy records without those ids are grouped conservatively.
 - The exact replacement request must reduce the projected request and fit the hard input ceiling before the checkpoint is appended.
@@ -68,6 +72,7 @@ This document defines durable conversation history, provider projection, file ch
 
 - Long-running turns emit host-visible activity around provider requests, tool calls, interaction pauses, compaction, quality handling, and validation.
 - Provider streaming may expose assistant deltas while still reconstructing one final normalized response for persistence and replay.
+- Streamed tool candidates are provisional. A disconnect, cancellation, retry, or adapter failure before the terminal provider commit leaves no assistant record, provider state, tool result, or tool side effect from that attempt.
 - Observability does not change provider, process, tool, or session semantics.
 
 Persistent Instructions are deliberately outside session identity; their separate resolution and mutation contract lives in [`PERSISTENT_INSTRUCTIONS.md`](./PERSISTENT_INSTRUCTIONS.md).

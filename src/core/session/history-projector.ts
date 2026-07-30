@@ -13,6 +13,7 @@ import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
 import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
 import { replayableToolArguments } from "../tools/arguments";
+import { parseProviderStateEnvelope } from "../../providers/shared/state";
 
 export type HistoryProjection = {
   messages: ResumedMessage[];
@@ -126,8 +127,11 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
       const messageEngine = readEngineId(record.metadata?.engine);
       const messageModel = typeof record.metadata?.model === "string" ? record.metadata.model : undefined;
       const usage = readResponseUsage(record.metadata?.usage);
+      const providerState = record.metadata && Object.hasOwn(record.metadata, "providerState")
+        ? parseProviderStateEnvelope(record.metadata.providerState, `Session assistant record ${record.uuid} provider state`)
+        : undefined;
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
-      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
+      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(providerState ? { providerState } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
       continue;
     }
 

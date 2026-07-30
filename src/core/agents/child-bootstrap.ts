@@ -3,6 +3,7 @@ import { createMcpRegistryForEngine } from "../../mcp/registry";
 import type { McpRegistry } from "../../mcp/registry";
 import { createProvider } from "../../providers";
 import type { ProviderAdapter, VesicleMessage } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { createSessionStore, type SessionStore } from "../session/store";
 import { hostToolDefinitions } from "../tools";
@@ -140,7 +141,15 @@ export function resolveChildTools(
 }
 
 function contextMessages(mode: "fresh" | "summary" | "fork", parent: VesicleMessage[], prompt: string): VesicleMessage[] {
-  if (mode === "fork") return [...parent, { role: "user", content: `[delegated task]\n${prompt}` }];
+  if (mode === "fork") {
+    return [
+      ...parent.map((message) => ({
+        ...message,
+        ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
+      })),
+      { role: "user", content: `[delegated task]\n${prompt}` },
+    ];
+  }
   if (mode === "summary") {
     const context = boundedParentContext(parent, 12_000);
     return [{

@@ -7,6 +7,7 @@
 import type { ProviderSelection } from "../../config/providers";
 import type { EngineId } from "../engine/profile";
 import type { VesicleImageAttachment, VesicleMessage, VesicleRequest } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 
 export type SideQuestionContextSnapshot = {
   sessionId: string;
@@ -42,6 +43,7 @@ export function cloneSideQuestionMessages(messages: VesicleMessage[]): VesicleMe
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+    ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images.map(stripImageBytes) } : {}),
   }));
 }

@@ -1,4 +1,7 @@
 import type { ToolCall, ToolDefinition } from "../../core/tools";
+import type { ProviderStateEnvelope } from "./state";
+
+export type { ProviderStateEnvelope } from "./state";
 
 export const reasoningTiers = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 export type ReasoningTier = typeof reasoningTiers[number];
@@ -44,6 +47,8 @@ export type VesicleMessage = {
   /** Host-derived tool outcome used by adapters with a native error flag. */
   toolOk?: boolean;
   toolCalls?: ToolCall[];
+  /** Owner-qualified durable state. Only the matching provider adapter interprets it. */
+  providerState?: ProviderStateEnvelope;
   images?: VesicleImageAttachment[];
 };
 
@@ -85,6 +90,8 @@ export type VesicleResponse = {
   reasoningContent?: string;
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCalls?: ToolCall[];
+  /** Validated provider-owned state published only with this completed response. */
+  providerState?: ProviderStateEnvelope;
   finishReason?: string;
   raw?: unknown;
   usage?: ResponseUsage;
@@ -113,7 +120,10 @@ export type ProviderStreamEvent =
   | { type: "content_delta"; delta: string }
   | { type: "reasoning_delta"; delta: string }
   | { type: "tool_call_delta"; index: number; id?: string; name?: string; argumentsDelta?: string }
-  | { type: "complete"; response: VesicleResponse };
+  | { type: "attempt_started"; attempt: number }
+  | { type: "tool_call_candidate"; attempt: number; toolCall: ToolCall }
+  | { type: "attempt_discarded"; attempt: number }
+  | { type: "complete"; response: VesicleResponse; attempt?: number };
 
 export interface ProviderAdapter {
   id: string;

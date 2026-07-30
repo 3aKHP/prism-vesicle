@@ -51,6 +51,37 @@ describe("session: compact-checkpoint-v1 projection", () => {
     ]);
   });
 
+  test("retained assistant messages preserve bounded provider state", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-provider-state-"));
+    const store = await createSessionStore(rootDir, "ckpt-provider-state");
+    const providerState = {
+      version: 1 as const,
+      protocol: "fixture-responses",
+      providerId: "fixture-provider",
+      model: "fixture-model",
+      endpointFingerprint: "sha256:fixture-endpoint",
+      payload: { responseId: "response-retained", outputItems: [] },
+    };
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          replacementMessages: [
+            { role: "user", content: "[conversation summary]\nEarlier work.", kind: "compact-summary" },
+            { role: "assistant", content: "retained", providerState },
+          ],
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages[1]?.providerState).toEqual(providerState);
+    expect(messages[1]?.providerState).not.toBe(providerState);
+  });
+
   test("an unknown future checkpoint version fails with an actionable error instead of partially projecting", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-unknown-"));
     const store = await createSessionStore(rootDir, "ckpt-unknown");

@@ -1,5 +1,6 @@
 import type { ExperimentalQualityProfile } from "../../config/quality";
 import type { VesicleMessage } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import type { AgentManager } from "../agents/manager";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { ToolPermissionBroker } from "../permissions";
@@ -157,6 +158,7 @@ export function toVesicleMessage(
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images } : {}),
   };
 }
