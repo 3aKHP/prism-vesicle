@@ -32,7 +32,15 @@ export function installHostShutdownHooks(): void {
 export function runHostShutdownCleanups(): Promise<void> {
   shutdownPromise ??= (async () => {
     const ordered = [...cleanups].sort((left, right) => left.priority - right.priority);
-    for (const { cleanup } of ordered) await cleanup();
+    for (const { cleanup } of ordered) {
+      try {
+        await cleanup();
+      } catch {
+        // Shutdown is best-effort per resource. One failed owner must not keep
+        // later resources (especially provider sockets) alive.
+        console.error("A host resource failed to clean up; continuing shutdown.");
+      }
+    }
   })();
   return shutdownPromise;
 }

@@ -518,13 +518,16 @@ export function App(props: AppProps = {}) {
     if (disposed) return;
     disposed = true;
     unsubscribeProcesses();
-    await processManager.shutdown();
-    sideQuestionController.dispose();
+    try {
+      await processManager.shutdown();
+    } finally {
+      sideQuestionController.dispose();
+    }
   };
   const unregisterHostShutdown = registerHostShutdownCleanup(shutdownHostResources);
   onCleanup(() => {
     unregisterHostShutdown();
-    void shutdownHostResources();
+    void shutdownHostResources().catch(() => undefined);
     closeAllProviderSessions();
   });
   const permissionBroker = new ToolPermissionBroker();

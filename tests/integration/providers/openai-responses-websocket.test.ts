@@ -463,8 +463,8 @@ describe("OpenAI Responses WebSocket transport", () => {
       + `import { closeAllProviderSessions } from ${JSON.stringify(lifecycleUrl)};\n`
       + `import { installHostShutdownHooks, registerHostShutdownCleanup } from ${JSON.stringify(shutdownUrl)};\n`
       + "installHostShutdownHooks();\n"
-      + "registerHostShutdownCleanup(async () => { await Bun.sleep(25); console.log(\"host-cleanup\"); });\n"
-      + "registerHostShutdownCleanup(closeAllProviderSessions, 100);\n"
+      + "registerHostShutdownCleanup(async () => { await Bun.sleep(25); console.log(\"host-cleanup\"); throw new Error(\"expected cleanup failure\"); });\n"
+      + "registerHostShutdownCleanup(() => { console.log(\"provider-cleanup\"); closeAllProviderSessions(); }, 100);\n"
       + `const session = responsesWebSocketSession({sessionId:"child",owner:"owner",baseUrl:${JSON.stringify(baseUrl)},providerId:"test",headers:{authorization:"Bearer test"}});\n`
       + "void session.request({type:\"response.create\"});";
     const child = Bun.spawn([process.execPath, "-e", script], { stdout: "pipe", stderr: "ignore" });
@@ -478,7 +478,7 @@ describe("OpenAI Responses WebSocket transport", () => {
         child.exited,
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("child did not exit")), 2_000)),
       ])).resolves.toBe(143);
-      expect(await new Response(child.stdout).text()).toContain("host-cleanup");
+      expect(await new Response(child.stdout).text()).toContain("host-cleanup\nprovider-cleanup");
     } finally {
       child.kill("SIGKILL");
       server.stop(true);
