@@ -8,6 +8,7 @@ type RegisteredCleanup = {
 const cleanups = new Set<RegisteredCleanup>();
 let hooksInstalled = false;
 let shutdownPromise: Promise<void> | undefined;
+let shutdownStarted = false;
 const signalShutdownTimeoutMs = 10_000;
 
 /** Register host-owned cleanup. Lower priorities run first. */
@@ -15,7 +16,7 @@ export function registerHostShutdownCleanup(
   cleanup: HostShutdownCleanup,
   priority = 0,
 ): () => void {
-  if (shutdownPromise) {
+  if (shutdownStarted) {
     throw new Error("Cannot register a host cleanup after process shutdown has started.");
   }
   const registered = { cleanup, priority };
@@ -36,7 +37,9 @@ export function runHostShutdownCleanups(): Promise<void> {
   // Process shutdown is a one-shot transaction. Keeping the settled promise
   // prevents `beforeExit` from rerunning resources already closed by an
   // explicit noninteractive cleanup; late registration is rejected above.
-  shutdownPromise ??= (async () => {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownStarted = true;
+  shutdownPromise = (async () => {
     const ordered = [...cleanups].sort((left, right) => left.priority - right.priority);
     for (const { cleanup } of ordered) {
       try {

@@ -661,6 +661,7 @@ describe("OpenAI Responses WebSocket transport", () => {
       + `import { closeAllProviderSessions } from ${JSON.stringify(lifecycleUrl)};\n`
       + `import { registerHostShutdownCleanup, runHostShutdownCleanups } from ${JSON.stringify(shutdownUrl)};\n`
       + "registerHostShutdownCleanup(closeAllProviderSessions, 100);\n"
+      + "registerHostShutdownCleanup(() => { try { registerHostShutdownCleanup(() => undefined); } catch (error) { console.log(`reentrant: ${error.message}`); } });\n"
       + `const session = responsesWebSocketSession({sessionId:"once",owner:"owner",baseUrl:${JSON.stringify(baseUrl)},providerId:"test",headers:{authorization:"Bearer test"}});\n`
       + "await session.request({type:\"response.create\"});\n"
       + "await runHostShutdownCleanups();\n"
@@ -678,6 +679,7 @@ describe("OpenAI Responses WebSocket transport", () => {
       ])).resolves.toBeUndefined();
       const stdout = await new Response(child.stdout).text();
       expect(stdout).toContain("completed");
+      expect(stdout).toContain("reentrant: Cannot register a host cleanup after process shutdown has started.");
       expect(stdout).toContain("Cannot register a host cleanup after process shutdown has started.");
       expect(await new Response(child.stderr).text()).toBe("");
     } finally {
