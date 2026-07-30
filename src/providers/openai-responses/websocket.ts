@@ -49,6 +49,7 @@ export class ResponsesWebSocketSession {
     return this.sessionId === options.sessionId
       && this.owner === options.owner
       && headersEqual(this.options.headers, options.headers)
+      && this.options.factory === options.factory
       && this.options.requestTimeoutMs === options.requestTimeoutMs;
   }
 

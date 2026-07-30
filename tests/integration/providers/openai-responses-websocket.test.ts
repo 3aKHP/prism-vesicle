@@ -142,8 +142,10 @@ describe("OpenAI Responses WebSocket transport", () => {
     const pending = first.request({ type: "response.create" });
     await expect(first.request({ type: "response.create" })).rejects.toThrow("only one in-flight");
     const second = responsesWebSocketSession(sessionOptions("same", "owner-b", factory));
+    const third = responsesWebSocketSession(sessionOptions("same", "owner-b", () => new FakeSocket(() => undefined)));
 
     expect(second).not.toBe(first);
+    expect(third).not.toBe(second);
     expect(sockets[0].closeCount).toBe(1);
     await expect(pending).rejects.toThrow("connection closed before opening: provider owner changed");
   });
