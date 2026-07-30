@@ -72,9 +72,12 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl),
       payload: { version: 1, compactedInput },
     });
-    if (this.runtime.sessionId) invalidateResponsesWebSocketContinuation(this.runtime.sessionId);
     const usage = usageFromResponses(body.usage);
     return { providerState, ...(usage ? { usage } : {}) };
+  }
+
+  commitCompact(): void {
+    if (this.runtime.sessionId) invalidateResponsesWebSocketContinuation(this.runtime.sessionId);
   }
 
   async *stream(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {

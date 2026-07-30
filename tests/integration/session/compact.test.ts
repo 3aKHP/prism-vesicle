@@ -13,6 +13,7 @@ import {
   loadSessionSnapshot,
   parseCompactCheckpoint,
 } from "../../../src/core/session/store";
+import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -392,6 +393,12 @@ describe("conversation compact", () => {
     await store.append({ role: "assistant", content: "answer one" });
     await store.append({ role: "user", content: "second" });
     await store.append({ role: "assistant", content: "answer two" });
+    const providerSession = responsesWebSocketSession({
+      sessionId: store.sessionId, owner: "existing-owner", baseUrl: "https://api.openai.com/v1",
+      providerId: "openai", headers: { authorization: "Bearer test" },
+      factory: () => { throw new Error("socket should not open"); },
+    });
+    providerSession.lastResponseId = "resp_before_failed_compact";
 
     let requests = 0;
     globalThis.fetch = (async (input: string | URL | Request) => {
@@ -410,12 +417,17 @@ describe("conversation compact", () => {
       });
     }) as unknown as typeof fetch;
 
-    await expect(compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" }))
-      .rejects.toThrow(/Session head changed/);
-    expect(requests).toBe(2);
-    const records = await loadSessionRecords(rootDir, store.sessionId);
-    expect(records.at(-1)?.content).toBe("concurrent suffix");
-    expect(records.some((record) => record.metadata?.kind === COMPACT_CHECKPOINT_KIND)).toBe(false);
+    try {
+      await expect(compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" }))
+        .rejects.toThrow(/Session head changed/);
+      expect(requests).toBe(2);
+      const records = await loadSessionRecords(rootDir, store.sessionId);
+      expect(records.at(-1)?.content).toBe("concurrent suffix");
+      expect(records.some((record) => record.metadata?.kind === COMPACT_CHECKPOINT_KIND)).toBe(false);
+      expect(providerSession.lastResponseId).toBe("resp_before_failed_compact");
+    } finally {
+      closeResponsesWebSocketSession(store.sessionId);
+    }
   });
 
   test("a retained tool round keeps its tool-call/result pairing and reasoning intact", async () => {

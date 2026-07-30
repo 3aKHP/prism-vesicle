@@ -136,6 +136,18 @@ describe("OpenAI Responses request codec", () => {
       { role: "assistant", content: "retained" },
       { role: "user", content: "continue" },
     ]);
+
+    const corrupt = {
+      ...compactedRequest,
+      messages: compactedRequest.messages.map((message) => message === marker
+        ? { ...message, providerState: { ...marker.providerState, version: 99 as 1 } }
+        : message),
+    };
+    expect(toResponsesBody(corrupt, context(), true).input).toEqual([
+      { role: "user", content: "[conversation summary]\nportable" },
+      { role: "assistant", content: "retained" },
+      { role: "user", content: "continue" },
+    ]);
   });
 
   test("encodes and validates standalone remote compaction without a response continuation", async () => {
@@ -201,7 +213,7 @@ describe("OpenAI Responses request codec", () => {
     }
   });
 
-  test("successful standalone compaction invalidates the old session continuation", async () => {
+  test("committed standalone compaction invalidates the old session continuation", async () => {
     const originalFetch = globalThis.fetch;
     const sessionId = "compact-continuation";
     const session = responsesWebSocketSession({
@@ -225,6 +237,8 @@ describe("OpenAI Responses request codec", () => {
         responsesTransport: "websocket", capabilities: { remoteCompact: true },
       }, { sessionId });
       await adapter.compact!({ id: "compact", model: request().model, messages: [] });
+      expect(session.lastResponseId).toBe("resp_before_compact");
+      adapter.commitCompact();
       expect(session.lastResponseId).toBeUndefined();
       expect(session.needsPrewarm()).toBe(true);
     } finally {

@@ -1,7 +1,7 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider } from "../../providers";
-import type { ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderAdapter, ProviderCompactResult, ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
@@ -147,11 +147,13 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     return { kind: "failed", error };
   }
 
-  let nativeProjection: VesicleResponse["providerState"];
+  let nativeProjection: ProviderCompactResult["providerState"] | undefined;
+  let compactProvider: ProviderAdapter | undefined;
   if (config.capabilities?.remoteCompact === true) {
     try {
       const provider = createProvider(config, { sessionId: options.sessionId });
       if (provider.compact) {
+        compactProvider = provider;
         const compacted = await provider.compact({
           id: `${options.sessionId}:compact:${selection.sourceHeadUuid}`,
           model: { provider: config.providerId, model: config.model },
@@ -217,6 +219,15 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
         ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
       },
     });
+    if (nativeProjection && compactProvider?.commitCompact) {
+      // The checkpoint is already durable. Provider-local continuation cleanup
+      // is best effort and must not turn a committed append into a failed result.
+      try {
+        compactProvider.commitCompact();
+      } catch {
+        // The next request still sees the native marker and starts a new chain.
+      }
+    }
     if (skillReattach.lost.length > 0) {
       await session.append({
         role: "system",

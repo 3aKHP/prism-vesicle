@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "../../core/tools";
-import { parseProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
+import { parseProviderStateEnvelope, type ProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderCompactRequest, type ReasoningTier, type VesicleMessage, type VesicleRequest } from "../shared/types";
 import { validateResponsesCompactItems, validateResponsesOutputItems } from "./items";
 import { openAIResponsesProtocol, type ResponsesOutputItem } from "./types";
@@ -173,7 +173,12 @@ function serializeResponsesInput(
 
 function nativeCompactInput(state: VesicleMessage["providerState"], model: string, context: RequestContext): ResponsesOutputItem[] | undefined {
   if (!state) return undefined;
-  const envelope = parseProviderStateEnvelope(state);
+  let envelope: ProviderStateEnvelope;
+  try {
+    envelope = parseProviderStateEnvelope(state);
+  } catch {
+    return undefined;
+  }
   if (envelope.protocol !== openAIResponsesProtocol
     || envelope.providerId !== context.providerId
     || envelope.model !== model

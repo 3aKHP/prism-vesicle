@@ -146,4 +146,6 @@ export interface ProviderAdapter {
   complete(request: VesicleRequest): Promise<VesicleResponse>;
   stream?(request: VesicleRequest): AsyncIterable<ProviderStreamEvent>;
   compact?(request: ProviderCompactRequest): Promise<ProviderCompactResult>;
+  /** Commit provider-local lifecycle changes only after the host durably installs compact state. */
+  commitCompact?(): void;
 }

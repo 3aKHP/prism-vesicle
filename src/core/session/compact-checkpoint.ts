@@ -187,15 +187,24 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
 
   let nativeProjection: PortableCompactCheckpointV1["nativeProjection"];
   if (Object.hasOwn(source, "nativeProjection")) {
-    const native = requireObject(source, "nativeProjection");
-    requireString(native, "sourceHeadUuid");
-    if (native.sourceHeadUuid !== source.sourceHeadUuid) {
+    const value = source.nativeProjection;
+    const native = value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : undefined;
+    if (typeof native?.sourceHeadUuid === "string" && native.sourceHeadUuid !== source.sourceHeadUuid) {
       throw new Error("Session compact checkpoint native projection source head does not match the portable projection.");
     }
-    nativeProjection = {
-      sourceHeadUuid: native.sourceHeadUuid as string,
-      state: parseProviderStateEnvelope(native.state, "Session compact checkpoint native projection state"),
-    };
+    if (native && native.sourceHeadUuid === source.sourceHeadUuid) {
+      try {
+        nativeProjection = {
+          sourceHeadUuid: native.sourceHeadUuid as string,
+          state: parseProviderStateEnvelope(native.state, "Session compact checkpoint native projection state"),
+        };
+      } catch {
+        // Provider-native state is optional. Corruption drops only this
+        // projection; the validated portable replacement remains readable.
+      }
+    }
   }
 
   return {

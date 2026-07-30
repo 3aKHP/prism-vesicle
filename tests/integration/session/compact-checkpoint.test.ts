@@ -138,6 +138,38 @@ describe("session: compact-checkpoint-v1 projection", () => {
     await expect(loadSessionMessages(rootDir, store.sessionId)).rejects.toThrow("source head does not match");
   });
 
+  test("drops a corrupt optional native envelope while keeping the portable projection readable", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-native-corrupt-"));
+    const store = await createSessionStore(rootDir, "ckpt-native-corrupt");
+    const sourceHeadUuid = crypto.randomUUID();
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          sourceHeadUuid,
+          nativeProjection: {
+            sourceHeadUuid,
+            state: {
+              version: 99 as 1,
+              protocol: "openai-responses",
+              providerId: "openai",
+              model: "gpt-5.6",
+              endpointFingerprint: "sha256:fixture-endpoint",
+              payload: { version: 1, compactedInput: [] },
+            },
+          },
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages.map((message) => message.kind)).toEqual(["compact-summary"]);
+    expect(messages[0]?.content).toBe("[conversation summary]\nEarlier work.");
+  });
+
   test("an unknown future checkpoint version fails with an actionable error instead of partially projecting", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-unknown-"));
     const store = await createSessionStore(rootDir, "ckpt-unknown");
