@@ -68,6 +68,7 @@ export type PortableCompactionOutcome =
       retainedUnits: number;
       contextWindow?: number;
       projectedAfterTokens?: number;
+      nativeProjectionInstalled: boolean;
       /** Active Skills whose exact body compaction could not retain; they require reactivation. */
       skillContextLoss?: SkillContextLoss[];
     }
@@ -146,6 +147,27 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     return { kind: "failed", error };
   }
 
+  let nativeProjection: VesicleResponse["providerState"];
+  if (config.capabilities?.remoteCompact === true) {
+    try {
+      const provider = createProvider(config, { sessionId: options.sessionId });
+      if (provider.compact) {
+        const compacted = await provider.compact({
+          id: `${options.sessionId}:compact:${selection.sourceHeadUuid}`,
+          model: { provider: config.providerId, model: config.model },
+          messages: full.messages.map(toVesicleMessage),
+          signal: options.signal,
+          onRetry: options.onRetry,
+        });
+        nativeProjection = compacted.providerState;
+      }
+    } catch (error) {
+      if (options.signal?.aborted || isAbortError(error)) return { kind: "cancelled", error };
+      // The portable projection remains authoritative. Remote compact is an
+      // optional same-source optimization and never blocks local recovery.
+    }
+  }
+
   const replacementMessages = buildCompactReplacementMessages(selection, summary, skillReattach.reattach);
   let projectedAfterTokens: number | undefined;
   let installed: Awaited<ReturnType<typeof installCompactCheckpoint>>;
@@ -179,6 +201,7 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
       selection,
       summary,
       replacementMessages,
+      ...(nativeProjection ? { nativeProjection } : {}),
       trigger: options.trigger,
       phase: options.phase,
       reason: options.reason,
@@ -225,6 +248,7 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
     checkpointUuid: installed.checkpointUuid,
     messagesSummarized,
     retainedUnits,
+    nativeProjectionInstalled: Boolean(nativeProjection),
     ...(config.limits?.contextWindow ? { contextWindow: config.limits.contextWindow } : {}),
     ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
     ...(skillReattach.lost.length > 0 ? { skillContextLoss: skillReattach.lost } : {}),
@@ -340,7 +364,7 @@ async function generateSummary(options: {
   onRetry?: (info: ProviderRetryInfo) => void;
 }): Promise<string> {
   const config = await loadConfigForSelection(options.providerSelection);
-  const provider = createProvider(config);
+  const provider = createProvider(config, { sessionId: options.sessionId });
   const profile = await loadEngineProfile(options.engine, options.rootDir);
   const enginePrompt = composeSystemPrompt(await loadPromptBundle(profile, options.rootDir));
   const systemPrompt = (

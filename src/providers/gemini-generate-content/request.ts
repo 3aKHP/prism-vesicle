@@ -1,4 +1,4 @@
-import type { ProviderThinkingBlock, ReasoningTier, VesicleRequest } from "../shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderThinkingBlock, type ReasoningTier, type VesicleRequest } from "../shared/types";
 import type { GeminiContent, GeminiPart } from "./types";
 
 const defaultMaxOutputTokens = 4096;
@@ -38,6 +38,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
   };
 
   for (const message of messages) {
+    if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) continue;
     if (message.role === "system") continue;
     if (message.role === "tool") {
       pendingToolResults.push({

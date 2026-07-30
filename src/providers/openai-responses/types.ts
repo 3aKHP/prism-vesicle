@@ -29,6 +29,14 @@ export type ResponsesBody = {
   incomplete_details?: { reason?: string } | null;
 };
 
+export type ResponsesCompactBody = {
+  id?: string;
+  object?: string;
+  output?: ResponsesOutputItem[];
+  usage?: ResponsesUsage;
+  error?: { message?: string; code?: string } | null;
+};
+
 export type ResponsesEvent = {
   type?: string;
   sequence_number?: number;

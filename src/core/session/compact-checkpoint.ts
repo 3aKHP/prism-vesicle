@@ -1,4 +1,5 @@
 import type { ResumedMessage } from "./store";
+import type { ProviderStateEnvelope } from "../../providers/shared/state";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
 
 /**
@@ -42,6 +43,10 @@ export type PortableCompactCheckpointV1 = {
     beforeTokens?: number;
     beforeSource: "provider" | "estimated" | "unknown";
     projectedAfterTokens?: number;
+  };
+  nativeProjection?: {
+    sourceHeadUuid: string;
+    state: ProviderStateEnvelope;
   };
 };
 
@@ -180,6 +185,19 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
   requireEnum(accounting, "beforeSource", BEFORE_SOURCES, "checkpoint beforeSource");
   const projectedAfterTokens = optionalPositiveInteger(accounting, "projectedAfterTokens");
 
+  let nativeProjection: PortableCompactCheckpointV1["nativeProjection"];
+  if (Object.hasOwn(source, "nativeProjection")) {
+    const native = requireObject(source, "nativeProjection");
+    requireString(native, "sourceHeadUuid");
+    if (native.sourceHeadUuid !== source.sourceHeadUuid) {
+      throw new Error("Session compact checkpoint native projection source head does not match the portable projection.");
+    }
+    nativeProjection = {
+      sourceHeadUuid: native.sourceHeadUuid as string,
+      state: parseProviderStateEnvelope(native.state, "Session compact checkpoint native projection state"),
+    };
+  }
+
   return {
     version: 1,
     strategy: "portable-summary",
@@ -210,6 +228,7 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
       beforeSource: accounting.beforeSource as "provider" | "estimated" | "unknown",
       ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
     },
+    ...(nativeProjection ? { nativeProjection } : {}),
   };
 }
 

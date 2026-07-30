@@ -541,6 +541,7 @@ function readCapabilityField(key: string, value: string, index: number, path: st
   if (key === "temperature") return { temperature: enabled };
   if (key === "maxTokens") return { maxTokens: enabled };
   if (key === "vision") return { vision: enabled };
+  if (key === "remoteCompact") return { remoteCompact: enabled };
   throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
 }
 

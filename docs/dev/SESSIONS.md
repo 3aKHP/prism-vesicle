@@ -49,6 +49,9 @@ This document defines durable conversation history, provider projection, file ch
 - Manual and automatic compaction install one atomic `compact-checkpoint-v1` system record at the active head. The original transcript remains intact for display, rewind, and audit.
 - A portable compact checkpoint contains a summary of the evicted prefix, a verbatim retained recent tail, and the active frontier when compaction occurs mid-turn.
 - Verbatim retained assistant messages may carry their validated provider-state envelopes through a portable checkpoint. Generated summaries never fabricate, merge, or reinterpret provider-native state.
+- A checkpoint may also carry one optional provider-native projection. It is recorded beside, never instead of, the portable projection; both projections name the same uncompressed `sourceHeadUuid` and install through the same conditional append.
+- Projection loads always reconstruct portable replacement history first, then expose an opaque host-only native marker. Only its exact protocol/provider/model/endpoint owner may replace the portable window with native state; all other adapters omit the marker and continue from portable history.
+- Remote compaction failure, malformed or incompatible native state, and provider-side native-state expiry do not make the session unreadable. Original JSONL ancestors remain append-only, and a stale source head rejects the entire checkpoint before either projection becomes active.
 - Provider-visible history resets at the newest valid checkpoint and replays its suffix. The selected-pivot rewind summary keeps its separate branch behavior.
 - Records use stable logical-turn and provider-round identity so compaction evicts only complete units and never separates a tool call from its result. Legacy records without those ids are grouped conservatively.
 - The exact replacement request must reduce the projected request and fit the hard input ceiling before the checkpoint is appended.

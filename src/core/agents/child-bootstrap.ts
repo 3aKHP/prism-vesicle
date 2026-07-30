@@ -37,7 +37,6 @@ export async function bootstrapChildAgent({
   registerChildSession,
 }: BootstrapContext): Promise<ChildAgentBootstrap> {
   const config = await loadConfigForSelection(invocation.providerSelection);
-  const provider = createProvider(config);
   const profile = await loadAgentProfile(spec.profileId, invocation.rootDir, invocation.assets);
   const agentSystemPrompt = await loadAgentSystemPrompt(profile, invocation.rootDir, invocation.assets);
   const systemPrompts = composeChildSystemPrompts(profile.contextMode, invocation.parentSystemPrompt, agentSystemPrompt);
@@ -50,6 +49,7 @@ export async function bootstrapChildAgent({
   );
   const session = await createSessionStore(invocation.rootDir);
   await registerChildSession(session.sessionId);
+  const provider = createProvider(config, { sessionId: session.sessionId });
 
   await session.append({
     role: "system",

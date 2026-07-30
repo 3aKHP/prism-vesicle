@@ -1,6 +1,6 @@
 # OpenAI Responses Conformance Profile
 
-This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. The HTTPS/non-stream JSON, typed-SSE, and session-scoped WebSocket transports are implemented; later compaction, third-party exposure, and product-documentation phases remain incomplete. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
+This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. The HTTPS/non-stream JSON, typed-SSE, session-scoped WebSocket, and dual portable/provider-native compaction lifecycle are implemented; later third-party exposure and product-documentation work remains incomplete. Current protocol availability remains in [`STATUS.md`](../../STATUS.md).
 
 ## Claim Boundary
 
@@ -62,3 +62,9 @@ Runtime selection is explicit. `openai-public` accepts only the frozen public re
 Every SSE transport attempt uses a fresh accumulator. Deltas, tool candidates, usage, and native state stay private to that attempt until `response.completed` validates the final ordered Items; failed attempts are discarded and may be retried at most five times. This intentionally buffers visible deltas at the HTTP baseline so a retry cannot duplicate provisional TUI text. Cancellation is never retried, semantic unknown events fail closed, and the generic fetch retry loop is disabled inside the Responses stream retry loop so attempt counts cannot multiply.
 
 The opt-in `bun run test:acceptance:responses` gate exercised `doro-gpt` with a streamed function call, exact `call_id` result, retained native reasoning/message Items, and a final text response. It prints only provider/model identity, event types, counts, id shape, content length, and usage presence. This evidence proves the current HTTPS/SSE relay boundary only; it does not authorize an OpenAI-conformance claim for that third-party service or imply WebSocket support. An official OpenAI acceptance remains unavailable when no official API credential is configured and must be reported as unavailable rather than passed.
+
+## Implemented Standalone Compaction
+
+An explicitly declared `remoteCompact` model capability permits the adapter to call HTTPS `/responses/compact` with the full provider-visible uncompressed Item window. The request contains `model` and `input`, carries tool interactions inside canonical input Items, and never sends `previous_response_id`. The response must contain exactly one encrypted compaction Item; the adapter retains the complete ordered `output` window without pruning, prose extraction, or reconstruction, including forward-compatible retained Item families.
+
+Core generates the portable summary and remote projection independently from the same session snapshot. A single compact-checkpoint append records the portable replacement and optional bounded owner-qualified native state only if the source head is still current. Successful standalone compaction clears the former connection-local continuation, so the next request begins a new WebSocket chain without `previous_response_id`. The exact protocol/provider/model/endpoint owner may replace portable input with the canonical native window; owner switches use portable history, while corrupt native payloads or non-retryable provider rejection receive one portable recovery attempt. Remote failure never removes or invalidates the portable checkpoint.

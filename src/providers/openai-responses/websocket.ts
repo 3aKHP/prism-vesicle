@@ -287,6 +287,11 @@ export function closeResponsesWebSocketSession(sessionId: string): void {
   sessionSockets.delete(sessionId);
 }
 
+/** Standalone compaction starts a new remote chain on the existing socket. */
+export function invalidateResponsesWebSocketContinuation(sessionId: string): void {
+  sessionSockets.get(sessionId)?.clearContinuation();
+}
+
 export function resetResponsesWebSocketSessionsForTest(): void {
   closeAllResponsesWebSocketSessions();
 }

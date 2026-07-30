@@ -247,7 +247,7 @@ export type ResumedMessage = {
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
   toolCalls?: ResumedToolCall[];
-  /** Validated provider-owned durable state attached to an assistant message. */
+  /** Validated provider-owned durable state attached to a provider-owned projection. */
   providerState?: ProviderStateEnvelope;
   toolOk?: boolean;
   toolFileEvent?: FileToolEvent;

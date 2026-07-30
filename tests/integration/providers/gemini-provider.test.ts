@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { GeminiGenerateContentAdapter, toGeminiGenerateContentBody } from "../../../src/providers/gemini-generate-content/adapter";
-import type { VesicleRequest } from "../../../src/providers/shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type VesicleRequest } from "../../../src/providers/shared/types";
 import { sseFromBlocks } from "../../support/providers/sse";
 
 const originalFetch = globalThis.fetch;
@@ -10,6 +10,21 @@ afterEach(() => {
 });
 
 describe("Gemini generateContent request shaping", () => {
+  test("does not expose a provider-native checkpoint marker to Gemini", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "portable" },
+        { role: "user", content: "", kind: PROVIDER_NATIVE_CHECKPOINT_KIND },
+        { role: "user", content: "continue" },
+      ],
+    });
+    expect(body.contents).toEqual([
+      { role: "user", parts: [{ text: "portable" }] },
+      { role: "user", parts: [{ text: "continue" }] },
+    ]);
+  });
+
   test("serializes image attachments as inlineData parts", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),

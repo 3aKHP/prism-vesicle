@@ -5,12 +5,43 @@ import { runPrompt, type AgentLoopEvent } from "../../../src/core/agent-loop/run
 import { completeProviderRound } from "../../../src/core/agent-loop/provider-round";
 import { runChildAgent } from "../../../src/core/agents/child-runner";
 import { getProcessManager } from "../../../src/core/process/manager";
+import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import { baseRoot, childContext, childRoot, harnessRuntime, providerTool, restoreQualityTestState, runtimeRoot } from "./fixtures/quality-runtime";
 
 afterEach(restoreQualityTestState);
 
 describe("quality: engine and child observe", () => {
+  test("closes provider resources owned by the child session when the child completes", async () => {
+    const root = await childRoot();
+    const factory = () => { throw new Error("socket should not open"); };
+    let childSessionId = "";
+    let ownedSession: ReturnType<typeof responsesWebSocketSession> | undefined;
+    globalThis.fetch = (async () => Response.json({
+      id: "child-lifecycle", choices: [{ message: { content: "done" } }],
+    })) as unknown as typeof fetch;
+    const context = childContext(root, "chapter-reviewer");
+    context.registerChildSession = async (sessionId) => {
+      childSessionId = sessionId;
+      ownedSession = responsesWebSocketSession({
+        sessionId, owner: "child-owner", baseUrl: "https://api.openai.com/v1",
+        providerId: "openai", headers: { authorization: "Bearer test" }, factory,
+      });
+    };
+
+    await runChildAgent(context);
+    const replacement = responsesWebSocketSession({
+      sessionId: childSessionId, owner: "child-owner", baseUrl: "https://api.openai.com/v1",
+      providerId: "openai", headers: { authorization: "Bearer test" }, factory,
+    });
+    try {
+      expect(childSessionId).not.toBe("");
+      expect(replacement).not.toBe(ownedSession);
+    } finally {
+      closeResponsesWebSocketSession(childSessionId);
+    }
+  });
+
   test("persists every declared Engine observe path and excludes Evaluate analyze output", async () => {
     for (const engine of ["dyad", "weaver", "weaver-orch", "evaluate"] as const) {
       const root = await runtimeRoot(engine);

@@ -8,6 +8,7 @@ import {
   loadSessionMessages,
 } from "../../../src/core/session/store";
 import type { PortableCompactCheckpointV1 } from "../../../src/core/session/store";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND } from "../../../src/providers/shared/types";
 
 function validCheckpoint(overrides: Partial<PortableCompactCheckpointV1> = {}): PortableCompactCheckpointV1 {
   return {
@@ -80,6 +81,61 @@ describe("session: compact-checkpoint-v1 projection", () => {
     const messages = await loadSessionMessages(rootDir, store.sessionId);
     expect(messages[1]?.providerState).toEqual(providerState);
     expect(messages[1]?.providerState).not.toBe(providerState);
+  });
+
+  test("projects an owner-bound native marker after the portable replacement", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-native-"));
+    const store = await createSessionStore(rootDir, "ckpt-native");
+    const sourceHeadUuid = crypto.randomUUID();
+    const providerState = {
+      version: 1 as const,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.6",
+      endpointFingerprint: "sha256:fixture-endpoint",
+      payload: { version: 1, compactedInput: [{ type: "compaction", encrypted_content: "opaque" }] },
+    };
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          sourceHeadUuid,
+          nativeProjection: { sourceHeadUuid, state: providerState },
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages.map((message) => message.kind)).toEqual(["compact-summary", PROVIDER_NATIVE_CHECKPOINT_KIND]);
+    expect(messages[1]).toMatchObject({ role: "user", content: "", providerState });
+    expect(messages[1]?.providerState).not.toBe(providerState);
+  });
+
+  test("rejects a native projection derived from a different source head", async () => {
+    const checkpoint = validCheckpoint();
+    checkpoint.nativeProjection = {
+      sourceHeadUuid: crypto.randomUUID(),
+      state: {
+        version: 1,
+        protocol: "openai-responses",
+        providerId: "openai",
+        model: "gpt-5.6",
+        endpointFingerprint: "sha256:fixture-endpoint",
+        payload: { version: 1, compactedInput: [] },
+      },
+    };
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-native-source-"));
+    const store = await createSessionStore(rootDir, "ckpt-native-source");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: { kind: COMPACT_CHECKPOINT_KIND, checkpoint },
+    });
+    await expect(loadSessionMessages(rootDir, store.sessionId)).rejects.toThrow("source head does not match");
   });
 
   test("an unknown future checkpoint version fails with an actionable error instead of partially projecting", async () => {

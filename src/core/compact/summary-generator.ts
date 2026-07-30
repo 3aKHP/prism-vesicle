@@ -52,7 +52,7 @@ export async function generatePortableSummary(options: GenerateSummaryOptions): 
   const messages = projectSessionHistory(options.evictedRecords).messages;
   const prompt = compactPrompt(FULL_COMPACT_PROMPT, options.instructions, options.previousSummary);
   const config = await loadConfigForSelection(options.providerSelection);
-  const provider = createProvider(config);
+  const provider = createProvider(config, { sessionId: options.sessionId });
   const profile = await loadEngineProfile(options.engine, options.rootDir);
   const enginePrompt = composeSystemPrompt(await loadPromptBundle(profile, options.rootDir));
   const systemPrompt = (await composeSystemPromptWithInstructions(options.engine, enginePrompt, options.rootDir)).systemPrompt;

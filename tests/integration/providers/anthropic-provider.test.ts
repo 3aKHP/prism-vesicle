@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { AnthropicMessagesAdapter } from "../../../src/providers/anthropic-messages/adapter";
 import { toAnthropicMessagesBody } from "../../../src/providers/anthropic-messages/request";
-import type { VesicleRequest } from "../../../src/providers/shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type VesicleRequest } from "../../../src/providers/shared/types";
 import { sseFromBlocks } from "../../support/providers/sse";
 
 const originalFetch = globalThis.fetch;
@@ -11,6 +11,21 @@ afterEach(() => {
 });
 
 describe("Anthropic Messages request shaping", () => {
+  test("does not expose a provider-native checkpoint marker to Anthropic", () => {
+    const body = toAnthropicMessagesBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "portable" },
+        { role: "user", content: "", kind: PROVIDER_NATIVE_CHECKPOINT_KIND },
+        { role: "user", content: "continue" },
+      ],
+    });
+    expect(body.messages).toEqual([
+      { role: "user", content: "portable" },
+      { role: "user", content: "continue" },
+    ]);
+  });
+
   test("serializes image attachments as native content blocks", () => {
     const body = toAnthropicMessagesBody({
       ...request(),
