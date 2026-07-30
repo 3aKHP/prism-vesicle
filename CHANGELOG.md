@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **MiMo Responses reasoning Items accept the provider's empty summary placeholder.** The dated MiMo subset still rejects OpenAI reasoning summaries and encrypted reasoning, but no longer rejects a valid terminal `reasoning_text` Item merely because the real endpoint includes its fixed empty `summary: []` schema field. Focused coverage retains fail-closed behavior for non-empty summary content.
 
-- **Official Responses reasoning Items accept an empty content placeholder.** The public profile now accepts the official reasoning Item shape when it carries `content: []` alongside its encrypted reasoning and summary fields; non-empty or malformed reasoning content remains rejected.
+- **Official Responses reasoning Items accept an empty content placeholder.** All non-MiMo profiles (`openai-public`, `codex-http-relay`, `codex-beta-2026-02-06`) now accept the official reasoning Item shape when it carries `content: []` alongside its encrypted reasoning and summary fields; non-empty or malformed reasoning content remains rejected.
 
 - **Responses acceptance distinguishes relay diagnostics and real WebSocket transport.** The narrow `codex-http-relay` profile now admits the observed non-semantic `responsesapi.websocket_timing` event without exposing it as normalized output or durable state, while `openai-public` remains strict. Official public-WebSocket acceptance now fails if the adapter downgrades to HTTP, preventing a successful fallback request from being counted as WebSocket evidence.
 

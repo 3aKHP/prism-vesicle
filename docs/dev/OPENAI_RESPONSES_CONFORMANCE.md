@@ -47,7 +47,9 @@ Changing this profile does not silently migrate persisted sessions or infer a ru
 
 ## Product Profiles And Acceptance
 
-`openai-public` is the official public application-layer tier. It sends the frozen public field set, admits only public semantic event families, uses Bearer authentication, and may opt into public WebSocket continuation and model-declared standalone compact. Official reasoning Items may include an empty `content: []` schema placeholder alongside encrypted reasoning and summary fields; non-empty reasoning content remains rejected. It does not claim Codex product identity or network-stack fingerprint equality.
+An official reasoning Item may carry an empty `content: []` schema placeholder alongside its encrypted reasoning and summary fields; non-empty or malformed reasoning content remains rejected. All non-MiMo profiles (`openai-public`, `codex-http-relay`, `codex-beta-2026-02-06`) accept this placeholder.
+
+`openai-public` is the official public application-layer tier. It sends the frozen public field set, admits only public semantic event families, uses Bearer authentication, and may opt into public WebSocket continuation and model-declared standalone compact. It does not claim Codex product identity or network-stack fingerprint equality.
 
 `mimo-subset-2026-07-30` is a third-party Responses-compatible subset. Its HTTP encoder omits `background`, `context_management`, `previous_response_id`, `parallel_tool_calls`, `store`, `stream_options`, encrypted-reasoning `include`, service tier, prompt cache key, WebSocket, and remote compact. It supports Bearer or `x-api-key`, replays full provider-visible context, omits OpenAI reasoning-summary controls that MiMo does not distinguish, maps Vesicle `off` to MiMo's documented `effort: none`, normalizes `xhigh`/`max` to `high`, and maps reasoning only from the profile-owned `response.reasoning_text.*` events and `reasoning_text` Items. MiMo's terminal reasoning Item may retain an empty `summary: []` schema placeholder; non-empty summaries and encrypted reasoning remain rejected. Other profiles reject that event/Item family.
 
