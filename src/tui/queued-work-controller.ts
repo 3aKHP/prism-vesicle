@@ -68,12 +68,8 @@ export function createQueuedWorkController(options: QueuedWorkOptions): QueuedWo
   }
 
   async function handleInterruption(sessionId: string | undefined): Promise<boolean> {
-    let captured: InterruptTakeover;
-    try {
-      captured = takeover();
-    } finally {
-      setTakeover({ kind: "none" });
-    }
+    const captured = takeover();
+    setTakeover({ kind: "none" });
     if (captured.kind === "none") return false;
     if (!sessionId) return false;
     try {
