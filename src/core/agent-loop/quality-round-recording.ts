@@ -1,5 +1,6 @@
 import type { ExperimentalQualityProfile } from "../../config/quality";
 import type { VesicleMessage, VesicleResponse } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import type { EngineProfile } from "../engine/profile";
 import {
   isQualityArtifactMutationCall,
@@ -184,7 +185,12 @@ export async function recordRejectedQualityRound(
   };
   if (calls.length > 0) {
     const feedback = qualityRewriteFeedback(result);
-    const assistantMessage: VesicleMessage = { role: "assistant", content: "", toolCalls: calls };
+    const assistantMessage: VesicleMessage = {
+      role: "assistant",
+      content: "",
+      ...(response.providerState ? { providerState: cloneProviderStateEnvelope(response.providerState) } : {}),
+      toolCalls: calls,
+    };
     const toolMessages: VesicleMessage[] = calls.map((call) => ({
       role: "tool",
       toolCallId: call.id,
@@ -200,6 +206,7 @@ export async function recordRejectedQualityRound(
           model: context.model,
           providerResponseId: response.id,
           candidateHash: result.evaluation.candidateHash,
+          ...(response.providerState ? { providerState: cloneProviderStateEnvelope(response.providerState) } : {}),
           toolCalls: calls,
         },
       },

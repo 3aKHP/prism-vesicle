@@ -1,5 +1,6 @@
 import { engineIds, type EngineId } from "../engine/profile";
 import { type ProviderThinkingBlock, type ResponseUsage } from "../../providers/shared/types";
+import { parseProviderStateEnvelope } from "../../providers/shared/state";
 import {
   qualityCandidateParts,
   qualityMutationParts,
@@ -558,6 +559,14 @@ function parseQualityDecisionCandidate(value: unknown): QualityDecisionCandidate
   });
   if (toolCalls.length !== source.toolCalls.length) return undefined;
   const thinkingBlocks = readThinkingBlocks(source.thinkingBlocks);
+  let providerState: QualityDecisionCandidate["providerState"];
+  if (Object.hasOwn(source, "providerState")) {
+    try {
+      providerState = parseProviderStateEnvelope(source.providerState, "Pending quality candidate provider state");
+    } catch {
+      return undefined;
+    }
+  }
   const usage = readResponseUsage(source.usage);
   return {
     responseId: source.responseId,
@@ -565,6 +574,7 @@ function parseQualityDecisionCandidate(value: unknown): QualityDecisionCandidate
     toolCalls,
     ...(typeof source.reasoningContent === "string" ? { reasoningContent: source.reasoningContent } : {}),
     ...(thinkingBlocks ? { thinkingBlocks } : {}),
+    ...(providerState ? { providerState } : {}),
     ...(typeof source.finishReason === "string" ? { finishReason: source.finishReason } : {}),
     ...(usage ? { usage } : {}),
   };

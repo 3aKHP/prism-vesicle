@@ -5,6 +5,7 @@ import type { ToolCall } from "../../../src/core/tools/types";
 import { executeActivateSkillTool, executeRunSkillScriptTool } from "../../../src/core/skills";
 import { clearSessionActivations } from "../../../src/core/skills";
 import type { ResolvedSkillCatalog } from "../../../src/core/skills";
+import { configureSelfInvocation, clearSelfInvocation } from "../../../src/core/runtime/self-invocation";
 import { catalogFor, loadWritten, makeScratch, writeSkill } from "./helpers";
 
 let scratch: string;
@@ -118,5 +119,65 @@ describe("run_skill_script executor", () => {
     expect(result.content).toContain('Interpreter "python3"');
     expect(result.content).toContain("was not executed");
     expect(result.processEvent).toBeUndefined();
+  });
+});
+
+describe("run_skill_script: PowerShell resolution", () => {
+  test.skipIf(process.platform === "win32")("reports pwsh unavailable on non-Windows without executing", async () => {
+    const catalog = await activeCatalog({ "scripts/tool.ps1": "Write-Output hi\n" });
+    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/tool.ps1" }), {
+      catalog,
+      sessionId,
+      which: () => undefined,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain("pwsh");
+    expect(result.content).toContain("was not executed");
+    expect(result.processEvent).toBeUndefined();
+  });
+
+  test("includes .ps1 in the supported extensions list for unknown types", async () => {
+    const catalog = await activeCatalog({ "scripts/tool.rb": "puts 1\n" });
+    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/tool.rb" }), { catalog, sessionId });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain(".ps1");
+  });
+});
+
+describe("run_skill_script: self-invocation", () => {
+  const selfExe = "/resolved/vesicle-bin";
+  const selfEntry = "/resolved/cli/main.ts";
+
+  afterEach(() => {
+    clearSelfInvocation();
+  });
+
+  test.skipIf(process.platform === "win32")("injects VESICLE_SELF_EXECUTABLE and ENTRYPOINT into the child only", async () => {
+    configureSelfInvocation({ executablePath: selfExe, entrypoint: selfEntry });
+    const catalog = await activeCatalog({ "scripts/echo-env.sh": "#!/bin/sh\nprintf '%s\\n' \"$VESICLE_SELF_EXECUTABLE\" \"$VESICLE_SELF_ENTRYPOINT\"\n" });
+    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/echo-env.sh" }), { catalog, sessionId });
+    expect(result.ok).toBe(true);
+    expect(result.content).toContain(selfExe);
+    expect(result.content).toContain(selfEntry);
+  });
+
+  test.skipIf(process.platform === "win32")("persisted events do not record absolute self-invocation paths", async () => {
+    configureSelfInvocation({ executablePath: selfExe, entrypoint: selfEntry });
+    const catalog = await activeCatalog({ "scripts/echo-env.sh": "#!/bin/sh\necho ok\n" });
+    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/echo-env.sh" }), { catalog, sessionId });
+    expect(result.ok).toBe(true);
+    expect(JSON.stringify(result.skillEvent)).not.toContain(selfExe);
+    expect(JSON.stringify(result.skillEvent)).not.toContain(selfEntry);
+    expect(JSON.stringify(result.processEvent)).not.toContain(selfExe);
+    expect(JSON.stringify(result.processEvent)).not.toContain(selfEntry);
+  });
+
+  test("works without configured self-invocation (no env injected, script still runs)", async () => {
+    clearSelfInvocation();
+    // The child simply does not see the env vars; execution is unaffected.
+    const catalog = await activeCatalog({ "scripts/echo-missing.sh": "#!/bin/sh\ntest -z \"$VESICLE_SELF_EXECUTABLE\" && echo absent || echo present\n" });
+    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/echo-missing.sh" }), { catalog, sessionId });
+    expect(result.ok).toBe(true);
+    expect(result.content).toContain("absent");
   });
 });

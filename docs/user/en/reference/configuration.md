@@ -43,7 +43,7 @@ default:               # provider and model selected at startup
 
 providers:
   deepseek:
-    protocol: openai-chat-compatible   # or anthropic-messages / gemini-generate-content
+    protocol: openai-chat-compatible   # or openai-responses / Anthropic / Gemini
     baseUrl: https://api.deepseek.com/v1
     apiKeyEnv: DEEPSEEK_API_KEY        # the variable name only; the secret itself goes in .env
     defaultModel: deepseek-v4-flash    # optional: what /model deepseek switches to
@@ -68,12 +68,25 @@ providers:
 
 Field notes:
 
-- `protocol`: one of `openai-chat-compatible`, `anthropic-messages`, `gemini-generate-content`.
+- `protocol`: one of `openai-chat-compatible`, `openai-responses`, `anthropic-messages`, `gemini-generate-content`.
 - `apiKeyEnv`: **the environment-variable name only**; the real secret goes in `.env`. `providers.yaml` itself never holds secrets.
-- `authMethod`: `x-api-key` for Anthropic, `x-goog-api-key` for Gemini.
+- `authMethod`: Anthropic or MiMo Responses may use `x-api-key`; Gemini uses `x-goog-api-key`. OpenAI-family protocols default to Bearer authentication when this field is omitted.
 - `userAgent` (optional): replaces the User-Agent for this provider only; other fingerprint and auth headers stay fixed.
 - A model entry can be a string shorthand or an object with `generation` (`temperature`/`maxTokens`), `capabilities` (`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`), and `limits` (`contextWindow`/`maxOutputTokens`/`autoCompact`).
 - `limits.contextWindow` enables the context percentage in the status bar. `autoCompact` opts into automatic context compaction: it activates only when `enabled` is not `false`, `threshold` is strictly between 0 and 1, and `contextWindow` is a positive integer; once active, Vesicle compacts (via the portable `/compact` checkpoint) before a new top-level prompt and at safe mid-turn boundaries when the projected next request crosses the soft trigger. Every provider send is checked after queued input and completed background-process notifications are included. `reserveOutputTokens` reserves space for the next output (precedence: `reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0); provider loading rejects a statically known reserve that leaves no positive input budget. There is no hidden default threshold. Run `/context` to inspect the effective soft trigger, hard input ceiling, reserve source (including the active model's generation defaults), and activation state.
+
+### OpenAI Responses profiles
+
+`openai-responses` also requires an explicit `responsesProfile`; Vesicle never guesses capabilities from a URL, provider id, or model name. Guided Setup can select OpenAI Responses, the MiMo Responses subset, or the DeepSeek Responses subset and writes a conservative HTTP configuration. Complete copyable examples live in [`docs/examples/providers.yaml`](../../../examples/providers.yaml).
+
+The independent Responses protocol remains opt-in experimental while the full `openai-public` real-provider gate is incomplete. On 2026-07-31, the funded MiMo endpoint and DeepSeek v4 Flash each passed their reasoning and function-loop cases (`2` pass, `0` fail per subset). A trusted Codex-backed gateway also passed relay HTTP/SSE and a non-stream request, but standalone compact still returned HTTP 503 and its WebSocket connection still failed; those unavailable capabilities are not reported as passed.
+
+- `openai-public` is the public protocol profile for the official `api.openai.com` endpoint. It supports HTTP/typed SSE and an explicit `responsesTransport: websocket` selection. It preserves ordered Items, exact `call_id` values, stateless encrypted reasoning, session-scoped WebSocket continuation, and `/responses/compact` when the model entry declares `capabilities.remoteCompact: true`. This is an application-layer protocol claim, not a claim of Codex-identical TLS or HTTP/2 fingerprints.
+- `mimo-subset-2026-07-30` is a dated third-party compatibility subset and is HTTP-only. It omits MiMo-undeclared or explicitly unsupported `background`, `context_management`, `previous_response_id`, `parallel_tool_calls`, `store`, remote-compaction, and WebSocket fields, fully replays context on every round, and explicitly maps `response.reasoning_text.*` into Vesicle reasoning. It is not OpenAI or Codex conformance.
+- `deepseek-subset-2026-07-31` is the dated HTTP subset DeepSeek documents for `deepseek-v4-flash`. It uses Bearer authentication, omits unsupported continuation, Conversations, storage, background, WebSocket, and remote-compaction fields, fully replays context including plaintext reasoning Items, and maps DeepSeek's documented `none`/`low`/`high`/`max` efforts. `deepseek-v4-pro` is outside this profile until its announced August support is live and independently accepted.
+- `codex-http-relay` is the HTTP-only maximum-compatibility profile for gateways that serve Codex: it accepts public-style terminal ordered output and the Codex event-terminal split where contiguous completed Items carry the payload and a later valid `response.completed` leaves `output` empty or omitted. Vesicle still waits for the successful terminal before committing tools, requires any non-empty dual representation to match, and rejects failed/incomplete/EOF attempts. `codex-beta-2026-02-06` remains a frozen WebSocket fingerprint profile. Neither profile copies private identity, attestation, or `x-codex-*` headers merely to resemble Codex.
+
+`responsesTransport` is `http` or `websocket`; when omitted, runtime behavior is HTTP. Only `openai-public` and the frozen Codex beta profile permit WebSocket; the MiMo and DeepSeek subsets are HTTP-only. Native Items and compact state are owned by the exact profile; changing profiles at one endpoint falls back to portable history. Portable `/compact` checkpoints remain the recovery authority whether or not remote compaction is enabled; an unavailable remote endpoint never makes an existing session unreadable. Run `vesicle doctor` to inspect the selected Responses profile, tier, transport, and remote-compaction declaration.
 
 ## .env
 
@@ -81,6 +94,8 @@ Put values here for every `apiKeyEnv` named in `providers.yaml`. Start from [`do
 
 ```text
 DEEPSEEK_API_KEY=
+OPENAI_API_KEY=
+MIMO_API_KEY=
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 LOCAL_OPENAI_COMPAT_API_KEY=
@@ -89,6 +104,49 @@ MCP_CLUSTER_TOKEN=
 ```
 
 `TAVILY_API_KEY` enables the web research tools for the ETL/Evaluate engines; MCP auth tokens also go here. Process environment variables are a fallback only.
+
+## Provider proxy (optional)
+
+A single optional key `VESICLE_PROVIDER_PROXY` lives in the `.env` above (beside `providers.yaml`). If your network requires a proxy to reach model providers, set it before running `vesicle setup`; Setup model discovery and later provider requests use the same setting. A non-empty value must be a complete `http://` or `https://` proxy URL:
+
+```text
+VESICLE_PROVIDER_PROXY=http://127.0.0.1:7890
+```
+
+For Basic auth, put the username and password in the URL; percent-encode reserved characters such as `@`, `:`, and `/` inside either value:
+
+```text
+VESICLE_PROVIDER_PROXY=http://username:password@proxy.example.com:8080
+```
+
+URL credentials are carried only on the transport and are never written to `providers.yaml`, sessions, or logs. Exit and restart Vesicle after changing `.env`.
+
+It applies to **all model-provider HTTP(S) and WebSocket** traffic, including model requests from the main workflow, SubAgents, Quality Judge, and compaction. It is not a global Vesicle network proxy. MCP, Tavily/Web tools, Skill downloads, asset synchronization, Git/package managers, `shell_exec`, and its child processes do not use this setting.
+
+Precedence: user-file `VESICLE_PROVIDER_PROXY` → process `VESICLE_PROVIDER_PROXY` → inherited terminal proxy variables (`https_proxy`/`HTTPS_PROXY`, etc.) → direct; a blank value means "unset" (it falls through) rather than "force direct". Therefore, a non-empty user-file value cannot be overridden by a temporary process variable. An explicit setting overrides inherited terminal proxies and is not bypassed by terminal `NO_PROXY`.
+
+For one launch without editing the file:
+
+```bash
+# Linux / macOS / WSL
+VESICLE_PROVIDER_PROXY=http://127.0.0.1:7890 vesicle .
+```
+
+```powershell
+# PowerShell 7
+$env:VESICLE_PROVIDER_PROXY = "http://127.0.0.1:7890"
+vesicle .
+```
+
+Inherited behavior matches the pinned Bun runtime: for `https://`/`wss://` targets only `https_proxy`/`HTTPS_PROXY` are honored (lowercase preferred when both are set); `HTTP_PROXY`/`ALL_PROXY` do not apply to secure targets; `NO_PROXY` supports `*`, exact hostnames (case-insensitive), and leading-dot suffixes (e.g. `.test`), but not `:port` or `*.`. OS proxy discovery, PAC/WPAD, SOCKS, proxy chaining, per-provider selection, NTLM, custom proxy headers, and production TLS bypass are not supported. `vesicle doctor` shows only route state, source, scheme, and whether auth is configured — never the proxy address or credentials.
+
+After restarting, run `vesicle doctor` and inspect the `Provider proxy:` line. `configured` means a proxy route is selected, `inherited` means it came from the terminal environment, `bypassed` means `NO_PROXY` bypasses it for the selected provider endpoint, `direct` means no proxy route, and `invalid` means the explicit URL is invalid. For example:
+
+```text
+Provider proxy: configured (user file; http; no authentication)
+```
+
+Doctor checks route selection only; it does not prove that the proxy or provider is reachable. Send one real model request to complete the connectivity check. See [Troubleshooting](./troubleshooting.md) for errors.
 
 ## Providers and cost (for beginners)
 

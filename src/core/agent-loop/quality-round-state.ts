@@ -1,5 +1,6 @@
 import type { ExperimentalQualityProfile } from "../../config/quality";
 import type { VesicleResponse } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import type { EngineId } from "../engine/profile";
 import {
   durableQualityTargets,
@@ -59,6 +60,7 @@ export function qualityDecisionCandidate(response: VesicleResponse): QualityDeci
     toolCalls: (response.toolCalls ?? []).map((call) => ({ ...call })),
     ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
     ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks.map((block) => ({ ...block })) } : {}),
+    ...(response.providerState ? { providerState: cloneProviderStateEnvelope(response.providerState) } : {}),
     ...(response.finishReason ? { finishReason: response.finishReason } : {}),
     ...(response.usage ? { usage: response.usage } : {}),
   };

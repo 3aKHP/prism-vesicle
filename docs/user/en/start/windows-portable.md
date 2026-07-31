@@ -48,6 +48,8 @@ Without PATH you can still call it by full file name. To type `vesicle` from any
 
 Converges with the other channels:
 
+If your network requires a proxy to reach model providers, edit `%APPDATA%\prism-vesicle\.env` as described in [Configuration: Provider proxy](../reference/configuration.md#provider-proxy-optional) before running Setup; the wizard uses the existing setting for model discovery.
+
 ```powershell
 vesicle setup          # or hand-edit %APPDATA%\prism-vesicle\providers.yaml + .env
 vesicle doctor

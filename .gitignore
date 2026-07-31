@@ -34,11 +34,14 @@ logs/
 /reports/
 /source_materials/
 
+# Project scratch root: model-visible drafts and intermediate work. Root-anchored
+# so unrelated nested tmp/ directories elsewhere are not ignored.
+/tmp/
+
 # Local non-public development notes
 /dev/
 
 # Generated test workspaces
-tmp/
 temp/
 test-workspaces/
 

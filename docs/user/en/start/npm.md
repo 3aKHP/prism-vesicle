@@ -21,6 +21,8 @@ If you prefer not to install globally, you can also `npm install prism-vesicle` 
 
 ## Configure
 
+If your network requires a proxy to reach model providers, set it in the user-level `.env` as described in [Configuration: Provider proxy](../reference/configuration.md#provider-proxy-optional) before running Setup; the wizard uses the existing setting for model discovery.
+
 Two options, either one:
 
 - `vesicle setup` — run the terminal wizard (the **same** wizard as the Windows installer): paste an API key masked, auto-discover OpenAI-compatible models.

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { OpenAIChatCompatibleAdapter } from "../../../src/providers/openai-chat/adapter";
 import { toChatCompletionBody } from "../../../src/providers/openai-chat/request";
 import { readChatCompletionStream } from "../../../src/providers/openai-chat/stream";
-import type { VesicleRequest } from "../../../src/providers/shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type VesicleRequest } from "../../../src/providers/shared/types";
 import { bytesFromChunks } from "../../support/providers/sse";
 
 const originalFetch = globalThis.fetch;
@@ -17,6 +17,22 @@ afterEach(() => {
 });
 
 describe("OpenAI-compatible request shaping", () => {
+  test("does not expose a provider-native checkpoint marker to Chat Completions", () => {
+    const body = toChatCompletionBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "portable" },
+        { role: "user", content: "", kind: PROVIDER_NATIVE_CHECKPOINT_KIND },
+        { role: "user", content: "continue" },
+      ],
+    }, false);
+    expect(body.messages).toEqual([
+      { role: "system", content: "system" },
+      { role: "user", content: "portable" },
+      { role: "user", content: "continue" },
+    ]);
+  });
+
   test("serializes user and tool images as multimodal content", () => {
     const body = toChatCompletionBody({
       ...request(),

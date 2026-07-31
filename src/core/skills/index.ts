@@ -67,3 +67,11 @@ export {
   runSkillScriptToolDefinition,
 } from "./tools";
 export type { SkillToolRuntimeOptions, ValidSkill } from "./tools";
+
+export { inspectSkillDraft, publishSkillDraft, SKILL_DRAFT_SCHEMA, SkillDraftError } from "./draft-publisher";
+export type {
+  SkillDraftErrorCode,
+  SkillDraftInspection,
+  SkillDraftPublication,
+  SkillDraftTarget,
+} from "./draft-publisher";

@@ -4,7 +4,7 @@
 
 Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端工作流宿主。它默认启动经过验证的内置 V10 Harness，也可以选择项目固定的托管 Harness Pack，将当前运行时连接到模型供应商与宿主工具，并通过持久化会话保存对话和制品生产过程。
 
-> **Alpha 状态：**`1.0.0-alpha.7` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
+> **Alpha 状态：**`1.0.0-alpha.8` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
 
 如果你不熟悉终端、API 密钥或模型供应商，请先阅读[循序渐进的用户手册](./docs/user/zh-CN/README.md)，再使用下方的精简配置说明。
 
@@ -14,7 +14,7 @@ Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端�
 
 从对应的 GitHub 预发布下载 `PrismVesicleSetup-<version>-windows-x64.exe` 并双击运行。该安装器按用户安装，不需要管理员权限。安装完成后会启动 Prism Vesicle Setup：用户只需填写 OpenAI 兼容服务的 Base URL 与 API Key，即可自动获取并勾选模型；也可选配 Tavily、MCP 和权限偏好，全程无需手写配置文件。项目选择可以跳过；即使选择，也只用于 Setup 完成后的那一次启动，Vesicle 不会保存全局唯一项目目录。
 
-`1.0.0-alpha.7` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
+`1.0.0-alpha.8` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
 
 安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。安装器会注册原生 `vesicle.exe` 命令，并添加当前用户的资源管理器目录操作 **Open in Prism Vesicle**。再次运行安装器时会显示 **重新安装 / 修复 / 卸载** 维护选项。在终端中启动项目时，先进入目标目录：
 
@@ -103,7 +103,7 @@ Vesicle 从用户级配置中读取供应商和模型配置档，而不是从项
 
 不要把密钥写入 `providers.yaml`，也不要依赖项目根目录的 `.env`。如果早期 Vesicle 配置仍留下了根目录 `.env`，请将其中的值迁移到用户级密钥文件，然后删除或重命名旧文件。
 
-当前支持的供应商协议包括 OpenAI-compatible Chat Completions、Anthropic Messages 和 Gemini `generateContent`。模型条目可以声明生成默认值、视觉能力等能力元数据以及上下文限制。规范格式请参阅带注释的示例注册表。
+当前供应商协议包括 OpenAI-compatible Chat Completions、Anthropic Messages、Gemini `generateContent`,以及 opt-in experimental 的独立 Responses 适配器。Responses 配置必须显式声明:`openai-public` 是 OpenAI 官方应用层档案,`codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案,固定日期的 MiMo 与 DeepSeek 档案则是请求/事件族更窄的第三方子集;Vesicle 不会根据 URL 或模型名猜测层级。模型条目可以声明生成默认值、视觉或远程压缩等能力元数据以及上下文限制。规范格式与限制请参阅带注释的示例注册表和[供应商配置参考](./docs/user/zh-CN/reference/configuration.md#openai-responses-档案)。
 
 可选的 Streamable HTTP MCP 服务器通过同目录的 `mcp.yaml` 配置；[`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) 说明了请求头变量展开、工具前缀、过滤器、引擎作用域和超时设置。在用户级 `.env` 中设置 `TAVILY_API_KEY`，即可为 ETL 和 Evaluate 引擎启用 Vesicle 的 Web 研究工具。
 
@@ -129,7 +129,7 @@ bun run dev
 
 运行 `vesicle --version`(或 `-v`)可打印已安装的版本,`vesicle --help` 查看全局用法摘要。
 
-生成文件只能写入受保护的项目目录。研究材料应放在 `source_materials/` 中；最终制品应放在 `workspace/`、`novels/`、`reports/` 或 `test_runs/` 中。模型可以在这些根目录下组织嵌套目录、查看目录条目、移动或重命名目录树，并删除空目录；固定根目录与符号链接穿越仍受保护。通过 Vesicle 工具完成的文件和目录变更会纳入 `.vesicle/file-history/` 下的回退检查点。
+生成文件只能写入受保护的项目目录，目录分为三种角色：`source_materials/` 存放研究素材，`workspace/`、`novels/`、`reports/` 或 `test_runs/` 存放最终制品，`tmp/` 作为模型可见的暂存根目录用于草稿和中间工作。模型可以在这些根目录下组织嵌套目录、查看目录条目、移动或重命名目录树，并删除空目录；固定根目录与符号链接穿越仍受保护。通过 Vesicle 工具完成的文件和目录变更——包括暂存路径——会纳入 `.vesicle/file-history/` 下的回退检查点；暂存内容在未显式清理前会跨回合和重启保留，且不会出现在 `/artifact`、`/validate`、Stage 输入发现或自动发布中。
 
 常用命令：
 
@@ -149,13 +149,13 @@ bun run dev
 | `/context` | 查看 token 总量和已配置的上下文限制 |
 | `/agents [handle\|stop <handle>\|retry]` | 使用 `explore-1` 这类短句柄列出、查看、中断 SubAgent，或重试暂停的结果投递 |
 
-主输入框使用 Enter 提交，使用 Ctrl+Enter 插入换行。Agent Loop 运行期间，Enter 会把普通消息加入队列；当前完整工具轮次结束后，Vesicle 会在下一次供应商请求前注入这些消息。Slash 命令使用命令自身声明的调度方式：安全的纯宿主命令立即执行，制品读取等待当前工具轮次，配置、选择器或会话命令等待 Agent Loop。混合队列显示在输入框上方，草稿为空时按 Up 可取回最新一条队列输入进行编辑。Escape 会中断当前供应商请求或工具操作，并立即处理下一条队列输入；输入框为空时，双击 Escape 会打开回退选择器。声明视觉能力的模型可以通过 Ctrl+V 接收剪贴板图像，并保留 Alt/Option+V 作为兼容入口。终端文本粘贴和 bracketed paste 仍走普通文本输入路径。
+主输入框使用 Enter 提交，使用 Ctrl+Enter 插入换行。Agent Loop 运行期间，Enter 会把普通消息加入队列；当前完整工具轮次结束后，Vesicle 会在下一次供应商请求前注入这些消息。Slash 命令使用命令自身声明的调度方式：安全的纯宿主命令立即执行，制品读取等待当前工具轮次，配置、选择器或会话命令等待 Agent Loop。混合队列显示在输入框上方，草稿为空时按 Up 可取回最新一条队列输入进行编辑。Escape 会中断当前供应商请求或工具操作；若有队列消息，会在重建中断会话后把 Esc 按下时捕获的那条队首输入提交一次（队列为空或只有草稿时仅中断）；输入框为空时，双击 Escape 会打开回退选择器。声明视觉能力的模型可以通过 Ctrl+V 接收剪贴板图像，并保留 Alt/Option+V 作为兼容入口。终端文本粘贴和 bracketed paste 仍走普通文本输入路径。
 
 ## Vesicle 当前支持的能力
 
 - 由配置档驱动的 Prism 引擎；其提示、工具、验证器和确认门通过项目/用户覆盖以及托管 Harness 或内置恢复基线解析。
 - 面向消费者的 Stage 引擎：将提供的 Module A/B 卡片冻结为以叙述为先的叙事引导，不暴露模型可见的工具或确认门。质量强制默认为 observe；只有显式启用的宿主质量配置可触发实验性的有界 rewrite。
-- 支持流式输出的 OpenAI-compatible、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
+- 支持流式输出的 OpenAI-compatible Chat、显式 OpenAI Responses、Anthropic 和 Gemini 供应商适配器，包括原生工具调用、思考控制、用量归一化、取消和有界重试。
 - 响应式 OpenTUI 界面，包括持久化会话、命令补全、供应商/模型切换、引擎移交、用户问题和确认门。
 - 持久化指令：项目根目录与供应商配置目录旁的 `VESICLE.md` / `VESICLE.<engine>.md`，每会话自动加载进系统 prompt，支持用户级 + 项目级双作用域与引擎专属替换，让可复用的子工作流与规范跨会话保留而无需重述。
 - 受保护的文件系统工具、制品预览与验证、只追加的对话回退以及由 Vesicle 管理的文件检查点。
@@ -217,7 +217,7 @@ Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复�
 
 ## 范围与来源
 
-1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。OpenAI Responses、更广泛的 MCP 传输与功能范围、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
+1.0 alpha 专注于让 Vesicle 成为实用的 Prism 工作流直连 API 宿主，而不是通用编码代理。更广泛的 MCP 传输与功能范围、长篇引擎专用流程框架和提示缓存工程仍处于延后状态；依赖未列出的能力前，请先查阅 [`STATUS.md`](./STATUS.md)。
 
 Prism Vesicle 是 [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology) 的姊妹项目；后者是这里内置的 V10 Harness Release 的公开来源。
 

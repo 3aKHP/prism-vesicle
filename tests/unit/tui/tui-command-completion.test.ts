@@ -145,6 +145,8 @@ describe("Stage completion paths", () => {
     await writeFile(join(root, "workspace", "cards", "mira card.md"), "card", "utf8");
     await writeFile(join(root, "assets", "hidden.md"), "asset", "utf8");
     await symlink(join(root, "assets", "hidden.md"), join(root, "workspace", "linked.md"));
+    await mkdir(join(root, "tmp"), { recursive: true });
+    await writeFile(join(root, "tmp", "draft-card.md"), "draft", "utf8");
 
     expect(await listStageCardPaths(root)).toEqual(["workspace/cards/mira card.md"]);
 

@@ -3,7 +3,7 @@ import { parseImageAttachments } from "../attachments/store";
 import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets";
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
-import { reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { SkillToolEvent } from "../skills/types";
@@ -12,6 +12,8 @@ import type { PermissionMode } from "../permissions";
 import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
 import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
+import { replayableToolArguments } from "../tools/arguments";
+import { parseProviderStateEnvelope } from "../../providers/shared/state";
 
 export type HistoryProjection = {
   messages: ResumedMessage[];
@@ -38,23 +40,23 @@ export const FAILED_TURN_KIND = "failed-turn";
 
 /**
  * User-role record kinds that act as a completed-operation boundary: a failed
- * turn's input is dropped only down to one of these. A `/compact` summary is the
- * sole such boundary — it is the terminal output of a finished compaction, never
- * the input to a round that can fail. Every other user-role record (a prompt, a
+ * turn's input is dropped only down to one of these. A `/compact` summary and
+ * its provider-native checkpoint marker are completed compaction output, never
+ * input to a round that can fail. Every other user-role record (a prompt, a
  * queued message, background-process results, a SubAgent delivery, an engine
  * handoff, a gate/user-question resolution, or a quality-rewrite feedback) is
  * the failed round's own input and must be dropped, otherwise resume/resend
  * emits consecutive same-role user messages. (SubAgent results are re-delivered
  * via the paused delivery; background-process results are re-drained.)
  */
-const failedTurnBoundaryKinds = new Set(["compact-summary"]);
+const failedTurnBoundaryKinds = new Set(["compact-summary", PROVIDER_NATIVE_CHECKPOINT_KIND]);
 
 /**
  * Remove the trailing user messages that belong to a failed turn. A failed turn
  * appends no assistant reply, so its input is a run of trailing user records
  * (the prompt plus any host-injected user context such as background-process
  * results or a quality-rewrite feedback). A completed-operation boundary
- * (`compact-summary`) is preserved.
+ * (portable summary or native checkpoint marker) is preserved.
  */
 function dropFailedTurnInput(messages: ResumedMessage[]): void {
   while (messages.length > 0) {
@@ -113,20 +115,31 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         const checkpoint = parseCompactCheckpoint(record.metadata.checkpoint);
         messages.length = 0;
         messages.push(...checkpoint.replacementMessages.map((message) => ({ ...message })));
+        if (checkpoint.nativeProjection) {
+          messages.push({
+            role: "user",
+            content: "",
+            kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+            providerState: checkpoint.nativeProjection.state,
+          });
+        }
         continue;
       }
       continue;
     }
 
     if (record.role === "assistant") {
-      const toolCalls = record.metadata?.toolCalls as ResumedToolCall[] | undefined;
+      const toolCalls = readReplayableToolCalls(record.metadata?.toolCalls);
       const reasoningContent = record.metadata?.reasoningContent as string | undefined;
       const thinkingBlocks = readThinkingBlocks(record.metadata?.thinkingBlocks);
       const messageEngine = readEngineId(record.metadata?.engine);
       const messageModel = typeof record.metadata?.model === "string" ? record.metadata.model : undefined;
       const usage = readResponseUsage(record.metadata?.usage);
+      const providerState = record.metadata && Object.hasOwn(record.metadata, "providerState")
+        ? parseProviderStateEnvelope(record.metadata.providerState, `Session assistant record ${record.uuid} provider state`)
+        : undefined;
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
-      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
+      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(providerState ? { providerState } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
       continue;
     }
 
@@ -151,6 +164,17 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
     messages.push({ role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(toolSkillEvent ? { toolSkillEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
   }
   return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}), ...(skillCatalogSnapshot ? { skillCatalogSnapshot } : {}) };
+}
+
+function readReplayableToolCalls(value: unknown): ResumedToolCall[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const calls = value.flatMap((entry): ResumedToolCall[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const call = entry as Record<string, unknown>;
+    if (typeof call.id !== "string" || typeof call.name !== "string" || typeof call.arguments !== "string") return [];
+    return [{ id: call.id, name: call.name, arguments: replayableToolArguments(call.arguments) }];
+  });
+  return calls.length > 0 ? calls : undefined;
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode { return value === "MANUAL" || value === "INERTIA" || value === "MOMENTUM" || value === "YOLO"; }

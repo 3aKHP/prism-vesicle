@@ -4,7 +4,7 @@ import { createComposerController } from "../../../src/tui/composer-controller";
 import { setComposerValue } from "../../../src/tui/composer";
 import { createInputQueue } from "../../../src/tui/input-queue";
 import type { Message } from "../../../src/tui/types";
-import { queuedInputPreviewRows } from "../../../src/tui/views/BottomSurface";
+import { busyComposerPlaceholder, escInterruptHint, queuedInputPreviewRows } from "../../../src/tui/views/BottomSurface";
 
 describe("TUI input queue", () => {
   test("preserves FIFO order and snapshots attachment state", () => {
@@ -103,12 +103,75 @@ describe("TUI input queue", () => {
     queue.enqueueCommand({ raw: "/model alpha", commandName: "model", args: "alpha", boundary: "agent-loop" });
     queue.enqueueMessage({ value: "three", elements: [], images: [] });
     queue.enqueueMessage({ value: "four", elements: [], images: [] });
-    expect(queuedInputPreviewRows(queue.items(), 40, 3)).toEqual([
+    expect(queuedInputPreviewRows(queue.items(), 40, 3, false)).toEqual([
       "Queued 4 · Up edits last",
       "1. one",
       "... +3 more queued",
     ]);
-    expect(queuedInputPreviewRows(queue.items(), 40, 0)).toEqual([]);
+    expect(queuedInputPreviewRows(queue.items(), 40, 0, false)).toEqual([]);
+  });
+
+  test("peekNext clones the head without consuming it and preserves FIFO", () => {
+    const queue = createInputQueue();
+    const image = {
+      id: "image-1",
+      path: ".vesicle/attachments/image-1.png",
+      sha256: "b".repeat(64),
+      mediaType: "image/png" as const,
+      bytes: 4,
+      source: "clipboard" as const,
+    };
+    queue.enqueueMessage({
+      value: "first [Image #1]",
+      elements: [{ type: "image" as const, attachmentId: image.id, placeholder: "[Image #1]", start: 6, end: 16 }],
+      images: [image],
+    });
+    queue.enqueueMessage({ value: "second", elements: [], images: [] });
+
+    const head = queue.peekNext();
+    expect(head).toMatchObject({ kind: "message", value: "first [Image #1]" });
+    // peek returns a clone: mutating the returned snapshot must not leak in.
+    if (head?.kind === "message") {
+      head.elements[0]!.placeholder = "changed";
+      head.images[0]!.path = "changed";
+    }
+    expect(queue.peekNext()).toMatchObject({
+      value: "first [Image #1]",
+      elements: [{ placeholder: "[Image #1]" }],
+      images: [{ path: ".vesicle/attachments/image-1.png" }],
+    });
+    // peek does not consume: FIFO order and later takeNext are unchanged.
+    expect(queue.items().map((item) => item.kind === "message" ? item.value : item.raw)).toEqual(["first [Image #1]", "second"]);
+    expect(queue.takeNext()).toMatchObject({ value: "first [Image #1]" });
+    expect(queue.peekNext()).toMatchObject({ value: "second" });
+    expect(queue.takeNext()).toMatchObject({ value: "second" });
+    expect(queue.peekNext()).toBeUndefined();
+  });
+
+  test("projects busy Esc interrupt hint states within the 80-column budget", () => {
+    const queue = createInputQueue();
+    queue.enqueueMessage({ value: "one", elements: [], images: [] });
+    // idle: no interrupt hint anywhere
+    expect(escInterruptHint(false, 1)).toBeUndefined();
+    expect(queuedInputPreviewRows(queue.items(), 40, 3, false)[0]).toBe("Queued 1 · Up edits last");
+    // busy: the hint appears in the non-empty queue header, not the placeholder
+    expect(escInterruptHint(true, 1)).toBe("Esc interrupt & send next");
+    expect(queuedInputPreviewRows(queue.items(), 60, 3, true)[0]).toBe("Queued 1 · Esc interrupt & send next · Up edits last");
+    expect(busyComposerPlaceholder(1)).toBe("Type input · Enter queue");
+    // busy + empty queue: the hint moves into the placeholder
+    expect(escInterruptHint(true, 0)).toBe("Esc interrupt");
+    expect(busyComposerPlaceholder(0)).toBe("Type input · Enter queue · Esc interrupt");
+    // 80-column content budget: composer input width is terminal width - 4.
+    const composerWidth = 80 - 4;
+    expect(busyComposerPlaceholder(0).length).toBeLessThanOrEqual(composerWidth);
+    expect(busyComposerPlaceholder(1).length).toBeLessThanOrEqual(composerWidth);
+    expect(escInterruptHint(true, 1)!.length).toBeLessThanOrEqual(composerWidth);
+    const header = queuedInputPreviewRows(queue.items(), composerWidth, 3, true)[0]!;
+    expect(header.length).toBeLessThanOrEqual(composerWidth);
+    // the mixed preview (header + preview rows) also stays within its inner width
+    for (const row of queuedInputPreviewRows(queue.items(), composerWidth, 3, true)) {
+      expect(row.length).toBeLessThanOrEqual(composerWidth);
+    }
   });
 
   test("drains only the leading tool-boundary commands from command FIFO", () => {

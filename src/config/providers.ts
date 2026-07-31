@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { VesicleConfig, VesicleProvider } from "./env";
+import type { ResponsesProfile, ResponsesTransport, VesicleConfig, VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
@@ -27,6 +27,8 @@ export type ProviderProfile = {
   apiKeyEnv: string;
   authMethod?: ProviderAuthMethod;
   userAgent?: string;
+  responsesProfile?: ResponsesProfile;
+  responsesTransport?: ResponsesTransport;
   defaultModel?: string;
   models: ProviderModelProfile[];
 };
@@ -44,6 +46,12 @@ export type ProviderConfigStatus = VesicleConfig & {
   registry: ProviderRegistry;
   providerEnvPath: string;
   hasProviderEnvFile: boolean;
+  /**
+   * User-level `.env` values only, without the process-env overlay. Lets the
+   * provider proxy policy resolve explicit-user vs process precedence without
+   * merge ambiguity. Existing consumers continue to use `effectiveEnv`.
+   */
+  fileEnv: NodeJS.ProcessEnv;
 };
 
 export async function loadProviderRegistry(
@@ -58,6 +66,7 @@ async function loadProviderRegistryWithEnv(
 ): Promise<{
   registry: ProviderRegistry;
   effectiveEnv: NodeJS.ProcessEnv;
+  fileEnv: NodeJS.ProcessEnv;
   providerEnvPath: string;
   hasProviderEnvFile: boolean;
 }> {
@@ -76,6 +85,7 @@ async function loadProviderRegistryWithEnv(
   return {
     registry: parseProviderConfig(source, configPath, providerEnv.effectiveEnv),
     effectiveEnv: providerEnv.effectiveEnv,
+    fileEnv: providerEnv.fileEnv,
     providerEnvPath: providerEnv.path,
     hasProviderEnvFile: providerEnv.exists,
   };
@@ -83,7 +93,7 @@ async function loadProviderRegistryWithEnv(
 
 export async function loadUserConfigEnvironment(
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ effectiveEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
+): Promise<{ effectiveEnv: NodeJS.ProcessEnv; fileEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
   return loadProviderEnvironment(providerConfigPathFromEnv(env), env);
 }
 
@@ -99,7 +109,7 @@ export async function inspectProviderConfig(
   selection?: Partial<ProviderSelection>,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ProviderConfigStatus> {
-  const { registry, effectiveEnv, providerEnvPath, hasProviderEnvFile } = await loadProviderRegistryWithEnv(env);
+  const { registry, effectiveEnv, fileEnv, providerEnvPath, hasProviderEnvFile } = await loadProviderRegistryWithEnv(env);
   const config = resolveProviderConfig(registry, selection, effectiveEnv);
   const missing: string[] = [];
   if (!config.apiKey) {
@@ -115,6 +125,7 @@ export async function inspectProviderConfig(
     registry,
     providerEnvPath,
     hasProviderEnvFile,
+    fileEnv,
   };
 }
 
@@ -140,6 +151,8 @@ export function resolveProviderConfig(
     apiKeyLabel: profile.apiKeyEnv,
     ...(profile.authMethod ? { authMethod: profile.authMethod } : {}),
     ...(profile.userAgent ? { userAgent: profile.userAgent } : {}),
+    ...(profile.responsesProfile ? { responsesProfile: profile.responsesProfile } : {}),
+    ...(profile.responsesTransport ? { responsesTransport: profile.responsesTransport } : {}),
     ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
     ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
     ...(modelProfile.limits ? { limits: modelProfile.limits } : {}),
@@ -158,14 +171,15 @@ export function providerConfigPathFromEnv(env: NodeJS.ProcessEnv = process.env):
 async function loadProviderEnvironment(
   configPath: string,
   env: NodeJS.ProcessEnv,
-): Promise<{ effectiveEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
+): Promise<{ effectiveEnv: NodeJS.ProcessEnv; fileEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
   const envPath = join(dirname(configPath), ".env");
   const source = await readFile(envPath, "utf8").catch((error: unknown) => {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return "";
     throw error;
   });
-  if (!source) return { effectiveEnv: env, path: envPath, exists: false };
-  return { effectiveEnv: { ...env, ...parseEnvFile(source, envPath) }, path: envPath, exists: true };
+  if (!source) return { effectiveEnv: env, fileEnv: {}, path: envPath, exists: false };
+  const fileEnv = parseEnvFile(source, envPath);
+  return { effectiveEnv: { ...env, ...fileEnv }, fileEnv, path: envPath, exists: true };
 }
 
 export function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
@@ -244,6 +258,46 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (defaultModel && !models.some((model) => model.id === defaultModel)) {
       throw new Error(`Provider "${id}" defaultModel "${defaultModel}" is not declared in models.`);
     }
+    if (protocol === "openai-responses" && !currentProvider.responsesProfile) {
+      throw new Error(`Provider "${id}" using openai-responses must declare responsesProfile.`);
+    }
+    if (protocol !== "openai-responses" && currentProvider.responsesProfile) {
+      throw new Error(`Provider "${id}" cannot declare responsesProfile with protocol ${protocol}.`);
+    }
+    if (protocol !== "openai-responses" && currentProvider.responsesTransport) {
+      throw new Error(`Provider "${id}" cannot declare responsesTransport with protocol ${protocol}.`);
+    }
+    if (currentProvider.responsesProfile === "codex-http-relay" && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use codex-http-relay with responsesTransport websocket.`);
+    }
+    if (currentProvider.responsesProfile === "codex-beta-2026-02-06" && currentProvider.responsesTransport !== "websocket") {
+      throw new Error(`Provider "${id}" must use responsesTransport websocket with codex-beta-2026-02-06.`);
+    }
+    if (currentProvider.responsesProfile === "mimo-subset-2026-07-30" && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use mimo-subset-2026-07-30 with responsesTransport websocket.`);
+    }
+    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31" && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use deepseek-subset-2026-07-31 with responsesTransport websocket.`);
+    }
+    if (protocol === "openai-responses" && currentProvider.authMethod === "x-goog-api-key") {
+      throw new Error(`Provider "${id}" using openai-responses cannot use authMethod x-goog-api-key.`);
+    }
+    if (protocol === "openai-responses" && currentProvider.authMethod === "x-api-key"
+      && currentProvider.responsesProfile !== "mimo-subset-2026-07-30") {
+      throw new Error(`Provider "${id}" can use authMethod x-api-key only with mimo-subset-2026-07-30.`);
+    }
+    if (currentProvider.responsesProfile === "mimo-subset-2026-07-30"
+      && models.some((model) => model.capabilities?.remoteCompact === true)) {
+      throw new Error(`Provider "${id}" cannot enable remoteCompact with mimo-subset-2026-07-30.`);
+    }
+    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+      && models.some((model) => model.capabilities?.remoteCompact === true)) {
+      throw new Error(`Provider "${id}" cannot enable remoteCompact with deepseek-subset-2026-07-31.`);
+    }
+    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+      && models.some((model) => model.id !== "deepseek-v4-flash")) {
+      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash with deepseek-subset-2026-07-31.`);
+    }
     registry.providers.push({
       id,
       protocol,
@@ -251,6 +305,8 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       apiKeyEnv,
       ...(currentProvider.authMethod ? { authMethod: currentProvider.authMethod } : {}),
       ...(currentProvider.userAgent ? { userAgent: currentProvider.userAgent } : {}),
+      ...(currentProvider.responsesProfile ? { responsesProfile: currentProvider.responsesProfile } : {}),
+      ...(currentProvider.responsesTransport ? { responsesTransport: currentProvider.responsesTransport } : {}),
       ...(defaultModel ? { defaultModel } : {}),
       models,
     });
@@ -318,6 +374,8 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       else if (key === "apiKeyEnv") currentProvider.apiKeyEnv = value;
       else if (key === "authMethod") currentProvider.authMethod = readAuthMethod(value, `provider ${currentProvider.id}`);
       else if (key === "userAgent") currentProvider.userAgent = readUserAgent(value, `provider ${currentProvider.id}`);
+      else if (key === "responsesProfile") currentProvider.responsesProfile = readResponsesProfile(value, `provider ${currentProvider.id}`);
+      else if (key === "responsesTransport") currentProvider.responsesTransport = readResponsesTransport(value, `provider ${currentProvider.id}`);
       else if (key === "defaultModel") currentProvider.defaultModel = value;
       else if (key === "apiKey") throw new Error(`Provider config parse error on line ${index + 1}: use apiKeyEnv instead of inline apiKey.`);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown provider field "${key}".`);
@@ -463,8 +521,23 @@ function requireModel(profile: ProviderProfile, modelId: string): ProviderModelP
 }
 
 function readProtocol(value: string, field: string): ProviderProtocol {
-  if (value !== "openai-chat-compatible" && value !== "anthropic-messages" && value !== "gemini-generate-content") {
+  if (value !== "openai-chat-compatible" && value !== "openai-responses" && value !== "anthropic-messages" && value !== "gemini-generate-content") {
     throw new Error(`Unsupported provider protocol "${value}" in ${field}.`);
+  }
+  return value;
+}
+
+function readResponsesProfile(value: string, field: string): ResponsesProfile {
+  if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06"
+    && value !== "mimo-subset-2026-07-30" && value !== "deepseek-subset-2026-07-31") {
+    throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
+  }
+  return value;
+}
+
+function readResponsesTransport(value: string, field: string): ResponsesTransport {
+  if (value !== "http" && value !== "websocket") {
+    throw new Error(`Unsupported Responses transport "${value}" in ${field}.`);
   }
   return value;
 }
@@ -504,6 +577,7 @@ function readCapabilityField(key: string, value: string, index: number, path: st
   if (key === "temperature") return { temperature: enabled };
   if (key === "maxTokens") return { maxTokens: enabled };
   if (key === "vision") return { vision: enabled };
+  if (key === "remoteCompact") return { remoteCompact: enabled };
   throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
 }
 

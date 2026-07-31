@@ -1,5 +1,4 @@
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
-import { join } from "node:path";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
@@ -71,9 +70,13 @@ import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
 import { activateSkillForSession } from "../core/skills";
+import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-loop/session-init";
+import { createSessionIdentityCoordinator } from "./session-identity-coordinator";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
+import { closeAllProviderSessions, closeProviderSession } from "../providers/lifecycle";
+import { registerHostShutdownCleanup } from "../core/process/shutdown";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -159,6 +162,14 @@ export function App(props: AppProps = {}) {
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
+  let providerResourceSessionId: string | undefined;
+  createEffect(() => {
+    const current = sessionId();
+    if (providerResourceSessionId && providerResourceSessionId !== current) {
+      closeProviderSession(providerResourceSessionId);
+    }
+    providerResourceSessionId = current;
+  });
   const [conversation, setConversation] = createSignal<VesicleMessage[]>([]);
   const [, setOutput] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -361,6 +372,10 @@ export function App(props: AppProps = {}) {
     activeModel,
     setStatus,
     recordActivity,
+    closeActiveProviderSession: () => {
+      const id = sessionId();
+      if (id) closeProviderSession(id);
+    },
   });
   const {
     activeGeneration,
@@ -499,10 +514,26 @@ export function App(props: AppProps = {}) {
     openSkillPicker,
   } = skillPickerController;
   const unsubscribeProcesses = processManager.subscribe(handleBackgroundProcessEvent);
+  let shutdownHostResourcesPromise: Promise<void> | undefined;
+  const shutdownHostResources = () => {
+    shutdownHostResourcesPromise ??= (async () => {
+      unsubscribeProcesses();
+      try {
+        await processManager.shutdown();
+      } finally {
+        sideQuestionController.dispose();
+      }
+    })();
+    return shutdownHostResourcesPromise;
+  };
+  const unregisterHostShutdown = registerHostShutdownCleanup(shutdownHostResources);
   onCleanup(() => {
-    unsubscribeProcesses();
-    void processManager.shutdown();
-    sideQuestionController.dispose();
+    void shutdownHostResources()
+      .catch(() => undefined)
+      .finally(() => {
+        unregisterHostShutdown();
+        closeAllProviderSessions();
+      });
   });
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
@@ -902,6 +933,8 @@ export function App(props: AppProps = {}) {
     handleArtifactFocusKey,
     togglePage: switchPage,
     workspaceActive,
+    workspaceFocusRegion: workspaceController.focusRegion,
+    workspaceEditableSourcePasteActive: workspaceController.editableSourcePasteActive,
     handleWorkspaceKey: workspaceController.handleKey,
   });
   /**
@@ -922,17 +955,47 @@ export function App(props: AppProps = {}) {
    *   /new              abandon the current session and start fresh
    *   /help             show available commands
    */
+  // Command dispatch is fire-and-forget, so two rapid /skill commands share one
+  // lazy identity. The coordinator releases a resolved identity and /new resets
+  // it so later activations cannot revive an abandoned session.
+  const sessionIdentityCoordinator = createSessionIdentityCoordinator({
+    currentSessionId: sessionId,
+    initialize: async (): Promise<SessionIdentity> => {
+      // Mirror turn-controller's ensureRuntimeReady: the identity header needs a
+      // resolved provider selection and effective permission settings, and the
+      // active provider/model signals start as "loading" before config resolves.
+      if (!providerConfigReady()) {
+        setStatus("loading provider config");
+        await loadProviderConfigOnce();
+      }
+      if (!permissionSettingsReady()) {
+        setStatus("loading permission settings");
+        await loadPermissionSettingsOnce();
+      }
+      return initializeSessionIdentity({
+        engine: activeEngine(),
+        rootDir: process.cwd(),
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        permission: {
+          mode: permissionMode(),
+          ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true as const } : {}),
+          shellExecEnabled: shellExecEnabled(),
+          shellInterpreter: shellInterpreter(),
+        },
+      });
+    },
+    apply: (identity) => {
+      setSessionId(identity.sessionId);
+      setSessionPath(identity.sessionPath);
+    },
+  });
   async function activateSkillCommand(
     name: string,
     options: { mode: "invoke" | "context-only"; taskText?: string },
   ): Promise<void> {
     const rootDir = process.cwd();
-    let sid = sessionId();
-    if (!sid) {
-      sid = crypto.randomUUID();
-      setSessionId(sid);
-      setSessionPath(join(rootDir, ".vesicle", "sessions", `${sid}.jsonl`));
-    }
+    const sid = await sessionIdentityCoordinator.ensure();
     const branchParent = nextSessionParent();
     const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
       profile: { id: activeEngine() },
@@ -940,6 +1003,7 @@ export function App(props: AppProps = {}) {
       ...(branchParent ? { parentUuid: branchParent.uuid } : {}),
       contextWindow: activeModelLimits()?.contextWindow,
     });
+    if (branchParent && activation.recordUuid) setNextSessionParent({ uuid: activation.recordUuid });
     const scriptInfo = activation.scripts.length > 0
       ? ` · ${activation.scripts.length} script${activation.scripts.length > 1 ? "s" : ""}`
       : "";
@@ -986,7 +1050,10 @@ export function App(props: AppProps = {}) {
     setStatus,
     recordActivity,
     setSessionId: (value) => {
-      if (typeof value !== "function" && value === undefined) clearQueuedInputs();
+      if (typeof value !== "function" && value === undefined) {
+        sessionIdentityCoordinator.reset();
+        clearQueuedInputs();
+      }
       return setSessionId(value);
     },
     setSessionPath,
@@ -1176,6 +1243,7 @@ export function App(props: AppProps = {}) {
       <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>
         <BottomSurface
         layout={layout()}
+        composerFocused={!workspaceActive() || workspaceController.focusRegion() === "composer"}
         yoloStage={yoloConfirmStage()}
         permissionRequest={activePermissionRequest()}
         question={pendingUserQuestion()}

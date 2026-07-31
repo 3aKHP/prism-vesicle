@@ -1,12 +1,12 @@
 import { loadConfigForSelection } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import { loadExperimentalQualityProfile } from "../../config/quality";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderSelection } from "../../config/providers";
 import type { VesicleMessage, VesicleRequest } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
 import { FileCheckpointManager } from "../checkpoints/file-history";
-import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
+import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeInstructionBlocks } from "../instructions";
 import { freezeInstructionBlocks } from "../instructions/instruction-context";
 import { defaultPermissionRuntime } from "../permissions";
@@ -19,6 +19,7 @@ import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
 import { generationMetadata, mergeGeneration } from "./generation";
 import { resolveToolSurface } from "./tool-surface";
+import { buildSessionHeaderRecord } from "./session-init";
 import type { RunLoopArgs } from "./turn-loop";
 import type { AgentLoopEvent, RunPromptOptions } from "./types";
 import {
@@ -52,7 +53,6 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
   const permission = options.permission ?? defaultPermissionRuntime;
-  const provider = createProvider(config);
   const projectHarness = !options.assets && !options.harness
     ? requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir))
     : undefined;
@@ -83,6 +83,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     options.sessionId,
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
 
   // Skills (Phase 2): freeze the session catalog (resume re-resolves by the
   // persisted snapshot's name+hash), filter it for this engine, hydrate the
@@ -158,34 +160,21 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const providerRoundId = newProviderRoundId();
 
   if (isNewSession) {
-    await session.append({
-      role: "system",
-      content: systemPrompt,
-      metadata: {
+    await session.append(
+      buildSessionHeaderRecord({
+        systemPrompt,
         engine,
-        provider: config.provider,
-        providerId: config.providerId,
-        model: config.model,
-        permissionMode: permission.mode,
-        ...(permission.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}),
-        ...generationMetadata(generation),
-        profile: {
-          displayName: profile.displayName,
-          protocolVersion: profile.protocolVersion,
-          tools: profile.defaultTools,
-          effectiveModelTools: toolSurface.definitions.map((tool) => tool.function.name),
-          ...(toolSurface.mcp.definitions.length > 0 ? { mcpTools: toolSurface.mcp.definitions.map((tool) => tool.function.name) } : {}),
-          validators: profile.validators,
-          stopGates: profile.stopGates,
-        },
+        config,
+        permission,
+        generation,
+        profile,
+        toolSurface,
         assets: engineAssets.assets,
-        instructions: selectionToRecord(instructional.selection),
-        ...(harness?.identity ? { harness: harness.identity } : {}),
-        // Bounded frozen-catalog identity (hash + name/scope/bodySha256 only);
-        // omitted entirely when the session has no Skills and no diagnostics.
-        ...(isMeaningfulSkillCatalogSnapshot(skillCatalogSnapshot) ? { skills: skillCatalogSnapshot } : {}),
-      },
-    });
+        instructionalSelection: instructional.selection,
+        harnessIdentity: harness?.identity,
+        skillCatalogSnapshot,
+      }),
+    );
   } else if (snapshot && !snapshot.skillCatalogSnapshot && isMeaningfulSkillCatalogSnapshot(skillCatalogSnapshot)) {
     // A resumed legacy session without a persisted snapshot: make the fresh
     // freeze durable so the next resume re-resolves by name+hash instead of

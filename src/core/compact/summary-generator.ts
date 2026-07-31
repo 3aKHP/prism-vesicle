@@ -1,11 +1,12 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderRetryInfo, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import { projectSessionHistory, type ResumedMessage, type SessionRecord } from "../session/store";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 
 const NO_TOOLS_COMPACT_PREAMBLE = `
 CRITICAL: Respond with TEXT ONLY. Do NOT call tools.
@@ -51,7 +52,8 @@ export async function generatePortableSummary(options: GenerateSummaryOptions): 
   const messages = projectSessionHistory(options.evictedRecords).messages;
   const prompt = compactPrompt(FULL_COMPACT_PROMPT, options.instructions, options.previousSummary);
   const config = await loadConfigForSelection(options.providerSelection);
-  const provider = createProvider(config);
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { sessionId: options.sessionId, proxyPolicy });
   const profile = await loadEngineProfile(options.engine, options.rootDir);
   const enginePrompt = composeSystemPrompt(await loadPromptBundle(profile, options.rootDir));
   const systemPrompt = (await composeSystemPromptWithInstructions(options.engine, enginePrompt, options.rootDir)).systemPrompt;
@@ -100,10 +102,13 @@ export function toVesicleMessage(message: ResumedMessage): VesicleMessage {
   return {
     role: message.role,
     content: message.content,
+    ...(message.kind ? { kind: message.kind } : {}),
     ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
     ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+    ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images?.length ? { images: message.images } : {}),
   };
 }

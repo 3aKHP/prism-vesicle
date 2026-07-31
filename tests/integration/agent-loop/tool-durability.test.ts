@@ -1,15 +1,109 @@
-import { readFile, } from "node:fs/promises";
+import { readFile, stat, } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolvePermission, runPrompt } from "../../../src/core/agent-loop/run";
+import { bootstrapTurn } from "../../../src/core/agent-loop/turn-bootstrap";
+import { runLoop } from "../../../src/core/agent-loop/turn-loop";
 import type { AgentLoopEvent } from "../../../src/core/agent-loop/run";
-import { loadSessionSnapshot } from "../../../src/core/session/store";
+import type { ProviderAdapter, ProviderStreamEvent } from "../../../src/providers/shared/types";
+import { listSessions, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);
 afterEach(restoreAgentLoopTestState);
 
 describe("agent loop: tool durability", () => {
+  test("does not dispatch a completed streamed tool call before the terminal commit", async () => {
+    const rootDir = await createPromptRoot();
+    const call = {
+      id: "call-commit-barrier",
+      type: "function",
+      function: {
+        name: "write_file",
+        arguments: JSON.stringify({ path: "workspace/commit-barrier.md", content: "written once" }),
+      },
+    };
+    let request = 0;
+    globalThis.fetch = (async () => {
+      request += 1;
+      if (request === 1) {
+        return new Response(`data: ${JSON.stringify({
+          id: "attempt-before-terminal",
+          choices: [{ delta: { tool_calls: [{ index: 0, ...call }] }, finish_reason: "tool_calls" }],
+        })}\n\n`);
+      }
+      if (request === 2) {
+        return Response.json({ id: "attempt-committed", choices: [{ message: { content: "", tool_calls: [call] } }] });
+      }
+      return Response.json({ id: "attempt-final", choices: [{ message: { content: "done" } }] });
+    }) as unknown as typeof fetch;
+
+    await expect(runPrompt({ input: "write", rootDir })).rejects.toThrow("ended before [DONE]");
+    await expect(stat(join(rootDir, "workspace", "commit-barrier.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    const failedSession = (await listSessions(rootDir))[0]!;
+    const failedRecords = await loadSessionRecords(rootDir, failedSession.sessionId);
+    expect(failedRecords.filter((record) => record.role === "assistant" || record.role === "tool")).toEqual([]);
+
+    const retried = await runPrompt({ input: "retry", rootDir });
+    expect(retried.kind).toBe("complete");
+    expect(await readFile(join(rootDir, "workspace", "commit-barrier.md"), "utf8")).toBe("written once");
+    const retryRecords = await loadSessionRecords(rootDir, retried.sessionId);
+    expect(retryRecords.filter((record) => record.role === "tool" && record.metadata?.toolCallId === call.id)).toHaveLength(1);
+  });
+
+  test("discards a failed attempt and executes the successful same-request retry exactly once", async () => {
+    const rootDir = await createPromptRoot();
+    const call = {
+      id: "call-attempt-retry",
+      name: "write_file",
+      arguments: JSON.stringify({ path: "workspace/attempt-retry.md", content: "committed once" }),
+    };
+    let round = 0;
+    const provider: ProviderAdapter = {
+      id: "attempt-retry-fixture",
+      complete: async () => { throw new Error("unexpected non-stream request"); },
+      stream: async function* (): AsyncIterable<ProviderStreamEvent> {
+        round += 1;
+        if (round === 1) {
+          yield { type: "attempt_started", attempt: 1 };
+          yield { type: "tool_call_candidate", attempt: 1, toolCall: call };
+          yield { type: "attempt_discarded", attempt: 1 };
+          yield { type: "attempt_started", attempt: 2 };
+          yield { type: "tool_call_candidate", attempt: 2, toolCall: call };
+          yield {
+            type: "complete",
+            attempt: 2,
+            response: {
+              id: "response-attempt-2",
+              content: "",
+              toolCalls: [call],
+              providerState: {
+                version: 1,
+                protocol: "fixture-responses",
+                providerId: "test",
+                model: "test-model",
+                endpointFingerprint: "sha256:fixture",
+                payload: { responseId: "response-attempt-2" },
+              },
+            },
+          };
+          return;
+        }
+        yield { type: "complete", response: { id: "response-final", content: "done" } };
+      },
+    };
+    const bootstrapped = await bootstrapTurn({ input: "write once", rootDir });
+    const result = await runLoop({ ...bootstrapped, provider });
+
+    expect(result.kind).toBe("complete");
+    expect(await readFile(join(rootDir, "workspace", "attempt-retry.md"), "utf8")).toBe("committed once");
+    const records = await loadSessionRecords(rootDir, result.sessionId);
+    expect(records.filter((record) => record.role === "tool" && record.metadata?.toolCallId === call.id)).toHaveLength(1);
+    const assistant = records.find((record) => record.metadata?.providerResponseId === "response-attempt-2");
+    expect(assistant?.metadata?.providerState).toEqual(expect.objectContaining({ payload: { responseId: "response-attempt-2" } }));
+    expect(JSON.stringify(records)).not.toContain("response-attempt-1");
+  });
+
   test.skipIf(process.platform === "win32")("keeps a durable tool result resolved when the provider continuation fails", async () => {
     const rootDir = await createPromptRoot();
     globalThis.fetch = (async () => Response.json({
@@ -184,6 +278,76 @@ describe("agent loop: tool durability", () => {
         path: "workspace/tool-test.md",
       }),
     }));
+  });
+
+  test("fails malformed tool arguments without replaying successful siblings", async () => {
+    const rootDir = await createPromptRoot();
+    const requestBodies: any[] = [];
+
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      requestBodies.push(JSON.parse(String(init.body)));
+      if (requestBodies.length === 1) {
+        return Response.json({
+          id: "chatcmpl-malformed-tools",
+          choices: [{ message: {
+            content: "",
+            tool_calls: [
+              {
+                id: "call-good",
+                type: "function",
+                function: {
+                  name: "write_file",
+                  arguments: JSON.stringify({ path: "workspace/good.md", content: "written once" }),
+                },
+              },
+              {
+                id: "call-bad",
+                type: "function",
+                function: {
+                  name: "write_file",
+                  arguments: "{\"path\":\"workspace/bad.md\",\"content\":\"truncated",
+                },
+              },
+            ],
+          } }],
+        });
+      }
+      return Response.json({ id: "chatcmpl-recovered", choices: [{ message: { content: "Recovered." } }] });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({ input: "write both files", rootDir, permission: { mode: "MOMENTUM" } });
+    if (result.kind !== "complete") throw new Error("expected complete");
+
+    expect(await readFile(join(rootDir, "workspace", "good.md"), "utf8")).toBe("written once");
+    await expect(stat(join(rootDir, "workspace", "bad.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    const replayedAssistant = requestBodies[1].messages.find((message: any) => message.role === "assistant");
+    expect(replayedAssistant.tool_calls).toEqual([
+      expect.objectContaining({ id: "call-good", function: expect.objectContaining({ arguments: expect.stringContaining("good.md") }) }),
+      expect.objectContaining({ id: "call-bad", function: expect.objectContaining({ arguments: "{}" }) }),
+    ]);
+    expect(requestBodies[1].messages.filter((message: any) => message.role === "tool")).toHaveLength(2);
+
+    const records = (await readFile(result.sessionPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const assistant = records.find((record) => record.role === "assistant" && record.metadata?.providerResponseId === "chatcmpl-malformed-tools");
+    expect(assistant.metadata.toolCalls[1].arguments).toBe("{}");
+    expect(assistant.metadata.malformedToolArguments).toEqual([
+      expect.objectContaining({
+        toolCallId: "call-bad",
+        name: "write_file",
+        reason: "invalid-json",
+        originalLength: expect.any(Number),
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    ]);
+    expect(records.filter((record) => record.role === "tool" && record.metadata?.toolCallId === "call-good")).toHaveLength(1);
+    expect(records.find((record) => record.role === "tool" && record.metadata?.toolCallId === "call-bad")?.metadata).toMatchObject({
+      ok: false,
+      reason: "malformed-tool-arguments",
+    });
+    expect(records.filter((record) => record.role === "tool").map((record) => record.metadata.toolCallId)).toEqual([
+      "call-good",
+      "call-bad",
+    ]);
   });
 
   test("does not run artifact validators on ordinary assistant prose", async () => {

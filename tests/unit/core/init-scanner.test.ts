@@ -98,11 +98,17 @@ describe("init scanner", () => {
       await writeFile(join(root, ".env"), "SECRET-ENV-KEY\n", "utf8");
       await mkdir(join(root, ".vesicle"), { recursive: true });
       await writeFile(join(root, ".vesicle", "state.json"), "SECRET-STATE\n", "utf8");
+      // Scratch canary: tmp/ is model-writable but must never feed the /init digest.
+      await mkdir(join(root, "tmp"), { recursive: true });
+      await writeFile(join(root, "tmp", "private-draft.md"), "SCRATCH-CANARY-MARKER\n", "utf8");
       const digest = await scanProject(root);
       expect(digest).toContain("CARD-MARKER");
       expect(digest).not.toContain("SECRET-PROVIDER-KEY");
       expect(digest).not.toContain("SECRET-ENV-KEY");
       expect(digest).not.toContain("SECRET-STATE");
+      expect(digest).not.toContain("tmp/");
+      expect(digest).not.toContain("private-draft.md");
+      expect(digest).not.toContain("SCRATCH-CANARY-MARKER");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

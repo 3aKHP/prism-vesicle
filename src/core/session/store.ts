@@ -5,7 +5,7 @@ import type { EngineId } from "../engine/profile";
 import type { EngineSwitchRequest } from "../engine/switch";
 import type { ProviderSelection } from "../../config/providers";
 import type { UserQuestionRequest } from "../user-question/types";
-import type { ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
+import type { ProviderStateEnvelope, ProviderThinkingBlock, ReasoningTier, ResponseUsage } from "../../providers/shared/types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { SkillToolEvent } from "../skills/types";
@@ -31,7 +31,7 @@ import { recoverSessionInteractions, type PendingDelegationRetry } from "./inter
 
 export { buildActiveSessionBranch } from "./record-model";
 export type { SessionRecord, SessionRole } from "./record-model";
-export { createSessionStore } from "./append-store";
+export { createSessionStore, withSessionActivationLock } from "./append-store";
 export type { SessionStore } from "./append-store";
 export type { PendingDelegationRetry } from "./interaction-recovery";
 export { FAILED_TURN_KIND } from "./history-projector";
@@ -247,6 +247,8 @@ export type ResumedMessage = {
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
   toolCalls?: ResumedToolCall[];
+  /** Validated provider-owned durable state attached to a provider-owned projection. */
+  providerState?: ProviderStateEnvelope;
   toolOk?: boolean;
   toolFileEvent?: FileToolEvent;
   toolWebEvent?: WebToolEvent;

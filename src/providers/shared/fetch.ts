@@ -1,4 +1,5 @@
 import { ProviderError } from "./errors";
+import { resolveHttpRoute, type ProviderProxyPolicy, type ProviderProxyRoute } from "./proxy";
 import type { ProviderRetryInfo } from "./types";
 
 export type ProviderRetryPolicy = {
@@ -6,6 +7,13 @@ export type ProviderRetryPolicy = {
   baseDelayMs: number;
   maxDelayMs: number;
 };
+
+/**
+ * RequestInit augmented with Bun's runtime-only `proxy` option. Local to this
+ * boundary so adapter and call-site `RequestInit` surfaces stay un-widened; the
+ * `proxy` value is the validated proxy URL from {@link SecretProxyUrl.forBun}.
+ */
+type BunFetchInit = RequestInit & { proxy?: string; tls?: { ca?: string | string[] } };
 
 type ProviderFetchOptions = {
   providerId?: string;
@@ -16,6 +24,13 @@ type ProviderFetchOptions = {
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   attemptHeaders?: (retryCount: number) => HeadersInit;
   onRetry?: (info: ProviderRetryInfo) => void;
+  /** Runtime-only proxy policy; never serialized. */
+  proxyPolicy?: ProviderProxyPolicy;
+  /**
+   * Test-only CA trust for the proxy boundary fixture; inert in production
+   * (undefined ⇒ Bun's default trust). Never weakens production defaults.
+   */
+  tlsCa?: string[];
 };
 
 const defaultRetryPolicy: ProviderRetryPolicy = {
@@ -39,12 +54,32 @@ export async function fetchProvider(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? abortableSleep;
   const signal = options.signal ?? init.signal ?? (input instanceof Request ? input.signal : undefined) ?? undefined;
+  const route: ProviderProxyRoute = options.proxyPolicy ? resolveHttpRoute(options.proxyPolicy) : { kind: "transport-default" };
+  const proxyActive = route.kind === "proxy";
   let retries = 0;
 
   while (true) {
     throwIfAborted(signal);
     try {
-      const response = await fetch(input, withAttemptHeaders(init, options.attemptHeaders?.(retries)));
+      const attemptInit = withAttemptHeaders(init, options.attemptHeaders?.(retries));
+      const bunInit: BunFetchInit = proxyActive
+        ? { ...attemptInit, proxy: (route as { secretUrl: { forBun: () => string } }).secretUrl.forBun() }
+        : attemptInit;
+      if (options.tlsCa) bunInit.tls = { ca: options.tlsCa };
+      const response = await fetch(input, bunInit);
+      // A 407 from a configured proxy is terminal: credentials are wrong/missing
+      // and retrying would resend known-bad auth. Surface a stable, non-revealing
+      // code; never interpolate the proxy endpoint.
+      if (proxyActive && response.status === 407) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new ProviderError("Provider proxy authentication failed.", {
+          kind: "http_error",
+          providerId: options.providerId,
+          status: 407,
+          code: "proxy_authentication_required",
+          retryable: false,
+        });
+      }
       if (!isRetryableStatus(response.status) || retries >= policy.maxRetries) return response;
 
       const delayMs = retryDelayMs(response, retries, policy, random, now);
@@ -53,18 +88,23 @@ export async function fetchProvider(
       await sleep(delayMs, signal);
       retries += 1;
     } catch (error) {
+      // Classified provider errors (e.g. proxy auth) are terminal; do not retry.
+      if (error instanceof ProviderError) throw error;
       if (signal?.aborted) throw abortError(signal);
       if (isAbortError(error)) throw error;
       if (retries >= policy.maxRetries) {
         const attempts = retries + 1;
         throw new ProviderError(
-          `Provider network request failed after ${attempts} attempts: ${errorMessage(error)}`,
+          proxyActive
+            ? "Provider proxy connection failed."
+            : `Provider network request failed after ${attempts} attempts: ${errorMessage(error)}`,
           {
             kind: "network_error",
             providerId: options.providerId,
             retryable: true,
             attempts,
-            cause: error,
+            code: proxyActive ? "proxy_connect_failed" : undefined,
+            ...(proxyActive ? {} : { cause: error }),
           },
         );
       }

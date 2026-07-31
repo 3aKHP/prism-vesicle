@@ -30,6 +30,65 @@ describe("TUI prompt composer", () => {
     expect(removedFirst.state.value).toBe(" [Image #1]");
     expect(removedFirst.state.elements).toEqual([expect.objectContaining({ attachmentId: "img_2", placeholder: "[Image #1]" })]);
   });
+  test("reverse-order image insertion renumbers placeholders to match visual order", () => {
+    // Paste first image at the end of a multiline draft.
+    let state = setComposerValue("first line\nsecond line", 22);
+    state = insertComposerImage(state, "img_first", "[Image #0]");
+    expect(state.elements).toHaveLength(1);
+    expect(state.elements![0].placeholder).toBe("[Image #1]");
+
+    // Move cursor to the beginning and paste a second image there.
+    state = { ...state, cursor: 0 };
+    state = insertComposerImage(state, "img_second", "[Image #0]");
+    expect(state.elements).toHaveLength(2);
+
+    // Visual order: img_second is earlier → #1, img_first is later → #2.
+    expect(state.elements![0].attachmentId).toBe("img_second");
+    expect(state.elements![0].placeholder).toBe("[Image #1]");
+    expect(state.elements![1].attachmentId).toBe("img_first");
+    expect(state.elements![1].placeholder).toBe("[Image #2]");
+
+    // The text contains correctly ordered placeholders.
+    expect(state.value).toContain("[Image #1]");
+    expect(state.value).toContain("[Image #2]");
+    expect(state.value.indexOf("[Image #1]")).toBeLessThan(state.value.indexOf("[Image #2]"));
+  });
+
+  test("pasting the same image twice reuses its id but keeps distinct, correctly numbered elements", () => {
+    // Attachment ids are content-hash derived, so an identical image pasted
+    // twice yields the same attachmentId for both elements.
+    let state = setComposerValue("a b", 1);
+    state = insertComposerImage(state, "img_same", "[Image #0]");
+    state = { ...state, cursor: state.value.length };
+    state = insertComposerImage(state, "img_same", "[Image #0]");
+
+    expect(state.elements).toHaveLength(2);
+    expect(state.elements![0].attachmentId).toBe("img_same");
+    expect(state.elements![1].attachmentId).toBe("img_same");
+    expect(state.elements![0].placeholder).toBe("[Image #1]");
+    expect(state.elements![1].placeholder).toBe("[Image #2]");
+    // The two placeholders occupy distinct, ordered ranges.
+    expect(state.elements![0].start).toBeLessThan(state.elements![1].start);
+  });
+
+  test("inserting at an existing placeholder's start pushes it right and numbers the new image #1", () => {
+    let state = setComposerValue("X");
+    state = insertComposerImage({ ...state, cursor: 1 }, "img_a", "[Image #0]");
+    // value: "X[Image #1]", element img_a at [1, 11).
+    expect(state.elements![0].attachmentId).toBe("img_a");
+
+    // Cursor at the exact start of img_a's placeholder.
+    state = { ...state, cursor: state.elements![0].start };
+    state = insertComposerImage(state, "img_b", "[Image #0]");
+
+    // img_b lands before img_a, which shifts right.
+    expect(state.elements).toHaveLength(2);
+    expect(state.elements![0].attachmentId).toBe("img_b");
+    expect(state.elements![0].placeholder).toBe("[Image #1]");
+    expect(state.elements![1].attachmentId).toBe("img_a");
+    expect(state.elements![1].placeholder).toBe("[Image #2]");
+  });
+
   test("backspace edits the draft without submitting", () => {
     const result = applyComposerKey(setComposerValue("runtime"), { name: "backspace" });
 

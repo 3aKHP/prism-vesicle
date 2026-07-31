@@ -1,0 +1,87 @@
+# OpenAI Responses Conformance Profile
+
+This document owns Vesicle's versioned application-layer comparison target for the independent `openai-responses` adapter. HTTPS/non-stream JSON, typed SSE, session-scoped WebSocket, dual portable/provider-native compaction, and explicit official/MiMo product profiles are implemented. Current protocol availability remains in [`STATUS.md`](../../STATUS.md); copyable configuration lives in the bilingual user reference and [`docs/examples/providers.yaml`](../examples/providers.yaml).
+
+## Claim Boundary
+
+The initial target is the public OpenAI `/v1/responses` API using API-key authentication, `store: false`, and a declared model capability profile, compared with OpenAI Codex commit `8f00b9a04cb542ad19a79f9f6c32348421741602`.
+
+Conformance covers application-controlled request fields and omission rules, deterministic JSON key order, public headers other than Vesicle's deliberate User-Agent, ordered input/output Items, typed events, exact `call_id` pairing, retry and terminal behavior, continuation, prewarm, fallback, and provider-native state needed for recovery.
+
+It excludes TLS ClientHello and ALPN, HTTP/2 framing and HPACK, TCP behavior, runtime-owned WebSocket handshake bytes, dynamic server values, and Codex private identity or attestation. Vesicle must not send `x-codex-*` headers, Codex session/thread/turn identities, private `client_metadata`, Responses Lite identity, or attestation merely to resemble Codex. Literal network-stack identity would require a separately approved component that owns and tests those bytes.
+
+## Evidence Fixtures
+
+The sanitized structured fixtures under `tests/fixtures/openai-responses/` are the executable evidence owner:
+
+- `profile-v1.json` pins source revisions, documentation check dates, the claim boundary, and explicit OpenAI/MiMo capability profiles.
+- `codex-source-evidence-v1.json` maps every frozen behavior claim to exact pinned source ranges and a bounded review excerpt.
+- `request-captures-v1.json` classifies every observed field as public required, public optional/profiled, transport-derived, dynamic, or private identity. It also freezes ordered HTTP/SSE, public WebSocket, Codex-beta WebSocket, and prewarm request captures.
+- `event-captures-v1.json` freezes ordered event/Item sequences, attempt boundaries, exact `call_id` relationships, usage, terminal variants, and the pinned Codex premature-EOF tool hazard.
+- `lifecycle-v1.json` freezes retry count meaning, Codex-observed versus Vesicle-selected terminal behavior, WebSocket limits, continuation recovery, and side-effect constraints.
+- `compatibility-ledger-v1.json` records public-versus-Codex differences and the selected behavior.
+
+The contract suite rejects unclassified captured fields, secret or private identity material, undeclared public/Codex WebSocket differences, and incomplete ledger entries. Later runtime phases use these captures as request, event, lifecycle, and acceptance oracles rather than duplicating prose expectations.
+
+## Frozen Decisions
+
+- HTTP/SSE and WebSocket share one request/event codec. Public WebSocket `response.create` omits `stream` and `background`; the separately selected `codex-beta-2026-02-06` profile sends `stream: true` and its beta header.
+- Stateless output Items are retained in API order. As of the 2026-07-30 public documentation check, `encrypted_content` is returned by default for stateless reasoning; the legacy `reasoning.encrypted_content` include remains accepted. The initial Codex-conformance profile sends the include for application parity, while subset profiles send it only when explicitly supported.
+- Frozen Codex does not provide the required host-side commit barrier: it queues a tool future at `output_item.done` and drains queued futures after the receive loop exits, including after premature EOF. Vesicle deliberately strengthens this boundary in Phase 2: a complete function-call Item remains pending until a structurally valid `response.completed`, and a failed attempt cannot commit assistant/native state or start a host side effect.
+- `codex-http-relay` deliberately accepts the Codex event-terminal split observed from trusted relays: contiguous completed Items are the response payload when a valid `response.completed` omits or empties `output`. Vesicle still waits for that successful terminal before committing; a non-empty terminal output must match the completed Item stream exactly, while premature EOF, failed/incomplete terminals, sparse indexes, and mismatched dual representations fail closed. `openai-public` retains terminal-output authority.
+- Five retries follow the triggering WebSocket attempt before a permanent active-session HTTPS downgrade. Each retry starts with a fresh attempt accumulator, and cancellation never retries.
+- Public WebSocket mode permits one in-flight response, no multiplexing, and a 60-minute connection. Vesicle's selected owner is one eligible socket per active session and exact provider owner; it must close on owner or lifecycle changes.
+- MiMo and DeepSeek are capability-declared Responses-compatible subsets, not OpenAI/Codex conformance profiles. Their dated HTTP profiles omit unsupported continuation/compaction fields and explicitly own `response.reasoning_text.*` events.
+
+## Updating The Profile
+
+Profile updates are reviewed fixture changes:
+
+1. Pin the new Codex commit and record exact source paths and line ranges.
+2. Re-check every listed public document and third-party subset document; update the dates.
+3. Derive sanitized structured requests and lifecycle evidence from the pinned serializers, call sites, tests, and public schemas. Record `provenance.kind`, exact source ranges, and every removed private path. Authorization is retained by name only as `<redacted:name-only>`; dynamic values use typed placeholders. Never capture credentials, auth values, private URLs, user prompts, installation IDs, attestation, or private metadata values.
+4. Classify every new field before accepting it. Unknown fields block the oracle; they are never copied or omitted silently.
+5. Add a compatibility-ledger entry for every public/Codex divergence and choose behavior per explicit transport/capability profile.
+6. Run `bun test tests/contract/providers/openai-responses-conformance.test.ts`, then the normal repository gates.
+
+Changing this profile does not silently migrate persisted sessions or infer a runtime feature. Each user-facing profile remains explicit configuration and a separately reviewed compatibility claim.
+
+## Product Profiles And Acceptance
+
+An official reasoning Item may carry an empty `content: []` schema placeholder alongside its encrypted reasoning and summary fields; non-empty or malformed reasoning content remains rejected. All non-MiMo profiles (`openai-public`, `codex-http-relay`, `codex-beta-2026-02-06`) accept this placeholder.
+
+`openai-public` is the official public application-layer tier. It sends the frozen public field set, admits only public semantic event families, uses Bearer authentication, and may opt into public WebSocket continuation and model-declared standalone compact. Vesicle `off` maps explicitly to `reasoning.effort: none`; it never falls through to provider-default reasoning. On 2026-07-31, a minimal proxied request to the official `api.openai.com` endpoint with `gpt-5.6-luna` accepted that exact control and returned content plus usage. The profile does not claim Codex product identity or network-stack fingerprint equality.
+
+`codex-http-relay` is the HTTP-only maximum-compatibility tier for Codex-serving Responses relays. It uses the public request field set without Codex-private identity, accepts the three observed non-semantic relay diagnostics, and supports either public-style terminal ordered output or Codex-style payload delivery through contiguous `response.output_item.done` events followed by a valid terminal whose `output` is empty or omitted. Reconstructed Items become the exact native replay window only after terminal commit. WebSocket, remote compact, and other optional capabilities still require their separately declared profile/capability boundaries.
+
+`mimo-subset-2026-07-30` is a third-party Responses-compatible subset. Its HTTP encoder omits `background`, `context_management`, `previous_response_id`, `parallel_tool_calls`, `store`, `stream_options`, encrypted-reasoning `include`, service tier, prompt cache key, WebSocket, and remote compact. It supports Bearer or `x-api-key`, replays full provider-visible context, omits OpenAI reasoning-summary controls that MiMo does not distinguish, maps Vesicle `off` to MiMo's documented `effort: none`, normalizes `xhigh`/`max` to `high`, and maps reasoning only from the profile-owned `response.reasoning_text.*` events and `reasoning_text` Items. MiMo's terminal reasoning Item may retain an empty `summary: []` schema placeholder; non-empty summaries and encrypted reasoning remain rejected.
+
+`deepseek-subset-2026-07-31` is the Bearer-authenticated, HTTP-only subset documented by DeepSeek for `deepseek-v4-flash`. It omits unsupported continuation, Conversations, storage, background, encrypted-reasoning include, stream options, WebSocket, and remote compaction; replays full context including plaintext reasoning Items required by tool rounds; and maps only `response.reasoning_text.*`. Reasoning tiers map to DeepSeek's documented `none`/`low`/`high`/`max` values: Vesicle `medium` and `xhigh` normalize to `high`, while `max` remains `max`. `deepseek-v4-pro` is excluded until its announced August support is live and independently accepted. Other profiles continue to reject this plaintext event/Item family unless explicitly declared.
+
+The independent Responses protocol remains opt-in experimental while the full `openai-public` real-provider gate is incomplete. On 2026-07-31, the funded MiMo endpoint and DeepSeek v4 Flash each passed their reasoning and function-loop cases (`2` pass, `0` fail per subset), completing both dated subsets' current real-provider gates. The trusted Codex-backed `doro-gpt` gateway passed the relay HTTP/SSE function loop and a non-stream Responses request, but standalone compact still returned HTTP 503 and a fallback-forbidden WebSocket probe still failed during connection setup. This is accepted upstream-backed relay evidence, not proof of the missing public WebSocket and compact boundaries.
+
+Deterministic integration tests own omission and event-admission evidence. The opt-in real-provider lanes are separate: `test:acceptance:responses:openai` requires an explicitly selected `openai-public` profile at `api.openai.com` with credentials and `remoteCompact`, then exercises HTTP/SSE, non-stream JSON, standalone compact, and public WebSocket; the MiMo and DeepSeek lanes require their exact dated profiles and exercise reasoning plus a function loop. Missing selectors, credentials, required capabilities, or exact profiles define skipped/unavailable tests, never passing tests. A third-party success is compatibility evidence only and cannot satisfy official OpenAI acceptance.
+
+## Implemented WebSocket Lifecycle
+
+`responsesTransport: websocket` selects one process-owned socket for the exact active session and provider/model/endpoint/profile owner. `openai-public` follows the public application message shape; `codex-beta-2026-02-06` is a separate frozen profile with its beta header and declared stream fields. The maximum-compatibility `codex-http-relay` profile remains HTTP-only. No profile, transport, or capability is inferred from a provider name, URL, hostname, or model.
+
+The first eligible request sends the same codec output with `generate: false`, validates the empty completed response, then generates from its returned response ID without duplicating input. Prewarm usage is billed provider work and is added to the completed logical response's token counters; the final generation remains the authority for current context occupancy. A same-owner completed assistant state permits later user/tool input to continue incrementally. An owner mismatch, rewind/branch divergence, socket rotation, disconnect, or `previous_response_not_found` clears the connection-local chain; with `store: false`, the next attempt prewarms from full portable history and begins a new chain. Live sockets, headers, credentials, callbacks, and connection state never enter the provider-state envelope or session JSONL.
+
+The transport enforces one in-flight response and no multiplexing, rotates before the public 60-minute limit, and closes on owner change, active-session change, or process shutdown. Every WebSocket event stream enters the same typed accumulator and final parser as SSE. Accepted deltas and function Items remain attempt-private; premature close publishes only discard markers, and no tool candidate can cross the Agent Loop commit barrier. Retryable failures receive five retries after the triggering attempt. Exhaustion closes the socket and permanently routes later requests in that active session through HTTP; cancellation closes without retry.
+
+## Implemented HTTPS/SSE Baseline
+
+The `src/providers/openai-responses/` module owns one deterministic request representation and one final response parser for both HTTPS JSON and typed SSE. It sends `store: false`, retains ordered output Items in the bounded provider-state envelope, replays same-owner Items at JSON-value fidelity, maps function results by exact `call_id`, and fails before network I/O for missing or duplicate result identities.
+
+Runtime selection is explicit. `openai-public` accepts only the frozen public request and event families. The maximum-compatibility `codex-http-relay` profile uses the same public HTTP request semantics, permits three observed non-semantic server diagnostics (`codex.rate_limits`, `codex.response.metadata`, and `responsesapi.websocket_timing`), and reconstructs empty/omitted terminal output from contiguous completed Item events after a valid terminal; diagnostics never enter normalized output or durable state. Other unknown events and every unknown output Item fail closed. No profile is inferred from provider id, hostname, URL, or model.
+
+Every SSE transport attempt uses a fresh accumulator. Deltas, tool candidates, usage, and native state stay private to that attempt until `response.completed` validates the final ordered Items; failed attempts are discarded and may be retried at most five times. This intentionally buffers visible deltas at the HTTP baseline so a retry cannot duplicate provisional TUI text. Cancellation is never retried, semantic unknown events fail closed, and the generic fetch retry loop is disabled inside the Responses stream retry loop so attempt counts cannot multiply.
+
+The opt-in `bun run test:acceptance:responses` gate exercises `doro-gpt` with a streamed function call, exact `call_id` result, retained native reasoning/message Items, and a final text response. It prints only provider/model identity, event types, counts, id shape, content length, and usage presence. The gateway operator identifies this deployment as a trusted transparent gateway backed by a Codex Pro subscription pool, so its successful HTTP evidence is accepted as upstream-backed relay evidence. It still does not imply WebSocket or compact support, and it cannot turn a failed capability probe into a pass. The public WebSocket acceptance explicitly forbids HTTP fallback so a successful HTTP downgrade cannot be mistaken for WebSocket evidence.
+
+## Implemented Standalone Compaction
+
+An explicitly declared `remoteCompact` model capability permits the adapter to call HTTPS `/responses/compact` with the full provider-visible uncompressed Item window. The request contains `model` and `input`, carries tool interactions inside canonical input Items, and never sends `previous_response_id`. The response must contain exactly one encrypted compaction Item; the adapter retains the complete ordered `output` window without pruning, prose extraction, or reconstruction, including forward-compatible retained Item families.
+
+Core generates the portable summary and remote projection independently from the same session snapshot. A single compact-checkpoint append records the portable replacement and optional bounded owner-qualified native state only if the source head is still current. Successful standalone compaction clears the former connection-local continuation, so the next request begins a new WebSocket chain without `previous_response_id`. The exact protocol/provider/model/endpoint owner may replace portable input with the canonical native window; owner switches use portable history, while corrupt native payloads or non-retryable provider rejection receive one portable recovery attempt. Remote failure never removes or invalidates the portable checkpoint.

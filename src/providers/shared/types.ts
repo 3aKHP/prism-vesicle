@@ -1,4 +1,7 @@
 import type { ToolCall, ToolDefinition } from "../../core/tools";
+import type { ProviderStateEnvelope } from "./state";
+
+export type { ProviderStateEnvelope } from "./state";
 
 export const reasoningTiers = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 export type ReasoningTier = typeof reasoningTiers[number];
@@ -41,9 +44,16 @@ export type VesicleMessage = {
   reasoningContent?: string;
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCallId?: string;
+  /** Host-derived tool outcome used by adapters with a native error flag. */
+  toolOk?: boolean;
   toolCalls?: ToolCall[];
+  /** Owner-qualified durable state. Only the matching provider adapter interprets it. */
+  providerState?: ProviderStateEnvelope;
   images?: VesicleImageAttachment[];
 };
+
+/** Host-only checkpoint marker consumed only by its owning provider adapter. */
+export const PROVIDER_NATIVE_CHECKPOINT_KIND = "provider-native-checkpoint";
 
 /**
  * Transport retry notification, fired by `fetchProvider` immediately before it
@@ -83,8 +93,23 @@ export type VesicleResponse = {
   reasoningContent?: string;
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCalls?: ToolCall[];
+  /** Validated provider-owned state published only with this completed response. */
+  providerState?: ProviderStateEnvelope;
   finishReason?: string;
   raw?: unknown;
+  usage?: ResponseUsage;
+};
+
+export type ProviderCompactRequest = {
+  id: string;
+  model: ModelRef;
+  messages: VesicleMessage[];
+  signal?: AbortSignal;
+  onRetry?: (info: ProviderRetryInfo) => void;
+};
+
+export type ProviderCompactResult = {
+  providerState: ProviderStateEnvelope;
   usage?: ResponseUsage;
 };
 
@@ -111,10 +136,16 @@ export type ProviderStreamEvent =
   | { type: "content_delta"; delta: string }
   | { type: "reasoning_delta"; delta: string }
   | { type: "tool_call_delta"; index: number; id?: string; name?: string; argumentsDelta?: string }
-  | { type: "complete"; response: VesicleResponse };
+  | { type: "attempt_started"; attempt: number }
+  | { type: "tool_call_candidate"; attempt: number; toolCall: ToolCall }
+  | { type: "attempt_discarded"; attempt: number }
+  | { type: "complete"; response: VesicleResponse; attempt?: number };
 
 export interface ProviderAdapter {
   id: string;
   complete(request: VesicleRequest): Promise<VesicleResponse>;
   stream?(request: VesicleRequest): AsyncIterable<ProviderStreamEvent>;
+  compact?(request: ProviderCompactRequest): Promise<ProviderCompactResult>;
+  /** Commit provider-local lifecycle changes only after the host durably installs compact state. */
+  commitCompact?(): void;
 }

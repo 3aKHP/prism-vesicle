@@ -39,6 +39,9 @@ for (const required of [
   "host-assets/skills/vesicle-docs/references/dev-skills.md",
   "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-configuration.md",
   "host-assets/skills/vesicle-docs/references/user-en-reference-configuration.md",
+  "host-assets/skills/skillify/SKILL.md",
+  "host-assets/skills/skillify/scripts/publish_skill.sh",
+  "host-assets/skills/skillify/scripts/publish_skill.ps1",
 ]) {
   if (!paths.includes(required)) throw new Error(`npm package is missing required runtime file: ${required}`);
 }

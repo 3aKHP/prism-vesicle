@@ -104,13 +104,13 @@ export function insertComposerImage(
   const current = { ...state, cursor: normalizeComposerCursor(state.value, state.cursor, state.elements) };
   const start = current.cursor;
   const next = insertText(current, placeholder);
-  return {
+  return renumberImageElements({
     ...next,
     elements: [
       ...(next.elements ?? []),
       { type: "image" as const, attachmentId, placeholder, start, end: start + placeholder.length },
     ].sort((left, right) => left.start - right.start),
-  };
+  });
 }
 
 export function setComposerValue(value: string, cursor = value.length): ComposerState {

@@ -7,7 +7,7 @@
 
 import { loadConfigForSelection } from "../../config/providers";
 import type { ProviderSelection } from "../../config/providers";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { EngineId } from "../engine/profile";
 import { mergeGeneration } from "../agent-loop/generation";
 import { resolveProjectHarnessRuntime, requireProjectHarnessRuntime } from "../harness/activation";
@@ -18,6 +18,7 @@ import type { ProviderRetryInfo, ReasoningTier, ResponseUsage, VesicleImageAttac
 import { materializeMessageImages } from "../attachments/store";
 import { createAssetResolver } from "../runtime/assets";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "./types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import { projectSideQuestionReference } from "./reference";
 
 const SIDE_QUESTION_PROMPT_PATH = "assets/prompts/shared/side-question.md";
@@ -33,7 +34,11 @@ export async function askSideQuestion(options: {
 }): Promise<{ content: string; usage?: ResponseUsage }> {
   const { context } = options;
   const config = await loadConfigForSelection(context.providerSelection);
-  const provider = createProvider(config);
+  // `/btw` is an independent, tool-free side request. It intentionally omits
+  // session ownership so it cannot contend with the main turn's one-in-flight
+  // Responses WebSocket or mutate its continuation chain.
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { proxyPolicy });
   const sidePrompt = await loadSideQuestionPrompt(options.rootDir);
   const projection = projectSideQuestionReference(context, options.question);
   const images = context.visionEnabled ? await materializeReferenceImages(options.rootDir, projection.images) : [];
@@ -154,7 +159,9 @@ function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     role: message.role,
     content: message.content,
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
+    ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+    ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images.map(({ data: _data, ...image }) => image) } : {}),
   };
 }

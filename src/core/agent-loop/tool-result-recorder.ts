@@ -23,6 +23,7 @@ export async function recordToolResult(options: RecordToolResultOptions): Promis
   options.messages.push({
     role: "tool",
     toolCallId: result.callId,
+    toolOk: result.ok,
     content,
     ...(result.images ? { images: result.images } : {}),
   });

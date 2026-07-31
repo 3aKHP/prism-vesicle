@@ -23,6 +23,8 @@ vesicle prompt shape --engine etl
 
 ## 配置
 
+网络必须经过代理才能访问模型供应商时,先按[配置:供应商代理](../reference/configuration.md#供应商代理可选)在用户级 `.env` 中写好代理,再运行 Setup;向导会把已有设置用于模型发现。
+
 两条路,任选其一:
 
 - `vesicle setup` —— 走终端向导(与 Windows 安装器是**同一个**向导),掩码粘贴 API key、自动发现 OpenAI 兼容模型。

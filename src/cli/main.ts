@@ -2,9 +2,19 @@
 import packageJson from "../../package.json";
 import { isCompiledBinaryRuntime } from "./runtime";
 import { parseCliInvocation } from "./args";
+import {
+  installHostShutdownHooks,
+  registerHostShutdownCleanup,
+  runHostShutdownCleanups,
+} from "../core/process/shutdown";
+import { closeAllProviderSessions } from "../providers/lifecycle";
+import { configureSelfInvocation } from "../core/runtime/self-invocation";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 declare const VESICLE_NPM_BUNDLE: boolean | undefined;
+
+installHostShutdownHooks();
+registerHostShutdownCleanup(closeAllProviderSessions, 100);
 
 // Bun's compiled single-file executable reports Bun.main from the bundled
 // virtual root. Keep the invocation cwd unchanged: it is the project root for
@@ -15,6 +25,15 @@ const compiledMarker = typeof VESICLE_COMPILED_BINARY === "boolean"
   : undefined;
 const isCompiledBinary = isCompiledBinaryRuntime(compiledMarker, Bun.main);
 const isNpmBundle = typeof VESICLE_NPM_BUNDLE === "boolean" && VESICLE_NPM_BUNDLE;
+
+// Configure the stable self-invocation prefix so bundled Skill scripts can
+// re-invoke the exact Vesicle runtime that launched them. Compiled binaries are
+// self-contained; source and npm-bundle runs also need the entrypoint module.
+configureSelfInvocation(
+  isCompiledBinary
+    ? { executablePath: process.execPath }
+    : { executablePath: process.execPath, entrypoint: Bun.main },
+);
 
 async function loadOpenTuiPreload(): Promise<void> {
   // Keep this specifier indirect so package builds can compile the TUI without
@@ -155,21 +174,28 @@ switch (parsed.kind) {
           console.error("Usage: vesicle once <prompt>");
           process.exit(1);
         }
-        const result = await runPrompt({
-          input,
-          permission: dangerouslySkipPermissions
-            ? {
-              mode: "YOLO",
-              dangerouslySkipPermissions: true,
-              shellExecEnabled: true,
-              shellInterpreter: permissionSettings.shellInterpreter,
-            }
-            : {
-              mode: permissionSettings.defaultMode,
-              shellExecEnabled: permissionSettings.shellExec,
-              shellInterpreter: permissionSettings.shellInterpreter,
-            },
-        });
+        let result: Awaited<ReturnType<typeof runPrompt>>;
+        try {
+          result = await runPrompt({
+            input,
+            permission: dangerouslySkipPermissions
+              ? {
+                mode: "YOLO",
+                dangerouslySkipPermissions: true,
+                shellExecEnabled: true,
+                shellInterpreter: permissionSettings.shellInterpreter,
+              }
+              : {
+                mode: permissionSettings.defaultMode,
+                shellExecEnabled: permissionSettings.shellExec,
+                shellInterpreter: permissionSettings.shellInterpreter,
+              },
+          });
+        } finally {
+          // An open session socket itself prevents `beforeExit`; noninteractive
+          // completion must therefore run host cleanup explicitly.
+          await runHostShutdownCleanups();
+        }
         if (result.kind === "needs_user") {
           console.log(result.assistantContent);
           console.log(`\n[gate:${result.gate.gate}] This turn needs user confirmation; the 'once' subcommand is non-interactive.`);

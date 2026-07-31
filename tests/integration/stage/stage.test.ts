@@ -130,6 +130,41 @@ describe("Stage bootstrap", () => {
     }
   });
 
+  test("rejects scratch tmp/ paths at Stage bootstrap", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-stage-scratch-"));
+    try {
+      await mkdir(join(root, "workspace"), { recursive: true });
+      await mkdir(join(root, "tmp"), { recursive: true });
+      await writeFile(join(root, "workspace", "character.md"), characterCard, "utf8");
+      await writeFile(join(root, "workspace", "scenario.md"), scenarioCard, "utf8");
+      await writeFile(join(root, "tmp", "draft-card.md"), "draft", "utf8");
+
+      await expect(startStageSession({
+        rootDir: root,
+        characterPath: "tmp/draft-card.md",
+        scenarioPath: "workspace/scenario.md",
+        provider: "fixture",
+        providerId: "fixture",
+        model: "fixture-model",
+        permissionMode: "MOMENTUM",
+      })).rejects.toThrow("Path must be under one of");
+
+      const started = await startStageSession({
+        rootDir: root,
+        characterPath: "workspace/character.md",
+        scenarioPath: "workspace/scenario.md",
+        provider: "fixture",
+        providerId: "fixture",
+        model: "fixture-model",
+        permissionMode: "MOMENTUM",
+      });
+      expect(started.sessionId).toBeTruthy();
+      expect(await stageSourceDrift(root, (await loadSessionSnapshot(root, started.sessionId)).stageBootstrap!)).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("keeps the empty-input warning within the bounded Stage diagnostics", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-stage-empty-"));
     try {

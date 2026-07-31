@@ -8,6 +8,7 @@ import {
   loadSessionMessages,
 } from "../../../src/core/session/store";
 import type { PortableCompactCheckpointV1 } from "../../../src/core/session/store";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND } from "../../../src/providers/shared/types";
 
 function validCheckpoint(overrides: Partial<PortableCompactCheckpointV1> = {}): PortableCompactCheckpointV1 {
   return {
@@ -49,6 +50,124 @@ describe("session: compact-checkpoint-v1 projection", () => {
       "after compact",
       "after reply",
     ]);
+  });
+
+  test("retained assistant messages preserve bounded provider state", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-provider-state-"));
+    const store = await createSessionStore(rootDir, "ckpt-provider-state");
+    const providerState = {
+      version: 1 as const,
+      protocol: "fixture-responses",
+      providerId: "fixture-provider",
+      model: "fixture-model",
+      endpointFingerprint: "sha256:fixture-endpoint",
+      payload: { responseId: "response-retained", outputItems: [] },
+    };
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          replacementMessages: [
+            { role: "user", content: "[conversation summary]\nEarlier work.", kind: "compact-summary" },
+            { role: "assistant", content: "retained", providerState },
+          ],
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages[1]?.providerState).toEqual(providerState);
+    expect(messages[1]?.providerState).not.toBe(providerState);
+  });
+
+  test("projects an owner-bound native marker after the portable replacement", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-native-"));
+    const store = await createSessionStore(rootDir, "ckpt-native");
+    const sourceHeadUuid = crypto.randomUUID();
+    const providerState = {
+      version: 1 as const,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.6",
+      endpointFingerprint: "sha256:fixture-endpoint",
+      payload: { version: 1, compactedInput: [{ type: "compaction", encrypted_content: "opaque" }] },
+    };
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          sourceHeadUuid,
+          nativeProjection: { sourceHeadUuid, state: providerState },
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages.map((message) => message.kind)).toEqual(["compact-summary", PROVIDER_NATIVE_CHECKPOINT_KIND]);
+    expect(messages[1]).toMatchObject({ role: "user", content: "", providerState });
+    expect(messages[1]?.providerState).not.toBe(providerState);
+  });
+
+  test("rejects a native projection derived from a different source head", async () => {
+    const checkpoint = validCheckpoint();
+    checkpoint.nativeProjection = {
+      sourceHeadUuid: crypto.randomUUID(),
+      state: {
+        version: 1,
+        protocol: "openai-responses",
+        providerId: "openai",
+        model: "gpt-5.6",
+        endpointFingerprint: "sha256:fixture-endpoint",
+        payload: { version: 1, compactedInput: [] },
+      },
+    };
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-native-source-"));
+    const store = await createSessionStore(rootDir, "ckpt-native-source");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: { kind: COMPACT_CHECKPOINT_KIND, checkpoint },
+    });
+    await expect(loadSessionMessages(rootDir, store.sessionId)).rejects.toThrow("source head does not match");
+  });
+
+  test("drops a corrupt optional native envelope while keeping the portable projection readable", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-native-corrupt-"));
+    const store = await createSessionStore(rootDir, "ckpt-native-corrupt");
+    const sourceHeadUuid = crypto.randomUUID();
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          sourceHeadUuid,
+          nativeProjection: {
+            sourceHeadUuid,
+            state: {
+              version: 99 as 1,
+              protocol: "openai-responses",
+              providerId: "openai",
+              model: "gpt-5.6",
+              endpointFingerprint: "sha256:fixture-endpoint",
+              payload: { version: 1, compactedInput: [] },
+            },
+          },
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages.map((message) => message.kind)).toEqual(["compact-summary"]);
+    expect(messages[0]?.content).toBe("[conversation summary]\nEarlier work.");
   });
 
   test("an unknown future checkpoint version fails with an actionable error instead of partially projecting", async () => {
@@ -152,11 +271,26 @@ describe("session: compact-checkpoint-v1 projection", () => {
   test("a failed turn after a checkpoint drops only the failed input, preserving the replacement", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-failed-"));
     const store = await createSessionStore(rootDir, "ckpt-failed");
+    const sourceHeadUuid = crypto.randomUUID();
+    const providerState = {
+      version: 1 as const,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.6",
+      endpointFingerprint: "sha256:fixture-endpoint",
+      payload: { version: 1, compactedInput: [{ type: "compaction", encrypted_content: "opaque" }] },
+    };
     await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
     await store.append({
       role: "system",
       content: "compacted",
-      metadata: { kind: COMPACT_CHECKPOINT_KIND, checkpoint: validCheckpoint() },
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          sourceHeadUuid,
+          nativeProjection: { sourceHeadUuid, state: providerState },
+        }),
+      },
     });
     await store.append({ role: "user", content: "failed prompt", metadata: { logicalTurnId: "t1", providerRoundId: "r1" } });
     await store.append({ role: "system", content: "", metadata: { kind: "failed-turn" } });
@@ -164,7 +298,8 @@ describe("session: compact-checkpoint-v1 projection", () => {
     const messages = await loadSessionMessages(rootDir, store.sessionId);
     // The checkpoint's replacement (a completed-operation boundary) survives;
     // only the failed turn's trailing input is dropped.
-    expect(messages.map((message) => message.content)).toEqual(["[conversation summary]\nEarlier work."]);
+    expect(messages.map((message) => message.kind)).toEqual(["compact-summary", PROVIDER_NATIVE_CHECKPOINT_KIND]);
+    expect(messages[1]).toMatchObject({ content: "", providerState });
   });
 
   test("image attachments in the replacement history stay reachable through projection", async () => {

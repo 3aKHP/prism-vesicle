@@ -17,9 +17,12 @@ import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harnes
 import { isBundledHostAgentId, type AssetResolver } from "../runtime/assets";
 import type { ResolvedSkillCatalog } from "../skills";
 import { appendHarnessDelegationDecision, type DelegationPause } from "./delegation-decision";
+import type { MalformedToolArguments } from "../tools/arguments";
 
 type ExecuteToolRoundOptions = {
   plan: ToolRoundPlan;
+  orderedToolCalls?: ToolCall[];
+  malformedToolArguments?: MalformedToolArguments[];
   rootDir: string;
   config: VesicleConfig;
   systemPrompt: string;
@@ -94,9 +97,19 @@ async function executeNonAgentCalls(
   let anyFailed = false;
   const failedToolCallIds = new Set<string>();
   const fileResults: ToolResult[] = [];
+  const executableCallIds = new Set(options.plan.executableHostToolCalls.map((call) => call.id));
+  const malformedById = new Map((options.malformedToolArguments ?? []).map((diagnostic) => [diagnostic.toolCallId, diagnostic]));
 
   try {
-    for (const call of options.plan.executableHostToolCalls) {
+    for (const call of options.orderedToolCalls ?? options.plan.executableHostToolCalls) {
+      const malformed = malformedById.get(call.id);
+      if (malformed) {
+        await recordMalformedCall(options, call, malformed);
+        anyFailed = true;
+        failedToolCallIds.add(call.id);
+        continue;
+      }
+      if (!executableCallIds.has(call.id)) continue;
       if (options.plan.unavailableHostCallIds.has(call.id)) {
         options.onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
         await recordUnavailableTool(options, call);
@@ -129,6 +142,30 @@ async function executeNonAgentCalls(
     return { anyFailed, failedToolCallIds, fileResults, error };
   }
   return { anyFailed, failedToolCallIds, fileResults };
+}
+
+async function recordMalformedCall(
+  options: ExecuteToolRoundOptions,
+  call: ToolCall,
+  diagnostic: MalformedToolArguments,
+): Promise<void> {
+  options.onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
+  await recordToolResult({
+    result: failedToolResult(
+      call.id,
+      call.name,
+      "Tool arguments must be valid JSON object. The tool was not executed. Retry with a smaller valid JSON object.",
+    ),
+    messages: options.messages,
+    session: options.session,
+    metadata: {
+      reason: "malformed-tool-arguments",
+      malformedToolArguments: diagnostic,
+      permissionMode: options.permission.mode,
+      decisionSource: decisionSource(options.permission),
+    },
+    onEvent: options.onEvent,
+  });
 }
 
 async function recordAgentCalls(

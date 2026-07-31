@@ -87,6 +87,133 @@ describe("guided Setup configuration writer", () => {
     expect(await readFile(join(configDir, "setup-state.json"), "utf8")).toBe(legacyState);
   });
 
+  test("writes an explicit Responses profile selected by Setup", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await writeSetupConfiguration({
+      providerPreset: "mimo-responses",
+      baseUrl: "https://api.xiaomimimo.com/v1",
+      apiKey: "secret",
+      modelIds: ["mimo-v2.5-pro"],
+      defaultModel: "mimo-v2.5-pro",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      authMethod: "x-api-key",
+      responsesProfile: "mimo-subset-2026-07-30",
+      responsesTransport: "http",
+    });
+    const source = await readFile(join(configDir, "providers.yaml"), "utf8");
+    expect(source).toContain("responsesProfile: mimo-subset-2026-07-30");
+    expect(source).toContain("responsesTransport: http");
+  });
+
+  test("writes the DeepSeek Responses subset selected by Setup", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await writeSetupConfiguration({
+      providerPreset: "deepseek-responses",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "secret",
+      modelIds: ["deepseek-v4-flash"],
+      defaultModel: "deepseek-v4-flash",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      responsesProfile: "deepseek-subset-2026-07-31",
+      responsesTransport: "http",
+    });
+    const source = await readFile(join(configDir, "providers.yaml"), "utf8");
+    expect(source).toContain("responsesProfile: deepseek-subset-2026-07-31");
+  });
+
+  test("refuses an unsupported model in the DeepSeek Responses preset", async () => {
+    const root = await tempRoot();
+    await expect(writeSetupConfiguration({
+      providerPreset: "deepseek-responses",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "secret",
+      modelIds: ["deepseek-v4-pro"],
+      defaultModel: "deepseek-v4-pro",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: join(root, "config") })).rejects.toThrow(
+      "DeepSeek Responses currently supports only deepseek-v4-flash",
+    );
+  });
+
+  test("preserves a Codex WebSocket Responses profile when Setup selects its coarse Responses preset", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await Bun.write(join(configDir, "providers.yaml"), [
+      "default:",
+      "  provider: relay",
+      "  model: codex-model",
+      "",
+      "providers:",
+      "  relay:",
+      "    protocol: openai-responses",
+      "    baseUrl: https://relay.example/v1",
+      "    apiKeyEnv: RELAY_API_KEY",
+      "    authMethod: bearer",
+      "    userAgent: legacy-agent",
+      "    responsesProfile: codex-beta-2026-02-06",
+      "    responsesTransport: websocket",
+      "    models:",
+      "      - codex-model",
+      "",
+    ].join("\n"));
+    await writeFile(join(configDir, ".env"), "RELAY_API_KEY=old-secret\n", "utf8");
+
+    await writeSetupConfiguration({
+      baseUrl: "https://relay.example/v1",
+      apiKey: "new-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      authMethod: "bearer",
+      userAgent: "legacy-agent",
+      responsesProfile: "codex-beta-2026-02-06",
+      responsesTransport: "websocket",
+    });
+
+    await writeSetupConfiguration({
+      providerPreset: "openai-responses",
+      baseUrl: "https://relay.example/v1",
+      apiKey: "newer-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+    expect((await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir })).providers[0]).toMatchObject({
+      authMethod: "bearer",
+      userAgent: "legacy-agent",
+      responsesProfile: "codex-beta-2026-02-06",
+      responsesTransport: "websocket",
+    });
+
+    await expect(writeSetupConfiguration({
+      providerPreset: "chat-compatible",
+      baseUrl: "https://relay.example/v1",
+      apiKey: "new-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir })).rejects.toThrow(
+      "will not replace existing Responses provider",
+    );
+  });
+
   test("preserves an existing shell capability and interpreter selection", async () => {
     const root = await tempRoot();
     const configDir = join(root, "config");

@@ -20,6 +20,7 @@ import { resolveInteractionPause } from "./interaction-pause";
 import { completeProviderRound, emitAssistantResponse, materializeBackgroundProcessNotifications } from "./provider-round";
 import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
+import { validateToolCallArguments } from "../tools/arguments";
 import { finalizeTurn } from "./turn-finalizer";
 import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
 import { composeSkillCatalogBlock, readFrozenSessionSkillCatalog, resolveEngineEligibleCatalog } from "../skills";
@@ -251,7 +252,7 @@ async function advanceRound(
   const boundary = await prepareExactProviderBoundary(args, runtime);
   if (boundary.blocked) return { blocked: true, error: boundary.error! };
   runtime.lastRequestEstimateTokens = estimateRequestTokens(args.messages, args.systemPrompt, args.tools);
-  const response = await completeProviderRound({
+  const providerResponse = await completeProviderRound({
     rootDir: args.rootDir,
     provider: args.provider,
     providerId: args.config.providerId,
@@ -272,6 +273,10 @@ async function advanceRound(
     onProviderContextSnapshot: args.onProviderContextSnapshot,
     backgroundAlreadyMaterialized: true,
   });
+  const validatedToolCalls = validateToolCallArguments(providerResponse.toolCalls ?? []);
+  const response = validatedToolCalls.malformed.length > 0
+    ? { ...providerResponse, toolCalls: validatedToolCalls.replayable }
+    : providerResponse;
   const toolCalls = response.toolCalls ?? [];
   if (toolCalls.length === 0) runtime.quality.proseParts.push(...qualityCandidateParts(response));
   const quality = await evaluateRoundQuality(args, runtime, response, "before-mutations");
@@ -305,10 +310,15 @@ async function advanceRound(
     profile: args.profile,
     model: args.config.model,
     metadata: runtime.lastRequestEstimateTokens !== undefined
-      ? { requestEstimateTokens: runtime.lastRequestEstimateTokens }
-      : undefined,
+      ? {
+          requestEstimateTokens: runtime.lastRequestEstimateTokens,
+          ...(validatedToolCalls.malformed.length > 0 ? { malformedToolArguments: validatedToolCalls.malformed } : {}),
+        }
+      : validatedToolCalls.malformed.length > 0
+        ? { malformedToolArguments: validatedToolCalls.malformed }
+        : undefined,
   });
-  const plan = planToolRound(toolCalls, args.tools, runtime.permission);
+  const plan = planToolRound(validatedToolCalls.executable, args.tools, runtime.permission);
   await recordPendingQualityCheck(
     qualityRecordingContext(args, runtime),
     response,
@@ -316,6 +326,8 @@ async function advanceRound(
   );
   const execution = await executeToolRound({
     plan,
+    orderedToolCalls: toolCalls,
+    malformedToolArguments: validatedToolCalls.malformed,
     rootDir: args.rootDir,
     config: args.config,
     systemPrompt: args.systemPrompt,

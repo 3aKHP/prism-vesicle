@@ -1,7 +1,7 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { loadExperimentalQualityProfile } from "../../config/quality";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { VesicleRequest } from "../../providers/shared/types";
 import type { EngineId } from "../engine/profile";
 import { defaultPermissionRuntime } from "../permissions";
@@ -56,7 +56,6 @@ export async function loadContinuationContext(
   const permission = options.permission ?? defaultPermissionRuntime;
   const config = await loadConfigForSelection(options.providerSelection);
   const generation = mergeGeneration(config.generation, options.generation);
-  const provider = createProvider(config);
   const projectHarness = !options.assets && !options.harness
     ? requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir))
     : undefined;
@@ -114,6 +113,8 @@ export async function loadContinuationContext(
     { catalogNames: catalogNames(skillCatalog) },
   );
   const session = await createSessionStore(rootDir, options.sessionId);
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
   // Recover the logical turn + provider round the paused interaction belongs to
   // and re-bind them as the active round, so every resolution record this
   // continuation appends carries the original ids and a resumed pause never

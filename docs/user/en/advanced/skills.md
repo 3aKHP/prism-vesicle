@@ -53,6 +53,12 @@ Every Vesicle installation ships with `vesicle-docs` (scope `host`), containing 
 
 When the user asks about Vesicle installation, configuration, commands, troubleshooting, or architecture, the model may automatically activate this Skill for accurate information.
 
+## First-party `skillify` Skill
+
+Every Vesicle installation ships with `skillify` (scope `host`). Ask Vesicle to capture, save, or turn a repeatable workflow from the current conversation into a reusable Skill, and the model activates `skillify`. It writes a draft under `tmp/skillify/<name>/` using ordinary guarded file tools, validates the complete bundle, and publishes it create-only to the project (`.agents/skills/<name>/`) or the installed Skill Store after you choose a target.
+
+Publication is create-only: no overwrite or upgrade. The draft is always retained under `tmp/skillify/`. The published Skill is discoverable from a new session — the current session catalog does not change. Validation and publication require Process Runtime (a resolved shell profile); `.ps1` scripts are supported through PowerShell 7 (or Windows PowerShell 5.1 fallback on Windows, `pwsh` elsewhere).
+
 ## Stage exclusion
 
 The Stage Engine does not resolve a Skill catalog and does not support `activate_skill`, `read_skill_resource`, or `run_skill_script`.

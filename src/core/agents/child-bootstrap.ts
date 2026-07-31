@@ -1,8 +1,9 @@
 import { loadConfigForSelection } from "../../config/providers";
 import { createMcpRegistryForEngine } from "../../mcp/registry";
 import type { McpRegistry } from "../../mcp/registry";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderAdapter, VesicleMessage } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { createSessionStore, type SessionStore } from "../session/store";
 import { hostToolDefinitions } from "../tools";
@@ -36,7 +37,6 @@ export async function bootstrapChildAgent({
   registerChildSession,
 }: BootstrapContext): Promise<ChildAgentBootstrap> {
   const config = await loadConfigForSelection(invocation.providerSelection);
-  const provider = createProvider(config);
   const profile = await loadAgentProfile(spec.profileId, invocation.rootDir, invocation.assets);
   const agentSystemPrompt = await loadAgentSystemPrompt(profile, invocation.rootDir, invocation.assets);
   const systemPrompts = composeChildSystemPrompts(profile.contextMode, invocation.parentSystemPrompt, agentSystemPrompt);
@@ -49,6 +49,8 @@ export async function bootstrapChildAgent({
   );
   const session = await createSessionStore(invocation.rootDir);
   await registerChildSession(session.sessionId);
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
 
   await session.append({
     role: "system",
@@ -140,7 +142,15 @@ export function resolveChildTools(
 }
 
 function contextMessages(mode: "fresh" | "summary" | "fork", parent: VesicleMessage[], prompt: string): VesicleMessage[] {
-  if (mode === "fork") return [...parent, { role: "user", content: `[delegated task]\n${prompt}` }];
+  if (mode === "fork") {
+    return [
+      ...parent.map((message) => ({
+        ...message,
+        ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
+      })),
+      { role: "user", content: `[delegated task]\n${prompt}` },
+    ];
+  }
   if (mode === "summary") {
     const context = boundedParentContext(parent, 12_000);
     return [{

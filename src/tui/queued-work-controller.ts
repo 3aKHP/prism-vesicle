@@ -23,6 +23,17 @@ type QueuedWorkOptions = {
   reportError: (error: unknown) => void;
 };
 
+/**
+ * One-shot interrupt takeover intent, owned by this controller (not a field on
+ * `QueuedInput`). `markInterruptRequested()` snapshots the FIFO head id after a
+ * successful prompt-level abort; `handleInterruption()` consumes the state and
+ * releases the queue only when that exact head still leads after durable
+ * projection rebuild.
+ */
+export type InterruptTakeover =
+  | { kind: "none" }
+  | { kind: "queued-head"; inputId: number };
+
 export type QueuedWorkController = {
   block: () => void;
   release: () => void;
@@ -36,7 +47,7 @@ export type QueuedWorkController = {
 
 export function createQueuedWorkController(options: QueuedWorkOptions): QueuedWorkController {
   const [ready, setReady] = createSignal(false);
-  const [sendAfterInterrupt, setSendAfterInterrupt] = createSignal(false);
+  const [takeover, setTakeover] = createSignal<InterruptTakeover>({ kind: "none" });
 
   function block(): void {
     setReady(false);
@@ -48,23 +59,32 @@ export function createQueuedWorkController(options: QueuedWorkOptions): QueuedWo
 
   function prepareTurn(): void {
     block();
-    setSendAfterInterrupt(false);
+    setTakeover({ kind: "none" });
   }
 
   function markInterruptRequested(): void {
-    setSendAfterInterrupt(options.inputQueue.items().length > 0);
+    const head = options.inputQueue.peekNext();
+    setTakeover(head ? { kind: "queued-head", inputId: head.id } : { kind: "none" });
   }
 
   async function handleInterruption(sessionId: string | undefined): Promise<boolean> {
-    const shouldRelease = sendAfterInterrupt();
-    if (shouldRelease && sessionId) {
-      const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: true });
-      options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
-      options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
+    const captured = takeover();
+    setTakeover({ kind: "none" });
+    if (captured.kind === "none") return false;
+    if (!sessionId) return false;
+    let snapshot: Awaited<ReturnType<typeof loadSessionSnapshot>>;
+    try {
+      snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: true });
+    } catch (error) {
+      options.reportError(error);
+      return false;
     }
-    setSendAfterInterrupt(false);
-    setReady(shouldRelease);
-    return shouldRelease;
+    options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+    options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
+    const head = options.inputQueue.peekNext();
+    if (!head || head.id !== captured.inputId) return false;
+    setReady(true);
+    return true;
   }
 
   function takePendingUserInputs(): PendingUserInput[] {

@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { type Renderable, TextareaRenderable } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { WorkspacePage } from "../../../src/tui/views/WorkspacePage";
 import { createWorkspaceController } from "../../../src/tui/workspace-controller";
+import { PromptComposer } from "../../../src/tui/PromptComposer";
 
 let root: string;
 
@@ -31,6 +33,15 @@ function renderPage(controller: ReturnType<typeof createWorkspaceController>, wi
       compact={width < 96}
     />
   ), { width, height });
+}
+
+function findTextarea(renderable: Renderable): TextareaRenderable | undefined {
+  if (renderable instanceof TextareaRenderable) return renderable;
+  for (const child of renderable.getChildren()) {
+    const found = child instanceof TextareaRenderable ? child : findTextarea(child as Renderable);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 describe("tui: workspace page (B2)", () => {
@@ -81,6 +92,33 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("line one");
     expect(frame).toContain("line two");
     expect(controller.isEditing()).toBe(true);
+  });
+
+  test("focused editor owns the native cursor over the inactive bottom composer", async () => {
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes.txt");
+    expect(controller.focusRegion()).toBe("editor");
+    const setup = await testRender(() => (
+      <box flexDirection="column" width="100%" height="100%">
+        <WorkspacePage controller={controller} projectRoot={root} width={100} height={20} treeWidth={30} compact={false} />
+        <box height={2}>
+          <PromptComposer value="chat" cursor={4} placeholder="Type" width={96} maxLines={1} focused={false} />
+        </box>
+      </box>
+    ), { width: 100, height: 24 });
+    await setup.flush();
+
+    const textarea = findTextarea(setup.renderer.root);
+    expect(textarea).toBeDefined();
+    const visualCursor = textarea!.visualCursor;
+    expect(setup.renderer.getCursorState()).toMatchObject({
+      x: textarea!.screenX + visualCursor.visualCol + 1,
+      y: textarea!.screenY + visualCursor.visualRow + 1,
+      visible: true,
+      style: "block",
+      blinking: true,
+    });
+    setup.renderer.destroy();
   });
 
   test("an empty editable file keeps the full editor width while typing", async () => {

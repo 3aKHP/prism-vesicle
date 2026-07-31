@@ -66,6 +66,7 @@ describe("side question context snapshot boundary", () => {
     const cloned = cloneSideQuestionMessages([{
       role: "user",
       content: "look",
+      toolOk: false,
       images: [{
         id: "img_1",
         path: ".vesicle/attachments/x.png",
@@ -80,5 +81,6 @@ describe("side question context snapshot boundary", () => {
     expect(cloned[0]!.images![0]!.data).toBeUndefined();
     expect(cloned[0]!.images![0]!.sha256).toBe("abc");
     expect(cloned[0]!.toolCalls![0]).toEqual({ id: "c1", name: "read_file", arguments: "{}" });
+    expect(cloned[0]!.toolOk).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import type { ResumedMessage } from "../session/store";
 import type { SessionRecord } from "../session/record-model";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import {
   COMPACT_CHECKPOINT_KIND,
   parseCompactCheckpoint,
@@ -149,6 +150,7 @@ function replacementMessageRecord(
       ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
       ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
       ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+      ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     });
   } else if (message.role === "tool") {
     Object.assign(metadata, {

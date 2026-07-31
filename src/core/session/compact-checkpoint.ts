@@ -1,4 +1,6 @@
 import type { ResumedMessage } from "./store";
+import type { ProviderStateEnvelope } from "../../providers/shared/state";
+import { parseProviderStateEnvelope } from "../../providers/shared/state";
 
 /**
  * The durable, versioned replacement-history checkpoint installed by every
@@ -42,6 +44,10 @@ export type PortableCompactCheckpointV1 = {
     beforeSource: "provider" | "estimated" | "unknown";
     projectedAfterTokens?: number;
   };
+  nativeProjection?: {
+    sourceHeadUuid: string;
+    state: ProviderStateEnvelope;
+  };
 };
 
 export const COMPACT_CHECKPOINT_KIND = "compact-checkpoint-v1";
@@ -60,6 +66,7 @@ const MESSAGE_KEYS = new Set([
   "thinkingBlocks",
   "toolCallId",
   "toolCalls",
+  "providerState",
   "toolOk",
   "toolFileEvent",
   "toolWebEvent",
@@ -81,6 +88,7 @@ const MESSAGE_KEYS_BY_ROLE: Record<ResumedMessage["role"], Set<string>> = {
     "reasoningContent",
     "thinkingBlocks",
     "toolCalls",
+    "providerState",
     "engine",
     "model",
     "usage",
@@ -177,6 +185,28 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
   requireEnum(accounting, "beforeSource", BEFORE_SOURCES, "checkpoint beforeSource");
   const projectedAfterTokens = optionalPositiveInteger(accounting, "projectedAfterTokens");
 
+  let nativeProjection: PortableCompactCheckpointV1["nativeProjection"];
+  if (Object.hasOwn(source, "nativeProjection")) {
+    const value = source.nativeProjection;
+    const native = value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : undefined;
+    if (typeof native?.sourceHeadUuid === "string" && native.sourceHeadUuid !== source.sourceHeadUuid) {
+      throw new Error("Session compact checkpoint native projection source head does not match the portable projection.");
+    }
+    if (native && native.sourceHeadUuid === source.sourceHeadUuid) {
+      try {
+        nativeProjection = {
+          sourceHeadUuid: native.sourceHeadUuid as string,
+          state: parseProviderStateEnvelope(native.state, "Session compact checkpoint native projection state"),
+        };
+      } catch {
+        // Provider-native state is optional. Corruption drops only this
+        // projection; the validated portable replacement remains readable.
+      }
+    }
+  }
+
   return {
     version: 1,
     strategy: "portable-summary",
@@ -207,6 +237,7 @@ export function parseCompactCheckpoint(payload: unknown): PortableCompactCheckpo
       beforeSource: accounting.beforeSource as "provider" | "estimated" | "unknown",
       ...(projectedAfterTokens !== undefined ? { projectedAfterTokens } : {}),
     },
+    ...(nativeProjection ? { nativeProjection } : {}),
   };
 }
 
@@ -236,6 +267,9 @@ function parseReplacementMessage(entry: unknown, index: number): ResumedMessage 
   copyOptionalBoolean(entry, message as unknown as Record<string, unknown>, "toolOk", label);
 
   if (Object.hasOwn(entry, "toolCalls")) message.toolCalls = parseToolCalls(entry.toolCalls, label);
+  if (Object.hasOwn(entry, "providerState")) {
+    message.providerState = parseProviderStateEnvelope(entry.providerState, `Session compact checkpoint ${label}.providerState`);
+  }
   if (Object.hasOwn(entry, "thinkingBlocks")) message.thinkingBlocks = parseThinkingBlocks(entry.thinkingBlocks, label);
   if (Object.hasOwn(entry, "images")) message.images = parseImages(entry.images, label);
   if (Object.hasOwn(entry, "usage")) message.usage = parseUsage(entry.usage, label);

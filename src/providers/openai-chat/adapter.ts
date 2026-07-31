@@ -2,6 +2,7 @@ import type { VesicleConfig } from "../../config/env";
 import { ProviderError } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { openAIChatHeaders } from "../shared/headers";
+import type { ProviderProxyPolicy } from "../shared/proxy";
 import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../shared/types";
 import { toChatCompletionBody } from "./request";
 import { readProviderErrorMessage, responseFromChatCompletionBody } from "./response";
@@ -11,7 +12,10 @@ import type { ChatCompletionResponse } from "./types";
 export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
   readonly id = "openai-chat-compatible";
 
-  constructor(private readonly config: VesicleConfig) {}
+  constructor(
+    private readonly config: VesicleConfig,
+    private readonly runtime: { proxyPolicy?: ProviderProxyPolicy } = {},
+  ) {}
 
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     this.requireApiKey();
@@ -74,6 +78,7 @@ export class OpenAIChatCompatibleAdapter implements ProviderAdapter {
       providerId: this.config.providerId,
       signal: request.signal,
       onRetry: request.onRetry,
+      proxyPolicy: this.runtime.proxyPolicy,
     });
   }
 

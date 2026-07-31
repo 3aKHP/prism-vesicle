@@ -50,6 +50,8 @@ chmod +x prism-vesicle-linux-x64-<version>
 
 ## 配置、检查、启动
 
+网络必须经过代理才能访问模型供应商时,先按[配置:供应商代理](../reference/configuration.md#供应商代理可选)编辑用户级 `.env`,再运行 Setup;向导会把已有设置用于模型发现。
+
 ```bash
 vesicle setup          # 或手动编辑 ~/.config/prism-vesicle/providers.yaml + .env
 vesicle doctor

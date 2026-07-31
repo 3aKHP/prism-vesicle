@@ -79,6 +79,7 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 - `docs/dev/ASSETS.md` → `references/dev-assets.md` — Prism Runtime Assets [en]
 - `docs/dev/COMMAND_COMPLETION.md` → `references/dev-command_completion.md` — Command Argument Completion [en]
 - `docs/dev/COMMAND_QUEUE.md` → `references/dev-command_queue.md` — Command Queue [en]
+- `docs/dev/OPENAI_RESPONSES_CONFORMANCE.md` → `references/dev-openai_responses_conformance.md` — OpenAI Responses Conformance Profile [en]
 - `docs/dev/PERSISTENT_INSTRUCTIONS.md` → `references/dev-persistent_instructions.md` — Persistent Instructions Runtime Contract [en]
 - `docs/dev/PROVIDERS.md` → `references/dev-providers.md` — Provider Runtime Contract [en]
 - `docs/dev/QUALITY_BENCHMARK.md` → `references/dev-quality_benchmark.md` — Semantic Judge Benchmarking [en]

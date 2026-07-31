@@ -166,7 +166,7 @@ export const m0Tools: ToolContract[] = [
   },
   {
     name: "write_file",
-    description: "Write UTF-8 files under source_materials, workspace, novels, reports, or test_runs.",
+    description: "Write UTF-8 files under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
   },
   {
     name: "replace_in_file",

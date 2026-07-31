@@ -7,6 +7,7 @@ import {
   type SessionStore,
 } from "../session/store";
 import type { ReplacementSelection } from "./replacement-builder";
+import type { ProviderStateEnvelope } from "../../providers/shared/state";
 
 export type CompactCheckpointTrigger = "manual" | "auto";
 export type CompactCheckpointPhase = "pre-turn" | "mid-turn" | "manual";
@@ -24,6 +25,7 @@ export type InstallCheckpointOptions = {
   createdWith: { providerId: string; model: string; engine: string };
   providerSelection?: Partial<ProviderSelection>;
   replacementMessages?: ResumedMessage[];
+  nativeProjection?: ProviderStateEnvelope;
   accounting: {
     contextWindow?: number;
     softTriggerTokens?: number;
@@ -77,21 +79,24 @@ export async function installCompactCheckpoint(options: InstallCheckpointOptions
       beforeSource: options.accounting.beforeSource,
       ...(options.accounting.projectedAfterTokens !== undefined ? { projectedAfterTokens: options.accounting.projectedAfterTokens } : {}),
     },
+    ...(options.nativeProjection ? {
+      nativeProjection: { sourceHeadUuid, state: options.nativeProjection },
+    } : {}),
   };
   // Validate the exact payload before it is persisted. parseCompactCheckpoint
   // throws on an unknown version or a malformed v1, so a bad payload never
   // reaches the JSONL and never partially projects.
-  parseCompactCheckpoint(payload);
+  const validatedPayload = parseCompactCheckpoint(payload);
 
   const record = await options.session.appendIfHead(sourceHeadUuid, {
     role: "system",
     content: "Conversation compacted into a portable checkpoint.",
-    metadata: { kind: "compact-checkpoint-v1", checkpoint: payload },
+    metadata: { kind: "compact-checkpoint-v1", checkpoint: validatedPayload },
   });
   return {
     checkpointUuid: record.uuid,
     sourceHeadUuid,
-    replacementMessages,
+    replacementMessages: validatedPayload.replacementMessages,
     accounting: options.accounting,
   };
 }

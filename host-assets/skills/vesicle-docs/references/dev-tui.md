@@ -38,8 +38,9 @@ The brand aesthetic, palette of record, motion grammar, and anti-patterns are ow
 - Up and Down move within soft-wrapped or explicit multiline drafts before falling back to prompt history.
 - The render layer owns visual wrapping, cursor-following viewport selection, and adaptive composer height; the keyboard state machine owns text mutation, submission, and history actions.
 - Trailing backslash plus Enter remains a compatibility newline fallback for terminals that cannot distinguish modified Enter.
-- Escape dispatches to the active modal first. At prompt level, the bounded double-press behavior distinguishes rewind, draft clearing, and request cancellation.
+- Escape dispatches to the active modal first; an owning modal, picker, or overlay consumes it and the parent turn is not aborted. At prompt level, the bounded double-press behavior distinguishes rewind, draft clearing, and request cancellation. A busy prompt-level Esc aborts the active provider or tool operation and preserves any composer draft, cursor, elements, and image attachments. When the FIFO has a head, the composer advertises `Esc interrupt & send next` and that exact head is dispatched once as a fresh top-level input after the interrupted durable session projection is rebuilt; an empty busy queue advertises `Esc interrupt` and nothing is auto-enqueued or auto-submitted.
 - `Ctrl+C` copies an active OpenTUI selection. Without a selection, the first press arms exit and the second exits through `renderer.destroy()`.
+- Global paste handlers must leave an unobscured editable native control unconsumed so OpenTUI delivers the bracketed paste to the focused textarea, and must block non-composer Workspace surfaces (tree, read-only viewer, missing focus data) so their paste never falls into the shared composer. Global overlays, Workspace-local panels, input bars, dialogs, and bottom-surface ownership still outrank Workspace editor delivery.
 
 ## Commands And Host Actions
 

@@ -229,8 +229,14 @@ export function createComposerController(options: ComposerControllerOptions) {
       const bytes = await readImageFromClipboard();
       if (!bytes) throw new Error("No supported image was found in the clipboard.");
       const image = await ingestImageBytes(options.rootDir, bytes, { source: "clipboard", filename: "clipboard.png" });
-      const number = inputElements().filter((element) => element.type === "image").length + 1;
-      const withImage = insertComposerImage(currentState(), image.id, `[Image #${number}]`);
+      const before = currentState();
+      // Attachment ids are content-hash derived and reused for identical
+      // images, so the new element's visual index must come from its
+      // insertion position, not an id lookup. Count only elements strictly
+      // before the cursor: an element starting exactly at the cursor is
+      // shifted right by the insertion, so the new image lands before it.
+      const number = (before.elements ?? []).filter((element) => element.start < before.cursor).length + 1;
+      const withImage = insertComposerImage(before, image.id, "[Image #0]");
       applyState(insertComposerText(withImage, " "));
       setInputImages((current) => [...current, image]);
       setHistoryIndex(null);

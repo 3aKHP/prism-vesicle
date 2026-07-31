@@ -1,5 +1,5 @@
 import { ProviderError } from "../shared/errors";
-import type { ProviderThinkingBlock, ReasoningTier, VesicleRequest } from "../shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderThinkingBlock, type ReasoningTier, type VesicleRequest } from "../shared/types";
 import type { AnthropicContentBlock, AnthropicMessage } from "./types";
 
 const defaultMaxTokens = 4096;
@@ -36,11 +36,13 @@ function toAnthropicMessages(messages: VesicleRequest["messages"]): AnthropicMes
   };
 
   for (const message of messages) {
+    if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) continue;
     if (message.role === "system") continue;
     if (message.role === "tool") {
       pendingToolResults.push({
         type: "tool_result",
         tool_use_id: message.toolCallId ?? "",
+        ...(message.toolOk === false ? { is_error: true } : {}),
         content: message.images?.length
           ? anthropicUserBlocks(message.content, message.images)
           : message.content,
@@ -163,10 +165,9 @@ function thinkingBudgetForTier(tier: Exclude<ReasoningTier, "off">): number {
 
 function parseToolArguments(value: string): unknown {
   try {
-    return JSON.parse(value || "{}");
+    const parsed: unknown = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
-    throw new ProviderError("Cannot serialize malformed tool-call arguments for Anthropic Messages.", {
-      kind: "malformed_response",
-    });
+    return {};
   }
 }

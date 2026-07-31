@@ -50,7 +50,7 @@ Phase 3 adds **project scope, authoring, enable/disable, and template copy**:
 - Project `.agents/skills/` discovery: Skills under `<project-root>/.agents/skills/<name>/SKILL.md` enter the catalog with visible `project` scope attribution. No separate project-trust gate; installation into the project directory is the authorization. Precedence: `project` > `user` > `installed` > `harness`.
 - `vesicle skills create <name> [--scope user|project] [--force]`: scaffolds a standard Agent Skills directory (`SKILL.md` + `scripts/` + `references/` + `assets/`) with a valid template. Refuses to overwrite without `--force`; with `--force`, backs up the existing directory first.
 - `vesicle skills enable <name>` / `disable <name>`: toggles availability. Installed Skills use the store active-index `enabled` flag; user and project filesystem Skills use line-delimited disabled-names files (`<user-config>/skills/.disabled` and `<project-root>/.vesicle/disabled-skills`). Disabled Skills are excluded at catalog resolution; the frozen-per-session contract is unchanged.
-- `vesicle skills copy-template <skill> <resource-path> <dest-path>`: copies a Skill resource into an approved writable root. Path hardening applies to the source; the destination must be under `source_materials/`, `workspace/`, `novels/`, `reports/`, or `test_runs/`.
+- `vesicle skills copy-template <skill> <resource-path> <dest-path>`: copies a Skill resource into an approved durable content root. Path hardening applies to the source; the destination must be under `source_materials/`, `workspace/`, `novels/`, `reports/`, or `test_runs/`. The scratch root `tmp/` is not an approved destination.
 
 Phase 3 does **not** add registries, broader distribution, or SubAgent Skill inheritance.
 
@@ -129,6 +129,8 @@ Phase 0 shipped the storage mechanism (`installSnapshot`) and read APIs; Phase 1
 ```text
 vesicle skills list
 vesicle skills validate <skill-directory>
+vesicle skills validate <skill-directory> --draft --json [--quiet-success]
+vesicle skills publish-draft <draft-directory> --target project|installed --json
 vesicle skills inspect <name>
 vesicle skills create <name> [--scope user|project] [--force]
 vesicle skills enable <name>
@@ -140,7 +142,7 @@ vesicle skills rollback <name>
 vesicle skills uninstall <name>
 ```
 
-`vesicle skills list` and `inspect` show Skills from all scopes (host, harness, user, project, installed) with their scope label and a `(disabled)` flag when toggled off. `vesicle doctor` reports valid/invalid/shadowed counts plus the installed count. `create` scaffolds a standard Agent Skills directory with a valid `SKILL.md` template; `--force` backs up and replaces an existing Skill. `enable`/`disable` toggle availability across all scopes (installed uses the store index; user, project, and host use line-delimited disabled-names files). `copy-template` copies a Skill resource into an approved writable root (`source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`). `inspect` of an installed Skill shows its provenance (source kind and identity, requested ref, resolved commit, dirty-source marker, bundle hash); for local sources the source identity is the local path, shown only in this user-facing CLI output and never in model-facing catalog or diagnostic shapes.
+`vesicle skills list` and `inspect` show Skills from all scopes (host, harness, user, project, installed) with their scope label and a `(disabled)` flag when toggled off. `vesicle doctor` reports valid/invalid/shadowed counts plus the installed count. `create` scaffolds a standard Agent Skills directory with a valid `SKILL.md` template; `--force` backs up and replaces an existing Skill. `enable`/`disable` toggle availability across all scopes (installed uses the store index; user, project, and host use line-delimited disabled-names files). `copy-template` copies a Skill resource into an approved durable content root (`source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`); the scratch root `tmp/` is not an approved destination. `inspect` of an installed Skill shows its provenance (source kind and identity, requested ref, resolved commit, dirty-source marker, bundle hash); for local sources the source identity is the local path, shown only in this user-facing CLI output and never in model-facing catalog or diagnostic shapes.
 
 ## Risk disclosure and runtime boundaries
 
@@ -159,9 +161,25 @@ Apply the cross-cutting policy in [`USER_AGENCY_AND_RISK_DISCLOSURE.md`](./USER_
 
 Static scanning may produce useful warnings, but it cannot certify Markdown or code as benign. Findings are disclosures, not a content-approval gate or an implied safety certification when no warning is emitted. Format validation, portable path rules, immutable provenance, and runtime observation protect correctness and auditability without replacing the user's judgment.
 
+## Scratch-first draft publication (`skillify`)
+
+The bundled `skillify` Skill turns a proven workflow from the current conversation into a reusable portable Skill. It is a first-party Host Skill activated through the ordinary catalog; it adds no new model-visible tools, permission grants, or capability surfaces.
+
+The flow is scratch-first and create-only:
+
+1. The model writes a draft bundle under `tmp/skillify/<name>/` using ordinary guarded file tools. No other draft root is accepted.
+2. The model validates the draft through one of two thin wrapper scripts (`scripts/publish_skill.sh` on POSIX, `scripts/publish_skill.ps1` on Windows), which relay a versioned JSON contract from the non-model-visible CLI.
+3. After an explicit publication target decision, the model publishes create-only to `project` (`.agents/skills/<name>/`) or `installed` (the Skill Store).
+
+`vesicle skills validate <dir> --draft --json` accepts only the exact `tmp/skillify/<name>` project-relative path and returns one `vesicle.skill-draft/v1` JSON envelope with the bundle hash, content-addressed version, and file count. `--quiet-success` emits no stdout on success so the publish wrapper can validate before publication without producing two success objects. `vesicle skills publish-draft <dir> --target project|installed --json` revalidates and re-hashes inside the publication transaction and returns the logical destination, hash, and version.
+
+Publication is create-only: no overwrite, merge, upgrade, backup-and-replace, or partial update. Project publication uses sibling staging and atomic rename; installed publication uses a name-level create-only Store API under the existing cross-process lock. If a first installed publication crashes after its exact content-addressed version reaches the Store, a retry may finish only the missing provenance/index commit after verifying the version bytes and any existing provenance inventory; conflicting or additional retained state remains a collision. The draft is always retained. The current session catalog is never mutated — the published Skill is discoverable only from a new session.
+
+First-party wrappers re-invoke the exact Vesicle runtime through Host-owned `VESICLE_SELF_EXECUTABLE` and `VESICLE_SELF_ENTRYPOINT` values injected into the filtered `run_skill_script` child environment. The wrappers never guess `vesicle` from `PATH`, never expose the absolute executable path in their output, and contain no path, hash, copy, staging, or cleanup logic — all safety lives in the CLI and the portable bundle seam. Any process-authorized Skill script can observe and deliberately print its own child environment; persisted events omit these paths unless script output itself contains them.
+
 ## Current boundary
 
-The shipped runtime covers format, inventory, the Skill Store, repository installation with lifecycle, model-visible activation with resources, scripts, and the `/skill` TUI command, project `.agents/skills/` discovery with visible provenance, Skill authoring (`create`), enable/disable across all scopes, text template copy into approved writable roots, and Host-bundled first-party Skill discovery from `host-assets/skills/`. The first-party `vesicle-docs` Skill ships version-matched public documentation as bundled references readable through `read_skill_resource` without process capability. The Skill Store is both CLI-listable and a model-visible catalog source (scope `installed`). The following are **not** part of the current contract and must not be implied by any current surface:
+The shipped runtime covers format, inventory, the Skill Store, repository installation with lifecycle, model-visible activation with resources, scripts, and the `/skill` TUI command, project `.agents/skills/` discovery with visible provenance, Skill authoring (`create`), enable/disable across all scopes, text template copy into approved durable content roots, Host-bundled first-party Skill discovery from `host-assets/skills/`, and the scratch-first `skillify` workflow with create-only draft publication. The first-party `vesicle-docs` Skill ships version-matched public documentation as bundled references readable through `read_skill_resource` without process capability. The `skillify` Skill ships with two thin publish wrappers (`.sh` and `.ps1`) that relay the non-model-visible JSON CLI contract. The Skill Store is both CLI-listable and a model-visible catalog source (scope `installed`). The following are **not** part of the current contract and must not be implied by any current surface:
 
 - registries or broader distribution; and
 - SubAgent Skill inheritance (children do not receive parent Skills).
