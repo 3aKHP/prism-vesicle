@@ -109,15 +109,46 @@ MCP_CLUSTER_TOKEN=
 
 ## Provider proxy (optional)
 
-A single optional key `VESICLE_PROVIDER_PROXY` lives in the `.env` above (beside `providers.yaml`). A non-empty value must be a complete `http://` or `https://` proxy URL; URL userinfo is used as Basic auth, carried only on the transport and never written to `providers.yaml`, sessions, or logs.
+A single optional key `VESICLE_PROVIDER_PROXY` lives in the `.env` above (beside `providers.yaml`). If your network requires a proxy to reach model providers, set it before running `vesicle setup`; Setup model discovery and later provider requests use the same setting. A non-empty value must be a complete `http://` or `https://` proxy URL:
 
 ```text
-VESICLE_PROVIDER_PROXY=
+VESICLE_PROVIDER_PROXY=http://127.0.0.1:7890
 ```
 
-It applies to **all provider HTTP(S) and WebSocket** traffic. Precedence: user-file `VESICLE_PROVIDER_PROXY` → process `VESICLE_PROVIDER_PROXY` → inherited terminal proxy variables (`https_proxy`/`HTTPS_PROXY`, etc.) → direct; a blank value means "unset" (it falls through) rather than "force direct". An explicit setting overrides inherited terminal proxies and is not bypassed by terminal `NO_PROXY`.
+For Basic auth, put the username and password in the URL; percent-encode reserved characters such as `@`, `:`, and `/` inside either value:
+
+```text
+VESICLE_PROVIDER_PROXY=http://username:password@proxy.example.com:8080
+```
+
+URL credentials are carried only on the transport and are never written to `providers.yaml`, sessions, or logs. Exit and restart Vesicle after changing `.env`.
+
+It applies to **all model-provider HTTP(S) and WebSocket** traffic, including model requests from the main workflow, SubAgents, Quality Judge, and compaction. It is not a global Vesicle network proxy. MCP, Tavily/Web tools, Skill downloads, asset synchronization, Git/package managers, `shell_exec`, and its child processes do not use this setting.
+
+Precedence: user-file `VESICLE_PROVIDER_PROXY` → process `VESICLE_PROVIDER_PROXY` → inherited terminal proxy variables (`https_proxy`/`HTTPS_PROXY`, etc.) → direct; a blank value means "unset" (it falls through) rather than "force direct". Therefore, a non-empty user-file value cannot be overridden by a temporary process variable. An explicit setting overrides inherited terminal proxies and is not bypassed by terminal `NO_PROXY`.
+
+For one launch without editing the file:
+
+```bash
+# Linux / macOS / WSL
+VESICLE_PROVIDER_PROXY=http://127.0.0.1:7890 vesicle .
+```
+
+```powershell
+# PowerShell 7
+$env:VESICLE_PROVIDER_PROXY = "http://127.0.0.1:7890"
+vesicle .
+```
 
 Inherited behavior matches the pinned Bun runtime: for `https://`/`wss://` targets only `https_proxy`/`HTTPS_PROXY` are honored (lowercase preferred when both are set); `HTTP_PROXY`/`ALL_PROXY` do not apply to secure targets; `NO_PROXY` supports `*`, exact hostnames (case-insensitive), and leading-dot suffixes (e.g. `.test`), but not `:port` or `*.`. OS proxy discovery, PAC/WPAD, SOCKS, proxy chaining, per-provider selection, NTLM, custom proxy headers, and production TLS bypass are not supported. `vesicle doctor` shows only route state, source, scheme, and whether auth is configured — never the proxy address or credentials.
+
+After restarting, run `vesicle doctor` and inspect the `Provider proxy:` line. `configured` means a proxy route is selected, `inherited` means it came from the terminal environment, `bypassed` means `NO_PROXY` bypasses it for the selected provider endpoint, `direct` means no proxy route, and `invalid` means the explicit URL is invalid. For example:
+
+```text
+Provider proxy: configured (user file; http; no authentication)
+```
+
+Doctor checks route selection only; it does not prove that the proxy or provider is reachable. Send one real model request to complete the connectivity check. See [Troubleshooting](./troubleshooting.md) for errors.
 
 ## Providers and cost (for beginners)
 

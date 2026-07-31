@@ -9,7 +9,7 @@ The reference section is for looking things up, not for reading end to end. Ever
 | Page | Look up |
 |---|---|
 | [Command cheatsheet](./commands.md) | Every `/` command, input-box keys, exit |
-| [Configuration files](./configuration.md) | Where `providers.yaml` / `.env` / `mcp.yaml` / `permissions.yaml` live and their fields; provider and API-key concepts |
+| [Configuration files](./configuration.md) | Where `providers.yaml` / `.env` / `mcp.yaml` / `permissions.yaml` live and their fields; providers, API keys, and the network proxy |
 | [Permissions and security model](./permissions-and-security.md) | The four permission modes, path guards, writable roots, the `shell_exec` boundary |
 | [Checksums and signing](./checksums-and-signing.md) | Verifying downloaded files, current signing status, how to verify an Authenticode signature |
 | [Update · uninstall · migrate](./update-uninstall-migrate.md) | Upgrade, uninstall, and what survives across each channel |

@@ -48,6 +48,8 @@ Get-FileHash .\prism-vesicle-assets-<version>.zip -Algorithm SHA256
 
 与其余渠道汇合:
 
+网络必须经过代理才能访问模型供应商时,先按[配置:供应商代理](../reference/configuration.md#供应商代理可选)编辑 `%APPDATA%\prism-vesicle\.env`,再运行 Setup;向导会把已有设置用于模型发现。
+
 ```powershell
 vesicle setup          # 或手动编辑 %APPDATA%\prism-vesicle\providers.yaml + .env
 vesicle doctor

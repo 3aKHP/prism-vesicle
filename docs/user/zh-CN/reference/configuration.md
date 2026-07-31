@@ -107,15 +107,46 @@ MCP_CLUSTER_TOKEN=
 
 ## 供应商代理(可选)
 
-只有一个可选键 `VESICLE_PROVIDER_PROXY`,放在上面的 `.env`(和 `providers.yaml` 同级)。非空值必须是完整的 `http://` 或 `https://` 代理 URL;URL 里的用户名/密码用作 Basic 认证,只随传输层下发,不会写进 `providers.yaml`、会话或日志。
+只有一个可选键 `VESICLE_PROVIDER_PROXY`,放在上面的 `.env`(和 `providers.yaml` 同级)。如果你的网络必须经过代理才能访问模型供应商,请在运行 `vesicle setup` 前先写好它;Setup 的模型发现和之后的供应商请求都会使用同一设置。非空值必须是完整的 `http://` 或 `https://` 代理 URL:
 
 ```text
-VESICLE_PROVIDER_PROXY=
+VESICLE_PROVIDER_PROXY=http://127.0.0.1:7890
 ```
 
-它作用于**所有供应商的 HTTP(S) 与 WebSocket** 流量。优先级:用户文件 `VESICLE_PROVIDER_PROXY` → 进程 `VESICLE_PROVIDER_PROXY` → 继承的终端代理变量(`https_proxy`/`HTTPS_PROXY` 等)→ 直连;留空代表"未设置"(继续向下 fallback),而不是"强制直连"。显式设置会覆盖继承的终端代理,且不被终端 `NO_PROXY` 绕过。
+需要 Basic 认证时,把用户名和密码写进 URL;其中的 `@`、`:`、`/` 等保留字符必须先做 URL 编码:
+
+```text
+VESICLE_PROVIDER_PROXY=http://username:password@proxy.example.com:8080
+```
+
+URL 里的凭据只随传输层下发,不会写进 `providers.yaml`、会话或日志。修改 `.env` 后请退出并重新启动 Vesicle。
+
+它作用于**所有模型供应商的 HTTP(S) 与 WebSocket** 流量,包括主工作流、SubAgent、Quality Judge 和压缩流程发出的模型请求;它不是 Vesicle 的全局网络代理。MCP、Tavily/Web 工具、Skill 下载、资源同步、Git/包管理器、`shell_exec` 及其子进程不使用这项设置。
+
+优先级:用户文件 `VESICLE_PROVIDER_PROXY` → 进程 `VESICLE_PROVIDER_PROXY` → 继承的终端代理变量(`https_proxy`/`HTTPS_PROXY` 等)→ 直连;留空代表"未设置"(继续向下 fallback),而不是"强制直连"。因此用户级 `.env` 里已有非空值时,临时进程变量不会覆盖它。显式设置会覆盖继承的终端代理,且不被终端 `NO_PROXY` 绕过。
+
+只想对一次启动使用时,可以不改文件:
+
+```bash
+# Linux / macOS / WSL
+VESICLE_PROVIDER_PROXY=http://127.0.0.1:7890 vesicle .
+```
+
+```powershell
+# PowerShell 7
+$env:VESICLE_PROVIDER_PROXY = "http://127.0.0.1:7890"
+vesicle .
+```
 
 继承行为以当前 Bun 运行时为准:对 `https://`/`wss://` 目标,只认 `https_proxy`/`HTTPS_PROXY`(两者都在时取小写),`HTTP_PROXY`/`ALL_PROXY` 不适用于安全目标;`NO_PROXY` 支持 `*`、精确主机名(大小写不敏感)和点号前缀后缀(如 `.test`),不支持 `:port` 和 `*.`。OS 代理、PAC/WPAD、SOCKS、代理链、按供应商选择、NTLM、自定义代理头和生产环境跳过 TLS 校验均不支持。`vesicle doctor` 只显示路由状态/来源/协议/是否带认证,不会打印代理地址或凭据。
+
+重启后运行 `vesicle doctor`,检查 `Provider proxy:` 行。`configured` 表示已选择代理,`inherited` 表示来自终端环境,`bypassed` 表示当前供应商端点被 `NO_PROXY` 绕过,`direct` 表示直连,`invalid` 表示显式 URL 无效。例如:
+
+```text
+Provider proxy: configured (user file; http; no authentication)
+```
+
+Doctor 只检查路由选择,不会尝试证明代理或供应商实际可达;还需发送一次真实模型请求完成连通性验证。错误处理见[故障排查](./troubleshooting.md)。
 
 ## 供应商与费用(给新手)
 

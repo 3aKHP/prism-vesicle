@@ -22,6 +22,8 @@
 
 安装最后一页保持勾选 **Configure and launch Prism Vesicle**,它会自动打开配置向导。开始菜单的 **Prism Vesicle** 组里有三个入口:**Configure Prism Vesicle**(重开向导)、**Prism Vesicle Doctor**(检查环境)、**Uninstall Prism Vesicle**(卸载)。
 
+> 如果你的网络必须经过代理才能访问模型供应商,请先退出自动打开的向导,按[配置:供应商代理](../reference/configuration.md#供应商代理可选)创建或修改 `%APPDATA%\prism-vesicle\.env`,再从开始菜单重开 **Configure Prism Vesicle**。向导目前没有代理输入项,但会读取已有设置用于模型发现。
+
 ## 走完 Setup 向导
 
 向导全程用三个键:方向键移动、Enter 继续、Esc 返回上一屏(Ctrl+Q 退出)。按顺序走完:

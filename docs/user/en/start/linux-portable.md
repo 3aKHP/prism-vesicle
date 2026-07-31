@@ -50,6 +50,8 @@ For the short `vesicle` name, rename the binary or use the symlink above.
 
 ## Configure, check, start
 
+If your network requires a proxy to reach model providers, edit the user-level `.env` as described in [Configuration: Provider proxy](../reference/configuration.md#provider-proxy-optional) before running Setup; the wizard uses the existing setting for model discovery.
+
 ```bash
 vesicle setup          # or hand-edit ~/.config/prism-vesicle/providers.yaml + .env
 vesicle doctor

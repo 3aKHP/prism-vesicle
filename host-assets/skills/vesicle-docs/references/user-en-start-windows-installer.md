@@ -24,6 +24,8 @@ Three facts, one line each:
 
 Keep **Configure and launch Prism Vesicle** checked on the installer's last page; it opens the configuration wizard automatically. The Start Menu group **Prism Vesicle** has three entries: **Configure Prism Vesicle** (reopen the wizard), **Prism Vesicle Doctor** (check the environment), and **Uninstall Prism Vesicle** (uninstall).
 
+> If your network requires a proxy to reach model providers, exit the automatically opened wizard first, create or edit `%APPDATA%\prism-vesicle\.env` as described in [Configuration: Provider proxy](../reference/configuration.md#provider-proxy-optional), then reopen **Configure Prism Vesicle** from the Start Menu. The wizard does not currently have a proxy input, but it reads an existing setting for model discovery.
+
 ## Finish the Setup wizard
 
 The wizard uses three keys throughout: arrow keys to move, Enter to continue, Esc to go back one screen (Ctrl+Q to quit). Walk through it in order:
