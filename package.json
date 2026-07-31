@@ -47,6 +47,7 @@
     "skills:docs:check": "bun run scripts/sync-bundled-skill-references.ts --check",
     "smoke:malformed-tool-pty": "bun run scripts/smoke-malformed-tool-pty.ts",
     "smoke:tmp-scratch-pty": "bun run scripts/smoke-tmp-scratch-pty.ts",
+    "smoke:skillify-pty": "bun run scripts/smoke-skillify-pty.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "lint": "biome lint .",
     "typecheck": "tsc --noEmit",

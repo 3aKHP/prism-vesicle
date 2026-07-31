@@ -37,7 +37,11 @@ esac
 # The Host injects VESICLE_SELF_EXECUTABLE (and VESICLE_SELF_ENTRYPOINT for
 # source/npm runs). Never guess "vesicle" from PATH.
 if [ -z "${VESICLE_SELF_EXECUTABLE:-}" ]; then
-  printf '{"schema":"vesicle.skill-draft/v1","operation":"%s","ok":false,"source":"%s","diagnostics":[{"code":"publication-failed","message":"Vesicle self-invocation is not configured; the publisher must run through the Host runtime."}],"draftRetained":true,"currentSessionCatalogChanged":false,"catalogRefresh":"new-session-required"}\n' "$op" "$1"
+  if [ "$op" = "validate" ]; then
+    printf '%s\n' '{"schema":"vesicle.skill-draft/v1","operation":"validate","ok":false,"source":"","diagnostics":[{"code":"publication-failed","message":"Vesicle self-invocation is not configured; the publisher must run through the Host runtime."}],"draftRetained":true,"currentSessionCatalogChanged":false,"catalogRefresh":"new-session-required"}'
+  else
+    printf '%s\n' '{"schema":"vesicle.skill-draft/v1","operation":"publish","ok":false,"source":"","diagnostics":[{"code":"publication-failed","message":"Vesicle self-invocation is not configured; the publisher must run through the Host runtime."}],"draftRetained":true,"currentSessionCatalogChanged":false,"catalogRefresh":"new-session-required"}'
+  fi
   exit 1
 fi
 

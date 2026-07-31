@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile, lstat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { inspectSkillDraft, publishSkillDraft } from "../../../src/core/skills/draft-publisher";
 import type { SkillDraftInspection } from "../../../src/core/skills/draft-publisher";
 import { readActiveIndex } from "../../../src/skills";
@@ -63,6 +63,7 @@ async function withEnv<T>(work: (env: NodeJS.ProcessEnv, projectRoot: string) =>
 }
 
 const inspections: DraftFixture[] = [];
+const CLI_ENTRY = resolve(import.meta.dir, "../../../src/cli/main.ts");
 afterEach(async () => {
   while (inspections.length > 0) {
     const fixture = inspections.pop()!;
@@ -130,6 +131,49 @@ describe("inspectSkillDraft", () => {
     });
     inspections.push(fixture);
     await expect(inspectSkillDraft(fixture.projectRoot, fixture.draftSource)).rejects.toMatchObject({ code: "bundle-invalid" });
+  });
+});
+
+describe("skills publish-draft CLI envelope", () => {
+  test("missing --target value returns one invalid-arguments JSON object on stdout", async () => {
+    const fixture = await makeDraft("missing-target");
+    inspections.push(fixture);
+    const child = Bun.spawn([process.execPath, CLI_ENTRY, "skills", "publish-draft", fixture.draftSource, "--target"], {
+      cwd: fixture.projectRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [exitCode, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe("");
+    const lines = stdout.trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({
+      schema: "vesicle.skill-draft/v1",
+      operation: "publish",
+      ok: false,
+      source: fixture.draftSource,
+      diagnostics: [{ code: "invalid-arguments", message: "--target requires a value." }],
+    });
+  });
+
+  test("duplicate --target is rejected inside the structured JSON contract", async () => {
+    const fixture = await makeDraft("duplicate-target");
+    inspections.push(fixture);
+    const child = Bun.spawn([
+      process.execPath, CLI_ENTRY, "skills", "publish-draft", fixture.draftSource,
+      "--target", "project", "--target", "installed", "--json",
+    ], { cwd: fixture.projectRoot, stdout: "pipe", stderr: "pipe" });
+    const [exitCode, stdout] = await Promise.all([child.exited, new Response(child.stdout).text()]);
+    expect(exitCode).toBe(1);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: "invalid-arguments", message: "Duplicate argument: --target" }],
+    });
   });
 });
 

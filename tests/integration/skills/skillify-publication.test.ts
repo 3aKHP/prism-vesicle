@@ -57,12 +57,16 @@ async function skillifyCatalog(): Promise<ResolvedSkillCatalog> {
 }
 
 async function runWrapper(operation: string, ...args: string[]): Promise<{ ok: boolean; content: string }> {
+  return runWrapperScript("scripts/publish_skill.sh", operation, ...args);
+}
+
+async function runWrapperScript(script: string, operation: string, ...args: string[]): Promise<{ ok: boolean; content: string }> {
   const catalog = await skillifyCatalog();
   const activation = await executeActivateSkillTool(call("activate_skill", { name: "skillify" }), { catalog, sessionId });
   expect(activation.ok).toBe(true);
   const result = await executeRunSkillScriptTool(projectRoot, call("run_skill_script", {
     skill: "skillify",
-    path: "scripts/publish_skill.sh",
+    path: script,
     args: [operation, ...args],
   }), { catalog, sessionId });
   return { ok: result.ok, content: result.content };
@@ -140,4 +144,53 @@ describe("skillify wrapper integration (.sh)", () => {
     expect(result.ok).toBe(false);
     expect(result.content).toContain("Exit code: 2");
   }, 15_000);
+
+  test.skipIf(process.platform === "win32")("self-invocation failure remains valid JSON for hostile source text", async () => {
+    const child = Bun.spawn([
+      "/bin/sh",
+      join(SKILLIFY_ROOT, "scripts", "publish_skill.sh"),
+      "validate",
+      'tmp/skillify/bad"name',
+    ], {
+      cwd: projectRoot,
+      env: { ...process.env, VESICLE_SELF_EXECUTABLE: undefined, VESICLE_SELF_ENTRYPOINT: undefined },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [exitCode, stdout] = await Promise.all([child.exited, new Response(child.stdout).text()]);
+    expect(exitCode).toBe(1);
+    expect(JSON.parse(stdout)).toMatchObject({ operation: "validate", ok: false, source: "" });
+  });
+});
+
+describe("skillify wrapper integration (.ps1)", () => {
+  test.skipIf(process.platform !== "win32")("validates, publishes, rejects collision, and preserves Unicode through native PowerShell", async () => {
+    await writeDraft("powershell-native");
+
+    const validated = await runWrapperScript("scripts/publish_skill.ps1", "validate", "tmp/skillify/powershell-native");
+    expect(validated.ok).toBe(true);
+    expect(parseWrapperJson(validated.content)).toMatchObject({
+      operation: "validate",
+      ok: true,
+      name: "powershell-native",
+      source: "tmp/skillify/powershell-native",
+      fileCount: 3,
+    });
+
+    const published = await runWrapperScript("scripts/publish_skill.ps1", "publish", "tmp/skillify/powershell-native", "project");
+    expect(published.ok).toBe(true);
+    expect(parseWrapperJson(published.content)).toMatchObject({
+      operation: "publish",
+      ok: true,
+      target: "project",
+      destination: ".agents/skills/powershell-native",
+    });
+    expect(await readFile(join(projectRoot, ".agents", "skills", "powershell-native", "references", "guide.md"), "utf8")).toContain("指南");
+    expect(await readFile(join(projectRoot, "tmp", "skillify", "powershell-native", "SKILL.md"), "utf8")).toContain("这是一个测试用 Skill 草稿");
+
+    const collision = await runWrapperScript("scripts/publish_skill.ps1", "publish", "tmp/skillify/powershell-native", "project");
+    expect(collision.ok).toBe(false);
+    const diagnostics = parseWrapperJson(collision.content)!.diagnostics as Array<{ code: string }>;
+    expect(diagnostics.some((diagnostic) => diagnostic.code === "target-exists")).toBe(true);
+  }, 60_000);
 });

@@ -36,6 +36,7 @@ export type SkillDraftErrorCode =
   | "invalid-draft-path"
   | "draft-unavailable"
   | "bundle-invalid"
+  | "validation-failed"
   | "target-exists"
   | "staging-failed"
   | "publication-failed";
@@ -59,7 +60,7 @@ export class SkillDraftError extends Error {
 }
 
 /** Logical draft path: `tmp/skillify/<name>`. */
-type ResolvedDraft = { name: string; source: string; draftRoot: string };
+type ResolvedDraft = { name: string; source: string; draftRoot: string; projectRoot: string };
 
 /** Result of inspecting a draft for validation or pre-publication revalidation. */
 export type SkillDraftInspection = {
@@ -143,7 +144,7 @@ export async function publishSkillDraft(
     };
   }
 
-  const destination = await publishProject(projectRoot, resolved, inspected);
+  const destination = await publishProject(resolved, inspected);
   return {
     schema: SKILL_DRAFT_SCHEMA,
     operation: "publish",
@@ -176,6 +177,10 @@ async function resolveDraft(projectRoot: string, input: string): Promise<Resolve
     throw new SkillDraftError(parsed.code, parsed.error);
   }
 
+  const projectInfo = await lstat(projectRoot).catch(() => undefined);
+  if (!projectInfo || projectInfo.isSymbolicLink() || !projectInfo.isDirectory()) {
+    throw new SkillDraftError("draft-unavailable", "Project root must be an accessible real directory.");
+  }
   const projectReal = await realpath(projectRoot).catch(() => undefined);
   if (!projectReal) {
     throw new SkillDraftError("draft-unavailable", "Project root is not accessible.");
@@ -203,7 +208,7 @@ async function resolveDraft(projectRoot: string, input: string): Promise<Resolve
     }
   }
 
-  return { name: parsed.name, source: input, draftRoot: join(projectRoot, "tmp", "skillify", parsed.name) };
+  return { name: parsed.name, source: input, draftRoot: join(projectReal, "tmp", "skillify", parsed.name), projectRoot: projectReal };
 }
 
 function parseDraftInput(input: string): { name: string } | { error: string; code: SkillDraftErrorCode } {
@@ -243,18 +248,18 @@ async function inspectDraftBundle(resolved: ResolvedDraft): Promise<InspectedSki
         error.diagnostics.map(toDiagnosticCode),
       );
     }
-    throw new SkillDraftError("publication-failed", error instanceof Error ? error.message : String(error));
+    throw new SkillDraftError("validation-failed", "Draft validation failed unexpectedly.");
   }
 }
 
 // --- project publication --------------------------------------------------
 
 async function publishProject(
-  projectRoot: string,
   resolved: ResolvedDraft,
   inspected: InspectedSkillBundle,
 ): Promise<string> {
-  const agentsPath = join(projectRoot, ".agents");
+  const publicationRoot = resolved.projectRoot;
+  const agentsPath = join(publicationRoot, ".agents");
   const skillsPath = join(agentsPath, "skills");
   const destination = join(skillsPath, inspected.name);
 
@@ -262,7 +267,9 @@ async function publishProject(
   // reject either when it already exists as a symlink or non-directory. Never
   // publish through a linked target parent.
   await ensurePublicationParent(agentsPath, ".agents");
+  await assertPublicationParents(publicationRoot, agentsPath);
   await ensurePublicationParent(skillsPath, ".agents/skills");
+  await assertPublicationParents(publicationRoot, agentsPath, skillsPath);
 
   if (await pathExistsAny(destination)) {
     throw new SkillDraftError("target-exists", `Destination .agents/skills/${inspected.name} already exists; create-only publication does not overwrite or upgrade.`);
@@ -273,6 +280,10 @@ async function publishProject(
   const staging = join(skillsPath, `.staging-${inspected.name}-${randomUUID()}`);
   try {
     await stageSkillBundle(resolved.draftRoot, staging, inspected);
+    // Narrow the linked-parent swap window immediately before the only durable
+    // mutation. A swapped parent makes the source staging path unreachable, so
+    // rename fails without publishing through the replacement link.
+    await assertPublicationParents(publicationRoot, agentsPath, skillsPath);
     try {
       await rename(staging, destination);
     } catch (error) {
@@ -300,14 +311,31 @@ async function publishProject(
 async function ensurePublicationParent(path: string, label: string): Promise<void> {
   const info = await lstat(path).catch(() => undefined);
   if (info === undefined) {
-    await mkdir(path, { recursive: true });
-    return;
+    await mkdir(path).catch((error: unknown) => {
+      if (!isAlreadyExists(error)) throw error;
+    });
   }
-  if (info.isSymbolicLink()) {
+  const current = await lstat(path).catch(() => undefined);
+  if (!current) throw new SkillDraftError("staging-failed", `${label} could not be created.`);
+  if (current.isSymbolicLink()) {
     throw new SkillDraftError("staging-failed", `${label} is a symbolic link; refusing to publish through a linked target parent.`);
   }
-  if (!info.isDirectory()) {
+  if (!current.isDirectory()) {
     throw new SkillDraftError("staging-failed", `${label} exists as a non-directory; refusing to publish.`);
+  }
+}
+
+async function assertPublicationParents(projectRoot: string, ...parents: string[]): Promise<void> {
+  let expectedParent = projectRoot;
+  for (const path of parents) {
+    const info = await lstat(path).catch(() => undefined);
+    const resolved = info && !info.isSymbolicLink() && info.isDirectory()
+      ? await realpath(path).catch(() => undefined)
+      : undefined;
+    if (!resolved || !resolved.startsWith(`${expectedParent}${sep}`)) {
+      throw new SkillDraftError("staging-failed", "Publication parent changed or became linked during publication.");
+    }
+    expectedParent = resolved;
   }
 }
 
@@ -329,7 +357,7 @@ async function publishInstalled(
     if (error instanceof SkillStoreError) {
       throw new SkillDraftError(error.code, error.message);
     }
-    throw new SkillDraftError("publication-failed", error instanceof Error ? error.message : String(error));
+    throw new SkillDraftError("publication-failed", "Installed Skill publication failed unexpectedly.");
   }
 }
 
@@ -341,4 +369,8 @@ function toDiagnosticCode(diagnostic: { kind: string; message: string }): { code
 
 async function pathExistsAny(path: string): Promise<boolean> {
   return Boolean(await lstat(path).catch(() => undefined));
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "EEXIST");
 }

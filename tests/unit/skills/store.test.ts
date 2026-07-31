@@ -396,16 +396,47 @@ describe("skill store: create-only publication", () => {
     });
   });
 
-  test("rejects a name that has a retained version with provenance but no active entry", async () => {
+  test("repairs an exact publication that crashed after provenance but before the active index", async () => {
     await withEnv(async (env, scratch) => {
       const source = await makeSource(scratch, "retained", "body");
-      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      const published = await installSnapshotCreateOnly({ sourceDirectory: source, env });
       // Drop the active index entry but keep the retained version + provenance.
       const storeRoot = skillStoreDirectory(env);
       const index = await readActiveIndex(env);
       await import("node:fs/promises").then(({ writeFile }) =>
         writeFile(join(storeRoot, "index.json"), JSON.stringify({ ...index, entries: [] }, null, 2)));
-      await expect(installSnapshotCreateOnly({ sourceDirectory: source, env })).rejects.toThrow(/retained version/);
+      const recovered = await installSnapshotCreateOnly({ sourceDirectory: source, env });
+      expect(recovered).toEqual(published);
+      expect((await readActiveIndex(env)).entries.find((entry) => entry.name === "retained")?.version).toBe(published.version);
+    });
+  });
+
+  test("refuses provenance recovery when retained bytes conflict with the submitted draft", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "retained-conflict", "body");
+      await installSnapshot({ sourceDirectory: source, env });
+      const storeRoot = skillStoreDirectory(env);
+      const index = await readActiveIndex(env);
+      await writeFile(join(storeRoot, "index.json"), JSON.stringify({ ...index, entries: [] }, null, 2));
+      await writeFile(join(source, "SKILL.md"), `---\nname: retained-conflict\ndescription: "demo: retained-conflict"\n---\nchanged\n`, "utf8");
+
+      await expect(installSnapshotCreateOnly({ sourceDirectory: source, env })).rejects.toMatchObject({ code: "target-exists" });
+      expect((await readActiveIndex(env)).entries).toHaveLength(0);
+    });
+  });
+
+  test("refuses a linked Store family instead of following it during create-only publication", async () => {
+    if (!symlinkSupported) return;
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "linked-family", "body");
+      const outside = join(scratch, "outside-family");
+      await mkdir(outside);
+      const storeRoot = skillStoreDirectory(env);
+      await mkdir(storeRoot, { recursive: true });
+      await symlink(outside, join(storeRoot, "linked-family"));
+
+      await expect(installSnapshotCreateOnly({ sourceDirectory: source, env })).rejects.toMatchObject({ code: "target-exists" });
+      expect(await import("node:fs/promises").then(({ readdir }) => readdir(outside))).toEqual([]);
     });
   });
 

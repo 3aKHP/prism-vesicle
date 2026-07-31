@@ -49,7 +49,7 @@ switch ($op) {
         schema                       = 'vesicle.skill-draft/v1'
         operation                    = 'validate'
         ok                           = $false
-        source                       = $rest[0]
+        source                       = ''
         diagnostics                  = @(@{
           code    = 'publication-failed'
           message = 'Vesicle self-invocation is not configured; the publisher must run through the Host runtime.'
@@ -78,7 +78,7 @@ switch ($op) {
         schema                       = 'vesicle.skill-draft/v1'
         operation                    = 'publish'
         ok                           = $false
-        source                       = $rest[0]
+        source                       = ''
         diagnostics                  = @(@{
           code    = 'publication-failed'
           message = 'Vesicle self-invocation is not configured; the publisher must run through the Host runtime.'

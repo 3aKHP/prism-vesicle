@@ -209,16 +209,18 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
 /**
  * Create-only publication: install one validated skill directory as an immutable
  * snapshot, rejecting any pre-existing name. Unlike `installSnapshot`, this is
- * not idempotent — an active index entry, a completed provenance sidecar, or a
- * retained version directory for the same name is a hard `target-exists`
- * refusal. The authoritative name-existence check, staging, rename, provenance
+ * not idempotent — an active index entry or a retained publication for another
+ * version/content is a hard `target-exists` refusal. One exact, fully verified
+ * version + provenance pair without an active index is treated as an interrupted
+ * first publication and has only its missing index commit repaired. The
+ * authoritative name-existence check, staging, rename, provenance
  * write, and index publication all run inside the existing cross-process
  * `withIndexLock` so concurrent create-only attempts produce exactly one winner.
  *
- * Exact-hash orphan recovery is preserved for the crash window between the final
- * rename and provenance/index publication: a version directory whose hash
- * matches but has neither provenance nor an active entry is completed rather
- * than refused. A different hash or any completed provenance remains a refusal.
+ * Exact-hash orphan recovery covers both crash windows after the final rename:
+ * with no provenance it writes provenance + index; with matching provenance it
+ * writes only the missing index. Different/corrupt content or another retained
+ * version/provenance remains a refusal.
  */
 export async function installSnapshotCreateOnly(options: InstallSnapshotOptions): Promise<SkillProvenance> {
   const env = options.env ?? process.env;
@@ -235,11 +237,47 @@ export async function installSnapshotCreateOnly(options: InstallSnapshotOptions)
   const staging = join(familyRoot, `${STAGING_DIR_PREFIX}${version}-${randomUUID()}`);
 
   return withIndexLock(storeRoot, async () => {
-    if ((await readIndexFile(storeRoot)).entries.some((entry) => entry.name === name)) {
+    const index = await readIndexFile(storeRoot);
+    if (index.entries.some((entry) => entry.name === name)) {
       throw new SkillStoreError("target-exists", `Skill "${name}" is already installed; create-only publication does not overwrite or upgrade.`);
     }
+    const familyInfo = await lstat(familyRoot).catch((error: unknown) => {
+      if (isNotFound(error)) return undefined;
+      throw error;
+    });
+    if (familyInfo && (familyInfo.isSymbolicLink() || !familyInfo.isDirectory())) {
+      throw new SkillStoreError("target-exists", `Skill "${name}" has conflicting retained Store state; create-only publication refuses linked or non-directory families.`);
+    }
+
+    // Recover the crash after provenance became durable but before index.json
+    // committed. This is safe only for one exact version/provenance pair whose
+    // bytes and recorded inventory still match the submitted draft.
+    if (await pathExists(versionDir)) {
+      const versionInfo = await lstat(versionDir);
+      if (versionInfo.isSymbolicLink() || !versionInfo.isDirectory()) {
+        throw new SkillStoreError("target-exists", `Skill "${name}" has conflicting retained Store state; create-only publication refuses linked or non-directory versions.`);
+      }
+      const existingProvenance = await readProvenance(name, version, env);
+      if (existingProvenance) {
+        const retained = await retainedPublicationNames(familyRoot);
+        const expectedEntries = new Set([version, `${version}.${PROVENANCE_FILE}`]);
+        if (retained.some((entry) => !expectedEntries.has(entry))) {
+          throw new SkillStoreError("target-exists", `Skill "${name}" has another retained publication; create-only publication does not overwrite or upgrade.`);
+        }
+        const existingInventory = await hashBundleDirectory(versionDir);
+        if (!provenanceMatchesInspection(existingProvenance, inspected, existingInventory)) {
+          throw new SkillStoreError("target-exists", `Skill "${name}" has conflicting retained publication state; create-only publication does not overwrite or repair it.`);
+        }
+        await writeIndexFile(storeRoot, upsertEntry(index, name, version, options.enabled ?? true, existingProvenance.installedAt));
+        return existingProvenance;
+      }
+    }
+
     if (await pathExists(familyRoot)) {
-      if (await hasCompletedProvenance(familyRoot, name, env)) {
+      // The exact version directory without provenance is handled below. Any
+      // other durable directory/sidecar represents retained or corrupt state.
+      const retained = await retainedPublicationNames(familyRoot);
+      if (retained.some((entry) => entry !== version)) {
         throw new SkillStoreError("target-exists", `Skill "${name}" has a retained version; create-only publication does not overwrite or upgrade.`);
       }
     }
@@ -254,7 +292,7 @@ export async function installSnapshotCreateOnly(options: InstallSnapshotOptions)
       }
       const provenance = buildProvenance({ name, version, options, contentSha256: inspected.bodySha256, bundleSha256: inspected.bundleSha256, inventory: [...inspected.files] });
       await writeJsonAtomic(provenancePath, provenance);
-      await writeIndexFile(storeRoot, upsertEntry(await readIndexFile(storeRoot), name, version, options.enabled ?? true, provenance.installedAt));
+      await writeIndexFile(storeRoot, upsertEntry(index, name, version, options.enabled ?? true, provenance.installedAt));
       return provenance;
     }
 
@@ -264,7 +302,7 @@ export async function installSnapshotCreateOnly(options: InstallSnapshotOptions)
       await rename(staging, versionDir);
       const provenance = buildProvenance({ name, version, options, contentSha256: inspected.bodySha256, bundleSha256: inspected.bundleSha256, inventory: [...inspected.files] });
       await writeJsonAtomic(provenancePath, provenance);
-      await writeIndexFile(storeRoot, upsertEntry(await readIndexFile(storeRoot), name, version, options.enabled ?? true, provenance.installedAt));
+      await writeIndexFile(storeRoot, upsertEntry(index, name, version, options.enabled ?? true, provenance.installedAt));
       return provenance;
     } catch (error) {
       await rm(staging, { recursive: true, force: true }).catch(() => undefined);
@@ -427,21 +465,34 @@ function upsertEntry(
   return { schema: INDEX_SCHEMA, entries: without };
 }
 
-/**
- * True when the family directory holds any version directory with a completed
- * provenance sidecar. Used by create-only publication to reject a retained
- * version even when the active index has no entry yet.
- */
-async function hasCompletedProvenance(familyRoot: string, name: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+/** Durable family entries relevant to create-only collision/recovery checks. */
+async function retainedPublicationNames(familyRoot: string): Promise<string[]> {
   const entries = await readdir(familyRoot, { withFileTypes: true }).catch((error: unknown) => {
     if (isNotFound(error)) return [] as import("node:fs").Dirent[];
     throw error;
   });
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith(STAGING_DIR_PREFIX)) continue;
-    if (await readProvenance(name, entry.name, env).catch(() => undefined)) return true;
-  }
-  return false;
+  return entries
+    .filter((entry) => !entry.name.startsWith(STAGING_DIR_PREFIX))
+    .map((entry) => entry.name);
+}
+
+function provenanceMatchesInspection(
+  provenance: SkillProvenance,
+  inspected: Awaited<ReturnType<typeof inspectSkillBundle>>,
+  actualInventory: SkillBundleFile[],
+): boolean {
+  if (
+    provenance.name !== inspected.name
+    || provenance.version !== inspected.version
+    || provenance.installedAt.length === 0
+    || provenance.contentSha256 !== inspected.bodySha256
+    || provenance.bundleSha256 !== inspected.bundleSha256
+    || computeBundleHash(actualInventory) !== inspected.bundleSha256
+  ) return false;
+  const normalize = (inventory: readonly SkillBundleFile[]) => [...inventory]
+    .sort((left, right) => left.path.localeCompare(right.path))
+    .map((file) => `${file.path}\0${file.sha256}\0${file.bytes}`);
+  return JSON.stringify(normalize(provenance.fileInventory)) === JSON.stringify(normalize(inspected.files));
 }
 
 function buildProvenance(args: {

@@ -230,8 +230,18 @@ function parsePublishDraftArgs(rest: string[]): PublishDraftArgs {
   let json = false;
   for (let index = 0; index < rest.length; index++) {
     const arg = rest[index]!;
-    if (arg === "--json") json = true;
-    else if (arg === "--target") target = consumeFlagValue(rest, ++index, "--target");
+    if (arg === "--json") {
+      if (json) return { error: "Duplicate argument: --json", source: directory };
+      json = true;
+    } else if (arg === "--target") {
+      if (target !== undefined) return { error: "Duplicate argument: --target", source: directory };
+      const value = rest[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        return { error: "--target requires a value.", source: directory };
+      }
+      target = value;
+      index += 1;
+    }
     else if (!arg.startsWith("--") && directory === undefined) directory = arg;
     else return { error: `Unexpected argument: ${arg}`, source: directory };
   }
@@ -336,7 +346,12 @@ function draftFailureFromError(operation: "validate" | "publish", source: string
   if (error instanceof SkillDraftError) {
     return draftFailureEnvelope(operation, source, error.message, error.code, [...error.diagnostics]);
   }
-  return draftFailureEnvelope(operation, source, error instanceof Error ? error.message : String(error), "publication-failed");
+  return draftFailureEnvelope(
+    operation,
+    source,
+    operation === "validate" ? "Draft validation failed unexpectedly." : "Draft publication failed unexpectedly.",
+    operation === "validate" ? "validation-failed" : "publication-failed",
+  );
 }
 
 async function runInspect(name: string): Promise<void> {
