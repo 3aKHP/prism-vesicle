@@ -104,6 +104,18 @@ MCP_CLUSTER_TOKEN=
 
 `TAVILY_API_KEY` enables the web research tools for the ETL/Evaluate engines; MCP auth tokens also go here. Process environment variables are a fallback only.
 
+## Provider proxy (optional)
+
+A single optional key `VESICLE_PROVIDER_PROXY` lives in the `.env` above (beside `providers.yaml`). A non-empty value must be a complete `http://` or `https://` proxy URL; URL userinfo is used as Basic auth, carried only on the transport and never written to `providers.yaml`, sessions, or logs.
+
+```text
+VESICLE_PROVIDER_PROXY=
+```
+
+It applies to **all provider HTTP(S) and WebSocket** traffic. Precedence: user-file `VESICLE_PROVIDER_PROXY` → process `VESICLE_PROVIDER_PROXY` → inherited terminal proxy variables (`https_proxy`/`HTTPS_PROXY`, etc.) → direct; a blank value means "unset" (it falls through) rather than "force direct". An explicit setting overrides inherited terminal proxies and is not bypassed by terminal `NO_PROXY`.
+
+Inherited behavior matches the pinned Bun runtime: for `https://`/`wss://` targets only `https_proxy`/`HTTPS_PROXY` are honored (lowercase preferred when both are set); `HTTP_PROXY`/`ALL_PROXY` do not apply to secure targets; `NO_PROXY` supports `*`, exact hostnames (case-insensitive), and leading-dot suffixes (e.g. `.test`), but not `:port` or `*.`. OS proxy discovery, PAC/WPAD, SOCKS, proxy chaining, per-provider selection, NTLM, custom proxy headers, and production TLS bypass are not supported. `vesicle doctor` shows only route state, source, scheme, and whether auth is configured — never the proxy address or credentials.
+
 ## Providers and cost (for beginners)
 
 - An **API key** is a string you get from a model provider (DeepSeek, Anthropic, Google, or a local compatible service) that identifies your account.

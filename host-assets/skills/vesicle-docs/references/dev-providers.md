@@ -48,6 +48,20 @@ This document defines how Vesicle selects providers, translates normalized reque
 - Streaming preserves the protocol's expected `Accept` behavior. Gemini selects SSE through `alt=sse`; a shared header layer must not force `text/event-stream` onto every protocol.
 - The only registry-configurable application header is provider-level `userAgent`. Arbitrary header overrides are not part of the provider contract.
 
+### Proxy
+
+Provider HTTP(S) and WebSocket traffic share one optional, runtime-only proxy policy owned under `providers/shared`. It is resolved once from configuration and threaded through provider construction; like the API key it is never serialized into `VesicleRequest`, provider state envelopes, session JSONL, quality identity, or the provider registry.
+
+- The canonical setting is one optional `VESICLE_PROVIDER_PROXY` in the user-level `.env` beside `providers.yaml`. A non-empty value must be a complete `http://` or `https://` URL; URL userinfo is the supported Basic-auth mechanism and is carried only on the transport option, never in provider headers. It does not belong in `providers.yaml` or `settings.yaml`, and no project-root `.env` is read.
+- Precedence (each blank value is absent and falls through): user-file `VESICLE_PROVIDER_PROXY` → process `VESICLE_PROVIDER_PROXY` → inherited terminal proxy variables → direct. An explicit Vesicle proxy overrides inherited terminal variables and is not bypassed by terminal `NO_PROXY`.
+- For an explicit Vesicle proxy, every provider HTTP and WebSocket connection receives Bun's native `proxy` option. URL userinfo is sent as `Proxy-Authorization` automatically; no custom header map, insecure-TLS flag, or custom CA is supported.
+- For the inherited path, HTTP defers to Bun's standard-environment behavior, while native WebSocket receives an explicit option resolved to mirror Bun (native WebSocket ignores proxy env vars). Mirroring — not a separate grammar — keeps HTTP and WebSocket on the same route for a given destination.
+- Verified against the pinned Bun runtime: for secure (`https:`/`wss:`) targets, `https_proxy`/`HTTPS_PROXY` are honored (lowercase preferred when both are set); `HTTP_PROXY`, `http_proxy`, `ALL_PROXY`, and `all_proxy` are not applied to secure targets. `NO_PROXY` supports `*`, comma-separated entries with surrounding whitespace ignored, exact hostnames (case-insensitive), leading-dot domain suffixes, and IP literals; empty means absent; malformed entries are ignored individually. Port-restricted entries (`host:port`) and `*.` wildcards are not supported because the runtime does not support them — implementing them would make WebSocket diverge from fetch.
+- A proxy `407` is terminal for its attempt class and surfaces a stable `proxy_authentication_required` code; known-bad credentials are not retried. A proxy connection failure is a transport attempt and follows the existing retry policy with a sanitized, non-revealing `proxy_connect_failed` code; the proxy URL, host, port, and credentials never enter error messages, causes, diagnostics, or session/quality artifacts.
+- `vesicle doctor` reports one bounded line — route state, source class, scheme, and auth yes/no — and never the proxy URL, host, port, credentials, bypass entries, or route fingerprint.
+
+Non-goals: OS proxy discovery, PAC/WPAD, SOCKS, proxy chaining, failover lists, per-provider or per-model proxy selection, NTLM/Negotiate, bearer or custom proxy headers, bundled private CAs, and any `rejectUnauthorized: false` in production. MCP server transports, Tavily web tools, Skill downloads, asset synchronization, git/network shell commands, package-manager traffic, and `shell_exec` child processes do not use the provider transport and do not inherit this policy.
+
 ## Protocol Mapping
 
 - OpenAI-compatible adapters preserve normalized reasoning content, assistant tool calls, and tool-result pairing without leaking OpenAI-specific message shapes into core session logic.

@@ -104,6 +104,18 @@ MCP_CLUSTER_TOKEN=
 
 `TAVILY_API_KEY` 打开 ETL/Evaluate 引擎的 Web 研究工具;MCP 的鉴权 token 也放这里。进程环境变量只是兜底。
 
+## 供应商代理(可选)
+
+只有一个可选键 `VESICLE_PROVIDER_PROXY`,放在上面的 `.env`(和 `providers.yaml` 同级)。非空值必须是完整的 `http://` 或 `https://` 代理 URL;URL 里的用户名/密码用作 Basic 认证,只随传输层下发,不会写进 `providers.yaml`、会话或日志。
+
+```text
+VESICLE_PROVIDER_PROXY=
+```
+
+它作用于**所有供应商的 HTTP(S) 与 WebSocket** 流量。优先级:用户文件 `VESICLE_PROVIDER_PROXY` → 进程 `VESICLE_PROVIDER_PROXY` → 继承的终端代理变量(`https_proxy`/`HTTPS_PROXY` 等)→ 直连;留空代表"未设置"(继续向下 fallback),而不是"强制直连"。显式设置会覆盖继承的终端代理,且不被终端 `NO_PROXY` 绕过。
+
+继承行为以当前 Bun 运行时为准:对 `https://`/`wss://` 目标,只认 `https_proxy`/`HTTPS_PROXY`(两者都在时取小写),`HTTP_PROXY`/`ALL_PROXY` 不适用于安全目标;`NO_PROXY` 支持 `*`、精确主机名(大小写不敏感)和点号前缀后缀(如 `.test`),不支持 `:port` 和 `*.`。OS 代理、PAC/WPAD、SOCKS、代理链、按供应商选择、NTLM、自定义代理头和生产环境跳过 TLS 校验均不支持。`vesicle doctor` 只显示路由状态/来源/协议/是否带认证,不会打印代理地址或凭据。
+
 ## 供应商与费用(给新手)
 
 - **API key** 是你在模型供应商(DeepSeek、Anthropic、Google、或本地兼容服务)那里申请的一串密钥,用来证明你的账户。
