@@ -35,7 +35,7 @@ Input box conventions:
 
 - Enter = send while idle; queue ordinary messages and deferred commands while the Agent Loop is running.
 - Ctrl+Enter = newline (for multi-line input).
-- Esc = interrupt the current provider or tool operation and process the next queued input immediately.
+- Esc = interrupt the current provider or tool operation; after the interrupted session is rebuilt, the FIFO head captured at the keypress is submitted once (with an empty queue, Esc only interrupts and leaves any draft untouched).
 
 You can keep writing ordinary messages or commands while the Agent Loop runs. Enter places deferred input in the FIFO shown above the composer. Vesicle injects queued messages after the current complete tool round and before the next provider request. Safe host-only commands can run immediately; artifact reads wait for the tool round; configuration, picker, and session commands wait for the Agent Loop. If the loop finishes first, the next queued input is processed immediately. With an empty composer, Up retrieves the latest queued input for editing.
 

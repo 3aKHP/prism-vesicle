@@ -14,7 +14,7 @@ Press Enter. The message appears in the FIFO above the composer. Vesicle lets th
 
 Queue one more message, then press Up while the composer is empty. The latest queued input returns to the composer so you can edit and resubmit it. The queue is processed in submission order; actions that switch or reset the session clear the current queue.
 
-If a new instruction must replace the direction being executed right now, press Esc. Vesicle interrupts the current provider request or tool operation, then prioritizes the next queued input. Do not use Esc as an ordinary “make this urgent” control: interruption may leave the current turn incomplete.
+If a new instruction must replace the direction being executed right now, press Esc. Vesicle interrupts the current provider request or tool operation, rebuilds the interrupted projection from durable history, and only then submits the exact FIFO head captured at the keypress once, as a fresh top-level input. With an empty queue, Esc just interrupts and submits nothing; any draft stays untouched and is never auto-enqueued. Do not use Esc as an ordinary “make this urgent” control: interruption may leave the current turn incomplete.
 
 ## Ask something beside the main turn
 
