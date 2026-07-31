@@ -9,7 +9,7 @@ import {
   matchFiles,
   readFilePreview,
   scanDirectory,
-} from "../../../src/tui/workspace-files";
+} from "../../../src/tui/workspace/tree-data";
 
 let root: string;
 

@@ -1,8 +1,8 @@
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import { dirname } from "node:path";
-import { OVERSIZED_BYTES, PREVIEW_LINE_CAP, type WorkspaceFilePreview } from "./workspace-files";
-import { assertProjectRelativePath } from "./workspace-paths";
+import { OVERSIZED_BYTES, PREVIEW_LINE_CAP, type WorkspaceFilePreview } from "./workspace/tree-data";
+import { assertProjectRelativePath } from "./workspace/paths";
 
 /**
  * Editor kernel for the Workspace page (Scope B / #62, milestone B3): the
