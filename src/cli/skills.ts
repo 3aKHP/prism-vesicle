@@ -1,5 +1,5 @@
 import { copyFile, mkdir } from "node:fs/promises";
-import { writableProjectRoots } from "../core/artifacts/roots";
+import { projectContentRoots } from "../core/project/roots";
 import { resolveFilesystemSkills } from "../core/skills/catalog-sources";
 import type { FilesystemSkillInspection } from "../core/skills/catalog-sources";
 import { dirname, join, resolve } from "node:path";
@@ -434,8 +434,8 @@ async function runCopyTemplate(rest: string[]): Promise<void> {
     assertSafeRelativePath(resourcePath);
     const normalizedDest = destPath.replace(/\\/g, "/");
     const destRoot = normalizedDest.split("/", 1)[0]!;
-    if (!writableProjectRoots.includes(destRoot as (typeof writableProjectRoots)[number])) {
-      console.error(`Destination must be under a writable root (${writableProjectRoots.join(", ")}). Got: "${destRoot}".`);
+    if (!projectContentRoots.includes(destRoot as (typeof projectContentRoots)[number])) {
+      console.error(`Destination must be under an approved content root (${projectContentRoots.join(", ")}). Got: "${destRoot}".`);
       process.exitCode = 1;
       return;
     }

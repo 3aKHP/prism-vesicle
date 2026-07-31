@@ -6,11 +6,12 @@ This document defines the capability boundary for model-visible tools, external 
 
 - Model-visible filesystem paths are project-relative. Absolute paths and traversal outside the project root are rejected.
 - Existing path components must not be symbolic links or linked directory junctions. Mutations of missing targets validate the nearest existing ancestor.
-- Read, list, stat, and grep operations are limited to `assets/`, `source_materials/`, `workspace/`, `test_runs/`, `novels/`, and `reports/`.
-- File and directory mutations are limited to `source_materials/`, `workspace/`, `test_runs/`, `novels/`, and `reports/`.
-- The canonical final-artifact root set and display order live in `core/artifacts/roots.ts`. `source_materials/` is writable research input but not a final artifact root.
+- Read, list, stat, and grep operations are limited to `assets/`, `source_materials/`, `workspace/`, `test_runs/`, `novels/`, `reports/`, and the scratch root `tmp/`.
+- File and directory mutations are limited to `source_materials/`, `workspace/`, `test_runs/`, `novels/`, `reports/`, and the scratch root `tmp/`.
+- The canonical root taxonomy lives in `core/project/roots.ts`: `sourceRoots`, `artifactRoots`, and `scratchRoots` (`tmp/`) are distinct categories, and `projectContentRoots` / `modelWritableRoots` derive from them. `source_materials/` is writable research input but not a final artifact root.
+- `tmp/` is model-visible scratch state: writable through the ordinary guarded tools, retained across turns and restarts, and never auto-cleaned by the host. It is excluded from Artifact Workbench, `/artifact`, `/validate`, `/init` scanning, Stage input discovery and source-drift checks, and Output Quality Guard artifact targets, so scratch drafts never enter final-artifact validation or rewrite lifecycles.
 - `read_file` is UTF-8 text-only. `view_image` uses the same readable-root guard, validates image type and size, and emits a structured attachment rather than base64 tool text.
-- `delete_file` deletes files only. `delete_directory` deletes empty directories only, and fixed writable roots cannot be created, moved, or deleted.
+- `delete_file` deletes files only. `delete_directory` deletes empty directories only, and fixed writable roots (including the `tmp` root itself) cannot be created, moved, or deleted.
 - Directory listing exposes symbolic-link entries without following them. Recursive operations and outputs remain bounded.
 - Regex grep is accepted only for the current trusted single-user model-input boundary. Exposure to untrusted plugin input requires a bounded regex engine or worker isolation.
 - A model must not claim that a file mutation succeeded unless the corresponding tool result reports success.
@@ -20,7 +21,7 @@ This document defines the capability boundary for model-visible tools, external 
 - Successful filesystem operations persist structured `FileToolEvent` metadata rather than requiring callers to parse result prose.
 - File-event byte counts describe the resulting or observed file size; deletion records the deleted size, append may also report delta bytes, and query tools report their bounded entry or match counts.
 - Successful create, write, replace, and append operations record the SHA-256 of the complete resulting file.
-- Mutation tools capture every affected writable path before changing it so the owning user turn can restore guarded file state through its checkpoint.
+- Mutation tools capture every affected writable path before changing it so the owning user turn can restore guarded file state through its checkpoint. Guarded mutations under `tmp/` participate in the same per-turn checkpoint and rewind lifecycle as the durable roots; scratch state is never auto-cleaned by the host.
 - The opt-in `shell_exec` tool is outside guarded file-tool authority. Shell mutations taint checkpoint completeness and must never be described as rewind-safe.
 
 ## Permission Runtime

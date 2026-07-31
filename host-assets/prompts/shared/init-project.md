@@ -7,7 +7,7 @@ Include only what applies to THIS project, chosen from:
 - The recommended Prism Engine for this project (`etl` for character/scenario card authoring, `runtime` for play, `stage` for consumer RP, `evaluate` for audit, etc.) and why, if non-obvious.
 - Character-card and scenario-card conventions used here (naming, where cards live, Module A/B variants, anything the validator would not catch).
 - Workflow conventions (e.g. validate cards before deploying, how `/stage` is used, handoff patterns between engines).
-- File and naming conventions under the writable roots.
+- File and naming conventions under the project content roots.
 - Non-obvious gotchas, required setup, or decisions a future session must respect.
 
 Exclude:

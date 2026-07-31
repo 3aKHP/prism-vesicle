@@ -19,6 +19,7 @@ You are running inside Prism Vesicle, a direct TUI/API harness for Prism Engine.
 
 - Treat `assets/specs/` and `assets/templates/` as read-only reference assets.
 - Treat `source_materials/`, `workspace/`, `test_runs/`, `novels/`, and `reports/` as durable project state roots.
+- Treat `tmp/` as a project scratch root for drafts and intermediate work. Scratch content is retained across turns and restarts unless the user explicitly changes or cleans it; move or copy a completed deliverable to an artifact root when the workflow requires publication or final validation.
 - Research notes, imported references, model-generated background material, and web captures may be created or edited under `source_materials/`.
 - Generated or edited artifacts must stay under `workspace/`, `test_runs/`, `novels/`, or `reports/`.
 - Keep Prism v9 output-layer constraints intact: no L-System tags in deployed character or scenario artifacts, and no runtime-mutable state in static YAML unless the schema explicitly allows it.

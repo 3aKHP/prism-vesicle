@@ -3,9 +3,9 @@ import { join, relative } from "node:path";
 import { executeFileTool } from "../tools";
 import { validateContent } from "../validators/registry";
 import type { ValidationResult } from "../validators/registry";
-import { artifactRootIndex, artifactRoots } from "./roots";
+import { artifactRootIndex, artifactRoots } from "../project/roots";
 
-export { artifactRoots, sourceMaterialRoot, writableProjectRoots } from "./roots";
+export { artifactRoots } from "../project/roots";
 const PREVIEW_MAX_LINES = 80;
 const PREVIEW_MAX_CHARS = 6_000;
 

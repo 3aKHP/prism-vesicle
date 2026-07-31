@@ -2,7 +2,14 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
-import { artifactRoots, previewArtifactContent, scanArtifacts, sortArtifacts, writableProjectRoots } from "../../../src/core/artifacts/workbench";
+import { artifactRoots, previewArtifactContent, scanArtifacts, sortArtifacts } from "../../../src/core/artifacts/workbench";
+import {
+  artifactRoots as projectArtifactRoots,
+  modelWritableRoots,
+  projectContentRoots,
+  scratchRoots,
+  sourceRoots,
+} from "../../../src/core/project/roots";
 
 const roots: string[] = [];
 
@@ -11,9 +18,13 @@ afterEach(async () => {
 });
 
 describe("artifact workbench", () => {
-  test("separates four final artifact roots from five writable project roots", () => {
+  test("classifies source, artifact, scratch, content, and model-writable roots distinctly", () => {
+    expect(sourceRoots).toEqual(["source_materials"]);
     expect(artifactRoots).toEqual(["workspace", "novels", "reports", "test_runs"]);
-    expect(writableProjectRoots).toEqual(["source_materials", "workspace", "novels", "reports", "test_runs"]);
+    expect(projectArtifactRoots).toEqual(["workspace", "novels", "reports", "test_runs"]);
+    expect(scratchRoots).toEqual(["tmp"]);
+    expect(projectContentRoots).toEqual(["source_materials", "workspace", "novels", "reports", "test_runs"]);
+    expect(modelWritableRoots).toEqual(["source_materials", "workspace", "novels", "reports", "test_runs", "tmp"]);
   });
 
   test("preserves document structure in bounded message-stream previews", () => {
@@ -35,16 +46,19 @@ describe("artifact workbench", () => {
     await mkdir(join(root, "workspace", "cards"), { recursive: true });
     await mkdir(join(root, "reports"), { recursive: true });
     await mkdir(join(root, "source_materials"), { recursive: true });
+    await mkdir(join(root, "tmp"), { recursive: true });
     await writeFile(join(root, "workspace", ".gitkeep"), "", "utf8");
     await writeFile(join(root, "workspace", "cards", "mira.md"), "# Mira", "utf8");
     await writeFile(join(root, "reports", "audit.md"), "# Audit", "utf8");
     await writeFile(join(root, "source_materials", "research.md"), "# Research", "utf8");
+    await writeFile(join(root, "tmp", "scratch-draft.md"), "# Draft", "utf8");
 
     const entries = await scanArtifacts(root);
     expect(entries.map((entry) => entry.path).sort()).toEqual([
       "reports/audit.md",
       "workspace/cards/mira.md",
     ]);
+    expect(entries.some((entry) => entry.path.startsWith("tmp/"))).toBe(false);
   });
 
   test("orders numeric selection by fixed root, then newest file within each root", () => {

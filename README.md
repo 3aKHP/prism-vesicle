@@ -129,7 +129,7 @@ bun run dev
 
 Run `vesicle --version` (or `-v`) to print the installed version, or `vesicle --help` for the global usage summary.
 
-Generated files are limited to guarded project roots. Research material belongs under `source_materials/`; final artifacts belong under `workspace/`, `novels/`, `reports/`, or `test_runs/`. Models may organize these roots into nested directories, inspect directory entries, move or rename directory trees, and delete empty directories; fixed roots and symbolic-link traversal remain protected. File and directory changes made through Vesicle tools participate in rewind checkpoints under `.vesicle/file-history/`.
+Generated files are limited to guarded project roots with three distinct roles: source material under `source_materials/`, final artifacts under `workspace/`, `novels/`, `reports/`, or `test_runs/`, and model-visible scratch under `tmp/` for drafts and intermediate work. Models may organize these roots into nested directories, inspect directory entries, move or rename directory trees, and delete empty directories; fixed roots and symbolic-link traversal remain protected. File and directory changes made through Vesicle tools — including scratch paths — participate in rewind checkpoints under `.vesicle/file-history/`; scratch content is retained across turns and restarts unless explicitly cleaned, and it never appears in `/artifact`, `/validate`, Stage input discovery, or automatic publication.
 
 Useful commands:
 

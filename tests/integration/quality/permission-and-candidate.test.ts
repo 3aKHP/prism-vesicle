@@ -5,13 +5,56 @@ import { resolvePermission, resumeQualityRewrite, runPrompt, type AgentLoopEvent
 import { AgentStore } from "../../../src/core/agents/store";
 import { getProcessManager } from "../../../src/core/process/manager";
 import { listSessions, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
-import { qualityArtifactTargetFromResult, } from "../../../src/core/quality";
+import { isQualityArtifactMutationCall, qualityArtifactTargetFromResult, } from "../../../src/core/quality";
 import { createSessionResumeController } from "../../../src/tui/session-resume-controller";
 import { harnessRuntime, literalRule, providerTool, providerTools, restoreQualityTestState, runtimeRoot } from "./fixtures/quality-runtime";
 
 afterEach(restoreQualityTestState);
 
 describe("quality: permission and candidate handling", () => {
+  test("excludes scratch tmp/ paths from Quality Guard targets and rewrite candidates", () => {
+    const runtimeCall = { name: "write_file", arguments: JSON.stringify({ path: "tmp/draft.md", content: "draft" }) };
+    const dyadCall = { name: "write_file", arguments: JSON.stringify({ path: "tmp/draft.md", content: "draft" }) };
+    expect(isQualityArtifactMutationCall(runtimeCall, "runtime")).toBe(false);
+    expect(isQualityArtifactMutationCall(dyadCall, "dyad")).toBe(false);
+
+    expect(isQualityArtifactMutationCall(
+      { name: "write_file", arguments: JSON.stringify({ path: "workspace/final.md", content: "final" }) },
+      "runtime",
+    )).toBe(true);
+    expect(isQualityArtifactMutationCall(
+      { name: "write_file", arguments: JSON.stringify({ path: "workspace/final.md", content: "final" }) },
+      "dyad",
+    )).toBe(true);
+
+    const scratchEvent = {
+      kind: "file_operation" as const,
+      operation: "write" as const,
+      path: "tmp/draft.md",
+      changed: true,
+      bytes: 5,
+      sha256: "a".repeat(64),
+    };
+    expect(qualityArtifactTargetFromResult("runtime", { callId: "call-scratch", ok: true, fileEvent: scratchEvent }))
+      .toBeUndefined();
+    expect(qualityArtifactTargetFromResult("dyad", { callId: "call-scratch-dyad", ok: true, fileEvent: scratchEvent }))
+      .toBeUndefined();
+
+    const artifactEvent = {
+      kind: "file_operation" as const,
+      operation: "write" as const,
+      path: "workspace/final.md",
+      changed: true,
+      bytes: 5,
+      sha256: "b".repeat(64),
+    };
+    expect(qualityArtifactTargetFromResult("runtime", { callId: "call-final", ok: true, fileEvent: artifactEvent }))
+      .toMatchObject({ kind: "artifact-post-image", path: "workspace/final.md" });
+
+    const ambiguous = { name: "write_file", arguments: JSON.stringify({ path: "tmp/../workspace/final.md", content: "final" }) };
+    expect(isQualityArtifactMutationCall(ambiguous, "runtime")).toBe(true);
+  });
+
   test("keeps Weaver-Orch prose-only across a same-response mutation boundary", async () => {
     expect(qualityArtifactTargetFromResult("weaver-orch", {
       callId: "call-orchestrator-write",

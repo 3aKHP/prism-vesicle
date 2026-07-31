@@ -6,7 +6,7 @@ Stage is Prism's consumer-side collaborative-fiction engine. The host bootstraps
 
 ## Bootstrap And Input Authority
 
-`/stage <character-card-path> <scenario-card-path>` starts a Stage session. Both cards must be files under a guarded, readable project root (typically `workspace/`, where ETL writes them). Bootstrap:
+`/stage <character-card-path> <scenario-card-path>` starts a Stage session. Both cards must be files under a guarded project content root (typically `workspace/`, where ETL writes them). Stage input roots are the `projectContentRoots` from `core/project/roots.ts`: `source_materials/` plus the four final artifact roots. The scratch root `tmp/` is explicitly excluded from card completion, bootstrap path resolution, and source-drift checks; a scratch path is rejected by the guarded root policy before any provider or session work. Bootstrap:
 
 1. freezes the raw text of both cards (recording SHA-256) and renders the frozen context from the character card's raw text plus the scenario's visible opening and its hidden HTML-comment logic layer;
 2. persists that system record plus an opening assistant message containing visible opening prose and dialogue and an HTML-comment logic layer, then waits for the first action input; and

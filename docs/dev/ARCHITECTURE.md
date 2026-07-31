@@ -20,6 +20,7 @@ core/gate/  # workflow-gate request types
 core/harness/  # Harness verification, compatibility, and installation
 core/permissions/  # Tool Permission Runtime policy and broker
 core/process/  # bounded Process Runtime and shell profiles
+core/project/  # project root taxonomy and path classification
 core/prompt/  # prompt loading and composition
 core/quality/  # Output Quality Guard host runtime
 core/rewind/  # conversation rewind and partial summarization
@@ -54,7 +55,7 @@ host-assets/  # restricted Vesicle prompts and generic Agent extensions
 
 - Provider adapters translate normalized requests and responses; they do not own host policy. See [`PROVIDERS.md`](./PROVIDERS.md).
 - Responses capability profiles are explicit configuration data consumed only by the Responses adapter. Core/session/TUI own normalized effects and opaque state, never OpenAI, MiMo, or DeepSeek wire fields; Setup may write reviewed profiles but must not infer them from provider or model identity. See [`OPENAI_RESPONSES_CONFORMANCE.md`](./OPENAI_RESPONSES_CONFORMANCE.md).
-- Model-visible tools remain behind host capability, path, permission, and process enforcement. See [`TOOLS.md`](./TOOLS.md).
+- Model-visible tools remain behind host capability, path, permission, and process enforcement. See [`TOOLS.md`](./TOOLS.md). Project-root taxonomy (source, artifact, scratch, content, and model-writable categories) and scratch-path classification live in `core/project/roots.ts`; consumers must select the semantically correct set instead of re-deriving root lists.
 - Sessions are append-only durable history. Projection, rewind, checkpoints, compaction, and continuation recovery must preserve that invariant. See [`SESSIONS.md`](./SESSIONS.md).
 - Prompt assets are runtime files resolved through the active verified asset stack; Engine prompts are not TypeScript literals. See [`ASSETS.md`](./ASSETS.md).
 - Generation prompts receive only the role, task, relevant input, effective actions, output contract, and concise task-specific quality guidance. Host enforcement — tool allowlists, permissions, path guards, integrity hashes, session identity, and the Quality lifecycle — is applied at runtime and must not be duplicated as prompt prose. Harness contract data stays declarative unless the active model must act on the exact binding in the current task; a profile with no tools must not be told about tools, Agents, shell, Web, state roots, or resource paths it cannot use. Prompt ledgers and prompt inspection keep capability and audience drift measurable without turning a review budget into a runtime admission threshold.

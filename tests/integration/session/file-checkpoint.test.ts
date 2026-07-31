@@ -52,6 +52,60 @@ describe("file checkpoints", () => {
     await expect(stat(join(rootDir, "workspace", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  test("rewinds scratch tmp/ mutations with exact bytes and directory topology", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-scratch-"));
+    await mkdir(join(rootDir, "tmp", "drafts", "empty"), { recursive: true });
+    await writeFile(join(rootDir, "tmp", "draft.md"), "draft before\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-scratch");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "change scratch files" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
+
+    expect((await executeFileTool(rootDir, {
+      id: "scratch-write",
+      name: "write_file",
+      arguments: JSON.stringify({ path: "tmp/draft.md", content: "draft after\n" }),
+    }, { beforeMutation })).ok).toBe(true);
+    expect((await executeFileTool(rootDir, {
+      id: "scratch-create",
+      name: "create_file",
+      arguments: JSON.stringify({ path: "tmp/drafts/new.md", content: "new\n" }),
+    }, { beforeMutation })).ok).toBe(true);
+    expect((await executeFileTool(rootDir, {
+      id: "scratch-move-directory",
+      name: "move_directory",
+      arguments: JSON.stringify({ sourcePath: "tmp/drafts/empty", targetPath: "tmp/moved" }),
+    }, { beforeMutation })).ok).toBe(true);
+
+    await store.append({ role: "assistant", content: "done" });
+    const nextUser = await store.append({ role: "user", content: "next" });
+    const nextCheckpoint = new FileCheckpointManager(rootDir, store, nextUser.uuid);
+    await nextCheckpoint.createSnapshot();
+
+    const stats = await fileCheckpointTurnDiffStats(rootDir, store.sessionId, user.uuid, nextUser.uuid);
+    expect(stats?.filesChanged.sort()).toEqual([
+      "tmp/draft.md",
+      "tmp/drafts/empty",
+      "tmp/drafts/new.md",
+      "tmp/moved",
+    ]);
+
+    const restored = await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid);
+    expect(restored.sort()).toEqual([
+      "tmp/draft.md",
+      "tmp/drafts/empty",
+      "tmp/drafts/new.md",
+      "tmp/moved",
+    ]);
+    expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("draft before\n");
+    expect((await stat(join(rootDir, "tmp", "drafts", "empty"))).isDirectory()).toBe(true);
+    await expect(stat(join(rootDir, "tmp", "drafts", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(rootDir, "tmp", "moved"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   test("persists snapshots in JSONL without exposing them as provider messages", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-session-"));
     const store = await createSessionStore(rootDir, "checkpoint-resume");

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { diffLines } from "diff";
-import { writableProjectRoots } from "../artifacts/roots";
+import { modelWritableRoots } from "../project/roots";
 import {
   buildActiveSessionBranch,
   loadSessionRecords,
@@ -413,7 +413,7 @@ function normalizeWritablePath(rootDir: string, requestedPath: string): string {
   const rel = relative(root, resolved);
   const normalized = rel.split(sep).join("/");
   const rootName = normalized.split("/")[0];
-  if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || !writableProjectRoots.some((allowed) => allowed === rootName)) {
+  if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || !modelWritableRoots.some((allowed) => allowed === rootName)) {
     throw new Error(`Checkpoint path is outside writable project roots: ${requestedPath}`);
   }
   return normalized;
