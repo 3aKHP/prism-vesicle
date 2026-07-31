@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.0.0-alpha.8] - 2026-08-01
+
 ### Added
 
 - **Host-bundled `skillify` Skill and scratch-first draft publication (#127).** A user can ask Vesicle to turn a proven workflow from the current conversation into a reusable portable Skill without hand-authoring a directory. The bundled `skillify` Skill extracts the reusable process into `tmp/skillify/<name>/` using ordinary guarded file tools, validates the complete draft through the existing parser and bundle rules, and publishes create-only to `.agents/skills/<name>/` (project) or the immutable Skill Store (installed) after an explicit target decision. Publication is create-only: no overwrite, merge, upgrade, or backup-and-replace. Drafts are always retained; the current session catalog is never mutated, and the published Skill is discoverable only from a new session. Two thin `.sh`/`.ps1` wrappers relay a versioned JSON contract (`vesicle.skill-draft/v1`) from a non-model-visible CLI (`vesicle skills validate --draft --json`, `vesicle skills publish-draft --target <project|installed> --json`); the wrappers contain no path, hash, copy, staging, or cleanup logic. Generic runtime support shipped with this feature: `.ps1` script execution in `run_skill_script` (PowerShell 7 preferred, Windows PowerShell 5.1 fallback on Windows, `pwsh`-only elsewhere, `-File` argv without `-Command` or `-ExecutionPolicy Bypass`); stable self-invocation (`VESICLE_SELF_EXECUTABLE`/`VESICLE_SELF_ENTRYPOINT`) so bundled scripts invoke the exact Vesicle runtime that launched them without PATH assumptions, injected into the filtered `run_skill_script` child only; a shared portable bundle inspection seam (`src/skills/bundle.ts`); and a guarded draft publisher with linked-ancestor rejection and sibling-staging atomic project publication (`src/core/skills/draft-publisher.ts`). Ordinary `skills install|update|rollback|uninstall` semantics are unchanged.
@@ -371,7 +373,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed the input bar not clearing after submit.
 - Fixed per-turn session creation that caused model memory loss across turns.
 
-[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.7...HEAD
+[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.8...HEAD
+[1.0.0-alpha.8]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.7...v1.0.0-alpha.8
 [1.0.0-alpha.7]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.6...v1.0.0-alpha.7
 [1.0.0-alpha.6]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.5...v1.0.0-alpha.6
 [1.0.0-alpha.5]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.4...v1.0.0-alpha.5
