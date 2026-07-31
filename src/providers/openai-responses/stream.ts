@@ -1,9 +1,10 @@
+import { isDeepStrictEqual } from "node:util";
 import { ProviderError } from "../shared/errors";
 import { readSseEvents } from "../shared/sse";
 import type { ProviderStreamEvent } from "../shared/types";
 import type { ResponsesProfile } from "../../config/env";
 import { responseFromResponsesBody } from "./response";
-import type { ResponsesBody, ResponsesEvent } from "./types";
+import type { ResponsesBody, ResponsesEvent, ResponsesOutputItem } from "./types";
 
 type StreamContext = {
   requestId: string;
@@ -25,6 +26,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
   let streamedContent = "";
   let streamedReasoning = "";
   const streamedArguments = new Map<number, string>();
+  const relayCompletedItems: ResponsesOutputItem[] = [];
   let expectedSequence = 0;
   for await (const block of readSseEvents(response.body)) {
     const event = parseEvent(block.data, context.providerId);
@@ -65,6 +67,14 @@ export async function* readResponsesStream(response: Response, context: StreamCo
         yield { type: "tool_call_delta", index: event.output_index, argumentsDelta: event.delta };
         break;
       case "response.output_item.done":
+        if (context.profile === "codex-http-relay") {
+          if (!event.item) throw malformed("Completed codex-http-relay output Item was missing.", context.providerId);
+          const outputIndex = event.output_index ?? relayCompletedItems.length;
+          if (!Number.isInteger(outputIndex) || outputIndex !== relayCompletedItems.length) {
+            throw malformed(`Completed codex-http-relay output Item index ${String(outputIndex)} did not match the expected index ${relayCompletedItems.length}.`, context.providerId);
+          }
+          relayCompletedItems.push(event.item);
+        }
         if (event.item?.type === "function_call") {
           if (!event.item.call_id || !event.item.name || typeof event.item.arguments !== "string") {
             throw malformed("Completed function_call Item was malformed.", context.providerId);
@@ -107,14 +117,15 @@ export async function* readResponsesStream(response: Response, context: StreamCo
   if (!terminal) throw new ProviderError("Provider stream ended before response.completed.", {
     kind: "stream_error", providerId: context.providerId,
   });
-  const completed = responseFromResponsesBody(terminal, context);
+  const effectiveTerminal = reconcileRelayTerminal(terminal, relayCompletedItems, context);
+  const completed = responseFromResponsesBody(effectiveTerminal, context);
   if (streamedContent && streamedContent !== completed.content) {
     throw malformed("Streamed output text did not match the completed response Items.", context.providerId);
   }
   if (streamedReasoning && streamedReasoning !== completed.reasoningContent) {
     throw malformed("Streamed reasoning did not match the completed response Items.", context.providerId);
   }
-  const output = terminal.output ?? [];
+  const output = effectiveTerminal.output ?? [];
   for (const [outputIndex, argumentsText] of streamedArguments) {
     const item = output[outputIndex];
     if (item?.type !== "function_call" || item.arguments !== argumentsText) {
@@ -122,6 +133,19 @@ export async function* readResponsesStream(response: Response, context: StreamCo
     }
   }
   yield { type: "complete", attempt, response: completed };
+}
+
+function reconcileRelayTerminal(
+  terminal: ResponsesBody,
+  completedItems: ResponsesOutputItem[],
+  context: StreamContext,
+): ResponsesBody {
+  if (context.profile !== "codex-http-relay" || completedItems.length === 0) return terminal;
+  if (!terminal.output || terminal.output.length === 0) return { ...terminal, output: completedItems };
+  if (!isDeepStrictEqual(terminal.output, completedItems)) {
+    throw malformed("Completed codex-http-relay output Items did not match response.output_item.done Items.", context.providerId);
+  }
+  return terminal;
 }
 
 function parseEvent(payload: string, providerId: string): ResponsesEvent {

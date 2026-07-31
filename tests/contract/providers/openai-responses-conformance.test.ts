@@ -98,6 +98,7 @@ describe("OpenAI Responses conformance evidence", () => {
       "ws-stream-field",
       "encrypted-reasoning-include",
       "tool-commit-barrier",
+      "relay-terminal-output-reconstruction",
       "websocket-owner",
       "private-identity",
       "mimo-subset",
@@ -109,10 +110,21 @@ describe("OpenAI Responses conformance evidence", () => {
 
   test("defines internally consistent official and third-party Responses profiles", () => {
     const openai = profile.profiles.openaiPublic;
+    const relay = profile.profiles.codexHttpRelay;
     const codex = profile.profiles.codexBeta20260206;
     const mimo = profile.profiles.mimoSubset20260730;
     const deepseek = profile.profiles.deepseekSubset20260731;
     expect(openai.websocket.profile).toBe("openai-public");
+    expect(relay).toMatchObject({
+      tier: "responses-maximum-compatibility",
+      previousResponseId: false,
+      remoteCompact: "capability-declared",
+      websocket: false,
+      outputCommit: "valid-response-completed-with-terminal-or-contiguous-done-items",
+    });
+    expect(relay.supportedEventFamilies).toEqual(expect.arrayContaining([
+      "response.output_item.*", "response.completed", "codex.rate_limits",
+    ]));
     expect(codex.websocket.profile).toBe("codex-beta-2026-02-06");
     expect(openai.supportedRequestFields).not.toContain("client_metadata");
     expect(codex.supportedRequestFields).not.toContain("client_metadata");
@@ -166,6 +178,16 @@ describe("OpenAI Responses conformance evidence", () => {
       vesicleSelected: { committed: false, toolDispatchCount: 0, durableAssistantCount: 0, retryEligible: true },
     });
     expect(ledger.entries.some((entry) => entry.id === "tool-commit-barrier")).toBe(true);
+    const relay = events.captures.find((capture) => capture.id === "codex-http-relay-empty-terminal-output");
+    expect(relay).toMatchObject({
+      relayObserved: { completedItemCount: 3, terminalOutputCount: 0 },
+      vesicleSelected: {
+        commitRequiresCompleted: true,
+        reconstructFromDoneItems: true,
+        prematureEofCommits: false,
+      },
+    });
+    expect(ledger.entries.some((entry) => entry.id === "relay-terminal-output-reconstruction")).toBe(true);
   });
 
   test("freezes ordered events, output Items, call_id, usage, attempt and terminal variants", () => {

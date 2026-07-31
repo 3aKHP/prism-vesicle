@@ -30,6 +30,23 @@
       "relationships": { "functionCallId": "call_fixture", "toolOutputMustUseCallId": "call_fixture", "terminalCommitSequence": 7 }
     },
     {
+      "id": "codex-http-relay-empty-terminal-output",
+      "provenance": { "kind": "trusted-relay-live-sanitized", "sources": ["Codex-backed HTTP/SSE relay checked 2026-07-31"] },
+      "attempt": 1,
+      "events": [
+        { "sequence": 0, "type": "response.output_item.done", "output_index": 0, "item": { "type": "reasoning", "id": "<dynamic:item-id>", "encrypted_content": "<dynamic:encrypted-reasoning>", "summary": [] } },
+        { "sequence": 1, "type": "response.function_call_arguments.delta", "output_index": 1, "item_id": "<dynamic:item-id>", "delta": "{\"path\":\"workspace/a.md\"}" },
+        { "sequence": 2, "type": "response.function_call_arguments.done", "output_index": 1, "item_id": "<dynamic:item-id>", "arguments": "{\"path\":\"workspace/a.md\"}" },
+        { "sequence": 3, "type": "response.output_item.done", "output_index": 1, "item": { "type": "function_call", "id": "<dynamic:item-id>", "call_id": "call_relay_a", "name": "read_file", "arguments": "{\"path\":\"workspace/a.md\"}" } },
+        { "sequence": 4, "type": "response.function_call_arguments.delta", "output_index": 2, "item_id": "<dynamic:item-id>", "delta": "{\"path\":\"workspace/b.md\"}" },
+        { "sequence": 5, "type": "response.function_call_arguments.done", "output_index": 2, "item_id": "<dynamic:item-id>", "arguments": "{\"path\":\"workspace/b.md\"}" },
+        { "sequence": 6, "type": "response.output_item.done", "output_index": 2, "item": { "type": "function_call", "id": "<dynamic:item-id>", "call_id": "call_relay_b", "name": "read_file", "arguments": "{\"path\":\"workspace/b.md\"}" } },
+        { "sequence": 7, "type": "response.completed", "response": { "id": "<dynamic:response-id>", "status": "completed", "output": [], "usage": { "input_tokens": 100, "output_tokens": 20, "total_tokens": 120 } } }
+      ],
+      "relayObserved": { "completedItemCount": 3, "terminalOutputCount": 0 },
+      "vesicleSelected": { "commitRequiresCompleted": true, "reconstructFromDoneItems": true, "prematureEofCommits": false }
+    },
+    {
       "id": "codex-premature-eof-after-function-item",
       "provenance": { "kind": "codex-source-derived", "sources": ["codex-rs/core/src/session/turn.rs:2244-2365,2685-2702"] },
       "attempt": 1,

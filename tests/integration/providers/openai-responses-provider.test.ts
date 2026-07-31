@@ -448,6 +448,101 @@ describe("OpenAI Responses typed SSE", () => {
     expect(complete.response.providerState?.endpointFingerprint).not.toContain("api.openai.com");
   });
 
+  test("reconstructs codex-http-relay output from completed stream Items after a valid terminal", async () => {
+    const events = await collect(readResponsesStream(responseStream([
+      event(0, "response.created"),
+      event(1, "response.output_item.done", { item: {
+        id: "rs_relay", type: "reasoning", encrypted_content: "opaque", summary: [{ type: "summary_text", text: "considered" }],
+      } }),
+      event(2, "response.function_call_arguments.delta", { output_index: 1, delta: "{\"path\":\"workspace/a.md\"}" }),
+      event(3, "response.output_item.done", { item: {
+        id: "call_relay_1", type: "function_call", call_id: "call_relay_1", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}",
+      } }),
+      event(4, "response.function_call_arguments.delta", { output_index: 2, delta: "{\"path\":\"workspace/b.md\"}" }),
+      event(5, "response.output_item.done", { item: {
+        id: "call_relay_2", type: "function_call", call_id: "call_relay_2", name: "read_file", arguments: "{\"path\":\"workspace/b.md\"}",
+      } }),
+      event(6, "response.completed", { response: {
+        id: "resp_relay_items", status: "completed", output: [],
+        usage: { input_tokens: 20, output_tokens: 8, total_tokens: 28, output_tokens_details: { reasoning_tokens: 3 } },
+      } }),
+    ]), {
+      ...streamContext(), profile: "codex-http-relay",
+    }));
+
+    expect(events.filter((candidate) => candidate.type === "tool_call_candidate")).toHaveLength(2);
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        id: "resp_relay_items",
+        content: "",
+        reasoningContent: "considered",
+        toolCalls: [
+          { id: "call_relay_1", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" },
+          { id: "call_relay_2", name: "read_file", arguments: "{\"path\":\"workspace/b.md\"}" },
+        ],
+        providerState: { payload: { profile: "codex-http-relay", outputItems: [
+          { id: "rs_relay", type: "reasoning" },
+          { id: "call_relay_1", type: "function_call" },
+          { id: "call_relay_2", type: "function_call" },
+        ] } },
+        usage: { inputTokens: 20, outputTokens: 8, totalTokens: 28, reasoningTokens: 3 },
+      },
+    });
+  });
+
+  test("keeps empty terminal output invalid outside codex-http-relay", async () => {
+    const events = [
+      event(0, "response.output_item.done", { output_index: 0, item: {
+        type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}",
+      } }),
+      event(1, "response.completed", { response: { id: "resp_empty", status: "completed", output: [] } }),
+    ];
+    await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "openai-public",
+    }))).rejects.toThrow("did not include assistant content or function calls");
+  });
+
+  test("reconstructs omitted relay terminal output only when completed Items exist", async () => {
+    const events = await collect(readResponsesStream(responseStream([
+      event(0, "response.output_item.done", { output_index: 0, item: {
+        type: "message", role: "assistant", content: [{ type: "output_text", text: "done" }],
+      } }),
+      event(1, "response.completed", { response: { id: "resp_omitted", status: "completed" } }),
+    ]), {
+      ...streamContext(), profile: "codex-http-relay",
+    }));
+    expect(events.at(-1)).toMatchObject({ type: "complete", response: { content: "done" } });
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.completed", { response: { id: "resp_missing", status: "completed" } }),
+    ]), {
+      ...streamContext(), profile: "codex-http-relay",
+    }))).rejects.toThrow("did not include ordered output Items");
+  });
+
+  test("rejects inconsistent or non-contiguous codex-http-relay completed Items", async () => {
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.output_item.done", { output_index: 1, item: {
+        type: "message", role: "assistant", content: [{ type: "output_text", text: "out of order" }],
+      } }),
+    ]), {
+      ...streamContext(), profile: "codex-http-relay",
+    }))).rejects.toThrow("did not match the expected index 0");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.output_item.done", { output_index: 0, item: {
+        type: "message", role: "assistant", content: [{ type: "output_text", text: "stream Item" }],
+      } }),
+      event(1, "response.completed", { response: {
+        id: "resp_mismatch", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "terminal Item" }] }],
+      } }),
+    ]), {
+      ...streamContext(), profile: "codex-http-relay",
+    }))).rejects.toThrow("did not match response.output_item.done Items");
+  });
+
   test("accepts the official empty reasoning content placeholder", async () => {
     const response = responseStream([event(0, "response.completed", { response: {
       id: "resp_empty_reasoning_content", status: "completed",
@@ -474,7 +569,9 @@ describe("OpenAI Responses typed SSE", () => {
     ]);
     const seen: ProviderStreamEvent[] = [];
     await expect((async () => {
-      for await (const item of readResponsesStream(response, streamContext())) seen.push(item);
+      for await (const item of readResponsesStream(response, {
+        ...streamContext(), profile: "codex-http-relay",
+      })) seen.push(item);
     })()).rejects.toThrow("ended before response.completed");
     expect(seen).toEqual([
       { type: "attempt_started", attempt: 1 },

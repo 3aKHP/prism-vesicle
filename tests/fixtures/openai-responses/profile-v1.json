@@ -113,6 +113,29 @@
         "error"
       ]
     },
+    "codexHttpRelay": {
+      "tier": "responses-maximum-compatibility",
+      "streaming": true,
+      "functionCalling": true,
+      "parallelToolCalls": true,
+      "reasoningItems": "encrypted",
+      "previousResponseId": false,
+      "remoteCompact": "capability-declared",
+      "websocket": false,
+      "outputCommit": "valid-response-completed-with-terminal-or-contiguous-done-items",
+      "supportedRequestFields": [
+        "model", "instructions", "input", "tools", "tool_choice", "parallel_tool_calls",
+        "reasoning", "store", "stream", "stream_options", "include", "service_tier",
+        "prompt_cache_key", "temperature", "text", "max_output_tokens"
+      ],
+      "supportedEventFamilies": [
+        "response.created", "response.in_progress", "response.output_item.*",
+        "response.content_part.*", "response.output_text.*", "response.refusal.*",
+        "response.reasoning_summary_*", "response.function_call_arguments.*",
+        "response.completed", "response.failed", "response.incomplete", "error",
+        "codex.rate_limits", "codex.response.metadata", "responsesapi.websocket_timing"
+      ]
+    },
     "codexBeta20260206": {
       "tier": "codex-application-fingerprint",
       "streaming": true,
