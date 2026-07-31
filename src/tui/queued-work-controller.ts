@@ -72,14 +72,15 @@ export function createQueuedWorkController(options: QueuedWorkOptions): QueuedWo
     setTakeover({ kind: "none" });
     if (captured.kind === "none") return false;
     if (!sessionId) return false;
+    let snapshot: Awaited<ReturnType<typeof loadSessionSnapshot>>;
     try {
-      const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: true });
-      options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
-      options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
+      snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: true });
     } catch (error) {
       options.reportError(error);
       return false;
     }
+    options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+    options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
     const head = options.inputQueue.peekNext();
     if (!head || head.id !== captured.inputId) return false;
     setReady(true);

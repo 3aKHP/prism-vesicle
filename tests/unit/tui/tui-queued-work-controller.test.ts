@@ -86,6 +86,34 @@ describe("TUI queued work controller", () => {
     }
   });
 
+  test("an empty queue produces no takeover intent and stays blocked", async () => {
+    const inputQueue = createInputQueue();
+    let dispose: () => void = () => undefined;
+    const controller = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return createQueuedWorkController({
+        rootDir: process.cwd(),
+        inputQueue,
+        canDrain: () => true,
+        agentCards: () => [],
+        setConversation: (value) => value as VesicleMessage[],
+        setMessages: (value) => value as Message[],
+        setStatus: (value) => value,
+        recordActivity: () => undefined,
+        recordPromptHistory: () => undefined,
+        submitPrompt: async () => undefined,
+        executeLocalCommand: async () => undefined,
+        reportError: (error) => { throw error; },
+      });
+    });
+
+    controller.markInterruptRequested();
+    expect(await controller.handleInterruption("session")).toBe(false);
+    expect(controller.drainIfReady()).toBe(false);
+    expect(inputQueue.items()).toEqual([]);
+    dispose();
+  });
+
   test("releases queued work for draining after rebuilding an interrupted session", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-queued-work-drain-"));
     try {
