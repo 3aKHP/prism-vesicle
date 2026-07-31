@@ -8,6 +8,7 @@ import {
   runHostShutdownCleanups,
 } from "../core/process/shutdown";
 import { closeAllProviderSessions } from "../providers/lifecycle";
+import { configureSelfInvocation } from "../core/runtime/self-invocation";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 declare const VESICLE_NPM_BUNDLE: boolean | undefined;
@@ -24,6 +25,15 @@ const compiledMarker = typeof VESICLE_COMPILED_BINARY === "boolean"
   : undefined;
 const isCompiledBinary = isCompiledBinaryRuntime(compiledMarker, Bun.main);
 const isNpmBundle = typeof VESICLE_NPM_BUNDLE === "boolean" && VESICLE_NPM_BUNDLE;
+
+// Configure the stable self-invocation prefix so bundled Skill scripts can
+// re-invoke the exact Vesicle runtime that launched them. Compiled binaries are
+// self-contained; source and npm-bundle runs also need the entrypoint module.
+configureSelfInvocation(
+  isCompiledBinary
+    ? { executablePath: process.execPath }
+    : { executablePath: process.execPath, entrypoint: Bun.main },
+);
 
 async function loadOpenTuiPreload(): Promise<void> {
   // Keep this specifier indirect so package builds can compile the TUI without

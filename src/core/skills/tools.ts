@@ -25,6 +25,7 @@ import { DEFAULT_PROCESS_TIMEOUT_MS, MAX_PROCESS_TIMEOUT_MS } from "../process/r
 import type { ProcessExecutionResult } from "../process/runtime";
 import { resolveShellProfile, type ShellInterpreterPreference } from "../process/shell-profile";
 import type { ProcessShellId } from "../process/shell-profile";
+import { selfInvocationEnvironment } from "../runtime/self-invocation";
 import type { ProcessToolEvent, ToolCall, ToolDefinition, ToolResult } from "../tools/types";
 import { getActivatedSkill, isDuplicateActivation, recordActivation } from "./activation-state";
 import type { ResolvedSkillCatalog } from "./catalog";
@@ -233,15 +234,67 @@ export async function executeReadSkillResourceTool(call: ToolCall, options: Skil
 
 // --- run_skill_script --------------------------------------------------------
 
-/** Extension → interpreter. Resolution, not a curated allowlist of script kinds. */
-const SCRIPT_INTERPRETERS: Record<string, string> = {
-  ".sh": "sh",
-  ".py": "python3",
-  ".js": "node",
-  ".mjs": "node",
-  ".cjs": "node",
-  ".ts": "bun",
+/** Extension → simple interpreter (identity + executable, no extra flags). */
+const SIMPLE_SCRIPT_INTERPRETERS: Record<string, { identity: string; command: string }> = {
+  ".sh": { identity: "sh", command: "sh" },
+  ".py": { identity: "python3", command: "python3" },
+  ".js": { identity: "node", command: "node" },
+  ".mjs": { identity: "node", command: "node" },
+  ".cjs": { identity: "node", command: "node" },
+  ".ts": { identity: "bun", command: "bun" },
 };
+
+const POWERSHELL_FLAGS = ["-NoLogo", "-NoProfile", "-NonInteractive", "-File"];
+
+/** Resolved interpreter: logical identity for events + full argv prefix. */
+type ResolvedInterpreter = {
+  identity: string;
+  argvPrefix: string[];
+};
+
+type WhichFn = (command: string, env: NodeJS.ProcessEnv) => string | undefined;
+
+/**
+ * Resolve a script extension to an interpreter descriptor. Simple extensions
+ * look up the command and verify it on PATH. `.ps1` prefers PowerShell 7 then
+ * Windows PowerShell 5.1 on Windows, and `pwsh` only on other platforms. When
+ * unavailable, returns a bounded message listing what was tried so the model
+ * gets an actionable failure and no process event is emitted.
+ */
+function resolveScriptInterpreter(
+  extension: string,
+  relPath: string,
+  platform: NodeJS.Platform,
+  which: WhichFn,
+  env: NodeJS.ProcessEnv,
+): { ok: true; interpreter: ResolvedInterpreter } | { ok: false; message: string } {
+  const simple = SIMPLE_SCRIPT_INTERPRETERS[extension];
+  if (simple) {
+    if (!which(simple.command, env)) {
+      return { ok: false, message: `Interpreter "${simple.command}" required by "${relPath}" was not found on the process PATH; install it or ask the user how to proceed. The script was not executed.` };
+    }
+    return { ok: true, interpreter: { identity: simple.identity, argvPrefix: [simple.command] } };
+  }
+
+  if (extension === ".ps1") {
+    if (platform === "win32") {
+      const resolved = resolveShellProfile("auto", { platform, env, which });
+      if (resolved) {
+        const identity = resolved.id === "powershell-7" ? "pwsh" : "powershell-5.1";
+        return { ok: true, interpreter: { identity, argvPrefix: [resolved.executablePath, ...POWERSHELL_FLAGS] } };
+      }
+      return { ok: false, message: `PowerShell 7 and Windows PowerShell 5.1 were not found; install one to run "${relPath}". The script was not executed.` };
+    }
+    // Non-Windows: pwsh only. Never pretend Windows PowerShell 5.1 exists.
+    if (which("pwsh", env)) {
+      return { ok: true, interpreter: { identity: "pwsh", argvPrefix: ["pwsh", ...POWERSHELL_FLAGS] } };
+    }
+    return { ok: false, message: `PowerShell ("pwsh") was not found on the process PATH; install it to run "${relPath}". The script was not executed.` };
+  }
+
+  const known = [".ps1", ...Object.keys(SIMPLE_SCRIPT_INTERPRETERS)];
+  return { ok: false, message: `No interpreter is known for "${extension || relPath}"; supported script extensions: ${known.join(", ")}.` };
+}
 
 export async function executeRunSkillScriptTool(
   rootDir: string,
@@ -280,29 +333,27 @@ export async function executeRunSkillScriptTool(
   if ("error" in file) return fail(call, file.error);
 
   const extension = extensionOf(relPath);
-  const interpreter = SCRIPT_INTERPRETERS[extension];
-  if (!interpreter) {
-    return fail(call, `No interpreter is known for "${extension || relPath}"; supported script extensions: ${Object.keys(SCRIPT_INTERPRETERS).join(", ")}.`);
-  }
+  const platform = options.platform ?? process.platform;
   const filteredEnv = buildProcessEnvironment(undefined);
   const which = options.which ?? defaultWhich;
-  if (!which(interpreter, filteredEnv)) {
-    return fail(call, `Interpreter "${interpreter}" required by "${relPath}" was not found on the process PATH; install it or ask the user how to proceed. The script was not executed.`);
+  const interpreterResult = resolveScriptInterpreter(extension, relPath, platform, which, filteredEnv);
+  if (!interpreterResult.ok) {
+    return fail(call, interpreterResult.message);
   }
+  const interpreter = interpreterResult.interpreter;
 
   const provenance: SkillToolEvent = {
     kind: "skill_script_exec",
     name: skill.name,
     contentHash: skill.parsed.bodySha256,
     path: relPath,
-    interpreter,
+    interpreter: interpreter.identity,
     args: scriptArgs,
   };
-  const display = [interpreter, `${skill.name}/${relPath}`, ...scriptArgs].map(quoteDisplay).join(" ");
+  const display = [interpreter.identity, `${skill.name}/${relPath}`, ...scriptArgs].map(quoteDisplay).join(" ");
   // No shell is spawned; the event's `shell` field records the resolved host
   // shell profile that gated process capability for this Engine, matching the
   // process capability contract of shell_exec.
-  const platform = options.platform ?? process.platform;
   const shellId: ProcessShellId = resolveShellProfile(options.shellInterpreter ?? "auto", { platform })?.id
     ?? (platform === "win32" ? "cmd" : "posix-sh");
   const progressEvent = (progress: { durationMs: number; stdoutTail: string; stderrTail: string; stdoutBytes: number; stderrBytes: number; stdoutTruncated: boolean; stderrTruncated: boolean }): ProcessToolEvent => ({
@@ -323,17 +374,19 @@ export async function executeRunSkillScriptTool(
     stderrTail: progress.stderrTail,
   });
 
+  const fullArgv = [...interpreter.argvPrefix, file.absolutePath, ...scriptArgs];
   let result: ProcessExecutionResult;
   try {
-    result = await executeProcessArgv(rootDir, [interpreter, file.absolutePath, ...scriptArgs], {
+    result = await executeProcessArgv(rootDir, fullArgv, {
       timeoutMs: timeoutMs as number,
       signal: options.signal,
       env: filteredEnv,
       platform,
+      additionalEnv: selfInvocationEnvironment(),
       onProgress: options.onProcessProgress ? (progress) => options.onProcessProgress!(progressEvent(progress)) : undefined,
     });
   } catch (error) {
-    return fail(call, `Unable to start interpreter "${interpreter}": ${error instanceof Error ? error.message : String(error)}`);
+    return fail(call, `Unable to start interpreter "${interpreter.identity}": ${error instanceof Error ? error.message : String(error)}`);
   }
 
   const processEvent: ProcessToolEvent = {
@@ -355,7 +408,7 @@ export async function executeRunSkillScriptTool(
     stderrTail: result.stderrTail,
   };
   const sections = [
-    `[skill_script name="${skill.name}" path="${relPath}" interpreter="${interpreter}"]`,
+    `[skill_script name="${skill.name}" path="${relPath}" interpreter="${interpreter.identity}"]`,
     result.stdout ? `stdout:\n${result.stdout}` : "stdout: (empty)",
     result.stderr ? `stderr:\n${result.stderr}` : "stderr: (empty)",
   ];

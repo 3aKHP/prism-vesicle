@@ -112,6 +112,13 @@ export type ProcessArgvOptions = {
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
   onProgress?: (progress: ProcessExecutionProgress) => void;
+  /**
+   * Host-owned environment merged after the ordinary allowlisted environment.
+   * Used by `run_skill_script` to inject stable self-invocation values into the
+   * filtered child only. These take precedence over the allowlisted env; the
+   * caller/user environment cannot override them. `shell_exec` never passes this.
+   */
+  additionalEnv?: Record<string, string>;
 };
 
 /**
@@ -163,13 +170,16 @@ function startProcessSpawn(
     env?: NodeJS.ProcessEnv;
     platform?: NodeJS.Platform;
     onProgress?: (progress: ProcessExecutionProgress) => void;
+    additionalEnv?: Record<string, string>;
   } = {},
 ): ProcessExecutionHandle {
   const platform = options.platform ?? process.platform;
   const started = performance.now();
+  const baseEnv = buildProcessEnvironment(options.env);
+  const env = options.additionalEnv ? { ...baseEnv, ...options.additionalEnv } : baseEnv;
   const child = Bun.spawn(command, {
     cwd: rootDir,
-    env: buildProcessEnvironment(options.env),
+    env,
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
