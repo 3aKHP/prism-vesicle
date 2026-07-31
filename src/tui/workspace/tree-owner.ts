@@ -249,7 +249,6 @@ export function createTreeOwner(options: TreeOwnerOptions) {
 
   return {
     // tree state
-    expanded,
     showHidden,
     rows,
     selectedIndex,
