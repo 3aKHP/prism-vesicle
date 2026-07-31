@@ -55,6 +55,41 @@ describe("quality: permission and candidate handling", () => {
     expect(isQualityArtifactMutationCall(ambiguous, "runtime")).toBe(true);
   });
 
+  test("delivers a Runtime scratch draft without entering the artifact rewrite lifecycle", async () => {
+    const root = await runtimeRoot("runtime", ["runtime-turn"]);
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      return requests === 1
+        ? providerTool("scratch-write", "write_file", {
+          path: "tmp/runtime-draft.md",
+          content: "### Part 3 — Prose Content\n空气中弥漫着雨味。",
+        })
+        : providerTool("scratch-gate", "request_confirmation", {
+          gate: "runtime-turn",
+          summary: "Review the scratch draft.",
+        });
+    }) as unknown as typeof fetch;
+
+    const result = await runPrompt({
+      input: "draft in scratch",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "draft in scratch" }],
+      harness: harnessRuntime(),
+    });
+
+    expect(result.kind).toBe("needs_user");
+    expect(requests).toBe(2);
+    expect(await readFile(join(root, "tmp", "runtime-draft.md"), "utf8"))
+      .toContain("空气中弥漫着雨味");
+    const snapshot = await loadSessionSnapshot(root, result.sessionId, { synthesizeDanglingToolResults: false });
+    expect(snapshot.messages.filter((message) => message.kind === "quality-rejected-candidate")).toHaveLength(0);
+    expect(snapshot.qualityEvents.flatMap((event) => event.targets).some((target) =>
+      target.id === "artifact:tmp/runtime-draft.md"
+    )).toBe(false);
+  });
+
   test("keeps Weaver-Orch prose-only across a same-response mutation boundary", async () => {
     expect(qualityArtifactTargetFromResult("weaver-orch", {
       callId: "call-orchestrator-write",

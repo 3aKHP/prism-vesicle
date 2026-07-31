@@ -8,7 +8,9 @@ describe("vesicle skills copy-template destinations", () => {
 
   afterEach(() => {
     console.error = savedLog;
-    process.exitCode = savedExitCode;
+    // Bun 1.3.14 keeps the prior non-zero exit status when exitCode is reset
+    // to undefined, so restore a concrete zero for the normal unset state.
+    process.exitCode = savedExitCode ?? 0;
     errors.length = 0;
   });
 

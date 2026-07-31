@@ -129,7 +129,13 @@ async function main(): Promise<void> {
     waitFor: (marker: string | RegExp, timeoutMs?: number) => Promise<boolean>;
     stop: () => Promise<void>;
   }> {
-    const child = Bun.spawn(["script", "-qfe", "-c", `stty cols ${WIDTH} rows ${HEIGHT}; bun ${join(REPO_ROOT, "src", "cli", "main.ts")} ${args.join(" ")} ${project}`, join(root, "pty.log")], {
+    const command = [
+      "bun",
+      shellQuote(join(REPO_ROOT, "src", "cli", "main.ts")),
+      ...args.map(shellQuote),
+      shellQuote(project),
+    ].join(" ");
+    const child = Bun.spawn(["script", "-qfe", "-c", `stty cols ${WIDTH} rows ${HEIGHT}; ${command}`, join(root, "pty.log")], {
       cwd: REPO_ROOT,
       env,
       stdout: "pipe",
@@ -156,7 +162,8 @@ async function main(): Promise<void> {
     const waitFor = async (marker: string | RegExp, timeoutMs = 15000): Promise<boolean> => {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
-        if (new RegExp(marker).test(plain())) return true;
+        const output = plain();
+        if (typeof marker === "string" ? output.includes(marker) : marker.test(output)) return true;
         await Bun.sleep(150);
       }
       return false;
@@ -268,6 +275,10 @@ async function main(): Promise<void> {
   } else {
     process.exitCode = 1;
   }
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 await main();
