@@ -45,6 +45,8 @@ This document defines the capability boundary for model-visible tools, external 
 - Foreground processes expose bounded live tail output and elapsed time without allowing observability callbacks to change process lifetime or results.
 - Background processes return a short managed task id, persist bounded state under ignored `.vesicle/processes/`, and deliver completion as host-owned context at the next available turn.
 - Managed background execution does not survive host restart. Recovery marks stale running records interrupted and never replays their commands.
+- Structured-argv Skill script execution (`run_skill_script`) uses the same Process Runtime timeout, output cap, cancellation, and cleanup as `shell_exec` but spawns no shell. Script extension resolution maps `.sh`, `.py`, `.js`/`.mjs`/`.cjs`, `.ts`, and `.ps1` to their interpreters; `.ps1` prefers PowerShell 7 then Windows PowerShell 5.1 on Windows and `pwsh` only elsewhere, executing with `-NoLogo -NoProfile -NonInteractive -File` (never `-Command` or `-ExecutionPolicy Bypass`). The logical interpreter identity (`pwsh`, `powershell-5.1`, `sh`, etc.) appears in model-visible events, never the absolute executable path.
+- Bundled Skill scripts receive Host-owned self-invocation values (`VESICLE_SELF_EXECUTABLE`, `VESICLE_SELF_ENTRYPOINT`) in their filtered child environment so they can re-invoke the exact Vesicle runtime without PATH assumptions. These are injected into the `run_skill_script` child only; `shell_exec` never receives them, the caller environment cannot override them, and persisted events never record the absolute values.
 
 ## Gates, Questions, And Engine Handoffs
 
