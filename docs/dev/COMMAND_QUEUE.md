@@ -60,7 +60,7 @@ Queued commands are stored with their canonical command name, normalized argumen
 
 Execute one idle item at a time and re-check busy, picker, modal, and session state after every command. A command that opens a picker pauses queue draining until that interaction closes. A session reset or switch clears remaining queued input rather than applying stale work to a different session.
 
-Escape does not grant a command a different capability. When the user interrupts the current provider or tool operation, Vesicle repairs the interrupted conversation and immediately processes the next queued input under normal command dispatch.
+Prompt-level Escape captures the FIFO head at the keypress and never grants a command a different capability. After the interruption, Vesicle rebuilds the interrupted conversation from the durable session projection and, only when that exact head is still the FIFO head, dispatches it once as a fresh top-level input under normal command dispatch. A recalled, consumed, or replaced head cancels the takeover instead of substituting another queued item; a missing session id or failed durable rebuild fails closed without dequeuing or submitting anything; and queue entries added after the Escape are never retroactively promoted.
 
 ## Adding A Command
 

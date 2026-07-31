@@ -69,6 +69,67 @@ function withController<T>(fn: (built: ReturnType<typeof buildController>) => Pr
   return fn(built).finally(() => dispose());
 }
 
+describe("composer controller: busy Esc interrupt preserves the draft", () => {
+  test("busy Esc interrupts without clearing text, cursor, elements, or image attachments", async () => {
+    let dispose!: () => void;
+    let abortCount = 0;
+    const built = createRoot((disposeRoot) => {
+      dispose = disposeRoot;
+      const [status, setStatus] = createSignal("");
+      const [, setMessages] = createSignal<Message[]>([]);
+      const controller = createComposerController({
+        rootDir: root,
+        activeEngine: () => "etl",
+        terminalWidth: () => 80,
+        providerRegistry: () => null,
+        activeProvider: () => "test",
+        ensureProviderRegistry: async () => { throw new Error("not used"); },
+        applyProviderSelection: async () => { throw new Error("not used"); },
+        persistProviderSwitch: async () => undefined,
+        agentCards: () => [],
+        sessionId: () => "session-test",
+        refreshArtifacts: async () => [],
+        listSessions: async () => [],
+        busy: () => true,
+        activeModelCapabilities: () => ({ vision: true }),
+        status,
+        setStatus,
+        setMessages,
+        recordActivity: () => undefined,
+        reportError: () => undefined,
+        inputQueue: createInputQueue(),
+        submitCommand: () => true,
+        submitPrompt: async () => undefined,
+        abortTurn: () => { abortCount += 1; return true; },
+        openRewind: async () => undefined,
+      });
+      return { controller };
+    });
+    try {
+      const { controller } = built;
+      await controller.pasteClipboardImage();
+      const elementsBefore = controller.inputElements().map((element) => ({ ...element }));
+      const imagesBefore = controller.inputImages().map((image) => ({ ...image }));
+      for (const char of "draft") controller.handleKey({ name: char, sequence: char });
+      const valueBefore = controller.inputValue();
+      const cursorBefore = controller.inputCursor();
+      expect(valueBefore).toContain("draft");
+
+      controller.handleEscape();
+
+      expect(abortCount).toBe(1);
+      expect(controller.inputValue()).toBe(valueBefore);
+      expect(controller.inputCursor()).toBe(cursorBefore);
+      expect(controller.inputElements()).toEqual(elementsBefore);
+      expect(controller.inputImages()).toEqual(imagesBefore);
+      // nothing was queued or submitted by the busy Esc path
+      expect(controller.queuedInputs()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+});
+
 describe("composer controller: clipboard image paste status numbering (#134)", () => {
   test("pasting at the start of an existing placeholder reports the new image as #1", async () => {
     await withController(async ({ controller, status }) => {
