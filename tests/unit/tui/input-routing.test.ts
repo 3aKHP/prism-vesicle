@@ -315,6 +315,148 @@ describe("TUI input routing: workspace paste ownership", () => {
   });
 });
 
+describe("TUI input routing: modal ownership of Esc", () => {
+  type EscRecorder = { keys: string[] };
+  type ModalCase = {
+    label: string;
+    overrides: (recorder: EscRecorder) => Partial<InputRoutingOptions>;
+  };
+  const owned: ModalCase[] = [
+    {
+      label: "YOLO confirm",
+      overrides: (recorder) => ({
+        yoloConfirmStage: () => 1,
+        handleYoloKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "permission request",
+      overrides: (recorder) => ({
+        activePermissionRequest: () => ({ id: "p", sessionId: "s", toolCallId: "t", toolName: "shell_exec", arguments: "ls", permissionClass: "arbitrary_exec", mode: "MOMENTUM", createdAt: "2026-07-31T00:00:00.000Z" }),
+        handleGateKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "gate request",
+      overrides: (recorder) => ({
+        activeGateRequest: () => ({ gate: "request_confirmation", summary: "confirm" }),
+        handleGateKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "user question",
+      overrides: (recorder) => ({
+        pendingUserQuestion: () => ({ question: { prompt: "pick", choices: [{ label: "a", decision: "reject" }] } }) as never,
+        handleQuestionKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "quality decision",
+      overrides: (recorder) => ({
+        pendingQualityDecision: () => ({ decision: { prompt: "rewrite", options: [{ label: "a", decision: "confirm" }] } }) as never,
+        handleQualityKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "rewind picker",
+      overrides: (recorder) => ({
+        rewindPicker: () => ({}) as never,
+        handleRewindKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "session picker",
+      overrides: (recorder) => ({
+        sessionPicker: () => ({}) as never,
+        handleSessionPickerKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "skill picker",
+      overrides: (recorder) => ({
+        skillPicker: () => ({}) as never,
+        handleSkillPickerKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "model picker",
+      overrides: (recorder) => ({
+        modelPicker: () => ({}) as never,
+        handleModelPickerKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "quality picker",
+      overrides: (recorder) => ({
+        qualityPicker: () => ({}) as never,
+        handleQualityPickerKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+    {
+      label: "quality rewrite confirm",
+      overrides: (recorder) => ({
+        qualityRewriteConfirm: () => ({}) as never,
+        handleRewriteConfirmKey: (key) => { recorder.keys.push(key.name ?? ""); return true; },
+      }),
+    },
+  ];
+
+  function modalRouter(overrides: Partial<InputRoutingOptions>) {
+    let promptEscapes = 0;
+    const router = createInputRouter({
+      renderer: {} as InputRoutingOptions["renderer"],
+      setStatus: () => {},
+      rewindPicker: () => null,
+      handleRewindKey: () => false,
+      modelPicker: () => null,
+      handleModelPickerKey: () => false,
+      qualityPicker: () => null,
+      handleQualityPickerKey: () => false,
+      qualityRewriteConfirm: () => null,
+      handleRewriteConfirmKey: () => false,
+      sessionPicker: () => null,
+      handleSessionPickerKey: () => false,
+      skillPicker: () => null,
+      handleSkillPickerKey: () => false,
+      yoloConfirmStage: () => null,
+      handleYoloKey: () => false,
+      activePermissionRequest: () => undefined,
+      pendingUserQuestion: () => null,
+      handleQuestionKey: () => false,
+      activeGateRequest: () => null,
+      handleGateKey: () => false,
+      pasteClipboardImage: async () => undefined,
+      handleComposerKey: () => false,
+      handlePromptEscape: () => { promptEscapes += 1; },
+      handleDecisionPaste: () => false,
+      insertComposerPaste: () => undefined,
+      ...overrides,
+    });
+    return { router, promptEscapeCount: () => promptEscapes };
+  }
+
+  for (const modal of owned) {
+    test(`prompt-level Esc is not called while the ${modal.label} surface owns the key`, () => {
+      const recorder: EscRecorder = { keys: [] };
+      const { router, promptEscapeCount } = modalRouter(modal.overrides(recorder));
+      router.handleKey(keyEvent("escape"));
+      expect(promptEscapeCount()).toBe(0);
+      expect(recorder.keys).toEqual(["escape"]);
+    });
+  }
+
+  test("an owning surface that declines the key still prevents prompt-level Esc", () => {
+    const recorder: EscRecorder = { keys: [] };
+    const { router, promptEscapeCount } = modalRouter({
+      yoloConfirmStage: () => 1,
+      handleYoloKey: (key) => { recorder.keys.push(key.name ?? ""); return false; },
+    });
+    router.handleKey(keyEvent("escape"));
+    expect(promptEscapeCount()).toBe(0);
+    expect(recorder.keys).toEqual(["escape"]);
+  });
+});
+
 function keyEvent(name: string, modifiers: {
   ctrl?: boolean;
   meta?: boolean;

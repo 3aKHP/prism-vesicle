@@ -134,6 +134,124 @@ describe("TUI queued work controller", () => {
     }
   });
 
+  test("promotes only the captured FIFO head and never retroactively promotes later input", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-queued-work-capture-"));
+    try {
+      const session = await createSessionStore(root, "parent");
+      await session.append({ role: "user", content: "durable" });
+      const inputQueue = createInputQueue();
+      inputQueue.enqueueMessage({ value: "head", elements: [], images: [] });
+      inputQueue.enqueueMessage({ value: "later", elements: [], images: [] });
+      const submitted: string[] = [];
+      let dispose: () => void = () => undefined;
+      const controller = createRoot((rootDispose) => {
+        dispose = rootDispose;
+        return createQueuedWorkController({
+          rootDir: root,
+          inputQueue,
+          canDrain: () => true,
+          agentCards: () => [],
+          setConversation: (value) => value as VesicleMessage[],
+          setMessages: (value) => value as Message[],
+          setStatus: (value) => value,
+          recordActivity: () => undefined,
+          recordPromptHistory: () => undefined,
+          submitPrompt: async (value) => { submitted.push(value); },
+          executeLocalCommand: async () => undefined,
+          reportError: (error) => { throw error; },
+        });
+      });
+
+      controller.markInterruptRequested(); // captures "head" (id 1)
+      // An item queued after Esc is not retroactively promoted by that Esc.
+      inputQueue.enqueueMessage({ value: "third", elements: [], images: [] });
+      expect(await controller.handleInterruption("parent")).toBe(true);
+      expect(controller.drainIfReady()).toBe(true);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(submitted).toEqual(["head"]);
+      expect(inputQueue.items().map((item) => item.kind === "message" ? item.value : item.raw)).toEqual(["later", "third"]);
+      dispose();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a changed head during recovery cancels the takeover without substituting another item", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-queued-work-subst-"));
+    try {
+      const session = await createSessionStore(root, "parent");
+      await session.append({ role: "user", content: "durable" });
+      const inputQueue = createInputQueue();
+      inputQueue.enqueueMessage({ value: "original head", elements: [], images: [] });
+      inputQueue.enqueueCommand({ raw: "/model alpha", commandName: "model", args: "alpha", boundary: "agent-loop" });
+      const submitted: string[] = [];
+      const executed: string[] = [];
+      let dispose: () => void = () => undefined;
+      const controller = createRoot((rootDispose) => {
+        dispose = rootDispose;
+        return createQueuedWorkController({
+          rootDir: root,
+          inputQueue,
+          canDrain: () => true,
+          agentCards: () => [],
+          setConversation: (value) => value as VesicleMessage[],
+          setMessages: (value) => value as Message[],
+          setStatus: (value) => value,
+          recordActivity: () => undefined,
+          recordPromptHistory: () => undefined,
+          submitPrompt: async (value) => { submitted.push(value); },
+          executeLocalCommand: async (raw) => { executed.push(raw); },
+          reportError: (error) => { throw error; },
+        });
+      });
+
+      controller.markInterruptRequested(); // captures "original head"
+      // The captured head is consumed naturally before recovery completes; the
+      // /model command is now the head but must not be promoted by the old Esc.
+      expect(inputQueue.takeMessages()).toHaveLength(1);
+      expect(await controller.handleInterruption("parent")).toBe(false);
+      expect(controller.drainIfReady()).toBe(false);
+      expect(submitted).toEqual([]);
+      expect(executed).toEqual([]);
+      expect(inputQueue.items().map((item) => item.kind === "message" ? item.value : item.raw)).toEqual(["/model alpha"]);
+      dispose();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("an absent session id fails closed without releasing or dequeuing", async () => {
+    const inputQueue = createInputQueue();
+    inputQueue.enqueueMessage({ value: "head", elements: [], images: [] });
+    const submitted: string[] = [];
+    let dispose: () => void = () => undefined;
+    const controller = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return createQueuedWorkController({
+        rootDir: process.cwd(),
+        inputQueue,
+        canDrain: () => true,
+        agentCards: () => [],
+        setConversation: (value) => value as VesicleMessage[],
+        setMessages: (value) => value as Message[],
+        setStatus: (value) => value,
+        recordActivity: () => undefined,
+        recordPromptHistory: () => undefined,
+        submitPrompt: async (value) => { submitted.push(value); },
+        executeLocalCommand: async () => undefined,
+        reportError: (error) => { throw error; },
+      });
+    });
+
+    controller.markInterruptRequested();
+    expect(await controller.handleInterruption(undefined)).toBe(false);
+    expect(controller.drainIfReady()).toBe(false);
+    expect(submitted).toEqual([]);
+    expect(inputQueue.items()).toHaveLength(1);
+    dispose();
+  });
+
   test("restores a queued prompt when submission fails", async () => {
     const inputQueue = createInputQueue();
     inputQueue.enqueueMessage({ value: "retry me", elements: [], images: [] });
