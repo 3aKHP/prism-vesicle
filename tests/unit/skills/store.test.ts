@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   computeBundleHash,
   installSnapshot,
+  installSnapshotCreateOnly,
   listSkillVersions,
   readActiveIndex,
   readProvenance,
@@ -13,6 +14,7 @@ import {
   skillStoreDirectory,
   uninstallSkill,
 } from "../../../src/skills";
+import { SkillStoreError } from "../../../src/skills/store";
 
 const symlinkSupported = await (async (): Promise<boolean> => {
   const dir = await mkdtemp(join(tmpdir(), "vesicle-store-symlink-probe-"));
@@ -368,6 +370,86 @@ v2 body
   test("setSkillEnabled throws for a non-installed skill", async () => {
     await withEnv(async (env) => {
       await expect(setSkillEnabled("ghost", false, env)).rejects.toThrow(/No installed skill named "ghost"/);
+    });
+  });
+});
+
+describe("skill store: create-only publication", () => {
+  test("installs a fresh name and publishes provenance + active index", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "fresh", "body");
+      const provenance = await installSnapshotCreateOnly({ sourceDirectory: source, env });
+      expect(provenance.name).toBe("fresh");
+      expect(provenance.version).toMatch(/^sha-/);
+      const index = await readActiveIndex(env);
+      expect(index.entries.some((entry) => entry.name === "fresh")).toBe(true);
+    });
+  });
+
+  test("rejects an already-installed name even with identical content", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "taken", "same body");
+      await installSnapshot({ sourceDirectory: source, env });
+      // installSnapshot is idempotent, but create-only must refuse the identical bytes.
+      await expect(installSnapshotCreateOnly({ sourceDirectory: source, env })).rejects.toThrow(/already installed/);
+      await expect(installSnapshotCreateOnly({ sourceDirectory: source, env })).rejects.toBeInstanceOf(SkillStoreError);
+    });
+  });
+
+  test("rejects a name that has a retained version with provenance but no active entry", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "retained", "body");
+      await installSnapshot({ sourceDirectory: source, version: "v1", env });
+      // Drop the active index entry but keep the retained version + provenance.
+      const storeRoot = skillStoreDirectory(env);
+      const index = await readActiveIndex(env);
+      await import("node:fs/promises").then(({ writeFile }) =>
+        writeFile(join(storeRoot, "index.json"), JSON.stringify({ ...index, entries: [] }, null, 2)));
+      await expect(installSnapshotCreateOnly({ sourceDirectory: source, env })).rejects.toThrow(/retained version/);
+    });
+  });
+
+  test("two concurrent create-only attempts for the same name produce one winner", async () => {
+    await withEnv(async (env, scratch) => {
+      const sourceA = await makeSource(scratch, "race", "a body");
+      const sourceB = await makeSource(join(scratch, "other"), "race", "b body");
+      const results = await Promise.allSettled([
+        installSnapshotCreateOnly({ sourceDirectory: sourceA, env }),
+        installSnapshotCreateOnly({ sourceDirectory: sourceB, env }),
+      ]);
+      const fulfilled = results.filter((result) => result.status === "fulfilled");
+      const rejected = results.filter((result) => result.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]!.reason).toBeInstanceOf(SkillStoreError);
+      // Exactly one active index entry, no staging residue.
+      const index = await readActiveIndex(env);
+      expect(index.entries.filter((entry) => entry.name === "race")).toHaveLength(1);
+      const familyRoot = join(skillStoreDirectory(env), "race");
+      const entries = await import("node:fs/promises").then(({ readdir }) => readdir(familyRoot));
+      expect(entries.filter((name) => name.startsWith(".staging-"))).toHaveLength(0);
+    });
+  });
+
+  test("orphan recovery completes an exact-hash version dir without provenance", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "orphan", "body");
+      // Install to create the version dir, then remove provenance + index to
+      // simulate a crash between final rename and provenance/index publication.
+      await installSnapshot({ sourceDirectory: source, env });
+      const index = await readActiveIndex(env);
+      const storeRoot = skillStoreDirectory(env);
+      const familyRoot = join(storeRoot, "orphan");
+      const version = index.entries.find((entry) => entry.name === "orphan")!.version;
+      await import("node:fs/promises").then(({ rm, writeFile }) =>
+        Promise.all([
+          rm(join(familyRoot, `${version}.provenance.json`)),
+          writeFile(join(storeRoot, "index.json"), JSON.stringify({ ...index, entries: [] }, null, 2)),
+        ]));
+      const provenance = await installSnapshotCreateOnly({ sourceDirectory: source, env });
+      expect(provenance.version).toBe(version);
+      const finalIndex = await readActiveIndex(env);
+      expect(finalIndex.entries.some((entry) => entry.name === "orphan")).toBe(true);
     });
   });
 });

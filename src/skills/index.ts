@@ -53,6 +53,15 @@ export { disabledPathForScope, projectDisabledPath, readDisabledNames, setDisabl
 
 export { assertSafeRelativePath, classifyResource, enumerateSkillResources, isTextReference } from "./paths";
 
+export {
+  SkillBundleError,
+  computeBundleHash,
+  hashBundleDirectory,
+  inspectSkillBundle,
+  stageSkillBundle,
+} from "./bundle";
+export type { InspectedSkillBundle, SkillBundleFile, SkillBundleErrorCode } from "./bundle";
+
 export { detectSkillRepo } from "./repo";
 export type { DetectSkillRepoOptions, SkillRepoShape, SkillRepoShapeKind } from "./repo";
 
@@ -66,8 +75,9 @@ export { buildCatalog } from "./catalog";
 export type { BuildCatalogOptions } from "./catalog";
 
 export {
-  computeBundleHash,
+  SkillStoreError,
   installSnapshot,
+  installSnapshotCreateOnly,
   listSkillVersions,
   readActiveIndex,
   readProvenance,
@@ -79,9 +89,9 @@ export {
 } from "./store";
 export type {
   InstallSnapshotOptions,
-  SkillBundleFile,
   SkillProvenance,
   SkillSourceKind,
+  SkillStoreErrorCode,
   SkillStoreIndex,
   SkillStoreIndexEntry,
 } from "./store";

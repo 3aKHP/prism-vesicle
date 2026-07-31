@@ -12,29 +12,34 @@
  *
  * The version directory holds only the auditable standard bundle; provenance
  * lives in a sibling sidecar so the bundle stays byte-for-byte comparable with
- * its source. Snapshots are staged, verified by re-hash, and atomically renamed
+ * its source. Snapshots are staged, re-verified by hash, and atomically renamed
  * so an interrupted install never leaves a live dependency on the source path
  * or a half-written active version. Reinstalling identical content is idempotent
  * by bundle hash; a differing bundle under the same version is a hard conflict.
  *
- * Phase 0 ships the storage mechanism (`installSnapshot`) plus the read APIs so
- * Phase 1 can layer repository-install commands on top without re-deriving the
- * immutable-snapshot contract. The store is not yet a discovery source.
+ * Portable bundle inspection, hashing, and byte-exact staging live in the
+ * shared `bundle.ts` seam. Both `installSnapshot` and the `skillify`
+ * create-only publication path (`installSnapshotCreateOnly`) call that seam so
+ * there is one hash/copy implementation. The Store owns only index/provenance
+ * persistence, lifecycle, and the cross-process lock.
  */
 
-import { createHash, randomUUID } from "node:crypto";
-import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 import { userConfigDirectory } from "../config/paths";
-import { SKILL_FILE_NAME } from "./loader";
-import { enumerateSkillBundle } from "./paths";
-import { parseSkillMarkdown } from "./parser";
+import { computeBundleHash, hashBundleDirectory, inspectSkillBundle, stageSkillBundle } from "./bundle";
+import type { SkillBundleFile } from "./bundle";
 
 const INDEX_SCHEMA = "prism-vesicle-skill-store/v1";
 const PROVENANCE_SCHEMA = "prism-vesicle-skill-provenance/v1";
 const INDEX_FILE = "index.json";
 const PROVENANCE_FILE = "provenance.json";
+
+export type { SkillBundleFile } from "./bundle";
+export { computeBundleHash } from "./bundle";
+export type { InspectedSkillBundle } from "./bundle";
 
 export type SkillSourceKind = "local-directory" | "local-git" | "github";
 
@@ -48,12 +53,6 @@ export interface SkillStoreIndexEntry {
 export interface SkillStoreIndex {
   schema: typeof INDEX_SCHEMA;
   entries: SkillStoreIndexEntry[];
-}
-
-export interface SkillBundleFile {
-  path: string;
-  sha256: string;
-  bytes: number;
 }
 
 export interface SkillProvenance {
@@ -95,6 +94,16 @@ export interface InstallSnapshotOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+/** Stable error codes the Store surfaces for create-only publication. */
+export type SkillStoreErrorCode = "target-exists";
+
+export class SkillStoreError extends Error {
+  constructor(readonly code: SkillStoreErrorCode, message: string) {
+    super(message);
+    this.name = "SkillStoreError";
+  }
+}
+
 /** Root directory of the host-owned Skill Store. */
 export function skillStoreDirectory(env: NodeJS.ProcessEnv = process.env): string {
   return join(userConfigDirectory(env), "skill-store");
@@ -131,44 +140,16 @@ export async function readProvenance(
 /**
  * Install one validated skill directory as an immutable snapshot.
  *
- * Validates the source `SKILL.md`, enumerates the full bundle with symlink and
- * path guards, content-hashes every file, stages the copy, re-verifies by hash,
- * and atomically renames it into place before updating the active index. Throws
- * on any validation, safety, or conflict failure; partial staging is cleaned up.
+ * Inspects the source through the shared bundle seam, stages a byte-exact copy,
+ * re-verifies by hash, and atomically renames it into place before updating the
+ * active index. Throws on any validation, safety, or conflict failure; partial
+ * staging is cleaned up. Idempotent for identical content under the same version.
  */
 export async function installSnapshot(options: InstallSnapshotOptions): Promise<SkillProvenance> {
   const env = options.env ?? process.env;
-  const sourceDirectory = options.sourceDirectory;
-  const expectedName = basename(sourceDirectory);
-
-  const rootInfo = await lstat(sourceDirectory).catch((error: unknown) => {
-    throw new Error(`Cannot access skill source directory: ${errorMessage(error)}`);
-  });
-  if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) {
-    throw new Error("Skill source must be a real directory, not a file or symbolic link.");
-  }
-
-  const skillFile = join(sourceDirectory, SKILL_FILE_NAME);
-  const raw = await readFile(skillFile).catch((error: unknown) => {
-    throw new Error(`Cannot read ${SKILL_FILE_NAME}: ${errorMessage(error)}`);
-  });
-  const content = decodeUtf8(raw.subarray(stripBom(raw)));
-  const parsed = parseSkillMarkdown(content, expectedName);
-  if (!parsed.ok) {
-    const detail = parsed.diagnostics.map((diagnostic) => diagnostic.message).join(" ");
-    throw new Error(`Skill "${expectedName}" failed validation: ${detail}`);
-  }
-
-  const bundle = await enumerateSkillBundle(sourceDirectory, SKILL_FILE_NAME);
-  const blocking = bundle.diagnostics.filter((diagnostic) => diagnostic.kind !== "resource-oversized");
-  if (blocking.length > 0) {
-    throw new Error(`Skill "${expectedName}" cannot be stored: ${blocking.map((diagnostic) => diagnostic.message).join(" ")}`);
-  }
-
-  const inventory = await hashFiles(sourceDirectory, bundle.files);
-  const bundleSha256 = computeBundleHash(inventory);
-  const version = options.version ?? `sha-${bundleSha256.slice(0, 12)}`;
-  const name = parsed.metadata.name;
+  const inspected = await inspectSkillBundle(options.sourceDirectory);
+  const name = inspected.name;
+  const version = options.version ?? inspected.version;
   // Defense in depth: `name` is parser-validated and `version` defaults to a
   // content-addressed label, but both are also used directly in path joins, so
   // every Store API re-validates them as single path segments.
@@ -181,8 +162,8 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
   const provenancePath = join(familyRoot, `${version}.${PROVENANCE_FILE}`);
 
   if (await pathExists(versionDir)) {
-    const existing = await hashDirectory(versionDir, SKILL_FILE_NAME);
-    if (computeBundleHash(existing) !== bundleSha256) {
+    const existing = await hashBundleDirectory(versionDir);
+    if (computeBundleHash(existing) !== inspected.bundleSha256) {
       throw new Error(`Skill "${name}" version "${version}" already exists with different content; use a distinct version.`);
     }
     // Idempotent reinstall by bundle hash: snapshot and provenance already exist.
@@ -197,7 +178,7 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
     // ensure the active-index entry without claiming a fresh install time.
     return writeProvenanceAndIndex(
       provenancePath,
-      buildProvenance({ name, version, options, contentSha256: parsed.bodySha256, bundleSha256, inventory }),
+      buildProvenance({ name, version, options, contentSha256: inspected.bodySha256, bundleSha256: inspected.bundleSha256, inventory: [...inspected.files] }),
       name,
       version,
       options,
@@ -208,11 +189,7 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
   const staging = join(familyRoot, `${STAGING_DIR_PREFIX}${version}-${randomUUID()}`);
   await mkdir(familyRoot, { recursive: true });
   try {
-    await copyBundle(sourceDirectory, staging, inventory);
-    const staged = await hashDirectory(staging, SKILL_FILE_NAME);
-    if (computeBundleHash(staged) !== bundleSha256) {
-      throw new Error("Skill snapshot verification failed after staging; refusing to install.");
-    }
+    await stageSkillBundle(options.sourceDirectory, staging, inspected);
     await rename(staging, versionDir);
   } catch (error) {
     await rm(staging, { recursive: true, force: true }).catch(() => undefined);
@@ -221,12 +198,79 @@ export async function installSnapshot(options: InstallSnapshotOptions): Promise<
 
   return writeProvenanceAndIndex(
     provenancePath,
-    buildProvenance({ name, version, options, contentSha256: parsed.bodySha256, bundleSha256, inventory }),
+    buildProvenance({ name, version, options, contentSha256: inspected.bodySha256, bundleSha256: inspected.bundleSha256, inventory: [...inspected.files] }),
     name,
     version,
     options,
     storeRoot,
   );
+}
+
+/**
+ * Create-only publication: install one validated skill directory as an immutable
+ * snapshot, rejecting any pre-existing name. Unlike `installSnapshot`, this is
+ * not idempotent — an active index entry, a completed provenance sidecar, or a
+ * retained version directory for the same name is a hard `target-exists`
+ * refusal. The authoritative name-existence check, staging, rename, provenance
+ * write, and index publication all run inside the existing cross-process
+ * `withIndexLock` so concurrent create-only attempts produce exactly one winner.
+ *
+ * Exact-hash orphan recovery is preserved for the crash window between the final
+ * rename and provenance/index publication: a version directory whose hash
+ * matches but has neither provenance nor an active entry is completed rather
+ * than refused. A different hash or any completed provenance remains a refusal.
+ */
+export async function installSnapshotCreateOnly(options: InstallSnapshotOptions): Promise<SkillProvenance> {
+  const env = options.env ?? process.env;
+  const inspected = await inspectSkillBundle(options.sourceDirectory);
+  const name = inspected.name;
+  const version = inspected.version;
+  assertStoreSegment(name, "name");
+  assertStoreSegment(version, "version");
+
+  const storeRoot = skillStoreDirectory(env);
+  const familyRoot = join(storeRoot, name);
+  const versionDir = join(familyRoot, version);
+  const provenancePath = join(familyRoot, `${version}.${PROVENANCE_FILE}`);
+  const staging = join(familyRoot, `${STAGING_DIR_PREFIX}${version}-${randomUUID()}`);
+
+  return withIndexLock(storeRoot, async () => {
+    if ((await readIndexFile(storeRoot)).entries.some((entry) => entry.name === name)) {
+      throw new SkillStoreError("target-exists", `Skill "${name}" is already installed; create-only publication does not overwrite or upgrade.`);
+    }
+    if (await pathExists(familyRoot)) {
+      if (await hasCompletedProvenance(familyRoot, name, env)) {
+        throw new SkillStoreError("target-exists", `Skill "${name}" has a retained version; create-only publication does not overwrite or upgrade.`);
+      }
+    }
+
+    // Exact-hash orphan recovery for an interrupted first publication that
+    // reached the final version directory but has neither provenance nor an
+    // active index entry (both checked above).
+    if (await pathExists(versionDir)) {
+      const existingHash = computeBundleHash(await hashBundleDirectory(versionDir));
+      if (existingHash !== inspected.bundleSha256) {
+        throw new SkillStoreError("target-exists", `Skill "${name}" already has different content under "${version}"; create-only publication does not overwrite.`);
+      }
+      const provenance = buildProvenance({ name, version, options, contentSha256: inspected.bodySha256, bundleSha256: inspected.bundleSha256, inventory: [...inspected.files] });
+      await writeJsonAtomic(provenancePath, provenance);
+      await writeIndexFile(storeRoot, upsertEntry(await readIndexFile(storeRoot), name, version, options.enabled ?? true, provenance.installedAt));
+      return provenance;
+    }
+
+    try {
+      await mkdir(familyRoot, { recursive: true });
+      await stageSkillBundle(options.sourceDirectory, staging, inspected);
+      await rename(staging, versionDir);
+      const provenance = buildProvenance({ name, version, options, contentSha256: inspected.bodySha256, bundleSha256: inspected.bundleSha256, inventory: [...inspected.files] });
+      await writeJsonAtomic(provenancePath, provenance);
+      await writeIndexFile(storeRoot, upsertEntry(await readIndexFile(storeRoot), name, version, options.enabled ?? true, provenance.installedAt));
+      return provenance;
+    } catch (error) {
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
+  });
 }
 
 // --- lifecycle: list / activate / rollback / uninstall ---------------------
@@ -325,42 +369,7 @@ export async function setSkillEnabled(name: string, enabled: boolean, env: NodeJ
   });
 }
 
-// --- hashing ----------------------------------------------------------------
-
-/** Deterministic SHA-256 over a sorted `path\0sha256` inventory. */
-export function computeBundleHash(inventory: readonly SkillBundleFile[]): string {
-  const payload = [...inventory]
-    .sort((left, right) => left.path.localeCompare(right.path))
-    .map((file) => `${file.path}\0${file.sha256}`)
-    .join("\n");
-  return createHash("sha256").update(payload).digest("hex");
-}
-
-async function hashFiles(sourceDirectory: string, files: readonly { path: string }[]): Promise<SkillBundleFile[]> {
-  const inventory: SkillBundleFile[] = [];
-  for (const file of files) {
-    const absolutePath = join(sourceDirectory, ...file.path.split("/"));
-    const bytes = await readFile(absolutePath);
-    inventory.push({ path: file.path, sha256: sha256(bytes), bytes: bytes.byteLength });
-  }
-  return inventory;
-}
-
-async function hashDirectory(directory: string, skillFileName: string): Promise<SkillBundleFile[]> {
-  const { files } = await enumerateSkillBundle(directory, skillFileName);
-  return hashFiles(directory, files);
-}
-
-// --- staging + persistence --------------------------------------------------
-
-async function copyBundle(sourceDirectory: string, staging: string, inventory: readonly SkillBundleFile[]): Promise<void> {
-  await mkdir(staging, { recursive: true });
-  for (const file of inventory) {
-    const target = join(staging, ...file.path.split("/"));
-    await mkdir(dirname(target), { recursive: true });
-    await copyFile(join(sourceDirectory, ...file.path.split("/")), target);
-  }
-}
+// --- provenance + index persistence -----------------------------------------
 
 async function writeProvenanceAndIndex(
   provenancePath: string,
@@ -400,12 +409,75 @@ async function ensureActiveIndexEntry(
   await updateActiveIndex(storeRoot, (index) => {
     const existing = index.entries.find((entry) => entry.name === name);
     if (existing && existing.version === version) return index;
-    const without = index.entries.filter((entry) => entry.name !== name);
-    without.push(existing ? { ...existing, version } : { name, version, enabled, installedAt });
-    without.sort((left, right) => left.name.localeCompare(right.name));
-    return { schema: INDEX_SCHEMA, entries: without };
+    return upsertEntry(index, name, version, enabled, installedAt);
   });
 }
+
+function upsertEntry(
+  index: SkillStoreIndex,
+  name: string,
+  version: string,
+  enabled: boolean,
+  installedAt: string,
+): SkillStoreIndex {
+  const existing = index.entries.find((entry) => entry.name === name);
+  const without = index.entries.filter((entry) => entry.name !== name);
+  without.push(existing ? { ...existing, version } : { name, version, enabled, installedAt });
+  without.sort((left, right) => left.name.localeCompare(right.name));
+  return { schema: INDEX_SCHEMA, entries: without };
+}
+
+/**
+ * True when the family directory holds any version directory with a completed
+ * provenance sidecar. Used by create-only publication to reject a retained
+ * version even when the active index has no entry yet.
+ */
+async function hasCompletedProvenance(familyRoot: string, name: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+  const entries = await readdir(familyRoot, { withFileTypes: true }).catch((error: unknown) => {
+    if (isNotFound(error)) return [] as import("node:fs").Dirent[];
+    throw error;
+  });
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith(STAGING_DIR_PREFIX)) continue;
+    if (await readProvenance(name, entry.name, env).catch(() => undefined)) return true;
+  }
+  return false;
+}
+
+function buildProvenance(args: {
+  name: string;
+  version: string;
+  options: InstallSnapshotOptions;
+  contentSha256: string;
+  bundleSha256: string;
+  inventory: SkillBundleFile[];
+}): SkillProvenance {
+  const provenance: SkillProvenance = {
+    schema: PROVENANCE_SCHEMA,
+    name: args.name,
+    version: args.version,
+    sourceKind: args.options.sourceKind ?? "local-directory",
+    skillRoot: args.options.skillRoot ?? ".",
+    contentSha256: args.contentSha256,
+    bundleSha256: args.bundleSha256,
+    fileInventory: [...args.inventory].sort((left, right) => left.path.localeCompare(right.path)),
+    installedAt: new Date().toISOString(),
+  };
+  if (args.options.sourceIdentity !== undefined) provenance.sourceIdentity = args.options.sourceIdentity;
+  if (args.options.requestedRef !== undefined) provenance.requestedRef = args.options.requestedRef;
+  if (args.options.resolvedCommit !== undefined) provenance.resolvedCommit = args.options.resolvedCommit;
+  if (args.options.dirtySource) provenance.dirtySource = true;
+  return provenance;
+}
+
+async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const staging = `${path}.tmp-${randomUUID()}`;
+  await writeFile(staging, `${JSON.stringify(value, null, 2)}\n`);
+  await rename(staging, path);
+}
+
+// --- index locking ---------------------------------------------------------
 
 /**
  * The active-index read-modify-write is serialized twice. Within one process an
@@ -486,47 +558,23 @@ async function updateActiveIndexCritical(
   mutate: (index: SkillStoreIndex) => SkillStoreIndex,
 ): Promise<void> {
   await withIndexLock(storeRoot, async () => {
-    const indexPath = join(storeRoot, INDEX_FILE);
-    const current = await readFile(indexPath).catch((error: unknown) => {
-      if (isNotFound(error)) return undefined;
-      throw error;
-    });
-    const base: SkillStoreIndex = current === undefined ? { schema: INDEX_SCHEMA, entries: [] } : parseActiveIndex(current);
-    await writeJsonAtomic(indexPath, mutate(base));
+    await writeIndexFile(storeRoot, mutate(await readIndexFile(storeRoot)));
   });
 }
 
-function buildProvenance(args: {
-  name: string;
-  version: string;
-  options: InstallSnapshotOptions;
-  contentSha256: string;
-  bundleSha256: string;
-  inventory: SkillBundleFile[];
-}): SkillProvenance {
-  const provenance: SkillProvenance = {
-    schema: PROVENANCE_SCHEMA,
-    name: args.name,
-    version: args.version,
-    sourceKind: args.options.sourceKind ?? "local-directory",
-    skillRoot: args.options.skillRoot ?? ".",
-    contentSha256: args.contentSha256,
-    bundleSha256: args.bundleSha256,
-    fileInventory: [...args.inventory].sort((left, right) => left.path.localeCompare(right.path)),
-    installedAt: new Date().toISOString(),
-  };
-  if (args.options.sourceIdentity !== undefined) provenance.sourceIdentity = args.options.sourceIdentity;
-  if (args.options.requestedRef !== undefined) provenance.requestedRef = args.options.requestedRef;
-  if (args.options.resolvedCommit !== undefined) provenance.resolvedCommit = args.options.resolvedCommit;
-  if (args.options.dirtySource) provenance.dirtySource = true;
-  return provenance;
+/** Read the index without acquiring the lock; the caller must already hold it. */
+async function readIndexFile(storeRoot: string): Promise<SkillStoreIndex> {
+  const indexPath = join(storeRoot, INDEX_FILE);
+  const current = await readFile(indexPath).catch((error: unknown) => {
+    if (isNotFound(error)) return undefined;
+    throw error;
+  });
+  return current === undefined ? { schema: INDEX_SCHEMA, entries: [] } : parseActiveIndex(current);
 }
 
-async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const staging = `${path}.tmp-${randomUUID()}`;
-  await writeFile(staging, `${JSON.stringify(value, null, 2)}\n`);
-  await rename(staging, path);
+/** Write the index atomically without acquiring the lock; the caller must hold it. */
+async function writeIndexFile(storeRoot: string, index: SkillStoreIndex): Promise<void> {
+  await writeJsonAtomic(join(storeRoot, INDEX_FILE), index);
 }
 
 // --- parsing ---------------------------------------------------------------
@@ -603,22 +651,6 @@ function parseJsonObject(raw: Buffer | string, label: string): Record<string, un
 }
 
 // --- small helpers ---------------------------------------------------------
-
-function sha256(value: string | Uint8Array): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function decodeUtf8(raw: Uint8Array): string {
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(raw);
-  } catch {
-    throw new Error(`${SKILL_FILE_NAME} is not valid UTF-8.`);
-  }
-}
-
-function stripBom(raw: Uint8Array): number {
-  return raw.length >= 3 && raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf ? 3 : 0;
-}
 
 async function pathExists(path: string): Promise<boolean> {
   return Boolean(await lstat(path).catch((error: unknown) => {
