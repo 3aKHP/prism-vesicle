@@ -27,6 +27,7 @@ export type InputQueue = {
   enqueueCommand: (command: Omit<QueuedCommand, "id" | "kind">) => number;
   enqueueMessage: (message: Omit<QueuedUserMessage, "id" | "kind">) => number;
   items: Accessor<QueuedInput[]>;
+  peekNext: () => QueuedInput | undefined;
   restoreNext: (item: QueuedInput) => void;
   takeLast: () => QueuedInput | undefined;
   takeMessages: () => QueuedUserMessage[];
@@ -46,6 +47,11 @@ export function createInputQueue(): InputQueue {
   function enqueueCommand(command: Omit<QueuedCommand, "id" | "kind">): number {
     setItems((current) => [...current, cloneItem({ ...command, id: nextId++, kind: "command" })]);
     return items().length;
+  }
+
+  function peekNext(): QueuedInput | undefined {
+    const next = items()[0];
+    return next ? cloneItem(next) : undefined;
   }
 
   function takeNext(): QueuedInput | undefined {
@@ -91,7 +97,7 @@ export function createInputQueue(): InputQueue {
     setItems([]);
   }
 
-  return { clear, enqueueCommand, enqueueMessage, items, restoreNext, takeLast, takeMessages, takeNext, takeToolBoundaryCommands };
+  return { clear, enqueueCommand, enqueueMessage, items, peekNext, restoreNext, takeLast, takeMessages, takeNext, takeToolBoundaryCommands };
 }
 
 export function composerStateFromQueuedInput(item: QueuedInput): ComposerState {

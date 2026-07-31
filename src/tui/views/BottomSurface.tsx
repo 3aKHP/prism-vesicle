@@ -144,6 +144,7 @@ export function BottomSurface(props: BottomSurfaceProps) {
     props.queuedInputs,
     props.layout.width - 4,
     props.composerPopupOpen ? 0 : Math.min(4, Math.max(1, props.layout.bottomHeight - 3)),
+    props.busy,
   );
   return (
     <Switch>
@@ -315,7 +316,9 @@ export function BottomSurface(props: BottomSurfaceProps) {
           <PromptComposer
             value={props.inputValue}
             cursor={props.inputCursor}
-            placeholder={props.busy ? "Type input, Enter queue, Up edit last" : !props.providerConfigReady ? "Loading provider config..." : "Type prompt, Enter send, Ctrl+Enter newline, /help commands"}
+            placeholder={props.busy
+              ? busyComposerPlaceholder(props.queuedInputs.length)
+              : !props.providerConfigReady ? "Loading provider config..." : "Type prompt, Enter send, Ctrl+Enter newline, /help commands"}
             width={props.inputWidth}
             maxLines={Math.max(1, props.layout.bottomHeight - queuedRows().length - (props.composerPopupOpen ? props.composerPopupMaxRows + 3 : 2))}
             focused={props.composerFocused}
@@ -326,9 +329,23 @@ export function BottomSurface(props: BottomSurfaceProps) {
   );
 }
 
-export function queuedInputPreviewRows(items: QueuedInput[], width: number, maxRows: number): string[] {
+/** Prompt-level Esc action text for the busy composer/queue hint. Rendering
+ * and tests share these exact strings so the affordance stays discoverable. */
+export function escInterruptHint(busy: boolean, queuedCount: number): string | undefined {
+  if (!busy) return undefined;
+  return queuedCount > 0 ? "Esc interrupt & send next" : "Esc interrupt";
+}
+
+/** Composer placeholder for a busy turn. The long Esc hint appears only when
+ * the queue header cannot also show it, so the two never repeat at 80 columns. */
+export function busyComposerPlaceholder(queuedCount: number): string {
+  return queuedCount > 0 ? "Type input · Enter queue" : "Type input · Enter queue · Esc interrupt";
+}
+
+export function queuedInputPreviewRows(items: QueuedInput[], width: number, maxRows: number, busy: boolean): string[] {
   if (items.length === 0 || maxRows <= 0) return [];
-  const rows = [truncateLine(`Queued ${items.length} · Up edits last`, width)];
+  const hint = escInterruptHint(busy, items.length);
+  const rows = [truncateLine(hint ? `Queued ${items.length} · ${hint} · Up edits last` : `Queued ${items.length} · Up edits last`, width)];
   const previewBudget = Math.max(0, maxRows - 1);
   if (previewBudget === 0) return rows;
   const visibleCount = Math.min(items.length, previewBudget);
