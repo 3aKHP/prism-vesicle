@@ -131,7 +131,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "view_image",
-      description: "View an image under an allowed project root. Use this for visual inspection of files in source_materials, workspace, assets, novels, reports, or test_runs.",
+      description: "View an image under an allowed project root. Use this for visual inspection of files in source_materials, workspace, assets, novels, reports, test_runs, or tmp (scratch).",
       parameters: {
         type: "object",
         properties: {
@@ -160,7 +160,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative output path under source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative output path under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
           content: {
             type: "string",
@@ -182,7 +182,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative directory path below source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative directory path below source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
           recursive: {
             type: "boolean",
@@ -198,7 +198,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "write_file",
-      description: "Create or overwrite a UTF-8 project file under source_materials, workspace, novels, reports, or test_runs.",
+      description: "Create or overwrite a UTF-8 project file under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
       parameters: {
         type: "object",
         properties: {
@@ -226,7 +226,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file path under source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative file path under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
           oldText: {
             type: "string",
@@ -256,7 +256,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file path under source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative file path under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
           content: {
             type: "string",
@@ -282,7 +282,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file path under source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative file path under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
         },
         required: ["path"],
@@ -304,7 +304,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
           },
           targetPath: {
             type: "string",
-            description: "Project-relative target path under source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative target path under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
           overwrite: {
             type: "boolean",
@@ -326,11 +326,11 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           sourcePath: {
             type: "string",
-            description: "Project-relative source file path under source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative source file path under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
           targetPath: {
             type: "string",
-            description: "Project-relative target path under source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative target path under source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
           overwrite: {
             type: "boolean",
@@ -374,7 +374,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative empty directory path below source_materials, workspace, novels, reports, or test_runs.",
+            description: "Project-relative empty directory path below source_materials, workspace, novels, reports, test_runs, or tmp (scratch).",
           },
         },
         required: ["path"],

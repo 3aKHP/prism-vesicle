@@ -272,6 +272,79 @@ describe("file tools v2", () => {
     }, "Fixed writable roots");
   });
 
+  test("treats project-relative tmp/ as a guarded scratch root", async () => {
+    await expectTool("create_directory", {
+      path: "tmp/skillify/example",
+    }, "Created directory tmp/skillify/example");
+
+    await expectTool("create_file", {
+      path: "tmp/skillify/example/SKILL.md",
+      content: "# Scratch Skill\nknown-marker-line\n",
+    }, "Created tmp/skillify/example/SKILL.md");
+
+    const read = await expectTool("read_file", {
+      path: "tmp/skillify/example/SKILL.md",
+    }, "# Scratch Skill\nknown-marker-line\n");
+    expect(read.fileEvent).toMatchObject({
+      operation: "read",
+      path: "tmp/skillify/example/SKILL.md",
+      changed: false,
+    });
+
+    const grep = await executeFileTool(rootDir, call("grep_files", {
+      path: "tmp/skillify",
+      pattern: "known-marker-line",
+    }));
+    expect(grep.ok).toBe(true);
+    expect(JSON.parse(grep.content)).toMatchObject({
+      matches: [{ path: "tmp/skillify/example/SKILL.md", line: 2, text: "known-marker-line" }],
+      truncated: false,
+    });
+
+    await expectTool("copy_file", {
+      sourcePath: "tmp/skillify/example/SKILL.md",
+      targetPath: "workspace/copied-skill.md",
+    }, "Copied tmp/skillify/example/SKILL.md to workspace/copied-skill.md");
+    expect(await readFile(join(rootDir, "workspace", "copied-skill.md"), "utf8")).toContain("known-marker-line");
+
+    await expectTool("copy_file", {
+      sourcePath: "workspace/copied-skill.md",
+      targetPath: "tmp/skillify/copied-back.md",
+    }, "Copied workspace/copied-skill.md to tmp/skillify/copied-back.md");
+
+    await expectTool("move_file", {
+      sourcePath: "tmp/skillify/copied-back.md",
+      targetPath: "reports/scratch-note.md",
+    }, "Moved tmp/skillify/copied-back.md to reports/scratch-note.md");
+
+    await expectTool("delete_file", {
+      path: "tmp/skillify/example/SKILL.md",
+    }, "Deleted tmp/skillify/example/SKILL.md");
+
+    await expectToolFailure("delete_directory", {
+      path: "tmp",
+    }, "Fixed writable roots");
+
+    await expectToolFailure("read_file", {
+      path: "/tmp/host-secret",
+    }, "Only project-relative paths are allowed");
+  });
+
+  test("rejects symbolic links below the project tmp/ scratch root", async () => {
+    const outside = await mkdtemp(join(tmpdir(), "vesicle-file-tools-outside-"));
+    try {
+      await mkdir(join(rootDir, "tmp"), { recursive: true });
+      await writeFile(join(outside, "secret.md"), "outside", "utf8");
+      await symlink(outside, join(rootDir, "tmp", "linked"), "dir");
+      await expectToolFailure("read_file", {
+        path: "tmp/linked/secret.md",
+      }, "Symbolic links are not allowed");
+      expect((await stat(join(outside, "secret.md"))).isFile()).toBe(true);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
   test("rejects symbolic links in model-visible paths", async () => {
     const outside = await mkdtemp(join(tmpdir(), "vesicle-file-tools-outside-"));
     try {

@@ -1,14 +1,15 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
-import { writableProjectRoots } from "../artifacts/roots";
+import { projectContentRoots } from "../project/roots";
 import { instructionFilePath } from "../instructions";
 
 /**
  * `/init` runs host-side, so it scans the project directly rather than through
  * the model-visible guarded filesystem tools. The digest is a bounded, readable
- * summary of the writable roots (file tree plus short text-file heads) that the
- * init provider call turns into a `VESICLE.md`.
+ * summary of the project content roots (file tree plus short text-file heads)
+ * that the init provider call turns into a `VESICLE.md`. Scratch roots such as
+ * `tmp/` are excluded.
  */
 
 const MAX_FILES_PER_ROOT = 60;
@@ -34,7 +35,7 @@ export async function scanProject(rootDir: string): Promise<string> {
     push("Note: a VESICLE.md already exists at the project root and will be replaced (the host backs up the previous version).");
   }
 
-  for (const root of writableProjectRoots) {
+  for (const root of projectContentRoots) {
     if (bytes >= MAX_TOTAL_DIGEST_BYTES) break;
     const rootPath = join(rootDir, root);
     const exists = await stat(rootPath).then((info) => info.isDirectory()).catch(() => false);

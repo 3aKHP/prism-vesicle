@@ -1,4 +1,5 @@
 import type { EngineId } from "../engine/profile";
+import { isScratchProjectPath } from "../project/roots";
 import { readWritableProjectText, type FileToolEvent, type ToolResult } from "../tools";
 import type {
   DurableQualityArtifactTarget,
@@ -29,7 +30,7 @@ export function qualityArtifactTargetFromResult(
 ): QualityArtifactTarget | undefined {
   const event = result.fileEvent;
   const candidateType = qualityCandidateTypeForProducer(producer);
-  if (!result.ok || !candidateType || !isArtifactMutationEvent(event) || !targetAppliesToProducer(producer, event.path)) {
+  if (!result.ok || !candidateType || !isArtifactMutationEvent(event) || isScratchProjectPath(event.path) || !targetAppliesToProducer(producer, event.path)) {
     return undefined;
   }
   return {
@@ -110,13 +111,16 @@ export async function readQualityArtifactTargets(
 export function isQualityArtifactMutationCall(call: { name: string; arguments: string }, producer: string): boolean {
   if (!new Set(["create_file", "write_file", "replace_in_file", "append_file"]).has(call.name)) return false;
   if (producer === "weaver-orch") return false;
-  if (producer !== "weaver" && producer !== "scene-writer") return true;
+  let path: string | undefined;
   try {
     const args = JSON.parse(call.arguments) as { path?: unknown };
-    return typeof args.path === "string" && targetAppliesToProducer(producer, args.path.replaceAll("\\", "/"));
+    if (typeof args.path === "string") path = args.path.replaceAll("\\", "/");
   } catch {
-    return false;
+    // Malformed arguments stay unclassified; the producer rules decide below.
   }
+  if (path !== undefined && isScratchProjectPath(path)) return false;
+  if (producer !== "weaver" && producer !== "scene-writer") return true;
+  return path !== undefined && targetAppliesToProducer(producer, path);
 }
 
 function isArtifactMutationEvent(event: FileToolEvent | undefined): event is FileToolEvent & {

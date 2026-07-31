@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolveAllowedPath, toProjectPath } from "../tools/file/path-policy";
 import { listDirectoryEntries } from "../tools/file/query-operations";
-import { writableProjectRoots } from "../artifacts/roots";
+import { projectContentRoots } from "../project/roots";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { createSessionStore } from "../session/store";
@@ -39,9 +39,9 @@ export type StartedStageSession = {
 /** List guarded project-relative files eligible for Stage card selection. */
 export async function listStageCardPaths(rootDir: string): Promise<string[]> {
   const paths: string[] = [];
-  for (const root of writableProjectRoots) {
+  for (const root of projectContentRoots) {
     if (paths.length >= stageCompletionFileLimit) break;
-    const directory = await resolveAllowedPath(rootDir, root, writableProjectRoots).catch((error: unknown) => {
+    const directory = await resolveAllowedPath(rootDir, root, projectContentRoots).catch((error: unknown) => {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
       throw error;
     });
@@ -64,8 +64,8 @@ export async function listStageCardPaths(rootDir: string): Promise<string[]> {
 export async function startStageSession(options: StartStageSessionOptions): Promise<StartedStageSession> {
   const rootDir = options.rootDir ?? process.cwd();
   const [characterFile, scenarioFile] = await Promise.all([
-    resolveAllowedPath(rootDir, options.characterPath, writableProjectRoots),
-    resolveAllowedPath(rootDir, options.scenarioPath, writableProjectRoots),
+    resolveAllowedPath(rootDir, options.characterPath, projectContentRoots),
+    resolveAllowedPath(rootDir, options.scenarioPath, projectContentRoots),
   ]);
   const [characterContent, scenarioContent] = await Promise.all([
     readFile(characterFile, "utf8"),
@@ -137,7 +137,7 @@ export async function stageSourceDrift(rootDir: string, bootstrap: StageBootstra
   const drifted: string[] = [];
   for (const source of sources) {
     try {
-      const path = await resolveAllowedPath(rootDir, source.path, writableProjectRoots);
+      const path = await resolveAllowedPath(rootDir, source.path, projectContentRoots);
       if (sha256(await readFile(path, "utf8")) !== source.sha256) drifted.push(source.path);
     } catch {
       drifted.push(source.path);
