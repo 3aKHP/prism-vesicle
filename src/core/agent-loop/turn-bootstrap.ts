@@ -1,7 +1,7 @@
 import { loadConfigForSelection } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import { loadExperimentalQualityProfile } from "../../config/quality";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderSelection } from "../../config/providers";
 import type { VesicleMessage, VesicleRequest } from "../../providers/shared/types";
 import { persistedImageAttachments } from "../attachments/store";
@@ -83,7 +83,8 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     options.sessionId,
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
-  const provider = createProvider(config, { sessionId: session.sessionId });
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
 
   // Skills (Phase 2): freeze the session catalog (resume re-resolves by the
   // persisted snapshot's name+hash), filter it for this engine, hydrate the

@@ -1,7 +1,7 @@
 import { loadConfigForSelection } from "../../config/providers";
 import { createMcpRegistryForEngine } from "../../mcp/registry";
 import type { McpRegistry } from "../../mcp/registry";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderAdapter, VesicleMessage } from "../../providers/shared/types";
 import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import { FileCheckpointManager } from "../checkpoints/file-history";
@@ -49,7 +49,8 @@ export async function bootstrapChildAgent({
   );
   const session = await createSessionStore(invocation.rootDir);
   await registerChildSession(session.sessionId);
-  const provider = createProvider(config, { sessionId: session.sessionId });
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
 
   await session.append({
     role: "system",

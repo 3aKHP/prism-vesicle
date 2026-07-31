@@ -1,7 +1,22 @@
+import { loadUserConfigEnvironment } from "../config/providers";
+import { loadProviderProxyPolicy } from "../providers/shared/proxy";
 import { writeSetupConfiguration } from "./config-writer";
 import { testMcpServer } from "./mcp-test";
 import { discoverOpenAIModels } from "./model-discovery";
 import { setupErrorMessage, type SetupEffect, type SetupEffectResult } from "./setup-state";
+
+async function resolveDiscoveryProxyUrl(env: NodeJS.ProcessEnv): Promise<string | undefined> {
+  // Only the explicit Vesicle proxy must be passed explicitly; inherited
+  // terminal proxy env vars are honored by Bun's fetch directly.
+  try {
+    const userEnv = await loadUserConfigEnvironment(env);
+    const policy = loadProviderProxyPolicy({ userFileEnv: userEnv.fileEnv, processEnv: env });
+    return policy.kind === "explicit" ? policy.secretUrl.forBun() : undefined;
+  } catch {
+    // Invalid proxy configuration is reported through discovery's own error path.
+    return undefined;
+  }
+}
 
 export type SetupEffectDependencies = {
   env?: NodeJS.ProcessEnv;
@@ -19,7 +34,11 @@ export async function runSetupEffect(
       case "discover-models":
         return {
           kind: "discovery-succeeded",
-          result: await (dependencies.discoverModels ?? discoverOpenAIModels)(effect.baseUrl, effect.apiKey),
+          result: await (dependencies.discoverModels ?? discoverOpenAIModels)(
+            effect.baseUrl,
+            effect.apiKey,
+            { proxyUrl: await resolveDiscoveryProxyUrl(dependencies.env ?? process.env) },
+          ),
         };
       case "test-mcp":
         return {

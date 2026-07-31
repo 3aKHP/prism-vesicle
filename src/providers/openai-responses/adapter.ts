@@ -2,13 +2,15 @@ import type { ResponsesProfile, VesicleConfig } from "../../config/env";
 import { abortError, ProviderError, summarizeProviderFailure } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
+import type { ProviderProxyPolicy } from "../shared/proxy";
+import { proxyRouteFingerprint, resolveWebSocketRoute } from "../shared/proxy";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderAdapter, type ProviderCompactRequest, type ProviderCompactResult, type ProviderStreamEvent, type VesicleRequest, type VesicleResponse } from "../shared/types";
 import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesWebSocketMessage, usesResponsesNativeCheckpoint } from "./request";
 import { readResponsesErrorMessage, responseFromResponsesBody } from "./response";
 import { readResponsesStream } from "./stream";
 import type { ResponsesBody, ResponsesCompactBody } from "./types";
 import { responsesEndpointFingerprint } from "./owner";
-import { invalidateResponsesWebSocketContinuation, responsesWebSocketSession, type ResponsesSocketFactory } from "./websocket";
+import { invalidateResponsesWebSocketContinuation, responsesWebSocketSession, responsesWebSocketUrl, type ResponsesSocketFactory } from "./websocket";
 import { parseProviderStateEnvelope, providerStateEnvelopeVersion } from "../shared/state";
 import { validateResponsesCompactItems } from "./items";
 import { usageFromResponses } from "./usage";
@@ -20,6 +22,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     private readonly config: VesicleConfig,
     private readonly runtime: {
       sessionId?: string;
+      proxyPolicy?: ProviderProxyPolicy;
       webSocketFactory?: ResponsesSocketFactory;
       webSocketRequestTimeoutMs?: number;
       retryDelay?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
@@ -60,6 +63,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       signal: request.signal,
       onRetry: request.onRetry,
       policy: { maxRetries: 5 },
+      proxyPolicy: this.runtime.proxyPolicy,
     });
     const body = await response.json().catch(() => undefined) as ResponsesCompactBody | undefined;
     if (!response.ok) this.throwHttp(response, body?.error?.message);
@@ -153,6 +157,9 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
     const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
+    const proxyRoute = this.runtime.proxyPolicy
+      ? resolveWebSocketRoute(new URL(responsesWebSocketUrl(this.config.baseUrl)), this.runtime.proxyPolicy)
+      : { kind: "direct" as const, reason: "none" as const };
     const session = responsesWebSocketSession({
       sessionId: this.runtime.sessionId!,
       owner,
@@ -161,10 +168,17 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       headers: this.webSocketHeaders(),
       factory: this.runtime.webSocketFactory,
       requestTimeoutMs: this.runtime.webSocketRequestTimeoutMs,
+      proxyRoute,
+      routeFingerprint: proxyRouteFingerprint(proxyRoute),
     });
     if (session.unavailable) {
       yield* this.streamHttp(stableRequest);
       return;
+    }
+    if (proxyRoute.kind === "proxy") {
+      // Raise proxy 407 terminal before the WS retry loop: native WebSocket
+      // cannot distinguish a proxy auth failure from a generic connection failure.
+      await session.verifyProxyAuth(proxyRoute, this.config.baseUrl, stableRequest.signal);
     }
     for (let retry = 0; ; retry++) {
       const attempt = retry + 1;
@@ -260,6 +274,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       signal: request.signal,
       onRetry: request.onRetry,
       policy: { maxRetries },
+      proxyPolicy: this.runtime.proxyPolicy,
     });
   }
 

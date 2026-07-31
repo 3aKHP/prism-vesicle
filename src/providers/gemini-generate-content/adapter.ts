@@ -3,6 +3,7 @@ import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleRespo
 import { ProviderError } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { geminiGenerateContentHeaders } from "../shared/headers";
+import type { ProviderProxyPolicy } from "../shared/proxy";
 import { toGeminiGenerateContentBody } from "./request";
 import { responseFromGeminiBody } from "./response";
 import { readGeminiGenerateContentStream } from "./stream";
@@ -13,7 +14,10 @@ export { toGeminiGenerateContentBody } from "./request";
 export class GeminiGenerateContentAdapter implements ProviderAdapter {
   readonly id = "gemini-generate-content";
 
-  constructor(private readonly config: VesicleConfig) {}
+  constructor(
+    private readonly config: VesicleConfig,
+    private readonly runtime: { proxyPolicy?: ProviderProxyPolicy } = {},
+  ) {}
 
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     this.requireApiKey();
@@ -27,6 +31,7 @@ export class GeminiGenerateContentAdapter implements ProviderAdapter {
       providerId: this.config.providerId,
       signal: request.signal,
       onRetry: request.onRetry,
+      proxyPolicy: this.runtime.proxyPolicy,
     });
     const body = await response.json().catch(() => undefined) as GeminiResponse | undefined;
     if (!response.ok) {
@@ -53,6 +58,7 @@ export class GeminiGenerateContentAdapter implements ProviderAdapter {
       providerId: this.config.providerId,
       signal: request.signal,
       onRetry: request.onRetry,
+      proxyPolicy: this.runtime.proxyPolicy,
     });
     if (!response.ok) {
       const body = await response.json().catch(() => undefined) as GeminiResponse | undefined;

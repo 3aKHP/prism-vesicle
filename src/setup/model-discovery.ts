@@ -7,6 +7,12 @@ export type ModelDiscoveryOptions = {
   fetchImpl?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
   timeoutMs?: number;
   maxBytes?: number;
+  /**
+   * Validated explicit Vesicle proxy URL (`VESICLE_PROVIDER_PROXY`). When set,
+   * discovery routes through it so proxy-only networks can complete setup.
+   * Inherited terminal proxy env vars are already honored by Bun's fetch.
+   */
+  proxyUrl?: string;
 };
 
 export type ModelDiscoveryResult = {
@@ -64,7 +70,13 @@ export async function discoverOpenAIModels(
   const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
 
   try {
-    const fetchImpl = options.fetchImpl ?? ((target: string | URL | Request, init?: RequestInit) => fetch(target, init));
+    const fetchImpl = options.fetchImpl ?? ((target: string | URL | Request, init?: RequestInit) => {
+      // Bun reads inherited proxy env vars itself; only the explicit Vesicle
+      // proxy needs the per-request `proxy` option.
+      if (!options.proxyUrl) return fetch(target, init);
+      const proxied: RequestInit & { proxy?: string } = { ...(init ?? {}), proxy: options.proxyUrl };
+      return fetch(target, proxied);
+    });
     const response = await fetchImpl(endpoint, {
       method: "GET",
       redirect: "error",
@@ -99,7 +111,11 @@ export async function discoverOpenAIModels(
     if (controller.signal.aborted) {
       throw new ModelDiscoveryError(`Model discovery timed out after ${Math.ceil(timeoutMs / 1000)} seconds.`);
     }
-    throw new ModelDiscoveryError(`Could not reach the provider: ${safeErrorMessage(error)}`);
+    throw new ModelDiscoveryError(
+      options.proxyUrl
+        ? "Could not reach the provider through the configured proxy."
+        : `Could not reach the provider: ${safeErrorMessage(error)}`,
+    );
   } finally {
     clearTimeout(timer);
   }

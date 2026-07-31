@@ -2,6 +2,7 @@ import type { VesicleConfig } from "../../config/env";
 import { ProviderError } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { anthropicMessagesHeaders } from "../shared/headers";
+import type { ProviderProxyPolicy } from "../shared/proxy";
 import type { ProviderAdapter, ProviderStreamEvent, VesicleRequest, VesicleResponse } from "../shared/types";
 import { toAnthropicMessagesBody } from "./request";
 import { responseFromAnthropicBody } from "./response";
@@ -13,7 +14,10 @@ export { toAnthropicMessagesBody } from "./request";
 export class AnthropicMessagesAdapter implements ProviderAdapter {
   readonly id = "anthropic-messages";
 
-  constructor(private readonly config: VesicleConfig) {}
+  constructor(
+    private readonly config: VesicleConfig,
+    private readonly runtime: { proxyPolicy?: ProviderProxyPolicy } = {},
+  ) {}
 
   async complete(request: VesicleRequest): Promise<VesicleResponse> {
     this.requireApiKey();
@@ -48,6 +52,7 @@ export class AnthropicMessagesAdapter implements ProviderAdapter {
       signal: request.signal,
       attemptHeaders: (retryCount) => ({ "x-stainless-retry-count": String(retryCount) }),
       onRetry: request.onRetry,
+      proxyPolicy: this.runtime.proxyPolicy,
     });
   }
 
