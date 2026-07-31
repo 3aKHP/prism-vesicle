@@ -172,7 +172,8 @@ function mergeProvider(
     throw new Error(`Setup will not replace existing Responses provider "${current.id}" with Chat Completions. Select its Responses protocol or use a different endpoint.`);
   }
   const preset = input.providerPreset ?? presetFromProvider(current) ?? "chat-compatible";
-  const preserveExistingResponses = input.providerPreset === undefined && current?.protocol === "openai-responses";
+  const preserveExistingResponses = current?.protocol === "openai-responses"
+    && (input.providerPreset === undefined || input.providerPreset === presetFromProvider(current));
   const preservedResponses = preserveExistingResponses
     ? {
         ...(current.authMethod ? { authMethod: current.authMethod } : {}),

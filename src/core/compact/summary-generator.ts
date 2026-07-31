@@ -102,6 +102,7 @@ export function toVesicleMessage(message: ResumedMessage): VesicleMessage {
   return {
     role: message.role,
     content: message.content,
+    ...(message.kind ? { kind: message.kind } : {}),
     ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
     ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),

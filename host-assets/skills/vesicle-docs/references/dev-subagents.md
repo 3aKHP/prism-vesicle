@@ -52,6 +52,8 @@ Session branching and SubAgent ownership are different graphs. `SessionRecord.pa
 
 Background completion and failure are written to a durable inbox before they are exposed to the parent. Inbox entries move through `pending`, `delivered`, and `acknowledged` states so restart recovery cannot lose or duplicate results. Explicit cancellation persists the Agent terminal state but does not enqueue a result or wake the parent because there is no child result to integrate.
 
+Child tool results preserve their success/failure outcome in both the in-memory provider conversation and the durable record. Protocol adapters may therefore map a failed child result to their native error form, including Anthropic `tool_result.is_error: true`, on the next child round and after resume.
+
 ## Parent Continuation
 
 The continuation scheduler serializes all parent provider turns:

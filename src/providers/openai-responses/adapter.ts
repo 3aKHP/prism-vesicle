@@ -4,7 +4,7 @@ import { fetchProvider } from "../shared/fetch";
 import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
 import type { ProviderProxyPolicy } from "../shared/proxy";
 import { proxyRouteFingerprint, resolveWebSocketRoute } from "../shared/proxy";
-import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderAdapter, type ProviderCompactRequest, type ProviderCompactResult, type ProviderStreamEvent, type VesicleRequest, type VesicleResponse } from "../shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderAdapter, type ProviderCompactRequest, type ProviderCompactResult, type ProviderStreamEvent, type ResponseUsage, type VesicleRequest, type VesicleResponse } from "../shared/types";
 import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesWebSocketMessage, usesResponsesNativeCheckpoint } from "./request";
 import { readResponsesErrorMessage, responseFromResponsesBody } from "./response";
 import { readResponsesStream } from "./stream";
@@ -155,6 +155,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
 
   private async *streamWebSocket(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
     let stableRequest = snapshotRequest(request, this.config.providerId);
+    let prewarmUsage: ResponseUsage | undefined;
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
     const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
@@ -207,6 +208,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
               kind: "malformed_response", providerId: this.config.providerId,
             });
           }
+          prewarmUsage = addResponseUsage(prewarmUsage, completed.response.usage);
           session.markCompleted(completed.response.id);
           continuation = {
             responseId: completed.response.id,
@@ -223,7 +225,10 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           ...this.context(stableRequest), attempt, profile: this.config.responsesProfile,
         })) committed.push(event);
         const completed = committed.find((event) => event.type === "complete");
-        if (completed?.type === "complete") session.markCompleted(completed.response.id);
+        if (completed?.type === "complete") {
+          session.markCompleted(completed.response.id);
+          if (prewarmUsage) completed.response.usage = addResponseUsage(prewarmUsage, completed.response.usage);
+        }
         for (const event of committed) yield event;
         return;
       } catch (error) {
@@ -241,7 +246,10 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           stableRequest = portableCheckpointRequest(stableRequest);
           if (retry >= maxRetries) {
             session.disable();
-            yield* this.streamHttp(stableRequest, maxRetries + 1, 0, false);
+            yield* withPriorUsage(
+              this.streamHttp(stableRequest, maxRetries + 1, 0, false),
+              prewarmUsage,
+            );
             return;
           }
           continue;
@@ -253,7 +261,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           session.disable();
           // The downgrade is the final attempt in this logical request. It does
           // not receive a second HTTP retry budget after six WS attempts.
-          yield* this.streamHttp(stableRequest, maxRetries + 1, 0);
+          yield* withPriorUsage(this.streamHttp(stableRequest, maxRetries + 1, 0), prewarmUsage);
           return;
         }
         const delayMs = Math.min(4_000, 250 * (2 ** retry));
@@ -394,6 +402,37 @@ function portableCheckpointRequest(request: VesicleRequest): VesicleRequest {
     ...request,
     messages: request.messages.filter((message) => message.kind !== PROVIDER_NATIVE_CHECKPOINT_KIND),
   };
+}
+
+function addResponseUsage(total: ResponseUsage | undefined, next: ResponseUsage | undefined): ResponseUsage | undefined {
+  if (!next) return total;
+  const result: ResponseUsage = { ...(total ?? {}) };
+  for (const key of [
+    "inputTokens",
+    "outputTokens",
+    "totalTokens",
+    "cacheReadInputTokens",
+    "cacheWriteInputTokens",
+    "cacheHitInputTokens",
+    "cacheMissInputTokens",
+    "reasoningTokens",
+    "effectiveTokens",
+  ] as const) {
+    if (next[key] !== undefined) result[key] = (result[key] ?? 0) + next[key];
+  }
+  if (next.contextInputTokens !== undefined) result.contextInputTokens = next.contextInputTokens;
+  if (next.providerDetails) result.providerDetails = next.providerDetails;
+  return result;
+}
+
+async function* withPriorUsage(
+  events: AsyncIterable<ProviderStreamEvent>,
+  prior: ResponseUsage | undefined,
+): AsyncIterable<ProviderStreamEvent> {
+  for await (const event of events) {
+    if (prior && event.type === "complete") event.response.usage = addResponseUsage(prior, event.response.usage);
+    yield event;
+  }
 }
 
 function snapshotRequest(request: VesicleRequest, providerId: string): VesicleRequest {

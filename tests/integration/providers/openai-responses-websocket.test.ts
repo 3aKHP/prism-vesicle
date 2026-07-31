@@ -111,6 +111,28 @@ describe("OpenAI Responses WebSocket transport", () => {
     expect(sent[2]).toMatchObject({ previous_response_id: "resp_2", input: [{ role: "user", content: "second" }] });
   });
 
+  test("includes prewarm billing in the completed response usage", async () => {
+    const adapter = websocketAdapter(() => new FakeSocket((message, socket) => {
+      const payload = JSON.parse(message) as Record<string, unknown>;
+      socket.terminal({
+        ...responseBody(payload.generate === false ? "resp_warm_usage" : "resp_usage", payload.generate === false ? "" : "done"),
+        usage: payload.generate === false
+          ? { input_tokens: 10, output_tokens: 0, total_tokens: 10 }
+          : { input_tokens: 2, output_tokens: 3, total_tokens: 5 },
+      });
+    }));
+
+    const response = await complete(adapter, request([{ role: "user", content: "bill both requests" }]));
+
+    expect(response.usage).toMatchObject({
+      contextInputTokens: 2,
+      inputTokens: 12,
+      outputTokens: 3,
+      totalTokens: 15,
+      effectiveTokens: 15,
+    });
+  });
+
   test("applies the frozen Codex beta header and WebSocket-only request shape", async () => {
     let headers: Record<string, string> | undefined;
     const sent: Array<Record<string, unknown>> = [];
@@ -264,6 +286,40 @@ describe("OpenAI Responses WebSocket transport", () => {
       expect(first.filter((item) => item.type === "attempt_discarded")).toHaveLength(6);
       expect(first.at(-1)).toMatchObject({ type: "complete", attempt: 7, response: { content: "http" } });
       expect(second.at(-1)).toMatchObject({ type: "complete", attempt: 1, response: { content: "http" } });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("retains successful prewarm billing when generation retries downgrade to HTTP", async () => {
+    const originalFetch = globalThis.fetch;
+    let sockets = 0;
+    globalThis.fetch = (async () => responseStream([event(0, "response.completed", {
+      response: {
+        ...responseBody("http_usage", "http"),
+        usage: { input_tokens: 4, output_tokens: 1, total_tokens: 5 },
+      },
+    })])) as unknown as typeof fetch;
+    try {
+      const adapter = websocketAdapter(() => {
+        sockets += 1;
+        return new FakeSocket((message, socket) => {
+          const payload = JSON.parse(message) as Record<string, unknown>;
+          if (payload.generate === false) {
+            socket.terminal({
+              ...responseBody(`warm_usage_${sockets}`, ""),
+              usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
+            });
+          } else {
+            socket.close();
+          }
+        });
+      });
+
+      const response = await complete(adapter, request([{ role: "user", content: "fallback billing" }]));
+
+      expect(sockets).toBe(6);
+      expect(response.usage).toMatchObject({ inputTokens: 64, outputTokens: 1, totalTokens: 65 });
     } finally {
       globalThis.fetch = originalFetch;
     }

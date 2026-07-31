@@ -71,6 +71,7 @@ import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
 import { activateSkillForSession } from "../core/skills";
 import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-loop/session-init";
+import { createSessionIdentityCoordinator } from "./session-identity-coordinator";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./views/WorkspacePage";
 import { copyTextToClipboard } from "./clipboard";
@@ -954,55 +955,47 @@ export function App(props: AppProps = {}) {
    *   /new              abandon the current session and start fresh
    *   /help             show available commands
    */
-  // Serializes fresh-session identity initialization: command dispatch is
-  // fire-and-forget, so two rapid /skill commands could otherwise both pass the
-  // !sessionId() check, each mint a session, and orphan the first file.
-  let pendingSessionIdentity: Promise<SessionIdentity> | null = null;
+  // Command dispatch is fire-and-forget, so two rapid /skill commands share one
+  // lazy identity. The coordinator releases a resolved identity and /new resets
+  // it so later activations cannot revive an abandoned session.
+  const sessionIdentityCoordinator = createSessionIdentityCoordinator({
+    currentSessionId: sessionId,
+    initialize: async (): Promise<SessionIdentity> => {
+      // Mirror turn-controller's ensureRuntimeReady: the identity header needs a
+      // resolved provider selection and effective permission settings, and the
+      // active provider/model signals start as "loading" before config resolves.
+      if (!providerConfigReady()) {
+        setStatus("loading provider config");
+        await loadProviderConfigOnce();
+      }
+      if (!permissionSettingsReady()) {
+        setStatus("loading permission settings");
+        await loadPermissionSettingsOnce();
+      }
+      return initializeSessionIdentity({
+        engine: activeEngine(),
+        rootDir: process.cwd(),
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        permission: {
+          mode: permissionMode(),
+          ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true as const } : {}),
+          shellExecEnabled: shellExecEnabled(),
+          shellInterpreter: shellInterpreter(),
+        },
+      });
+    },
+    apply: (identity) => {
+      setSessionId(identity.sessionId);
+      setSessionPath(identity.sessionPath);
+    },
+  });
   async function activateSkillCommand(
     name: string,
     options: { mode: "invoke" | "context-only"; taskText?: string },
   ): Promise<void> {
     const rootDir = process.cwd();
-    let sid = sessionId();
-    if (!sid) {
-      if (!pendingSessionIdentity) {
-        pendingSessionIdentity = (async () => {
-          // Mirror turn-controller's ensureRuntimeReady: the identity header needs a
-          // resolved provider selection and effective permission settings, and the
-          // active provider/model signals start as "loading" before config resolves.
-          if (!providerConfigReady()) {
-            setStatus("loading provider config");
-            await loadProviderConfigOnce();
-          }
-          if (!permissionSettingsReady()) {
-            setStatus("loading permission settings");
-            await loadPermissionSettingsOnce();
-          }
-          return initializeSessionIdentity({
-            engine: activeEngine(),
-            rootDir,
-            providerSelection: activeProviderSelection(),
-            generation: activeGeneration(),
-            permission: {
-              mode: permissionMode(),
-              ...(props.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true as const } : {}),
-              shellExecEnabled: shellExecEnabled(),
-              shellInterpreter: shellInterpreter(),
-            },
-          });
-        })();
-      }
-      const initPromise = pendingSessionIdentity;
-      try {
-        const identity = await initPromise;
-        sid = identity.sessionId;
-        setSessionId(sid);
-        setSessionPath(identity.sessionPath);
-      } catch (error) {
-        if (pendingSessionIdentity === initPromise) pendingSessionIdentity = null;
-        throw error;
-      }
-    }
+    const sid = await sessionIdentityCoordinator.ensure();
     const branchParent = nextSessionParent();
     const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
       profile: { id: activeEngine() },
@@ -1057,7 +1050,10 @@ export function App(props: AppProps = {}) {
     setStatus,
     recordActivity,
     setSessionId: (value) => {
-      if (typeof value !== "function" && value === undefined) clearQueuedInputs();
+      if (typeof value !== "function" && value === undefined) {
+        sessionIdentityCoordinator.reset();
+        clearQueuedInputs();
+      }
       return setSessionId(value);
     },
     setSessionPath,

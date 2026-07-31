@@ -69,6 +69,9 @@ describe("OpenAI Responses request codec", () => {
       { type: "function_call", call_id: "call_read", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" },
       { type: "function_call_output", call_id: "call_read", output: "{\"ok\":true}" },
     ]);
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "off" },
+    }, context(), false, "openai-public").reasoning).toEqual({ effort: "none" });
     expect(() => toResponsesBody({
       ...request(), generation: { reasoningTier: "invalid" as ReasoningTier },
     }, context(), false, "openai-public")).toThrow("Unsupported reasoning tier: invalid");

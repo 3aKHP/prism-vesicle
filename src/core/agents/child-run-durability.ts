@@ -107,7 +107,13 @@ export async function recordChildToolResult(
   },
 ): Promise<void> {
   const content = JSON.stringify({ ok: result.ok, result: result.content });
-  state.messages.push({ role: "tool", toolCallId: call.id, content, ...(result.images ? { images: result.images } : {}) });
+  state.messages.push({
+    role: "tool",
+    toolCallId: call.id,
+    toolOk: result.ok,
+    content,
+    ...(result.images ? { images: result.images } : {}),
+  });
   await session.append({
     role: "tool",
     content,

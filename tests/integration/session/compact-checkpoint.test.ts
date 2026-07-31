@@ -271,11 +271,26 @@ describe("session: compact-checkpoint-v1 projection", () => {
   test("a failed turn after a checkpoint drops only the failed input, preserving the replacement", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-failed-"));
     const store = await createSessionStore(rootDir, "ckpt-failed");
+    const sourceHeadUuid = crypto.randomUUID();
+    const providerState = {
+      version: 1 as const,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.6",
+      endpointFingerprint: "sha256:fixture-endpoint",
+      payload: { version: 1, compactedInput: [{ type: "compaction", encrypted_content: "opaque" }] },
+    };
     await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
     await store.append({
       role: "system",
       content: "compacted",
-      metadata: { kind: COMPACT_CHECKPOINT_KIND, checkpoint: validCheckpoint() },
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          sourceHeadUuid,
+          nativeProjection: { sourceHeadUuid, state: providerState },
+        }),
+      },
     });
     await store.append({ role: "user", content: "failed prompt", metadata: { logicalTurnId: "t1", providerRoundId: "r1" } });
     await store.append({ role: "system", content: "", metadata: { kind: "failed-turn" } });
@@ -283,7 +298,8 @@ describe("session: compact-checkpoint-v1 projection", () => {
     const messages = await loadSessionMessages(rootDir, store.sessionId);
     // The checkpoint's replacement (a completed-operation boundary) survives;
     // only the failed turn's trailing input is dropped.
-    expect(messages.map((message) => message.content)).toEqual(["[conversation summary]\nEarlier work."]);
+    expect(messages.map((message) => message.kind)).toEqual(["compact-summary", PROVIDER_NATIVE_CHECKPOINT_KIND]);
+    expect(messages[1]).toMatchObject({ content: "", providerState });
   });
 
   test("image attachments in the replacement history stay reachable through projection", async () => {

@@ -147,7 +147,7 @@ describe("guided Setup configuration writer", () => {
     );
   });
 
-  test("preserves a legacy Codex Responses profile when no replacement preset is selected", async () => {
+  test("preserves a Codex WebSocket Responses profile when Setup selects its coarse Responses preset", async () => {
     const root = await tempRoot();
     const configDir = join(root, "config");
     await Bun.write(join(configDir, "providers.yaml"), [
@@ -162,8 +162,8 @@ describe("guided Setup configuration writer", () => {
       "    apiKeyEnv: RELAY_API_KEY",
       "    authMethod: bearer",
       "    userAgent: legacy-agent",
-      "    responsesProfile: codex-http-relay",
-      "    responsesTransport: http",
+      "    responsesProfile: codex-beta-2026-02-06",
+      "    responsesTransport: websocket",
       "    models:",
       "      - codex-model",
       "",
@@ -183,8 +183,23 @@ describe("guided Setup configuration writer", () => {
       protocol: "openai-responses",
       authMethod: "bearer",
       userAgent: "legacy-agent",
-      responsesProfile: "codex-http-relay",
-      responsesTransport: "http",
+      responsesProfile: "codex-beta-2026-02-06",
+      responsesTransport: "websocket",
+    });
+
+    await writeSetupConfiguration({
+      providerPreset: "openai-responses",
+      baseUrl: "https://relay.example/v1",
+      apiKey: "newer-secret",
+      modelIds: ["codex-model"],
+      defaultModel: "codex-model",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+    expect((await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir })).providers[0]).toMatchObject({
+      authMethod: "bearer",
+      userAgent: "legacy-agent",
+      responsesProfile: "codex-beta-2026-02-06",
+      responsesTransport: "websocket",
     });
 
     await expect(writeSetupConfiguration({

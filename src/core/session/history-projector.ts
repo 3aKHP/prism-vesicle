@@ -40,23 +40,23 @@ export const FAILED_TURN_KIND = "failed-turn";
 
 /**
  * User-role record kinds that act as a completed-operation boundary: a failed
- * turn's input is dropped only down to one of these. A `/compact` summary is the
- * sole such boundary — it is the terminal output of a finished compaction, never
- * the input to a round that can fail. Every other user-role record (a prompt, a
+ * turn's input is dropped only down to one of these. A `/compact` summary and
+ * its provider-native checkpoint marker are completed compaction output, never
+ * input to a round that can fail. Every other user-role record (a prompt, a
  * queued message, background-process results, a SubAgent delivery, an engine
  * handoff, a gate/user-question resolution, or a quality-rewrite feedback) is
  * the failed round's own input and must be dropped, otherwise resume/resend
  * emits consecutive same-role user messages. (SubAgent results are re-delivered
  * via the paused delivery; background-process results are re-drained.)
  */
-const failedTurnBoundaryKinds = new Set(["compact-summary"]);
+const failedTurnBoundaryKinds = new Set(["compact-summary", PROVIDER_NATIVE_CHECKPOINT_KIND]);
 
 /**
  * Remove the trailing user messages that belong to a failed turn. A failed turn
  * appends no assistant reply, so its input is a run of trailing user records
  * (the prompt plus any host-injected user context such as background-process
  * results or a quality-rewrite feedback). A completed-operation boundary
- * (`compact-summary`) is preserved.
+ * (portable summary or native checkpoint marker) is preserved.
  */
 function dropFailedTurnInput(messages: ResumedMessage[]): void {
   while (messages.length > 0) {

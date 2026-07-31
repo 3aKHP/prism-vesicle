@@ -263,7 +263,7 @@ function reasoningControl(
   profile?: ResponsesProfile,
 ): Record<string, unknown> | undefined {
   if (!tier) return undefined;
-  if (tier === "off") return summary ? undefined : { effort: "none" };
+  if (tier === "off") return { effort: "none" };
   if (profile === "deepseek-subset-2026-07-31") {
     switch (tier) {
       case "low": return { effort: "low" };

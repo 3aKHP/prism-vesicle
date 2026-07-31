@@ -42,7 +42,7 @@ The Guard runs at delivery boundaries declared by the active Engine and Harness 
 
 ## Session And Observability
 
-Quality decisions are durable records: they retain target, bounded evidence, Pack and Rule identity, outcome, and action without copying rejected full text that checkpoints or tool history already cover. Resume preserves an unfinished rewrite state or terminates it as a visible warning rather than silently losing it; it never displays a rejected candidate as a delivered assistant message. Judge token usage is accounted as auxiliary quality cost, not mingled with the main engine output counters.
+Quality decisions are durable records: they retain target, bounded evidence, Pack and Rule identity, outcome, and action without copying rejected full text that checkpoints or tool history already cover. Resume preserves an unfinished rewrite state or terminates it as a visible warning rather than silently losing it; it never displays a rejected candidate as a delivered assistant message. A malformed optional candidate or its provider-owned state invalidates that pending decision without preventing other sessions from appearing in the session picker; required assistant provider state retains the session projection's fail-closed rule. Judge token usage is accounted as auxiliary quality cost, not mingled with the main engine output counters.
 
 ## Current Unconnected Boundary
 

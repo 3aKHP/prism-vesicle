@@ -149,12 +149,20 @@ export class ResponsesWebSocketSession {
     if (this.proxyAuthVerified) return;
     this.proxyAuthVerified = true;
     if (route.kind !== "proxy") return;
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(
+      () => timeoutController.abort("proxy authentication preflight timed out"),
+      this.options.requestTimeoutMs ?? defaultRequestTimeoutMs,
+    );
+    const requestSignal = signal
+      ? AbortSignal.any([signal, timeoutController.signal])
+      : timeoutController.signal;
     let response: Response;
     try {
       response = await fetch(new URL(baseUrl), {
         method: "GET",
         proxy: route.secretUrl.forBun(),
-        signal,
+        signal: requestSignal,
         redirect: "error",
       });
     } catch {
@@ -162,6 +170,8 @@ export class ResponsesWebSocketSession {
       // Proxy unreachable / network: not an auth failure. Let the WS attempt
       // and its existing retry/fallback handle it.
       return;
+    } finally {
+      clearTimeout(timeout);
     }
     if (response.status === 407) {
       throw new ProviderError("Provider proxy authentication failed.", {

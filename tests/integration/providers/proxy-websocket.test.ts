@@ -120,6 +120,35 @@ describe("Responses WebSocket socket ownership respects the route fingerprint", 
 });
 
 describe("Responses WebSocket proxy auth is terminal (adapter-level)", () => {
+  test("bounds a stalled proxy-auth preflight with the socket request timeout", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((_input: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    })) as typeof fetch;
+    try {
+      const sessionId = "ws-preflight-timeout";
+      sessions.push(sessionId);
+      const route: ProviderProxyRoute = {
+        kind: "proxy",
+        source: "user-file",
+        secretUrl: validateProxyUrl("http://stalled-proxy.test:8080"),
+        auth: "none",
+      };
+      const session = responsesWebSocketSession({
+        sessionId,
+        owner: "test",
+        baseUrl: "https://ws-provider.test/v1",
+        providerId: "test",
+        headers: {},
+        requestTimeoutMs: 5,
+      });
+
+      await expect(session.verifyProxyAuth(route, "https://ws-provider.test/v1")).resolves.toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("proxy 407 on the WS route raises immediately: no WS attempt, no HTTP fallback", async () => {
     fixture = await startProxyFixture();
     fixture.observer.reset();

@@ -1,5 +1,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { resolveQualityDecision, runPrompt, } from "../../../src/core/agent-loop/run";
 import { createSessionStore, listSessions, loadSessionSnapshot } from "../../../src/core/session/store";
 import { harnessRuntime, restoreQualityTestState, runtimeRoot } from "./fixtures/quality-runtime";
@@ -7,6 +9,40 @@ import { harnessRuntime, restoreQualityTestState, runtimeRoot } from "./fixtures
 afterEach(restoreQualityTestState);
 
 describe("quality: decision recovery", () => {
+  test("keeps session listing available when a pending candidate has corrupt provider state", async () => {
+    const root = await runtimeRoot("runtime");
+    globalThis.fetch = (async () => Response.json({
+      id: "corrupt-candidate",
+      choices: [{ message: { content: "空气中弥漫着雨味。" } }],
+    })) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    const path = join(root, ".vesicle", "sessions", `${first.sessionId}.jsonl`);
+    const records = (await readFile(path, "utf8")).trimEnd().split("\n").map((line) => JSON.parse(line));
+    const warning = records.find((record) => record.metadata?.kind === "quality-warning");
+    if (!warning?.metadata?.qualityDecision?.candidate) throw new Error("expected persisted quality candidate");
+    warning.metadata.qualityDecision.candidate.providerState = {
+      version: 2,
+      protocol: "openai-responses",
+      providerId: "fixture",
+      model: "fixture",
+      endpointFingerprint: "sha256:fixture",
+      payload: {},
+    };
+    await writeFile(path, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+
+    const summaries = await listSessions(root);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({ sessionId: first.sessionId });
+    expect(summaries[0]?.pendingQuality).toBeUndefined();
+  });
+
   test("retains the same quality decision after retry provider failure", async () => {
     const root = await runtimeRoot("runtime");
     let requests = 0;

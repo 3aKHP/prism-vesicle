@@ -20,7 +20,7 @@ This document defines the Windows installer scope, interactive onboarding, model
 ## Configuration Writes
 
 - Setup configuration writes are host actions, not model-visible tools. Validate the complete staged provider/MCP/environment shape, preserve unrelated secrets and profiles, create timestamped backups for existing files, and keep YOLO and `shell_exec` out of first-run persistent defaults.
-- Serialization must retain `responsesProfile` and `responsesTransport` for existing Responses providers. Reconfiguring a recognized endpoint without an explicit new preset preserves its supported profile; an explicit Chat preset against that endpoint is refused instead of silently discarding the Responses profile.
+- Serialization must retain `responsesProfile`, `responsesTransport`, `authMethod`, and `userAgent` for existing Responses providers. Reconfiguring a recognized endpoint preserves its exact supported profile when Setup supplies no preset or only the same coarse Responses choice; an explicit Chat preset against that endpoint is refused instead of silently discarding the Responses profile. Selecting a different representable Responses subset is an explicit profile migration.
 
 ## Project Launch
 
