@@ -221,6 +221,46 @@ describe("TUI queued work controller", () => {
     }
   });
 
+  test("a failed projection rebuild fails closed and reports through the error path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-queued-work-rebuild-"));
+    try {
+      const inputQueue = createInputQueue();
+      inputQueue.enqueueMessage({ value: "head", elements: [], images: [] });
+      const submitted: string[] = [];
+      const reported: unknown[] = [];
+      let dispose: () => void = () => undefined;
+      const controller = createRoot((rootDispose) => {
+        dispose = rootDispose;
+        return createQueuedWorkController({
+          rootDir: root,
+          inputQueue,
+          canDrain: () => true,
+          agentCards: () => [],
+          setConversation: (value) => value as VesicleMessage[],
+          setMessages: (value) => value as Message[],
+          setStatus: (value) => value,
+          recordActivity: () => undefined,
+          recordPromptHistory: () => undefined,
+          submitPrompt: async (value) => { submitted.push(value); },
+          executeLocalCommand: async () => undefined,
+          reportError: (error) => { reported.push(error); },
+        });
+      });
+
+      controller.markInterruptRequested();
+      // No session file exists for "missing", so loadSessionSnapshot rejects;
+      // the takeover must fail closed without dequeuing or submitting.
+      expect(await controller.handleInterruption("missing")).toBe(false);
+      expect(controller.drainIfReady()).toBe(false);
+      expect(submitted).toEqual([]);
+      expect(inputQueue.items()).toHaveLength(1);
+      expect(reported).toHaveLength(1);
+      dispose();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("an absent session id fails closed without releasing or dequeuing", async () => {
     const inputQueue = createInputQueue();
     inputQueue.enqueueMessage({ value: "head", elements: [], images: [] });
