@@ -4,7 +4,7 @@ import { existsSync, lstatSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { engineIds } from "../engine/profile";
 import { requireProjectHarnessRuntime, resolveProjectHarnessRuntime } from "../harness/activation";
@@ -58,7 +58,8 @@ export async function generateProjectInstructions(
   refuseExistingTarget(target, options.force === true);
 
   const config = await loadConfigForSelection(options.providerSelection);
-  const provider = createProvider(config);
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { proxyPolicy });
   const harness = requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(options.rootDir));
   const initPrompt = await harness.assets.readText(INIT_PROMPT_LOGICAL_PATH);
   const digest = await scanProject(options.rootDir);

@@ -1,4 +1,5 @@
 import { abortError, ProviderError } from "../shared/errors";
+import type { ProviderProxyRoute } from "../shared/proxy";
 
 type SocketEvent = Event & { data?: unknown; code?: number; reason?: string };
 export type ResponsesSocket = {
@@ -8,7 +9,14 @@ export type ResponsesSocket = {
   addEventListener(type: string, listener: (event: SocketEvent) => void, options?: AddEventListenerOptions): void;
   removeEventListener(type: string, listener: (event: SocketEvent) => void): void;
 };
-export type ResponsesSocketFactory = (url: string, headers: Record<string, string>) => ResponsesSocket;
+export type ResponsesSocketFactory = (
+  url: string,
+  headers: Record<string, string>,
+  route: ProviderProxyRoute,
+) => ResponsesSocket;
+
+/** Default route used when no proxy policy is in scope (direct connection). */
+const DIRECT_ROUTE: ProviderProxyRoute = { kind: "direct", reason: "none" };
 
 type SessionSocketOptions = {
   sessionId: string;
@@ -19,6 +27,10 @@ type SessionSocketOptions = {
   factory?: ResponsesSocketFactory;
   now?: () => number;
   requestTimeoutMs?: number;
+  /** Resolved WebSocket proxy route; runtime-only, never serialized. */
+  proxyRoute?: ProviderProxyRoute;
+  /** In-memory route fingerprint for socket ownership only; never serialized. */
+  routeFingerprint?: string;
 };
 
 const sessionSockets = new Map<string, ResponsesWebSocketSession>();
@@ -39,6 +51,7 @@ export class ResponsesWebSocketSession {
   private inFlight = false;
   private openedAt = 0;
   private prewarmRequired = true;
+  private proxyAuthVerified = false;
 
   constructor(private readonly options: SessionSocketOptions) {
     this.sessionId = options.sessionId;
@@ -50,7 +63,8 @@ export class ResponsesWebSocketSession {
       && this.owner === options.owner
       && headersEqual(this.options.headers, options.headers)
       && this.options.factory === options.factory
-      && this.options.requestTimeoutMs === options.requestTimeoutMs;
+      && this.options.requestTimeoutMs === options.requestTimeoutMs
+      && this.options.routeFingerprint === options.routeFingerprint;
   }
 
   async request(
@@ -121,6 +135,56 @@ export class ResponsesWebSocketSession {
     this.prewarmRequired = true;
   }
 
+  /**
+   * Preflight proxy-authentication check, once per session instance. Native
+   * WebSocket surfaces a proxy 407 as a generic "Proxy connection failed"
+   * (close 1006), indistinguishable from a proxy-unreachable failure, so the WS
+   * retry loop and HTTP fallback would otherwise resend known-bad credentials.
+   * A single `fetch` through the same resolved route returns `Response{status:407}`
+   * on bad credentials (at CONNECT, before origin TLS), which is raised terminal.
+   * Any other failure (proxy unreachable, origin TLS, etc.) is swallowed so the
+   * WS path's own retry/fallback still owns it. Cached per session.
+   */
+  async verifyProxyAuth(route: ProviderProxyRoute, baseUrl: string, signal?: AbortSignal): Promise<void> {
+    if (this.proxyAuthVerified) return;
+    this.proxyAuthVerified = true;
+    if (route.kind !== "proxy") return;
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(
+      () => timeoutController.abort("proxy authentication preflight timed out"),
+      this.options.requestTimeoutMs ?? defaultRequestTimeoutMs,
+    );
+    const requestSignal = signal
+      ? AbortSignal.any([signal, timeoutController.signal])
+      : timeoutController.signal;
+    let response: Response;
+    try {
+      response = await fetch(new URL(baseUrl), {
+        method: "GET",
+        proxy: route.secretUrl.forBun(),
+        signal: requestSignal,
+        redirect: "error",
+      });
+    } catch {
+      if (signal?.aborted) throw abortError(signal);
+      // Proxy unreachable / network: not an auth failure. Let the WS attempt
+      // and its existing retry/fallback handle it.
+      return;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 407) {
+      throw new ProviderError("Provider proxy authentication failed.", {
+        kind: "http_error",
+        providerId: this.options.providerId,
+        status: 407,
+        code: "proxy_authentication_required",
+        retryable: false,
+      });
+    }
+    await response.body?.cancel().catch(() => undefined);
+  }
+
   disable(): void {
     this.unavailable = true;
     this.close(1000, "HTTP downgrade");
@@ -160,7 +224,11 @@ export class ResponsesWebSocketSession {
     if (this.socket?.readyState === 1) return Promise.resolve(this.socket);
     if (this.connectPromise) return this.connectPromise;
     const factory = this.options.factory ?? defaultSocketFactory;
-    const socket = factory(responsesWebSocketUrl(this.options.baseUrl), this.options.headers);
+    const socket = factory(
+      responsesWebSocketUrl(this.options.baseUrl),
+      this.options.headers,
+      this.options.proxyRoute ?? DIRECT_ROUTE,
+    );
     this.pendingSocket = socket;
     this.connectPromise = new Promise((resolve, reject) => {
       const opened = () => {
@@ -310,14 +378,23 @@ export function responsesWebSocketUrl(baseUrl: string): string {
   return url.toString();
 }
 
-function defaultSocketFactory(url: string, headers: Record<string, string>): ResponsesSocket {
+function defaultSocketFactory(
+  url: string,
+  headers: Record<string, string>,
+  route: ProviderProxyRoute,
+): ResponsesSocket {
   // This repository includes lib.dom for browser-shaped types, whose standard
   // constructor hides Bun's documented WebSocketOptions overload. Name that
   // Bun-native overload explicitly instead of casting the options to `never`.
+  // Native WebSocket ignores proxy env vars, so the resolved route must be
+  // passed explicitly; URL credentials are carried only on Bun's proxy option.
   const BunWebSocket = WebSocket as unknown as {
     new(url: string, options: Bun.WebSocketOptions): WebSocket;
   };
-  return new BunWebSocket(url, { headers }) as unknown as ResponsesSocket;
+  const options = route.kind === "proxy"
+    ? { headers, proxy: route.secretUrl.forBun() }
+    : { headers };
+  return new BunWebSocket(url, options) as unknown as ResponsesSocket;
 }
 
 function receiveTerminal(

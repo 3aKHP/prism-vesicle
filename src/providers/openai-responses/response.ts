@@ -79,9 +79,14 @@ function messageText(items: ResponsesOutputItem[]): string {
 
 function reasoningText(items: ResponsesOutputItem[], profile: ResponsesProfile | undefined): string {
   return items.filter((item) => item.type === "reasoning").flatMap((item) => (
-    profile === "mimo-subset-2026-07-30" ? item.content ?? [] : item.summary ?? []
+    isReasoningTextProfile(profile) ? item.content ?? [] : item.summary ?? []
   ))
     .map((part) => part.text ?? "").join("");
+}
+
+function isReasoningTextProfile(profile: ResponsesProfile | undefined): boolean {
+  return profile === "mimo-subset-2026-07-30"
+    || profile === "deepseek-subset-2026-07-31";
 }
 
 function malformed(message: string, context: ResponseContext): never {

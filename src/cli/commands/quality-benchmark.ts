@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { loadConfigForSelection } from "../../config/providers";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import {
   runQualityBenchmark,
   type QualityBenchmarkCase,
@@ -46,11 +46,12 @@ export async function runQualityBenchmarkCommand(args: string[]): Promise<void> 
   const models = await Promise.all(plan.models.map(async (entry): Promise<QualityBenchmarkModel> => {
     const config = await loadConfigForSelection({ provider: entry.providerAlias, model: entry.modelId });
     if (!config.apiKey) throw new Error(`Provider ${entry.providerAlias} is missing ${config.apiKeyLabel ?? "its API key"}.`);
+    const proxyPolicy = await resolveProviderProxyPolicy();
     return {
       providerAlias: entry.providerAlias,
       protocol: protocolName(config.provider),
       modelId: entry.modelId,
-      provider: createProvider(config),
+      provider: createProvider(config, { proxyPolicy }),
       pricing: entry.pricing,
       temperatureSupported: config.capabilities?.temperature,
       reasoningTierSupported: config.capabilities?.reasoningTier,

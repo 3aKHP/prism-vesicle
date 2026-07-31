@@ -79,15 +79,16 @@ providers:
 
 ### OpenAI Responses 档案
 
-`openai-responses` 必须再明确写出 `responsesProfile`;Vesicle 不会根据 URL、供应商 id 或模型名猜测能力。Guided Setup 可直接选择 OpenAI Responses 或 MiMo Responses 子集,并写入保守的 HTTP 配置。完整可复制示例在 [`docs/examples/providers.yaml`](../../../examples/providers.yaml)。
+`openai-responses` 必须再明确写出 `responsesProfile`;Vesicle 不会根据 URL、供应商 id 或模型名猜测能力。Guided Setup 可直接选择 OpenAI Responses、MiMo Responses 或 DeepSeek Responses 子集,并写入保守的 HTTP 配置。完整可复制示例在 [`docs/examples/providers.yaml`](../../../examples/providers.yaml)。
 
-在完整 `openai-public` 真实供应商门槛完成前,独立 Responses 协议仍保持 opt-in experimental。2026-07-31 充值后的 MiMo 端点通过了 reasoning 与函数调用闭环两个用例(`2` pass、`0` fail)。一个可信的 Codex 上游网关也通过了 relay HTTP/SSE 与非流式请求,但 standalone compact 仍返回 HTTP 503,WebSocket 连接仍失败;这些不可用能力不能记为通过。
+在完整 `openai-public` 真实供应商门槛完成前,独立 Responses 协议仍保持 opt-in experimental。2026-07-31,充值后的 MiMo 端点与 DeepSeek v4 Flash 均分别通过了 reasoning 与函数调用闭环两个用例(`2` pass、`0` fail)。一个可信的 Codex 上游网关也通过了 relay HTTP/SSE 与非流式请求,但 standalone compact 仍返回 HTTP 503,WebSocket 连接仍失败;这些不可用能力不能记为通过。
 
 - `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
 - `mimo-subset-2026-07-30` 是固定日期的第三方兼容子集,只支持 HTTP。它会省略 MiMo 未声明或明确不支持的 `background`、`context_management`、`previous_response_id`、`parallel_tool_calls`、`store`、远程压缩和 WebSocket 字段,每轮回放完整上下文,并把 `response.reasoning_text.*` 显式映射为 Vesicle reasoning。它不是 OpenAI 或 Codex conformance。
-- `codex-http-relay` 与 `codex-beta-2026-02-06` 是窄化的验收/冻结兼容档案,不是通用第三方模板。后者必须配合 WebSocket;不要为了“像 Codex”而复制私有身份、attestation 或 `x-codex-*` 头。
+- `deepseek-subset-2026-07-31` 是 DeepSeek 为 `deepseek-v4-flash` 提供的固定日期 HTTP 子集。它使用 Bearer 鉴权,省略不支持的 continuation、Conversations、存储、background、WebSocket 和远程压缩字段,每轮回放包含明文 reasoning Item 的完整上下文,并按 DeepSeek 文档映射 `none`/`low`/`high`/`max` effort。`deepseek-v4-pro` 在官方 8 月支持实际上线并完成独立验收前不属于此档案。
+- `codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案:既接受公开协议式的终态有序 output,也接受 Codex 的事件/终态分离格式——由连续 completed Items 承载响应内容,随后合法的 `response.completed` 可省略 `output` 或返回空数组。Vesicle 仍会等成功终态后才提交工具,非空的双重表示必须一致,failed/incomplete/EOF 尝试一律拒绝。`codex-beta-2026-02-06` 仍是冻结的 WebSocket 指纹档案;两者都不会为了“像 Codex”而复制私有身份、attestation 或 `x-codex-*` 头。
 
-`responsesTransport` 可为 `http` 或 `websocket`;不写时运行时走 HTTP。只有 `openai-public` 与冻结 Codex beta 档案允许 WebSocket。原生 Items 与 compact state 由精确档案拥有;同一端点切换档案时会回退到 portable history。无论是否启用远程压缩,portable `/compact` checkpoint 都是恢复权威;远程端点不可用不会让已有会话不可读。运行 `vesicle doctor` 可查看当前 Responses 档案、层级、传输和远程压缩声明。
+`responsesTransport` 可为 `http` 或 `websocket`;不写时运行时走 HTTP。只有 `openai-public` 与冻结 Codex beta 档案允许 WebSocket;MiMo 与 DeepSeek 子集均只支持 HTTP。原生 Items 与 compact state 由精确档案拥有;同一端点切换档案时会回退到 portable history。无论是否启用远程压缩,portable `/compact` checkpoint 都是恢复权威;远程端点不可用不会让已有会话不可读。运行 `vesicle doctor` 可查看当前 Responses 档案、层级、传输和远程压缩声明。
 
 ## .env
 
@@ -105,6 +106,18 @@ MCP_CLUSTER_TOKEN=
 ```
 
 `TAVILY_API_KEY` 打开 ETL/Evaluate 引擎的 Web 研究工具;MCP 的鉴权 token 也放这里。进程环境变量只是兜底。
+
+## 供应商代理(可选)
+
+只有一个可选键 `VESICLE_PROVIDER_PROXY`,放在上面的 `.env`(和 `providers.yaml` 同级)。非空值必须是完整的 `http://` 或 `https://` 代理 URL;URL 里的用户名/密码用作 Basic 认证,只随传输层下发,不会写进 `providers.yaml`、会话或日志。
+
+```text
+VESICLE_PROVIDER_PROXY=
+```
+
+它作用于**所有供应商的 HTTP(S) 与 WebSocket** 流量。优先级:用户文件 `VESICLE_PROVIDER_PROXY` → 进程 `VESICLE_PROVIDER_PROXY` → 继承的终端代理变量(`https_proxy`/`HTTPS_PROXY` 等)→ 直连;留空代表"未设置"(继续向下 fallback),而不是"强制直连"。显式设置会覆盖继承的终端代理,且不被终端 `NO_PROXY` 绕过。
+
+继承行为以当前 Bun 运行时为准:对 `https://`/`wss://` 目标,只认 `https_proxy`/`HTTPS_PROXY`(两者都在时取小写),`HTTP_PROXY`/`ALL_PROXY` 不适用于安全目标;`NO_PROXY` 支持 `*`、精确主机名(大小写不敏感)和点号前缀后缀(如 `.test`),不支持 `:port` 和 `*.`。OS 代理、PAC/WPAD、SOCKS、代理链、按供应商选择、NTLM、自定义代理头和生产环境跳过 TLS 校验均不支持。`vesicle doctor` 只显示路由状态/来源/协议/是否带认证,不会打印代理地址或凭据。
 
 ## 供应商与费用(给新手)
 

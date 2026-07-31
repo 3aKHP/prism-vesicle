@@ -2,13 +2,15 @@ import type { ResponsesProfile, VesicleConfig } from "../../config/env";
 import { abortError, ProviderError, summarizeProviderFailure } from "../shared/errors";
 import { fetchProvider } from "../shared/fetch";
 import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
-import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderAdapter, type ProviderCompactRequest, type ProviderCompactResult, type ProviderStreamEvent, type VesicleRequest, type VesicleResponse } from "../shared/types";
+import type { ProviderProxyPolicy } from "../shared/proxy";
+import { proxyRouteFingerprint, resolveWebSocketRoute } from "../shared/proxy";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderAdapter, type ProviderCompactRequest, type ProviderCompactResult, type ProviderStreamEvent, type ResponseUsage, type VesicleRequest, type VesicleResponse } from "../shared/types";
 import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesWebSocketMessage, usesResponsesNativeCheckpoint } from "./request";
 import { readResponsesErrorMessage, responseFromResponsesBody } from "./response";
 import { readResponsesStream } from "./stream";
 import type { ResponsesBody, ResponsesCompactBody } from "./types";
 import { responsesEndpointFingerprint } from "./owner";
-import { invalidateResponsesWebSocketContinuation, responsesWebSocketSession, type ResponsesSocketFactory } from "./websocket";
+import { invalidateResponsesWebSocketContinuation, responsesWebSocketSession, responsesWebSocketUrl, type ResponsesSocketFactory } from "./websocket";
 import { parseProviderStateEnvelope, providerStateEnvelopeVersion } from "../shared/state";
 import { validateResponsesCompactItems } from "./items";
 import { usageFromResponses } from "./usage";
@@ -20,6 +22,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     private readonly config: VesicleConfig,
     private readonly runtime: {
       sessionId?: string;
+      proxyPolicy?: ProviderProxyPolicy;
       webSocketFactory?: ResponsesSocketFactory;
       webSocketRequestTimeoutMs?: number;
       retryDelay?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
@@ -40,8 +43,9 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   async compact(request: ProviderCompactRequest): Promise<ProviderCompactResult> {
     this.requireApiKey();
     this.requireProfile();
-    if (this.config.responsesProfile === "mimo-subset-2026-07-30") {
-      throw new ProviderError("mimo-subset-2026-07-30 does not support remote Responses compaction.", {
+    if (this.config.responsesProfile === "mimo-subset-2026-07-30"
+      || this.config.responsesProfile === "deepseek-subset-2026-07-31") {
+      throw new ProviderError(`${this.config.responsesProfile} does not support remote Responses compaction.`, {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
@@ -60,6 +64,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       signal: request.signal,
       onRetry: request.onRetry,
       policy: { maxRetries: 5 },
+      proxyPolicy: this.runtime.proxyPolicy,
     });
     const body = await response.json().catch(() => undefined) as ResponsesCompactBody | undefined;
     if (!response.ok) this.throwHttp(response, body?.error?.message);
@@ -150,9 +155,13 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
 
   private async *streamWebSocket(request: VesicleRequest): AsyncIterable<ProviderStreamEvent> {
     let stableRequest = snapshotRequest(request, this.config.providerId);
+    let prewarmUsage: ResponseUsage | undefined;
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
     const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
+    const proxyRoute = this.runtime.proxyPolicy
+      ? resolveWebSocketRoute(new URL(responsesWebSocketUrl(this.config.baseUrl)), this.runtime.proxyPolicy)
+      : { kind: "direct" as const, reason: "none" as const };
     const session = responsesWebSocketSession({
       sessionId: this.runtime.sessionId!,
       owner,
@@ -161,10 +170,17 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       headers: this.webSocketHeaders(),
       factory: this.runtime.webSocketFactory,
       requestTimeoutMs: this.runtime.webSocketRequestTimeoutMs,
+      proxyRoute,
+      routeFingerprint: proxyRouteFingerprint(proxyRoute),
     });
     if (session.unavailable) {
       yield* this.streamHttp(stableRequest);
       return;
+    }
+    if (proxyRoute.kind === "proxy") {
+      // Raise proxy 407 terminal before the WS retry loop: native WebSocket
+      // cannot distinguish a proxy auth failure from a generic connection failure.
+      await session.verifyProxyAuth(proxyRoute, this.config.baseUrl, stableRequest.signal);
     }
     for (let retry = 0; ; retry++) {
       const attempt = retry + 1;
@@ -192,6 +208,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
               kind: "malformed_response", providerId: this.config.providerId,
             });
           }
+          prewarmUsage = addResponseUsage(prewarmUsage, completed.response.usage);
           session.markCompleted(completed.response.id);
           continuation = {
             responseId: completed.response.id,
@@ -208,7 +225,10 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           ...this.context(stableRequest), attempt, profile: this.config.responsesProfile,
         })) committed.push(event);
         const completed = committed.find((event) => event.type === "complete");
-        if (completed?.type === "complete") session.markCompleted(completed.response.id);
+        if (completed?.type === "complete") {
+          session.markCompleted(completed.response.id);
+          if (prewarmUsage) completed.response.usage = addResponseUsage(prewarmUsage, completed.response.usage);
+        }
         for (const event of committed) yield event;
         return;
       } catch (error) {
@@ -226,7 +246,10 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           stableRequest = portableCheckpointRequest(stableRequest);
           if (retry >= maxRetries) {
             session.disable();
-            yield* this.streamHttp(stableRequest, maxRetries + 1, 0, false);
+            yield* withPriorUsage(
+              this.streamHttp(stableRequest, maxRetries + 1, 0, false),
+              prewarmUsage,
+            );
             return;
           }
           continue;
@@ -238,7 +261,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
           session.disable();
           // The downgrade is the final attempt in this logical request. It does
           // not receive a second HTTP retry budget after six WS attempts.
-          yield* this.streamHttp(stableRequest, maxRetries + 1, 0);
+          yield* withPriorUsage(this.streamHttp(stableRequest, maxRetries + 1, 0), prewarmUsage);
           return;
         }
         const delayMs = Math.min(4_000, 250 * (2 ** retry));
@@ -260,6 +283,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       signal: request.signal,
       onRetry: request.onRetry,
       policy: { maxRetries },
+      proxyPolicy: this.runtime.proxyPolicy,
     });
   }
 
@@ -328,10 +352,21 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
+    if (this.config.responsesProfile === "deepseek-subset-2026-07-31" && this.config.responsesTransport === "websocket") {
+      throw new ProviderError("deepseek-subset-2026-07-31 supports HTTP only.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
+    if (this.config.responsesProfile === "deepseek-subset-2026-07-31" && this.config.model !== "deepseek-v4-flash") {
+      throw new ProviderError("deepseek-subset-2026-07-31 currently supports only deepseek-v4-flash.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
     if (this.config.responsesProfile === "openai-public"
       || this.config.responsesProfile === "codex-http-relay"
       || this.config.responsesProfile === "codex-beta-2026-02-06"
-      || this.config.responsesProfile === "mimo-subset-2026-07-30") return this.config.responsesProfile;
+      || this.config.responsesProfile === "mimo-subset-2026-07-30"
+      || this.config.responsesProfile === "deepseek-subset-2026-07-31") return this.config.responsesProfile;
     throw new ProviderError("OpenAI Responses requires an explicit supported responsesProfile.", {
       kind: "malformed_response", providerId: this.config.providerId,
     });
@@ -367,6 +402,37 @@ function portableCheckpointRequest(request: VesicleRequest): VesicleRequest {
     ...request,
     messages: request.messages.filter((message) => message.kind !== PROVIDER_NATIVE_CHECKPOINT_KIND),
   };
+}
+
+function addResponseUsage(total: ResponseUsage | undefined, next: ResponseUsage | undefined): ResponseUsage | undefined {
+  if (!next) return total;
+  const result: ResponseUsage = { ...(total ?? {}) };
+  for (const key of [
+    "inputTokens",
+    "outputTokens",
+    "totalTokens",
+    "cacheReadInputTokens",
+    "cacheWriteInputTokens",
+    "cacheHitInputTokens",
+    "cacheMissInputTokens",
+    "reasoningTokens",
+    "effectiveTokens",
+  ] as const) {
+    if (next[key] !== undefined) result[key] = (result[key] ?? 0) + next[key];
+  }
+  if (next.contextInputTokens !== undefined) result.contextInputTokens = next.contextInputTokens;
+  if (next.providerDetails) result.providerDetails = next.providerDetails;
+  return result;
+}
+
+async function* withPriorUsage(
+  events: AsyncIterable<ProviderStreamEvent>,
+  prior: ResponseUsage | undefined,
+): AsyncIterable<ProviderStreamEvent> {
+  for await (const event of events) {
+    if (prior && event.type === "complete") event.response.usage = addResponseUsage(prior, event.response.usage);
+    yield event;
+  }
 }
 
 function snapshotRequest(request: VesicleRequest, providerId: string): VesicleRequest {

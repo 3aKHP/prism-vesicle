@@ -46,6 +46,12 @@ export type ProviderConfigStatus = VesicleConfig & {
   registry: ProviderRegistry;
   providerEnvPath: string;
   hasProviderEnvFile: boolean;
+  /**
+   * User-level `.env` values only, without the process-env overlay. Lets the
+   * provider proxy policy resolve explicit-user vs process precedence without
+   * merge ambiguity. Existing consumers continue to use `effectiveEnv`.
+   */
+  fileEnv: NodeJS.ProcessEnv;
 };
 
 export async function loadProviderRegistry(
@@ -60,6 +66,7 @@ async function loadProviderRegistryWithEnv(
 ): Promise<{
   registry: ProviderRegistry;
   effectiveEnv: NodeJS.ProcessEnv;
+  fileEnv: NodeJS.ProcessEnv;
   providerEnvPath: string;
   hasProviderEnvFile: boolean;
 }> {
@@ -78,6 +85,7 @@ async function loadProviderRegistryWithEnv(
   return {
     registry: parseProviderConfig(source, configPath, providerEnv.effectiveEnv),
     effectiveEnv: providerEnv.effectiveEnv,
+    fileEnv: providerEnv.fileEnv,
     providerEnvPath: providerEnv.path,
     hasProviderEnvFile: providerEnv.exists,
   };
@@ -85,7 +93,7 @@ async function loadProviderRegistryWithEnv(
 
 export async function loadUserConfigEnvironment(
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ effectiveEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
+): Promise<{ effectiveEnv: NodeJS.ProcessEnv; fileEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
   return loadProviderEnvironment(providerConfigPathFromEnv(env), env);
 }
 
@@ -101,7 +109,7 @@ export async function inspectProviderConfig(
   selection?: Partial<ProviderSelection>,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ProviderConfigStatus> {
-  const { registry, effectiveEnv, providerEnvPath, hasProviderEnvFile } = await loadProviderRegistryWithEnv(env);
+  const { registry, effectiveEnv, fileEnv, providerEnvPath, hasProviderEnvFile } = await loadProviderRegistryWithEnv(env);
   const config = resolveProviderConfig(registry, selection, effectiveEnv);
   const missing: string[] = [];
   if (!config.apiKey) {
@@ -117,6 +125,7 @@ export async function inspectProviderConfig(
     registry,
     providerEnvPath,
     hasProviderEnvFile,
+    fileEnv,
   };
 }
 
@@ -162,14 +171,15 @@ export function providerConfigPathFromEnv(env: NodeJS.ProcessEnv = process.env):
 async function loadProviderEnvironment(
   configPath: string,
   env: NodeJS.ProcessEnv,
-): Promise<{ effectiveEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
+): Promise<{ effectiveEnv: NodeJS.ProcessEnv; fileEnv: NodeJS.ProcessEnv; path: string; exists: boolean }> {
   const envPath = join(dirname(configPath), ".env");
   const source = await readFile(envPath, "utf8").catch((error: unknown) => {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return "";
     throw error;
   });
-  if (!source) return { effectiveEnv: env, path: envPath, exists: false };
-  return { effectiveEnv: { ...env, ...parseEnvFile(source, envPath) }, path: envPath, exists: true };
+  if (!source) return { effectiveEnv: env, fileEnv: {}, path: envPath, exists: false };
+  const fileEnv = parseEnvFile(source, envPath);
+  return { effectiveEnv: { ...env, ...fileEnv }, fileEnv, path: envPath, exists: true };
 }
 
 export function parseEnvFile(source: string, path: string): NodeJS.ProcessEnv {
@@ -266,6 +276,9 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (currentProvider.responsesProfile === "mimo-subset-2026-07-30" && currentProvider.responsesTransport === "websocket") {
       throw new Error(`Provider "${id}" cannot use mimo-subset-2026-07-30 with responsesTransport websocket.`);
     }
+    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31" && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use deepseek-subset-2026-07-31 with responsesTransport websocket.`);
+    }
     if (protocol === "openai-responses" && currentProvider.authMethod === "x-goog-api-key") {
       throw new Error(`Provider "${id}" using openai-responses cannot use authMethod x-goog-api-key.`);
     }
@@ -276,6 +289,14 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (currentProvider.responsesProfile === "mimo-subset-2026-07-30"
       && models.some((model) => model.capabilities?.remoteCompact === true)) {
       throw new Error(`Provider "${id}" cannot enable remoteCompact with mimo-subset-2026-07-30.`);
+    }
+    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+      && models.some((model) => model.capabilities?.remoteCompact === true)) {
+      throw new Error(`Provider "${id}" cannot enable remoteCompact with deepseek-subset-2026-07-31.`);
+    }
+    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+      && models.some((model) => model.id !== "deepseek-v4-flash")) {
+      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash with deepseek-subset-2026-07-31.`);
     }
     registry.providers.push({
       id,
@@ -508,7 +529,7 @@ function readProtocol(value: string, field: string): ProviderProtocol {
 
 function readResponsesProfile(value: string, field: string): ResponsesProfile {
   if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06"
-    && value !== "mimo-subset-2026-07-30") {
+    && value !== "mimo-subset-2026-07-30" && value !== "deepseek-subset-2026-07-31") {
     throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
   }
   return value;

@@ -7,7 +7,7 @@
 
 import { loadConfigForSelection } from "../../config/providers";
 import type { ProviderSelection } from "../../config/providers";
-import { createProvider } from "../../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { EngineId } from "../engine/profile";
 import { mergeGeneration } from "../agent-loop/generation";
 import { resolveProjectHarnessRuntime, requireProjectHarnessRuntime } from "../harness/activation";
@@ -37,7 +37,8 @@ export async function askSideQuestion(options: {
   // `/btw` is an independent, tool-free side request. It intentionally omits
   // session ownership so it cannot contend with the main turn's one-in-flight
   // Responses WebSocket or mutate its continuation chain.
-  const provider = createProvider(config);
+  const proxyPolicy = await resolveProviderProxyPolicy();
+  const provider = createProvider(config, { proxyPolicy });
   const sidePrompt = await loadSideQuestionPrompt(options.rootDir);
   const projection = projectSideQuestionReference(context, options.question);
   const images = context.visionEnabled ? await materializeReferenceImages(options.rootDir, projection.images) : [];

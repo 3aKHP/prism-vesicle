@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadConfigForSelection, loadProviderRegistry } from "../../../src/config/providers";
+import { inspectProviderConfig, loadConfigForSelection, loadProviderRegistry, loadUserConfigEnvironment } from "../../../src/config/providers";
+import { loadProviderProxyPolicy } from "../../../src/providers/shared/proxy";
 import { userConfigDirectory } from "../../../src/config/paths";
 import {
   loadExperimentalQualityProfile,
@@ -174,6 +175,46 @@ describe("config loading", () => {
     const invalid = await writeProvidersFile(unsupported, ["MIMO_API_KEY=secret"]);
     await expect(loadConfigForSelection(undefined, invalid.env)).rejects.toThrow(
       "cannot enable remoteCompact with mimo-subset-2026-07-30",
+    );
+  });
+
+  test("loads the dated DeepSeek Responses subset and rejects stateful capabilities", async () => {
+    const valid = [
+      "default:", "  provider: deepseek", "  model: deepseek-v4-flash", "providers:",
+      "  deepseek:", "    protocol: openai-responses", "    baseUrl: https://api.deepseek.com",
+      "    apiKeyEnv: DEEPSEEK_API_KEY", "    responsesProfile: deepseek-subset-2026-07-31",
+      "    responsesTransport: http", "    models:", "      - deepseek-v4-flash", "",
+    ];
+    const { env } = await writeProvidersFile(valid, ["DEEPSEEK_API_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, env)).resolves.toMatchObject({
+      provider: "openai-responses",
+      responsesProfile: "deepseek-subset-2026-07-31",
+      responsesTransport: "http",
+      apiKey: "secret",
+    });
+
+    const websocket = valid.map((line) => line === "    responsesTransport: http"
+      ? "    responsesTransport: websocket"
+      : line);
+    const invalidTransport = await writeProvidersFile(websocket, ["DEEPSEEK_API_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, invalidTransport.env)).rejects.toThrow(
+      "cannot use deepseek-subset-2026-07-31 with responsesTransport websocket",
+    );
+
+    const remoteCompact = valid.flatMap((line) => line === "      - deepseek-v4-flash"
+      ? ["      - id: deepseek-v4-flash", "        capabilities:", "          remoteCompact: true"]
+      : [line]);
+    const invalidCapability = await writeProvidersFile(remoteCompact, ["DEEPSEEK_API_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, invalidCapability.env)).rejects.toThrow(
+      "cannot enable remoteCompact with deepseek-subset-2026-07-31",
+    );
+
+    const unsupportedModel = valid.map((line) => line === "      - deepseek-v4-flash"
+      ? "      - deepseek-v4-pro"
+      : line);
+    const invalidModel = await writeProvidersFile(unsupportedModel, ["DEEPSEEK_API_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, invalidModel.env)).rejects.toThrow(
+      "can declare only deepseek-v4-flash with deepseek-subset-2026-07-31",
     );
   });
 
@@ -708,3 +749,43 @@ async function writeProvidersFile(lines: string[], envLines: string[] = []): Pro
   }
   return { env: { VESICLE_PROVIDERS_FILE: configPath } };
 }
+
+describe("provider proxy configuration", () => {
+  const providersLines = [
+    "default:", "  provider: main", "  model: main-model", "providers:",
+    "  main:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1",
+    "    apiKeyEnv: MAIN_KEY", "    models:", "      - main-model", "",
+  ];
+
+  test("retains the user-file env map separately from the process overlay", async () => {
+    const { env } = await writeProvidersFile(providersLines, [
+      "MAIN_KEY=file-secret",
+      "VESICLE_PROVIDER_PROXY=http://uf-host:8080",
+    ]);
+    const processEnv: NodeJS.ProcessEnv = {
+      ...env,
+      MAIN_KEY: "proc-secret",
+      HTTPS_PROXY: "http://std-host:8080",
+      VESICLE_PROVIDER_PROXY: "http://proc-host:8080",
+    };
+    const inspected = await inspectProviderConfig(undefined, processEnv);
+    // fileEnv holds ONLY the user-file values, unmerged with the process overlay:
+    // process-only keys must not appear here, and process values never override.
+    expect(inspected.fileEnv.MAIN_KEY).toBe("file-secret");
+    expect(inspected.fileEnv.VESICLE_PROVIDER_PROXY).toBe("http://uf-host:8080");
+    expect(inspected.fileEnv.HTTPS_PROXY).toBeUndefined();
+    // The user file still overlays the process map in effectiveEnv (existing contract).
+    expect(inspected.apiKey).toBe("file-secret");
+  });
+
+  test("user-file Vesicle proxy wins over process standard vars via the real loader", async () => {
+    const { env } = await writeProvidersFile(providersLines, [
+      "MAIN_KEY=file-secret",
+      "VESICLE_PROVIDER_PROXY=http://uf-host:8080",
+    ]);
+    const processEnv: NodeJS.ProcessEnv = { ...env, HTTPS_PROXY: "http://std-host:8080" };
+    const userEnv = await loadUserConfigEnvironment(processEnv);
+    const p = loadProviderProxyPolicy({ userFileEnv: userEnv.fileEnv, processEnv });
+    expect(p).toEqual(expect.objectContaining({ kind: "explicit", source: "user-file" }));
+  });
+});

@@ -559,9 +559,14 @@ function parseQualityDecisionCandidate(value: unknown): QualityDecisionCandidate
   });
   if (toolCalls.length !== source.toolCalls.length) return undefined;
   const thinkingBlocks = readThinkingBlocks(source.thinkingBlocks);
-  const providerState = Object.hasOwn(source, "providerState")
-    ? parseProviderStateEnvelope(source.providerState, "Pending quality candidate provider state")
-    : undefined;
+  let providerState: QualityDecisionCandidate["providerState"];
+  if (Object.hasOwn(source, "providerState")) {
+    try {
+      providerState = parseProviderStateEnvelope(source.providerState, "Pending quality candidate provider state");
+    } catch {
+      return undefined;
+    }
+  }
   const usage = readResponseUsage(source.usage);
   return {
     responseId: source.responseId,

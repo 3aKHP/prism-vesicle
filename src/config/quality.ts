@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { userConfigDirectory } from "./paths";
 import { loadConfigForSelection } from "./providers";
-import { createProvider } from "../providers";
+import { createProvider, resolveProviderProxyPolicy } from "../providers";
 import type { VesicleConfig } from "./env";
 import type { ProviderAdapter } from "../providers/shared/types";
 import type { QualityRuntimeContext } from "../core/quality/types";
@@ -80,7 +80,7 @@ export async function loadExperimentalQualityProfile(
   }
   return {
     mode: settings.mode,
-    provider: createProvider(config),
+    provider: createProvider(config, { proxyPolicy: await resolveProviderProxyPolicy(env) }),
     providerId: config.providerId,
     modelId: config.model,
     protocol: config.provider,

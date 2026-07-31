@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/adapter";
 import { closeResponsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
+import { resolveProviderProxyPolicy } from "../../../src/providers";
 import type { ProviderStateJson } from "../../../src/providers/shared/state";
 import { summarize } from "./support";
 import {
@@ -16,12 +17,17 @@ const precondition = await resolveResponsesAcceptance({
   requireOfficialEndpoint: true,
   requireRemoteCompact: true,
 });
+// Resolve the provider proxy policy so the official gate is reproducible through
+// a required proxy when VESICLE_PROVIDER_PROXY (or inherited terminal proxy env)
+// is present. Direct when no proxy is configured (no behavior change).
+const proxyPolicy = precondition.config ? await resolveProviderProxyPolicy() : undefined;
+const proxyActive = proxyPolicy?.kind !== "direct";
 if (!precondition.config) console.log(`[acceptance:openai-responses] unavailable: ${precondition.reason}`);
 const liveTest: typeof test = precondition.config ? test : test.skip;
 
 liveTest("official OpenAI HTTP/SSE function loop and stateless native replay", async () => {
   const config = precondition.config!;
-  const adapter = new OpenAIResponsesAdapter({ ...config, responsesTransport: "http" });
+  const adapter = new OpenAIResponsesAdapter({ ...config, responsesTransport: "http" }, { proxyPolicy });
   const result = await runResponsesFunctionLoop(adapter, config);
   expect(result.first.toolCalls).toHaveLength(1);
   expect(result.second.toolCalls ?? []).toHaveLength(0);
@@ -35,12 +41,13 @@ liveTest("official OpenAI HTTP/SSE function loop and stateless native replay", a
     callIdShape: result.callId.startsWith("call_"),
     nativeItemCount: nativeItemCount(result.first.providerState?.payload),
     usagePresent: result.second.usage?.totalTokens !== undefined,
+    proxyActive,
   });
 }, 120_000);
 
 liveTest("official OpenAI non-stream JSON and standalone compact", async () => {
   const config = precondition.config!;
-  const adapter = new OpenAIResponsesAdapter({ ...config, responsesTransport: "http" });
+  const adapter = new OpenAIResponsesAdapter({ ...config, responsesTransport: "http" }, { proxyPolicy });
   const response = await adapter.complete({
     id: `acceptance-${crypto.randomUUID()}`,
     model: { provider: config.providerId, model: config.model },
@@ -64,6 +71,7 @@ liveTest("official OpenAI non-stream JSON and standalone compact", async () => {
     nonStreamContentLength: response.content.length,
     compactItemCount: nativeCompactItemCount(compact.providerState?.payload),
     usagePresent: compact.usage?.totalTokens !== undefined,
+    proxyActive,
   });
 }, 120_000);
 
@@ -74,7 +82,7 @@ liveTest("official OpenAI public WebSocket prewarm, continuation, and tool loop"
   const adapter = new OpenAIResponsesAdapter({
     ...config,
     responsesTransport: "websocket",
-  }, { sessionId });
+  }, { sessionId, proxyPolicy });
   try {
     globalThis.fetch = (async () => {
       throw new Error("Official OpenAI WebSocket acceptance attempted HTTP fallback.");
@@ -88,6 +96,7 @@ liveTest("official OpenAI public WebSocket prewarm, continuation, and tool loop"
       firstEventTypes: result.firstEvents.map((event) => event.type),
       secondEventTypes: result.secondEvents.map((event) => event.type),
       callIdShape: result.callId.startsWith("call_"),
+      proxyActive,
     });
   } finally {
     globalThis.fetch = originalFetch;

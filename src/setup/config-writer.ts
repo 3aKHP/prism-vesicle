@@ -37,7 +37,7 @@ export type SetupConfiguration = {
   projectDirectory?: string;
 };
 
-export type SetupProviderPreset = "chat-compatible" | "openai-responses" | "mimo-responses";
+export type SetupProviderPreset = "chat-compatible" | "openai-responses" | "mimo-responses" | "deepseek-responses";
 
 export type SetupWriteResult = {
   providerId: string;
@@ -172,7 +172,8 @@ function mergeProvider(
     throw new Error(`Setup will not replace existing Responses provider "${current.id}" with Chat Completions. Select its Responses protocol or use a different endpoint.`);
   }
   const preset = input.providerPreset ?? presetFromProvider(current) ?? "chat-compatible";
-  const preserveExistingResponses = input.providerPreset === undefined && current?.protocol === "openai-responses";
+  const preserveExistingResponses = current?.protocol === "openai-responses"
+    && (input.providerPreset === undefined || input.providerPreset === presetFromProvider(current));
   const preservedResponses = preserveExistingResponses
     ? {
         ...(current.authMethod ? { authMethod: current.authMethod } : {}),
@@ -183,6 +184,9 @@ function mergeProvider(
     : {};
   const models = [...new Set(input.modelIds.map((model) => model.trim()).filter(Boolean))]
     .map((id) => existingModels.get(id) ?? { id });
+  if (preset === "deepseek-responses" && models.some((model) => model.id !== "deepseek-v4-flash")) {
+    throw new Error("DeepSeek Responses currently supports only deepseek-v4-flash; deselect other models before saving.");
+  }
   const profile: ProviderProfile = {
     id: providerId,
     protocol: preset === "chat-compatible" ? "openai-chat-compatible" : "openai-responses",
@@ -198,6 +202,11 @@ function mergeProvider(
               responsesProfile: "mimo-subset-2026-07-30" as const,
               responsesTransport: "http" as const,
             }
+          : preset === "deepseek-responses"
+            ? {
+                responsesProfile: "deepseek-subset-2026-07-31" as const,
+                responsesTransport: "http" as const,
+              }
           : {}),
     defaultModel: input.defaultModel,
     models,
@@ -223,6 +232,7 @@ function presetFromProvider(provider: ProviderProfile | undefined): SetupProvide
   if (provider.protocol === "openai-chat-compatible") return "chat-compatible";
   if (provider.responsesProfile === "openai-public") return "openai-responses";
   if (provider.responsesProfile === "mimo-subset-2026-07-30") return "mimo-responses";
+  if (provider.responsesProfile === "deepseek-subset-2026-07-31") return "deepseek-responses";
   if (provider.responsesProfile === "codex-http-relay" || provider.responsesProfile === "codex-beta-2026-02-06") {
     return "openai-responses";
   }

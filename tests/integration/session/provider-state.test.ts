@@ -9,7 +9,7 @@ import { loadEngineProfile } from "../../../src/core/engine/profile";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import { parseProviderStateEnvelope, type ProviderStateEnvelope } from "../../../src/providers/shared/state";
 import { createPromptRoot } from "../agent-loop/fixtures/agent-loop";
-import { createChildRunState, recordChildResponse } from "../../../src/core/agents/child-run-durability";
+import { createChildRunState, recordChildResponse, recordChildToolResult } from "../../../src/core/agents/child-run-durability";
 
 function state(responseId: string): ProviderStateEnvelope {
   return {
@@ -37,6 +37,27 @@ describe("session provider-state projection", () => {
     expect(child.messages.at(-1)?.providerState).toEqual(state("child-response"));
     const snapshot = await loadSessionSnapshot(rootDir, store.sessionId);
     expect(snapshot.messages.at(-1)?.providerState).toEqual(state("child-response"));
+  });
+
+  test("child-Agent failed tool results preserve the native error outcome", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-provider-state-child-tool-"));
+    const store = await createSessionStore(rootDir, "provider-state-child-tool");
+    const child = createChildRunState([{ role: "user", content: "start" }]);
+
+    await recordChildToolResult(child, {
+      call: { id: "call-failed", name: "shell_exec", arguments: "{}" },
+      result: { callId: "call-failed", name: "shell_exec", ok: false, content: "exit 1" },
+      session: store,
+      runId: "run-child",
+      handle: "child-1",
+      profileId: "general",
+      permissionMode: "MOMENTUM",
+      decisionSource: "policy",
+    });
+
+    expect(child.messages.at(-1)).toMatchObject({ role: "tool", toolCallId: "call-failed", toolOk: false });
+    expect((await loadSessionSnapshot(rootDir, store.sessionId)).messages.at(-1))
+      .toMatchObject({ role: "tool", toolCallId: "call-failed", toolOk: false });
   });
 
   test("assistant recorders durably commit state for tool and final responses", async () => {
@@ -101,6 +122,11 @@ describe("session provider-state projection", () => {
       throw new Error("expected reloaded provider state payload");
     }
     expect(reloadedPayload.responseId).toBe("response-a");
+  });
+
+  test("preserves host-only message kinds when rebuilding provider requests", () => {
+    expect(toVesicleMessage({ role: "user", content: "", kind: "provider-native-checkpoint" }))
+      .toMatchObject({ role: "user", content: "", kind: "provider-native-checkpoint" });
   });
 
   test("fails session load on unsupported or malformed required provider state", async () => {

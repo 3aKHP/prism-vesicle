@@ -87,6 +87,26 @@ providers:
           maxTokens: true
           remoteCompact: false
 
+  deepseek-responses:
+    protocol: openai-responses
+    baseUrl: https://api.deepseek.com
+    apiKeyEnv: DEEPSEEK_API_KEY
+    # This dated profile follows DeepSeek's stateless HTTP Responses subset.
+    # As of 2026-07-31, only deepseek-v4-flash supports this endpoint.
+    responsesProfile: deepseek-subset-2026-07-31
+    responsesTransport: http
+    defaultModel: deepseek-v4-flash
+    models:
+      - id: deepseek-v4-flash
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
+          temperature: true
+          maxTokens: true
+          remoteCompact: false
+
   anthropic:
     protocol: anthropic-messages
     baseUrl: https://api.anthropic.com/v1

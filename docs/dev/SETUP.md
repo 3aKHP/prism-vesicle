@@ -10,7 +10,7 @@ This document defines the Windows installer scope, interactive onboarding, model
 ## Onboarding
 
 - `src/setup` owns interactive onboarding. Network discovery, masked input, configuration merge/backup, validation, optional MCP/Tavily setup, permission defaults, and project selection stay in the application so they reuse runtime contracts.
-- Setup presents the wire protocol before collecting the endpoint: OpenAI-compatible Chat, official OpenAI Responses, or the dated MiMo Responses subset. It writes reviewed HTTP defaults and the exact `responsesProfile`; it never guesses a protocol, profile, WebSocket capability, or remote-compaction capability from a URL or model name.
+- Setup presents the wire protocol before collecting the endpoint: OpenAI-compatible Chat, official OpenAI Responses, or the dated MiMo/DeepSeek Responses subsets. It writes reviewed HTTP defaults and the exact `responsesProfile`; it never guesses a protocol, profile, WebSocket capability, or remote-compaction capability from a URL or model name.
 - Setup choice pages must expose a visible backward action in addition to Escape handling, reset selection when returning to a shorter option list, and keep every rendered row clipped within compact terminal bounds.
 
 ## Model Discovery
@@ -20,7 +20,7 @@ This document defines the Windows installer scope, interactive onboarding, model
 ## Configuration Writes
 
 - Setup configuration writes are host actions, not model-visible tools. Validate the complete staged provider/MCP/environment shape, preserve unrelated secrets and profiles, create timestamped backups for existing files, and keep YOLO and `shell_exec` out of first-run persistent defaults.
-- Serialization must retain `responsesProfile` and `responsesTransport` for existing Responses providers. Reconfiguring a recognized endpoint without an explicit new preset preserves its supported profile; an explicit Chat preset against that endpoint is refused instead of silently discarding the Responses profile.
+- Serialization must retain `responsesProfile`, `responsesTransport`, `authMethod`, and `userAgent` for existing Responses providers. Reconfiguring a recognized endpoint preserves its exact supported profile when Setup supplies no preset or only the same coarse Responses choice; an explicit Chat preset against that endpoint is refused instead of silently discarding the Responses profile. Selecting a different representable Responses subset is an explicit profile migration.
 
 ## Project Launch
 

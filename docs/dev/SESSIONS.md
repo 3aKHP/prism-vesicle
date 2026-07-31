@@ -39,7 +39,7 @@ This document defines durable conversation history, provider projection, file ch
 
 - A top-level user turn whose provider round fails before any assistant response keeps the authored prompt in the transcript and appends a host-only failure marker.
 - Provider projection excludes the failed round's unmatched user tail so resume or resend cannot create invalid consecutive same-role messages.
-- A completed compact checkpoint remains a valid replacement boundary even when a later provider round fails.
+- A completed compact checkpoint remains a valid replacement boundary even when a later provider round fails; failed-turn cleanup preserves both its portable summary and host-only provider-native marker.
 - A mid-loop failure after an assistant response retains the already valid alternation tail and is not rewritten as a failed top-level turn.
 - After any main-turn exception, the TUI rebuilds its in-memory provider conversation from the durable session projection. Records already appended by a partial tool round therefore remain in the next request instead of being hidden by a stale pre-turn snapshot.
 - Continuation state must be persisted before another provider request so cancellation, provider failure, or restart cannot silently lose or replay a gate, question, permission, Agent delivery, or quality decision.

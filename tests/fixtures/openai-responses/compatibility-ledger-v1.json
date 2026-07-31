@@ -24,6 +24,13 @@
       "test": "premature EOF after a function-call Item commits nothing and dispatches zero tools"
     },
     {
+      "id": "relay-terminal-output-reconstruction",
+      "codex": "Codex consumes completed output_item.done Items directly and uses response.completed for response identity, usage, end-turn state, and successful stream termination rather than requiring response.output to repeat those Items.",
+      "public": "Public Responses examples repeat completed ordered Items in response.completed.output.",
+      "selected": "codex-http-relay accepts an empty or omitted terminal output only after a valid response.completed and reconstructs it from contiguous completed Item events; non-empty dual representations must match exactly. Other profiles retain terminal-output authority.",
+      "test": "sanitized multi-call relay capture reconstructs after response.completed while public profile, premature EOF, sparse indexes, and mismatched dual representations fail closed"
+    },
+    {
       "id": "websocket-owner",
       "codex": "The frozen client uses a turn-scoped wrapper but caches and returns WebsocketSession through the session-scoped ModelClient, allowing an eligible socket to survive across turns while turn-state metadata does not.",
       "public": "One persistent socket may carry multiple sequential response.create messages; no multiplexing; lifetime is 60 minutes.",
@@ -43,6 +50,13 @@
       "public": "OpenAI exposes these as separately observable capabilities.",
       "selected": "MiMo is a Responses-compatible subset with full replay, no previous_response_id/remote compact/WebSocket, and explicit response.reasoning_text.* mapping.",
       "test": "MiMo profile omits unsupported request fields and declares its reasoning event family"
+    },
+    {
+      "id": "deepseek-subset",
+      "codex": "Codex exercises OpenAI continuation, encrypted reasoning and WebSocket behavior.",
+      "public": "DeepSeek documents a stateless HTTP Responses subset for deepseek-v4-flash with plaintext response.reasoning_text events.",
+      "selected": "DeepSeek uses a dated HTTP-only profile with full replay, no previous_response_id/remote compact/WebSocket, and exact documented reasoning effort mapping.",
+      "test": "DeepSeek profile omits unsupported request fields, admits only plaintext reasoning events, and has a live reasoning/function acceptance lane"
     },
     {
       "id": "network-fingerprint",

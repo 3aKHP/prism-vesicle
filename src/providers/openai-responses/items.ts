@@ -20,12 +20,14 @@ export function validateResponsesOutputItems(
         }
         break;
       case "reasoning":
-        if (profile === "mimo-subset-2026-07-30") {
+        if (isReasoningTextProfile(profile)) {
           if ((item.summary !== undefined && (!Array.isArray(item.summary) || item.summary.length > 0))
             || item.encrypted_content !== undefined
             || !Array.isArray(item.content)
             || item.content.some((part) => part.type !== "reasoning_text" || typeof part.text !== "string")) {
-            fail("Provider response included unsupported MiMo reasoning content.", providerId);
+            fail(profile === "mimo-subset-2026-07-30"
+              ? "Provider response included unsupported MiMo reasoning content."
+              : "Provider response included unsupported DeepSeek reasoning content.", providerId);
           }
           break;
         }
@@ -52,6 +54,11 @@ export function validateResponsesOutputItems(
     }
   }
   return items;
+}
+
+function isReasoningTextProfile(profile: ResponsesProfile | undefined): boolean {
+  return profile === "mimo-subset-2026-07-30"
+    || profile === "deepseek-subset-2026-07-31";
 }
 
 /** Validate the canonical input window returned by `/responses/compact`. */
