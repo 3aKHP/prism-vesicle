@@ -187,7 +187,8 @@ export function setupChoiceItems(state: SetupState): SetupChoiceItem[] {
 export function setupProviderPresetLabel(preset: SetupProviderPreset): string {
   if (preset === "chat-compatible") return "OpenAI-compatible Chat";
   if (preset === "openai-responses") return "OpenAI Responses";
-  return "MiMo Responses subset";
+  if (preset === "mimo-responses") return "MiMo Responses subset";
+  return "DeepSeek Responses subset";
 }
 
 function baseChoiceItems(state: SetupState): SetupChoiceItem[] {
@@ -200,6 +201,7 @@ function baseChoiceItems(state: SetupState): SetupChoiceItem[] {
       { label: setupProviderPresetLabel("chat-compatible"), detail: "Broadest third-party compatibility" },
       { label: setupProviderPresetLabel("openai-responses"), detail: "Official public profile over HTTP" },
       { label: setupProviderPresetLabel("mimo-responses"), detail: "Pinned 2026-07-30 subset over HTTP" },
+      { label: setupProviderPresetLabel("deepseek-responses"), detail: "Pinned 2026-07-31 subset over HTTP" },
     ];
     case "discovery-error": return [
       { label: "Retry model discovery" },
@@ -336,7 +338,7 @@ function chooseCurrent(state: SetupState, env: NodeJS.ProcessEnv): SetupTransiti
         ? unchanged({ ...state, step: "provider-protocol", selectedIndex: 0, status: "Choose an explicit wire protocol; Vesicle never infers one from the URL or model name." })
         : { state, completion: { launch: false } };
     case "provider-protocol": {
-      const providerPreset = (["chat-compatible", "openai-responses", "mimo-responses"] as const)[index] ?? "chat-compatible";
+      const providerPreset = (["chat-compatible", "openai-responses", "mimo-responses", "deepseek-responses"] as const)[index] ?? "chat-compatible";
       return unchanged(enterInput({ ...state, providerPreset }, "base-url", ""));
     }
     case "discovery-error":
@@ -539,7 +541,7 @@ function applyEffectResult(state: SetupState, result: SetupEffectResult): SetupS
 function goBack(state: SetupState): SetupState {
   switch (state.step) {
     case "provider-protocol": return { ...state, step: "welcome" };
-    case "base-url": return returnToChoice(state, "provider-protocol", ["chat-compatible", "openai-responses", "mimo-responses"].indexOf(state.providerPreset));
+    case "base-url": return returnToChoice(state, "provider-protocol", ["chat-compatible", "openai-responses", "mimo-responses", "deepseek-responses"].indexOf(state.providerPreset));
     case "api-key": return enterInput(state, "base-url", state.baseUrl);
     case "add-model": return { ...state, step: "models" };
     case "tavily-key": return { ...state, step: "tavily-choice" };

@@ -16,14 +16,14 @@ export function toResponsesBody(
   profile: ResponsesProfile,
 ): Record<string, unknown> {
   const tools = request.tools?.map(toResponsesTool);
-  if (profile === "mimo-subset-2026-07-30") {
+  if (isStatelessHttpSubset(profile)) {
     return {
       model: request.model.model,
       instructions: request.system.join("\n\n") || undefined,
       input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
       tools: tools?.length ? tools : undefined,
       tool_choice: tools?.length ? "auto" : undefined,
-      reasoning: reasoningControl(request.generation?.reasoningTier, false, context.providerId),
+      reasoning: reasoningControl(request.generation?.reasoningTier, false, context.providerId, profile),
       stream,
       max_output_tokens: request.generation?.maxTokens,
       temperature: request.generation?.temperature,
@@ -260,9 +260,23 @@ function reasoningControl(
   tier: ReasoningTier | undefined,
   summary: boolean,
   providerId: string,
+  profile?: ResponsesProfile,
 ): Record<string, unknown> | undefined {
   if (!tier) return undefined;
   if (tier === "off") return summary ? undefined : { effort: "none" };
+  if (profile === "deepseek-subset-2026-07-31") {
+    switch (tier) {
+      case "low": return { effort: "low" };
+      case "medium":
+      case "high":
+      case "xhigh": return { effort: "high" };
+      case "max": return { effort: "max" };
+      default:
+        throw new ProviderError(`Unsupported reasoning tier: ${String(tier)}.`, {
+          kind: "malformed_response", providerId,
+        });
+    }
+  }
   let effort: "low" | "medium" | "high" | "xhigh";
   switch (tier) {
     case "low":
@@ -282,6 +296,11 @@ function reasoningControl(
       });
   }
   return { effort, ...(summary ? { summary: "auto" } : {}) };
+}
+
+function isStatelessHttpSubset(profile: ResponsesProfile): boolean {
+  return profile === "mimo-subset-2026-07-30"
+    || profile === "deepseek-subset-2026-07-31";
 }
 
 function userContent(message: VesicleMessage): Array<Record<string, unknown>> {

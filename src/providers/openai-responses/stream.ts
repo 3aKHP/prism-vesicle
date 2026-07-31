@@ -42,7 +42,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
         yield { type: "content_delta", delta: event.delta };
         break;
       case "response.reasoning_summary_text.delta":
-        if (context.profile === "mimo-subset-2026-07-30") {
+        if (isReasoningTextProfile(context.profile)) {
           throw malformed(`Unsupported semantic Responses event: ${event.type}.`, context.providerId);
         }
         if (typeof event.delta !== "string") throw malformed("Reasoning delta was malformed.", context.providerId);
@@ -50,7 +50,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
         yield { type: "reasoning_delta", delta: event.delta };
         break;
       case "response.reasoning_text.delta":
-        if (context.profile !== "mimo-subset-2026-07-30") {
+        if (!isReasoningTextProfile(context.profile)) {
           throw malformed(`Unsupported semantic Responses event: ${event.type}.`, context.providerId);
         }
         if (typeof event.delta !== "string") throw malformed("Reasoning delta was malformed.", context.providerId);
@@ -139,10 +139,15 @@ function isKnownAdditiveEvent(type: string, profile: ResponsesProfile | undefine
     || type === "response.output_item.added" || type === "response.content_part.added"
     || type === "response.content_part.done" || type === "response.output_text.done"
     || type === "response.refusal.done"
-    || (profile !== "mimo-subset-2026-07-30" && (type === "response.reasoning_summary_part.added"
+    || (!isReasoningTextProfile(profile) && (type === "response.reasoning_summary_part.added"
       || type === "response.reasoning_summary_part.done" || type === "response.reasoning_summary_text.done"))
-    || (profile === "mimo-subset-2026-07-30" && type === "response.reasoning_text.done")
+    || (isReasoningTextProfile(profile) && type === "response.reasoning_text.done")
     || type === "response.function_call_arguments.done";
+}
+
+function isReasoningTextProfile(profile: ResponsesProfile | undefined): boolean {
+  return profile === "mimo-subset-2026-07-30"
+    || profile === "deepseek-subset-2026-07-31";
 }
 
 function isFatalResponseFailure(code: string | undefined): boolean {

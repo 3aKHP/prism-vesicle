@@ -136,7 +136,7 @@ describe("guided Setup UI", () => {
     expect(frame).not.toContain("model-00");
   });
 
-  test("exposes explicit Chat, OpenAI Responses, and MiMo subset protocol choices", async () => {
+  test("exposes explicit Chat, OpenAI Responses, MiMo, and DeepSeek protocol choices", async () => {
     const state: SetupState = { ...createInitialSetupState(), step: "provider-protocol" };
     const setup = await testRender(() => <SetupView state={state} width={80} height={24} />, { width: 80, height: 24 });
     await setup.flush();
@@ -145,6 +145,7 @@ describe("guided Setup UI", () => {
     expect(frame).toContain("OpenAI-compatible Chat");
     expect(frame).toContain("OpenAI Responses");
     expect(frame).toContain("MiMo Responses subset");
+    expect(frame).toContain("DeepSeek Responses subset");
   });
 
   test("offers explicit Back actions and resets review navigation to a valid project choice", () => {

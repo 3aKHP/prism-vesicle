@@ -111,6 +111,42 @@ describe("guided Setup configuration writer", () => {
     expect(source).toContain("responsesTransport: http");
   });
 
+  test("writes the DeepSeek Responses subset selected by Setup", async () => {
+    const root = await tempRoot();
+    const configDir = join(root, "config");
+    await writeSetupConfiguration({
+      providerPreset: "deepseek-responses",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "secret",
+      modelIds: ["deepseek-v4-flash"],
+      defaultModel: "deepseek-v4-flash",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: configDir });
+
+    const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
+    expect(registry.providers[0]).toMatchObject({
+      protocol: "openai-responses",
+      responsesProfile: "deepseek-subset-2026-07-31",
+      responsesTransport: "http",
+    });
+    const source = await readFile(join(configDir, "providers.yaml"), "utf8");
+    expect(source).toContain("responsesProfile: deepseek-subset-2026-07-31");
+  });
+
+  test("refuses an unsupported model in the DeepSeek Responses preset", async () => {
+    const root = await tempRoot();
+    await expect(writeSetupConfiguration({
+      providerPreset: "deepseek-responses",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "secret",
+      modelIds: ["deepseek-v4-pro"],
+      defaultModel: "deepseek-v4-pro",
+      permissionMode: "MOMENTUM",
+    }, { VESICLE_CONFIG_DIR: join(root, "config") })).rejects.toThrow(
+      "DeepSeek Responses currently supports only deepseek-v4-flash",
+    );
+  });
+
   test("preserves a legacy Codex Responses profile when no replacement preset is selected", async () => {
     const root = await tempRoot();
     const configDir = join(root, "config");

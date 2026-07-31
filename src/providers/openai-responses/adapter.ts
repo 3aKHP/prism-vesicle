@@ -43,8 +43,9 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   async compact(request: ProviderCompactRequest): Promise<ProviderCompactResult> {
     this.requireApiKey();
     this.requireProfile();
-    if (this.config.responsesProfile === "mimo-subset-2026-07-30") {
-      throw new ProviderError("mimo-subset-2026-07-30 does not support remote Responses compaction.", {
+    if (this.config.responsesProfile === "mimo-subset-2026-07-30"
+      || this.config.responsesProfile === "deepseek-subset-2026-07-31") {
+      throw new ProviderError(`${this.config.responsesProfile} does not support remote Responses compaction.`, {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
@@ -343,10 +344,21 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
+    if (this.config.responsesProfile === "deepseek-subset-2026-07-31" && this.config.responsesTransport === "websocket") {
+      throw new ProviderError("deepseek-subset-2026-07-31 supports HTTP only.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
+    if (this.config.responsesProfile === "deepseek-subset-2026-07-31" && this.config.model !== "deepseek-v4-flash") {
+      throw new ProviderError("deepseek-subset-2026-07-31 currently supports only deepseek-v4-flash.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
     if (this.config.responsesProfile === "openai-public"
       || this.config.responsesProfile === "codex-http-relay"
       || this.config.responsesProfile === "codex-beta-2026-02-06"
-      || this.config.responsesProfile === "mimo-subset-2026-07-30") return this.config.responsesProfile;
+      || this.config.responsesProfile === "mimo-subset-2026-07-30"
+      || this.config.responsesProfile === "deepseek-subset-2026-07-31") return this.config.responsesProfile;
     throw new ProviderError("OpenAI Responses requires an explicit supported responsesProfile.", {
       kind: "malformed_response", providerId: this.config.providerId,
     });

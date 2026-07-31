@@ -10,7 +10,7 @@ This document defines the Windows installer scope, interactive onboarding, model
 ## Onboarding
 
 - `src/setup` owns interactive onboarding. Network discovery, masked input, configuration merge/backup, validation, optional MCP/Tavily setup, permission defaults, and project selection stay in the application so they reuse runtime contracts.
-- Setup presents the wire protocol before collecting the endpoint: OpenAI-compatible Chat, official OpenAI Responses, or the dated MiMo Responses subset. It writes reviewed HTTP defaults and the exact `responsesProfile`; it never guesses a protocol, profile, WebSocket capability, or remote-compaction capability from a URL or model name.
+- Setup presents the wire protocol before collecting the endpoint: OpenAI-compatible Chat, official OpenAI Responses, or the dated MiMo/DeepSeek Responses subsets. It writes reviewed HTTP defaults and the exact `responsesProfile`; it never guesses a protocol, profile, WebSocket capability, or remote-compaction capability from a URL or model name.
 - Setup choice pages must expose a visible backward action in addition to Escape handling, reset selection when returning to a shorter option list, and keep every rendered row clipped within compact terminal bounds.
 
 ## Model Discovery

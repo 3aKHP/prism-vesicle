@@ -101,15 +101,17 @@ describe("OpenAI Responses conformance evidence", () => {
       "websocket-owner",
       "private-identity",
       "mimo-subset",
+      "deepseek-subset",
       "network-fingerprint",
     ]));
     expect(ledger.entries.every((entry) => entry.codex && entry.public && entry.selected && entry.test)).toBe(true);
   });
 
-  test("defines internally consistent OpenAI, Codex-beta, and MiMo profiles", () => {
+  test("defines internally consistent official and third-party Responses profiles", () => {
     const openai = profile.profiles.openaiPublic;
     const codex = profile.profiles.codexBeta20260206;
     const mimo = profile.profiles.mimoSubset20260730;
+    const deepseek = profile.profiles.deepseekSubset20260731;
     expect(openai.websocket.profile).toBe("openai-public");
     expect(codex.websocket.profile).toBe("codex-beta-2026-02-06");
     expect(openai.supportedRequestFields).not.toContain("client_metadata");
@@ -129,6 +131,17 @@ describe("OpenAI Responses conformance evidence", () => {
     ]));
     for (const unsupported of mimo.unsupportedRequestFields) {
       expect(mimo.supportedRequestFields).not.toContain(unsupported);
+    }
+    expect(deepseek).toMatchObject({
+      tier: "responses-compatible-subset",
+      previousResponseId: false,
+      remoteCompact: false,
+      websocket: false,
+      supportedModels: ["deepseek-v4-flash"],
+    });
+    expect(deepseek.supportedEventFamilies).toContain("response.reasoning_text.*");
+    for (const unsupported of deepseek.unsupportedRequestFields) {
+      expect(deepseek.supportedRequestFields).not.toContain(unsupported);
     }
   });
 

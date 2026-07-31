@@ -58,9 +58,11 @@
       ]
     },
     "thirdPartyDocs": {
-      "checkedAt": "2026-07-30",
+      "checkedAt": "2026-07-31",
       "urls": [
-        "https://mimo.mi.com/docs/zh-CN/api/chat/responses"
+        "https://mimo.mi.com/docs/zh-CN/api/chat/responses",
+        "https://api-docs.deepseek.com/zh-cn/guides/responses_api",
+        "https://api-docs.deepseek.com/zh-cn/guides/thinking_mode"
       ]
     }
   },
@@ -180,6 +182,52 @@
         "previous_response_id",
         "parallel_tool_calls",
         "store"
+      ]
+    },
+    "deepseekSubset20260731": {
+      "tier": "responses-compatible-subset",
+      "streaming": true,
+      "functionCalling": true,
+      "parallelToolCalls": true,
+      "reasoningItems": "plaintext",
+      "previousResponseId": false,
+      "remoteCompact": false,
+      "websocket": false,
+      "supportedModels": ["deepseek-v4-flash"],
+      "supportedRequestFields": [
+        "model",
+        "instructions",
+        "input",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "stream",
+        "max_output_tokens",
+        "temperature",
+        "top_p",
+        "text"
+      ],
+      "supportedEventFamilies": [
+        "response.created",
+        "response.in_progress",
+        "response.output_item.*",
+        "response.content_part.*",
+        "response.output_text.*",
+        "response.function_call_arguments.*",
+        "response.reasoning_text.*",
+        "response.completed",
+        "response.failed",
+        "response.incomplete",
+        "error"
+      ],
+      "unsupportedRequestFields": [
+        "background",
+        "context_management",
+        "previous_response_id",
+        "conversation",
+        "store",
+        "include",
+        "stream_options"
       ]
     }
   }

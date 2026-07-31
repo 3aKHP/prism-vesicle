@@ -4,7 +4,8 @@ export type ResponsesProfile =
   | "openai-public"
   | "codex-http-relay"
   | "codex-beta-2026-02-06"
-  | "mimo-subset-2026-07-30";
+  | "mimo-subset-2026-07-30"
+  | "deepseek-subset-2026-07-31";
 export type ResponsesTransport = "http" | "websocket";
 
 export type GenerationDefaults = {

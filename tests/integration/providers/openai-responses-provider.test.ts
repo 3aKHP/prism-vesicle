@@ -371,6 +371,42 @@ describe("OpenAI Responses request codec", () => {
       ...request(), generation: { reasoningTier: "xhigh" },
     }, context(), false, "mimo-subset-2026-07-30").reasoning).toEqual({ effort: "high" });
   });
+
+  test("encodes the stateless DeepSeek subset with its documented reasoning efforts", () => {
+    const body = toResponsesBody({
+      ...request(),
+      messages: [{ role: "user", content: "hello" }],
+      tools: [{ type: "function", function: {
+        name: "echo", description: "Echo", parameters: { type: "object" },
+      } }],
+      generation: { reasoningTier: "max", temperature: 0.2, maxTokens: 512 },
+    }, context(), true, "deepseek-subset-2026-07-31");
+
+    expect(Object.keys(body)).toEqual([
+      "model", "instructions", "input", "tools", "tool_choice", "reasoning",
+      "stream", "max_output_tokens", "temperature", "text",
+    ]);
+    expect(body).toMatchObject({
+      reasoning: { effort: "max" },
+      stream: true,
+      max_output_tokens: 512,
+      temperature: 0.2,
+    });
+    for (const unsupported of [
+      "background", "context_management", "previous_response_id", "parallel_tool_calls",
+      "store", "stream_options", "include", "service_tier", "prompt_cache_key",
+    ]) expect(body).not.toHaveProperty(unsupported);
+
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "off" },
+    }, context(), false, "deepseek-subset-2026-07-31").reasoning).toEqual({ effort: "none" });
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "medium" },
+    }, context(), false, "deepseek-subset-2026-07-31").reasoning).toEqual({ effort: "high" });
+    expect(toResponsesBody({
+      ...request(), generation: { reasoningTier: "xhigh" },
+    }, context(), false, "deepseek-subset-2026-07-31").reasoning).toEqual({ effort: "high" });
+  });
 });
 
 describe("OpenAI Responses typed SSE", () => {
@@ -524,6 +560,14 @@ describe("OpenAI Responses typed SSE", () => {
       { type: "complete", response: { reasoningContent: "thinking", content: "answer" } },
     ]);
     await expect(collect(readResponsesStream(responseStream(events), {
+      ...streamContext(), profile: "deepseek-subset-2026-07-31",
+    }))).resolves.toMatchObject([
+      { type: "attempt_started" },
+      { type: "reasoning_delta", delta: "thinking" },
+      { type: "content_delta", delta: "answer" },
+      { type: "complete", response: { reasoningContent: "thinking", content: "answer" } },
+    ]);
+    await expect(collect(readResponsesStream(responseStream(events), {
       ...streamContext(), profile: "openai-public",
     }))).rejects.toThrow("Unsupported semantic Responses event: response.reasoning_text.delta");
 
@@ -602,6 +646,28 @@ describe("OpenAI Responses typed SSE", () => {
       await expect(adapter.complete(request())).rejects.toThrow(
         "x-api-key authentication requires mimo-subset-2026-07-30",
       );
+      expect(fetches).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("rejects unsupported DeepSeek models before network I/O", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      throw new Error("unexpected fetch");
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "deepseek", baseUrl: "https://api.deepseek.com",
+        model: "deepseek-v4-pro", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
+        responsesTransport: "http",
+      });
+      await expect(adapter.complete({
+        ...request(), model: { provider: "deepseek", model: "deepseek-v4-pro" },
+      })).rejects.toThrow("currently supports only deepseek-v4-flash");
       expect(fetches).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;
