@@ -28,6 +28,7 @@ test("provider selection closes active session resources before changing owner s
     hasApiKey: true,
     missing: [],
     registry,
+    fileEnv: {},
     providerEnvPath: "/redacted/.env",
     hasProviderEnvFile: true,
   };

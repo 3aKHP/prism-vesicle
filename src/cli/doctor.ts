@@ -2,6 +2,7 @@ import { inspectProviderConfig, loadConfigForSelection, loadUserConfigEnvironmen
 import type { ResponsesProfile } from "../config/env";
 import { loadExperimentalQualitySettings } from "../config/quality";
 import { inspectMcpConfig } from "../mcp/registry";
+import { describeProviderProxy, formatProviderProxyDiagnostic, loadProviderProxyPolicy } from "../providers/shared/proxy";
 import { inspectAssets } from "./assets";
 import { inspectSkills } from "./skills";
 import { readActiveIndex } from "../skills";
@@ -57,6 +58,7 @@ export async function runDoctor(): Promise<void> {
     console.log(`Responses remote compact: ${config.capabilities?.remoteCompact === true ? "enabled" : "not declared"}`);
   }
   console.log(`Base URL: ${config.baseUrl}`);
+  console.log(formatProviderProxyLine(config.baseUrl, config.fileEnv));
   console.log(`Model: ${config.model}`);
   console.log(`Vision input: ${config.capabilities?.vision === true ? "available" : "not declared"}`);
   console.log(`Provider config: ${config.registry.source}${config.registry.path ? ` (${config.registry.path})` : ""}`);
@@ -96,4 +98,21 @@ const responsesTierLabels: Record<ResponsesProfile, string> = {
 
 function responsesTier(profile: ResponsesProfile | undefined): string {
   return profile ? responsesTierLabels[profile] : "unknown";
+}
+
+function formatProviderProxyLine(baseUrl: string, fileEnv: NodeJS.ProcessEnv): string {
+  let destination: URL;
+  try {
+    destination = new URL(baseUrl);
+  } catch {
+    return "Provider proxy: direct (no configured route)";
+  }
+  try {
+    const policy = loadProviderProxyPolicy({ userFileEnv: fileEnv, processEnv: process.env });
+    const diagnostic = describeProviderProxy(policy, destination);
+    return formatProviderProxyDiagnostic(diagnostic);
+  } catch {
+    // Invalid proxy configuration: fixed safe message, no value echoed.
+    return "Provider proxy: invalid (set VESICLE_PROVIDER_PROXY to a complete http:// or https:// URL)";
+  }
 }

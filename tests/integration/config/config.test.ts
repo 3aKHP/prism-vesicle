@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadConfigForSelection, loadProviderRegistry } from "../../../src/config/providers";
+import { inspectProviderConfig, loadConfigForSelection, loadProviderRegistry, loadUserConfigEnvironment } from "../../../src/config/providers";
+import { loadProviderProxyPolicy } from "../../../src/providers/shared/proxy";
 import { userConfigDirectory } from "../../../src/config/paths";
 import {
   loadExperimentalQualityProfile,
@@ -708,3 +709,43 @@ async function writeProvidersFile(lines: string[], envLines: string[] = []): Pro
   }
   return { env: { VESICLE_PROVIDERS_FILE: configPath } };
 }
+
+describe("provider proxy configuration", () => {
+  const providersLines = [
+    "default:", "  provider: main", "  model: main-model", "providers:",
+    "  main:", "    protocol: openai-chat-compatible", "    baseUrl: https://example.test/v1",
+    "    apiKeyEnv: MAIN_KEY", "    models:", "      - main-model", "",
+  ];
+
+  test("retains the user-file env map separately from the process overlay", async () => {
+    const { env } = await writeProvidersFile(providersLines, [
+      "MAIN_KEY=file-secret",
+      "VESICLE_PROVIDER_PROXY=http://uf-host:8080",
+    ]);
+    const processEnv: NodeJS.ProcessEnv = {
+      ...env,
+      MAIN_KEY: "proc-secret",
+      HTTPS_PROXY: "http://std-host:8080",
+      VESICLE_PROVIDER_PROXY: "http://proc-host:8080",
+    };
+    const inspected = await inspectProviderConfig(undefined, processEnv);
+    // fileEnv holds ONLY the user-file values, unmerged with the process overlay:
+    // process-only keys must not appear here, and process values never override.
+    expect(inspected.fileEnv.MAIN_KEY).toBe("file-secret");
+    expect(inspected.fileEnv.VESICLE_PROVIDER_PROXY).toBe("http://uf-host:8080");
+    expect(inspected.fileEnv.HTTPS_PROXY).toBeUndefined();
+    // The user file still overlays the process map in effectiveEnv (existing contract).
+    expect(inspected.apiKey).toBe("file-secret");
+  });
+
+  test("user-file Vesicle proxy wins over process standard vars via the real loader", async () => {
+    const { env } = await writeProvidersFile(providersLines, [
+      "MAIN_KEY=file-secret",
+      "VESICLE_PROVIDER_PROXY=http://uf-host:8080",
+    ]);
+    const processEnv: NodeJS.ProcessEnv = { ...env, HTTPS_PROXY: "http://std-host:8080" };
+    const userEnv = await loadUserConfigEnvironment(processEnv);
+    const p = loadProviderProxyPolicy({ userFileEnv: userEnv.fileEnv, processEnv });
+    expect(p).toEqual(expect.objectContaining({ kind: "explicit", source: "user-file" }));
+  });
+});
