@@ -1,5 +1,5 @@
-import { ARTIFACT_VALIDATOR_NAMES } from "../core/artifacts/workbench";
-import { validateContent } from "../core/validators/registry";
+import { ARTIFACT_VALIDATOR_NAMES } from "../../core/artifacts/workbench";
+import { validateContent } from "../../core/validators/registry";
 
 /**
  * In-page validation orchestration for the Workspace page (Scope B / #62,

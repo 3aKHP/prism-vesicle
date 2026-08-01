@@ -7,6 +7,7 @@ import {
   type WorkspaceTreeNode,
   type WorkspaceVisibleRow,
 } from "./tree-data";
+import type { WorkspaceMutation } from "./types";
 
 /**
  * Workspace file-tree owner (Scope B / #62). Owns the tree navigation state —
@@ -213,6 +214,20 @@ export function createTreeOwner(options: TreeOwnerOptions) {
     await Promise.all([recomputeRows(), rebuildIndex()]);
   }
 
+  /**
+   * Apply a frozen file-operation mutation: invalidate the affected caches and
+   * refresh rows + index. Selection follow-ups are the facade's reaction.
+   */
+  function applyMutation(mutation: WorkspaceMutation): Promise<void> {
+    if (mutation.kind === "created" || mutation.kind === "deleted") {
+      invalidateCache(mutation.path);
+    } else {
+      invalidateCache(mutation.source);
+      invalidateCache(mutation.target);
+    }
+    return refreshRowsAndIndex();
+  }
+
   // —— quick open ——
 
   function openQuickOpen(): void {
@@ -268,6 +283,7 @@ export function createTreeOwner(options: TreeOwnerOptions) {
     invalidateCache,
     refreshRowsAndIndex,
     rebuildIndex,
+    applyMutation,
     // quick open
     quickOpenActive,
     quickQuery,

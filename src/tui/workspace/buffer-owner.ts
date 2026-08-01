@@ -8,9 +8,9 @@ import {
   sameFileStamp,
   type FileStamp,
 } from "./buffer-io";
-import { entryExists } from "../workspace-fileops";
+import { entryExists } from "./file-operations";
 import { assertProjectRelativePath } from "./paths";
-import type { EditorStatusTone } from "./types";
+import type { EditorStatusTone, WorkspaceMutation } from "./types";
 
 /**
  * Workspace editor-buffer owner (Scope B / #62, milestone B3). Uniquely owns
@@ -478,6 +478,17 @@ export function createBufferOwner(options: BufferOwnerPorts) {
     return next;
   }
 
+  /** Apply a frozen file-operation mutation to pool state. */
+  function applyMutation(mutation: WorkspaceMutation): void {
+    if (mutation.kind === "moved") {
+      rekey(mutation.source, mutation.target);
+      return;
+    }
+    if (mutation.kind === "deleted" && stampOf(mutation.path)) {
+      close(mutation.path);
+    }
+  }
+
   // —— find / goto / save-as bars ——
 
   function openFind(): void {
@@ -621,6 +632,7 @@ export function createBufferOwner(options: BufferOwnerPorts) {
     checkExternalModifications,
     reconcileExternalChange,
     rekey,
+    applyMutation,
     stampOf,
     setActiveEditorPath,
     // find / goto / save-as

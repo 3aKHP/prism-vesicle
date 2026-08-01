@@ -5,7 +5,7 @@ import {
   runValidation,
   validationSeverity,
   validationSummary,
-} from "../../../src/tui/workspace-validate";
+} from "../../../src/tui/workspace/validation";
 
 describe("validate anchor extraction", () => {
   test("pulls ## section headers and quoted frontmatter keys from a finding", () => {
@@ -127,7 +127,7 @@ describe("validate run + summary + severity", () => {
   });
 
   test("the summary is pure state and never carries an action token (Issue #118 §1)", () => {
-    type VState = import("../../../src/tui/workspace-validate").ValidationState;
+    type VState = import("../../../src/tui/workspace/validation").ValidationState;
     // Each outcome maps to an exact summary, and none carries an action token.
     const cases: Array<{ state: VState; want: string }> = [
       { state: { state: "pending" }, want: "" },

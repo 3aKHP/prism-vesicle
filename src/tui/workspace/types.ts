@@ -19,3 +19,15 @@ export type ViewerScrollEdge = "home" | "end";
  * for save/reload confirmations.
  */
 export type EditorStatusTone = "info" | "success" | "warn" | "error";
+
+/**
+ * A frozen file-operation result. The file-operation owner returns one of
+ * these for every successful mutation; the facade applies it to the owners in
+ * the fixed tree → buffer → validation order, so no owner interprets a
+ * mutation by reaching into another owner's state.
+ */
+export type WorkspaceMutation =
+  | { kind: "created"; path: string; entryType: "file" | "directory" }
+  | { kind: "copied"; source: string; target: string }
+  | { kind: "moved"; source: string; target: string }
+  | { kind: "deleted"; path: string };

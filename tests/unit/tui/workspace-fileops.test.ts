@@ -10,7 +10,7 @@ import {
   moveEntry,
   removeFile,
   trashEntry,
-} from "../../../src/tui/workspace-fileops";
+} from "../../../src/tui/workspace/file-operations";
 
 let root: string;
 
