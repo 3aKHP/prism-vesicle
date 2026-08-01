@@ -211,6 +211,18 @@ export function createBufferOwner(options: BufferOwnerPorts) {
       next.delete(relPath);
       return next;
     });
+    // A closed path must leave every pool set: a stale †disk marker would keep
+    // the status line pinned to warn after the buffer is gone. The `instances`
+    // map is deliberately left to the view's unmount lifecycle
+    // (unregisterEditorInstance): the textarea stays mounted while Solid
+    // reconciles, and purging here would orphan its registration and silently
+    // disable saves after a rekey onto a still-mounted buffer.
+    setExternalChanged((set) => {
+      if (!set.has(relPath)) return set;
+      const next = new Set(set);
+      next.delete(relPath);
+      return next;
+    });
     if (activeEditorPath() === relPath) setActiveEditorPath(null);
   }
 

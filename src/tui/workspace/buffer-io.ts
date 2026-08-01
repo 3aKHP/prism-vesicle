@@ -96,7 +96,16 @@ export async function readEditableFile(
     return null;
   }
   if (!info.isFile()) return null;
-  const content = await readFile(abs, "utf8");
+  // A file that vanishes or becomes unreadable between lstat and read must
+  // surface as "not readable" (null), never as an unhandled rejection — the
+  // editor pool, reload, and external-edit reconciliation all treat null as
+  // the missing/unreadable outcome.
+  let content: string;
+  try {
+    content = await readFile(abs, "utf8");
+  } catch {
+    return null;
+  }
   return {
     relPath: relPath.replace(/\\/g, "/"),
     content,
