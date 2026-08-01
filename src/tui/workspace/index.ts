@@ -5,7 +5,8 @@
  * state. The surface is the complete set of exports external consumers may
  * use; W5 removes the root compat module after callers switch to this path.
  */
-export { createWorkspaceController, resetStaleHorizontalScroll } from "./controller";
+export { createWorkspaceController } from "./controller";
+export { resetStaleHorizontalScroll } from "./buffer-owner";
 export type { WorkspaceController } from "./controller";
 export type {
   ShellPage,
