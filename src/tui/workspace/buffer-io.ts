@@ -1,8 +1,8 @@
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import { dirname } from "node:path";
-import { OVERSIZED_BYTES, PREVIEW_LINE_CAP, type WorkspaceFilePreview } from "./workspace/tree-data";
-import { assertProjectRelativePath } from "./workspace/paths";
+import { OVERSIZED_BYTES, PREVIEW_LINE_CAP, type WorkspaceFilePreview } from "./tree-data";
+import { assertProjectRelativePath } from "./paths";
 
 /**
  * Editor kernel for the Workspace page (Scope B / #62, milestone B3): the
@@ -37,6 +37,11 @@ export type EditableFileRead = {
 };
 
 export type FileStamp = { mtimeMs: number; ino: number };
+
+/** Whether two disk identities describe the same file version (mtime + inode). */
+export function sameFileStamp(left: FileStamp, right: FileStamp): boolean {
+  return left.mtimeMs === right.mtimeMs && left.ino === right.ino;
+}
 
 /**
  * Whether a preview is eligible for the editable textarea. Mirrors the B2
@@ -91,7 +96,16 @@ export async function readEditableFile(
     return null;
   }
   if (!info.isFile()) return null;
-  const content = await readFile(abs, "utf8");
+  // A file that vanishes or becomes unreadable between lstat and read must
+  // surface as "not readable" (null), never as an unhandled rejection — the
+  // editor pool, reload, and external-edit reconciliation all treat null as
+  // the missing/unreadable outcome.
+  let content: string;
+  try {
+    content = await readFile(abs, "utf8");
+  } catch {
+    return null;
+  }
   return {
     relPath: relPath.replace(/\\/g, "/"),
     content,

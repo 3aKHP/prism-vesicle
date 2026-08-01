@@ -8,7 +8,7 @@ import {
   isEditablePreview,
   readEditableFile,
   readFileStamp,
-} from "../../../src/tui/workspace-editor";
+} from "../../../src/tui/workspace/buffer-io";
 import { assertProjectRelativePath } from "../../../src/tui/workspace/paths";
 import { readFilePreview } from "../../../src/tui/workspace/tree-data";
 
