@@ -114,6 +114,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   const editorStatusTone = () => editorStatusState().tone;
   /** Typed setter; clears to neutral info when called with no tone. */
   function status(text: string, tone: EditorStatusTone = "info"): void {
+    const current = editorStatusState();
+    // Skip identical writes: the dirty tracker clears the line on every
+    // keystroke, and an empty-line clear must not re-trigger the status
+    // render on each keypress (hot path — see markEditorContentChanged).
+    if (current.text === text && current.tone === tone) return;
     setEditorStatusState({ text, tone });
   }
   /** Tracks whether the workspace page has been entered at least once. */
