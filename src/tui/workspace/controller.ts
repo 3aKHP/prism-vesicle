@@ -1,27 +1,8 @@
 import { createSignal } from "solid-js";
 import type { TuiKeyEvent } from "../decision-interaction";
-import {
-  isEditablePreview,
-  readFileStamp,
-  sameFileStamp,
-  type FileStamp,
-} from "./buffer-io";
+import { isEditablePreview, readFileStamp } from "./buffer-io";
 import { createBufferOwner } from "./buffer-owner";
-import {
-  copyEntry,
-  createDirectory,
-  createFile,
-  entryExists,
-  moveEntry,
-  removeFile,
-  trashEntry,
-} from "../workspace-fileops";
-import {
-  pendingValidation,
-  runValidation,
-  type LocatedFinding,
-  type ValidationState,
-} from "../workspace-validate";
+import { createFileOperationOwner } from "./file-operation-owner";
 import {
   resolveEditorCommand,
   runExternalEditor,
@@ -31,7 +12,8 @@ import { loadSettings, type Settings } from "../../config/settings";
 import { assertProjectRelativePath } from "./paths";
 import { readFilePreview, statEntry, type WorkspaceFilePreview } from "./tree-data";
 import { createTreeOwner } from "./tree-owner";
-import type { ShellPage, WorkspaceFocusRegion, ViewerScrollEdge, EditorStatusTone } from "./types";
+import { createValidationOwner } from "./validation-owner";
+import type { ShellPage, WorkspaceFocusRegion, ViewerScrollEdge, EditorStatusTone, WorkspaceMutation } from "./types";
 
 /**
  * Shell page state for the two-page model (Scope B / #62). B1 shipped the
@@ -49,22 +31,13 @@ import type { ShellPage, WorkspaceFocusRegion, ViewerScrollEdge, EditorStatusTon
  *
  * Ownership: tree navigation + quick-open state live in `createTreeOwner`,
  * the editable-buffer pool / save / reload / find / goto / save-as live in
- * `createBufferOwner`; this factory composes the owners, keeps the
- * page/focus model, viewer, dialogs, file mutations, validation, and
- * external-editor orchestration until their own waves take over.
+ * `createBufferOwner`, file mutations + ops bar + confirm dialogs live in
+ * `createFileOperationOwner`, and validation state + findings navigation live
+ * in `createValidationOwner`. This factory composes the owners, keeps the
+ * page/focus model and viewer state, applies frozen mutations in the fixed
+ * tree → buffer → validation order, and routes keys until the input-router
+ * wave takes over.
  */
-
-type B3DialogKind = "dirty-confirm" | "overwrite-confirm" | "reload-confirm";
-type EditorDialog =
-  | { kind: B3DialogKind; path: string }
-  | { kind: "delete-confirm"; path: string }
-  | { kind: "ops-overwrite"; path: string; op: "move" | "copy"; source: string }
-  | { kind: "save-as-overwrite"; path: string }
-  | null;
-
-/** Tree file-management input bar (B4 §5.1): path prompts isomorphic to save-as. */
-type OpsBarKind = "create-file" | "create-dir" | "move" | "copy";
-type OpsBar = { kind: OpsBarKind; draft: string; source: string } | null;
 
 const FOCUS_CYCLE: WorkspaceFocusRegion[] = ["tree", "editor", "composer"];
 
@@ -124,6 +97,12 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   /** Tracks whether the workspace page has been entered at least once. */
   let workspaceEntered = false;
 
+  // —— viewer ——
+  const [openFile, setOpenFile] = createSignal<WorkspaceFilePreview | null>(null);
+  const [viewMode, setViewMode] = createSignal<"source" | "preview">("source");
+  let viewerScrollBy: ((delta: number) => void) | null = null;
+  let viewerScrollEdge: ((edge: ViewerScrollEdge) => void) | null = null;
+
   const tree = createTreeOwner({
     rootDir,
     onOpenPath: (relPath) => openPath(relPath),
@@ -135,89 +114,46 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     onStatus: (text, tone) => status(text, tone),
     onWritten: ({ path, content, stamp }) => {
       tree.invalidateCache(path);
-      setValidationFor(path, content, stamp);
+      validation.setFor(path, content, stamp);
     },
     onReloaded: ({ path, content, stamp }) => {
-      setValidationFor(path, content, stamp);
+      validation.setFor(path, content, stamp);
     },
     onSaveAsTargetActivated: async (target) => {
       setOpenFile(await readFilePreview(rootDir, target));
       setViewMode("source");
       void tree.rebuildIndex();
     },
-    onOverwriteConfirm: (path) => setDialog({ kind: "overwrite-confirm", path }),
-    onSaveAsOverwrite: (target) => setDialog({ kind: "save-as-overwrite", path: target }),
-    onReloadConfirm: (path) => setDialog({ kind: "reload-confirm", path }),
+    onOverwriteConfirm: (path) => fileOps.raiseDialog({ kind: "overwrite-confirm", path }),
+    onSaveAsOverwrite: (target) => fileOps.raiseDialog({ kind: "save-as-overwrite", path: target }),
+    onReloadConfirm: (path) => fileOps.raiseDialog({ kind: "reload-confirm", path }),
     onSaveStarted: () => {
-      closeAfterSave = false;
+      fileOps.clearCloseAfterSave();
     },
   });
 
-  // —— viewer ——
-  const [openFile, setOpenFile] = createSignal<WorkspaceFilePreview | null>(null);
-  const [viewMode, setViewMode] = createSignal<"source" | "preview">("source");
-  let viewerScrollBy: ((delta: number) => void) | null = null;
-  let viewerScrollEdge: ((edge: ViewerScrollEdge) => void) | null = null;
+  const fileOps = createFileOperationOwner({
+    rootDir,
+    onStatus: (text, tone) => status(text, tone),
+  });
 
-  // —— editor input dialogs ——
-  const [dialog, setDialog] = createSignal<EditorDialog>(null);
-
-  // —— file-management ops bar (B4 §5.1) ——
-  const [opsBar, setOpsBar] = createSignal<OpsBar>(null);
-
-  // —— in-page validation (B4 §5.2) ——
-  // The snapshot is the retained last result plus the path it describes. The
-  // projected `validationState()` folds in the dirty-buffer staleness rule so
-  // the view never has to: a result whose owning buffer is dirty reads as the
-  // neutral `validation stale` state, and clearing the dirty flag (undo to
-  // clean, save, reload) restores it without re-running the validators.
-  const [validationSnapshot, setValidationSnapshot] = createSignal<ValidationState>(pendingValidation);
-  const [findingsOpen, setFindingsOpen] = createSignal(false);
-  const [findingsIndex, setFindingsIndex] = createSignal(0);
-
-  /**
-   * Displayed validation state. Reads the snapshot plus dirty-buffer truth: a
-   * result/no-match whose path is currently dirty projects to `stale` so the
-   * old verdict never reads as current over edited content. Plain function (not
-   * a memo) so callers — including tests outside a reactive root — always read
-   * the latest projection.
-   */
-  function validationState(): ValidationState {
-    const snap = validationSnapshot();
-    if ((snap.state === "result" || snap.state === "no-match") && buffer.dirtyPaths().has(snap.path)) {
-      return { state: "stale", path: snap.path };
-    }
-    return snap;
-  }
-
-  /**
-   * Disk identity (mtime+ino) of the file the snapshot was computed from. The
-   * findings panel compares this against the live file before reusing a
-   * snapshot, so a deleted-then-recreated or externally rewritten file at the
-   * same path cannot inherit the previous file's findings (Issue #118 review
-   * round 2).
-   */
-  let validationStamp: FileStamp | null = null;
-
-  /** Install a fresh snapshot for `relPath` from its content, with its disk identity. */
-  function setValidationFor(relPath: string, content: string, stamp: FileStamp | null = null): void {
-    setValidationSnapshot(runValidation(relPath, content));
-    validationStamp = stamp;
-  }
-
-  /** Clear the snapshot back to pending (close/delete of the validated file). */
-  function clearValidation(): void {
-    setValidationSnapshot(pendingValidation);
-    validationStamp = null;
-  }
-
-  /** Rekey the snapshot path after a rename/move; the underlying result is unchanged. */
-  function rekeyValidation(oldPath: string, newPath: string): void {
-    const snap = validationSnapshot();
-    if (snap.state !== "pending" && snap.path === oldPath) {
-      setValidationSnapshot({ ...snap, path: newPath } as ValidationState);
-    }
-  }
+  const validation = createValidationOwner({
+    rootDir,
+    onStatus: (text, tone) => status(text, tone),
+    isDirty: (path) => buffer.dirtyPaths().has(path),
+    selectedFilePath: () => {
+      const row = tree.rows()[tree.selectedIndex()];
+      return row && row.node.kind === "file" ? row.node.relPath : null;
+    },
+    openFile: () => openFile(),
+    canEditOpenFile: () => canEditOpenFile(),
+    onJumpTo: (relPath, line) => {
+      if (buffer.activeEditorPath() !== relPath) buffer.setActiveEditorPath(relPath);
+      setViewMode("source");
+      setFocusRegion("editor");
+      buffer.gotoLine(line);
+    },
+  });
 
   function activatePage(next: ShellPage): void {
     const reentering = next === "workspace" && page() === "workspace";
@@ -252,14 +188,14 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     return page() === "workspace"
       && focusRegion() === "editor"
       && isEditing()
-      && !dialogActionPending
+      && !fileOps.dialogActionPending()
       && !tree.quickOpenActive()
-      && !findingsOpen()
+      && !validation.findingsOpen()
       && !buffer.findActive()
       && !buffer.gotoActive()
       && !buffer.saveAsActive()
-      && !dialog()
-      && !opsBar();
+      && !fileOps.dialog()
+      && !fileOps.opsBar();
   }
 
   /**
@@ -281,7 +217,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setViewMode(preview.kind === "markdown" ? "preview" : "source");
     setFocusRegion("editor");
     status("");
-    setValidationFor(relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, relPath));
+    validation.setFor(relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, relPath));
     if (isEditablePreview(preview)) {
       await buffer.open(relPath);
     } else {
@@ -316,7 +252,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     const preview = await readFilePreview(rootDir, file.relPath);
     if (preview) {
       setOpenFile(preview);
-      setValidationFor(file.relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, file.relPath));
+      validation.setFor(file.relPath, preview.lines?.join("\n") ?? "", await readFileStamp(rootDir, file.relPath));
       status(`reloaded ${file.relPath}`, "success");
     }
   }
@@ -331,6 +267,33 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       viewerScrollBy = null;
       viewerScrollEdge = null;
     };
+  }
+
+  // —— mutation application (fixed tree → buffer → validation order) ——
+
+  /**
+   * Apply a frozen file-operation mutation across the owners. The viewer and
+   * tree-selection reactions are the facade's own state; buffer rekey/close
+   * and validation rekey/clear are each owner's `applyMutation`.
+   */
+  async function applyMutation(mutation: WorkspaceMutation): Promise<void> {
+    await tree.applyMutation(mutation);
+    buffer.applyMutation(mutation);
+    validation.applyMutation(mutation);
+    if (mutation.kind === "created" && mutation.entryType === "directory") {
+      tree.selectRelPath(mutation.path);
+    }
+    if (mutation.kind === "copied" || mutation.kind === "moved") {
+      tree.selectRelPath(mutation.target);
+    }
+    if (mutation.kind === "moved" && openFile()?.relPath === mutation.source) {
+      const file = openFile();
+      if (file) setOpenFile({ ...file, relPath: mutation.target });
+    }
+    if (mutation.kind === "deleted" && openFile()?.relPath === mutation.path) {
+      setOpenFile(null);
+      setFocusRegion("tree");
+    }
   }
 
   // —— external editor handoff (B5 §6) ——
@@ -435,299 +398,31 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   // —— save / dialog orchestration ——
 
-  /**
-   * Set when a dirty-confirm "save and close" diverts to the overwrite
-   * confirm: the close intent survives, so force-overwriting completes the
-   * close. saveActive() clears it at the start of every save so it can't leak
-   * across buffers; choosing save-as or cancelling clears it too.
-   */
-  let closeAfterSave = false;
-  // Dialog actions that await filesystem I/O temporarily own keyboard input.
-  // Without this guard, the dialog disappears before the save promise settles
-  // and a fast Esc can reopen it against the same in-flight buffer.
-  let dialogActionPending = false;
-
-  function runDialogAction(action: () => Promise<unknown>): void {
-    dialogActionPending = true;
-    void action().finally(() => { dialogActionPending = false; });
-  }
-
   async function forceSaveActive(): Promise<void> {
     const saved = await buffer.forceSave();
-    if (saved && closeAfterSave) {
-      closeAfterSave = false;
+    if (saved && fileOps.closeAfterSavePending()) {
+      fileOps.clearCloseAfterSave();
       afterDirtyConfirm();
     }
   }
 
-  // —— file management (B4 §5.1) ——
-
-  function openOpsBar(kind: OpsBarKind): void {
-    const row = tree.rows()[tree.selectedIndex()];
-    if (!row) return;
-    const source = row.node.relPath;
-    // create-* and move/copy both prefill the directory part so the user types
-    // the new name in place (B3 save-as taught us a pre-filled full path just
-    // has to be cleared first).
-    setOpsBar({ kind, draft: tree.selectionDirPrefix(), source });
-  }
-
-  function handleOpsBarKey(key: TuiKeyEvent): boolean {
-    const bar = opsBar();
-    if (!bar) return false;
-    if (key.name === "escape") { setOpsBar(null); return true; }
-    if (key.name === "enter") {
-      const draft = bar.draft.trim().replace(/\\/g, "/");
-      setOpsBar(null);
-      if (!draft) { status(`${bar.kind} needs a path`, "error"); return true; }
-      try {
-        assertProjectRelativePath(rootDir, draft);
-      } catch (error) {
-        status(String(error instanceof Error ? error.message : error), "error");
-        return true;
-      }
-      if (bar.kind === "create-file") void execCreateFile(draft);
-      else if (bar.kind === "create-dir") void execCreateDir(draft);
-      else if (bar.kind === "move") void execMove(bar.source, draft, false);
-      else void execCopy(bar.source, draft, false);
-      return true;
-    }
-    if (key.name === "backspace") {
-      setOpsBar((b) => (b ? { ...b, draft: b.draft.slice(0, -1) } : b));
-      return true;
-    }
-    const ch = printableChar(key);
-    if (ch && /[A-Za-z0-9._\-/]/.test(ch)) {
-      setOpsBar((b) => (b ? { ...b, draft: b.draft + ch } : b));
-    }
-    return true;
-  }
-
-  async function execCreateFile(relPath: string): Promise<void> {
-    try {
-      await createFile(rootDir, relPath);
-      status(`created ${relPath}`, "success");
-      await afterTreeMutation(relPath);
-      await openPath(relPath);
-    } catch (error) { status(errMsg(error), "error"); }
-  }
-
-  async function execCreateDir(relPath: string): Promise<void> {
-    try {
-      await createDirectory(rootDir, relPath);
-      status(`created directory ${relPath}`, "success");
-      await afterTreeMutation(relPath);
-      tree.selectRelPath(relPath);
-    } catch (error) { status(errMsg(error), "error"); }
-  }
-
-  async function execMove(source: string, target: string, overwrite: boolean): Promise<void> {
-    if (target === source) { status("move target equals source", "error"); return; }
-    if (!overwrite && await entryExists(rootDir, target)) {
-      setDialog({ kind: "ops-overwrite", path: target, op: "move", source });
-      return;
-    }
-    try {
-      if (overwrite) await removeFile(rootDir, target);
-      await moveEntry(rootDir, source, target);
-      rekeyAcrossOwners(source, target);
-      status(`moved ${source} → ${target}`, "success");
-      await afterTreeMutation2(source, target);
-      tree.selectRelPath(target);
-    } catch (error) { status(errMsg(error), "error"); }
-  }
-
-  async function execCopy(source: string, target: string, overwrite: boolean): Promise<void> {
-    if (target === source) { status("copy target equals source", "error"); return; }
-    if (!overwrite && await entryExists(rootDir, target)) {
-      setDialog({ kind: "ops-overwrite", path: target, op: "copy", source });
-      return;
-    }
-    try {
-      if (overwrite) await removeFile(rootDir, target);
-      await copyEntry(rootDir, source, target);
-      status(`copied ${source} → ${target}`, "success");
-      await afterTreeMutation2(source, target);
-      tree.selectRelPath(target);
-    } catch (error) { status(errMsg(error), "error"); }
-  }
-
-  async function execDelete(relPath: string): Promise<void> {
-    try {
-      // Drop any open editable buffer for this path first (the confirm already
-      // noted unsaved edits); also clear the viewer if it was showing it.
-      if (buffer.stampOf(relPath)) buffer.close(relPath);
-      if (openFile()?.relPath === relPath) {
-        setOpenFile(null);
-        buffer.setActiveEditorPath(null);
-        setFocusRegion("tree");
-      }
-      // A deleted file may own the validation snapshot even when it was never
-      // opened (tree `v` validates the selection without opening it). Clear it
-      // whenever the snapshot describes the deleted path, so a recreated file
-      // at the same path — or an external rewrite — cannot inherit stale
-      // findings (Issue #118 review round 2).
-      const deletedSnap = validationSnapshot();
-      if (deletedSnap.state !== "pending" && deletedSnap.path === relPath) clearValidation();
-      const trashPath = await trashEntry(rootDir, relPath);
-      status(`moved ${relPath} → ${trashPath} (trash)`, "success");
-      await afterTreeMutation(relPath);
-    } catch (error) { status(errMsg(error), "error"); }
-  }
-
   /**
-   * Rekey an open editable buffer from oldPath to newPath (rename/move) across
-   * the owners: the buffer owner rekeys pool state, the facade rekeys the
-   * viewer preview and the validation snapshot. Content and dirty state
-   * survive via the captured plainText → initialValue on remount; the
-   * textarea's undo stack does NOT survive the path-keyed remount (a known B4
-   * limitation — finish editing before renaming if undo matters).
+   * After a dirty-confirm save/discard: drop the buffer's local state, close
+   * the file, and return focus to the tree.
    */
-  function rekeyAcrossOwners(oldPath: string, newPath: string): void {
-    buffer.rekey(oldPath, newPath);
-    const file = openFile();
-    if (file?.relPath === oldPath) setOpenFile({ ...file, relPath: newPath });
-    rekeyValidation(oldPath, newPath);
-  }
-
-  async function afterTreeMutation(relPath: string): Promise<void> {
-    tree.invalidateCache(relPath);
-    await tree.refreshRowsAndIndex();
-  }
-
-  async function afterTreeMutation2(source: string, target: string): Promise<void> {
-    tree.invalidateCache(source);
-    tree.invalidateCache(target);
-    await tree.refreshRowsAndIndex();
+  function afterDirtyConfirm(): void {
+    const path = buffer.activeEditorPath();
+    if (path) buffer.close(path);
+    setOpenFile(null);
+    setFocusRegion("tree");
+    validation.clear();
   }
 
   function errMsg(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
   }
 
-  // —— in-page validation (B4 §5.2) ——
-
-  /**
-   * Open the findings panel for a snapshot already current for `relPath`
-   * (consume, no re-run). Returns false when the caller should bail. Reuse is
-   * gated on the live file's disk identity still matching the snapshot's, so a
-   * recreated or externally rewritten file at the same path does not inherit
-   * stale findings (Issue #118 review round 2).
-   */
-  async function openFindingsForCurrent(relPath: string): Promise<boolean> {
-    const snap = validationSnapshot();
-    if ((snap.state === "result" || snap.state === "no-match") && snap.path === relPath && !buffer.dirtyPaths().has(relPath)) {
-      const current = await readFileStamp(rootDir, relPath);
-      if (validationStamp !== null && current !== null && sameFileStamp(current, validationStamp)) {
-        setFindingsIndex(0);
-        setFindingsOpen(true);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Tree-focus `v` targets the selected row, never an unrelated open file
-   * (Issue #118 §3). A directory or empty selection stays closed with a hint;
-   * a dirty buffer is not silently validated against its older disk image; a
-   * snapshot already current for the selection is consumed rather than re-run.
-   */
-  async function treeValidate(): Promise<void> {
-    const row = tree.rows()[tree.selectedIndex()];
-    if (!row || row.node.kind !== "file") {
-      status("select a file to validate", "info");
-      return;
-    }
-    const relPath = row.node.relPath;
-    if (buffer.dirtyPaths().has(relPath)) {
-      status(`save ${relPath} before validating`, "info");
-      return;
-    }
-    if (await openFindingsForCurrent(relPath)) return;
-    const preview = await readFilePreview(rootDir, relPath);
-    if (!preview) {
-      status(`${relPath} is not readable`, "error");
-      return;
-    }
-    const stamp = await readFileStamp(rootDir, relPath);
-    setValidationFor(relPath, preview.lines?.join("\n") ?? "", stamp);
-    setFindingsIndex(0);
-    setFindingsOpen(true);
-  }
-
-  /**
-   * Viewer-focus `v` targets the open file. Same dirty-buffer and consume
-   * rules as the tree path; re-validates only when the snapshot is stale or
-   * for a different file.
-   */
-  async function viewerValidate(): Promise<void> {
-    const file = openFile();
-    if (!file) { status("open a file to validate", "info"); return; }
-    if (buffer.dirtyPaths().has(file.relPath)) {
-      status(`save ${file.relPath} before validating`, "info");
-      return;
-    }
-    if (await openFindingsForCurrent(file.relPath)) return;
-    const stamp = await readFileStamp(rootDir, file.relPath);
-    setValidationFor(file.relPath, file.lines?.join("\n") ?? "", stamp);
-    setFindingsIndex(0);
-    setFindingsOpen(true);
-  }
-
-  /**
-   * Whether `Enter` in the findings panel would really jump. Requires an
-   * admitted editable buffer for the open file and a selected finding with a
-   * resolvable line (Issue #118 §4 — read-only / oversized / refused-buffer
-   * targets must neither advertise nor execute a jump).
-   */
-  function canJumpToSelectedFinding(): boolean {
-    const file = openFile();
-    if (!file || !canEditOpenFile()) return false;
-    const snap = validationSnapshot();
-    if (snap.state !== "result") return false;
-    // The findings panel can describe a different file than the one open (tree
-    // `v` validates the selection without opening it). A jump must target the
-    // open buffer, so refuse — and do not advertise Enter — when the snapshot
-    // belongs to another file (Issue #118 review: cross-file jump).
-    if (snap.path !== file.relPath) return false;
-    const finding = snap.findings[findingsIndex()];
-    return Boolean(finding && finding.line !== null);
-  }
-
-  function handleFindingsKey(key: TuiKeyEvent): boolean {
-    const state = validationSnapshot();
-    const findings = state.state === "result" ? state.findings : [];
-    if (key.name === "escape") { setFindingsOpen(false); return true; }
-    if (findings.length === 0) return true;
-    if (key.name === "up") { setFindingsIndex((i) => Math.max(0, i - 1)); return true; }
-    if (key.name === "down") { setFindingsIndex((i) => Math.min(findings.length - 1, i + 1)); return true; }
-    if (key.name === "enter") {
-      if (canJumpToSelectedFinding()) {
-        const finding = findings[findingsIndex()];
-        if (finding) jumpToFinding(finding);
-      }
-      return true;
-    }
-    return true;
-  }
-
-  /** Land the active editable buffer at a finding's line and close the panel. */
-  function jumpToFinding(finding: LocatedFinding): void {
-    const file = openFile();
-    // Defence-in-depth alongside canJumpToSelectedFinding: never jump a finding
-    // from another file's snapshot into the open buffer.
-    const snap = validationSnapshot();
-    if (!file || !canEditOpenFile() || finding.line === null) return;
-    if (snap.state !== "pending" && snap.path !== file.relPath) return;
-    if (buffer.activeEditorPath() !== file.relPath) buffer.setActiveEditorPath(file.relPath);
-    setViewMode("source");
-    setFocusRegion("editor");
-    setFindingsOpen(false);
-    buffer.gotoLine(finding.line);
-  }
-
-  // —— quick open keys ——
+  // —— key handling ——
 
   function handleQuickOpenKey(key: TuiKeyEvent): boolean {
     if (key.name === "escape") { tree.closeQuickOpen(); return true; }
@@ -739,8 +434,6 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (char) tree.quickOpenAppend(char);
     return true; // the panel owns all input while open
   }
-
-  // —— key handling ——
 
   function handleFindKey(key: TuiKeyEvent): boolean {
     if (key.name === "escape") { buffer.closeFind(); return true; }
@@ -795,89 +488,109 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     return true;
   }
 
+  function handleOpsBarKey(key: TuiKeyEvent): boolean {
+    const bar = fileOps.opsBar();
+    if (!bar) return false;
+    if (key.name === "escape") { fileOps.closeOpsBar(); return true; }
+    if (key.name === "enter") {
+      void fileOps.opsBarCommit().then(async (mutation) => {
+        if (!mutation) return;
+        await applyMutation(mutation);
+        if (mutation.kind === "created" && mutation.entryType === "file") {
+          await openPath(mutation.path);
+        }
+      });
+      return true;
+    }
+    if (key.name === "backspace") {
+      fileOps.opsBarBackspace();
+      return true;
+    }
+    const ch = printableChar(key);
+    if (ch && /[A-Za-z0-9._\-/]/.test(ch)) {
+      fileOps.opsBarAppend(ch);
+    }
+    return true;
+  }
+
   function handleDialogKey(key: TuiKeyEvent): boolean {
-    const current = dialog();
+    const current = fileOps.dialog();
     if (!current) return false;
-    if (key.name === "escape") { closeAfterSave = false; setDialog(null); return true; }
+    if (key.name === "escape") { fileOps.clearCloseAfterSave(); fileOps.closeDialog(); return true; }
     if (current.kind === "dirty-confirm") {
       if (key.name === "y") {
-        setDialog(null);
+        fileOps.closeDialog();
         // Close only when the save actually landed. A save diverted to the
         // overwrite confirm keeps the buffer open and arms closeAfterSave so
         // force-overwriting completes the close — the edits are never
         // discarded under the user's feet.
-        runDialogAction(async () => {
+        fileOps.runDialogAction(async () => {
           const saved = await buffer.saveActive();
           if (saved) afterDirtyConfirm();
-          else closeAfterSave = true;
+          else fileOps.armCloseAfterSave();
         });
         return true;
       }
-      if (key.name === "n") { setDialog(null); afterDirtyConfirm(); return true; }
+      if (key.name === "n") { fileOps.closeDialog(); afterDirtyConfirm(); return true; }
       return true;
     }
     if (current.kind === "overwrite-confirm") {
       if (key.name === "o") {
-        setDialog(null);
-        runDialogAction(forceSaveActive);
+        fileOps.closeDialog();
+        fileOps.runDialogAction(forceSaveActive);
         return true;
       }
       // Save-as satisfies the save intent by itself; the buffer moves to the
       // new path and stays open there.
-      if (key.name === "s") { closeAfterSave = false; setDialog(null); buffer.openSaveAs(); return true; }
-      if (key.name === "c") { closeAfterSave = false; setDialog(null); return true; }
+      if (key.name === "s") { fileOps.clearCloseAfterSave(); fileOps.closeDialog(); buffer.openSaveAs(); return true; }
+      if (key.name === "c") { fileOps.clearCloseAfterSave(); fileOps.closeDialog(); return true; }
       return true;
     }
     if (current.kind === "reload-confirm") {
-      if (key.name === "y") { setDialog(null); runDialogAction(buffer.reloadActiveBuffer); return true; }
-      if (key.name === "n") { setDialog(null); return true; }
+      if (key.name === "y") { fileOps.closeDialog(); fileOps.runDialogAction(buffer.reloadActiveBuffer); return true; }
+      if (key.name === "n") { fileOps.closeDialog(); return true; }
       return true;
     }
     if (current.kind === "delete-confirm") {
       // Plan §5.1: "y deletes / anything else cancels".
       if (key.name === "y") {
         const p = current.path;
-        setDialog(null);
-        runDialogAction(() => execDelete(p));
+        fileOps.closeDialog();
+        fileOps.runDialogAction(async () => {
+          const mutation = await fileOps.execDelete(p);
+          if (mutation) await applyMutation(mutation);
+        });
         return true;
       }
-      setDialog(null);
+      fileOps.closeDialog();
       return true;
     }
     if (current.kind === "ops-overwrite") {
       if (key.name === "o") {
         const { op, source, path: target } = current;
-        setDialog(null);
-        if (op === "move") runDialogAction(() => execMove(source, target, true));
-        else runDialogAction(() => execCopy(source, target, true));
+        fileOps.closeDialog();
+        fileOps.runDialogAction(async () => {
+          const mutation = op === "move"
+            ? await fileOps.execMove(source, target, true)
+            : await fileOps.execCopy(source, target, true);
+          if (mutation) await applyMutation(mutation);
+        });
         return true;
       }
-      if (key.name === "c") { setDialog(null); return true; }
+      if (key.name === "c") { fileOps.closeDialog(); return true; }
       return true;
     }
     if (current.kind === "save-as-overwrite") {
       if (key.name === "o") {
         const p = current.path;
-        setDialog(null);
-        runDialogAction(() => buffer.performSaveAs(p));
+        fileOps.closeDialog();
+        fileOps.runDialogAction(() => buffer.performSaveAs(p));
         return true;
       }
-      if (key.name === "c" || key.name === "escape") { setDialog(null); return true; }
+      if (key.name === "c" || key.name === "escape") { fileOps.closeDialog(); return true; }
       return true;
     }
     return true;
-  }
-
-  /**
-   * After a dirty-confirm save/discard: drop the buffer's local state, close
-   * the file, and return focus to the tree.
-   */
-  function afterDirtyConfirm(): void {
-    const path = buffer.activeEditorPath();
-    if (path) buffer.close(path);
-    setOpenFile(null);
-    setFocusRegion("tree");
-    clearValidation();
   }
 
   function handleTreeKey(key: TuiKeyEvent): boolean {
@@ -890,16 +603,28 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "r": void tree.refresh(); return true;
       case ".": void tree.toggleHidden(); return true;
       case "/": tree.openQuickOpen(); return true;
-      case "a": openOpsBar(key.shift ? "create-dir" : "create-file"); return true;
-      case "m":
-      case "f2": openOpsBar("move"); return true;
-      case "c": openOpsBar("copy"); return true;
-      case "d": {
+      case "a": {
         const row = tree.rows()[tree.selectedIndex()];
-        if (row) setDialog({ kind: "delete-confirm", path: row.node.relPath });
+        if (row) fileOps.openOpsBar(key.shift ? "create-dir" : "create-file", row.node.relPath, tree.selectionDirPrefix());
         return true;
       }
-      case "v": void treeValidate(); return true;
+      case "m":
+      case "f2": {
+        const row = tree.rows()[tree.selectedIndex()];
+        if (row) fileOps.openOpsBar("move", row.node.relPath, tree.selectionDirPrefix());
+        return true;
+      }
+      case "c": {
+        const row = tree.rows()[tree.selectedIndex()];
+        if (row) fileOps.openOpsBar("copy", row.node.relPath, tree.selectionDirPrefix());
+        return true;
+      }
+      case "d": {
+        const row = tree.rows()[tree.selectedIndex()];
+        if (row) fileOps.raiseDialog({ kind: "delete-confirm", path: row.node.relPath });
+        return true;
+      }
+      case "v": void validation.treeValidate(); return true;
       case "q": setFocusRegion("composer"); return true;
       case "escape": setFocusRegion("composer"); return true;
       default: return true; // focused region owns (and swallows) the rest
@@ -912,7 +637,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
       case "q": setFocusRegion("tree"); return true;
       case "r": void reloadViewer(); return true;
       case "m": toggleViewMode(); return true;
-      case "v": void viewerValidate(); return true;
+      case "v": void validation.viewerValidate(); return true;
       case "up": viewerScrollBy?.(-1); return true;
       case "down": viewerScrollBy?.(1); return true;
       case "pageup": viewerScrollBy?.(-10); return true;
@@ -945,7 +670,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (key.name === "escape") {
       const path = buffer.activeEditorPath();
       if (path && buffer.dirtyPaths().has(path)) {
-        setDialog({ kind: "dirty-confirm", path });
+        fileOps.raiseDialog({ kind: "dirty-confirm", path });
         return true;
       }
       leaveEditorSource();
@@ -958,11 +683,11 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   /** Returns true when the key was consumed by the Workspace page. */
   function handleKey(key: TuiKeyEvent): boolean {
     if (page() !== "workspace") return false;
-    if (dialogActionPending) return true;
+    if (fileOps.dialogActionPending()) return true;
     if (tree.quickOpenActive()) return handleQuickOpenKey(key);
-    if (findingsOpen()) return handleFindingsKey(key);
-    if (dialog()) return handleDialogKey(key);
-    if (opsBar()) return handleOpsBarKey(key);
+    if (validation.findingsOpen()) return validation.handleFindingsKey(key);
+    if (fileOps.dialog()) return handleDialogKey(key);
+    if (fileOps.opsBar()) return handleOpsBarKey(key);
     if (buffer.findActive()) return handleFindKey(key);
     if (buffer.gotoActive()) return handleGotoKey(key);
     if (buffer.saveAsActive()) return handleSaveAsKey(key);
@@ -1033,16 +758,16 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     gotoDraft: buffer.gotoDraft,
     saveAsActive: buffer.saveAsActive,
     saveAsDraft: buffer.saveAsDraft,
-    dialog,
+    dialog: fileOps.dialog,
     // file management (B4)
-    opsBar,
+    opsBar: fileOps.opsBar,
     // in-page validation (B4)
-    validationState,
-    validationSnapshot,
-    findingsOpen,
-    findingsIndex,
+    validationState: validation.validationState,
+    validationSnapshot: validation.validationSnapshot,
+    findingsOpen: validation.findingsOpen,
+    findingsIndex: validation.findingsIndex,
     canEditOpenFile,
-    canJumpToSelectedFinding,
+    canJumpToSelectedFinding: validation.canJumpToSelectedFinding,
     // quick open
     quickOpenActive: tree.quickOpenActive,
     quickQuery: tree.quickQuery,
