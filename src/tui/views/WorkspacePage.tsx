@@ -5,7 +5,7 @@ import { palette } from "../theme";
 import { MarkdownContent } from "../widgets/MarkdownContent";
 import type { WorkspaceController, EditorStatusTone } from "../workspace-controller";
 import { resetStaleHorizontalScroll } from "../workspace-controller";
-import type { WorkspaceFileKind } from "../workspace-files";
+import type { WorkspaceFileKind } from "../workspace";
 import { pendingValidation, validationSeverity, validationSummary } from "../workspace-validate";
 import type { ValidationState } from "../workspace-validate";
 import { displayWidth, truncateMiddle } from "../format";

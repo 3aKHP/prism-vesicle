@@ -1,7 +1,7 @@
 import { constants, type Dirent, type Stats } from "node:fs";
 import { access, lstat, open, readFile, readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
-import { assertProjectRelativePath } from "./workspace-paths";
+import { assertProjectRelativePath } from "./paths";
 
 /**
  * Filesystem model for the Workspace page (Scope B / #62, milestone B2).

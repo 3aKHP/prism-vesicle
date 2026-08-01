@@ -9,8 +9,8 @@ import {
   readEditableFile,
   readFileStamp,
 } from "../../../src/tui/workspace-editor";
-import { assertProjectRelativePath } from "../../../src/tui/workspace-paths";
-import { readFilePreview } from "../../../src/tui/workspace-files";
+import { assertProjectRelativePath } from "../../../src/tui/workspace/paths";
+import { readFilePreview } from "../../../src/tui/workspace/tree-data";
 
 let root: string;
 
