@@ -43,11 +43,12 @@ export function createFileOperationOwner(options: FileOpOwnerPorts) {
   const [opsBar, setOpsBar] = createSignal<OpsBar>(null);
 
   // —— confirm dialogs + action serialization ——
-  // The dialog signal is the page's single modal surface; B3 buffer dialogs
-  // (dirty/overwrite/reload/save-as overwrite) are raised through the facade
-  // into this owner, which serializes every async dialog action behind
-  // `dialogActionPending` so a fast Esc cannot reopen a dialog against an
-  // in-flight save.
+  // The dialog signal is the page's single modal surface: buffer-owned B3
+  // dialogs (dirty/overwrite/reload/save-as overwrite) are raised through the
+  // facade into this owner alongside the B4 delete/ops-overwrite dialogs. The
+  // controller keeps interpreting dialog actions (key routing, W4) and only
+  // delegates the serialization gate here, so no dialog is interpreted in two
+  // places.
   const [dialog, setDialog] = createSignal<EditorDialog>(null);
   let dialogActionPending = false;
 
@@ -132,7 +133,7 @@ export function createFileOperationOwner(options: FileOpOwnerPorts) {
     try {
       await createFile(rootDir, relPath);
       onStatus(`created ${relPath}`, "success");
-      return { kind: "created", path: relPath, entryType: "file" };
+      return Object.freeze({ kind: "created", path: relPath, entryType: "file" });
     } catch (error) { onStatus(errMsg(error), "error"); return null; }
   }
 
@@ -140,7 +141,7 @@ export function createFileOperationOwner(options: FileOpOwnerPorts) {
     try {
       await createDirectory(rootDir, relPath);
       onStatus(`created directory ${relPath}`, "success");
-      return { kind: "created", path: relPath, entryType: "directory" };
+      return Object.freeze({ kind: "created", path: relPath, entryType: "directory" });
     } catch (error) { onStatus(errMsg(error), "error"); return null; }
   }
 
@@ -154,7 +155,7 @@ export function createFileOperationOwner(options: FileOpOwnerPorts) {
       if (overwrite) await removeFile(rootDir, target);
       await moveEntry(rootDir, source, target);
       onStatus(`moved ${source} → ${target}`, "success");
-      return { kind: "moved", source, target };
+      return Object.freeze({ kind: "moved", source, target });
     } catch (error) { onStatus(errMsg(error), "error"); return null; }
   }
 
@@ -168,7 +169,7 @@ export function createFileOperationOwner(options: FileOpOwnerPorts) {
       if (overwrite) await removeFile(rootDir, target);
       await copyEntry(rootDir, source, target);
       onStatus(`copied ${source} → ${target}`, "success");
-      return { kind: "copied", source, target };
+      return Object.freeze({ kind: "copied", source, target });
     } catch (error) { onStatus(errMsg(error), "error"); return null; }
   }
 
@@ -176,7 +177,7 @@ export function createFileOperationOwner(options: FileOpOwnerPorts) {
     try {
       const trashPath = await trashEntry(rootDir, relPath);
       onStatus(`moved ${relPath} → ${trashPath} (trash)`, "success");
-      return { kind: "deleted", path: relPath };
+      return Object.freeze({ kind: "deleted", path: relPath });
     } catch (error) { onStatus(errMsg(error), "error"); return null; }
   }
 
