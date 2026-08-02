@@ -7,7 +7,7 @@ import {
   runExternalEditor,
   splitCommandLine,
   type EditorRuntime,
-} from "../../../src/tui/workspace-external-editor";
+} from "../../../src/tui/workspace/external-editor-runtime";
 import { loadSettings, settingsPath } from "../../../src/config/settings";
 
 describe("splitCommandLine", () => {

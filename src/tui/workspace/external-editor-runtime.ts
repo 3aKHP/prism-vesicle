@@ -1,4 +1,4 @@
-import type { Settings } from "../config/settings";
+import type { Settings } from "../../config/settings";
 
 /**
  * External-editor handoff for the Workspace page (Scope B / #62, milestone
