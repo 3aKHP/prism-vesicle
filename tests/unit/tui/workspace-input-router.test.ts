@@ -71,6 +71,32 @@ describe("workspace input router: fixed priority order", () => {
     expect(ports.calls.global ?? 0).toBe(0);
   });
 
+  test("with two surfaces active the earlier priority wins and the later is never called", () => {
+    // This pins the ORDER itself: a permuted if-chain would pass the
+    // single-surface tests but fails here (the plan's stop condition forbids
+    // relaxing the priority).
+    const quickFind = makePorts();
+    quickFind.surfaces.quickOpen = true;
+    quickFind.surfaces.findings = true;
+    expect(routeWorkspaceKey(key("x"), quickFind)).toBe(true);
+    expect(quickFind.calls.quickOpen).toBe(1);
+    expect(quickFind.calls.findings ?? 0).toBe(0);
+
+    const dialogFind = makePorts();
+    dialogFind.surfaces.dialog = true;
+    dialogFind.surfaces.find = true;
+    expect(routeWorkspaceKey(key("x"), dialogFind)).toBe(true);
+    expect(dialogFind.calls.dialog).toBe(1);
+    expect(dialogFind.calls.find ?? 0).toBe(0);
+
+    const findSave = makePorts();
+    findSave.surfaces.find = true;
+    findSave.surfaces.saveAs = true;
+    expect(routeWorkspaceKey(key("x"), findSave)).toBe(true);
+    expect(findSave.calls.find).toBe(1);
+    expect(findSave.calls.saveAs ?? 0).toBe(0);
+  });
+
   test("global keys run before the region dispatch", () => {
     const ports = makePorts();
     ports.globalKeys = () => { ports.calls.global = 1; return true; };
