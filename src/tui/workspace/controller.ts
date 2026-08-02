@@ -2,15 +2,10 @@ import { createSignal } from "solid-js";
 import type { TuiKeyEvent } from "../decision-interaction";
 import { isEditablePreview, readFileStamp } from "./buffer-io";
 import { createBufferOwner } from "./buffer-owner";
+import { createExternalEditorOwner } from "./external-editor-owner";
 import { createFileOperationOwner } from "./file-operation-owner";
-import {
-  resolveEditorCommand,
-  runExternalEditor,
-  type EditorRuntime,
-} from "../workspace-external-editor";
-import { loadSettings, type Settings } from "../../config/settings";
-import { assertProjectRelativePath } from "./paths";
-import { readFilePreview, statEntry, type WorkspaceFilePreview } from "./tree-data";
+import { routeWorkspaceKey, type InputSurface } from "./input-router";
+import { readFilePreview, type WorkspaceFilePreview } from "./tree-data";
 import { createTreeOwner } from "./tree-owner";
 import { createValidationOwner } from "./validation-owner";
 import type { ShellPage, WorkspaceFocusRegion, ViewerScrollEdge, EditorStatusTone, WorkspaceMutation } from "./types";
@@ -296,14 +291,30 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     }
   }
 
-  // —— external editor handoff (B5 §6) ——
-
-  /** Renderer + spawn primitives, injected by the component (see WorkspacePage). */
-  let externalEditorRuntime: EditorRuntime | null = null;
-  function registerExternalEditor(runtime: EditorRuntime): () => void {
-    externalEditorRuntime = runtime;
-    return () => { externalEditorRuntime = null; };
-  }
+  const externalEditor = createExternalEditorOwner({
+    rootDir,
+    onStatus: (text, tone) => status(text, tone),
+    resolveHandoffTarget: () => resolveHandoffTarget(),
+    buffer: {
+      isDirty: (path) => buffer.dirtyPaths().has(path),
+      reconcile: (path) => buffer.reconcileExternalChange(path),
+    },
+    tree: {
+      invalidateCache: (path) => tree.invalidateCache(path),
+      refreshRowsAndIndex: () => tree.refreshRowsAndIndex(),
+    },
+    viewer: {
+      reloadIfShowing: async (relPath) => {
+        if (openFile()?.relPath === relPath) await reloadViewer();
+      },
+      closeIfShowing: (relPath) => {
+        if (openFile()?.relPath === relPath) {
+          setOpenFile(null);
+          setFocusRegion("tree");
+        }
+      },
+    },
+  });
 
   /** Which file Ctrl+X hands off, by focus region (plan §6.1). */
   function resolveHandoffTarget(): string | null {
@@ -320,68 +331,6 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (file) return file.relPath;
     status("open or select a file to edit externally", "info");
     return null;
-  }
-
-  async function handoffToExternal(): Promise<void> {
-    const target = resolveHandoffTarget();
-    if (!target) return;
-    let abs: string;
-    try {
-      abs = assertProjectRelativePath(rootDir, target);
-    } catch (error) {
-      status(errMsg(error), "error");
-      return;
-    }
-    const stat = await statEntry(rootDir, target);
-    if (stat?.kind === "dir") { status(`${target} is a directory`, "error"); return; }
-    // dirty gate (plan §6.1): an unsaved buffer would be silently overwritten
-    // by whatever the external editor writes, so refuse and point at Ctrl+S.
-    if (buffer.dirtyPaths().has(target)) {
-      status(`${target} has unsaved edits — press Ctrl+S before the external editor`, "error");
-      return;
-    }
-    const runtime = externalEditorRuntime;
-    if (!runtime) { status("external editor is unavailable in this build", "error"); return; }
-
-    let settings: Settings;
-    try {
-      settings = await loadSettings();
-    } catch (error) {
-      status(`settings.yaml is malformed — ${errMsg(error)} (fix or remove it)`, "error");
-      return;
-    }
-    const editor = resolveEditorCommand({ env: process.env, settings });
-    status(`opening ${target} in ${editor.command}…`, "info");
-    let exitCode = 0;
-    try {
-      const result = await runExternalEditor({ absPath: abs, editor, runtime });
-      exitCode = result.exitCode;
-    } catch (error) {
-      status(`editor "${editor.command}" failed to start — ${errMsg(error)}`, "error");
-      return;
-    }
-    if (exitCode !== 0) status(`editor exited with code ${exitCode}`, "warn");
-    await refreshAfterExternalEdit(target);
-  }
-
-  /**
-   * React to whatever the external editor did: a resident buffer is reconciled
-   * by the buffer owner (unchanged/modified/removed), and the facade only
-   * reacts to viewer/focus state; a non-resident file just has its tree cache
-   * + index invalidated and the viewer re-read if it was showing the file.
-   */
-  async function refreshAfterExternalEdit(relPath: string): Promise<void> {
-    const outcome = await buffer.reconcileExternalChange(relPath);
-    if (outcome === "not-resident") {
-      tree.invalidateCache(relPath);
-      await tree.refreshRowsAndIndex();
-      if (openFile()?.relPath === relPath) await reloadViewer();
-      return;
-    }
-    if (outcome === "removed" && openFile()?.relPath === relPath) {
-      setOpenFile(null);
-      setFocusRegion("tree");
-    }
   }
 
   /** Leave the editable source by one focus level (Esc-clean destination). */
@@ -416,10 +365,6 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setOpenFile(null);
     setFocusRegion("tree");
     validation.clear();
-  }
-
-  function errMsg(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
   }
 
   // —— key handling ——
@@ -682,21 +627,22 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
 
   /** Returns true when the key was consumed by the Workspace page. */
   function handleKey(key: TuiKeyEvent): boolean {
-    if (page() !== "workspace") return false;
-    if (fileOps.dialogActionPending()) return true;
-    if (tree.quickOpenActive()) return handleQuickOpenKey(key);
-    if (validation.findingsOpen()) return validation.handleFindingsKey(key);
-    if (fileOps.dialog()) return handleDialogKey(key);
-    if (fileOps.opsBar()) return handleOpsBarKey(key);
-    if (buffer.findActive()) return handleFindKey(key);
-    if (buffer.gotoActive()) return handleGotoKey(key);
-    if (buffer.saveAsActive()) return handleSaveAsKey(key);
+    return routeWorkspaceKey(key, routerPorts);
+  }
+
+  /** Global Workspace keys (Ctrl+P / Ctrl+X / F6) — routed before the region. */
+  function handleGlobalKeys(key: TuiKeyEvent): boolean {
     if (key.ctrl && key.name === "p") { tree.openQuickOpen(); return true; }
     // Ctrl+X hands off to the external editor from every Workspace focus
     // region (B5 §6.1); caught here so it also covers the composer region and
     // is intercepted before the editable source textarea can consume it.
-    if (isCtrl(key, "x") && !key.shift) { void handoffToExternal(); return true; }
+    if (isCtrl(key, "x") && !key.shift) { void externalEditor.handoffToExternal(); return true; }
     if (key.name === "f6") { cycleFocus(key.shift ? -1 : 1); return true; }
+    return false;
+  }
+
+  /** Focus-region dispatch (tree / viewer / editable source / composer). */
+  function handleRegionKeys(key: TuiKeyEvent): boolean {
     const region = focusRegion();
     if (region === "editor" && openFile()) {
       if (isEditing()) return handleEditableKey(key);
@@ -705,6 +651,24 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     if (region === "editor") { setFocusRegion("tree"); return true; }
     if (region === "tree") return handleTreeKey(normalizeVimKey(key));
     return false; // composer region: fall through to the shared composer
+  }
+
+  const routerPorts: import("./input-router").WorkspaceRouterPorts = {
+    pageIsWorkspace: () => page() === "workspace",
+    dialogActionPending: () => fileOps.dialogActionPending(),
+    quickOpen: surface(() => tree.quickOpenActive(), handleQuickOpenKey),
+    findings: surface(() => validation.findingsOpen(), (key) => validation.handleFindingsKey(key)),
+    dialog: surface(() => fileOps.dialog() !== null, handleDialogKey),
+    opsBar: surface(() => fileOps.opsBar() !== null, handleOpsBarKey),
+    find: surface(() => buffer.findActive(), handleFindKey),
+    goto: surface(() => buffer.gotoActive(), handleGotoKey),
+    saveAs: surface(() => buffer.saveAsActive(), handleSaveAsKey),
+    globalKeys: handleGlobalKeys,
+    regionKeys: handleRegionKeys,
+  };
+
+  function surface(active: () => boolean, handle: (key: TuiKeyEvent) => boolean): InputSurface {
+    return { active, handle };
   }
 
   return {
@@ -730,7 +694,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     toggleViewMode,
     registerViewerScroller,
     // external editor handoff (B5)
-    registerExternalEditor,
+    registerExternalEditor: externalEditor.registerExternalEditor,
     // editor pool
     editorOrder: buffer.editorOrder,
     activeEditorPath: buffer.activeEditorPath,
