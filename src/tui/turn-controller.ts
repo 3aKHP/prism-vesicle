@@ -14,17 +14,120 @@ import { createDecisionContinuations } from "./decision-continuations";
 import { ProviderError, cleanProviderMessage, providerFailureCategoryLabel, summarizeProviderFailure } from "../providers/shared/errors";
 import { vesicleMessagesFromResumed } from "./session-presenter";
 
-export type { TurnControllerOptions } from "./turn-controller-options";
-import type { TurnControllerOptions } from "./turn-controller-options";
+export type { TurnControllerOptions, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnDecisionPort, TurnAgentPort, TurnUsagePort, TurnComposerPort, TurnHostActionPort } from "./turn-controller-options";
+import type { TurnAgentPort, TurnComposerPort, TurnDecisionPort, TurnHostActionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort, TurnControllerOptions } from "./turn-controller-options";
 export function createTurnController(options: TurnControllerOptions) {
   let activeTurnSawResponse = false;
-  const { handleResult } = createTurnResultController(options);
+
+  // Named turn-domain ports (plan §4.3): the composition root hands each
+  // downstream owner only the ports — and only the port slices — it consumes.
+  const runtime: TurnRuntimePort = {
+    dangerouslySkipPermissions: options.dangerouslySkipPermissions,
+    permissionMode: options.permissionMode,
+    shellExecEnabled: options.shellExecEnabled,
+    shellInterpreter: options.shellInterpreter,
+    providerConfigReady: options.providerConfigReady,
+    setProviderConfigReady: options.setProviderConfigReady,
+    loadProviderConfig: options.loadProviderConfig,
+    permissionSettingsReady: options.permissionSettingsReady,
+    loadPermissionSettings: options.loadPermissionSettings,
+    activeModelCapabilities: options.activeModelCapabilities,
+    activeEngine: options.activeEngine,
+    setActiveEngine: options.setActiveEngine,
+    activeModel: options.activeModel,
+    activeProviderSelection: options.activeProviderSelection,
+    activeGeneration: options.activeGeneration,
+    permissionBroker: options.permissionBroker,
+    busy: options.busy,
+    setBusy: options.setBusy,
+  };
+  const session: TurnSessionPort = {
+    rootDir: options.rootDir,
+    sessionId: options.sessionId,
+    setSessionId: options.setSessionId,
+    setSessionPath: options.setSessionPath,
+    conversation: options.conversation,
+    setConversation: options.setConversation,
+    nextSessionParent: options.nextSessionParent,
+    setNextSessionParent: options.setNextSessionParent,
+    setSessionPicker: options.setSessionPicker,
+  };
+  const transcript: TurnTranscriptPort = {
+    setMessages: options.setMessages,
+    setStatus: options.setStatus,
+    setOutput: options.setOutput,
+    setStreamingAssistant: options.setStreamingAssistant,
+    setStreamingReasoning: options.setStreamingReasoning,
+    lastDisplayedToolAssistantContent: options.lastDisplayedToolAssistantContent,
+    setLastDisplayedToolAssistantContent: options.setLastDisplayedToolAssistantContent,
+    recordActivity: options.recordActivity,
+  };
+  const decision: TurnDecisionPort = {
+    pendingGate: options.pendingGate,
+    setPendingGate: options.setPendingGate,
+    pendingEngineSwitch: options.pendingEngineSwitch,
+    setPendingEngineSwitch: options.setPendingEngineSwitch,
+    pendingUserQuestion: options.pendingUserQuestion,
+    setPendingUserQuestion: options.setPendingUserQuestion,
+    pendingPermission: options.pendingPermission,
+    setPendingPermission: options.setPendingPermission,
+    pendingQualityDecision: options.pendingQualityDecision,
+    setPendingQualityDecision: options.setPendingQualityDecision,
+    pendingChildPermission: options.pendingChildPermission,
+    questionSelected: options.questionSelected,
+    setQuestionSelected: options.setQuestionSelected,
+    setQualitySelected: options.setQualitySelected,
+    questionFreeformText: options.questionFreeformText,
+    clearQuestionFreeform: options.clearQuestionFreeform,
+    setGateFocus: options.setGateFocus,
+    setGateFeedbackMode: options.setGateFeedbackMode,
+    clearGateFeedback: options.clearGateFeedback,
+  };
+  const agent: TurnAgentPort = {
+    agentCards: options.agentCards,
+    setAgentCards: options.setAgentCards,
+    pausedAgentDeliveries: options.pausedAgentDeliveries,
+    agentManager: options.agentManager,
+    handleAgentEvent: options.handleAgentEvent,
+    onProviderContextSnapshot: options.onProviderContextSnapshot,
+  };
+  const usage: TurnUsagePort = {
+    beginUsageTurn: options.beginUsageTurn,
+    publishTurnUsage: options.publishTurnUsage,
+    recordIndependentAgentUsage: options.recordIndependentAgentUsage,
+  };
+  const composer: TurnComposerPort = {
+    recordPromptHistory: options.recordPromptHistory,
+    applyComposerState: options.applyComposerState,
+    composerValue: options.composerValue,
+    setInputImages: options.setInputImages,
+    setHistoryIndex: options.setHistoryIndex,
+    setPromptHistory: options.setPromptHistory,
+    applyConversationRewind: options.applyConversationRewind,
+  };
+  const hostAction: TurnHostActionPort = {
+    refreshArtifacts: options.refreshArtifacts,
+    refreshQualityWarnings: options.refreshQualityWarnings,
+    resumeQualitySession: options.resumeQualitySession,
+    compactSession: options.compactSession,
+    executeLocalCommand: options.executeLocalCommand,
+  };
+
+  const { handleResult } = createTurnResultController({ runtime, session, transcript, decision, usage, hostAction, queuedWork: options.queuedWork });
   const decisionContinuations = createDecisionContinuations({
-    ...options,
+    runtime,
+    session,
+    transcript,
+    decision,
+    agent,
+    usage,
+    hostAction,
+    queuedWork: options.queuedWork,
+    runCancellable: options.runCancellable,
     handleResult,
     handleInterruptedTurn,
-    permissionContext,
     reportError,
+    permissionContext,
   });
 
   function markTurnSawResponse(): void {
@@ -37,10 +140,10 @@ export function createTurnController(options: TurnControllerOptions) {
     elements: ComposerElement[] = [],
   ): Promise<void> {
     const prompt = value.trim();
-    if (!prompt || options.busy()) return;
+    if (!prompt || runtime.busy()) return;
     if (prompt.startsWith("/") && images.length === 0) {
       try {
-        await options.executeLocalCommand(prompt);
+        await hostAction.executeLocalCommand(prompt);
       } catch (error) {
         reportError(error);
       }
@@ -49,30 +152,30 @@ export function createTurnController(options: TurnControllerOptions) {
     if (!await ensureRuntimeReady()) return;
     // Keep the turn boundary safe for non-composer callers and capabilities
     // that become available only after provider configuration loads.
-    if (images.length > 0 && options.activeModelCapabilities()?.vision !== true) {
-      options.applyComposerState({ value, cursor: value.length, elements: elements.map((element) => ({ ...element })) });
-      options.setInputImages(images.map((image) => ({ ...image })));
-      options.setStatus("current model does not declare vision support; draft restored");
+    if (images.length > 0 && runtime.activeModelCapabilities()?.vision !== true) {
+      composer.applyComposerState({ value, cursor: value.length, elements: elements.map((element) => ({ ...element })) });
+      composer.setInputImages(images.map((image) => ({ ...image })));
+      transcript.setStatus("current model does not declare vision support; draft restored");
       return;
     }
     await runUserPrompt(prompt, value, images, elements);
   }
 
   async function ensureRuntimeReady(): Promise<boolean> {
-    if (!options.providerConfigReady()) {
-      options.setStatus("loading provider config");
+    if (!runtime.providerConfigReady()) {
+      transcript.setStatus("loading provider config");
       try {
-        await options.loadProviderConfig();
+        await runtime.loadProviderConfig();
       } catch (error) {
-        options.setProviderConfigReady(true);
+        runtime.setProviderConfigReady(true);
         reportError(error);
         return false;
       }
     }
-    if (!options.permissionSettingsReady()) {
-      options.setStatus("loading permission settings");
+    if (!runtime.permissionSettingsReady()) {
+      transcript.setStatus("loading permission settings");
       try {
-        await options.loadPermissionSettings();
+        await runtime.loadPermissionSettings();
       } catch (error) {
         reportError(error);
         return false;
@@ -87,47 +190,47 @@ export function createTurnController(options: TurnControllerOptions) {
     images: VesicleImageAttachment[],
     elements: ComposerElement[],
   ): Promise<void> {
-    options.recordPromptHistory(originalValue, elements, images);
-    const id = options.sessionId();
-    if (id) options.pausedAgentDeliveries.delete(id);
-    options.setHistoryIndex(null);
-    options.setSessionPicker(null);
-    options.setLastDisplayedToolAssistantContent(null);
+    composer.recordPromptHistory(originalValue, elements, images);
+    const id = session.sessionId();
+    if (id) agent.pausedAgentDeliveries.delete(id);
+    composer.setHistoryIndex(null);
+    session.setSessionPicker(null);
+    transcript.setLastDisplayedToolAssistantContent(null);
     options.queuedWork.prepareTurn();
-    options.setBusy(true);
-    options.setStatus("sending request");
-    options.recordActivity({ kind: "provider", text: "sending provider request" });
-    const requestMessages: VesicleMessage[] = [...options.conversation(), { role: "user", content: prompt, ...(images.length ? { images } : {}) }];
-    options.setMessages((previous) => [...previous, { role: "user", content: prompt, ...(images.length ? { images } : {}) }]);
-    const branchParent = options.nextSessionParent();
-    options.setNextSessionParent(null);
+    runtime.setBusy(true);
+    transcript.setStatus("sending request");
+    transcript.recordActivity({ kind: "provider", text: "sending provider request" });
+    const requestMessages: VesicleMessage[] = [...session.conversation(), { role: "user", content: prompt, ...(images.length ? { images } : {}) }];
+    transcript.setMessages((previous) => [...previous, { role: "user", content: prompt, ...(images.length ? { images } : {}) }]);
+    const branchParent = session.nextSessionParent();
+    session.setNextSessionParent(null);
     activeTurnSawResponse = false;
-    options.beginUsageTurn();
+    usage.beginUsageTurn();
     try {
       const outcome = await options.runCancellable((signal) => runPrompt({
         input: prompt,
-        engine: options.activeEngine(),
-        sessionId: options.sessionId(),
+        engine: runtime.activeEngine(),
+        sessionId: session.sessionId(),
         ...(branchParent ? { sessionParentUuid: branchParent.uuid } : {}),
         messages: requestMessages,
         ...(images.length ? { images } : {}),
-        providerSelection: options.activeProviderSelection(),
-        generation: options.activeGeneration(),
+        providerSelection: runtime.activeProviderSelection(),
+        generation: runtime.activeGeneration(),
         permission: permissionContext(),
         signal,
-        onEvent: options.handleAgentEvent,
-        onProviderContextSnapshot: options.onProviderContextSnapshot,
-        agentManager: options.agentManager(),
-        permissionBroker: options.permissionBroker,
+        onEvent: agent.handleAgentEvent,
+        onProviderContextSnapshot: agent.onProviderContextSnapshot,
+        agentManager: agent.agentManager(),
+        permissionBroker: runtime.permissionBroker,
         takePendingUserInputs: options.queuedWork.takePendingUserInputs,
         runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
         onSessionReady: (sessionId, sessionPath) => {
-          options.setSessionId(sessionId);
-          options.setSessionPath(sessionPath);
+          session.setSessionId(sessionId);
+          session.setSessionPath(sessionPath);
         },
       }));
       if (outcome.kind === "interrupted") {
-        const queuedInterruption = await options.queuedWork.handleInterruption(options.sessionId());
+        const queuedInterruption = await options.queuedWork.handleInterruption(session.sessionId());
         if (!queuedInterruption && !activeTurnSawResponse) await restoreInterruptedPrompt(originalValue, images, elements);
         handleInterruptedTurn();
       } else {
@@ -141,9 +244,9 @@ export function createTurnController(options: TurnControllerOptions) {
       // (it was never persisted, so it must not linger as a ghost turn).
       if (error instanceof AutoCompactBlockedError) {
         if (!error.inputPersisted) {
-          options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
-          if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
-          options.setMessages((previous) => (previous.length > 0 && previous[previous.length - 1]!.role === "user" ? previous.slice(0, -1) : previous));
+          composer.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
+          if (images.length) composer.setInputImages(images.map((image) => ({ ...image })));
+          transcript.setMessages((previous) => (previous.length > 0 && previous[previous.length - 1]!.role === "user" ? previous.slice(0, -1) : previous));
         }
         reportError(error);
         return;
@@ -153,8 +256,8 @@ export function createTurnController(options: TurnControllerOptions) {
       // hint is actionable. Terminal failures keep the message in place; the
       // user starts the next turn fresh.
       if (error instanceof ProviderError && summarizeProviderFailure(error).retryable) {
-        options.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
-        if (images.length) options.setInputImages(images.map((image) => ({ ...image })));
+        composer.applyComposerState({ value: originalValue, cursor: originalValue.length, elements: elements.map((element) => ({ ...element })) });
+        if (images.length) composer.setInputImages(images.map((image) => ({ ...image })));
       }
       // Mark the failed turn so a resume or resend never re-sends the dangling
       // user prompt as a consecutive same-role message (#102). Best-effort: a
@@ -162,45 +265,45 @@ export function createTurnController(options: TurnControllerOptions) {
       // fresh: a new session is only assigned during runPrompt (onSessionReady),
       // so the `id` captured at the top of this function is still undefined for
       // a first-turn failure on a new session.
-      const currentSessionId = options.sessionId();
+      const currentSessionId = session.sessionId();
       if (currentSessionId) {
         await markFailedUserTurn(currentSessionId);
         await refreshConversationFromSession(currentSessionId);
       }
       reportError(error);
     } finally {
-      options.setBusy(false);
+      runtime.setBusy(false);
     }
   }
 
   async function deliverAgentResults(parentSessionId: string, entries: AgentInboxEntry[], packet: string): Promise<void> {
-    if (options.sessionId() !== parentSessionId || options.busy() || hasPendingInteraction()) throw new AgentDeliveryDeferred();
+    if (session.sessionId() !== parentSessionId || runtime.busy() || hasPendingInteraction()) throw new AgentDeliveryDeferred();
     options.queuedWork.prepareTurn();
-    options.setBusy(true);
+    runtime.setBusy(true);
     try {
       beginAgentDelivery(entries);
-      const requestMessages: VesicleMessage[] = [...options.conversation(), { role: "user", content: packet }];
+      const requestMessages: VesicleMessage[] = [...session.conversation(), { role: "user", content: packet }];
       activeTurnSawResponse = false;
-      options.beginUsageTurn();
-      for (const entry of entries) if (entry.usage) options.recordIndependentAgentUsage(entry.usage);
+      usage.beginUsageTurn();
+      for (const entry of entries) if (entry.usage) usage.recordIndependentAgentUsage(entry.usage);
       const inboxIds = entries.map((entry) => entry.inboxId).sort();
       const persistedDelivery = await findPersistedAgentDelivery(parentSessionId, inboxIds);
       const childUsage = combineIndependentUsage(entries.map((entry) => entry.usage));
       const outcome = await options.runCancellable((signal) => runPrompt({
         input: packet,
-        engine: options.activeEngine(),
+        engine: runtime.activeEngine(),
         sessionId: parentSessionId,
         messages: requestMessages,
         inputMetadata: { kind: "subagent-results", inboxIds, ...(childUsage ? { usage: childUsage } : {}) },
         ...(persistedDelivery ? { prePersistedInputUuid: persistedDelivery.uuid } : {}),
-        providerSelection: options.activeProviderSelection(),
-        generation: options.activeGeneration(),
+        providerSelection: runtime.activeProviderSelection(),
+        generation: runtime.activeGeneration(),
         permission: permissionContext(),
         signal,
-        onEvent: options.handleAgentEvent,
-        onProviderContextSnapshot: options.onProviderContextSnapshot,
-        agentManager: options.agentManager(),
-        permissionBroker: options.permissionBroker,
+        onEvent: agent.handleAgentEvent,
+        onProviderContextSnapshot: agent.onProviderContextSnapshot,
+        agentManager: agent.agentManager(),
+        permissionBroker: runtime.permissionBroker,
         takePendingUserInputs: options.queuedWork.takePendingUserInputs,
         runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       }));
@@ -210,42 +313,42 @@ export function createTurnController(options: TurnControllerOptions) {
         throw new AgentDeliveryDeferred();
       }
       handleResult(outcome.value);
-      options.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrated", "result integrated"));
+      agent.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrated", "result integrated"));
     } catch (error) {
-      options.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "pending", "integration paused; use /agents retry or send input"));
-      options.pausedAgentDeliveries.add(parentSessionId);
+      agent.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "pending", "integration paused; use /agents retry or send input"));
+      agent.pausedAgentDeliveries.add(parentSessionId);
       throw error;
     } finally {
-      options.setBusy(false);
+      runtime.setBusy(false);
     }
   }
 
   function beginAgentDelivery(entries: AgentInboxEntry[]): void {
-    options.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrating", "integrating result into parent"));
-    options.setStatus(`integrating ${entries.length} SubAgent result${entries.length === 1 ? "" : "s"}`);
-    options.recordActivity({ kind: "agent", text: `delivering ${entries.length} background result${entries.length === 1 ? "" : "s"}` });
-    options.setMessages((current) => [...current, {
+    agent.setAgentCards((cards) => setAgentDeliveryState(cards, entries.map((entry) => entry.runId), "integrating", "integrating result into parent"));
+    transcript.setStatus(`integrating ${entries.length} SubAgent result${entries.length === 1 ? "" : "s"}`);
+    transcript.recordActivity({ kind: "agent", text: `delivering ${entries.length} background result${entries.length === 1 ? "" : "s"}` });
+    transcript.setMessages((current) => [...current, {
       role: "system",
       content: `Background SubAgent${entries.length === 1 ? "" : "s"} completed: ${entries.map((entry) => `${entry.description} (${entry.status})`).join(", ")}.`,
     }]);
   }
 
   async function findPersistedAgentDelivery(parentSessionId: string, inboxIds: string[]) {
-    const snapshot = await loadSessionSnapshot(options.rootDir, parentSessionId, { synthesizeDanglingToolResults: false });
+    const snapshot = await loadSessionSnapshot(session.rootDir, parentSessionId, { synthesizeDanglingToolResults: false });
     return snapshot.records.find((record) => record.role === "user"
       && record.metadata?.kind === "subagent-results"
       && sameInboxIds(record.metadata?.inboxIds, inboxIds));
   }
 
   function reportError(error: unknown): void {
-    options.setStreamingAssistant("");
-    options.setStreamingReasoning("");
+    transcript.setStreamingAssistant("");
+    transcript.setStreamingReasoning("");
     options.queuedWork.block();
     if (!(error instanceof ProviderError)) {
       const message = cleanProviderMessage(error instanceof Error ? error.message : String(error));
-      options.setStatus("error");
-      options.recordActivity({ kind: "system", text: `error: ${message}` });
-      options.setMessages((previous) => [...previous, { role: "system", kind: "host-error", content: message }]);
+      transcript.setStatus("error");
+      transcript.recordActivity({ kind: "system", text: `error: ${message}` });
+      transcript.setMessages((previous) => [...previous, { role: "system", kind: "host-error", content: message }]);
       return;
     }
     const failure = summarizeProviderFailure(error);
@@ -254,9 +357,9 @@ export function createTurnController(options: TurnControllerOptions) {
     if (failure.providerId) statusParts.push(failure.providerId);
     if (failure.status !== undefined) statusParts.push(String(failure.status));
     statusParts.push(title);
-    options.setStatus(statusParts.join(" · "));
-    options.recordActivity({ kind: "system", text: `error: ${title}: ${failure.message}` });
-    options.setMessages((previous) => [...previous, {
+    transcript.setStatus(statusParts.join(" · "));
+    transcript.recordActivity({ kind: "system", text: `error: ${title}: ${failure.message}` });
+    transcript.setMessages((previous) => [...previous, {
       role: "system",
       kind: "provider-failure",
       content: failure.message,
@@ -270,11 +373,11 @@ export function createTurnController(options: TurnControllerOptions) {
   }
 
   function handleInterruptedTurn(): void {
-    options.setStatus("Interrupted");
-    options.setStreamingAssistant("");
-    options.setStreamingReasoning("");
-    options.setLastDisplayedToolAssistantContent(null);
-    options.recordActivity({ kind: "system", text: "request interrupted" });
+    transcript.setStatus("Interrupted");
+    transcript.setStreamingAssistant("");
+    transcript.setStreamingReasoning("");
+    transcript.setLastDisplayedToolAssistantContent(null);
+    transcript.recordActivity({ kind: "system", text: "request interrupted" });
   }
 
   /**
@@ -288,9 +391,9 @@ export function createTurnController(options: TurnControllerOptions) {
    */
   async function markFailedUserTurn(sessionId: string): Promise<void> {
     try {
-      const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: false });
+      const snapshot = await loadSessionSnapshot(session.rootDir, sessionId, { synthesizeDanglingToolResults: false });
       if (snapshot.records.at(-1)?.role !== "user") return;
-      const store = await createSessionStore(options.rootDir, sessionId);
+      const store = await createSessionStore(session.rootDir, sessionId);
       await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
     } catch {
       // Best-effort: never mask the original turn error.
@@ -299,8 +402,8 @@ export function createTurnController(options: TurnControllerOptions) {
 
   async function refreshConversationFromSession(sessionId: string): Promise<void> {
     try {
-      const snapshot = await loadSessionSnapshot(options.rootDir, sessionId, { synthesizeDanglingToolResults: true });
-      options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      const snapshot = await loadSessionSnapshot(session.rootDir, sessionId, { synthesizeDanglingToolResults: true });
+      session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
     } catch {
       // Best-effort: preserve the original error when durable reload also fails.
     }
@@ -311,30 +414,30 @@ export function createTurnController(options: TurnControllerOptions) {
     images: VesicleImageAttachment[] = [],
     elements: ComposerElement[] = [],
   ): Promise<void> {
-    const id = options.sessionId();
+    const id = session.sessionId();
     if (!id) return;
-    const points = await listRewindPoints(options.rootDir, id);
+    const points = await listRewindPoints(session.rootDir, id);
     const point = [...points].reverse().find((entry) => entry.content.trim() === prompt.trim());
     if (!point) return;
-    await options.applyConversationRewind(await rewindConversation(options.rootDir, id, point));
-    options.setPromptHistory((previous) => previous.at(-1)?.value === prompt ? previous.slice(0, -1) : previous);
-    if (options.composerValue().length === 0) {
-      options.applyComposerState({ value: prompt, cursor: prompt.length, elements: elements.map((element) => ({ ...element })) });
-      options.setInputImages(images.map((image) => ({ ...image })));
+    await composer.applyConversationRewind(await rewindConversation(session.rootDir, id, point));
+    composer.setPromptHistory((previous) => previous.at(-1)?.value === prompt ? previous.slice(0, -1) : previous);
+    if (composer.composerValue().length === 0) {
+      composer.applyComposerState({ value: prompt, cursor: prompt.length, elements: elements.map((element) => ({ ...element })) });
+      composer.setInputImages(images.map((image) => ({ ...image })));
     }
   }
 
   function permissionContext() {
     return {
-      mode: options.permissionMode(),
-      ...(options.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true as const } : {}),
-      shellExecEnabled: options.shellExecEnabled(),
-      shellInterpreter: options.shellInterpreter(),
+      mode: runtime.permissionMode(),
+      ...(runtime.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true as const } : {}),
+      shellExecEnabled: runtime.shellExecEnabled(),
+      shellInterpreter: runtime.shellInterpreter(),
     };
   }
 
   function hasPendingInteraction(): boolean {
-    return Boolean(options.pendingGate() || options.pendingEngineSwitch() || options.pendingUserQuestion() || options.pendingPermission() || options.pendingQualityDecision() || options.pendingChildPermission());
+    return Boolean(decision.pendingGate() || decision.pendingEngineSwitch() || decision.pendingUserQuestion() || decision.pendingPermission() || decision.pendingQualityDecision() || decision.pendingChildPermission());
   }
 
   return {

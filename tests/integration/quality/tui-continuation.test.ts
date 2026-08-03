@@ -33,8 +33,33 @@ describe("quality: tui decision continuation", () => {
       const pendingUpdates: unknown[] = [];
       const before = requests;
       const continuations = createDecisionContinuations({
-        rootDir: root,
-        busy: () => false,
+        runtime: {
+          busy: () => false,
+          setBusy: (value: boolean) => value,
+          activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
+          activeGeneration: () => undefined,
+          permissionBroker: undefined as any,
+        },
+        session: { rootDir: root },
+        transcript: {
+          setStatus: (value: string) => value,
+          setMessages: (value: unknown) => value,
+          recordActivity: () => undefined,
+        },
+        decision: {
+          pendingQualityDecision: () => pending,
+          setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
+          setQualitySelected: (value: number) => value,
+        },
+        agent: {
+          agentManager: () => undefined as any,
+          handleAgentEvent: () => undefined,
+        },
+        usage: { beginUsageTurn: () => undefined },
+        hostAction: {
+          refreshQualityWarnings: async () => undefined,
+          resumeQualitySession: async (sessionId: string) => { resumed.push(sessionId); },
+        },
         queuedWork: {
           block: () => undefined,
           release: () => undefined,
@@ -42,28 +67,13 @@ describe("quality: tui decision continuation", () => {
           takePendingUserInputs: () => [],
           runToolBoundaryCommands: async () => undefined,
         },
-        pendingQualityDecision: () => pending,
-        setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
-        setQualitySelected: (value: number) => value,
-        setBusy: (value: boolean) => value,
-        setStatus: (value: string) => value,
-        recordActivity: () => undefined,
-        setMessages: (value: unknown) => value,
-        beginUsageTurn: () => undefined,
-        activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
-        activeGeneration: () => undefined,
-        permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
-        handleAgentEvent: () => undefined,
-        agentManager: () => undefined as any,
-        permissionBroker: undefined as any,
         runCancellable: async (operation: (signal: AbortSignal) => Promise<unknown>) => ({
           kind: "complete" as const,
           value: await operation(new AbortController().signal),
         }),
         handleResult: (value: unknown) => { handled.push(value); },
         handleInterruptedTurn: () => undefined,
-        refreshQualityWarnings: async () => undefined,
-        resumeQualitySession: async (sessionId: string) => { resumed.push(sessionId); },
+        permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
         resolveQualityDecision: (options: any) => resolveQualityDecision({ ...options, harness: harnessRuntime() }),
         reportError: (error: unknown) => { throw error; },
       } as any);
@@ -107,8 +117,35 @@ describe("quality: tui decision continuation", () => {
       const errors: unknown[] = [];
       const controller = new AbortController();
       const continuations = createDecisionContinuations({
-        rootDir: root,
-        busy: () => false,
+        runtime: {
+          busy: () => false,
+          setBusy: (value: boolean) => value,
+          activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
+          activeGeneration: () => undefined,
+          permissionBroker: undefined as any,
+        },
+        session: { rootDir: root },
+        transcript: {
+          setStatus: (value: string) => value,
+          setMessages: (value: unknown) => value,
+          recordActivity: () => undefined,
+        },
+        decision: {
+          pendingQualityDecision: () => pending,
+          setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
+          setQualitySelected: (value: number) => value,
+        },
+        agent: {
+          agentManager: () => undefined as any,
+          handleAgentEvent: (event: AgentLoopEvent) => {
+            if (failure === "cancel" && event.type === "provider_request") controller.abort(new DOMException("cancel quality retry", "AbortError"));
+          },
+        },
+        usage: { beginUsageTurn: () => undefined },
+        hostAction: {
+          refreshQualityWarnings: async () => undefined,
+          resumeQualitySession: async () => undefined,
+        },
         queuedWork: {
           block: () => undefined,
           release: () => undefined,
@@ -116,22 +153,6 @@ describe("quality: tui decision continuation", () => {
           takePendingUserInputs: () => [],
           runToolBoundaryCommands: async () => undefined,
         },
-        pendingQualityDecision: () => pending,
-        setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
-        setQualitySelected: (value: number) => value,
-        setBusy: (value: boolean) => value,
-        setStatus: (value: string) => value,
-        recordActivity: () => undefined,
-        setMessages: (value: unknown) => value,
-        beginUsageTurn: () => undefined,
-        activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
-        activeGeneration: () => undefined,
-        permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
-        handleAgentEvent: (event: AgentLoopEvent) => {
-          if (failure === "cancel" && event.type === "provider_request") controller.abort(new DOMException("cancel quality retry", "AbortError"));
-        },
-        agentManager: () => undefined as any,
-        permissionBroker: undefined as any,
         runCancellable: async (operation: (signal: AbortSignal) => Promise<unknown>) => {
           try {
             return { kind: "complete" as const, value: await operation(controller.signal) };
@@ -142,8 +163,7 @@ describe("quality: tui decision continuation", () => {
         },
         handleResult: () => undefined,
         handleInterruptedTurn: () => undefined,
-        refreshQualityWarnings: async () => undefined,
-        resumeQualitySession: async () => undefined,
+        permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
         resolveQualityDecision: (options: any) => resolveQualityDecision({ ...options, harness: harnessRuntime() }),
         reportError: (error: unknown) => { errors.push(error); },
       } as any);
