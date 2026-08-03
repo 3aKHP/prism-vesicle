@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { createEffect, createSignal } from "solid-js";
 import type { MarkdownRenderable } from "@opentui/core";
 import { prepareMarkdownForDisplay, renderMarkdownPlainText } from "../markdown-display";
@@ -29,24 +30,39 @@ export function MarkdownContent(props: { content: string; fg?: string }) {
     });
   }
   if (mode === "plain") {
-    return <text content={renderMarkdownPlainText(props.content)} fg={props.fg ?? palette.textPrimary} />;
+    return <ThemedText content={renderMarkdownPlainText(props.content)} fg={props.fg ?? palette.textPrimary} />;
   }
 
   const [markdown, setMarkdown] = createSignal<MarkdownRenderable>();
   const initialSyntaxStyle = syntaxStyle();
   const initialForeground = props.fg ?? palette.textPrimary;
+  const initialSelectionBackground = palette.selectionBackground;
+  const initialSelectionForeground = palette.selectionForeground;
   let appliedSyntaxStyle = initialSyntaxStyle;
   let appliedForeground = initialForeground;
+  let appliedSelectionBackground = initialSelectionBackground;
+  let appliedSelectionForeground = initialSelectionForeground;
   createEffect(() => {
     const nextSyntaxStyle = syntaxStyle();
     const nextForeground = props.fg ?? palette.textPrimary;
+    const nextSelectionBackground = palette.selectionBackground;
+    const nextSelectionForeground = palette.selectionForeground;
     const renderable = markdown();
     if (!renderable) return;
-    if (appliedSyntaxStyle === nextSyntaxStyle && appliedForeground === nextForeground) return;
+    if (
+      appliedSyntaxStyle === nextSyntaxStyle
+      && appliedForeground === nextForeground
+      && appliedSelectionBackground === nextSelectionBackground
+      && appliedSelectionForeground === nextSelectionForeground
+    ) return;
     appliedSyntaxStyle = nextSyntaxStyle;
     appliedForeground = nextForeground;
+    appliedSelectionBackground = nextSelectionBackground;
+    appliedSelectionForeground = nextSelectionForeground;
     renderable.syntaxStyle = nextSyntaxStyle;
     renderable.fg = nextForeground;
+    renderable.selectionBg = nextSelectionBackground;
+    renderable.selectionFg = nextSelectionForeground;
     renderable.refreshStyles();
   });
 
@@ -56,6 +72,8 @@ export function MarkdownContent(props: { content: string; fg?: string }) {
       content={prepareMarkdownForDisplay(props.content)}
       syntaxStyle={initialSyntaxStyle}
       fg={initialForeground}
+      selectionBg={initialSelectionBackground}
+      selectionFg={initialSelectionForeground}
       conceal={true}
     />
   );

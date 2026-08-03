@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
@@ -76,14 +77,14 @@ export function GatePrompt(props: GatePromptProps) {
   return (
     <box flexDirection="column" border borderColor={palette.gateBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
-        <text content="◆ " fg={palette.gateAccent} wrapMode="none" />
-        <text content={`Stop Gate: ${props.gate.gate}`} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <ThemedText content="◆ " fg={palette.gateAccent} wrapMode="none" />
+        <ThemedText content={`Stop Gate: ${props.gate.gate}`} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
       </box>
       <box flexDirection="column">
         <For each={summaryLines()}>
           {(line) => (
             <box height={1}>
-              <text content={line || " "} fg={palette.textPrimary} width="100%" wrapMode="none" />
+              <ThemedText content={line || " "} fg={palette.textPrimary} width="100%" wrapMode="none" />
             </box>
           )}
         </For>
@@ -103,7 +104,7 @@ export function GatePrompt(props: GatePromptProps) {
       </For>
 
       <box>
-        <text
+        <ThemedText
           content="↑/↓ navigate · Tab note · Enter select · Esc cancel"
           fg={palette.textDim}
           wrapMode="none"
@@ -121,7 +122,7 @@ function labelFor(gate: GateRequest, decision: GateFocusTarget, fallback: string
 function OptionRow(props: { index: number; label: string; focused: boolean }) {
   return (
     <box height={1}>
-      <text
+      <ThemedText
         content={gateOptionLine(props.index, props.label, props.focused)}
         fg={props.focused ? palette.textPrimary : palette.textSecondary}
         attributes={props.focused ? TextAttributes.BOLD : TextAttributes.NONE}
@@ -197,7 +198,7 @@ export function visibleGateSummaryLines(value: string, maxWidth: number, maxLine
 function FeedbackLine(props: { placeholder: string; value: string; cursor: number; width: number }) {
   return (
     <box marginLeft={4} height={1} flexDirection="row">
-      <text content="✎ " fg={palette.warn} wrapMode="none" />
+      <ThemedText content="✎ " fg={palette.warn} wrapMode="none" />
       <PromptComposer
         value={props.value}
         cursor={props.cursor}

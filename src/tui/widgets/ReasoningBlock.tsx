@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { createMemo, For, Show } from "solid-js";
 import { palette } from "../theme";
 import { truncateLine } from "../format";
@@ -23,16 +24,16 @@ export function ReasoningBlock(props: { content: string; streaming: boolean; mod
   return (
     <Show when={props.mode !== "hidden" && props.content.trim().length > 0} fallback={<box height={0} />}>
       <box flexDirection="column">
-        <text
+        <ThemedText
           content={`━━━━━━━━ ${props.streaming ? "thinking streaming" : props.mode === "expanded" ? "thinking expanded" : "thinking collapsed"} (${props.content.length} chars, ${rawLineCount()} line${rawLineCount() === 1 ? "" : "s"}) ${props.mode === "expanded" ? "/reasoning collapse" : "/reasoning expand"}`}
           fg={palette.textMuted}
           attributes={1}
           wrapMode="none"
         />
         <For each={lines()}>
-          {(line) => <text content={line} fg={palette.textDim} wrapMode="none" />}
+          {(line) => <ThemedText content={line} fg={palette.textDim} wrapMode="none" />}
         </For>
-        <text content=" " fg={palette.textDim} />
+        <ThemedText content=" " fg={palette.textDim} />
       </box>
     </Show>
   );

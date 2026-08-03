@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { createEffect, createSignal, onCleanup, onMount, Show, type Accessor } from "solid-js";
 import { COMPACT_MARK, PRIMARY_MARK, scaleHex, type SplashMode } from "../brand-mark";
 import { palette, themeMode } from "../theme";
@@ -140,12 +141,17 @@ export function Splash(props: {
         <box height={1} />
         <Show
           when={props.width >= 56}
-          fallback={<text content="PRISM VESICLE" fg={scaleHex(wordmarkColor(), fadeFactor())} attributes={1} wrapMode="none" />}
+          fallback={<ThemedText content="PRISM VESICLE" fg={scaleHex(wordmarkColor(), fadeFactor())} attributes={1} wrapMode="none" />}
         >
-          <ascii_font text="PRISM VESICLE" font="tiny" color={scaleHex(wordmarkColor(), fadeFactor())} />
+          <ascii_font
+            text="PRISM VESICLE"
+            font="tiny"
+            color={scaleHex(wordmarkColor(), fadeFactor())}
+            selectable={false}
+          />
         </Show>
         <Show when={props.mode !== "static"} fallback={<box width={0} height={0} />}>
-          <text
+          <ThemedText
             position="absolute"
             left={lightCell().col}
             top={lightCell().row}

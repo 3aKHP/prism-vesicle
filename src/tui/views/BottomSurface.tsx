@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { For, Match, Switch } from "solid-js";
 import type { GateRequest } from "../../core/gate/types";
 import type { PermissionRequest } from "../../core/permissions";
@@ -295,7 +296,7 @@ export function BottomSurface(props: BottomSurfaceProps) {
                   width={props.layout.width - 4}
                   maxVisible={props.composerPopupMaxRows}
                 />
-                <text content="↑/↓ choose · Tab/Enter complete · Esc cancel" fg={palette.textDim} wrapMode="none" />
+                <ThemedText content="↑/↓ choose · Tab/Enter complete · Esc cancel" fg={palette.textDim} wrapMode="none" />
               </box>
             </Match>
             <Match when={props.commandArgumentMenuOpen}>
@@ -306,12 +307,12 @@ export function BottomSurface(props: BottomSurfaceProps) {
                   width={props.layout.width - 4}
                   maxVisible={props.composerPopupMaxRows}
                 />
-                <text content={commandArgumentHint(props.commandArgumentDraft)} fg={palette.textDim} wrapMode="none" />
+                <ThemedText content={commandArgumentHint(props.commandArgumentDraft)} fg={palette.textDim} wrapMode="none" />
               </box>
             </Match>
           </Switch>
           <For each={queuedRows()}>
-            {(row, index) => <text content={row} fg={index() === 0 ? palette.brand : palette.textDim} wrapMode="none" />}
+            {(row, index) => <ThemedText content={row} fg={index() === 0 ? palette.brand : palette.textDim} wrapMode="none" />}
           </For>
           <PromptComposer
             value={props.inputValue}

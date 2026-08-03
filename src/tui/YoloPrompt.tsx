@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
 import type { GateFocusTarget } from "./GatePrompt";
 import { displayWidth, wrapDisplayLines } from "./format";
@@ -24,11 +25,11 @@ export function YoloPrompt(props: { stage: 1 | 2; focused: GateFocusTarget; widt
   const descriptionLines = () => wrapDisplayLines(description(), Math.max(20, props.width - 4));
   return (
     <box border borderColor={palette.error} paddingX={1} flexDirection="column" width={props.width} height="100%">
-      <text content={`DANGER · Enable YOLO (${props.stage}/2)`} fg={palette.error} attributes={1} wrapMode="none" />
-      <For each={descriptionLines()}>{(line) => <text content={line} fg={palette.error} wrapMode="none" />}</For>
-      <text content={`${props.focused === "confirm" ? "›" : " "} ${props.stage === 1 ? "Continue" : "Enable YOLO for this process"}`} fg={props.focused === "confirm" ? palette.error : palette.textDim} wrapMode="none" />
-      <text content={`${props.focused === "reject" ? "›" : " "} Cancel`} fg={props.focused === "reject" ? palette.textPrimary : palette.textDim} wrapMode="none" />
-      <text content={yoloHint(props.width)} fg={palette.textDim} wrapMode="none" />
+      <ThemedText content={`DANGER · Enable YOLO (${props.stage}/2)`} fg={palette.error} attributes={1} wrapMode="none" />
+      <For each={descriptionLines()}>{(line) => <ThemedText content={line} fg={palette.error} wrapMode="none" />}</For>
+      <ThemedText content={`${props.focused === "confirm" ? "›" : " "} ${props.stage === 1 ? "Continue" : "Enable YOLO for this process"}`} fg={props.focused === "confirm" ? palette.error : palette.textDim} wrapMode="none" />
+      <ThemedText content={`${props.focused === "reject" ? "›" : " "} Cancel`} fg={props.focused === "reject" ? palette.textPrimary : palette.textDim} wrapMode="none" />
+      <ThemedText content={yoloHint(props.width)} fg={palette.textDim} wrapMode="none" />
     </box>
   );
 }

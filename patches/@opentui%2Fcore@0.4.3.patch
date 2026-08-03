@@ -1,0 +1,206 @@
+diff --git a/index.js b/index.js
+index c7badbef2f345f9d228d40c64a69d6570512fd8d..262a7c84c1b856c12fabe89e3f9a31d6e2c99a95 100644
+--- a/index.js
++++ b/index.js
+@@ -6862,6 +6862,32 @@ class TextTableRenderable extends Renderable {
+     this._content = value ?? [];
+     this.rebuildCells();
+   }
++  get selectionBg() {
++    return this._selectionBg;
++  }
++  set selectionBg(value) {
++    const next = value ? parseColor(value) : undefined;
++    if (colorsEqual(this._selectionBg, next))
++      return;
++    this._selectionBg = next;
++    if (this._lastLocalSelection?.isActive) {
++      this.applySelectionToCells(this._lastLocalSelection, true);
++    }
++    this.invalidateRasterOnly();
++  }
++  get selectionFg() {
++    return this._selectionFg;
++  }
++  set selectionFg(value) {
++    const next = value ? parseColor(value) : undefined;
++    if (colorsEqual(this._selectionFg, next))
++      return;
++    this._selectionFg = next;
++    if (this._lastLocalSelection?.isActive) {
++      this.applySelectionToCells(this._lastLocalSelection, true);
++    }
++    this.invalidateRasterOnly();
++  }
+   get wrapMode() {
+     return this._wrapMode;
+   }
+@@ -7941,6 +7967,8 @@ class MarkdownRenderable extends Renderable {
+   _syntaxStyle;
+   _fg;
+   _bg;
++  _selectionBg;
++  _selectionFg;
+   _conceal;
+   _concealCode;
+   _treeSitterClient;
+@@ -7972,6 +8000,8 @@ class MarkdownRenderable extends Renderable {
+     this._syntaxStyle = options.syntaxStyle;
+     this._fg = options.fg ? parseColor(options.fg) : undefined;
+     this._bg = options.bg ? parseColor(options.bg) : undefined;
++    this._selectionBg = options.selectionBg ? parseColor(options.selectionBg) : undefined;
++    this._selectionFg = options.selectionFg ? parseColor(options.selectionFg) : undefined;
+     this._conceal = options.conceal ?? this._contentDefaultOptions.conceal;
+     this._concealCode = options.concealCode ?? this._contentDefaultOptions.concealCode;
+     this._content = options.content ?? this._contentDefaultOptions.content;
+@@ -8023,6 +8053,26 @@ class MarkdownRenderable extends Renderable {
+       this._styleDirty = true;
+     }
+   }
++  get selectionBg() {
++    return this._selectionBg;
++  }
++  set selectionBg(value) {
++    const next = value ? parseColor(value) : undefined;
++    if (!colorsEqual(this._selectionBg, next)) {
++      this._selectionBg = next;
++      this._styleDirty = true;
++    }
++  }
++  get selectionFg() {
++    return this._selectionFg;
++  }
++  set selectionFg(value) {
++    const next = value ? parseColor(value) : undefined;
++    if (!colorsEqual(this._selectionFg, next)) {
++      this._selectionFg = next;
++      this._styleDirty = true;
++    }
++  }
+   get conceal() {
+     return this._conceal;
+   }
+@@ -8257,6 +8307,8 @@ class MarkdownRenderable extends Renderable {
+       syntaxStyle: this._syntaxStyle,
+       fg: this._fg,
+       bg: this._bg,
++      selectionBg: this._selectionBg,
++      selectionFg: this._selectionFg,
+       conceal: this._conceal,
+       drawUnstyledText: initialStyledText !== undefined,
+       streaming: true,
+@@ -8344,7 +8396,9 @@ class MarkdownRenderable extends Renderable {
+       id: `${input.id}-marker`,
+       content: new StyledText([this.createChunk(input.marker.padStart(input.markerWidth) + " ", "markup.list")]),
+       width: input.markerWidth + 1,
+-      flexShrink: 0
++      flexShrink: 0,
++      selectionBg: this._selectionBg,
++      selectionFg: this._selectionFg
+     }));
+     const content = new BoxRenderable(this.ctx, {
+       id: `${input.id}-content`,
+@@ -8463,6 +8517,8 @@ class MarkdownRenderable extends Renderable {
+     if (marker.chunks[0]?.text !== markerText) {
+       marker.content = new StyledText([this.createChunk(markerText, "markup.list")]);
+     }
++    marker.selectionBg = this._selectionBg;
++    marker.selectionFg = this._selectionFg;
+   }
+   createListChildRenderable(token, id) {
+     if (token.type === "text" || token.type === "paragraph") {
+@@ -8499,6 +8555,8 @@ class MarkdownRenderable extends Renderable {
+       syntaxStyle: this._syntaxStyle,
+       fg: this._fg,
+       bg: this._bg,
++      selectionBg: this._selectionBg,
++      selectionFg: this._selectionFg,
+       conceal: this._concealCode,
+       drawUnstyledText: !this._streaming,
+       streaming: this._streaming,
+@@ -8513,6 +8571,8 @@ class MarkdownRenderable extends Renderable {
+     renderable.syntaxStyle = this._syntaxStyle;
+     renderable.fg = this._fg;
+     renderable.bg = this._bg;
++    renderable.selectionBg = this._selectionBg;
++    renderable.selectionFg = this._selectionFg;
+     renderable.conceal = this._conceal;
+     renderable.drawUnstyledText = initialStyledText !== undefined;
+     renderable.streaming = true;
+@@ -8542,6 +8602,8 @@ class MarkdownRenderable extends Renderable {
+     renderable.syntaxStyle = this._syntaxStyle;
+     renderable.fg = this._fg;
+     renderable.bg = this._bg;
++    renderable.selectionBg = this._selectionBg;
++    renderable.selectionFg = this._selectionFg;
+     renderable.conceal = this._concealCode;
+     renderable.drawUnstyledText = !this._streaming;
+     renderable.streaming = this._streaming;
+@@ -8821,6 +8883,8 @@ class MarkdownRenderable extends Renderable {
+     tableRenderable.borderStyle = options.borderStyle;
+     tableRenderable.borderColor = options.borderColor;
+     tableRenderable.selectable = options.selectable;
++    tableRenderable.selectionBg = this._selectionBg;
++    tableRenderable.selectionFg = this._selectionFg;
+   }
+   applyTableOptionsToBlocks() {
+     const options = this.resolveTableRenderableOptions();
+@@ -8854,7 +8918,9 @@ class MarkdownRenderable extends Renderable {
+       showBorders: options.showBorders,
+       borderStyle: options.borderStyle,
+       borderColor: options.borderColor,
+-      selectable: options.selectable
++      selectable: options.selectable,
++      selectionBg: this._selectionBg,
++      selectionFg: this._selectionFg
+     });
+   }
+   createTableBlock(table, id, marginBottom = 0, previousCache, forceRegenerate = false) {
+diff --git a/renderables/Markdown.d.ts b/renderables/Markdown.d.ts
+index 9300bf024dae00f9c27230b396391afef15de704..fe29ccd60305c4154f33a0b77d9a3d802ca24d8f 100644
+--- a/renderables/Markdown.d.ts
++++ b/renderables/Markdown.d.ts
+@@ -70,6 +70,8 @@ export interface MarkdownOptions extends RenderableOptions<MarkdownRenderable> {
+     syntaxStyle: SyntaxStyle;
+     fg?: ColorInput;
+     bg?: ColorInput;
++    selectionBg?: ColorInput;
++    selectionFg?: ColorInput;
+     /** Controls concealment for markdown syntax markers in markdown text blocks. */
+     conceal?: boolean;
+     /** Controls concealment inside fenced code blocks rendered by CodeRenderable. */
+@@ -136,6 +138,8 @@ export declare class MarkdownRenderable extends Renderable {
+     private _syntaxStyle;
+     private _fg?;
+     private _bg?;
++    private _selectionBg?;
++    private _selectionFg?;
+     private _conceal;
+     private _concealCode;
+     private _treeSitterClient?;
+@@ -164,6 +168,10 @@ export declare class MarkdownRenderable extends Renderable {
+     set fg(value: ColorInput | undefined);
+     get bg(): RGBA | undefined;
+     set bg(value: ColorInput | undefined);
++    get selectionBg(): RGBA | undefined;
++    set selectionBg(value: ColorInput | undefined);
++    get selectionFg(): RGBA | undefined;
++    set selectionFg(value: ColorInput | undefined);
+     get conceal(): boolean;
+     set conceal(value: boolean);
+     get concealCode(): boolean;
+diff --git a/renderables/TextTable.d.ts b/renderables/TextTable.d.ts
+index 17017911d7774b53df75d65344a2d2fecb499e47..a80a0a8d8cf25ea55f5504f8e8f673d9562a5a04 100644
+--- a/renderables/TextTable.d.ts
++++ b/renderables/TextTable.d.ts
+@@ -68,6 +68,10 @@ export declare class TextTableRenderable extends Renderable {
+     constructor(ctx: RenderContext, options?: TextTableOptions);
+     get content(): TextTableContent;
+     set content(value: TextTableContent);
++    get selectionBg(): RGBA | undefined;
++    set selectionBg(value: ColorInput | undefined);
++    get selectionFg(): RGBA | undefined;
++    set selectionFg(value: ColorInput | undefined);
+     get wrapMode(): "none" | "char" | "word";
+     set wrapMode(value: "none" | "char" | "word");
+     get columnWidthMode(): TextTableColumnWidthMode;

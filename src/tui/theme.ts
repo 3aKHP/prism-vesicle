@@ -289,6 +289,9 @@ export type ThemePalette = {
   bg: string;
   panelBorder: string;
   sectionBorder: string;
+  selectionForeground: string;
+  selectionBackground: string;
+  editorCursor: string;
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
@@ -314,6 +317,9 @@ const DARK_PALETTE: ThemePalette = {
   bg: "#121415",
   panelBorder: "#272b2d",
   sectionBorder: "#32373a",
+  selectionForeground: "#121415",
+  selectionBackground: "#e3e5e6",
+  editorCursor: "#10b981",
 
   textPrimary: "#e3e5e6",
   textSecondary: "#aeb2b4",
@@ -355,6 +361,9 @@ const LIGHT_PALETTE: ThemePalette = {
   bg: "#f5f4f0",
   panelBorder: "#d9d6cb",
   sectionBorder: "#c6c3b7",
+  selectionForeground: "#f5f4f0",
+  selectionBackground: "#23261f",
+  editorCursor: "#266f54",
 
   textPrimary: "#23261f",
   textSecondary: "#4b4e45",

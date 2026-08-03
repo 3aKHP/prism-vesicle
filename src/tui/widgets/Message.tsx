@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../../core/tools";
 import { engineAccent, engineDisplayName, palette } from "../theme";
 import { MarkdownContent } from "./MarkdownContent";
@@ -111,7 +112,7 @@ export function Message(props: {
           />
           <box flexDirection="column" paddingX={1} flexGrow={1}>
             {props.message.engine && (
-              <text
+              <ThemedText
                 content={`▣ ${engineDisplayName(props.message.engine)}${props.message.model ? `·${props.message.model}` : ""}`}
                 fg={engineAccent(props.message.engine)}
                 attributes={1}
@@ -125,7 +126,7 @@ export function Message(props: {
               : <MarkdownContent content={props.message.content} />}
           </box>
         </box>
-        <text content=" " fg={palette.textDim} />
+        <ThemedText content=" " fg={palette.textDim} />
       </box>
     );
   }
@@ -136,16 +137,16 @@ export function Message(props: {
         <box flexDirection="row">
           <box width={1} backgroundColor={palette.laneUser} />
           <box flexDirection="column" border borderColor={palette.sectionBorder} paddingX={1} flexGrow={1}>
-            <text content={props.message.content} fg={palette.textPrimary} />
+            <ThemedText content={props.message.content} fg={palette.textPrimary} />
             {(props.message.images ?? []).map((image, index) => (
-              <text
+              <ThemedText
                 content={`▧ Image #${index + 1} · ${image.sourcePath ?? image.filename ?? image.source} · ${formatImageBytes(image.bytes)}`}
                 fg={palette.user}
               />
             ))}
           </box>
         </box>
-        <text content=" " fg={palette.textDim} />
+        <ThemedText content=" " fg={palette.textDim} />
       </box>
     );
   }
@@ -179,11 +180,11 @@ export function Message(props: {
       <box flexDirection="row">
         <box width={1} backgroundColor={lane} />
         <box flexDirection="column" paddingX={1} flexGrow={1}>
-          <text content={props.message.role} fg={color} attributes={1} />
-          <text content={props.message.content} fg={palette.textPrimary} />
+          <ThemedText content={props.message.role} fg={color} attributes={1} />
+          <ThemedText content={props.message.content} fg={palette.textPrimary} />
         </box>
       </box>
-      <text content=" " fg={palette.textDim} />
+      <ThemedText content=" " fg={palette.textDim} />
     </box>
   );
 }
@@ -205,12 +206,12 @@ function ProviderFailureCard(props: {
       <box flexDirection="row">
         <box width={1} backgroundColor={palette.error} />
         <box flexDirection="column" border borderColor={palette.error} paddingX={1} flexGrow={1}>
-          <text content={header()} fg={palette.error} attributes={1} wrapMode="none" />
-          {label().hint ? <text content={label().hint} fg={palette.warn} wrapMode="word" /> : null}
-          <text content={props.content} fg={palette.textPrimary} wrapMode="word" />
+          <ThemedText content={header()} fg={palette.error} attributes={1} wrapMode="none" />
+          {label().hint ? <ThemedText content={label().hint} fg={palette.warn} wrapMode="word" /> : null}
+          <ThemedText content={props.content} fg={palette.textPrimary} wrapMode="word" />
         </box>
       </box>
-      <text content=" " fg={palette.textDim} />
+      <ThemedText content=" " fg={palette.textDim} />
     </box>
   );
 }

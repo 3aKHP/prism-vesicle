@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { createMemo, For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { OptionItem } from "../types";
@@ -40,9 +41,9 @@ export function ArgumentMenu(props: ArgumentMenuProps) {
           const attributes = () => isSelected() ? TextAttributes.BOLD : TextAttributes.NONE;
           return (
             <box height={1} flexDirection="row">
-              <text content={isSelected() ? ">" : " "} fg={palette.brand} attributes={attributes()} wrapMode="none" />
-              <text content={label} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={attributes()} wrapMode="none" />
-              <text content={detail} fg={isSelected() ? palette.textSecondary : palette.textDim} wrapMode="none" />
+              <ThemedText content={isSelected() ? ">" : " "} fg={palette.brand} attributes={attributes()} wrapMode="none" />
+              <ThemedText content={label} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={attributes()} wrapMode="none" />
+              <ThemedText content={detail} fg={isSelected() ? palette.textSecondary : palette.textDim} wrapMode="none" />
             </box>
           );
         }}

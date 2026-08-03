@@ -1,7 +1,8 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { useRenderer } from "@opentui/solid";
 import type { BoxRenderable, KeyBinding, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core";
-import { palette } from "../theme";
+import { palette, paletteFor, themeMode } from "../theme";
+import { ThemedText } from "../theme-text";
 import { MarkdownContent } from "../widgets/MarkdownContent";
 import type { WorkspaceController, EditorStatusTone } from "./index";
 import { resetStaleHorizontalScroll } from "./index";
@@ -390,7 +391,7 @@ export function WorkspacePage(props: {
                     .filter(Boolean)
                     .join(" ");
                 return (
-                  <text
+                  <ThemedText
                     content={`${"  ".repeat(row.depth)}${marker()}${row.node.name}${suffix() ? ` ${suffix()}` : ""}`}
                     fg={
                       isSelected()
@@ -406,7 +407,7 @@ export function WorkspacePage(props: {
               }}
             </For>
             <Show when={!c.loading() && c.rows().length === 0} fallback={<box height={0} />}>
-              <text content="(empty project)" fg={palette.textDim} wrapMode="none" />
+              <ThemedText content="(empty project)" fg={palette.textDim} wrapMode="none" />
             </Show>
           </box>
         </Show>
@@ -436,7 +437,7 @@ export function WorkspacePage(props: {
 
             <Show when={c.openFile()} fallback={
               <box flexGrow={1} alignItems="center" justifyContent="center">
-                <text
+                <ThemedText
                   content="No file open — Enter opens the selection, Ctrl+P quick open"
                   fg={palette.textDim}
                   wrapMode="none"
@@ -449,14 +450,14 @@ export function WorkspacePage(props: {
                     when={file().lines}
                     fallback={
                       <box flexDirection="column" padding={1} gap={1}>
-                        <text content={`${KIND_BADGES[file().kind]} file · ${formatSize(file().size)}`} fg={palette.textSecondary} wrapMode="none" />
+                        <ThemedText content={`${KIND_BADGES[file().kind]} file · ${formatSize(file().size)}`} fg={palette.textSecondary} wrapMode="none" />
                         <Show when={file().symlink} fallback={<box height={0} />}>
-                          <text content="symbolic link" fg={palette.warn} wrapMode="none" />
+                          <ThemedText content="symbolic link" fg={palette.warn} wrapMode="none" />
                         </Show>
                         <Show when={file().readonly} fallback={<box height={0} />}>
-                          <text content="read-only" fg={palette.warn} wrapMode="none" />
+                          <ThemedText content="read-only" fg={palette.warn} wrapMode="none" />
                         </Show>
-                        <text
+                        <ThemedText
                           content={file().kind === "image"
                             ? "Image preview is not inline-renderable in the terminal; press Ctrl+X to open in your external editor."
                             : file().symlink
@@ -472,7 +473,7 @@ export function WorkspacePage(props: {
                       <box flexDirection="column" width="100%">
                         <Show
                           when={file().kind === "markdown" && c.viewMode() === "preview"}
-                          fallback={<text content={numberedSource()} fg={palette.textPrimary} wrapMode="none" />}
+                          fallback={<ThemedText content={numberedSource()} fg={palette.textPrimary} wrapMode="none" />}
                         >
                           <MarkdownContent content={file().lines?.join("\n") ?? ""} />
                         </Show>
@@ -498,10 +499,10 @@ export function WorkspacePage(props: {
             flexDirection="column"
             paddingX={1}
           >
-            <text content={`Open file: ${c.quickQuery()}▌`} fg={palette.textPrimary} wrapMode="none" />
+            <ThemedText content={`Open file: ${c.quickQuery()}▌`} fg={palette.textPrimary} wrapMode="none" />
             <For each={c.quickMatches().slice(0, 10)}>
               {(path, index) => (
-                <text
+                <ThemedText
                   content={path}
                   fg={index() === c.quickIndex() ? palette.brand : palette.textSecondary}
                   attributes={index() === c.quickIndex() ? 1 : 0}
@@ -510,9 +511,9 @@ export function WorkspacePage(props: {
               )}
             </For>
             <Show when={c.quickMatches().length === 0} fallback={<box height={0} />}>
-              <text content="(no matches)" fg={palette.textDim} wrapMode="none" />
+              <ThemedText content="(no matches)" fg={palette.textDim} wrapMode="none" />
             </Show>
-            <text content="↑↓ select · Enter open · Esc close" fg={palette.textDim} wrapMode="none" />
+            <ThemedText content="↑↓ select · Enter open · Esc close" fg={palette.textDim} wrapMode="none" />
           </box>
         </Show>
 
@@ -532,7 +533,7 @@ export function WorkspacePage(props: {
             <FindingsHeader state={c.validationState()} width={quickOpenWidth(props.width)} />
             <For each={findingsList(c.validationState())}>
               {(finding, index) => (
-                <text
+                <ThemedText
                   content={`${finding.severity === "error" ? "✗" : "⚠"} ${finding.text}${finding.anchored ? "" : "  (no anchor)"}`}
                   fg={index() === c.findingsIndex() ? palette.brand : finding.severity === "error" ? palette.error : palette.warn}
                   attributes={index() === c.findingsIndex() ? 1 : 0}
@@ -541,9 +542,9 @@ export function WorkspacePage(props: {
               )}
             </For>
             <Show when={findingsList(c.validationState()).length === 0} fallback={<box height={0} />}>
-              <text content="(nothing to report)" fg={palette.textDim} wrapMode="none" />
+              <ThemedText content="(nothing to report)" fg={palette.textDim} wrapMode="none" />
             </Show>
-            <text
+            <ThemedText
               content={findingsStatus({ budget: Math.max(8, quickOpenWidth(props.width) - 4), canJump: c.canJumpToSelectedFinding() })}
               fg={palette.textDim}
               wrapMode="none"
@@ -554,7 +555,7 @@ export function WorkspacePage(props: {
 
       {/* —— editor status line (D5 low-band hint bar) —— */}
       <box height={1} paddingLeft={1}>
-        <text
+        <ThemedText
           content={statusLine()}
           fg={statusFg()}
           attributes={statusBold() ? 1 : 0}
@@ -598,6 +599,19 @@ function EditorBuffer(props: {
       if (!ed.isDestroyed && ed.width > 1) ed.editorView.setViewportSize(ed.width, ed.height);
     }, 0);
   });
+  createEffect(() => {
+    const current = paletteFor(themeMode());
+    const textColor = current.textPrimary;
+    const cursorColor = current.editorCursor;
+    const selectionBackground = current.selectionBackground;
+    const selectionForeground = current.selectionForeground;
+    if (!ta) return;
+    ta.textColor = textColor;
+    ta.focusedTextColor = textColor;
+    ta.cursorColor = cursorColor;
+    ta.selectionBg = selectionBackground;
+    ta.selectionFg = selectionForeground;
+  });
   return (
     <box width="100%" flexGrow={1} flexDirection="row" visible={props.active()}>
       <line_number fg={palette.textDim} minWidth={4} paddingRight={1}>
@@ -608,6 +622,11 @@ function EditorBuffer(props: {
           }}
           initialValue={c.editorInitialContent(props.relPath)}
           focused={props.focused()}
+          textColor={palette.textPrimary}
+          focusedTextColor={palette.textPrimary}
+          cursorColor={palette.editorCursor}
+          selectionBg={palette.selectionBackground}
+          selectionFg={palette.selectionForeground}
           width="100%"
           height="100%"
           // Soft wrap (VSCode-style): long lines continue on the next visual
@@ -674,5 +693,5 @@ function FindingsHeader(props: { state: import("./validation").ValidationState; 
     // composed line so the header never overflows its box (Issue #118 §8).
     return displayWidth(full) <= contentWidth ? full : truncateMiddle(full, contentWidth);
   };
-  return <text content={content()} fg={palette.textPrimary} wrapMode="none" />;
+  return <ThemedText content={content()} fg={palette.textPrimary} wrapMode="none" />;
 }

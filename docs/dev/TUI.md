@@ -28,6 +28,8 @@ The brand aesthetic, palette of record, motion grammar, and anti-patterns are ow
 - Thinking content renders separately from assistant prose, before the assistant body, with bounded or collapsible presentation.
 - Tool, Agent, validation, quality, and host-action records render from structured state rather than parsing natural-language result text.
 - Theme changes refresh mounted renderables whose colors are not reactively inherited from the root palette.
+- The theme palette owns a complete text-selection foreground/background pair and the Workspace editor cursor color. Selectable production text uses `ThemedText`; native editor and rich-text adapters must apply the same pair explicitly and refresh mounted renderables on a theme change. Decorative renderables that should not participate in copy selection declare `selectable={false}`.
+- OpenTUI 0.4.3 does not expose Markdown selection colors, so the pinned dependency carries a narrow Bun patch that adds `selectionBg`/`selectionFg` to `MarkdownOptions` and propagates them to prose, list markers, fenced code, and tables. Source and standalone builds replay the tracked patch through `patchedDependencies`; the precompiled npm entry bundles the patched core JavaScript while leaving the parser worker and platform-native packages external, so installed consumers do not depend on package-manager patch support or load a second unpatched core. Remove the patch and its `patchedDependencies` metadata once the pinned upstream release provides equivalent public options and propagation, and the focused native-renderer selection tests plus package smoke still pass; [Issue #158](https://github.com/3aKHP/prism-vesicle/issues/158) tracks that deletion condition.
 
 ## Prompt Editing And Keys
 

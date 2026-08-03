@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 // `/btw` full-area overlay. While active it visually replaces the message
 // stream and composer; the main TUI state keeps running underneath. Presentational
 // only — exchange state and key handling are owned by the side-question
@@ -76,12 +77,12 @@ export function SideQuestionOverlay(props: SideQuestionOverlayProps) {
   return (
     <box flexDirection="column" width="100%" height="100%" border borderColor={palette.panelBorder} paddingX={1}>
       <box flexDirection="row" height={1}>
-        <text content={title()} fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
-        <text content={`  ${props.mainStatus}`} fg={palette.textMuted} wrapMode="none" />
+        <ThemedText content={title()} fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <ThemedText content={`  ${props.mainStatus}`} fg={palette.textMuted} wrapMode="none" />
       </box>
       {questionLines().map((line) => (
         <box height={1}>
-          <text content={truncateLine(line, innerWidth())} fg={palette.user} wrapMode="none" />
+          <ThemedText content={truncateLine(line, innerWidth())} fg={palette.user} wrapMode="none" />
         </box>
       ))}
       <scrollbox ref={scrollbox} width="100%" flexGrow={1} stickyScroll stickyStart="bottom">
@@ -91,16 +92,16 @@ export function SideQuestionOverlay(props: SideQuestionOverlayProps) {
               <MarkdownContent content={`${answer()}\n\n…`} />
             </Match>
             <Match when={phase() === "loading" && Boolean(retryText())}>
-              <text content={retryText()!} fg={palette.warn} wrapMode="word" />
+              <ThemedText content={retryText()!} fg={palette.warn} wrapMode="word" />
             </Match>
             <Match when={phase() === "loading"}>
-              <text content="Thinking…" fg={palette.textMuted} />
+              <ThemedText content="Thinking…" fg={palette.textMuted} />
             </Match>
             <Match when={phase() === "error"}>
-              <text content={`Error: ${props.exchange?.error ?? "unknown"}`} fg={palette.error} wrapMode="word" />
+              <ThemedText content={`Error: ${props.exchange?.error ?? "unknown"}`} fg={palette.error} wrapMode="word" />
             </Match>
             <Match when={phase() === "cancelled"}>
-              <text content="Side question cancelled." fg={palette.textMuted} />
+              <ThemedText content="Side question cancelled." fg={palette.textMuted} />
             </Match>
             <Match when={phase() === "complete"}>
               <MarkdownContent content={answer()} />
@@ -110,11 +111,11 @@ export function SideQuestionOverlay(props: SideQuestionOverlayProps) {
       </scrollbox>
       <Show when={usageText().length > 0} fallback={<box height={0} />}>
         <box height={1}>
-          <text content={truncateLine(usageText(), innerWidth())} fg={palette.textDim} wrapMode="none" />
+          <ThemedText content={truncateLine(usageText(), innerWidth())} fg={palette.textDim} wrapMode="none" />
         </box>
       </Show>
       <box height={1}>
-        <text content={truncateLine(FOOTER_HINT, innerWidth())} fg={palette.textDim} wrapMode="none" />
+        <ThemedText content={truncateLine(FOOTER_HINT, innerWidth())} fg={palette.textDim} wrapMode="none" />
       </box>
     </box>
   );

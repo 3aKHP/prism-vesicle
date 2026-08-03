@@ -109,6 +109,9 @@ describe("reactive preference and source", () => {
     expect(themeMode()).toBe("light");
     expect(palette.bg).toBe("#f5f4f0");
     expect(palette.textPrimary).toBe("#23261f");
+    expect(palette.selectionForeground).toBe("#f5f4f0");
+    expect(palette.selectionBackground).toBe("#23261f");
+    expect(palette.editorCursor).toBe("#266f54");
     expect(engineAccent("stage")).toBe("#7247ce");
     expect(engineAccent("etl")).toBe("#266f54");
     expect(syntaxStyle()).not.toBe(sharedSyntaxStyle);
@@ -116,6 +119,9 @@ describe("reactive preference and source", () => {
     setThemePreference("dark", "session");
     expect(themeMode()).toBe("dark");
     expect(palette.bg).toBe("#121415");
+    expect(palette.selectionForeground).toBe("#121415");
+    expect(palette.selectionBackground).toBe("#e3e5e6");
+    expect(palette.editorCursor).toBe("#10b981");
     expect(engineAccent("stage")).toBe("#8b5cf6");
     expect(syntaxStyle()).toBe(sharedSyntaxStyle);
   });
@@ -179,6 +185,11 @@ describe("light palette contrast", () => {
     for (const id of engineIds) {
       expect(contrastRatio(engineAccent(id), lightPalette.bg)).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  test("selection and editor cursor colors remain visible on light surfaces", () => {
+    expect(contrastRatio(light.selectionForeground, light.selectionBackground)).toBeGreaterThanOrEqual(7);
+    expect(contrastRatio(light.editorCursor, light.bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

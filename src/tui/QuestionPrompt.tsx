@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { UserQuestionOption, UserQuestionRequest } from "../core/user-question/types";
@@ -35,17 +36,17 @@ export function QuestionPrompt(props: QuestionPromptProps) {
   return (
     <box flexDirection="column" border borderColor={palette.gateBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
-        <text content="◆ " fg={palette.gateAccent} wrapMode="none" />
-        <text content={props.question.header} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
-        <text content="  ↑/↓ choose · Enter answer · free answer accepts typing" fg={palette.textDim} wrapMode="none" />
+        <ThemedText content="◆ " fg={palette.gateAccent} wrapMode="none" />
+        <ThemedText content={props.question.header} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <ThemedText content="  ↑/↓ choose · Enter answer · free answer accepts typing" fg={palette.textDim} wrapMode="none" />
       </box>
       <box height={1}>
-        <text content={truncateLine(props.question.question, width())} fg={palette.textPrimary} width="100%" wrapMode="none" />
+        <ThemedText content={truncateLine(props.question.question, width())} fg={palette.textPrimary} width="100%" wrapMode="none" />
       </box>
       <For each={rows()}>
         {(row) => row.kind === "option" ? (
             <box height={1}>
-              <text
+              <ThemedText
                 content={optionLine(row.index + 1, row.option.label, row.option.description, row.index === props.selected, width())}
                 fg={row.index === props.selected ? palette.textPrimary : palette.textSecondary}
                 attributes={row.index === props.selected ? TextAttributes.BOLD : TextAttributes.NONE}
@@ -55,7 +56,7 @@ export function QuestionPrompt(props: QuestionPromptProps) {
             </box>
           ) : (
               <box marginLeft={4} height={2} flexDirection="row">
-                <text content="✎ " fg={palette.warn} wrapMode="none" />
+                <ThemedText content="✎ " fg={palette.warn} wrapMode="none" />
                 <PromptComposer
                   value={props.freeformValue ?? ""}
                   cursor={props.freeformCursor ?? (props.freeformValue ?? "").length}
