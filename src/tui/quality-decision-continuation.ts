@@ -6,7 +6,7 @@ import { pendingQualityDecisionFromSnapshot } from "./quality-decision-state";
 import type { QueuedWorkController } from "./queued-work-controller";
 import type { PermissionContext, TurnAgentPort, TurnDecisionPort, TurnHostActionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort, TurnRunCancellable } from "./turn-controller-options";
 
-type QualityDecisionContinuationOptions = {
+type QualityContinuationOptions = {
   runtime: Pick<TurnRuntimePort, "activeProviderSelection" | "activeGeneration" | "busy" | "setBusy" | "permissionBroker">;
   decision: Pick<TurnDecisionPort, "pendingQualityDecision" | "setPendingQualityDecision" | "setQualitySelected">;
   transcript: Pick<TurnTranscriptPort, "setMessages" | "setStatus" | "recordActivity">;
@@ -23,7 +23,7 @@ type QualityDecisionContinuationOptions = {
   resolveQualityDecision?: typeof resolveQualityDecision;
 };
 
-export function createQualityDecisionContinuation(options: QualityDecisionContinuationOptions) {
+export function createQualityDecisionContinuation(options: QualityContinuationOptions) {
   const { activeProviderSelection, activeGeneration, busy, setBusy, permissionBroker } = options.runtime;
   const { pendingQualityDecision, setPendingQualityDecision, setQualitySelected } = options.decision;
   const { setMessages, setStatus, recordActivity } = options.transcript;
