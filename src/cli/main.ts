@@ -286,7 +286,7 @@ switch (parsed.kind) {
         break;
       }
       case "skills": {
-        const { runSkillsCommand } = await import("./skills");
+        const { runSkillsCommand } = await import("./commands/skills");
         try {
           await runSkillsCommand(args);
         } catch (error) {
