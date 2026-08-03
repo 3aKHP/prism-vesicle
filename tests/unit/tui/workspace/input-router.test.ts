@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { routeWorkspaceKey, type WorkspaceRouterPorts } from "../../../src/tui/workspace/input-router";
-import type { TuiKeyEvent } from "../../../src/tui/decision-interaction";
+import { routeWorkspaceKey, type WorkspaceRouterPorts } from "../../../../src/tui/workspace/input-router";
+import type { TuiKeyEvent } from "../../../../src/tui/decision-interaction";
 
 function key(name: string, mods: Partial<TuiKeyEvent> = {}): TuiKeyEvent {
   return { name, ...mods } as TuiKeyEvent;

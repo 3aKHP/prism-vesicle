@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createTreeOwner } from "../../../src/tui/workspace/tree-owner";
+import { createTreeOwner } from "../../../../src/tui/workspace/tree-owner";
 
 let root: string;
 

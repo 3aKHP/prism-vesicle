@@ -7,8 +7,8 @@ import {
   runExternalEditor,
   splitCommandLine,
   type EditorRuntime,
-} from "../../../src/tui/workspace/external-editor-runtime";
-import { loadSettings, settingsPath } from "../../../src/config/settings";
+} from "../../../../src/tui/workspace/external-editor-runtime";
+import { loadSettings, settingsPath } from "../../../../src/config/settings";
 
 describe("splitCommandLine", () => {
   test("splits on whitespace, honouring single and double quotes", () => {

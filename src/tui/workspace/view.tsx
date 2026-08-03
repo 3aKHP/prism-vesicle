@@ -3,11 +3,11 @@ import { useRenderer } from "@opentui/solid";
 import type { BoxRenderable, KeyBinding, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core";
 import { palette } from "../theme";
 import { MarkdownContent } from "../widgets/MarkdownContent";
-import type { WorkspaceController, EditorStatusTone } from "../workspace-controller";
-import { resetStaleHorizontalScroll } from "../workspace-controller";
-import type { WorkspaceFileKind } from "../workspace";
-import { pendingValidation, validationSeverity, validationSummary } from "../workspace/validation";
-import type { ValidationState } from "../workspace/validation";
+import type { WorkspaceController, EditorStatusTone } from "./index";
+import { resetStaleHorizontalScroll } from "./index";
+import type { WorkspaceFileKind } from "./tree-data";
+import { pendingValidation, validationSeverity, validationSummary } from "./validation";
+import type { ValidationState } from "./validation";
 import { displayWidth, truncateMiddle } from "../format";
 import {
   dialogStatus,
@@ -17,7 +17,7 @@ import {
   truncatePath,
   treeStatus,
   viewerStatus,
-} from "../workspace-status";
+} from "./status";
 
 /**
  * Workspace page (Scope B / #62): the project-file workbench — lazy file tree
@@ -642,7 +642,7 @@ function quickOpenWidth(pageWidth: number): number {
   return Math.max(30, Math.min(72, Math.floor(pageWidth * 0.6)));
 }
 
-function findingsList(state: import("../workspace/validation").ValidationState): import("../workspace/validation").LocatedFinding[] {
+function findingsList(state: import("./validation").ValidationState): import("./validation").LocatedFinding[] {
   return state.state === "result" ? state.findings : [];
 }
 
@@ -654,7 +654,7 @@ function findingsList(state: import("../workspace/validation").ValidationState):
  * the `findings: `/` — ` chrome and the summary, so a long or CJK path can
  * never clip the verdict (Issue #118 §8).
  */
-function FindingsHeader(props: { state: import("../workspace/validation").ValidationState; width: number }) {
+function FindingsHeader(props: { state: import("./validation").ValidationState; width: number }) {
   const content = () => {
     const s = props.state;
     const summary = validationSummary(s) || "—";

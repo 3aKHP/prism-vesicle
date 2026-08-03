@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { ExternalEditOutcome } from "../../../src/tui/workspace/buffer-owner";
-import { createExternalEditorOwner } from "../../../src/tui/workspace/external-editor-owner";
-import type { EditorRuntime } from "../../../src/tui/workspace/external-editor-runtime";
+import type { ExternalEditOutcome } from "../../../../src/tui/workspace/buffer-owner";
+import { createExternalEditorOwner } from "../../../../src/tui/workspace/external-editor-owner";
+import type { EditorRuntime } from "../../../../src/tui/workspace/external-editor-runtime";
 
 let root: string;
 let savedEnv: NodeJS.ProcessEnv;

@@ -4,8 +4,8 @@ import { testRender } from "@opentui/solid";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { WorkspacePage } from "../../../src/tui/views/WorkspacePage";
-import { createWorkspaceController } from "../../../src/tui/workspace-controller";
+import { WorkspacePage } from "../../../src/tui/workspace/view";
+import { createWorkspaceController } from "../../../src/tui/workspace";
 import { PromptComposer } from "../../../src/tui/PromptComposer";
 
 let root: string;
