@@ -97,8 +97,8 @@ describe("MarkdownContent theme colors", () => {
     setup.renderer.destroy();
   });
 
-  test("uses native theme-owned selection colors for fenced code and tables", async () => {
-    const scenarios = ["fenced-code", "table-cell"];
+  test("uses native theme-owned selection colors across Markdown renderables", async () => {
+    const scenarios = ["prose", "list", "link", "fenced-code", "table-cell"];
     const results = await Promise.all(scenarios.map(async (scenario) => {
       const probe = Bun.spawn([
         process.execPath,

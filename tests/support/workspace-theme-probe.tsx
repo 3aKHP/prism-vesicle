@@ -47,29 +47,31 @@ const root = await mkdtemp(join(tmpdir(), "vesicle-workspace-theme-"));
 try {
   await mkdir(join(root, "workspace"), { recursive: true });
   await writeFile(join(root, "notes.txt"), "line one\nline two\n");
-  setThemePreference("light");
-  const controller = createWorkspaceController(root);
-  await controller.openWorkspaceTarget("notes.txt");
-  const setup = await testRender(() => (
-    <WorkspacePage
-      controller={controller}
-      projectRoot={root}
-      width={100}
-      height={24}
-      treeWidth={30}
-      compact={false}
-    />
-  ), { width: 100, height: 24 });
-  await setup.flush();
-  const textarea = findTextarea(setup.renderer.root);
-  if (!textarea) throw new Error("Workspace textarea was not mounted");
-  textarea.setSelection(0, 4);
-  await setup.flush();
-  assertEditor(setup, textarea, "light", "light mount");
-  setThemePreference("dark");
-  await setup.flush();
-  assertEditor(setup, textarea, "dark", "light to dark");
-  setup.renderer.destroy();
+  for (const [initial, next] of [["light", "dark"], ["dark", "light"]] as const) {
+    setThemePreference(initial);
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes.txt");
+    const setup = await testRender(() => (
+      <WorkspacePage
+        controller={controller}
+        projectRoot={root}
+        width={100}
+        height={24}
+        treeWidth={30}
+        compact={false}
+      />
+    ), { width: 100, height: 24 });
+    await setup.flush();
+    const textarea = findTextarea(setup.renderer.root);
+    if (!textarea) throw new Error("Workspace textarea was not mounted");
+    textarea.setSelection(0, 4);
+    await setup.flush();
+    assertEditor(setup, textarea, initial, `${initial} mount`);
+    setThemePreference(next);
+    await setup.flush();
+    assertEditor(setup, textarea, next, `${initial} to ${next}`);
+    setup.renderer.destroy();
+  }
   console.log("Workspace theme refresh passed");
 } finally {
   await rm(root, { recursive: true, force: true });
