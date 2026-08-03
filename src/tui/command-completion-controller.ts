@@ -3,7 +3,7 @@ import type { ProviderRegistry } from "../config/providers";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { SessionSummary } from "../core/session/store";
 import type { VesicleImageAttachment } from "../providers/shared/types";
-import { builtinCommands } from "./commands/builtin";
+import type { Command } from "./commands/types";
 import { matchOptionItems, resolveCommandArgumentCompletion } from "./commands/argument-completion";
 import { matchCommands } from "./commands/match";
 import { clampCommandMenuSelection, moveCommandMenuSelection } from "./commands/selection";
@@ -13,6 +13,9 @@ import type { AgentCardState, OptionItem } from "./types";
 
 export type CommandCompletionControllerOptions = {
   rootDir: string;
+  /** Lazy command source: the App builds domain contexts after this controller,
+   *  so the getter defers the read until the first memo computation (post-render). */
+  commands: () => readonly Command[];
   activeEngine: Accessor<string>;
   inputValue: Accessor<string>;
   applyComposerState: (state: ComposerState) => void;
@@ -31,7 +34,7 @@ export type CommandCompletionControllerOptions = {
 export function createCommandCompletionController(options: CommandCompletionControllerOptions) {
   const commandMenuOpen = createMemo(() => options.inputValue().startsWith("/") && !options.inputValue().slice(1).includes(" "));
   const commandMenuQuery = createMemo(() => options.inputValue().slice(1));
-  const commandMenuItems = createMemo(() => matchCommands(commandMenuQuery(), builtinCommands));
+  const commandMenuItems = createMemo(() => matchCommands(commandMenuQuery(), options.commands()));
   const [commandMenuSelected, setCommandMenuSelected] = createSignal(0);
   createEffect(() => {
     setCommandMenuSelected((selected) => clampCommandMenuSelection(selected, commandMenuItems().length));
@@ -43,7 +46,7 @@ export function createCommandCompletionController(options: CommandCompletionCont
     previousCommandMenuQuery = query;
   });
 
-  const commandArgumentDraft = createMemo(() => resolveCommandArgumentCompletion(options.inputValue(), builtinCommands, {
+  const commandArgumentDraft = createMemo(() => resolveCommandArgumentCompletion(options.inputValue(), options.commands(), {
     rootDir: options.rootDir,
     activeEngine: options.activeEngine,
     providerRegistry: options.providerRegistry,

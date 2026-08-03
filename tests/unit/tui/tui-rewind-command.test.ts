@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
-import type { CommandContext } from "../../../src/tui/commands/types";
+import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
+import { createSessionCommands } from "../../../src/tui/commands/session";
+import type { BuiltinCommandContexts, SessionCommandContext } from "../../../src/tui/commands/types";
 import { rewindPointLine, rewindRestoreOptions } from "../../../src/tui/RewindPicker";
+
+const allCommands = createBuiltinCommands({} as unknown as BuiltinCommandContexts);
 
 describe("/rewind command", () => {
   test("opens the rewind selector without echoing a transcript message", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "rewind");
-    expect(command?.aliases).toEqual(["checkpoint"]);
-    expect(builtinCommands.some((entry) => entry.name === "checkpoint")).toBe(false);
     let opened = 0;
     let transcriptTouched = false;
     const ctx = {
@@ -17,9 +17,12 @@ describe("/rewind command", () => {
       setMessages() {
         transcriptTouched = true;
       },
-    } as unknown as CommandContext;
+    } as unknown as SessionCommandContext;
+    const command = createSessionCommands(ctx).find((entry) => entry.name === "rewind");
+    expect(command?.aliases).toEqual(["checkpoint"]);
+    expect(allCommands.some((entry) => entry.name === "checkpoint")).toBe(false);
 
-    await command!.run(ctx, "", "/rewind");
+    await command!.run("", "/rewind");
     expect(opened).toBe(1);
     expect(transcriptTouched).toBe(false);
   });

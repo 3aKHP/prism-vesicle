@@ -9,7 +9,7 @@ import { reasoningTiers } from "../../providers/shared/types";
 import type { ReasoningTier } from "../../providers/shared/types";
 import type { ReasoningDisplayMode, SessionSummary } from "../../core/session/store";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
-import type { Command, CommandBusyBehavior, CommandContext } from "./types";
+import type { Command, CommandBusyBehavior, CommandEchoPort } from "./types";
 
 /** Split "/engine runtime extra" into { name: "engine", args: "runtime extra" }. */
 export function parseSlashInput(raw: string): { name: string; args: string } {
@@ -38,22 +38,31 @@ export function resolveCommandBusyBehavior(command: Command, args: string): Comm
   return typeof command.busyBehavior === "function" ? command.busyBehavior(args) : command.busyBehavior;
 }
 
+// Shared scheduling contracts reused across command domain modules. Kept here
+// alongside resolveCommandBusyBehavior so the one-way dispatch -> types edge
+// stays the only dependency; domain modules import these with the parse helpers.
+export const immediate = { kind: "immediate" } as const;
+export const afterToolRound = { kind: "queue", boundary: "tool-round" } as const;
+export const afterAgentLoop = { kind: "queue", boundary: "agent-loop" } as const;
+
 /**
- * Parse + resolve + run. Unknown commands echo a host notice, mirroring the
- * old handleCommand tail.
+ * Parse + resolve + run. Unknown commands echo a host notice via `echo`,
+ * mirroring the old handleCommand tail. Each command closes over its own
+ * domain context at registration time, so the dispatcher never sees domain
+ * state — only the shared transcript port for the unknown-command echo.
  */
-export async function executeCommand(raw: string, ctx: CommandContext, commands: readonly Command[]): Promise<void> {
+export async function executeCommand(raw: string, commands: readonly Command[], echo: CommandEchoPort): Promise<void> {
   const { name, args, command } = resolveCommandInvocation(raw, commands);
   if (!command) {
     const label = name || "(empty)";
-    ctx.setMessages((prev) => [
+    echo.setMessages((prev) => [
       ...prev,
       { role: "user", content: raw },
       { role: "system", content: `Unknown command: /${label}. Type /help for available commands.` },
     ]);
     return;
   }
-  await command.run(ctx, args, raw);
+  await command.run(args, raw);
 }
 
 // —— pure parse / target helpers (moved verbatim from app.tsx) ——

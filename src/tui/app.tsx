@@ -19,9 +19,9 @@ import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
 import { yoloPanelHeight } from "./YoloPrompt";
 import { qualityRewritePanelHeight } from "./QualityRewritePrompt";
-import { builtinCommands } from "./commands/builtin";
+import { createBuiltinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
-import type { CommandContext } from "./commands/types";
+import type { BuiltinCommandContexts, Command } from "./commands/types";
 import type { ActivityEntry, AgentCardState, Message, SelectedArtifact, SessionPickerState } from "./types";
 import { createRewindController } from "./rewind/controller";
 import { initDebugLogging } from "./debug-log";
@@ -149,6 +149,10 @@ export function App(props: AppProps = {}) {
   const [activeEngine, setActiveEngine] = createSignal<EngineId>("etl");
   const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
   const [reasoningDisplayMode, setReasoningDisplayMode] = createSignal<ReasoningDisplayMode>("collapsed");
+  // Populated after the domain contexts are wired (later in this component); the
+  // completion controller reads it reactively, and the signal avoids TDZ on the
+  // late-initialised command list during the initial render pass.
+  const [builtinCommands, setBuiltinCommands] = createSignal<readonly Command[]>([]);
   const [messages, setMessages] = createSignal<Message[]>([
     ...(props.dangerouslySkipPermissions ? [{
       role: "system" as const,
@@ -404,9 +408,9 @@ export function App(props: AppProps = {}) {
   });
   const rewindPicker = rewindController.state;
   function submitCommand(raw: string): boolean {
-    return routeCommandSubmission(raw, busy(), builtinCommands, {
+    return routeCommandSubmission(raw, busy(), builtinCommands(), {
       execute: (value) => {
-        void executeCommand(value, commandContext, builtinCommands).catch((error) => turnController.reportError(error));
+        void executeCommand(value, builtinCommands(), { setMessages }).catch((error) => turnController.reportError(error));
       },
       enqueue: (command) => {
         const count = inputQueue.enqueueCommand(command);
@@ -419,6 +423,7 @@ export function App(props: AppProps = {}) {
   }
   const composerController = createComposerController({
     rootDir: process.cwd(),
+    commands: builtinCommands,
     activeEngine,
     terminalWidth: () => dimensions().width,
     providerRegistry,
@@ -587,7 +592,7 @@ export function App(props: AppProps = {}) {
     recordActivity,
     recordPromptHistory,
     submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
-    executeLocalCommand: (raw) => executeCommand(raw, commandContext, builtinCommands),
+    executeLocalCommand: (raw) => executeCommand(raw, builtinCommands(), { setMessages }),
     reportError: (error) => turnController.reportError(error),
   });
   turnController = createTurnController({
@@ -664,7 +669,7 @@ export function App(props: AppProps = {}) {
       await resumeSession(target);
     },
     compactSession: (instructions) => sessionActions.compactSession(instructions),
-    executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
+    executeLocalCommand: (prompt) => executeCommand(prompt, builtinCommands(), { setMessages }),
     recordPromptHistory,
     applyComposerState,
     composerValue: inputValue,
@@ -1006,83 +1011,99 @@ export function App(props: AppProps = {}) {
     return skillActivation.activate(name, options);
   }
 
-  // Command execution context: the surface slash-command handlers reach
-  // through. Built once from component signals/helpers; submitPrompt passes it
-  // to executeCommand. See src/tui/commands/.
-  const commandContext: CommandContext = {
-    setMessages,
-    activeProvider,
-    activeModel,
-    activeModelGeneration: () => providerRegistry()
-      ?.providers.find((provider) => provider.id === activeProvider())
-      ?.models.find((model) => model.id === activeModel())
-      ?.generation,
-    activeModelLimits,
-    ensureProviderRegistry,
-    applyProviderSelection,
-    persistProviderSwitch,
-    activeEngine,
-    setActiveEngine,
-    persistEngineSwitch,
-    thinkingTier,
-    setThinkingTier,
-    persistThinkingSwitch,
-    reasoningDisplayMode,
-    setReasoningDisplayMode,
-    persistReasoningSwitch,
-    permissionMode,
-    changePermissionMode,
-    artifacts,
-    refreshArtifacts,
-    loadArtifactPreview: (artifact, options) => loadArtifactPreview(process.cwd(), artifact, options),
-    setSelectedArtifact,
-    setStatus,
-    recordActivity,
-    setSessionId: (value) => {
-      if (typeof value !== "function" && value === undefined) {
-        sessionIdentityCoordinator.reset();
-        clearQueuedInputs();
-      }
-      return setSessionId(value);
+  // Slash-command domain contexts: each command family receives only the
+  // fields it reads, built from component signals/helpers. createBuiltinCommands
+  // composes the per-family factories into the registry the dispatcher and the
+  // completion controller consume. See src/tui/commands/.
+  const commandContexts: BuiltinCommandContexts = {
+    provider: {
+      setMessages, setStatus, recordActivity,
+      activeProvider, activeModel,
+      activeModelGeneration: () => providerRegistry()
+        ?.providers.find((provider) => provider.id === activeProvider())
+        ?.models.find((model) => model.id === activeModel())
+        ?.generation,
+      activeModelLimits,
+      ensureProviderRegistry,
+      applyProviderSelection,
+      persistProviderSwitch,
+      openModelPicker,
+      thinkingTier, setThinkingTier, persistThinkingSwitch,
+      reasoningDisplayMode, setReasoningDisplayMode, persistReasoningSwitch,
+      lastTurnUsage, sessionUsage,
     },
-    setSessionPath,
-    setConversation,
-    setOutput,
-    lastTurnUsage,
-    sessionUsage,
-    setLastTurnUsage,
-    setSessionUsage,
-    setPendingGate,
-    setPendingEngineSwitch,
-    setPendingUserQuestion,
-    setResumableSessions,
-    setSessionPicker,
-    listSessions,
-    resumeSession,
-    compactSession,
-    initProject,
-    openRewindPicker: rewindController.open,
-    resetRewindState,
-    agentCommand,
-    startStage: stageSessionController.start,
-    openModelPicker,
-    openQualityPicker,
-    openQualityRewriteConfirm: openRewriteConfirm,
-    openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
-    openSkillPicker,
-    activateSkill: (name, options) => activateSkill(name, options),
-    openWorkspaceTarget: async (relPath?: string) => {
-      setFocusedArtifactPath(null);
-      return workspaceController.openWorkspaceTarget(relPath);
+    engine: {
+      setMessages, setStatus, recordActivity,
+      activeEngine, setActiveEngine, persistEngineSwitch, compactSession,
+    },
+    session: {
+      setMessages, setStatus, recordActivity,
+      activeEngine, setActiveEngine,
+      setSessionId: (value) => {
+        if (typeof value !== "function" && value === undefined) {
+          sessionIdentityCoordinator.reset();
+          clearQueuedInputs();
+        }
+        return setSessionId(value);
+      },
+      setSessionPath, setConversation, setOutput,
+      setLastTurnUsage, setSessionUsage,
+      setPendingGate, setPendingEngineSwitch, setPendingUserQuestion,
+      setResumableSessions, setSessionPicker,
+      listSessions, resumeSession,
+      compactSession, initProject,
+      openRewindPicker: rewindController.open,
+      resetRewindState,
+      theme: { clearOverride: () => themeController.clearOverride() },
+    },
+    quality: {
+      setMessages, setStatus, recordActivity,
+      openQualityPicker,
+      openQualityRewriteConfirm: openRewriteConfirm,
+      ensureProviderRegistry,
+      activeProvider, activeModel,
+    },
+    skills: {
+      setMessages,
+      openSkillPicker,
+      activateSkill: (name, options) => activateSkill(name, options),
+    },
+    workspace: {
+      setMessages, setStatus, recordActivity,
+      openWorkspaceTarget: async (relPath?: string) => {
+        setFocusedArtifactPath(null);
+        return workspaceController.openWorkspaceTarget(relPath);
+      },
+      refreshArtifacts,
+      loadArtifactPreview: (artifact, options) => loadArtifactPreview(process.cwd(), artifact, options),
+      setSelectedArtifact,
     },
     theme: {
-      statusText: () => themeController.statusText(),
-      applyOverride: (pref) => themeController.applyOverride(pref),
-      clearOverride: () => themeController.clearOverride(),
-      persistProject: (pref) => themeController.persistProject(pref),
-      unsetProject: () => themeController.unsetProject(),
+      setMessages, setStatus, recordActivity,
+      theme: {
+        statusText: () => themeController.statusText(),
+        applyOverride: (pref) => themeController.applyOverride(pref),
+        clearOverride: () => themeController.clearOverride(),
+        persistProject: (pref) => themeController.persistProject(pref),
+        unsetProject: () => themeController.unsetProject(),
+      },
+    },
+    agents: {
+      setMessages,
+      agentCommand,
+      startStage: stageSessionController.start,
+      openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
+    },
+    permissions: {
+      setMessages,
+      permissionMode,
+      changePermissionMode,
+    },
+    help: {
+      setMessages,
     },
   };
+  setBuiltinCommands(createBuiltinCommands(commandContexts));
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
     const entries = await scanArtifacts(process.cwd());

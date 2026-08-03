@@ -1,19 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import type { ReasoningTier } from "../../../src/providers/shared/types";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
-import type { CommandContext } from "../../../src/tui/commands/types";
+import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
+import { createProviderCommands } from "../../../src/tui/commands/provider";
+import type { BuiltinCommandContexts, ProviderCommandContext } from "../../../src/tui/commands/types";
 import type { Message } from "../../../src/tui/types";
+
+const allCommands = createBuiltinCommands({} as unknown as BuiltinCommandContexts);
 
 describe("/effort command", () => {
   test("is the only provider thinking-effort command and leaves workflow unclaimed", () => {
-    expect(builtinCommands.some((command) => command.name === "effort")).toBe(true);
-    expect(builtinCommands.some((command) => command.name === "think")).toBe(false);
-    expect(builtinCommands.find((command) => command.name === "engine")?.aliases).toBeUndefined();
+    expect(allCommands.some((command) => command.name === "effort")).toBe(true);
+    expect(allCommands.some((command) => command.name === "think")).toBe(false);
+    expect(allCommands.find((command) => command.name === "engine")?.aliases).toBeUndefined();
   });
 
   test("persists the canonical medium effort", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "effort");
-    if (!command) throw new Error("Missing /effort command.");
     let messages: Message[] = [];
     let selected: ReasoningTier | undefined;
     let persisted: ReasoningTier | undefined;
@@ -30,9 +31,11 @@ describe("/effort command", () => {
       },
       setStatus() {},
       recordActivity() {},
-    } as unknown as CommandContext;
+    } as unknown as ProviderCommandContext;
+    const command = createProviderCommands(ctx).find((entry) => entry.name === "effort");
+    if (!command) throw new Error("Missing /effort command.");
 
-    await command.run(ctx, "medium", "/effort medium");
+    await command.run("medium", "/effort medium");
 
     expect(selected).toBe("medium");
     expect(persisted).toBe("medium");

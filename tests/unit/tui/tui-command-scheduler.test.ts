@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { executeQueuedCommands, routeCommandSubmission } from "../../../src/tui/command-scheduler";
 import type { QueuedCommand } from "../../../src/tui/input-queue";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
+import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
+import type { BuiltinCommandContexts } from "../../../src/tui/commands/types";
 import {
   parseInitCommandArgs,
   resolveCommandBusyBehavior,
   resolveCommandInvocation,
 } from "../../../src/tui/commands/dispatch";
+
+// Busy-behavior resolution reads command metadata only; run is never invoked.
+const builtinCommands = createBuiltinCommands({} as unknown as BuiltinCommandContexts);
 
 describe("TUI command scheduler", () => {
   test("parses /init notes and requires an explicit leading --force option", () => {

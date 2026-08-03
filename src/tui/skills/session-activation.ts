@@ -10,7 +10,7 @@ import type { EngineId } from "../../core/engine/profile";
  * Boundary: the owner receives only narrow ports — the session-identity
  * coordinator's `ensure`, the active Engine / model-limits accessors, the
  * branch-parent get/set, a system-notice sink, and turn submission. It never
- * receives the App, CommandContext, TurnControllerOptions, or a signal bundle.
+ * receives the App, a command domain context, TurnControllerOptions, or a signal bundle.
  */
 
 export type SkillActivationOptions = {

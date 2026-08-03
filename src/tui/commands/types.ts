@@ -1,7 +1,7 @@
 // Command subsystem types. A slash command is a data object with a `run`
-// handler that receives a CommandContext (the TUI state + callbacks the old
-// handleCommand closure depended on) plus its parsed arguments and the raw
-// input (echoed into the transcript). Command definitions can add focused host
+// handler that closes over a domain-specific context (the narrow TUI state
+// its family reads) and receives its parsed arguments plus the raw input
+// (echoed into the transcript). Command definitions can add focused host
 // interactions such as provider/model completion without moving state into
 // the dispatch layer.
 
@@ -13,6 +13,7 @@ import type { ReasoningTier, VesicleMessage } from "../../providers/shared/types
 import type { ReasoningDisplayMode, SessionSummary } from "../../core/session/store";
 import type { PermissionMode } from "../../core/permissions";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
+import type { ThemePreference } from "../theme";
 import type {
   ActivityEntry,
   Message,
@@ -67,16 +68,34 @@ export type CommandBusyBehavior =
 
 export type CommandBusyBehaviorResolver = CommandBusyBehavior | ((args: string) => CommandBusyBehavior);
 
-/**
- * Everything a slash command handler needs from the TUI. The App component
- * constructs one instance and passes it to executeCommand. Fields group by
- * concern to keep the ~30 dependencies scannable.
- */
-export type CommandContext = {
-  // —— transcript ——
-  setMessages: (updater: (prev: Message[]) => Message[]) => void;
+// Each command family declares its own narrow context — the fields its
+// commands actually read. A family factory closes over its context at
+// registration time (see src/tui/commands/*.ts), so adding a field for one
+// family never touches the others. The App builds these slices separately
+// rather than one flat host bag; createBuiltinCommands composes the registry.
 
-  // —— provider / model ——
+/** Transcript writes every command family may need. */
+export type CommandEchoPort = {
+  setMessages: (updater: (prev: Message[]) => Message[]) => void;
+};
+
+/** Echo plus the status/activity log mutating commands share. */
+export type CommandActivityPort = CommandEchoPort & {
+  setStatus: (status: string) => void;
+  recordActivity: (event: ActivityEntry) => void;
+};
+
+/** Theme surface owned by the theme controller; /theme reads all of it. */
+export type CommandThemePort = {
+  statusText: () => string;
+  applyOverride: (pref: ThemePreference) => void;
+  clearOverride: () => void;
+  persistProject: (pref: ThemePreference) => Promise<void>;
+  unsetProject: () => Promise<void>;
+};
+
+/** /model, /effort, /reasoning, /context — provider/model configuration. */
+export type ProviderCommandContext = CommandActivityPort & {
   activeProvider: () => string;
   activeModel: () => string;
   activeModelGeneration: () => GenerationDefaults | undefined;
@@ -84,41 +103,33 @@ export type CommandContext = {
   ensureProviderRegistry: () => Promise<ProviderRegistry>;
   applyProviderSelection: (selection: Partial<ProviderSelection>) => Promise<ProviderSelection>;
   persistProviderSwitch: (selection: ProviderSelection) => Promise<void>;
-
-  // —— engine ——
-  activeEngine: () => EngineId;
-  setActiveEngine: (engine: EngineId) => void;
-  persistEngineSwitch: (transition: EngineTransition) => Promise<void>;
-
-  // —— thinking effort / reasoning display ——
+  openModelPicker: () => Promise<void>;
   thinkingTier: () => ReasoningTier | undefined;
   setThinkingTier: (tier: ReasoningTier | undefined) => void;
   persistThinkingSwitch: (tier: ReasoningTier | undefined) => Promise<void>;
   reasoningDisplayMode: () => ReasoningDisplayMode;
   setReasoningDisplayMode: (mode: ReasoningDisplayMode) => void;
   persistReasoningSwitch: (mode: ReasoningDisplayMode) => Promise<void>;
+  lastTurnUsage: () => UsageTelemetrySummary | undefined;
+  sessionUsage: () => UsageTelemetrySummary;
+};
 
-  // —— tool permissions ——
-  permissionMode: () => PermissionMode;
-  changePermissionMode: (mode: PermissionMode) => Promise<void>;
+/** /engine, /instructions — Prism engine switch and instruction resolution. */
+export type EngineCommandContext = CommandActivityPort & {
+  activeEngine: () => EngineId;
+  setActiveEngine: (engine: EngineId) => void;
+  persistEngineSwitch: (transition: EngineTransition) => Promise<void>;
+  compactSession: (instructions?: string) => Promise<{ summary: string; messagesSummarized: number }>;
+};
 
-  // —— artifacts ——
-  artifacts: () => ArtifactEntry[];
-  refreshArtifacts: () => Promise<ArtifactEntry[]>;
-  loadArtifactPreview: (artifact: ArtifactEntry, opts?: { validate?: boolean }) => Promise<SelectedArtifact>;
-  setSelectedArtifact: (artifact: SelectedArtifact) => void;
-
-  // —— status / activity ——
-  setStatus: (status: string) => void;
-  recordActivity: (event: ActivityEntry) => void;
-
-  // —— session ——
+/** /new, /resume, /rewind, /compact, /init — session lifecycle. */
+export type SessionCommandContext = CommandActivityPort & {
+  activeEngine: () => EngineId;
+  setActiveEngine: (engine: EngineId) => void;
   setSessionId: (id: string | undefined) => void;
   setSessionPath: (path: string) => void;
   setConversation: (messages: VesicleMessage[]) => void;
   setOutput: (text: string) => void;
-  lastTurnUsage: () => UsageTelemetrySummary | undefined;
-  sessionUsage: () => UsageTelemetrySummary;
   setLastTurnUsage: (usage: UsageTelemetrySummary | undefined) => void;
   setSessionUsage: (usage: UsageTelemetrySummary) => void;
   setPendingGate: (value: null) => void;
@@ -132,30 +143,65 @@ export type CommandContext = {
   initProject: (options?: { notes?: string; force?: boolean }) => Promise<{ path: string; overwritten: boolean }>;
   openRewindPicker: () => Promise<void>;
   resetRewindState: () => void;
-  agentCommand: (args: string) => Promise<string>;
-  startStage?: (characterPath: string, scenarioPath: string, commandEcho: string) => Promise<void>;
+  theme: { clearOverride: () => void };
+};
 
-  // —— model picker (used by /model with no args) ——
-  openModelPicker: () => Promise<void>;
+/** /quality — experimental Semantic Judge configuration. */
+export type QualityCommandContext = CommandActivityPort & {
   openQualityPicker: (focusMode?: "observe" | "rewrite") => Promise<void>;
   openQualityRewriteConfirm: (candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) => Promise<void>;
-  openSideQuestion: (args: string) => Promise<void>;
+  ensureProviderRegistry: () => Promise<ProviderRegistry>;
+  activeProvider: () => string;
+  activeModel: () => string;
+};
 
-  // —— skills (Phase 2) ——
+/** /skill — skill picker and activation. */
+export type SkillCommandContext = CommandEchoPort & {
   openSkillPicker: () => Promise<void>;
   activateSkill: (name: string, options: { mode: "invoke" | "context-only"; taskText?: string }) => Promise<void>;
+};
 
-  // —— shell pages (Scope B two-page model) ——
+/** /workspace, /artifact, /validate — Workspace page and artifact preview. */
+export type WorkspaceCommandContext = CommandActivityPort & {
   openWorkspaceTarget: (relPath?: string) => Promise<"file" | "dir" | null>;
+  refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  loadArtifactPreview: (artifact: ArtifactEntry, opts?: { validate?: boolean }) => Promise<SelectedArtifact>;
+  setSelectedArtifact: (artifact: SelectedArtifact) => void;
+};
 
-  // —— theme preference (#86) ——
-  theme: {
-    statusText: () => string;
-    applyOverride: (pref: import("../theme").ThemePreference) => void;
-    clearOverride: () => void;
-    persistProject: (pref: import("../theme").ThemePreference) => Promise<void>;
-    unsetProject: () => Promise<void>;
-  };
+/** /theme — colour theme status, override, and project persistence. */
+export type ThemeCommandContext = CommandActivityPort & {
+  theme: CommandThemePort;
+};
+
+/** /agents, /stage, /btw — SubAgent control, Stage startup, side questions. */
+export type AgentsCommandContext = CommandEchoPort & {
+  agentCommand: (args: string) => Promise<string>;
+  startStage?: (characterPath: string, scenarioPath: string, commandEcho: string) => Promise<void>;
+  openSideQuestion: (args: string) => Promise<void>;
+};
+
+/** /permissions — tool approval mode. */
+export type PermissionsCommandContext = CommandEchoPort & {
+  permissionMode: () => PermissionMode;
+  changePermissionMode: (mode: PermissionMode) => Promise<void>;
+};
+
+/** /help — static help text. */
+export type HelpCommandContext = CommandEchoPort;
+
+/** All domain context slices the App builds and hands to createBuiltinCommands. */
+export type BuiltinCommandContexts = {
+  provider: ProviderCommandContext;
+  engine: EngineCommandContext;
+  session: SessionCommandContext;
+  quality: QualityCommandContext;
+  skills: SkillCommandContext;
+  workspace: WorkspaceCommandContext;
+  theme: ThemeCommandContext;
+  agents: AgentsCommandContext;
+  permissions: PermissionsCommandContext;
+  help: HelpCommandContext;
 };
 
 export type Command = {
@@ -172,7 +218,9 @@ export type Command = {
   /**
    * Execute the command. `args` is the raw text after the command name
    * (trimmed, whitespace-normalised); `raw` is the full input including the
-   * leading slash, echoed into the transcript as the user turn.
+   * leading slash, echoed into the transcript as the user turn. Each command
+   * family closes over its own narrow context at registration time, so `run`
+   * receives only the parsed arguments, not a shared host bag.
    */
-  run: (ctx: CommandContext, args: string, raw: string) => Promise<void>;
+  run: (args: string, raw: string) => Promise<void>;
 };

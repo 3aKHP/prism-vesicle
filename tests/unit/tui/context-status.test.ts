@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { renderContextStatus } from "../../../src/tui/commands/builtin";
+import { renderContextStatus } from "../../../src/tui/commands/provider";
 
 type Ctx = Parameters<typeof renderContextStatus>[0];
 
