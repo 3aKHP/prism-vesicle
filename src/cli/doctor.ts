@@ -4,7 +4,7 @@ import { loadExperimentalQualitySettings } from "../config/quality";
 import { inspectMcpConfig } from "../mcp/registry";
 import { describeProviderProxy, formatProviderProxyDiagnostic, loadProviderProxyPolicy } from "../providers/shared/proxy";
 import { inspectAssets } from "./assets";
-import { inspectSkills } from "./skills";
+import { inspectSkills } from "./commands/skills";
 import { readActiveIndex } from "../skills";
 import { loadPermissionSettings } from "../config/permissions";
 import { resolveShellProfile } from "../core/process/shell-profile";

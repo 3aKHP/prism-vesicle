@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { runSkillsCommand } from "../../../src/cli/skills";
+import { runSkillsCommand } from "../../../src/cli/commands/skills";
 
 describe("vesicle skills copy-template destinations", () => {
   const savedLog = console.error;
