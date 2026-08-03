@@ -31,3 +31,10 @@ export type WorkspaceMutation =
   | { kind: "copied"; source: string; target: string }
   | { kind: "moved"; source: string; target: string }
   | { kind: "deleted"; path: string };
+
+/**
+ * The classified result of reconciling a resident buffer against the live
+ * disk after an external edit. Produced by the buffer owner and consumed by
+ * the external-editor owner to decide viewer/tree follow-ups.
+ */
+export type ExternalEditOutcome = "not-resident" | "unchanged" | "modified" | "removed" | "unreadable";
