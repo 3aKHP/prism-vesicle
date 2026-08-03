@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { installFromGitHub, installFromLocalPath, isRemoteSource, parseGitHubUrl, updateSkill } from "../../../src/cli/skills-source";
+import { installFromGitHub, installFromLocalPath, isRemoteSource, parseGitHubUrl, updateSkill } from "../../../src/cli/commands/skills/source";
 import { listSkillVersions, readProvenance, rollbackSkill, skillStoreDirectory } from "../../../src/skills";
 
 const gitSupported = await (async (): Promise<boolean> => {
