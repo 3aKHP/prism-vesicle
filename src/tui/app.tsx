@@ -69,9 +69,10 @@ import { createWorkspaceController } from "./workspace";
 import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
-import { activateSkillForSession } from "../core/skills";
+
 import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-loop/session-init";
 import { createSessionIdentityCoordinator } from "./session-identity-coordinator";
+import { createSkillActivationOwner, type SkillActivationOptions } from "./skills/session-activation";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./workspace/view";
 import { copyTextToClipboard } from "./clipboard";
@@ -504,7 +505,7 @@ export function App(props: AppProps = {}) {
     setStatus,
     setMessages,
     reportError: (error) => turnController.reportError(error),
-    onActivate: (name) => activateSkillCommand(name, { mode: "context-only" }),
+    onActivate: (name) => activateSkill(name, { mode: "context-only" }),
   });
   const {
     skillPicker,
@@ -990,31 +991,21 @@ export function App(props: AppProps = {}) {
       setSessionPath(identity.sessionPath);
     },
   });
-  async function activateSkillCommand(
-    name: string,
-    options: { mode: "invoke" | "context-only"; taskText?: string },
-  ): Promise<void> {
-    const rootDir = process.cwd();
-    const sid = await sessionIdentityCoordinator.ensure();
-    const branchParent = nextSessionParent();
-    const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
-      profile: { id: activeEngine() },
-      mode: options.mode,
-      ...(branchParent ? { parentUuid: branchParent.uuid } : {}),
-      contextWindow: activeModelLimits()?.contextWindow,
-    });
-    if (branchParent && activation.recordUuid) setNextSessionParent({ uuid: activation.recordUuid });
-    const scriptInfo = activation.scripts.length > 0
-      ? ` · ${activation.scripts.length} script${activation.scripts.length > 1 ? "s" : ""}`
-      : "";
-    const card = activation.alreadyActive
-      ? `Skill "${activation.name}" already active [${activation.scope}].`
-      : `Skill "${activation.name}" activated [${activation.scope}] · ${activation.resources.length} resource${activation.resources.length === 1 ? "" : "s"}${scriptInfo}.`;
-    setMessages((prev) => [...prev, { role: "system", content: card }]);
-    if (options.mode === "invoke") {
-      const prompt = options.taskText ?? `Apply the ${activation.name} skill to the current context.`;
-      await turnController.submitPrompt(prompt);
-    }
+  const skillActivation = createSkillActivationOwner({
+    rootDir: process.cwd(),
+    sessionIdentity: { ensure: () => sessionIdentityCoordinator.ensure() },
+    activeEngine,
+    activeModelLimits,
+    branchParent: nextSessionParent,
+    setBranchParent: setNextSessionParent,
+    onNotice: (card) => setMessages((prev) => [...prev, { role: "system", content: card }]),
+    submitTurn: (prompt) => turnController.submitPrompt(prompt),
+  });
+  // Function declaration (hoisted like the pre-T1 use case) so the picker's
+  // onActivate closure cannot trip a TDZ regardless of construction order;
+  // it only runs post-render, when skillActivation is initialized.
+  async function activateSkill(name: string, options: SkillActivationOptions): Promise<void> {
+    return skillActivation.activate(name, options);
   }
 
   // Command execution context: the surface slash-command handlers reach
@@ -1081,7 +1072,7 @@ export function App(props: AppProps = {}) {
     openQualityRewriteConfirm: openRewriteConfirm,
     openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
     openSkillPicker,
-    activateSkill: (name, options) => activateSkillCommand(name, options),
+    activateSkill: (name, options) => activateSkill(name, options),
     openWorkspaceTarget: async (relPath?: string) => {
       setFocusedArtifactPath(null);
       return workspaceController.openWorkspaceTarget(relPath);
