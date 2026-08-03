@@ -3,6 +3,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { resolveQualityDecision, runPrompt, type AgentLoopEvent } from "../../../src/core/agent-loop/run";
 import { loadSessionSnapshot } from "../../../src/core/session/store";
 import { createDecisionContinuations } from "../../../src/tui/decision-continuations";
+import { makeContinuationBundle, recordSetter } from "../../../tests/support/tui/continuation-bundle";
+import type { PendingQualityDecisionState } from "../../../src/tui/decision-interaction";
+import type { TurnRunCancellable } from "../../../src/tui/turn-controller-options";
 import { harnessRuntime, restoreQualityTestState, runtimeRoot } from "./fixtures/quality-runtime";
 
 afterEach(restoreQualityTestState);
@@ -30,29 +33,29 @@ describe("quality: tui decision continuation", () => {
       const pending = { ...result, engine: "runtime" as const };
       const handled: unknown[] = [];
       const resumed: string[] = [];
-      const pendingUpdates: unknown[] = [];
+      const pendingUpdates: Array<PendingQualityDecisionState | null> = [];
       const before = requests;
-      const continuations = createDecisionContinuations({
+      const continuations = createDecisionContinuations(makeContinuationBundle({
         runtime: {
           busy: () => false,
-          setBusy: (value: boolean) => value,
+          setBusy: (() => undefined) as never,
           activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
           activeGeneration: () => undefined,
-          permissionBroker: undefined as any,
+          permissionBroker: undefined as never,
         },
         session: { rootDir: root },
         transcript: {
-          setStatus: (value: string) => value,
-          setMessages: (value: unknown) => value,
+          setStatus: (() => undefined) as never,
+          setMessages: (() => undefined) as never,
           recordActivity: () => undefined,
         },
         decision: {
-          pendingQualityDecision: () => pending,
-          setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
-          setQualitySelected: (value: number) => value,
+          pendingQualityDecision: () => pending as unknown as PendingQualityDecisionState,
+          setPendingQualityDecision: recordSetter(pendingUpdates),
+          setQualitySelected: (() => undefined) as never,
         },
         agent: {
-          agentManager: () => undefined as any,
+          agentManager: (() => undefined) as never,
           handleAgentEvent: () => undefined,
         },
         usage: { beginUsageTurn: () => undefined },
@@ -67,16 +70,16 @@ describe("quality: tui decision continuation", () => {
           takePendingUserInputs: () => [],
           runToolBoundaryCommands: async () => undefined,
         },
-        runCancellable: async (operation: (signal: AbortSignal) => Promise<unknown>) => ({
+        runCancellable: (async (operation: (signal: AbortSignal) => Promise<unknown>) => ({
           kind: "complete" as const,
           value: await operation(new AbortController().signal),
-        }),
+        })) as unknown as TurnRunCancellable,
         handleResult: (value: unknown) => { handled.push(value); },
         handleInterruptedTurn: () => undefined,
         permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
         resolveQualityDecision: (options: any) => resolveQualityDecision({ ...options, harness: harnessRuntime() }),
         reportError: (error: unknown) => { throw error; },
-      } as any);
+      }));
       await continuations.submitQualityDecision(resolution);
       expect(pendingUpdates[0]).toBeNull();
       if (resolution === "retry") {
@@ -113,30 +116,30 @@ describe("quality: tui decision continuation", () => {
       });
       if (result.kind !== "needs_quality_decision") throw new Error("expected quality decision");
       const pending = { ...result, engine: "runtime" as const };
-      const pendingUpdates: unknown[] = [];
+      const pendingUpdates: Array<PendingQualityDecisionState | null> = [];
       const errors: unknown[] = [];
       const controller = new AbortController();
-      const continuations = createDecisionContinuations({
+      const continuations = createDecisionContinuations(makeContinuationBundle({
         runtime: {
           busy: () => false,
-          setBusy: (value: boolean) => value,
+          setBusy: (() => undefined) as never,
           activeProviderSelection: () => ({ provider: "test", model: "test-model" }),
           activeGeneration: () => undefined,
-          permissionBroker: undefined as any,
+          permissionBroker: undefined as never,
         },
         session: { rootDir: root },
         transcript: {
-          setStatus: (value: string) => value,
-          setMessages: (value: unknown) => value,
+          setStatus: (() => undefined) as never,
+          setMessages: (() => undefined) as never,
           recordActivity: () => undefined,
         },
         decision: {
-          pendingQualityDecision: () => pending,
-          setPendingQualityDecision: (value: unknown) => { pendingUpdates.push(value); return value; },
-          setQualitySelected: (value: number) => value,
+          pendingQualityDecision: () => pending as unknown as PendingQualityDecisionState,
+          setPendingQualityDecision: recordSetter(pendingUpdates),
+          setQualitySelected: (() => undefined) as never,
         },
         agent: {
-          agentManager: () => undefined as any,
+          agentManager: (() => undefined) as never,
           handleAgentEvent: (event: AgentLoopEvent) => {
             if (failure === "cancel" && event.type === "provider_request") controller.abort(new DOMException("cancel quality retry", "AbortError"));
           },
@@ -153,20 +156,20 @@ describe("quality: tui decision continuation", () => {
           takePendingUserInputs: () => [],
           runToolBoundaryCommands: async () => undefined,
         },
-        runCancellable: async (operation: (signal: AbortSignal) => Promise<unknown>) => {
+        runCancellable: (async (operation: (signal: AbortSignal) => Promise<unknown>) => {
           try {
             return { kind: "complete" as const, value: await operation(controller.signal) };
           } catch (error) {
             if (controller.signal.aborted) return { kind: "interrupted" as const };
             throw error;
           }
-        },
+        }) as unknown as TurnRunCancellable,
         handleResult: () => undefined,
         handleInterruptedTurn: () => undefined,
         permissionContext: () => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
         resolveQualityDecision: (options: any) => resolveQualityDecision({ ...options, harness: harnessRuntime() }),
         reportError: (error: unknown) => { errors.push(error); },
-      } as any);
+      }));
       await continuations.submitQualityDecision("retry");
       expect(pendingUpdates[0]).toBeNull();
       expect(pendingUpdates.at(-1)).toMatchObject({ decision: { id: result.decision.id } });

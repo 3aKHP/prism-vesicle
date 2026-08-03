@@ -5,56 +5,8 @@ import { expect, test } from "bun:test";
 import { createSessionStore } from "../../../src/core/session/store";
 import { createDecisionContinuations } from "../../../src/tui/decision-continuations";
 
-/**
- * Builds a full continuation bundle with inert defaults so each test only
- * overrides the port members it observes. The bundle shape mirrors the
- * turn-domain ports (runtime/session/transcript/decision/agent/usage/
- * hostAction + execution handles).
- */
-function makeBundle(overrides: {
-  runtime?: Record<string, unknown>;
-  session?: Record<string, unknown>;
-  transcript?: Record<string, unknown>;
-  decision?: Record<string, unknown>;
-  agent?: Record<string, unknown>;
-  usage?: Record<string, unknown>;
-  hostAction?: Record<string, unknown>;
-  queuedWork?: Record<string, unknown>;
-  runCancellable?: unknown;
-  handleResult?: unknown;
-  handleInterruptedTurn?: unknown;
-  reportError?: unknown;
-  permissionContext?: unknown;
-} = {}): any {
-  return {
-    runtime: {
-      activeProviderSelection: () => undefined,
-      activeGeneration: () => undefined,
-      busy: () => false,
-      setBusy: (value: boolean) => value,
-      permissionBroker: { resolve: () => true },
-      ...overrides.runtime,
-    },
-    session: { rootDir: "", setConversation: () => undefined, ...overrides.session },
-    transcript: { setMessages: () => undefined, setStatus: () => undefined, recordActivity: () => undefined, ...overrides.transcript },
-    decision: { ...overrides.decision },
-    agent: { agentCards: () => [], agentManager: () => undefined, handleAgentEvent: () => undefined, ...overrides.agent },
-    usage: { beginUsageTurn: () => undefined, ...overrides.usage },
-    hostAction: { ...overrides.hostAction },
-    queuedWork: {
-      block: () => undefined,
-      handleInterruption: async () => false,
-      takePendingUserInputs: () => [],
-      runToolBoundaryCommands: async () => undefined,
-      ...overrides.queuedWork,
-    },
-    runCancellable: overrides.runCancellable ?? (async () => ({ kind: "interrupted" as const })),
-    handleResult: overrides.handleResult ?? (() => undefined),
-    handleInterruptedTurn: overrides.handleInterruptedTurn ?? (() => undefined),
-    reportError: overrides.reportError ?? (() => undefined),
-    permissionContext: overrides.permissionContext ?? (() => ({ mode: "manual" })),
-  };
-}
+import { makeContinuationBundle, recordSetter } from "../../../tests/support/tui/continuation-bundle";
+import type { PendingGateState, PendingUserQuestionState } from "../../../src/tui/decision-interaction";
 
 test("gate interruption delegates queued-session recovery before releasing the modal", async () => {
   const root = await mkdtemp(join(tmpdir(), "vesicle-tui-gate-queue-"));
@@ -71,24 +23,24 @@ test("gate interruption delegates queued-session recovery before releasing the m
       assistantContent: "Blueprint",
       messages: [],
     } as const;
-    const pendingUpdates: unknown[] = [];
+    const pendingUpdates: Array<PendingGateState | null> = [];
     let interrupted = 0;
     let queuedInterruptionHandled = 0;
-    const continuations = createDecisionContinuations(makeBundle({
+    const continuations = createDecisionContinuations(makeContinuationBundle({
       session: { rootDir: root },
       decision: {
-        pendingGate: () => pending,
-        setPendingGate: (value: unknown) => { pendingUpdates.push(value); return value; },
-        setGateFeedbackMode: (value: unknown) => value,
+        pendingGate: () => pending as unknown as PendingGateState,
+        setPendingGate: recordSetter(pendingUpdates),
+        setGateFeedbackMode: (() => undefined) as never,
         clearGateFeedback: () => undefined,
       },
       transcript: {
-        setStatus: (value: string) => value,
-        setMessages: (value: unknown) => value,
+        setStatus: (() => undefined) as never,
+        setMessages: (() => undefined) as never,
         recordActivity: () => undefined,
       },
       queuedWork: {
-        handleInterruption: async (sessionId: string) => {
+        handleInterruption: async (sessionId: string | undefined) => {
           expect(sessionId).toBe("parent");
           queuedInterruptionHandled += 1;
           return true;
@@ -153,24 +105,24 @@ test("user-question interruption does not restore a resolved Harness retry decis
       messages: [],
     } as const;
     const busy: boolean[] = [];
-    const pendingUpdates: unknown[] = [];
+    const pendingUpdates: Array<PendingUserQuestionState | null> = [];
     const statuses: string[] = [];
     let interrupted = 0;
-    const continuations = createDecisionContinuations(makeBundle({
+    const continuations = createDecisionContinuations(makeContinuationBundle({
       session: { rootDir: root },
       runtime: {
         busy: () => false,
-        setBusy: (value: boolean) => { busy.push(value); return value; },
+        setBusy: recordSetter(busy),
       },
       decision: {
-        pendingUserQuestion: () => pending,
-        setPendingUserQuestion: (value: unknown) => { pendingUpdates.push(value); return value; },
-        setQuestionSelected: (value: number) => value,
+        pendingUserQuestion: () => pending as unknown as PendingUserQuestionState,
+        setPendingUserQuestion: recordSetter(pendingUpdates),
+        setQuestionSelected: (() => undefined) as never,
         clearQuestionFreeform: () => undefined,
       },
       transcript: {
-        setStatus: (value: string) => { statuses.push(value); return value; },
-        setMessages: (value: unknown) => value,
+        setStatus: recordSetter(statuses),
+        setMessages: (() => undefined) as never,
         recordActivity: () => undefined,
       },
       agent: {
@@ -207,24 +159,24 @@ test("user-question recovery fails closed when the durable session cannot be loa
       messages: [],
     } as const;
     const busy: boolean[] = [];
-    const pendingUpdates: unknown[] = [];
+    const pendingUpdates: Array<PendingUserQuestionState | null> = [];
     const statuses: string[] = [];
     let reported = 0;
-    const continuations = createDecisionContinuations(makeBundle({
+    const continuations = createDecisionContinuations(makeContinuationBundle({
       session: { rootDir: root },
       runtime: {
         busy: () => false,
-        setBusy: (value: boolean) => { busy.push(value); return value; },
+        setBusy: recordSetter(busy),
       },
       decision: {
-        pendingUserQuestion: () => pending,
-        setPendingUserQuestion: (value: unknown) => { pendingUpdates.push(value); return value; },
-        setQuestionSelected: (value: number) => value,
+        pendingUserQuestion: () => pending as unknown as PendingUserQuestionState,
+        setPendingUserQuestion: recordSetter(pendingUpdates),
+        setQuestionSelected: (() => undefined) as never,
         clearQuestionFreeform: () => undefined,
       },
       transcript: {
-        setStatus: (value: string) => { statuses.push(value); return value; },
-        setMessages: (value: unknown) => value,
+        setStatus: recordSetter(statuses),
+        setMessages: (() => undefined) as never,
         recordActivity: () => undefined,
       },
       agent: {

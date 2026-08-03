@@ -75,7 +75,6 @@ test("interrupted SubAgent delivery rebuilds durable conversation before releasi
         conversation = typeof value === "function" ? value(conversation) : value;
         return conversation;
       },
-      messages: () => messages,
       setMessages: (value: unknown[] | ((current: unknown[]) => unknown[])) => {
         messages = typeof value === "function" ? value(messages) : value;
         return messages;
