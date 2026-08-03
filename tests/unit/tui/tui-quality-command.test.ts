@@ -3,8 +3,8 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadExperimentalQualitySettings } from "../../../src/config/quality";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
-import type { CommandContext } from "../../../src/tui/commands/types";
+import { createQualityCommands } from "../../../src/tui/commands/quality";
+import type { QualityCommandContext } from "../../../src/tui/commands/types";
 import type { Message } from "../../../src/tui/types";
 
 const originalProvidersFile = process.env.VESICLE_PROVIDERS_FILE;
@@ -21,15 +21,15 @@ afterEach(async () => {
 
 describe("/quality command", () => {
   test("opens the picker without arguments and keeps status read-only", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let opened = false;
     let messages: Message[] = [];
     const ctx = {
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
       async openQualityPicker() { opened = true; },
-    } as unknown as CommandContext;
-    await command.run(ctx, "", "/quality");
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
+    await command.run("", "/quality");
     expect(opened).toBe(true);
     expect(messages).toHaveLength(1);
   });
@@ -38,8 +38,6 @@ describe("/quality command", () => {
     const config = await configFixture();
     process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
     process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let messages: Message[] = [];
     const stagedCandidates: { providerAlias: string; modelId: string; judgeTimeoutMs: number }[] = [];
     const ctx = {
@@ -50,9 +48,11 @@ describe("/quality command", () => {
       activeProvider: () => "judge",
       activeModel: () => "judge-model",
       async openQualityRewriteConfirm(candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) { stagedCandidates.push(candidate); },
-    } as unknown as CommandContext;
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
 
-    await command.run(ctx, "rewrite judge judge-model 20000", "/quality rewrite judge judge-model 20000");
+    await command.run("rewrite judge judge-model 20000", "/quality rewrite judge judge-model 20000");
     expect(stagedCandidates).toEqual([{ providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 20_000 }]);
     // The command must not persist Rewrite before the confirmation panel commits.
     expect((await loadExperimentalQualitySettings()).mode).toBe("off");
@@ -62,8 +62,6 @@ describe("/quality command", () => {
     const config = await configFixture();
     process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
     process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let messages: Message[] = [];
     let staged = false;
     const ctx = {
@@ -74,9 +72,11 @@ describe("/quality command", () => {
       activeProvider: () => "judge",
       activeModel: () => "judge-model",
       async openQualityRewriteConfirm() { staged = true; },
-    } as unknown as CommandContext;
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
 
-    await command.run(ctx, "confirm rewrite judge judge-model 20000", "/quality confirm rewrite judge judge-model 20000");
+    await command.run("confirm rewrite judge judge-model 20000", "/quality confirm rewrite judge judge-model 20000");
     expect(messages.at(-1)?.content).toContain("confirm step was removed");
     expect(staged).toBe(false);
     expect((await loadExperimentalQualitySettings()).mode).toBe("off");
@@ -86,17 +86,17 @@ describe("/quality command", () => {
     const config = await configFixture();
     process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
     process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let messages: Message[] = [];
     const ctx = {
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
       ensureProviderRegistry: async () => ({ providers: [] }),
       setStatus: () => undefined,
       recordActivity: () => undefined,
-    } as unknown as CommandContext;
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
 
-    await command.run(ctx, "observe judge judge-model 25000", "/quality observe judge judge-model 25000");
+    await command.run("observe judge judge-model 25000", "/quality observe judge judge-model 25000");
     expect(await loadExperimentalQualitySettings()).toMatchObject({
       mode: "observe", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 25_000,
     });
@@ -106,18 +106,18 @@ describe("/quality command", () => {
     const config = await configFixture();
     process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
     process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let messages: Message[] = [];
     const ctx = {
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
       ensureProviderRegistry: async () => ({ providers: [] }),
       setStatus: () => undefined,
       recordActivity: () => undefined,
-    } as unknown as CommandContext;
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
 
-    await command.run(ctx, "observe judge judge-model 18000", "/quality observe judge judge-model 18000");
-    await command.run(ctx, "off", "/quality off");
+    await command.run("observe judge judge-model 18000", "/quality observe judge judge-model 18000");
+    await command.run("off", "/quality off");
     const off = await loadExperimentalQualitySettings();
     expect(off).toMatchObject({ mode: "off", providerAlias: "judge", modelId: "judge-model", judgeTimeoutMs: 18_000 });
   });
@@ -126,8 +126,6 @@ describe("/quality command", () => {
     const config = await configFixture();
     process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
     process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let messages: Message[] = [];
     const stagedCandidates: { providerAlias: string; modelId: string; judgeTimeoutMs: number }[] = [];
     const ctx = {
@@ -136,9 +134,11 @@ describe("/quality command", () => {
       setStatus: () => undefined,
       recordActivity: () => undefined,
       async openQualityRewriteConfirm(candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) { stagedCandidates.push(candidate); },
-    } as unknown as CommandContext;
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
 
-    await command.run(ctx, "rewrite judge judge-model 50", "/quality rewrite judge judge-model 50");
+    await command.run("rewrite judge judge-model 50", "/quality rewrite judge judge-model 50");
     expect(messages.at(-1)?.content).toContain("1000 to 180000");
     expect(stagedCandidates).toEqual([]);
     expect((await loadExperimentalQualitySettings()).mode).toBe("off");
@@ -148,8 +148,6 @@ describe("/quality command", () => {
     const config = await keylessConfigFixture();
     process.env.VESICLE_PROVIDERS_FILE = join(config, "providers.yaml");
     process.env.VESICLE_QUALITY_FILE = join(config, "quality.yaml");
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let messages: Message[] = [];
     const pickerOpened: string[] = [];
     const ctx = {
@@ -160,9 +158,11 @@ describe("/quality command", () => {
       setStatus: () => undefined,
       recordActivity: () => undefined,
       async openQualityPicker(focusMode?: "observe" | "rewrite") { pickerOpened.push(focusMode ?? "none"); },
-    } as unknown as CommandContext;
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
 
-    await command.run(ctx, "observe", "/quality observe");
+    await command.run("observe", "/quality observe");
     expect(pickerOpened).toEqual(["observe"]);
     // The keyless retained profile must not be written, and no missing-key error is shown.
     expect(messages.at(-1)?.role).not.toBe("system");
@@ -182,8 +182,6 @@ describe("/quality command", () => {
     await writeFile(join(directory, "quality.yaml"), "version: 2\nmode: off\nproviderAlias: judge\nmodelId: stale-model\njudgeTimeoutMs: 15000\n");
     process.env.VESICLE_PROVIDERS_FILE = join(directory, "providers.yaml");
     process.env.VESICLE_QUALITY_FILE = join(directory, "quality.yaml");
-    const command = builtinCommands.find((entry) => entry.name === "quality");
-    if (!command) throw new Error("Missing /quality command.");
     let messages: Message[] = [];
     const pickerOpened: string[] = [];
     const stagedCandidates: { providerAlias: string; modelId: string; judgeTimeoutMs: number }[] = [];
@@ -198,9 +196,11 @@ describe("/quality command", () => {
       activeModel: () => "judge-model",
       async openQualityPicker(focusMode?: "observe" | "rewrite") { pickerOpened.push(focusMode ?? "none"); },
       async openQualityRewriteConfirm(candidate: { providerAlias: string; modelId: string; judgeTimeoutMs: number }) { stagedCandidates.push(candidate); },
-    } as unknown as CommandContext;
+    } as unknown as QualityCommandContext;
+    const command = createQualityCommands(ctx).find((entry) => entry.name === "quality");
+    if (!command) throw new Error("Missing /quality command.");
 
-    await command.run(ctx, "rewrite", "/quality rewrite");
+    await command.run("rewrite", "/quality rewrite");
     // Stale retained → require Change Judge via the picker; the red panel must not stage a substitute.
     expect(pickerOpened).toEqual(["rewrite"]);
     expect(stagedCandidates).toEqual([]);

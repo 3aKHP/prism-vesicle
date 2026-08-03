@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ProviderRegistry, ProviderSelection } from "../../../src/config/providers";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
-import type { CommandContext } from "../../../src/tui/commands/types";
+import { createProviderCommands } from "../../../src/tui/commands/provider";
+import type { ProviderCommandContext } from "../../../src/tui/commands/types";
 import type { Message } from "../../../src/tui/types";
 
 const registry: ProviderRegistry = {
@@ -31,7 +31,7 @@ describe("/model command", () => {
   test("preserves the legacy one-argument model switch in the active provider", async () => {
     const harness = commandHarness();
 
-    await harness.command.run(harness.ctx, "deepseek-reasoner", "/model deepseek-reasoner");
+    await harness.command.run("deepseek-reasoner", "/model deepseek-reasoner");
 
     expect(harness.requested()).toEqual({ provider: "deepseek", model: "deepseek-reasoner" });
     expect(harness.persisted()).toEqual({ provider: "deepseek", model: "deepseek-reasoner" });
@@ -40,7 +40,7 @@ describe("/model command", () => {
   test("treats a one-argument provider id as a switch to its default model", async () => {
     const harness = commandHarness();
 
-    await harness.command.run(harness.ctx, "mimo", "/model mimo");
+    await harness.command.run("mimo", "/model mimo");
 
     expect(harness.requested()).toEqual({ provider: "mimo" });
     expect(harness.persisted()).toEqual({ provider: "mimo", model: "mimo-v2" });
@@ -49,7 +49,7 @@ describe("/model command", () => {
   test("opens the picker when no arguments are supplied", async () => {
     const harness = commandHarness();
 
-    await harness.command.run(harness.ctx, "", "/model");
+    await harness.command.run("", "/model");
 
     expect(harness.pickerOpened()).toBe(true);
     expect(harness.requested()).toBeNull();
@@ -57,8 +57,6 @@ describe("/model command", () => {
 });
 
 function commandHarness() {
-  const command = builtinCommands.find((entry) => entry.name === "model");
-  if (!command) throw new Error("Missing /model command.");
   let messages: Message[] = [];
   let requestedSelection: Partial<ProviderSelection> | null = null;
   let persistedSelection: ProviderSelection | null = null;
@@ -82,11 +80,12 @@ function commandHarness() {
     async openModelPicker() {
       opened = true;
     },
-  } as unknown as CommandContext;
+  } as unknown as ProviderCommandContext;
+  const command = createProviderCommands(ctx).find((entry) => entry.name === "model");
+  if (!command) throw new Error("Missing /model command.");
 
   return {
     command,
-    ctx,
     requested: () => requestedSelection,
     persisted: () => persistedSelection,
     pickerOpened: () => opened,

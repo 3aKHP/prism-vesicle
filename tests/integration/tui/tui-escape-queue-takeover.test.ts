@@ -85,6 +85,7 @@ async function buildHarness(root: string, sessionId: string): Promise<Harness> {
     });
     composer = createComposerController({
       rootDir: root,
+      commands: () => [],
       activeEngine: () => "etl",
       terminalWidth: () => 80,
       providerRegistry: () => null,

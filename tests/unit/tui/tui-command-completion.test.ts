@@ -6,9 +6,13 @@ import type { ProviderRegistry } from "../../../src/config/providers";
 import type { ArtifactEntry } from "../../../src/core/artifacts/workbench";
 import { listStageCardPaths } from "../../../src/core/stage/bootstrap";
 import { resolveCommandArgumentCompletion } from "../../../src/tui/commands/argument-completion";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
+import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
 import { argumentMenuLabelBudget } from "../../../src/tui/widgets/ArgumentMenu";
-import type { CommandArgumentCompletion, CommandCompletionContext } from "../../../src/tui/commands/types";
+import type { BuiltinCommandContexts, CommandArgumentCompletion, CommandCompletionContext } from "../../../src/tui/commands/types";
+
+// Completion contracts and busy metadata are resolved without invoking run,
+// so an inert context bundle suffices for this infrastructure-level suite.
+const builtinCommands = createBuiltinCommands({} as unknown as BuiltinCommandContexts);
 
 const roots: string[] = [];
 
