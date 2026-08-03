@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { createMemo, For } from "solid-js";
 import { fadedRuns, markRuns } from "../brand-mark";
 
@@ -15,7 +16,7 @@ export function BrandMark(props: { mark: readonly string[]; fade?: number }) {
         {(row) => (
           <box flexDirection="row" height={1}>
             <For each={row}>
-              {(run) => <text content={run.text} fg={run.fg} wrapMode="none" />}
+              {(run) => <ThemedText content={run.text} fg={run.fg} wrapMode="none" />}
             </For>
           </box>
         )}

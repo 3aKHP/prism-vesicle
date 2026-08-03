@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import { palette } from "../theme";
@@ -39,8 +40,8 @@ export function OptionPicker(props: OptionPickerProps) {
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
-        <text content={title()} fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
-        {props.hint ? <text content={`  ${props.hint}`} fg={palette.textDim} wrapMode="none" /> : null}
+        <ThemedText content={title()} fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
+        {props.hint ? <ThemedText content={`  ${props.hint}`} fg={palette.textDim} wrapMode="none" /> : null}
       </box>
       <For each={win().visible}>
         {(item, getIndex) => {
@@ -55,9 +56,9 @@ export function OptionPicker(props: OptionPickerProps) {
           const attr = () => (isSelected() ? TextAttributes.BOLD : TextAttributes.NONE);
           return (
             <box height={1} flexDirection="row">
-              <text content={isSelected() ? ">" : " "} fg={palette.brand} attributes={attr()} wrapMode="none" />
-              <text content={padded} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={attr()} wrapMode="none" />
-              <text content={detail} fg={isSelected() ? palette.textSecondary : palette.textDim} wrapMode="none" />
+              <ThemedText content={isSelected() ? ">" : " "} fg={palette.brand} attributes={attr()} wrapMode="none" />
+              <ThemedText content={padded} fg={isSelected() ? palette.textPrimary : palette.textSecondary} attributes={attr()} wrapMode="none" />
+              <ThemedText content={detail} fg={isSelected() ? palette.textSecondary : palette.textDim} wrapMode="none" />
             </box>
           );
         }}

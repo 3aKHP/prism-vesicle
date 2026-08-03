@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { createMemo, For, Show } from "solid-js";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../../core/tools";
 import { palette } from "../theme";
@@ -61,11 +62,11 @@ export function ToolCard(props: Props) {
     const footer = toolResultFooter(props.toolName ?? "tool", ok, props.content ?? "", props.toolFileEvent, props.toolWebEvent, props.toolMcpEvent, props.toolProcessEvent);
     return (
       <box flexDirection="column">
-        <text content={`  ⎿ ${footer}`} fg={ok ? palette.textMuted : palette.error} />
+        <ThemedText content={`  ⎿ ${footer}`} fg={ok ? palette.textMuted : palette.error} />
         <For each={props.images ?? []}>
-          {(image, index) => <text content={`    ▧ Image #${index() + 1} · ${image.sourcePath ?? image.filename ?? image.source}`} fg={palette.tool} />}
+          {(image, index) => <ThemedText content={`    ▧ Image #${index() + 1} · ${image.sourcePath ?? image.filename ?? image.source}`} fg={palette.tool} />}
         </For>
-        <text content=" " fg={palette.textDim} />
+        <ThemedText content=" " fg={palette.textDim} />
       </box>
     );
   }
@@ -89,11 +90,11 @@ export function ToolCard(props: Props) {
 
   return (
     <box flexDirection="column">
-      <text content={header} fg={palette.tool} attributes={1} />
+      <ThemedText content={header} fg={palette.tool} attributes={1} />
       <Show when={hunk} fallback={<box height={0} />}>
-        <text content={`  ${hunk}`} fg={palette.textDim} />
+        <ThemedText content={`  ${hunk}`} fg={palette.textDim} />
       </Show>
-      <For each={rows()}>{(row) => <text content={row.text} fg={row.fg} />}</For>
+      <For each={rows()}>{(row) => <ThemedText content={row.text} fg={row.fg} />}</For>
       <Show when={kind === "process" ? props.toolProcessEvent : undefined} keyed fallback={<box height={0} />}>
         {(event) => <ProcessOutput event={event} width={props.width} />}
       </Show>
@@ -107,9 +108,9 @@ function ProcessOutput(props: { event: ProcessToolEvent; width: number }) {
   return (
     <box flexDirection="column">
       <For each={rows()}>
-        {(row) => <text content={`  ${truncateLine(row.text, Math.max(20, props.width - 4))}`} fg={row.stderr ? palette.warn : palette.textMuted} />}
+        {(row) => <ThemedText content={`  ${truncateLine(row.text, Math.max(20, props.width - 4))}`} fg={row.stderr ? palette.warn : palette.textMuted} />}
       </For>
-      <text
+      <ThemedText
         content={`  ${status()}${props.event.taskId ? ` · ${props.event.taskId}` : ""} · ${shellDisplayName(props.event.shell)} · ${formatDuration(props.event.durationMs)}`}
         fg={props.event.status === "running" ? palette.warn : props.event.status === "completed" ? palette.success : palette.error}
       />

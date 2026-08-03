@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Light-theme text selection and Workspace editor contrast (#158).** Selectable TUI text now receives one theme-owned foreground/background selection pair instead of relying on OpenTUI's implicit transparent-buffer color swap. Markdown propagates the same pair through prose, list markers, fenced code, and tables, including mounted selections during theme changes. The Workspace textarea now explicitly follows the active theme for ordinary and focused text, cursor, and selection colors, fixing its white-on-light editor text.
+
 ## [1.0.0-alpha.8] - 2026-08-01
 
 ### Added

@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
@@ -1158,7 +1159,7 @@ export function App(props: AppProps = {}) {
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
-        <text
+        <ThemedText
           content={workspaceActive()
             ? workspaceHeaderLine(process.cwd(), layout().width)
             : headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
@@ -1167,7 +1168,7 @@ export function App(props: AppProps = {}) {
           wrapMode="none"
         />
         <Show when={permissionMode() === "YOLO"} fallback={<box width={0} />}>
-          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} wrapMode="none" />
+          <ThemedText content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} wrapMode="none" />
         </Show>
       </box>
 
@@ -1299,7 +1300,7 @@ export function App(props: AppProps = {}) {
       />
       </Show>
       <box height={layout().footerHeight} paddingLeft={1}>
-        <text
+        <ThemedText
           content={footerLine(activeProvider(), activeModel(), providerHasApiKey(), layout().width, lastTurnUsage(), sessionUsage(), activeModelLimits())}
           fg={palette.textMuted}
           wrapMode="none"

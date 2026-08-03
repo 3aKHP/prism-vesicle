@@ -155,7 +155,7 @@ async function main(): Promise<void> {
     assert(!/Unknown option/.test(r.stderr), `should not be an option error; stderr=${r.stderr.slice(0, 200)}`);
   });
 
-  await scenario("debug markdown-runtime loads the embedded tree-sitter worker", async () => {
+  await scenario("debug markdown-runtime verifies the embedded parser and native selection", async () => {
     const r = await runBinary(binary, ["debug", "markdown-runtime"], project, config);
     assert(r.exitCode === 0, `exit ${r.exitCode}; stderr=${r.stderr.slice(0, 200)}`);
     const parsed = JSON.parse(r.stdout.trim()) as { ok: boolean };

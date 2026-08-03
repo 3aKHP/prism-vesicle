@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
 import { wrapDisplayLines } from "./format";
 import { palette } from "./theme";
@@ -57,12 +58,12 @@ export function QualityRewritePrompt(props: {
   const action = () => stageAction[props.stage];
   return (
     <box border borderColor={palette.error} paddingX={1} flexDirection="column" width={props.width} height="100%">
-      <text content={`CONFIRM · Enable Review and Rewrite (${props.stage}/2)`} fg={palette.error} attributes={1} wrapMode="none" />
-      <For each={judgeLines()}>{(line) => <text content={line} fg={palette.textPrimary} wrapMode="none" />}</For>
-      <For each={descriptionLines()}>{(line) => <text content={line} fg={palette.error} wrapMode="none" />}</For>
-      <text content={`${props.focused === "confirm" ? "›" : " "} ${action()}`} fg={props.focused === "confirm" ? palette.error : palette.textDim} wrapMode="none" />
-      <text content={`${props.focused === "reject" ? "›" : " "} Cancel`} fg={props.focused === "reject" ? palette.textPrimary : palette.textDim} wrapMode="none" />
-      <text content={rewriteHint(props.width)} fg={palette.textDim} wrapMode="none" />
+      <ThemedText content={`CONFIRM · Enable Review and Rewrite (${props.stage}/2)`} fg={palette.error} attributes={1} wrapMode="none" />
+      <For each={judgeLines()}>{(line) => <ThemedText content={line} fg={palette.textPrimary} wrapMode="none" />}</For>
+      <For each={descriptionLines()}>{(line) => <ThemedText content={line} fg={palette.error} wrapMode="none" />}</For>
+      <ThemedText content={`${props.focused === "confirm" ? "›" : " "} ${action()}`} fg={props.focused === "confirm" ? palette.error : palette.textDim} wrapMode="none" />
+      <ThemedText content={`${props.focused === "reject" ? "›" : " "} Cancel`} fg={props.focused === "reject" ? palette.textPrimary : palette.textDim} wrapMode="none" />
+      <ThemedText content={rewriteHint(props.width)} fg={palette.textDim} wrapMode="none" />
     </box>
   );
 }

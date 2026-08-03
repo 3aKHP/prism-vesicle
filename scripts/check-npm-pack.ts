@@ -29,6 +29,7 @@ if (tempArtifacts.length > 0) {
 for (const required of [
   "bin/vesicle.mjs",
   "dist/npm/vesicle.mjs",
+  "patches/@opentui%2Fcore@0.4.3.patch",
   "harness-manifest.json",
   "assets/engines/etl.profile.yaml",
   "host-assets/prompts/shared/vesicle-base.md",
@@ -52,6 +53,15 @@ if (rawApplicationSources.length > 0) {
 }
 if (paths.includes("dist/npm/vesicle.meta.json")) {
   throw new Error("npm package contains its development-only build metafile.");
+}
+for (const runtimeAsset of [
+  /^dist\/npm\/highlights-[a-z0-9]+\.scm$/,
+  /^dist\/npm\/injections-[a-z0-9]+\.scm$/,
+  /^dist\/npm\/tree-sitter-markdown-[a-z0-9]+\.wasm$/,
+]) {
+  if (!paths.some((path) => runtimeAsset.test(path))) {
+    throw new Error(`npm package is missing a bundled OpenTUI runtime asset matching ${runtimeAsset}.`);
+  }
 }
 
 console.log(`npm package shape verified: ${paths.length} files.`);

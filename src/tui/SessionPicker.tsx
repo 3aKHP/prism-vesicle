@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { SessionSummary } from "../core/session/store";
@@ -16,13 +17,13 @@ export function SessionPicker(props: SessionPickerProps) {
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
-        <text content="Resume Session" fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
-        <text content="  ↑/↓ choose · Enter resume · Esc close" fg={palette.textDim} wrapMode="none" />
+        <ThemedText content="Resume Session" fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <ThemedText content="  ↑/↓ choose · Enter resume · Esc close" fg={palette.textDim} wrapMode="none" />
       </box>
       <For each={visible()}>
         {(entry) => (
           <box height={1}>
-            <text
+            <ThemedText
               content={sessionPickerLine(entry.session, entry.index, entry.index === props.selected, props.width - 4)}
               fg={entry.index === props.selected ? palette.textPrimary : palette.textSecondary}
               attributes={entry.index === props.selected ? TextAttributes.BOLD : TextAttributes.NONE}

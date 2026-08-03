@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { createMemo, createSignal, For, onCleanup, Show, type Accessor } from "solid-js";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
@@ -166,7 +167,7 @@ export function MessageStream(props: {
         </Show>
         <Show when={props.streamingAssistant.trim().length > 0} fallback={<box height={0} />}>
           <box flexDirection="column">
-            <text content="━━━━━━━━ assistant streaming" fg={palette.assistant} attributes={1} />
+            <ThemedText content="━━━━━━━━ assistant streaming" fg={palette.assistant} attributes={1} />
             <Message
               message={{ id: `stream:${props.sessionId ?? "new"}`, role: "assistant", content: props.streamingAssistant, ...(props.activeEngine === "stage" ? { engine: "stage" as const } : {}) }}
               reasoningMode={props.reasoningMode}

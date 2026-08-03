@@ -13,5 +13,13 @@ describe("Markdown runtime diagnostic", () => {
       expect.objectContaining({ filetype: "typescript", error: undefined, highlights: expect.objectContaining({ count: expect.any(Number) }) }),
     ]);
     expect(diagnostic.probes.every((probe) => probe.highlights.count > 0)).toBe(true);
+    expect(diagnostic.selection.ok).toBe(true);
+    expect(diagnostic.selection.cases).toEqual([
+      expect.objectContaining({ name: "prose", ok: true, selectedText: expect.stringContaining("alpha") }),
+      expect.objectContaining({ name: "list", ok: true, selectedText: expect.stringContaining("beta") }),
+      expect.objectContaining({ name: "link", ok: true, selectedText: expect.stringContaining("epsilon") }),
+      expect.objectContaining({ name: "fenced-code", ok: true, selectedText: expect.stringContaining("gamma") }),
+      expect.objectContaining({ name: "table-cell", ok: true, selectedText: expect.stringContaining("delta") }),
+    ]);
   });
 });

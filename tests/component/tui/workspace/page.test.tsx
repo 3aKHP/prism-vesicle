@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { type Renderable, TextareaRenderable } from "@opentui/core";
+import { parseColor, type Renderable, TextareaRenderable } from "@opentui/core";
 import { testRender } from "@opentui/solid";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { WorkspacePage } from "../../../../src/tui/workspace/view";
 import { createWorkspaceController } from "../../../../src/tui/workspace";
 import { PromptComposer } from "../../../../src/tui/PromptComposer";
+import { paletteFor, reportTerminalThemeMode, setThemePreference } from "../../../../src/tui/theme";
 
 let root: string;
 
@@ -19,6 +20,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  setThemePreference("dark");
+  reportTerminalThemeMode(null);
   await rm(root, { recursive: true, force: true });
 });
 
@@ -93,6 +96,57 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("line two");
     expect(controller.isEditing()).toBe(true);
   });
+
+  test("uses readable light-theme Workspace editor text, cursor, and selection colors", async () => {
+    setThemePreference("light");
+    const controller = createWorkspaceController(root);
+    await controller.openWorkspaceTarget("notes.txt");
+    const setup = await renderPage(controller);
+    await setup.flush();
+
+    const textarea = findTextarea(setup.renderer.root);
+    expect(textarea).toBeDefined();
+    const light = paletteFor("light");
+    expect(textarea!.textColor.toInts()).toEqual(parseColor(light.textPrimary).toInts());
+    expect(textarea!.cursorColor.toInts()).toEqual(parseColor(light.editorCursor).toInts());
+    expect(textarea!.selectionBg?.toInts()).toEqual(parseColor(light.selectionBackground).toInts());
+    expect(textarea!.selectionFg?.toInts()).toEqual(parseColor(light.selectionForeground).toInts());
+    const ordinaryLight = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .find((span) => span.text.includes("line one"));
+    expect(ordinaryLight?.fg.toInts()).toEqual(parseColor(light.textPrimary).toInts());
+
+    textarea!.setSelection(0, 4);
+    await setup.flush();
+    const selectedLight = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .find((span) => span.text === "line" && span.bg.toInts()[3] !== 0);
+    expect(selectedLight?.fg.toInts()).toEqual(parseColor(light.selectionForeground).toInts());
+    expect(selectedLight?.bg.toInts()).toEqual(parseColor(light.selectionBackground).toInts());
+    expect(textarea!.getSelectedText()).toBe("line");
+    setup.renderer.destroy();
+  });
+
+  test("refreshes a mounted Workspace editor and active selection when the theme changes", async () => {
+    const probe = Bun.spawn([
+      process.execPath,
+      "--preload",
+      "@opentui/solid/preload",
+      "tests/support/workspace-theme-probe.tsx",
+    ], {
+      cwd: process.cwd(),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const timeout = setTimeout(() => probe.kill(), 10_000);
+    const [exitCode, stdout, stderr] = await Promise.all([
+      probe.exited.finally(() => clearTimeout(timeout)),
+      new Response(probe.stdout).text(),
+      new Response(probe.stderr).text(),
+    ]);
+    if (exitCode !== 0) throw new Error(`Workspace theme probe failed:\n${stdout}\n${stderr}`);
+    expect(stdout).toContain("Workspace theme refresh passed");
+  }, 15_000);
 
   test("focused editor owns the native cursor over the inactive bottom composer", async () => {
     const controller = createWorkspaceController(root);

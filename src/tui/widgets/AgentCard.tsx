@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import type { AgentCardState } from "../types";
 import { palette } from "../theme";
 import { truncateLine } from "../format";
@@ -10,19 +11,19 @@ export function AgentCard(props: { agent: AgentCardState; width: number }) {
       <box flexDirection="row">
         <box width={1} backgroundColor={palette.brandDim} />
         <box flexDirection="column" paddingX={1} flexGrow={1}>
-          <text
+          <ThemedText
             content={truncateLine(`${state().symbol} ${props.agent.handle} · ${props.agent.profileId} · ${props.agent.mode}`, bodyWidth())}
             fg={state().color}
             attributes={1}
           />
-          <text content={truncateLine(props.agent.description, bodyWidth())} fg={palette.textPrimary} />
-          <text content={truncateLine(state().detail, bodyWidth())} fg={palette.textSecondary} />
+          <ThemedText content={truncateLine(props.agent.description, bodyWidth())} fg={palette.textPrimary} />
+          <ThemedText content={truncateLine(state().detail, bodyWidth())} fg={palette.textSecondary} />
           {props.agent.resultPreview && isTerminalForPreview(props.agent.status) && (
-            <text content={truncateLine(`result · ${props.agent.resultPreview}`, bodyWidth())} fg={palette.textMuted} />
+            <ThemedText content={truncateLine(`result · ${props.agent.resultPreview}`, bodyWidth())} fg={palette.textMuted} />
           )}
         </box>
       </box>
-      <text content=" " fg={palette.textDim} />
+      <ThemedText content=" " fg={palette.textDim} />
     </box>
   );
 }

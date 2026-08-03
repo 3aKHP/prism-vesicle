@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
 import type { PermissionRequest } from "../core/permissions";
 import type { GateFocusTarget } from "./GatePrompt";
@@ -56,19 +57,19 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       width={props.width}
       height="100%"
     >
-      <text
+      <ThemedText
         content={title()}
         fg={dangerous() ? palette.error : palette.gateAccent}
         wrapMode="none"
       />
-      <text content={truncateLine(`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}${props.request.executionPlan ? ` · ${processShellDisplay(props.request.executionPlan)}` : ""}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
+      <ThemedText content={truncateLine(`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}${props.request.executionPlan ? ` · ${processShellDisplay(props.request.executionPlan)}` : ""}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
       {props.request.executionPlan?.executablePath ? (
-        <text content={truncateLine(`Interpreter: ${props.request.executionPlan.executablePath}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
+        <ThemedText content={truncateLine(`Interpreter: ${props.request.executionPlan.executablePath}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
       ) : null}
-      <For each={warningLines()}>{(line) => <text content={line} fg={palette.error} wrapMode="none" />}</For>
-      <For each={detailLines()}>{(line) => <text content={line || " "} fg={palette.textPrimary} wrapMode="none" />}</For>
-      <text content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} wrapMode="none" />
-      <text content={`${props.focused === "reject" ? "›" : " "} Reject`} fg={props.focused === "reject" ? palette.error : palette.textDim} wrapMode="none" />
+      <For each={warningLines()}>{(line) => <ThemedText content={line} fg={palette.error} wrapMode="none" />}</For>
+      <For each={detailLines()}>{(line) => <ThemedText content={line || " "} fg={palette.textPrimary} wrapMode="none" />}</For>
+      <ThemedText content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} wrapMode="none" />
+      <ThemedText content={`${props.focused === "reject" ? "›" : " "} Reject`} fg={props.focused === "reject" ? palette.error : palette.textDim} wrapMode="none" />
       {props.feedbackMode === "reject" ? (
         <PromptComposer
           value={props.feedback}
@@ -79,7 +80,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
           focused={true}
         />
       ) : null}
-      <text content={hint()} fg={palette.textDim} wrapMode="none" />
+      <ThemedText content={hint()} fg={palette.textDim} wrapMode="none" />
     </box>
   );
 }
