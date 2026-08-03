@@ -72,7 +72,7 @@ import { createStartupController } from "./startup-controller";
 
 import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-loop/session-init";
 import { createSessionIdentityCoordinator } from "./session-identity-coordinator";
-import { createSkillActivationOwner } from "./skills/session-activation";
+import { createSkillActivationOwner, type SkillActivationOptions } from "./skills/session-activation";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
 import { WorkspacePage } from "./workspace/view";
 import { copyTextToClipboard } from "./clipboard";
@@ -1001,8 +1001,12 @@ export function App(props: AppProps = {}) {
     onNotice: (card) => setMessages((prev) => [...prev, { role: "system", content: card }]),
     submitTurn: (prompt) => turnController.submitPrompt(prompt),
   });
-  const activateSkill = (name: string, options: { mode: "invoke" | "context-only"; taskText?: string }): Promise<void> =>
-    skillActivation.activate(name, options);
+  // Function declaration (hoisted like the pre-T1 use case) so the picker's
+  // onActivate closure cannot trip a TDZ regardless of construction order;
+  // it only runs post-render, when skillActivation is initialized.
+  async function activateSkill(name: string, options: SkillActivationOptions): Promise<void> {
+    return skillActivation.activate(name, options);
+  }
 
   // Command execution context: the surface slash-command handlers reach
   // through. Built once from component signals/helpers; submitPrompt passes it
