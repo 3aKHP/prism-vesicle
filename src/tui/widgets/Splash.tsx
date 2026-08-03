@@ -141,7 +141,15 @@ export function Splash(props: {
         <box height={1} />
         <Show
           when={props.width >= 56}
-          fallback={<ThemedText content="PRISM VESICLE" fg={scaleHex(wordmarkColor(), fadeFactor())} attributes={1} wrapMode="none" />}
+          fallback={
+            <ThemedText
+              content="PRISM VESICLE"
+              fg={scaleHex(wordmarkColor(), fadeFactor())}
+              attributes={1}
+              wrapMode="none"
+              selectable={false}
+            />
+          }
         >
           <ascii_font
             text="PRISM VESICLE"

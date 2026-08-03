@@ -71,13 +71,13 @@ const output = await Bun.file(OUTPUT_ENTRY).text();
 if (/react\/jsx-(?:dev-)?runtime/.test(output)) {
   throw new Error("npm runtime bundle contains a React JSX runtime import.");
 }
-if (/from\s*["']@opentui\/solid|import\s*\(["']@opentui\/solid/.test(output)) {
+if (/from\s*["'`]@opentui\/solid["'`]|(?:import|require)\s*\(\s*["'`]@opentui\/solid["'`]\s*\)/.test(output)) {
   throw new Error("npm runtime bundle still imports @opentui/solid at runtime.");
 }
-if (/from\s*["']@opentui\/core["']|import\s*\(["']@opentui\/core["']/.test(output)) {
+if (/from\s*["'`]@opentui\/core["'`]|(?:import|require)\s*\(\s*["'`]@opentui\/core["'`]\s*\)/.test(output)) {
   throw new Error("npm runtime bundle still imports the unpatched @opentui/core entry at runtime.");
 }
-if (/from\s*["']@opentui\/core\/testing["']|import\s*\(["']@opentui\/core\/testing["']/.test(output)) {
+if (/from\s*["'`]@opentui\/core\/testing["'`]|(?:import|require)\s*\(\s*["'`]@opentui\/core\/testing["'`]\s*\)/.test(output)) {
   throw new Error("npm runtime bundle still imports a second OpenTUI core through its testing subpath.");
 }
 if (!output.includes("class MarkdownRenderable") || !output.includes("set selectionBg") || !output.includes("set selectionFg")) {
