@@ -18,7 +18,7 @@
  * the cache rather than re-running `displayWidth` (Bun.stringWidth) per drop
  * pass or shrink iteration.
  */
-import { displayWidth, truncateMiddle } from "./format";
+import { displayWidth, truncateMiddle } from "../format";
 
 /** Middle-truncate a path/target to `budget` display columns (never below 8). */
 export function truncatePath(path: string, budget: number): string {

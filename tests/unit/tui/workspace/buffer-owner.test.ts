@@ -3,8 +3,8 @@ import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { TextareaRenderable } from "@opentui/core";
-import { createBufferOwner, type BufferWritten } from "../../../src/tui/workspace/buffer-owner";
-import type { FileStamp } from "../../../src/tui/workspace/buffer-io";
+import { createBufferOwner, type BufferWritten } from "../../../../src/tui/workspace/buffer-owner";
+import type { FileStamp } from "../../../../src/tui/workspace/buffer-io";
 
 let root: string;
 

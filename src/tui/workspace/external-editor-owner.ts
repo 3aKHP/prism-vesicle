@@ -1,13 +1,13 @@
 import { loadSettings, type Settings } from "../../config/settings";
 import { assertProjectRelativePath } from "./paths";
 import { statEntry } from "./tree-data";
-import type { ExternalEditOutcome } from "./buffer-owner";
+
 import {
   resolveEditorCommand,
   runExternalEditor,
   type EditorRuntime,
 } from "./external-editor-runtime";
-import type { EditorStatusTone } from "./types";
+import type { EditorStatusTone, ExternalEditOutcome } from "./types";
 
 /**
  * Workspace external-editor owner (Scope B / #62, milestone B5 §6). Owns the

@@ -9,8 +9,8 @@ import {
   treeStatus,
   viewerStatus,
   type StatusSegment,
-} from "../../../src/tui/workspace-status";
-import { displayWidth } from "../../../src/tui/format";
+} from "../../../../src/tui/workspace/status";
+import { displayWidth } from "../../../../src/tui/format";
 
 const WIDTHS = [56, 80, 100, 140];
 
@@ -22,7 +22,7 @@ function fitsAt(builder: (budget: number) => string): void {
   }
 }
 
-describe("workspace-status: composeStatus priority", () => {
+describe("workspace status: composeStatus priority", () => {
   test("drops low-priority segments before high-priority; critical never drops", () => {
     const segs: StatusSegment[] = [
       { text: "keep0", priority: "critical" },
@@ -72,7 +72,7 @@ describe("workspace-status: composeStatus priority", () => {
   });
 });
 
-describe("workspace-status: tree surface", () => {
+describe("workspace status: tree surface", () => {
   test("fits every width and keeps nav/open/v plus the current state", () => {
     fitsAt((w) => treeStatus({ budget: w, selectedIsFile: true, validation: "✗ 2" }));
   });
@@ -98,7 +98,7 @@ describe("workspace-status: tree surface", () => {
   });
 });
 
-describe("workspace-status: viewer surface", () => {
+describe("workspace status: viewer surface", () => {
   test("fits every width with ASCII, long, and CJK paths", () => {
     for (const target of ["card.md", "workspace/cards/very-long-card-name.md", "工作区/卡片/角色卡.md"]) {
       fitsAt((w) => viewerStatus({
@@ -142,7 +142,7 @@ describe("workspace-status: viewer surface", () => {
   });
 });
 
-describe("workspace-status: editor surface", () => {
+describe("workspace status: editor surface", () => {
   test("fits every width; keeps target/cursor/Ctrl+S/Esc, drops find/goto/external at narrow", () => {
     const narrow = editorStatus({
       budget: 56, target: "workspace/cards/mira.md", dirtyMark: "●", diskMark: "",
@@ -173,14 +173,14 @@ describe("workspace-status: editor surface", () => {
   });
 });
 
-describe("workspace-status: findings surface", () => {
+describe("workspace status: findings surface", () => {
   test("Enter jump appears only when canJump is true", () => {
     expect(findingsStatus({ budget: 80, canJump: true })).toContain("Enter jump");
     expect(findingsStatus({ budget: 80, canJump: false })).not.toContain("Enter jump");
   });
 });
 
-describe("workspace-status: input bars and dialogs", () => {
+describe("workspace status: input bars and dialogs", () => {
   test("input bar keeps the cursor glyph and shrinks a long draft", () => {
     const line = inputBarStatus({
       budget: 44, label: "save as:",
@@ -203,7 +203,7 @@ describe("workspace-status: input bars and dialogs", () => {
   });
 });
 
-describe("workspace-status: status note (controller status() text)", () => {
+describe("workspace status: status note (controller status() text)", () => {
   test("builders render the note, and it survives width pressure (#118 review)", () => {
     expect(editorStatus({ budget: 140, target: "x.md", dirtyMark: "", diskMark: "", cursor: "Ln 1:1", validation: "", note: "saved x.md" })).toContain("saved x.md");
     expect(viewerStatus({ budget: 140, target: "x.md", mode: "preview", flags: "", validation: "", toggleHint: "", canViewFindings: false, note: "reloaded x.md" })).toContain("reloaded x.md");
@@ -215,7 +215,7 @@ describe("workspace-status: status note (controller status() text)", () => {
   });
 });
 
-describe("workspace-status: truncatePath", () => {
+describe("workspace status: truncatePath", () => {
   test("never reports a width wider than the budget", () => {
     for (const p of ["a.md", "workspace/cards/very-long-card-name.md", "工作区/卡片/角色卡.md"]) {
       for (const b of [8, 16, 30, 80]) {

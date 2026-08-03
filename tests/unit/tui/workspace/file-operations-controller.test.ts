@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createWorkspaceController } from "../../../src/tui/workspace-controller";
-import type { TuiKeyEvent } from "../../../src/tui/decision-interaction";
+import { createWorkspaceController } from "../../../../src/tui/workspace";
+import type { TuiKeyEvent } from "../../../../src/tui/decision-interaction";
 import type { TextareaRenderable } from "@opentui/core";
 
 let root: string;

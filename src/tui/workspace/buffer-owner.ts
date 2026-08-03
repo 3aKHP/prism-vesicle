@@ -10,7 +10,7 @@ import {
 } from "./buffer-io";
 import { entryExists } from "./file-operations";
 import { assertProjectRelativePath } from "./paths";
-import type { EditorStatusTone, WorkspaceMutation } from "./types";
+import type { EditorStatusTone, ExternalEditOutcome, WorkspaceMutation } from "./types";
 
 /**
  * Workspace editor-buffer owner (Scope B / #62, milestone B3). Uniquely owns
@@ -33,7 +33,6 @@ export type BufferWritten = {
   stamp: FileStamp | null;
 };
 
-export type ExternalEditOutcome = "not-resident" | "unchanged" | "modified" | "removed" | "unreadable";
 
 export type BufferOwnerPorts = {
   rootDir: string;

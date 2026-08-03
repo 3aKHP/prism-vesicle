@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFileOperationOwner } from "../../../src/tui/workspace/file-operation-owner";
+import { createFileOperationOwner } from "../../../../src/tui/workspace/file-operation-owner";
 
 let root: string;
 

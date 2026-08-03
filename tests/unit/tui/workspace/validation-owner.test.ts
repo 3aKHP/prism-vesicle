@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { WorkspaceFilePreview } from "../../../src/tui/workspace/tree-data";
-import { createValidationOwner } from "../../../src/tui/workspace/validation-owner";
+import type { WorkspaceFilePreview } from "../../../../src/tui/workspace/tree-data";
+import { createValidationOwner } from "../../../../src/tui/workspace/validation-owner";
 
 let root: string;
 
