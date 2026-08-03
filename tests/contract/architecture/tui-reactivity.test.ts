@@ -161,7 +161,10 @@ describe("TUI reactivity static guard", () => {
     const source = await readFile(join(import.meta.dir, "..", "..", "..", "src", "tui", "permission-continuation.ts"), "utf8");
     const handler = source.match(/async function submitPermissionResolution[\s\S]*?function submitChildPermissionResolution/)?.[0] ?? "";
     expect(handler.match(/reconcilePermissionAfterContinuationFailure\(pending\)/g)).toHaveLength(2);
-    expect(handler).toContain("loadSessionSnapshot(options.rootDir, pending.sessionId");
+    // The session port slice supplies the durable-reload root (destructured at
+    // the factory top, so the guard follows the port-name contract instead of
+    // the options bag).
+    expect(handler).toContain("loadSessionSnapshot(rootDir, pending.sessionId");
     expect(handler).toContain("snapshot.pendingPermission?.id === pending.request.id");
     expect(handler).toContain("setPendingPermission(null)");
   });
