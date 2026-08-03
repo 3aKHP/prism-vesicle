@@ -1,8 +1,8 @@
 // skills install/update/rollback/uninstall — installed-skill lifecycle commands.
 
 import { rollbackSkill, uninstallSkill } from "../../../skills";
-import { installFromSource, updateSkill } from "../../skills-source";
-import type { InstallSourceOptions } from "../../skills-source";
+import { installFromSource, updateSkill } from "./source";
+import type { InstallSourceOptions } from "./source";
 
 interface ParsedInstallArgs {
   source?: string;
