@@ -57,7 +57,16 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun test
-      - run: bun audit
+      - id: audit
+        run: bun audit
+      - name: Audit failure guidance
+        if: failure() && steps.audit.outcome == 'failure'
+        run: |
+          MESSAGE="bun audit failed. If this run did not change bun.lock or package.json, this is likely audit database drift: a new advisory now flags the unchanged lockfile. Rerunning will not recover it. Follow docs/dev/AUDIT_DRIFT.md — fix forward in a dedicated chore(deps) PR."
+          echo "::error title=Audit database drift?::${MESSAGE}"
+          echo "### Audit database drift?" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "${MESSAGE}" >> "$GITHUB_STEP_SUMMARY"
       - run: bun run pack:check
       - run: bun run pack:smoke
 

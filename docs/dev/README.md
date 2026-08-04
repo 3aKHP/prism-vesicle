@@ -24,6 +24,7 @@ Promotion flows in one direction. An internal conclusion becomes public only by 
 | [`STYLE.md`](./STYLE.md) | Source-code structure, maintainability, types, errors, naming, comments, and test design |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Ownership, dependency direction, cross-cutting boundaries, and domain-contract routing |
 | [`WORKFLOW.md`](./WORKFLOW.md) | Branching, verification, review, publication, and documentation workflow |
+| [`AUDIT_DRIFT.md`](./AUDIT_DRIFT.md) | Audit-database drift recognition, fix-forward SOP, waiver path, and release rule |
 | [`USER_AGENCY_AND_RISK_DISCLOSURE.md`](./USER_AGENCY_AND_RISK_DISCLOSURE.md) | User agency, disclosure, confirmation, and enforceable-boundary policy |
 
 ### Runtime and product contracts
