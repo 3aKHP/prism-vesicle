@@ -202,6 +202,7 @@ Repository rules and Environment protection are live GitHub state, not YAML. Aud
 ### Failure And Retry Rules
 
 - A failed PR CI run has no public side effects. Fix the release branch and let the updated PR commit run again.
+- An audit-gate failure on an unchanged lockfile is audit database drift and is not retry-recoverable. CI annotates such failures with a pointer to [`AUDIT_DRIFT.md`](./AUDIT_DRIFT.md); follow its dedicated fix-forward PR flow instead of rerunning.
 - Do not create the release tag until PR CI and human acceptance are complete.
 - A pushed release tag is immutable publication intent. Do not delete or move it merely to retrigger CI.
 - If a transient failure happens after the tag push, use the CLI to find and rerun the existing workflow: `gh run list --workflow release.yml`, then `gh run rerun <run-id> --failed`. This exceptional recovery needs `gh` because Git cannot truthfully push the same immutable tag twice. The npm job skips an exact version that is already present, and the GitHub Release job updates the release for the same tag.
