@@ -36,7 +36,7 @@ try {
   const audit = await runCaptured(["npm", "audit", "--omit=dev", "--audit-level=low"], localProject);
   if (audit.exitCode !== 0 || !/found 0 vulnerabilities/i.test(audit.output)) {
     throw new Error(
-      `local consumer audit failed:\n${audit.output.slice(-4000)}\nIf production dependencies are unchanged, this is likely audit database drift; follow docs/dev/AUDIT_DRIFT.md (rerunning will not recover it).`,
+      `local consumer audit failed:\n${audit.output.slice(-4000)}\nFollow docs/dev/AUDIT_DRIFT.md — if production dependencies are unchanged, rerunning will not recover this failure.`,
     );
   }
   const localExecutable = npmExecutable(join(localProject, "node_modules"), false);

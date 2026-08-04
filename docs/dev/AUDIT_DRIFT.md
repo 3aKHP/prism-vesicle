@@ -34,7 +34,7 @@ Follow the PR #48 / #92 convention. The audit gate stays blocking; the response 
 2. Open a dedicated `chore(deps): patch <package> audit finding` PR. Never bundle the fix into a feature PR, and never widen an in-flight feature PR to absorb it.
 3. For a transitive finding, pin the patched release through `package.json` `overrides` and regenerate `bun.lock`. For a direct finding, bump the declared version normally.
 4. The commit message must name the GHSA/CVE id, the dependency chain, the reachability/real-risk assessment, and the verification list (see PR #92 for the shape).
-5. Verify: `bun audit` green, plus `bun run lint`, `bun run typecheck`, `bun test`, `bun run doctor`, and `bun run pack:check`. An exact override bump adds no tests, per the test value discipline in `AGENTS.md`.
+5. Verify: `bun audit` green, plus `bun run lint`, `bun run typecheck`, `bun test`, `bun run doctor`, `bun run pack:check`, and `bun run pack:smoke` (which includes the consumer `npm audit` gate). An exact override bump adds no tests, per the test value discipline in `AGENTS.md`.
 6. Land the patch PR on `develop` first; in-flight PRs rebase or re-run afterwards. One drift fix unblocks the whole pipeline.
 
 ## Exceptional Waiver Path
