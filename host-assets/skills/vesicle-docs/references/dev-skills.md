@@ -79,7 +79,7 @@ Discovery resolves four deterministic, non-merging filesystem scopes plus the in
 4. **User** — `<user-config>/skills/<name>/SKILL.md`, direct filesystem.
 5. **Project** — `<project-root>/.agents/skills/<name>/SKILL.md`, direct filesystem with visible project provenance. No separate trust gate.
 
-The `src/skills` module takes **pre-resolved roots** and does not import the asset resolver, providers, harness runtime, or TUI. A shared filesystem-source resolver (`src/core/skills/catalog-sources.ts`) resolves all four filesystem scopes and is used by both the CLI (`src/cli/skills.ts`) and the session catalog (`src/core/skills/catalog.ts`).
+The `src/skills` module takes **pre-resolved roots** and does not import the asset resolver, providers, harness runtime, or TUI. A shared filesystem-source resolver (`src/core/skills/catalog-sources.ts`) resolves all four filesystem scopes and is used by both the CLI inventory owner (`src/cli/commands/skills/inventory.ts`) and the session catalog (`src/core/skills/catalog.ts`).
 
 On a name collision, exactly one winner is selected by precedence (`project` > `user` > `installed` > `harness` > `host`); lower-precedence entries produce one `shadowed` diagnostic each. Bodies and resources are never merged. Catalog and diagnostic shapes never carry an absolute host path — only logical source scopes and skill-relative paths.
 
