@@ -77,6 +77,7 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 
 - `docs/dev/ARCHITECTURE.md` → `references/dev-architecture.md` — Prism Vesicle Architecture [en]
 - `docs/dev/ASSETS.md` → `references/dev-assets.md` — Prism Runtime Assets [en]
+- `docs/dev/AUDIT_DRIFT.md` → `references/dev-audit_drift.md` — Audit Database Drift [en]
 - `docs/dev/COMMAND_COMPLETION.md` → `references/dev-command_completion.md` — Command Argument Completion [en]
 - `docs/dev/COMMAND_QUEUE.md` → `references/dev-command_queue.md` — Command Queue [en]
 - `docs/dev/OPENAI_RESPONSES_CONFORMANCE.md` → `references/dev-openai_responses_conformance.md` — OpenAI Responses Conformance Profile [en]
