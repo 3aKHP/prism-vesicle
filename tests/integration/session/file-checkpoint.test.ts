@@ -52,18 +52,21 @@ describe("file checkpoints", () => {
     await expect(stat(join(rootDir, "workspace", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  test("rewinds scratch tmp/ mutations with exact bytes and directory topology", async () => {
+  test("excludes scratch tmp/ from checkpoint tracking while still tracking content roots", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-scratch-"));
-    await mkdir(join(rootDir, "tmp", "drafts", "empty"), { recursive: true });
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
     await writeFile(join(rootDir, "tmp", "draft.md"), "draft before\n", "utf8");
+    await writeFile(join(rootDir, "workspace", "kept.md"), "before\n", "utf8");
 
     const store = await createSessionStore(rootDir, "checkpoint-scratch");
     await store.append({ role: "system", content: "prompt" });
-    const user = await store.append({ role: "user", content: "change scratch files" });
+    const user = await store.append({ role: "user", content: "change scratch and content files" });
     const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
     await checkpoint.createSnapshot();
     const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
 
+    // tmp/ writes succeed but are not checkpoint-tracked.
     expect((await executeFileTool(rootDir, {
       id: "scratch-write",
       name: "write_file",
@@ -72,12 +75,13 @@ describe("file checkpoints", () => {
     expect((await executeFileTool(rootDir, {
       id: "scratch-create",
       name: "create_file",
-      arguments: JSON.stringify({ path: "tmp/drafts/new.md", content: "new\n" }),
+      arguments: JSON.stringify({ path: "tmp/new.md", content: "new\n" }),
     }, { beforeMutation })).ok).toBe(true);
+    // A content-root write in the same turn is checkpoint-tracked.
     expect((await executeFileTool(rootDir, {
-      id: "scratch-move-directory",
-      name: "move_directory",
-      arguments: JSON.stringify({ sourcePath: "tmp/drafts/empty", targetPath: "tmp/moved" }),
+      id: "content-write",
+      name: "write_file",
+      arguments: JSON.stringify({ path: "workspace/kept.md", content: "after\n" }),
     }, { beforeMutation })).ok).toBe(true);
 
     await store.append({ role: "assistant", content: "done" });
@@ -85,25 +89,106 @@ describe("file checkpoints", () => {
     const nextCheckpoint = new FileCheckpointManager(rootDir, store, nextUser.uuid);
     await nextCheckpoint.createSnapshot();
 
-    const stats = await fileCheckpointTurnDiffStats(rootDir, store.sessionId, user.uuid, nextUser.uuid);
-    expect(stats?.filesChanged.sort()).toEqual([
-      "tmp/draft.md",
-      "tmp/drafts/empty",
-      "tmp/drafts/new.md",
-      "tmp/moved",
-    ]);
+    // Only the content-root mutation is reported and restored; tmp/ is excluded.
+    expect((await fileCheckpointTurnDiffStats(rootDir, store.sessionId, user.uuid, nextUser.uuid))?.filesChanged)
+      .toEqual(["workspace/kept.md"]);
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid)).toEqual(["workspace/kept.md"]);
+
+    // Content root rewound; scratch is left exactly as the model left it.
+    expect(await readFile(join(rootDir, "workspace", "kept.md"), "utf8")).toBe("before\n");
+    expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("draft after\n");
+    expect(await readFile(join(rootDir, "tmp", "new.md"), "utf8")).toBe("new\n");
+  });
+
+  test("ignores scratch tmp/ paths carried by legacy snapshots on restore", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-legacy-"));
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    // Files present after resuming a session whose 137A-era snapshot still tracked tmp/.
+    await writeFile(join(rootDir, "tmp", "draft.md"), "model wrote this\n", "utf8");
+    await writeFile(join(rootDir, "workspace", "new.md"), "model wrote this\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-legacy");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "resumed turn" });
+    // Legacy snapshot recording both paths as absent at turn start. Under 137B,
+    // restore must honor the content path but ignore the scratch path.
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "file-history-snapshot",
+        messageId: user.uuid,
+        snapshot: {
+          messageId: user.uuid,
+          timestamp: new Date().toISOString(),
+          files: {
+            "tmp/draft.md": { backup: null, kind: "absent" },
+            "workspace/new.md": { backup: null, kind: "absent" },
+          },
+        },
+        isSnapshotUpdate: false,
+      },
+    });
 
     const restored = await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid);
-    expect(restored.sort()).toEqual([
-      "tmp/draft.md",
-      "tmp/drafts/empty",
-      "tmp/drafts/new.md",
-      "tmp/moved",
-    ]);
-    expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("draft before\n");
-    expect((await stat(join(rootDir, "tmp", "drafts", "empty"))).isDirectory()).toBe(true);
-    await expect(stat(join(rootDir, "tmp", "drafts", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(stat(join(rootDir, "tmp", "moved"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(restored).toEqual(["workspace/new.md"]);
+    await expect(stat(join(rootDir, "workspace", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    // Scratch survives: legacy entry did not re-enter the restore state.
+    expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("model wrote this\n");
+  });
+
+  test("a move from scratch tmp/ into a content root is not recoverable on rewind", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-move-out-"));
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "tmp", "draft.md"), "draft body\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-move-out");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "promote draft" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
+
+    expect((await executeFileTool(rootDir, {
+      id: "move-out",
+      name: "move_file",
+      arguments: JSON.stringify({ sourcePath: "tmp/draft.md", targetPath: "workspace/draft.md" }),
+    }, { beforeMutation })).ok).toBe(true);
+
+    // Rewind deletes the promoted content-root copy; the scratch source was not
+    // tracked, so the moved body is lost. tmp/ is not rewind-safe by design —
+    // use copy_file when promoting scratch if rewind-safety matters.
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid)).toEqual(["workspace/draft.md"]);
+    await expect(stat(join(rootDir, "workspace", "draft.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(rootDir, "tmp", "draft.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("a move from a content root into scratch tmp/ leaves the scratch copy behind on rewind", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-move-in-"));
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "doc.md"), "original\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-move-in");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "demote doc" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
+
+    expect((await executeFileTool(rootDir, {
+      id: "move-in",
+      name: "move_file",
+      arguments: JSON.stringify({ sourcePath: "workspace/doc.md", targetPath: "tmp/doc.md" }),
+    }, { beforeMutation })).ok).toBe(true);
+
+    // Rewind restores the content-root original from backup; the scratch copy is
+    // not tracked and is left in place, so the file ends up duplicated.
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid)).toEqual(["workspace/doc.md"]);
+    expect(await readFile(join(rootDir, "workspace", "doc.md"), "utf8")).toBe("original\n");
+    expect(await readFile(join(rootDir, "tmp", "doc.md"), "utf8")).toBe("original\n");
   });
 
   test("persists snapshots in JSONL without exposing them as provider messages", async () => {
