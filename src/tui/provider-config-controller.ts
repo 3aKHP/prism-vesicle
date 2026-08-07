@@ -122,6 +122,8 @@ export function createProviderConfigController(options: ProviderConfigController
         enabled: status.enabled,
         connected: status.connected,
         toolCount: status.toolCount,
+        ...(status.era ? { era: status.era } : {}),
+        ...(status.negotiation ? { negotiation: status.negotiation } : {}),
         ...(status.error ? { error: status.error } : {}),
       })),
     });

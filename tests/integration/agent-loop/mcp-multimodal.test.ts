@@ -151,7 +151,9 @@ function multimodalFetch(providerBodies: Record<string, any>[]): typeof fetch {
     const body = JSON.parse(String(init?.body)) as Record<string, any>;
     if (String(input).startsWith("https://mcp.test/")) {
       if (body.method === "initialize") {
-        return Response.json({ jsonrpc: "2.0", id: body.id, result: { serverInfo: { name: "prts" } } });
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "prts", version: "1.0" },
+        } });
       }
       if (body.method === "notifications/initialized") return new Response("", { status: 202 });
       if (body.method === "tools/list") {
@@ -201,11 +203,13 @@ function subagentMultimodalFetch(childBodies: Record<string, any>[]): typeof fet
     const body = JSON.parse(String(init?.body)) as Record<string, any>;
     if (String(input).startsWith("https://mcp.test/")) {
       if (body.method === "initialize") {
-        return Response.json({ jsonrpc: "2.0", id: body.id, result: { serverInfo: { name: "prts" } } });
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "prts", version: "1.0" },
+        } });
       }
       if (body.method === "notifications/initialized") return new Response("", { status: 202 });
       if (body.method === "tools/list") {
-        return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "operator_artwork" }] } });
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "operator_artwork", inputSchema: { type: "object" } }] } });
       }
       if (body.method === "tools/call") {
         return Response.json({

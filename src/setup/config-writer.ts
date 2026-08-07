@@ -280,7 +280,7 @@ function mcpAddition(
   const parsed = existingSource === undefined ? undefined : parseMcpConfig(existingSource, "mcp.yaml", env);
   const id = uniqueId(sanitizeId(server.name), new Set(parsed?.servers.map((entry) => entry.id) ?? []));
   const envUpdates: Record<string, string> = {};
-  const lines = [`  ${yamlKey(id)}:`, "    enabled: true", "    transport: streamable-http", `    url: ${yamlScalar(server.url.trim())}`];
+  const lines = [`  ${yamlKey(id)}:`, "    enabled: true", "    transport: streamable-http", `    url: ${yamlScalar(server.url.trim())}`, "    negotiation: auto"];
   if (server.auth !== "none") {
     const envKey = `MCP_${id.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}_TOKEN`;
     envUpdates[envKey] = server.secret!.trim();

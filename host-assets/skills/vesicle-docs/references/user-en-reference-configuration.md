@@ -161,6 +161,14 @@ Doctor checks route selection only; it does not prove that the proxy or provider
 
 Start from [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml). Each server can set `transport` (streamable-http), `url`, `timeoutSeconds`, `toolPrefix`, `headers` (supports `${ENV_VAR}` expansion from `.env`), `includeTools`/`excludeTools` filters, and `enabledEngines` (which engines can use it). A present `mcp.yaml` defaults to enabled; secrets go in `.env`.
 
+Vesicle supports dual-era Streamable HTTP MCP tools: one Vesicle process can connect to both legacy (`initialize` handshake) and modern (`server/discover`) MCP servers concurrently. Each server can set `negotiation`:
+
+- `legacy` (default when absent): uses the `initialize` path only, no modern probe.
+- `auto`: probes with `server/discover` first, then falls back to legacy for servers that do not support the modern protocol. Recommended for newly configured remote servers.
+- `modern`: connects only through the `2026-07-28` protocol, never falls back to legacy.
+
+`protocolVersion` is the legacy revision pin (default `2025-03-26`); it does not select the era. `supportedProtocolVersions` is an optional modern offer list (default `["2026-07-28"]`).
+
 MCP tool results first cross the host's untrusted-content boundary. Ordinary text keeps its original order. When the selected model declares `capabilities.vision: true`, strictly validated inline PNG, JPEG, GIF, and WebP images are delivered as image attachments. Sessions retain only content-addressed references, never base64. The current 20 MiB decoded-image ceiling is a provisional safety boundary, not a configurable long-term product commitment.
 
 For a non-vision model, images are neither decoded nor persisted; safe text continues with an omission notice. MCP error results also do not import images. Resource, audio, URL/link, and unknown results currently produce only bounded unsupported-item notices; Vesicle does not automatically download, read, transcribe, play, or inject them.
