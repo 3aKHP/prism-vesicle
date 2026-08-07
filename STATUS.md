@@ -186,7 +186,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Filesystem & Session
 
 - Directory tools intentionally omit recursive deletion and directory-tree copying. Models must delete contents explicitly before `delete_directory`; `move_directory` never overwrites an existing target.
-- Rewind file checkpoints track only mutations performed through Vesicle's guarded filesystem tools under the durable content and artifact roots (not the scratch root `tmp/`), including nested directory topology. Files or directories changed only by the user, an external process, or `shell_exec` are outside that ledger and are not independently discovered as rewind targets.
+- Rewind file checkpoints track only mutations performed through Vesicle's guarded filesystem tools under the durable content and artifact roots (not the scratch root `tmp/`), including nested directory topology. Files or directories changed only by the user, an external process, or `shell_exec` are outside that ledger and are not independently discovered as rewind targets. Moves across the `tmp/` boundary are asymmetric under rewind: scratch→content loses the moved body; content→scratch leaves a duplicate in `tmp/`.
 - Persistent Instruction targets are host configuration outside the guarded writable roots, so `/rewind` and double-Esc do not restore changes made by `update_instructions`. Rewinding the conversation can therefore remove the visible tool call while leaving the instruction file changed on disk. The tool reports the single `.previous` backup location after each mutation; recovery is manual until a dedicated restore command exists.
 
 ### Providers & Streaming

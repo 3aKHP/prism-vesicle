@@ -138,6 +138,59 @@ describe("file checkpoints", () => {
     expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("model wrote this\n");
   });
 
+  test("a move from scratch tmp/ into a content root is not recoverable on rewind", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-move-out-"));
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "tmp", "draft.md"), "draft body\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-move-out");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "promote draft" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
+
+    expect((await executeFileTool(rootDir, {
+      id: "move-out",
+      name: "move_file",
+      arguments: JSON.stringify({ sourcePath: "tmp/draft.md", targetPath: "workspace/draft.md" }),
+    }, { beforeMutation })).ok).toBe(true);
+
+    // Rewind deletes the promoted content-root copy; the scratch source was not
+    // tracked, so the moved body is lost. tmp/ is not rewind-safe by design —
+    // use copy_file when promoting scratch if rewind-safety matters.
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid)).toEqual(["workspace/draft.md"]);
+    await expect(stat(join(rootDir, "workspace", "draft.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(rootDir, "tmp", "draft.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("a move from a content root into scratch tmp/ leaves the scratch copy behind on rewind", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-move-in-"));
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "doc.md"), "original\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-move-in");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "demote doc" });
+    const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpoint.createSnapshot();
+    const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
+
+    expect((await executeFileTool(rootDir, {
+      id: "move-in",
+      name: "move_file",
+      arguments: JSON.stringify({ sourcePath: "workspace/doc.md", targetPath: "tmp/doc.md" }),
+    }, { beforeMutation })).ok).toBe(true);
+
+    // Rewind restores the content-root original from backup; the scratch copy is
+    // not tracked and is left in place, so the file ends up duplicated.
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid)).toEqual(["workspace/doc.md"]);
+    expect(await readFile(join(rootDir, "workspace", "doc.md"), "utf8")).toBe("original\n");
+    expect(await readFile(join(rootDir, "tmp", "doc.md"), "utf8")).toBe("original\n");
+  });
+
   test("persists snapshots in JSONL without exposing them as provider messages", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-session-"));
     const store = await createSessionStore(rootDir, "checkpoint-resume");

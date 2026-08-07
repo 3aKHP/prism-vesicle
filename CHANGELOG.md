@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
-- **Scratch root `tmp/` excluded from rewind checkpoints (#137B, slice 0).** Guarded file mutations under the project-relative scratch root `tmp/` remain writable through ordinary file tools, but are now excluded from the per-turn file checkpoint and rewind lifecycle: `/rewind` and double-Esc no longer restore `tmp/` state, so scratch edits (including `tmp/skillify/` drafts) are not rewind-safe. This reverses the 137A decision and prepares `tmp/` to hold ephemeral MCP tool-result spills without polluting the durable content-root checkpoint ledger. The host still never auto-cleans scratch state.
+- **Scratch root `tmp/` excluded from rewind checkpoints (#137B, slice 0).** Guarded file mutations under the project-relative scratch root `tmp/` remain writable through ordinary file tools, but are now excluded from the per-turn file checkpoint and rewind lifecycle: `/rewind` and double-Esc no longer restore `tmp/` state, so scratch edits (including `tmp/skillify/` drafts) are not rewind-safe. This reverses the 137A decision and prepares `tmp/` to hold ephemeral MCP tool-result spills without polluting the durable content-root checkpoint ledger. The host still never auto-cleans scratch state. Moves across the `tmp/` boundary are not fully reversible on rewind (scratch→content loses the moved body; content→scratch leaves a duplicate in `tmp/`); use `copy_file` to promote scratch work when rewind-safety matters.
 
 ### Fixed
 
