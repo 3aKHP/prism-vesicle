@@ -17,22 +17,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { describe, expect, test } from "bun:test";
 import { createMcpConnection } from "../../../src/mcp/connection";
-import { createMcpRegistryForEngine } from "../../../src/mcp/registry";
-import { mkdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 const ACCEPTANCE_ENV = process.env.VESICLE_MCP_ACCEPTANCE === "1";
 
-/** Skip helper: produces an explicit unavailable reason when prerequisites are missing. */
-function skipIfUnavailable(label: string, condition: boolean): void {
+// Static-skip helper for acceptance describe blocks that have no individual
+// test conditions to check beyond ACCEPTANCE_ENV.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _skip(label: string): void {
   if (!ACCEPTANCE_ENV) {
     test.skip(`${label} — set VESICLE_MCP_ACCEPTANCE=1 to run`, () => {});
-    return;
-  }
-  if (!condition) {
+  } else {
     test.skip(`${label} — prerequisite unavailable`, () => {});
-    return;
   }
 }
 
@@ -52,7 +47,16 @@ async function startServer(command: string, args: string[], env: Record<string, 
     }, 15000);
     child.stderr?.on("data", (data: Buffer) => {
       const text = data.toString();
-      const portMatch = /port[:\s]+(\d+)/i.exec(text);
+      const portMatch = /(?:port[:\s]+|listening.*?)(\d+)/i.exec(text);
+      if (portMatch && !resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        resolve({ url: `http://127.0.0.1:${portMatch[1]}/mcp`, process: child });
+      }
+    });
+    child.stdout?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      const portMatch = /(?:port[:\s]+|listening.*?)(\d+)/i.exec(text);
       if (portMatch && !resolved) {
         resolved = true;
         clearTimeout(timeout);
@@ -84,127 +88,98 @@ function stopServer(process: ChildProcess): Promise<void> {
   });
 }
 
+function serverConfig(url: string, negotiation: "legacy" | "modern" | "auto", id = "acceptance") {
+  return {
+    id,
+    enabled: true,
+    transport: "streamable-http" as const,
+    url,
+    headers: {},
+    timeoutSeconds: 15,
+    protocolVersion: "2025-03-26",
+    negotiation,
+    supportedProtocolVersions: negotiation === "legacy" ? [] : ["2026-07-28"],
+    includeTools: [],
+    excludeTools: [],
+    enabledEngines: [],
+  };
+}
+
 // ─── autotel-mcp (modern/dual-era) ─────────────────────────────────────────
 
 describe("MCP acceptance: autotel-mcp (modern)", () => {
-  skipIfUnavailable("autotel modern pin", ACCEPTANCE_ENV);
-  if (!ACCEPTANCE_ENV) return;
-
-  let server: { url: string; process: ChildProcess } | undefined;
-
   test("strict modern pin connects, lists, calls, and closes", async () => {
+    if (!ACCEPTANCE_ENV) return;
     const started = await startServer("npx", ["-y", "autotel-mcp@0.4.1", "--transport", "http", "--host", "127.0.0.1", "--port", "0"]);
     if ("error" in started) { console.log(`autotel unavailable: ${started.error}`); return; }
-    server = started;
+    try {
+      const result = await createMcpConnection(serverConfig(started.url, "modern", "autotel"));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.connection.info.era).toBe("modern");
 
-    const result = await createMcpConnection({
-      id: "autotel",
-      enabled: true,
-      transport: "streamable-http",
-      url: started.url,
-      headers: {},
-      timeoutSeconds: 15,
-      protocolVersion: "2025-03-26",
-      negotiation: "modern",
-      supportedProtocolVersions: ["2026-07-28"],
-      includeTools: [],
-      excludeTools: [],
-      enabledEngines: [],
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.connection.info.era).toBe("modern");
+      const tools = await result.connection.listTools();
+      expect(tools.length).toBeGreaterThan(0);
 
-    const tools = await result.connection.listTools();
-    expect(tools.length).toBeGreaterThan(0);
+      const callResult = await result.connection.callTool("backend_capabilities", {});
+      expect(callResult.isError).toBe(false);
 
-    const callResult = await result.connection.callTool("backend_capabilities", {});
-    expect(callResult.isError).toBe(false);
-
-    await result.connection.close();
+      await result.connection.close();
+    } finally {
+      await stopServer(started.process);
+    }
   }, 30000);
 
   test("auto selects modern without initialize", async () => {
-    if (!server) return;
-    const result = await createMcpConnection({
-      id: "autotel-auto",
-      enabled: true,
-      transport: "streamable-http",
-      url: server.url,
-      headers: {},
-      timeoutSeconds: 15,
-      protocolVersion: "2025-03-26",
-      negotiation: "auto",
-      supportedProtocolVersions: ["2026-07-28"],
-      includeTools: [],
-      excludeTools: [],
-      enabledEngines: [],
-    });
-    if (result.ok) {
-      expect(result.connection.info.era).toBe("modern");
-      await result.connection.close();
+    if (!ACCEPTANCE_ENV) return;
+    const started = await startServer("npx", ["-y", "autotel-mcp@0.4.1", "--transport", "http", "--host", "127.0.0.1", "--port", "0"]);
+    if ("error" in started) { console.log(`autotel unavailable: ${started.error}`); return; }
+    try {
+      const result = await createMcpConnection(serverConfig(started.url, "auto", "autotel-auto"));
+      if (result.ok) {
+        expect(result.connection.info.era).toBe("modern");
+        await result.connection.close();
+      }
+    } finally {
+      await stopServer(started.process);
     }
-  }, 15000);
-
-  test.afterAll(async () => {
-    if (server) await stopServer(server.process);
-  });
+  }, 30000);
 });
 
 // ─── PRTS-MCP (legacy) ─────────────────────────────────────────────────────
 
 describe("MCP acceptance: PRTS-MCP (legacy)", () => {
-  skipIfUnavailable("prts legacy", ACCEPTANCE_ENV);
-  if (!ACCEPTANCE_ENV) return;
-
-  let server: { url: string; process: ChildProcess } | undefined;
-
   test("absent-field/legacy connection uses initialize and session", async () => {
+    if (!ACCEPTANCE_ENV) return;
     const started = await startServer("npx", ["-y", "prts-mcp-ts@2.5.0"], { HOST: "127.0.0.1", PORT: "0" });
     if ("error" in started) { console.log(`prts unavailable: ${started.error}`); return; }
-    server = started;
+    try {
+      const result = await createMcpConnection(serverConfig(started.url, "legacy", "prts"));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.connection.info.era).toBe("legacy");
 
-    const result = await createMcpConnection({
-      id: "prts",
-      enabled: true,
-      transport: "streamable-http",
-      url: started.url,
-      headers: {},
-      timeoutSeconds: 15,
-      protocolVersion: "2025-03-26",
-      negotiation: "legacy",
-      supportedProtocolVersions: [],
-      includeTools: [],
-      excludeTools: [],
-      enabledEngines: [],
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.connection.info.era).toBe("legacy");
+      const tools = await result.connection.listTools();
+      expect(tools.length).toBeGreaterThan(0);
 
-    const tools = await result.connection.listTools();
-    expect(tools.length).toBeGreaterThan(0);
-
-    await result.connection.close();
+      await result.connection.close();
+    } finally {
+      await stopServer(started.process);
+    }
   }, 30000);
-
-  test.afterAll(async () => {
-    if (server) await stopServer(server.process);
-  });
 });
 
 // ─── Mixed Registry ────────────────────────────────────────────────────────
 
 describe("MCP acceptance: mixed Registry", () => {
-  skipIfUnavailable("mixed registry", ACCEPTANCE_ENV);
-  if (!ACCEPTANCE_ENV) return;
-
+  if (!ACCEPTANCE_ENV) {
+    test.skip("mixed registry — set VESICLE_MCP_ACCEPTANCE=1 to run", () => {});
+    return;
+  }
   test("one Vesicle Registry calls both legacy and modern servers", async () => {
-    // This test requires both servers to be running.
-    // In real acceptance, start both servers on separate ports and
-    // create a single mcp.yaml with both entries.
-    // The test verifies both eras' tools are callable in one Agent turn.
+    // This test requires both servers to be running on separate ports.
+    // Configure a combined mcp.yaml and verify both eras' tools are callable
+    // in one Agent turn with independent state.
     console.log("Mixed Registry acceptance requires both autotel and prts servers running.");
-    console.log("Run the individual server tests first, then configure a combined mcp.yaml.");
   }, 60000);
 });
