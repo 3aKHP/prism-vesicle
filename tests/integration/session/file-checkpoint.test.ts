@@ -52,18 +52,21 @@ describe("file checkpoints", () => {
     await expect(stat(join(rootDir, "workspace", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  test("rewinds scratch tmp/ mutations with exact bytes and directory topology", async () => {
+  test("excludes scratch tmp/ from checkpoint tracking while still tracking content roots", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-scratch-"));
-    await mkdir(join(rootDir, "tmp", "drafts", "empty"), { recursive: true });
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
     await writeFile(join(rootDir, "tmp", "draft.md"), "draft before\n", "utf8");
+    await writeFile(join(rootDir, "workspace", "kept.md"), "before\n", "utf8");
 
     const store = await createSessionStore(rootDir, "checkpoint-scratch");
     await store.append({ role: "system", content: "prompt" });
-    const user = await store.append({ role: "user", content: "change scratch files" });
+    const user = await store.append({ role: "user", content: "change scratch and content files" });
     const checkpoint = new FileCheckpointManager(rootDir, store, user.uuid);
     await checkpoint.createSnapshot();
     const beforeMutation = (paths: string[]) => checkpoint.trackBeforeMutation(paths);
 
+    // tmp/ writes succeed but are not checkpoint-tracked.
     expect((await executeFileTool(rootDir, {
       id: "scratch-write",
       name: "write_file",
@@ -72,12 +75,13 @@ describe("file checkpoints", () => {
     expect((await executeFileTool(rootDir, {
       id: "scratch-create",
       name: "create_file",
-      arguments: JSON.stringify({ path: "tmp/drafts/new.md", content: "new\n" }),
+      arguments: JSON.stringify({ path: "tmp/new.md", content: "new\n" }),
     }, { beforeMutation })).ok).toBe(true);
+    // A content-root write in the same turn is checkpoint-tracked.
     expect((await executeFileTool(rootDir, {
-      id: "scratch-move-directory",
-      name: "move_directory",
-      arguments: JSON.stringify({ sourcePath: "tmp/drafts/empty", targetPath: "tmp/moved" }),
+      id: "content-write",
+      name: "write_file",
+      arguments: JSON.stringify({ path: "workspace/kept.md", content: "after\n" }),
     }, { beforeMutation })).ok).toBe(true);
 
     await store.append({ role: "assistant", content: "done" });
@@ -85,25 +89,15 @@ describe("file checkpoints", () => {
     const nextCheckpoint = new FileCheckpointManager(rootDir, store, nextUser.uuid);
     await nextCheckpoint.createSnapshot();
 
-    const stats = await fileCheckpointTurnDiffStats(rootDir, store.sessionId, user.uuid, nextUser.uuid);
-    expect(stats?.filesChanged.sort()).toEqual([
-      "tmp/draft.md",
-      "tmp/drafts/empty",
-      "tmp/drafts/new.md",
-      "tmp/moved",
-    ]);
+    // Only the content-root mutation is reported and restored; tmp/ is excluded.
+    expect((await fileCheckpointTurnDiffStats(rootDir, store.sessionId, user.uuid, nextUser.uuid))?.filesChanged)
+      .toEqual(["workspace/kept.md"]);
+    expect(await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid)).toEqual(["workspace/kept.md"]);
 
-    const restored = await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid);
-    expect(restored.sort()).toEqual([
-      "tmp/draft.md",
-      "tmp/drafts/empty",
-      "tmp/drafts/new.md",
-      "tmp/moved",
-    ]);
-    expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("draft before\n");
-    expect((await stat(join(rootDir, "tmp", "drafts", "empty"))).isDirectory()).toBe(true);
-    await expect(stat(join(rootDir, "tmp", "drafts", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(stat(join(rootDir, "tmp", "moved"))).rejects.toMatchObject({ code: "ENOENT" });
+    // Content root rewound; scratch is left exactly as the model left it.
+    expect(await readFile(join(rootDir, "workspace", "kept.md"), "utf8")).toBe("before\n");
+    expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("draft after\n");
+    expect(await readFile(join(rootDir, "tmp", "new.md"), "utf8")).toBe("new\n");
   });
 
   test("persists snapshots in JSONL without exposing them as provider messages", async () => {

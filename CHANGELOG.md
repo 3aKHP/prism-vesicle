@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Typed MCP multimodal tool results (#175).** Streamable HTTP MCP calls now cross a protocol-neutral, untrusted result normalizer instead of flattening unknown `content` objects into text. Ordered text remains compatible, while valid inline PNG/JPEG/GIF/WebP `ImageContent` is strictly base64-decoded, checked against declared MIME and magic bytes, stored in the existing content-addressed attachment store, and materialized only for a vision-capable main or SubAgent provider request. Session JSONL, resume, and compact history retain only `source: "mcp"` references and host-derived labels. Non-vision models, MCP error results, malformed or mismatched images, attachment failures, and the provisional shared 20 MiB decoded-image ceiling degrade to bounded payload-free notices; resource, audio, URL/link, and unknown items remain explicitly unsupported and are never auto-fetched or injected.
 
+### Changed
+
+- **Scratch root `tmp/` excluded from rewind checkpoints (#137B, slice 0).** Guarded file mutations under the project-relative scratch root `tmp/` remain writable through ordinary file tools, but are now excluded from the per-turn file checkpoint and rewind lifecycle: `/rewind` and double-Esc no longer restore `tmp/` state, so scratch edits (including `tmp/skillify/` drafts) are not rewind-safe. This reverses the 137A decision and prepares `tmp/` to hold ephemeral MCP tool-result spills without polluting the durable content-root checkpoint ledger. The host still never auto-cleans scratch state.
+
 ### Fixed
 
 - **Light-theme text selection and Workspace editor contrast (#158).** Selectable TUI text now receives one theme-owned foreground/background selection pair instead of relying on OpenTUI's implicit transparent-buffer color swap. Markdown propagates the same pair through prose, list markers, fenced code, and tables, including mounted selections during theme changes. The Workspace textarea now explicitly follows the active theme for ordinary and focused text, cursor, and selection colors, fixing its white-on-light editor text.

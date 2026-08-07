@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { diffLines } from "diff";
-import { modelWritableRoots } from "../project/roots";
+import { isScratchProjectPath, modelWritableRoots } from "../project/roots";
 import {
   buildActiveSessionBranch,
   loadSessionRecords,
@@ -88,6 +88,9 @@ export class FileCheckpointManager {
     let changed = false;
     for (const path of paths) {
       const normalized = normalizeWritablePath(this.rootDir, path);
+      // Scratch root tmp/ is writable but not a rewind target: spills and drafts
+      // there must not pollute the content-root checkpoint ledger (issue #137B).
+      if (isScratchProjectPath(normalized)) continue;
       if (Object.hasOwn(this.current.files, normalized)) continue;
       const captured = await capturePaths(this.rootDir, this.session.sessionId, normalized);
       for (const [capturedPath, entry] of Object.entries(captured)) {

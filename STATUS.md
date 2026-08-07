@@ -154,7 +154,7 @@ Model-visible tools and their write scope. Path guards, permissions, process aut
 | `config.load` / `prompt.load` | Internal contract |
 | `session.write` | `.vesicle/sessions/` |
 
-Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`, and the scratch root `tmp/`. Writable roots: `source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`, and the scratch root `tmp/`; `tmp/` holds drafts and intermediate work, participates in per-turn file checkpoints and rewind, is retained unless explicitly cleaned, and is excluded from `/init` scanning, Stage input discovery, the Artifact Workbench, `/artifact`, `/validate`, Quality Guard artifact targets, and automatic publication. The Artifact workbench indexes only the four final-output roots (`workspace`, `novels`, `reports`, `test_runs`). All model-visible filesystem paths are project-relative; absolute paths, `..` escapes, and symbolic-link traversal are rejected. `request_confirmation` is attached only when the active engine profile declares at least one stop gate.
+Read/list/stat/grep roots: `assets/`, `source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`, and the scratch root `tmp/`. Writable roots: `source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`, and the scratch root `tmp/`; `tmp/` holds drafts and intermediate work, is excluded from per-turn file checkpoints and rewind (so its mutations are not rewind-safe), and is retained unless explicitly cleaned; `tmp/` is also excluded from `/init` scanning, Stage input discovery, the Artifact Workbench, `/artifact`, `/validate`, Quality Guard artifact targets, and automatic publication. The Artifact workbench indexes only the four final-output roots (`workspace`, `novels`, `reports`, `test_runs`). All model-visible filesystem paths are project-relative; absolute paths, `..` escapes, and symbolic-link traversal are rejected. `request_confirmation` is attached only when the active engine profile declares at least one stop gate.
 
 ## Gate Runtime
 
@@ -186,7 +186,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Filesystem & Session
 
 - Directory tools intentionally omit recursive deletion and directory-tree copying. Models must delete contents explicitly before `delete_directory`; `move_directory` never overwrites an existing target.
-- Rewind file checkpoints track only mutations performed through Vesicle's guarded filesystem tools, including nested directory topology. Files or directories changed only by the user, an external process, or `shell_exec` are outside that ledger and are not independently discovered as rewind targets.
+- Rewind file checkpoints track only mutations performed through Vesicle's guarded filesystem tools under the durable content and artifact roots (not the scratch root `tmp/`), including nested directory topology. Files or directories changed only by the user, an external process, or `shell_exec` are outside that ledger and are not independently discovered as rewind targets.
 - Persistent Instruction targets are host configuration outside the guarded writable roots, so `/rewind` and double-Esc do not restore changes made by `update_instructions`. Rewinding the conversation can therefore remove the visible tool call while leaving the instruction file changed on disk. The tool reports the single `.previous` backup location after each mutation; recovery is manual until a dedicated restore command exists.
 
 ### Providers & Streaming

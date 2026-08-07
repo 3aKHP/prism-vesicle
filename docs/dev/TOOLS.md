@@ -21,7 +21,7 @@ This document defines the capability boundary for model-visible tools, external 
 - Successful filesystem operations persist structured `FileToolEvent` metadata rather than requiring callers to parse result prose.
 - File-event byte counts describe the resulting or observed file size; deletion records the deleted size, append may also report delta bytes, and query tools report their bounded entry or match counts.
 - Successful create, write, replace, and append operations record the SHA-256 of the complete resulting file.
-- Mutation tools capture every affected writable path before changing it so the owning user turn can restore guarded file state through its checkpoint. Guarded mutations under `tmp/` participate in the same per-turn checkpoint and rewind lifecycle as the durable roots; scratch state is never auto-cleaned by the host.
+- Mutation tools capture every affected writable path before changing it so the owning user turn can restore guarded file state through its checkpoint. Guarded mutations under `tmp/` are writable but excluded from the per-turn checkpoint and rewind lifecycle; scratch state is never auto-cleaned by the host.
 - The opt-in `shell_exec` tool is outside guarded file-tool authority. Shell mutations taint checkpoint completeness and must never be described as rewind-safe.
 
 ## Permission Runtime
