@@ -70,7 +70,11 @@ This document defines the capability boundary for model-visible tools, external 
 
 - Tavily web tools are host-executed research tools, not provider adapter features. They persist structured web metadata and do not mutate project files directly.
 - MCP configuration is user-level host state. Secret header values expand from the sibling user `.env` and must not be logged or persisted.
-- MCP discovery and calls are normalized into ordinary host tool definitions and results; provider adapters remain unaware of MCP transport.
+- MCP discovery and calls are normalized into ordinary host tool definitions and typed, untrusted results; provider adapters remain unaware of MCP transport and result parsing.
 - The effective Engine and server configuration scope MCP availability. Model arguments and permission modes cannot widen that scope.
+- MCP text items keep their upstream order. Raw unknown content arrays and `structuredContent` are never JSON-stringified as a provider-visible fallback; the host emits bounded, payload-free diagnostics for unsupported or malformed items.
+- The supported multimodal result path is inline `ImageContent` with strict base64, declared MIME, and detected magic bytes that agree. Accepted PNG, JPEG, GIF, and WebP bytes use the existing content-addressed attachment store with `source: "mcp"`; server-provided filenames are ignored. The shared decoded-image ceiling is currently 20 MiB and is an internal, provisional safety policy rather than a configurable product limit.
+- A vision-capable selected model receives accepted MCP images through ordinary `ToolResult.images` materialization. A non-vision model keeps safe text plus an omission notice without decoding or persisting the image. An MCP error result never imports media; cancellation, invalid data, a MIME mismatch, an over-budget item, or an attachment-write failure cannot expose the binary payload to model text, session metadata, logs, or a provider request.
+- Resource, audio, URL/link, and unknown result items remain explicitly unsupported. Vesicle does not auto-read, download, transcribe, play, inject, or otherwise promote them into a prompt or a wider tool scope.
 
 The current tool inventory belongs in [`STATUS.md`](../../STATUS.md); user-facing shell guidance belongs in the language-mirrored user manual.

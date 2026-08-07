@@ -161,6 +161,10 @@ Doctor checks route selection only; it does not prove that the proxy or provider
 
 Start from [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml). Each server can set `transport` (streamable-http), `url`, `timeoutSeconds`, `toolPrefix`, `headers` (supports `${ENV_VAR}` expansion from `.env`), `includeTools`/`excludeTools` filters, and `enabledEngines` (which engines can use it). A present `mcp.yaml` defaults to enabled; secrets go in `.env`.
 
+MCP tool results first cross the host's untrusted-content boundary. Ordinary text keeps its original order. When the selected model declares `capabilities.vision: true`, strictly validated inline PNG, JPEG, GIF, and WebP images are delivered as image attachments. Sessions retain only content-addressed references, never base64. The current 20 MiB decoded-image ceiling is a provisional safety boundary, not a configurable long-term product commitment.
+
+For a non-vision model, images are neither decoded nor persisted; safe text continues with an omission notice. MCP error results also do not import images. Resource, audio, URL/link, and unknown results currently produce only bounded unsupported-item notices; Vesicle does not automatically download, read, transcribe, play, or inject them.
+
 ## Persistent Instructions (optional)
 
 If you keep re-stating the same sub-workflow or specification under an engine, write it into a Persistent Instructions file — the host loads it into the system prompt automatically at the start of every session, so you no longer have to ask the model to write a spec to a file and remind it to read it next session.

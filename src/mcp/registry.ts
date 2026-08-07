@@ -4,6 +4,7 @@ import type { EngineId } from "../core/engine/profile";
 import type { ToolCall, ToolDefinition, ToolResult } from "../core/tools/types";
 import { McpStreamableHttpClient, type McpClientOptions } from "./client";
 import { loadMcpConfig, mcpConfigPathFromEnv } from "./config";
+import { deliverMcpToolResult, type McpResultDeliveryContext } from "./result-delivery";
 import type { McpConfig, McpRawTool, McpServerConfig, McpServerStatus, McpToolBinding, McpToolEvent } from "./types";
 import {
   buildMcpToolAlias,
@@ -21,7 +22,7 @@ export type McpRegistry = {
   definitions: ToolDefinition[];
   statuses: McpServerStatus[];
   hasTool: (name: string) => boolean;
-  execute: (call: ToolCall, options?: { signal?: AbortSignal }) => Promise<ToolResult>;
+  execute: (call: ToolCall, context: Pick<McpResultDeliveryContext, "rootDir" | "visionEnabled" | "signal">) => Promise<ToolResult>;
 };
 
 export type McpInspection = {
@@ -159,7 +160,7 @@ async function buildRegistry(
     definitions: [...bindings.values()].map(toolDefinitionFromMcpBinding),
     statuses,
     hasTool: (name) => bindings.has(name),
-    execute: async (call, executeOptions = {}) => {
+    execute: async (call, executeContext) => {
       const binding = bindings.get(call.name);
       if (!binding) {
         return {
@@ -190,16 +191,26 @@ async function buildRegistry(
         };
       }
       try {
-        const result = await client.callTool(binding.toolName, args.value, executeOptions);
+        const result = await client.callTool(binding.toolName, args.value, { signal: executeContext.signal });
+        const delivered = await deliverMcpToolResult(result, {
+          ...executeContext,
+          serverId: binding.serverId,
+          toolName: binding.toolName,
+        });
         return {
           callId: call.id,
           name: call.name,
           ok: !result.isError,
-          content: result.content,
-          mcpEvent: eventFromBinding(binding, result.isError),
+          content: delivered.content,
+          ...(delivered.images ? { images: delivered.images } : {}),
+          mcpEvent: eventFromBinding(binding, result.isError, {
+            imageCount: delivered.imageCount,
+            omittedContentCount: delivered.omittedContentCount,
+            hasStructuredContent: result.structuredContent !== undefined,
+          }),
         };
       } catch (error) {
-        if (executeOptions.signal?.aborted) throw error;
+        if (executeContext.signal?.aborted) throw error;
         return {
           callId: call.id,
           name: call.name,
@@ -268,13 +279,20 @@ function disconnectedStatus(server: McpServerConfig, detail: string): McpServerS
   };
 }
 
-function eventFromBinding(binding: McpToolBinding, isError: boolean): McpToolEvent {
+function eventFromBinding(
+  binding: McpToolBinding,
+  isError: boolean,
+  summary?: { imageCount: number; omittedContentCount: number; hasStructuredContent: boolean },
+): McpToolEvent {
   return {
     kind: "mcp_tool",
     serverId: binding.serverId,
     alias: binding.alias,
     toolName: binding.toolName,
     isError,
+    ...(summary?.imageCount ? { imageCount: summary.imageCount } : {}),
+    ...(summary?.omittedContentCount ? { omittedContentCount: summary.omittedContentCount } : {}),
+    ...(summary?.hasStructuredContent ? { hasStructuredContent: true } : {}),
   };
 }
 

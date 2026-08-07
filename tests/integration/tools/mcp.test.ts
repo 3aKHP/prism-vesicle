@@ -6,7 +6,7 @@ import { McpStreamableHttpClient, parseSseEnvelopes } from "../../../src/mcp/cli
 import { parseMcpConfig } from "../../../src/mcp/config";
 import { createMcpRegistryForEngine } from "../../../src/mcp/registry";
 import { inspectMcpConfig } from "../../../src/mcp/registry";
-import { buildMcpToolAlias } from "../../../src/mcp/types";
+import { buildMcpToolAlias, normalizeMcpToolResult } from "../../../src/mcp/types";
 
 describe("MCP config", () => {
   test("defaults an existing mcp.yaml to enabled with minimal server fields", () => {
@@ -105,6 +105,62 @@ describe("MCP alias helpers", () => {
     expect(alias.length).toBeLessThanOrEqual(64);
     expect(alias).toMatch(/_[a-f0-9]{8}$/);
   });
+
+  test("normalizes ordered content kinds without retaining deferred payload bodies", () => {
+    const normalized = normalizeMcpToolResult({
+      content: [
+        { type: "text", text: " first " },
+        { type: "image", data: "aW1hZ2U=", mimeType: "image/png", filename: "remote.png" },
+        { type: "text", text: "second" },
+        { type: "audio", data: "c2VjcmV0", mimeType: "audio/wav" },
+        { type: "resource", resource: { uri: "file:///private/path", mimeType: "text/plain", text: "secret body" } },
+        { type: "resource_link", uri: "https://user:pass@example.test/private?token=secret", name: "private" },
+        { type: "future_binary", data: "must-not-survive" },
+      ],
+      structuredContent: { count: 2 },
+    });
+
+    expect(normalized.text).toEqual(["first", "second"]);
+    expect(normalized.structuredContent).toEqual({ count: 2 });
+    expect(normalized.images).toEqual([{
+      kind: "image",
+      contentIndex: 1,
+      data: "aW1hZ2U=",
+      mimeType: "image/png",
+    }]);
+    expect(normalized.deferred).toEqual([
+      { kind: "audio", contentIndex: 3, mimeType: "audio/wav" },
+      { kind: "resource", contentIndex: 4, mimeType: "text/plain", scheme: "file", hasText: true, hasBlob: false },
+      { kind: "link", contentIndex: 5, scheme: "https" },
+    ]);
+    expect(normalized.diagnostics).toEqual([{
+      contentIndex: 6,
+      code: "unknown-content-type",
+      declaredType: "future_binary",
+    }]);
+    expect(JSON.stringify(normalized.deferred)).not.toContain("secret");
+    expect(JSON.stringify(normalized.diagnostics)).not.toContain("must-not-survive");
+  });
+
+  test("diagnoses malformed result envelopes without misclassifying empty text or resources", () => {
+    const normalized = normalizeMcpToolResult({
+      content: [
+        { type: "text", text: "  " },
+        { type: "resource", resource: "private body" },
+      ],
+    });
+
+    expect(normalized.text).toEqual([]);
+    expect(normalized.deferred).toEqual([]);
+    expect(normalized.diagnostics).toEqual([{
+      contentIndex: 1,
+      code: "invalid-content-item",
+      declaredType: "resource",
+    }]);
+    expect(normalizeMcpToolResult({ content: "private body" }).diagnostics).toEqual([{
+      code: "invalid-response",
+    }]);
+  });
 });
 
 describe("Streamable HTTP MCP client", () => {
@@ -174,7 +230,10 @@ describe("Streamable HTTP MCP client", () => {
       { name: "fetch_url", inputSchema: { type: "object", properties: { url: { type: "string" } } } },
     ]);
     expect(await client.callTool("fetch_url", { url: "https://example.test" })).toEqual({
-      content: "fetched page",
+      text: ["fetched page"],
+      images: [],
+      deferred: [],
+      diagnostics: [],
       isError: false,
     });
     expect(requests.map((request) => request.session)).toEqual([
@@ -269,18 +328,22 @@ describe("MCP registry", () => {
     expect(etl.definitions[0].function.description).toBe("[MCP/math] Add numbers");
     expect(runtime.definitions).toEqual([]);
 
-    const result = await etl.execute({ id: "call-1", name: "mcp_math_add", arguments: "{\"a\":1,\"b\":2}" });
+    const result = await etl.execute(
+      { id: "call-1", name: "mcp_math_add", arguments: "{\"a\":1,\"b\":2}" },
+      { rootDir: configDir, visionEnabled: false },
+    );
     expect(result).toMatchObject({
       callId: "call-1",
       name: "mcp_math_add",
       ok: true,
-      content: "{\"sum\":3}",
+      content: "MCP tool returned structured content.",
       mcpEvent: {
         kind: "mcp_tool",
         serverId: "math",
         alias: "mcp_math_add",
         toolName: "add",
         isError: false,
+        hasStructuredContent: true,
       },
     });
   });

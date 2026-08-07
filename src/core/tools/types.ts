@@ -96,6 +96,9 @@ export type McpToolEvent = {
   alias: string;
   toolName: string;
   isError: boolean;
+  imageCount?: number;
+  omittedContentCount?: number;
+  hasStructuredContent?: boolean;
 };
 
 export type ProcessToolEvent = {

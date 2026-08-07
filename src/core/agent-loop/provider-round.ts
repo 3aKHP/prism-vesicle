@@ -106,7 +106,7 @@ export function emitAssistantResponse(response: VesicleResponse, onEvent?: (even
   });
 }
 
-async function prepareProviderMessages(
+export async function prepareProviderMessages(
   rootDir: string,
   messages: VesicleMessage[],
   visionEnabled: boolean,

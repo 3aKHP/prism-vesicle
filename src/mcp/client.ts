@@ -1,6 +1,6 @@
 import packageJson from "../../package.json";
 import type { McpServerConfig, McpToolCallResult, McpRawTool } from "./types";
-import { formatMcpToolResult, isRecord, McpError } from "./types";
+import { isRecord, McpError, normalizeMcpToolResult } from "./types";
 
 type JsonRpcEnvelope = Record<string, unknown>;
 
@@ -50,7 +50,7 @@ export class McpStreamableHttpClient {
       name: toolName,
       arguments: args,
     }, options);
-    return formatMcpToolResult(result);
+    return normalizeMcpToolResult(result);
   }
 
   private async request(method: string, params: Record<string, unknown>, options: { signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {

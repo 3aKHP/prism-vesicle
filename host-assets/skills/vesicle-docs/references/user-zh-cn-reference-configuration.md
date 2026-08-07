@@ -161,6 +161,10 @@ Doctor 只检查路由选择,不会尝试证明代理或供应商实际可达;�
 
 从 [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml) 起步。每个服务器可设 `transport`(streamable-http)、`url`、`timeoutSeconds`、`toolPrefix`、`headers`(支持 `${ENV_VAR}` 从 `.env` 展开)、`includeTools`/`excludeTools` 过滤、`enabledEngines`(限定哪些引擎能用)。文件存在即默认启用;密钥放 `.env`。
 
+MCP 工具结果会先经过宿主的不可信内容边界。普通文本保持原顺序；如果当前模型声明 `capabilities.vision: true`，严格校验后的内联 PNG/JPEG/GIF/WebP 图片会作为图片附件交给模型。会话只保存内容寻址引用，不保存 base64。当前解码上限是临时的 20 MiB 安全边界，不是可配置的长期产品承诺。
+
+如果当前模型不支持视觉，图片不会被解码或落盘，安全文本仍会继续并附带省略提示。MCP 错误结果也不会导入图片。resource、audio、URL/link 和未知结果目前只会给出有界的“不支持”提示；Vesicle 不会自动下载、读取、转录、播放或注入这些内容。
+
 ## 持久化指令(可选)
 
 如果你经常要在某个引擎下重复同一套子工作流或规范,可以写进持久化指令文件——宿主在每个会话启动时自动把它们加载进系统 prompt,不需要再让模型写文件、下次会话再提醒它去读。

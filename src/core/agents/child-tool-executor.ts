@@ -27,6 +27,7 @@ type ChildToolContext = {
   invocation: AgentInvocationContext;
   session: SessionStore;
   mcp: McpRegistry;
+  visionEnabled: boolean;
   checkpoint: FileCheckpointManager;
   claimMutation(paths: string[]): Promise<void>;
 };
@@ -40,6 +41,7 @@ export async function executeChildTool({
   invocation,
   session,
   mcp,
+  visionEnabled,
   checkpoint,
   claimMutation,
 }: ChildToolContext): Promise<ChildToolExecution> {
@@ -96,7 +98,7 @@ export async function executeChildTool({
 
   async function executeApprovedTool(): Promise<ToolResult> {
     return mcp.hasTool(call.name)
-      ? mcp.execute(call)
+      ? mcp.execute(call, { rootDir: invocation.rootDir, visionEnabled, signal })
       : executeHostTool(invocation.rootDir, call, {
         signal,
         shellInterpreter: permission.shellInterpreter,

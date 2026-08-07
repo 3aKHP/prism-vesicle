@@ -11,6 +11,7 @@ import { agentToolProgress, executeChildTool } from "./child-tool-executor";
 import { providerRetryLabel } from "../../providers/shared/retry-label";
 import type { AgentRunner } from "./manager";
 import { closeProviderSession } from "../../providers/lifecycle";
+import { prepareProviderMessages } from "../agent-loop/provider-round";
 
 export { composeChildSystemPrompts, resolveChildTools } from "./child-bootstrap";
 export { agentToolProgress } from "./child-tool-executor";
@@ -35,11 +36,16 @@ export const runChildAgent: AgentRunner = async ({
       if (signal.aborted) throw signal.reason;
       await appendChildParentMessages(state, takeMessages(), runtime.session, runId, handle);
       onProgress(`request ${iteration + 1}`);
+      const providerMessages = await prepareProviderMessages(
+        invocation.rootDir,
+        state.messages,
+        runtime.config.capabilities?.vision === true,
+      );
       const response = await runChildProviderRound(runtime.provider, {
         id: runtime.session.sessionId,
         model: { provider: runtime.config.providerId, model: runtime.config.model },
         system: runtime.systemPrompts,
-        messages: state.messages,
+        messages: providerMessages,
         tools: runtime.tools,
         generation: invocation.generation,
         signal,
@@ -75,6 +81,7 @@ export const runChildAgent: AgentRunner = async ({
           invocation,
           session: runtime.session,
           mcp: runtime.mcp,
+          visionEnabled: runtime.config.capabilities?.vision === true,
           checkpoint: runtime.checkpoint,
           claimMutation,
         });

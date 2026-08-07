@@ -3,9 +3,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { ImageDetail, VesicleImageAttachment } from "../../providers/shared/types";
 
-export const maxImageAttachmentBytes = 5 * 1024 * 1024;
+export const maxImageAttachmentBytes = 20 * 1024 * 1024;
 
-type SupportedImageMime = VesicleImageAttachment["mediaType"];
+export type SupportedImageMime = VesicleImageAttachment["mediaType"];
 
 export async function ingestImageBytes(
   rootDir: string,
@@ -15,6 +15,7 @@ export async function ingestImageBytes(
     filename?: string;
     sourcePath?: string;
     detail?: ImageDetail;
+    expectedMediaType?: SupportedImageMime;
   },
 ): Promise<VesicleImageAttachment> {
   if (bytes.byteLength === 0) throw new Error("Image attachment is empty.");
@@ -24,6 +25,9 @@ export async function ingestImageBytes(
 
   const mediaType = detectImageMediaType(bytes);
   if (!mediaType) throw new Error("Unsupported image format. Use PNG, JPEG, GIF, or WebP.");
+  if (options.expectedMediaType && mediaType !== options.expectedMediaType) {
+    throw new Error(`Image attachment MIME mismatch: declared ${options.expectedMediaType}, detected ${mediaType}.`);
+  }
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const extension = extensionForMime(mediaType);
   const attachmentPath = `.vesicle/attachments/${sha256}.${extension}`;
@@ -55,6 +59,7 @@ export async function ingestImageFile(
     filename?: string;
     sourcePath?: string;
     detail?: ImageDetail;
+    expectedMediaType?: SupportedImageMime;
   },
 ): Promise<VesicleImageAttachment> {
   return ingestImageBytes(rootDir, await readFile(absolutePath), {
@@ -120,7 +125,7 @@ function isImageAttachment(value: unknown): value is VesicleImageAttachment {
     && typeof image.path === "string"
     && typeof image.bytes === "number"
     && typeof image.sha256 === "string"
-    && (image.source === "clipboard" || image.source === "project")
+    && (image.source === "clipboard" || image.source === "project" || image.source === "mcp")
     && ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(image.mediaType ?? "");
 }
 

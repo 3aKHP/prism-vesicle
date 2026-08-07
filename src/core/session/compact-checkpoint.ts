@@ -335,7 +335,7 @@ function parseImages(value: unknown, label: string): NonNullable<ResumedMessage[
       || entry.bytes < 0
       || typeof entry.sha256 !== "string"
       || !/^[a-f0-9]{64}$/.test(entry.sha256)
-      || (entry.source !== "clipboard" && entry.source !== "project")
+      || (entry.source !== "clipboard" && entry.source !== "project" && entry.source !== "mcp")
     ) throw new Error(`Session compact checkpoint ${imageLabel} is malformed.`);
     for (const key of ["filename", "sourcePath"] as const) {
       if (Object.hasOwn(entry, key) && typeof entry[key] !== "string") throw new Error(`Session compact checkpoint ${imageLabel}.${key} is malformed.`);
