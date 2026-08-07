@@ -56,9 +56,10 @@ export type McpConnection = {
 const clientIdentity = { name: "Prism Vesicle", version: packageJson.version };
 
 /**
- * One logical request has one timeout owner. The SDK owns the timeout via
- * its per-request signal and transport timeout. Vesicle passes the caller's
- * abort signal through and does not layer additional retries.
+ * The fetch wrapper in {@linkcode sanitizeContentResponse} enforces
+ * `config.timeoutSeconds` on every HTTP request and passes the caller's abort
+ * signal through via `AbortSignal.any`. The SDK does not layer additional
+ * retries; Vesicle does not add timeout layers beyond the fetch wrapper.
  */
 export async function createMcpConnection(
   config: McpServerConfig,
@@ -170,7 +171,7 @@ function makeConnection(
         }
         // SDK strict validation may reject content Vesicle accepts; fall back
         // to the raw result captured by the fetch wrapper (if available).
-        if (rawHolder.result !== undefined) return rejectInputRequired(rawHolder.result);
+        if (rawHolder.result !== undefined) return normalizeToolCallResult(rawHolder.result);
         // Non-validation errors (e.g. JSON-RPC error from server) must surface
         // their original message rather than a generic placeholder (Bot Review Should-fix).
         throw error;
@@ -182,7 +183,7 @@ function makeConnection(
       if (resultToNormalize === undefined) {
         throw new McpError(`MCP server ${config.id} returned no processable tools/call result.`);
       }
-      return rejectInputRequired(resultToNormalize);
+      return normalizeToolCallResult(resultToNormalize);
     },
     async close(): Promise<void> {
       await safeClose(currentClient);
@@ -220,20 +221,20 @@ function createTransport(config: McpServerConfig, options: McpConnectionOptions,
 }
 
 /**
- * The fetch wrapper captures the raw tools/call result before the SDK's strict
- * Zod validation can reject content items that Vesicle's lenient normalizer
- * would accept (invalid base64, unknown types, resource_link without name).
- * The connection's callTool always normalizes from this captured raw result.
- * When the SDK rejects a response, the connection falls back to the raw result;
- * when the SDK accepts it, the raw result is still preferred to preserve items
- * the sanitizer stripped for SDK compliance.
- */
-/**
- * The fetch wrapper enforces the configured per-server timeout (Blocking fix
- * for Bot Review: the old client used setTimeoutController on every request),
- * captures the raw tools/call result before SDK Zod validation, and sanitizes
- * content items the SDK would reject. Only tools/call responses are captured
- * to prevent cross-contamination of overlapping requests.
+ * The fetch wrapper does three things on every HTTP response:
+ *
+ * 1. Enforces `config.timeoutSeconds` via `AbortSignal.timeout`, combined
+ *    with the caller's signal via `AbortSignal.any`. The timeout covers
+ *    header arrival AND body read (the old `setTimeoutController` bounded
+ *    the entire request; this wrapper restores that contract).
+ * 2. Captures the raw `tools/call` result (only for `method === "tools/call"`
+ *    requests) before the SDK's strict Zod validation can reject content
+ *    items Vesicle's lenient normalizer accepts. The connection normalizes
+ *    from this captured result; SDK validation errors fall back to it.
+ * 3. Sanitizes content arrays the SDK would reject (invalid base64, unknown
+ *    types, missing required fields) so the SDK accepts the response.
+ *
+ * The 32 MiB bound on response body bytes is a safety policy (§7.3).
  */
 const maxSanitizerResponseBytes = 32 * 1024 * 1024;
 
@@ -244,20 +245,13 @@ async function sanitizeContentResponse(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  // Enforce configured timeout on every HTTP request (Bot Review Blocking fix).
   const callerSignal = init?.signal;
   const timeoutMs = Math.max(1, config.timeoutSeconds) * 1000;
-  const timeoutController = new AbortController();
-  const timeoutHandle = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const combinedSignal = callerSignal
-    ? AbortSignal.any([callerSignal, timeoutController.signal])
-    : timeoutController.signal;
-  let response: Response;
-  try {
-    response = await baseFetch(input, { ...init, signal: combinedSignal });
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
+    ? AbortSignal.any([callerSignal, timeoutSignal])
+    : timeoutSignal;
+  const response = await baseFetch(input, { ...init, signal: combinedSignal });
   if (!response.ok) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
@@ -277,7 +271,6 @@ async function sanitizeContentResponse(
   if (!isRecord(parsed) || !("result" in parsed)) return new Response(text, { status: response.status, headers: response.headers });
   const result = parsed.result;
   if (!isRecord(result)) return new Response(text, { status: response.status, headers: response.headers });
-  // Only capture tools/call results to prevent cross-contamination (Bot Review Should-fix).
   if (isToolsCallRequest(init?.body)) {
     rawHolder.result = result;
   }
@@ -358,7 +351,6 @@ function classifyError(error: unknown): ClassifiedError {
   if (error instanceof SdkHttpError) {
     const status = error.status;
     if (status === 401 || status === 403) return { kind: "auth", message: safeMessage(error) };
-    if (status >= 500) return { kind: "transport", message: safeMessage(error) };
     return { kind: "transport", message: safeMessage(error) };
   }
   if (error instanceof SdkError) {
@@ -367,6 +359,10 @@ function classifyError(error: unknown): ClassifiedError {
     return { kind: "protocol", message: safeMessage(error) };
   }
   if (error instanceof ProtocolError) return { kind: "protocol", message: safeMessage(error) };
+  if (error instanceof DOMException) {
+    if (error.name === "TimeoutError") return { kind: "timeout", message: safeMessage(error) };
+    if (error.name === "AbortError") return { kind: "timeout", message: safeMessage(error) };
+  }
   if (error instanceof Error) return { kind: "transport", message: safeMessage(error) };
   return { kind: "transport", message: "unknown MCP error" };
 }
@@ -412,11 +408,11 @@ function abortReason(signal: AbortSignal): unknown {
 }
 
 /**
- * Reject modern input_required (MRTR) with a stable unsupported-capability
- * error — no retry, no side effect, never reported as success. Otherwise
- * normalize normally.
+ * Normalize a tools/call result, rejecting modern `input_required` (MRTR)
+ * with a stable unsupported-capability error — no retry, no side effect,
+ * never reported as success.
  */
-function rejectInputRequired(raw: unknown): McpToolCallResult {
+function normalizeToolCallResult(raw: unknown): McpToolCallResult {
   if (isRecord(raw) && raw.resultType === "input_required") {
     return {
       text: [],

@@ -306,3 +306,63 @@ describe("MCP stale-session no-replay", () => {
     await result.connection.close();
   });
 });
+
+describe("MCP timeout and error surfacing", () => {
+  test("timeoutSeconds bounds a server that never responds", async () => {
+    const result = await createMcpConnection({
+      ...serverConfig("https://mcp.example.test/slow/mcp", "legacy"),
+      id: "timeout-test",
+      timeoutSeconds: 1,
+    }, {
+      fetchImpl: ((_url: RequestInfo | URL, _init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          const controller = new AbortController();
+          _init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+            controller.abort();
+          }, { once: true });
+        })) as unknown as typeof fetch,
+    });
+    // Connection should fail because initialize never completes within 1s
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failureKind).toBe("timeout");
+    }
+  }, 10000);
+
+  test("server JSON-RPC error message surfaces instead of generic placeholder", async () => {
+    const result = await createMcpConnection({
+      ...serverConfig("https://mcp.example.test/err/mcp", "legacy"),
+      id: "error-surface",
+    }, {
+      fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        const method = body.method as string;
+        if (method === "initialize") {
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+            protocolVersion: "2025-03-26", capabilities: { tools: {} },
+            serverInfo: { name: "err-srv", version: "1.0" },
+          }}, { headers: { "Mcp-Session-Id": "s1" } });
+        }
+        if (method === "notifications/initialized") return new Response("", { status: 202 });
+        if (method === "tools/list") {
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+            tools: [{ name: "boom", inputSchema: { type: "object" } }],
+          }});
+        }
+        if (method === "tools/call") {
+          // Server returns a JSON-RPC error envelope (not a result)
+          return Response.json({ jsonrpc: "2.0", id: body.id, error: {
+            code: -32602, message: "Invalid tool arguments: missing required field 'x'",
+          }});
+        }
+        throw new Error(`unexpected: ${method}`);
+      }) as unknown as typeof fetch,
+    });
+
+    if (!result.ok) throw new Error("connection failed");
+    // The server's error message should surface, not "no processable result"
+    await expect(result.connection.callTool("boom", {})).rejects.toThrow(/Invalid tool arguments|missing required field/);
+    await result.connection.close();
+  }, 10000);
+});
