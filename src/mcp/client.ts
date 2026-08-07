@@ -2,10 +2,6 @@ import { isRecord } from "./types";
 
 type JsonRpcEnvelope = Record<string, unknown>;
 
-export type McpClientOptions = {
-  fetchImpl?: typeof fetch;
-};
-
 /**
  * Incremental SSE envelope parser used by test fixtures and protocol
  * utilities. Production HTTP/SSE handling is owned by the SDK transport

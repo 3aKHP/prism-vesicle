@@ -17,7 +17,7 @@ Config lives at the user-level `mcp.yaml` beside `providers.yaml`; set `VESICLE_
 - Secrets are expanded from the same sibling `.env` file used by provider and Tavily keys.
 - `transport: streamable-http` and `transport: http` both select the Streamable HTTP client.
 - `negotiation` accepts `legacy`, `modern`, or `auto`. Absent normalizes to `legacy` (no probe, unchanged wire behavior).
-- `protocolVersion` is the legacy revision pin (default `2025-03-26`). It does not select the era.
+- `protocolVersion` is the configured legacy revision (default `2025-03-26`). It does not select the era. The SDK negotiates its own latest legacy revision (`2025-11-25`) during the `initialize` handshake; the configured value is informational and does not override the SDK's negotiation.
 - `supportedProtocolVersions` is an optional modern offer list (default `["2026-07-28"]`). It must contain at least one Vesicle-supported modern revision.
 - `includeTools` and `excludeTools` match either the remote tool name or the Vesicle alias.
 - `enabledEngines` can scope a server to specific Prism engines.
