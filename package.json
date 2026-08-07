@@ -76,6 +76,7 @@
     "build:installer": "bun run scripts/build-installer.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
     "@opentui/core": "0.4.3",
     "web-tree-sitter": "0.25.10"
   },
