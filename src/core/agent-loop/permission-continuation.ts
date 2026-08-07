@@ -286,7 +286,11 @@ async function executeApprovedEntry(
   const mutationOwner = `${context.session.sessionId}:${call.id}`;
   try {
     return context.toolSurface.mcp.hasTool(call.name)
-      ? await context.toolSurface.mcp.execute(call)
+      ? await context.toolSurface.mcp.execute(call, {
+        rootDir: context.rootDir,
+        visionEnabled: context.config.capabilities?.vision === true,
+        signal: options.signal,
+      })
       : await executeHostTool(context.rootDir, call, {
         signal: options.signal,
         processManager: getProcessManager(context.rootDir),

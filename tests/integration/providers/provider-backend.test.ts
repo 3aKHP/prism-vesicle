@@ -38,7 +38,7 @@ describe("OpenAI-compatible request shaping", () => {
       ...request(),
       messages: [
         { role: "user", content: "inspect", images: [image()] },
-        { role: "tool", toolCallId: "call-view", content: "viewed", images: [image()] },
+        { role: "tool", toolCallId: "call-view", content: "viewed", images: [mcpImage()] },
       ],
     }, false);
     expect(body.messages).toEqual([
@@ -55,7 +55,7 @@ describe("OpenAI-compatible request shaping", () => {
       {
         role: "user",
         content: [
-          { type: "text", text: "[Image #1: source_materials/reference.png]" },
+          { type: "text", text: "[Image #1: prts-operator_artwork-image-1.png]" },
           { type: "image_url", image_url: { url: "data:image/png;base64,cG5n", detail: "high" } },
         ],
       },
@@ -389,6 +389,15 @@ function image(): NonNullable<VesicleRequest["messages"][number]["images"]>[numb
     sourcePath: "source_materials/reference.png",
     detail: "high",
     data: "cG5n",
+  };
+}
+
+function mcpImage(): ReturnType<typeof image> {
+  return {
+    ...image(),
+    source: "mcp",
+    sourcePath: undefined,
+    filename: "prts-operator_artwork-image-1.png",
   };
 }
 

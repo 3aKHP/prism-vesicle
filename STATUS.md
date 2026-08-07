@@ -35,7 +35,7 @@ Release candidate: **1.0.0-alpha.8**. The `State` column tracks the candidate's 
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
 | Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | released |
-| Tools | Streamable-HTTP MCP tools | released |
+| Tools | Streamable-HTTP MCP tools with typed, vision-gated inline image results | released |
 | Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
 | Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | released |
 | Agents | Foreground/background SubAgents with contract-bound Harness delegation | released |
@@ -70,7 +70,7 @@ prism-vesicle/
 │   │   ├── agent-loop/   # Provider calls, tool loop, gate pause/resume
 │   │   ├── agents/       # Agent profiles, child runtime, scheduling, inbox
 │   │   ├── artifacts/    # Artifact scanning, preview bounds, validation selection
-│   │   ├── attachments/  # Clipboard image content-addressed store
+│   │   ├── attachments/  # Image content-addressed store and request materialization
 │   │   ├── checkpoints/  # Per-turn file snapshots, diff stats, restore
 │   │   ├── compact/      # Context compaction service
 │   │   ├── engine/       # Engine profile YAML loader
@@ -211,7 +211,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ### Web & MCP
 
-- MCP currently supports Streamable HTTP tools only. Local stdio servers, classic HTTP+SSE, prompts/resources, and background tool-list-change handling are deferred.
+- MCP currently supports Streamable HTTP tools and strictly validated inline PNG/JPEG/GIF/WebP tool-result images. Resource, audio, URL/link, and unknown result kinds are omitted without auto-fetch or prompt injection. Local stdio servers, classic HTTP+SSE, prompts/resources APIs, non-image media delivery, and background tool-list-change handling are deferred.
 - Web tools are limited to the five Tavily host tools on ETL and Evaluate profiles.
 
 ### Host Shell

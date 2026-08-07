@@ -6,6 +6,7 @@ import {
   detectImageMediaType,
   ingestImageBytes,
   materializeMessageImages,
+  maxImageAttachmentBytes,
   parseImageAttachments,
   persistedImageAttachments,
 } from "../../../src/core/attachments/store";
@@ -36,5 +37,26 @@ describe("image attachment store", () => {
     expect(detectImageMediaType(png)).toBe("image/png");
     expect(detectImageMediaType(Uint8Array.from([0xff, 0xd8, 0xff, 0x00]))).toBe("image/jpeg");
     expect(parseImageAttachments([{ id: "bad" }])).toBeUndefined();
+  });
+
+  test("round-trips MCP attachment references under the shared 20 MiB policy", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-mcp-attachments-"));
+    const image = await ingestImageBytes(rootDir, png, {
+      source: "mcp",
+      filename: "prts-operator_artwork-image-1.png",
+      expectedMediaType: "image/png",
+    });
+    const persisted = persistedImageAttachments([{
+      ...image,
+      data: Buffer.from(png).toString("base64"),
+    }]);
+
+    expect(maxImageAttachmentBytes).toBe(20 * 1024 * 1024);
+    expect(parseImageAttachments(persisted)).toEqual([image]);
+    expect(JSON.stringify(persisted)).not.toContain(Buffer.from(png).toString("base64"));
+    await expect(ingestImageBytes(rootDir, png, {
+      source: "mcp",
+      expectedMediaType: "image/jpeg",
+    })).rejects.toThrow("MIME mismatch");
   });
 });

@@ -15,6 +15,7 @@ import {
 import type { SessionStore } from "../session/store";
 import type { ToolCall, ToolResult } from "../tools";
 import type { AgentInvocationContext, AgentRunOutput } from "./types";
+import { persistedImageAttachments } from "../attachments/store";
 
 export type ChildRunState = {
   messages: VesicleMessage[];
@@ -129,6 +130,7 @@ export async function recordChildToolResult(
       ...(result.fileEvent ? { fileEvent: result.fileEvent } : {}),
       ...(result.webEvent ? { webEvent: result.webEvent } : {}),
       ...(result.mcpEvent ? { mcpEvent: result.mcpEvent } : {}),
+      ...(result.images ? { images: persistedImageAttachments(result.images) } : {}),
     },
   });
   const qualityTarget = qualityArtifactTargetFromResult(profileId, result);

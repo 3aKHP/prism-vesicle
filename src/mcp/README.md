@@ -9,5 +9,7 @@ Vesicle's first MCP milestone is a tools-only Streamable HTTP client.
 - Tools are discovered with `initialize` + paginated `tools/list`, then exposed as `mcp_<prefix>_<tool>` aliases.
 - `includeTools` and `excludeTools` match either the remote tool name or the Vesicle alias.
 - `enabledEngines` can scope a server to specific Prism engines.
+- Tool results are normalized as untrusted typed content. Ordered text remains text; supported inline PNG/JPEG/GIF/WebP images are strictly validated and enter the existing attachment path only for vision-capable models.
+- Non-vision models and MCP error results receive safe text plus an omission notice without importing image bytes. Resource, audio, link, and unknown result items are not fetched or injected.
 
 The client intentionally does not launch local stdio servers yet. That transport needs a separate process-management pass for Windows PE distribution and local path/env behavior.

@@ -1,5 +1,5 @@
 import type { ProviderAdapter, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
-import { materializeMessageImages } from "../attachments/store";
+import { prepareProviderMessages } from "../attachments/store";
 import type { EngineId } from "../engine/profile";
 import type { ProviderSelection } from "../../config/providers";
 import type { SessionStore } from "../session/store";
@@ -10,7 +10,6 @@ import type { AgentLoopEvent } from "./types";
 import { renderBackgroundProcessNotifications } from "./background-process";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "../side-question/types";
 import { ProviderAttemptCommitBarrier } from "../../providers/shared/attempt-commit";
-import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 
 type ProviderRoundOptions = {
   rootDir: string;
@@ -104,25 +103,6 @@ export function emitAssistantResponse(response: VesicleResponse, onEvent?: (even
     ...(response.usage ? { usage: response.usage } : {}),
     toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name, arguments: call.arguments })),
   });
-}
-
-async function prepareProviderMessages(
-  rootDir: string,
-  messages: VesicleMessage[],
-  visionEnabled: boolean,
-): Promise<VesicleMessage[]> {
-  const hasImages = messages.some((message) => (message.images?.length ?? 0) > 0);
-  if (hasImages && !visionEnabled) {
-    throw new Error("The selected model does not declare capabilities.vision: true; image attachments were not sent.");
-  }
-  return Promise.all(messages.map(async (message) => {
-    const images = await materializeMessageImages(rootDir, message.images);
-    return {
-      ...message,
-      ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
-      ...(images ? { images } : {}),
-    };
-  }));
 }
 
 async function completeWithStreaming(

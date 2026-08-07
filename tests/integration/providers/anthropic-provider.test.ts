@@ -40,6 +40,32 @@ describe("Anthropic Messages request shaping", () => {
       ],
     }]);
   });
+
+  test("serializes MCP tool-result images inside the native tool_result block", () => {
+    const body = toAnthropicMessagesBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "toolu_mcp", name: "mcp_prts_operator_artwork", arguments: "{}" }],
+        },
+        { role: "tool", toolCallId: "toolu_mcp", content: "artwork", images: [mcpImage()] },
+      ],
+    });
+    expect((body.messages as unknown[])[1]).toEqual({
+      role: "user",
+      content: [{
+        type: "tool_result",
+        tool_use_id: "toolu_mcp",
+        content: [
+          { type: "text", text: "artwork" },
+          { type: "text", text: "[Image #1: prts-operator_artwork-image-1.png]" },
+          { type: "image", source: { type: "base64", media_type: "image/png", data: "cG5n" } },
+        ],
+      }],
+    });
+  });
   test("serializes messages, thinking blocks, tools, and tool results", () => {
     const body = toAnthropicMessagesBody({
       ...request(),
@@ -439,6 +465,14 @@ function image(): NonNullable<VesicleRequest["messages"][number]["images"]>[numb
     source: "clipboard",
     filename: "capture.png",
     data: "cG5n",
+  };
+}
+
+function mcpImage(): ReturnType<typeof image> {
+  return {
+    ...image(),
+    source: "mcp",
+    filename: "prts-operator_artwork-image-1.png",
   };
 }
 

@@ -28,7 +28,7 @@ This document defines durable conversation history, provider projection, file ch
 
 ## Attachments And File Checkpoints
 
-- Image bytes live in the ignored content-addressed `.vesicle/attachments/` store. JSONL records ids, hashes, MIME types, sizes, and relative paths, never base64 payloads.
+- Clipboard, guarded-project, and accepted MCP image bytes live in the ignored content-addressed `.vesicle/attachments/` store. JSONL records ids, hashes, MIME types, sizes, origins, host-derived labels, and relative paths, never base64 payloads. Main and child provider requests materialize base64 only on their in-memory request copy; resume and compact projection retain the durable reference.
 - A real user prompt owns the guarded-file checkpoint for the work it initiates.
 - Mutation tools capture every affected writable path before changing it. Checkpoint metadata remains host-only.
 - Checkpoints preserve absent paths, file contents, and directory topology. Directory-tree moves capture both the source tree and target path so empty directories can be restored.

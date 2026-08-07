@@ -306,7 +306,7 @@ describe("session: compact-checkpoint-v1 projection", () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-images-"));
     const store = await createSessionStore(rootDir, "ckpt-images");
     await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
-    const image = { id: "img_reachable", path: ".vesicle/attachments/img_reachable.png", mediaType: "image/png" as const, bytes: 12, sha256: "a".repeat(64), source: "clipboard" as const };
+    const image = { id: "img_reachable", path: ".vesicle/attachments/img_reachable.png", mediaType: "image/png" as const, bytes: 12, sha256: "a".repeat(64), source: "mcp" as const };
     await store.append({
       role: "system",
       content: "compacted",
@@ -329,7 +329,7 @@ describe("session: compact-checkpoint-v1 projection", () => {
       "[conversation summary]\nEarlier work.",
       "kept turn with an image",
     ]);
-    expect(messages[1]!.images?.map((entry) => entry.id)).toEqual(["img_reachable"]);
+    expect(messages[1]!.images).toEqual([image]);
   });
 
   test("toolSkillEvent in the retained tail survives checkpoint round-trip", async () => {

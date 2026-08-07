@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
-import type { ImageDetail, VesicleImageAttachment } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
+import type { ImageDetail, VesicleImageAttachment, VesicleMessage } from "../../providers/shared/types";
 
-export const maxImageAttachmentBytes = 5 * 1024 * 1024;
+export const maxImageAttachmentBytes = 20 * 1024 * 1024;
 
-type SupportedImageMime = VesicleImageAttachment["mediaType"];
+export type SupportedImageMime = VesicleImageAttachment["mediaType"];
 
 export async function ingestImageBytes(
   rootDir: string,
@@ -15,15 +16,19 @@ export async function ingestImageBytes(
     filename?: string;
     sourcePath?: string;
     detail?: ImageDetail;
+    expectedMediaType?: SupportedImageMime;
   },
 ): Promise<VesicleImageAttachment> {
   if (bytes.byteLength === 0) throw new Error("Image attachment is empty.");
   if (bytes.byteLength > maxImageAttachmentBytes) {
-    throw new Error(`Image attachment exceeds the ${formatBytes(maxImageAttachmentBytes)} limit.`);
+    throw new Error(`Image attachment exceeds the ${formatImageAttachmentBytes(maxImageAttachmentBytes)} limit.`);
   }
 
   const mediaType = detectImageMediaType(bytes);
   if (!mediaType) throw new Error("Unsupported image format. Use PNG, JPEG, GIF, or WebP.");
+  if (options.expectedMediaType && mediaType !== options.expectedMediaType) {
+    throw new Error(`Image attachment MIME mismatch: declared ${options.expectedMediaType}, detected ${mediaType}.`);
+  }
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const extension = extensionForMime(mediaType);
   const attachmentPath = `.vesicle/attachments/${sha256}.${extension}`;
@@ -55,6 +60,7 @@ export async function ingestImageFile(
     filename?: string;
     sourcePath?: string;
     detail?: ImageDetail;
+    expectedMediaType?: SupportedImageMime;
   },
 ): Promise<VesicleImageAttachment> {
   return ingestImageBytes(rootDir, await readFile(absolutePath), {
@@ -78,6 +84,25 @@ export async function materializeMessageImages(
       throw new Error(`Image attachment MIME changed on disk: ${image.id}.`);
     }
     return { ...image, data: Buffer.from(bytes).toString("base64") };
+  }));
+}
+
+export async function prepareProviderMessages(
+  rootDir: string,
+  messages: VesicleMessage[],
+  visionEnabled: boolean,
+): Promise<VesicleMessage[]> {
+  const hasImages = messages.some((message) => (message.images?.length ?? 0) > 0);
+  if (hasImages && !visionEnabled) {
+    throw new Error("The selected model does not declare capabilities.vision: true; image attachments were not sent.");
+  }
+  return Promise.all(messages.map(async (message) => {
+    const images = await materializeMessageImages(rootDir, message.images);
+    return {
+      ...message,
+      ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
+      ...(images ? { images } : {}),
+    };
   }));
 }
 
@@ -120,7 +145,7 @@ function isImageAttachment(value: unknown): value is VesicleImageAttachment {
     && typeof image.path === "string"
     && typeof image.bytes === "number"
     && typeof image.sha256 === "string"
-    && (image.source === "clipboard" || image.source === "project")
+    && (image.source === "clipboard" || image.source === "project" || image.source === "mcp")
     && ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(image.mediaType ?? "");
 }
 
@@ -133,6 +158,6 @@ function extensionForMime(mime: SupportedImageMime): string {
   return mime.slice("image/".length);
 }
 
-function formatBytes(bytes: number): string {
-  return `${Math.round(bytes / 1024 / 1024)} MB`;
+export function formatImageAttachmentBytes(bytes: number): string {
+  return `${Math.round(bytes / 1024 / 1024)} MiB`;
 }
