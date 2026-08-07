@@ -64,6 +64,33 @@ describe("MCP output persistence helper", () => {
     expect(hint).toContain("read_file");
     expect(hint).toContain("not rewind-safe");
   });
+
+  test("sanitizes adversarial server/tool/argument names so nothing escapes the session dir", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mcp-persist-traversal-"));
+    try {
+      const adversarial = ["../../etc", "/absolute/path", "..\\..\\windows", "a/b/c", "name\x00null"];
+      for (const value of adversarial) {
+        await persistMcpOutput(
+          root,
+          { sessionId: SESSION_ID, toolCallId: `call-${value}`, serverId: value, toolName: value, arguments: JSON.stringify({ q: value }) },
+          "body\n",
+          [],
+        );
+      }
+      const dir = join(root, mcpOutputSessionDir(SESSION_ID));
+      const textFiles = (await readdir(dir)).filter((f) => f.endsWith(".txt"));
+      expect(textFiles.length).toBe(adversarial.length);
+      for (const f of textFiles) {
+        expect(f).not.toContain("..");
+        expect(f).not.toContain("/");
+        expect(f).not.toContain("\\");
+      }
+      // Nothing escaped the scratch root: only tmp/ exists at the project root.
+      expect((await readdir(root)).filter((entry) => entry !== "tmp")).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("MCP result delivery persistence", () => {

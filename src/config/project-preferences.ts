@@ -144,10 +144,11 @@ export async function readMcpOutputPersistence(rootDir: string): Promise<boolean
 }
 
 /**
- * Remove the project theme preference. After removal the file holds only
- * `version: 1`, so the file itself is removed (the `.vesicle/` directory and
- * unrelated state are left untouched). Refuses to modify a malformed file.
- * Removing an already-absent preference is a no-op.
+ * Remove the project theme preference. Other preference fields (e.g.
+ * `mcpOutputPersistence`) are preserved: the file is removed only when no
+ * preference field remains. The `.vesicle/` directory and unrelated state are
+ * left untouched. Refuses to modify a malformed file. Removing an already-absent
+ * theme is a no-op.
  */
 export async function unsetProjectThemePreference(rootDir: string): Promise<void> {
   const path = projectPreferencesPath(rootDir);
@@ -156,6 +157,11 @@ export async function unsetProjectThemePreference(rootDir: string): Promise<void
     throw new Error(`Refusing to modify malformed ${rel(path, rootDir)}: ${existing.diagnostic}`);
   }
   if (existing.theme === undefined) return;
+  if (existing.mcpOutputPersistence) {
+    await rejectSymlinkTarget(path, rootDir);
+    await atomicWrite(path, `version: ${PROJECT_PREFERENCES_VERSION}\nmcpOutputPersistence: true\n`);
+    return;
+  }
   await safeUnlink(path);
 }
 

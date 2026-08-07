@@ -36,8 +36,9 @@ export function mcpOutputSessionDir(sessionId: string): string {
 
 /**
  * Persist one MCP call's text and images. Filenames are meaningful
- * (`<server>-<tool>__<argSlug>-<callHash>`) and unique per call. Never throws
- * for expected filesystem errors — the caller treats persistence as best-effort.
+ * (`<server>-<tool>__<argSlug>-<callHash>`) and unique per call. May throw for
+ * filesystem errors; the caller treats persistence as best-effort (see
+ * `maybePersistMcpToolResult`), so a failure never alters the tool result.
  */
 export async function persistMcpOutput(
   rootDir: string,
@@ -63,9 +64,11 @@ export async function persistMcpOutput(
 
 /**
  * Compose the system-prompt hint that tells the model where MCP outputs are
- * persisted and how to read them back. Returns an empty string for Stage-like
- * callers that should not advertise MCP. Appended by the prompt builders and
- * re-appended by `refreshLiveSystemPrompt`, mirroring the Skill catalog block.
+ * persisted and how to read them back. Always returns a non-empty block;
+ * callers are responsible for gating it on the master toggle and on actual MCP
+ * availability (`mcpRegistry.definitions.length > 0`). Appended by the prompt
+ * builders and re-appended by `refreshLiveSystemPrompt`, mirroring the Skill
+ * catalog block.
  */
 export function composeMcpOutputPersistenceHint(sessionId: string): string {
   const sessionDir = mcpOutputSessionDir(sessionId);

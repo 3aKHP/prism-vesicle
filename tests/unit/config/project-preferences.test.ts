@@ -150,6 +150,15 @@ describe("project theme preferences write/unset", () => {
     await expect(unsetProjectThemePreference(root)).rejects.toThrow(/Refusing to modify/);
   });
 
+  test("unset removes only the theme and preserves mcpOutputPersistence", async () => {
+    await writePref(root, "version: 1\ntheme: dark\nmcpOutputPersistence: true\n");
+    await unsetProjectThemePreference(root);
+    const read = await readProjectThemePreference(root);
+    expect(read.ok && read.theme).toBeUndefined();
+    expect(read.ok && read.mcpOutputPersistence).toBe(true);
+    expect(await readMcpOutputPersistence(root)).toBe(true);
+  });
+
   test(".vesicle/ directory and unrelated state survive unset", async () => {
     await mkdir(join(root, ".vesicle"), { recursive: true });
     await writeFile(join(root, ".vesicle", "sentinel"), "keep me");
