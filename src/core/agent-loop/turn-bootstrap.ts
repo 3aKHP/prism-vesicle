@@ -1,4 +1,6 @@
 import { loadConfigForSelection } from "../../config/providers";
+import { readMcpOutputPersistence } from "../../config/project-preferences";
+import { composeMcpOutputPersistenceHint } from "../../mcp/output-persistence";
 import type { VesicleConfig } from "../../config/env";
 import { loadExperimentalQualityProfile } from "../../config/quality";
 import { createProvider, resolveProviderProxyPolicy } from "../../providers";
@@ -109,14 +111,18 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
   if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
 
+  const mcpOutputPersistence = await readMcpOutputPersistence(rootDir);
   const toolSurface = await resolveToolSurface(
     profile,
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
     permission.shellInterpreter,
-    {},
+    mcpOutputPersistence ? { outputPersistence: { sessionId: session.sessionId } } : {},
     { catalogNames: catalogNames(skillCatalog) },
   );
+  if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {
+    systemPrompt = `${systemPrompt}\n\n${composeMcpOutputPersistenceHint(session.sessionId)}`;
+  }
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   let compactedSnapshot: SessionSnapshot | undefined;
   if (options.sessionId && snapshot) {
@@ -238,6 +244,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     enginePrompt: engineAssets.systemPrompt,
     tools: toolSurface.definitions,
     mcpRegistry: toolSurface.mcp,
+    mcpOutputPersistence,
     messages,
     session,
     logicalTurnId,

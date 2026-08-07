@@ -16,6 +16,12 @@ import {
 
 export type McpRegistryOptions = McpConnectionOptions & {
   env?: NodeJS.ProcessEnv;
+  /**
+   * When set, MCP tool-call outputs are persisted under
+   * `tmp/mcp-output/<sessionId>/` (#137B). The registry captures this at build
+   * time so the tool-round executor does not need to know about persistence.
+   */
+  outputPersistence?: { sessionId: string };
 };
 
 export type McpRegistry = {
@@ -218,6 +224,15 @@ async function buildRegistry(
           ...executeContext,
           serverId: binding.serverId,
           toolName: binding.toolName,
+          ...(options.outputPersistence
+            ? {
+                outputPersistence: {
+                  sessionId: options.outputPersistence.sessionId,
+                  toolCallId: call.id,
+                  arguments: call.arguments,
+                },
+              }
+            : {}),
         });
         return {
           callId: call.id,

@@ -8,6 +8,7 @@ import {
 } from "../core/attachments/store";
 import type { McpToolCallResult } from "./types";
 import { sanitizeToolName } from "./types";
+import { persistMcpOutput, type PersistableMcpImage } from "./output-persistence";
 
 export type McpResultDeliveryContext = {
   rootDir: string;
@@ -15,6 +16,16 @@ export type McpResultDeliveryContext = {
   serverId: string;
   toolName: string;
   signal?: AbortSignal;
+  /**
+   * When set, persist this call's raw text and decoded images under
+   * `tmp/mcp-output/<sessionId>/` (#137B). Persistence is additive and
+   * best-effort; it never alters the returned tool result.
+   */
+  outputPersistence?: {
+    sessionId: string;
+    toolCallId: string;
+    arguments: string;
+  };
 };
 
 export type DeliveredMcpToolResult = {
@@ -47,6 +58,7 @@ export async function deliverMcpToolResult(
 ): Promise<DeliveredMcpToolResult> {
   throwIfAborted(context.signal);
   const images: VesicleImageAttachment[] = [];
+  const persistableImages: PersistableMcpImage[] = [];
   const omissions = new Map<ImageOmissionReason, number>();
   const notices: string[] = [];
 
@@ -81,6 +93,9 @@ export async function deliverMcpToolResult(
         });
         throwIfAborted(context.signal);
         images.push(image);
+        if (context.outputPersistence) {
+          persistableImages.push({ bytes: decoded.bytes, mediaType: mediaType });
+        }
       } catch (error) {
         if (context.signal?.aborted) throw context.signal.reason ?? error;
         addOmission(omissions, "attachment-write-failed");
@@ -106,6 +121,7 @@ export async function deliverMcpToolResult(
   }
 
   const safeText = result.text.join("\n").trim();
+  await maybePersistMcpOutput(context, safeText, persistableImages);
   const baseContent = safeText
     || (result.structuredContent !== undefined ? "MCP tool returned structured content." : "")
     || (images.length > 0 ? `MCP tool returned ${formatCount(images.length, "image")}.` : "")
@@ -120,6 +136,28 @@ export async function deliverMcpToolResult(
     imageCount: images.length,
     omittedContentCount,
   };
+}
+
+async function maybePersistMcpOutput(
+  context: McpResultDeliveryContext,
+  text: string,
+  images: PersistableMcpImage[],
+): Promise<void> {
+  if (!context.outputPersistence || context.signal?.aborted) return;
+  await persistMcpOutput(
+    context.rootDir,
+    {
+      sessionId: context.outputPersistence.sessionId,
+      toolCallId: context.outputPersistence.toolCallId,
+      serverId: context.serverId,
+      toolName: context.toolName,
+      arguments: context.outputPersistence.arguments,
+    },
+    text,
+    images,
+  ).catch(() => {
+    // Best-effort: a persistence failure must never alter the tool result.
+  });
 }
 
 function decodeInlineBase64(
