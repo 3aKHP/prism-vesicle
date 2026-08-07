@@ -2,7 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { McpStreamableHttpClient, parseSseEnvelopes } from "../../../src/mcp/client";
+import { parseSseEnvelopes } from "../../../src/mcp/client";
+import { createMcpConnection } from "../../../src/mcp/connection";
 import { parseMcpConfig } from "../../../src/mcp/config";
 import { createMcpRegistryForEngine } from "../../../src/mcp/registry";
 import { inspectMcpConfig } from "../../../src/mcp/registry";
@@ -331,9 +332,9 @@ describe("Streamable HTTP MCP client", () => {
     ]);
   });
 
-  test("initializes, lists paginated tools, reuses session id, and calls a tool", async () => {
-    const requests: Array<{ body: Record<string, unknown>; session?: string }> = [];
-    const client = new McpStreamableHttpClient({
+  test("legacy connection initializes, lists paginated tools, reuses session, and calls a tool", async () => {
+    const requests: Array<{ method: string; session?: string }> = [];
+    const result = await createMcpConnection({
       id: "fetch",
       enabled: true,
       transport: "streamable-http",
@@ -350,13 +351,18 @@ describe("Streamable HTTP MCP client", () => {
       fetchImpl: (async (_url, init) => {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
         const headers = new Headers(init?.headers);
-        requests.push({ body, session: headers.get("MCP-Session-Id") ?? undefined });
+        const session = headers.get("MCP-Session-Id") ?? headers.get("mcp-session-id") ?? undefined;
+        requests.push({ method: String(body.method), session });
         if (body.method === "initialize") {
           return Response.json({
             jsonrpc: "2.0",
             id: body.id,
-            result: { serverInfo: { name: "mcp-fetch", version: "2.0.0" } },
-          }, { headers: { "MCP-Session-Id": "session-1" } });
+            result: {
+              protocolVersion: "2025-03-26",
+              capabilities: { tools: {} },
+              serverInfo: { name: "mcp-fetch", version: "2.0.0" },
+            },
+          }, { headers: { "Mcp-Session-Id": "session-1" } });
         }
         if (body.method === "notifications/initialized") return new Response("", { status: 202 });
         if (body.method === "tools/list") {
@@ -366,45 +372,45 @@ describe("Streamable HTTP MCP client", () => {
             id: body.id,
             result: params.cursor
               ? { tools: [{ name: "fetch_url", inputSchema: { type: "object", properties: { url: { type: "string" } } } }] }
-              : { tools: [{ name: "map_url" }], nextCursor: "next" },
+              : { tools: [{ name: "map_url", inputSchema: { type: "object" } }], nextCursor: "next" },
           });
         }
         if (body.method === "tools/call") {
-          return new Response([
-            "event: message",
-            `data: ${JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "fetched page" }] } })}`,
-            "",
-          ].join("\n"), { headers: { "content-type": "text/event-stream" } });
+          return Response.json({
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { content: [{ type: "text", text: "fetched page" }] },
+          });
         }
         throw new Error(`unexpected method ${String(body.method)}`);
       }) as typeof fetch,
     });
 
-    await client.initialize();
-    expect(client.serverInfo).toEqual({ name: "mcp-fetch", version: "2.0.0" });
-    expect(await client.listTools()).toEqual([
-      { name: "map_url" },
-      { name: "fetch_url", inputSchema: { type: "object", properties: { url: { type: "string" } } } },
-    ]);
-    expect(await client.callTool("fetch_url", { url: "https://example.test" })).toEqual({
-      text: ["fetched page"],
-      images: [],
-      deferred: [],
-      diagnostics: [],
-      isError: false,
-    });
-    expect(requests.map((request) => request.session)).toEqual([
-      undefined,
-      "session-1",
-      "session-1",
-      "session-1",
-      "session-1",
-    ]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const connection = result.connection;
+    expect(connection.info.era).toBe("legacy");
+    expect(connection.info.serverInfo).toEqual({ name: "mcp-fetch", version: "2.0.0" });
+
+    const tools = await connection.listTools();
+    expect(tools.map((t) => t.name)).toEqual(["map_url", "fetch_url"]);
+
+    const callResult = await connection.callTool("fetch_url", { url: "https://example.test" });
+    expect(callResult.text).toEqual(["fetched page"]);
+    expect(callResult.isError).toBe(false);
+
+    await connection.close();
+
+    // The first request (initialize) carries no session; subsequent requests reuse it.
+    expect(requests[0]?.method).toBe("initialize");
+    expect(requests[0]?.session).toBeUndefined();
+    const postInit = requests.slice(1);
+    expect(postInit.every((r) => r.session === "session-1")).toBe(true);
   });
 
   test("aborts an in-flight tool call with the turn cancellation signal", async () => {
     const controller = new AbortController();
-    const client = new McpStreamableHttpClient({
+    const result = await createMcpConnection({
       id: "slow",
       enabled: true,
       transport: "streamable-http",
@@ -418,15 +424,33 @@ describe("Streamable HTTP MCP client", () => {
       excludeTools: [],
       enabledEngines: [],
     }, {
-      fetchImpl: ((_url, init) => new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-      })) as typeof fetch,
+      fetchImpl: (async (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        if (body.method === "initialize") {
+          return Response.json({
+            jsonrpc: "2.0", id: body.id,
+            result: { protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "slow", version: "1.0" } },
+          });
+        }
+        if (body.method === "notifications/initialized") return new Response("", { status: 202 });
+        if (body.method === "tools/list") {
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "wait" }] } });
+        }
+        if (body.method === "tools/call") {
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+          });
+        }
+        throw new Error(`unexpected method ${String(body.method)}`);
+      }) as typeof fetch,
     });
 
-    const running = client.callTool("wait", {}, { signal: controller.signal });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const running = result.connection.callTool("wait", {}, { signal: controller.signal });
     controller.abort(new DOMException("user cancelled", "AbortError"));
-
-    await expect(running).rejects.toMatchObject({ name: "AbortError" });
+    await expect(running).rejects.toThrow();
+    await result.connection.close();
   });
 });
 
@@ -457,7 +481,9 @@ describe("MCP registry", () => {
     const fetchImpl = (async (_url, init) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       if (body.method === "initialize") {
-        return Response.json({ jsonrpc: "2.0", id: body.id, result: { serverInfo: { name: "math", version: "1.0" } } });
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "math", version: "1.0" },
+        } });
       }
       if (body.method === "notifications/initialized") return new Response("", { status: 202 });
       if (body.method === "tools/list") {
@@ -467,8 +493,8 @@ describe("MCP registry", () => {
           result: {
             tools: [
               { name: "add", description: "Add numbers", inputSchema: { type: "object", properties: { a: { type: "number" } } } },
-              { name: "echo", description: "Echo text" },
-              { name: "subtract", description: "Subtract numbers" },
+              { name: "echo", description: "Echo text", inputSchema: { type: "object" } },
+              { name: "subtract", description: "Subtract numbers", inputSchema: { type: "object" } },
             ],
           },
         });

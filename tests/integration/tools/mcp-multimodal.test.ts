@@ -186,11 +186,13 @@ async function registryForResults(
   const fetchImpl = (async (_url, init) => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     if (body.method === "initialize") {
-      return Response.json({ jsonrpc: "2.0", id: body.id, result: { serverInfo: { name: "media" } } });
+      return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+        protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "media", version: "1.0" },
+      } });
     }
     if (body.method === "notifications/initialized") return new Response("", { status: 202 });
     if (body.method === "tools/list") {
-      return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "render" }] } });
+      return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "render", inputSchema: { type: "object" } }] } });
     }
     if (body.method === "tools/call") {
       const params = body.params as Record<string, unknown>;

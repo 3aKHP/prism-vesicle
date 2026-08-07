@@ -15,9 +15,9 @@ describe("guided Setup MCP connection test", () => {
         const request = new Request(input, init);
         requests.push(request);
         const body = JSON.parse(await request.text()) as { id?: number; method: string };
-        if (body.method === "notifications/initialized") return new Response(null, { status: 204 });
+        if (body.method === "notifications/initialized") return new Response("", { status: 202 });
         const result = body.method === "initialize"
-          ? { serverInfo: { name: "Test MCP" } }
+          ? { protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "Test MCP", version: "1.0" } }
           : { tools: [{ name: "search", inputSchema: { type: "object" } }] };
         return Response.json({ jsonrpc: "2.0", id: body.id, result });
       }, { preconnect: () => undefined }) as typeof fetch,

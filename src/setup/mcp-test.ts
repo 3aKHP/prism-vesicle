@@ -1,5 +1,5 @@
-import { McpStreamableHttpClient } from "../mcp/client";
-import type { McpServerConfig } from "../mcp/types";
+import { createMcpConnection } from "../mcp/connection";
+import { isRecord, type McpServerConfig } from "../mcp/types";
 import type { SetupMcpServer } from "./config-writer";
 
 export type McpTestResult = {
@@ -25,11 +25,19 @@ export async function testMcpServer(
     excludeTools: [],
     enabledEngines: draft.enabledEngines,
   };
-  const client = new McpStreamableHttpClient(config, options);
-  await client.initialize();
-  const tools = await client.listTools();
-  const serverName = typeof client.serverInfo.name === "string" ? client.serverInfo.name : undefined;
-  return { toolCount: tools.length, ...(serverName ? { serverName } : {}) };
+  const result = await createMcpConnection(config, options);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  const connection = result.connection;
+  try {
+    const tools = await connection.listTools();
+    const serverInfo = connection.info.serverInfo;
+    const serverName = isRecord(serverInfo) && typeof serverInfo.name === "string" ? serverInfo.name : undefined;
+    return { toolCount: tools.length, ...(serverName ? { serverName } : {}) };
+  } finally {
+    await connection.close();
+  }
 }
 
 function authHeaders(draft: SetupMcpServer): Record<string, string> {
