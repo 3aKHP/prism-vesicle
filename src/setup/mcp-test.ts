@@ -19,6 +19,8 @@ export async function testMcpServer(
     headers: authHeaders(draft),
     timeoutSeconds: 12,
     protocolVersion: "2025-03-26",
+    negotiation: "legacy",
+    supportedProtocolVersions: [],
     includeTools: [],
     excludeTools: [],
     enabledEngines: draft.enabledEngines,

@@ -98,6 +98,161 @@ describe("MCP config", () => {
   });
 });
 
+describe("MCP negotiation config", () => {
+  test("absent negotiation defaults to legacy and supportedProtocolVersions defaults to the modern list", () => {
+    const config = parseMcpConfig(
+      ["servers:", "  old:", "    url: http://127.0.0.1:5100/mcp", ""].join("\n"),
+      "/tmp/mcp.yaml",
+      {},
+    );
+    expect(config.servers[0].negotiation).toBe("legacy");
+    expect(config.servers[0].supportedProtocolVersions).toEqual(["2026-07-28"]);
+  });
+
+  test("explicit legacy negotiation is identical to absent", () => {
+    const config = parseMcpConfig(
+      [
+        "servers:",
+        "  old:",
+        "    url: http://127.0.0.1:5100/mcp",
+        "    negotiation: legacy",
+        "",
+      ].join("\n"),
+      "/tmp/mcp.yaml",
+      {},
+    );
+    expect(config.servers[0].negotiation).toBe("legacy");
+  });
+
+  test("parses auto and modern negotiation with supportedProtocolVersions", () => {
+    const config = parseMcpConfig(
+      [
+        "servers:",
+        "  flex:",
+        "    url: http://127.0.0.1:5100/mcp",
+        "    negotiation: auto",
+        "    supportedProtocolVersions:",
+        "      - \"2026-07-28\"",
+        "  strict:",
+        "    url: http://127.0.0.1:5101/mcp",
+        "    negotiation: modern",
+        "    supportedProtocolVersions: [\"2026-07-28\"]",
+        "",
+      ].join("\n"),
+      "/tmp/mcp.yaml",
+      {},
+    );
+    expect(config.servers[0]).toMatchObject({ id: "flex", negotiation: "auto", supportedProtocolVersions: ["2026-07-28"] });
+    expect(config.servers[1]).toMatchObject({ id: "strict", negotiation: "modern", supportedProtocolVersions: ["2026-07-28"] });
+  });
+
+  test("accepts snake_case aliases for new fields", () => {
+    const config = parseMcpConfig(
+      [
+        "servers:",
+        "  srv:",
+        "    url: http://127.0.0.1:5100/mcp",
+        "    supported_protocol_versions:",
+        "      - \"2026-07-28\"",
+        "",
+      ].join("\n"),
+      "/tmp/mcp.yaml",
+      {},
+    );
+    expect(config.servers[0].supportedProtocolVersions).toEqual(["2026-07-28"]);
+  });
+
+  test("de-duplicates supportedProtocolVersions and preserves declared order", () => {
+    const config = parseMcpConfig(
+      [
+        "servers:",
+        "  srv:",
+        "    url: http://127.0.0.1:5100/mcp",
+        "    supportedProtocolVersions: [\"2026-07-28\", \"2026-07-28\"]",
+        "",
+      ].join("\n"),
+      "/tmp/mcp.yaml",
+      {},
+    );
+    expect(config.servers[0].supportedProtocolVersions).toEqual(["2026-07-28"]);
+  });
+
+  test("rejects an invalid negotiation value", () => {
+    expect(() =>
+      parseMcpConfig(
+        ["servers:", "  bad:", "    url: http://127.0.0.1:5100/mcp", "    negotiation: speedy", ""].join("\n"),
+        "/tmp/mcp.yaml",
+        {},
+      ),
+    ).toThrow("legacy, modern, or auto");
+  });
+
+  test("rejects a malformed protocol revision date", () => {
+    expect(() =>
+      parseMcpConfig(
+        [
+          "servers:",
+          "  bad:",
+          "    url: http://127.0.0.1:5100/mcp",
+          "    supportedProtocolVersions: [\"not-a-date\"]",
+          "",
+        ].join("\n"),
+        "/tmp/mcp.yaml",
+        {},
+      ),
+    ).toThrow("YYYY-MM-DD");
+  });
+
+  test("rejects supportedProtocolVersions with no Vesicle-supported modern revision", () => {
+    expect(() =>
+      parseMcpConfig(
+        [
+          "servers:",
+          "  bad:",
+          "    url: http://127.0.0.1:5100/mcp",
+          "    supportedProtocolVersions: [\"2099-01-01\"]",
+          "",
+        ].join("\n"),
+        "/tmp/mcp.yaml",
+        {},
+      ),
+    ).toThrow("no Vesicle-supported modern revision");
+  });
+
+  test("rejects an explicitly empty supportedProtocolVersions list", () => {
+    expect(() =>
+      parseMcpConfig(
+        [
+          "servers:",
+          "  bad:",
+          "    url: http://127.0.0.1:5100/mcp",
+          "    supportedProtocolVersions: []",
+          "",
+        ].join("\n"),
+        "/tmp/mcp.yaml",
+        {},
+      ),
+    ).toThrow("empty supportedProtocolVersions");
+  });
+
+  test("rejects negotiation: modern with no usable modern versions after filtering", () => {
+    expect(() =>
+      parseMcpConfig(
+        [
+          "servers:",
+          "  bad:",
+          "    url: http://127.0.0.1:5100/mcp",
+          "    negotiation: modern",
+          "    supportedProtocolVersions: [\"2099-01-01\"]",
+          "",
+        ].join("\n"),
+        "/tmp/mcp.yaml",
+        {},
+      ),
+    ).toThrow("no Vesicle-supported modern revision");
+  });
+});
+
 describe("MCP alias helpers", () => {
   test("sanitizes aliases and caps long names", () => {
     expect(buildMcpToolAlias("prts wiki", "search/prts", "prts")).toBe("mcp_prts_search_prts");
@@ -186,6 +341,8 @@ describe("Streamable HTTP MCP client", () => {
       headers: { Authorization: "Bearer test" },
       timeoutSeconds: 5,
       protocolVersion: "2025-03-26",
+      negotiation: "legacy",
+      supportedProtocolVersions: [],
       includeTools: [],
       excludeTools: [],
       enabledEngines: [],
@@ -255,6 +412,8 @@ describe("Streamable HTTP MCP client", () => {
       headers: {},
       timeoutSeconds: 30,
       protocolVersion: "2025-03-26",
+      negotiation: "legacy",
+      supportedProtocolVersions: [],
       includeTools: [],
       excludeTools: [],
       enabledEngines: [],

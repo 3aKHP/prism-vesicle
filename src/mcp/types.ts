@@ -6,6 +6,30 @@ export type { McpToolEvent } from "../core/tools/types";
 
 export type McpTransport = "streamable-http";
 
+export type McpProtocolEra = "legacy" | "modern";
+
+export type McpNegotiationMode = "legacy" | "modern" | "auto";
+
+export type McpFailureKind =
+  | "config"
+  | "probe"
+  | "auth"
+  | "timeout"
+  | "transport"
+  | "legacy-handshake"
+  | "stale-session"
+  | "modern-negotiation"
+  | "routing"
+  | "unsupported-capability"
+  | "protocol";
+
+/**
+ * Modern protocol revisions Vesicle supports as a client. Currently exactly
+ * the `2026-07-28` era entry point. Legacy revisions are not listed here;
+ * they are owned by the legacy `initialize` path and `protocolVersion` pin.
+ */
+export const supportedModernProtocolVersions: readonly string[] = ["2026-07-28"];
+
 export type McpServerConfig = {
   id: string;
   enabled: boolean;
@@ -14,6 +38,8 @@ export type McpServerConfig = {
   headers: Record<string, string>;
   timeoutSeconds: number;
   protocolVersion: string;
+  negotiation: McpNegotiationMode;
+  supportedProtocolVersions: string[];
   toolPrefix?: string;
   includeTools: string[];
   excludeTools: string[];
@@ -47,6 +73,10 @@ export type McpServerStatus = {
   enabled: boolean;
   connected: boolean;
   toolCount: number;
+  negotiation?: McpNegotiationMode;
+  era?: McpProtocolEra | "unknown";
+  protocolVersion?: string;
+  failureKind?: McpFailureKind;
   error?: string;
   detail?: string;
 };
