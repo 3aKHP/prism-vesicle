@@ -172,7 +172,7 @@ async function buildRegistry(
         toolCount: 0,
         negotiation: server.negotiation,
         era: connection.info.era,
-        failureKind: "legacy-handshake",
+        failureKind: connection.info.era === "modern" ? "protocol" : "legacy-handshake",
         error: error instanceof Error ? error.message : String(error),
       });
     }

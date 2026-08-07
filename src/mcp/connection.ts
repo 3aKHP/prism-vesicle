@@ -170,6 +170,10 @@ function makeConnection(
         }
         // SDK strict validation may reject content Vesicle accepts; fall back
         // to the raw result captured by the fetch wrapper (if available).
+        if (rawHolder.result !== undefined) return rejectInputRequired(rawHolder.result);
+        // Non-validation errors (e.g. JSON-RPC error from server) must surface
+        // their original message rather than a generic placeholder (Bot Review Should-fix).
+        throw error;
       }
       // Prefer the raw result (preserves items stripped by sanitizer for
       // Vesicle's lenient normalization); fall back to the SDK result for
@@ -178,18 +182,7 @@ function makeConnection(
       if (resultToNormalize === undefined) {
         throw new McpError(`MCP server ${config.id} returned no processable tools/call result.`);
       }
-      // Reject modern input_required (MRTR) with a stable unsupported-capability
-      // error — no retry, no side effect, never reported as success.
-      if (isRecord(resultToNormalize) && resultToNormalize.resultType === "input_required") {
-        return {
-          text: [],
-          images: [],
-          deferred: [],
-          diagnostics: [{ code: "invalid-response" }],
-          isError: true,
-        };
-      }
-      return normalizeMcpToolResult(resultToNormalize);
+      return rejectInputRequired(resultToNormalize);
     },
     async close(): Promise<void> {
       await safeClose(currentClient);
@@ -221,7 +214,7 @@ function createTransport(config: McpServerConfig, options: McpConnectionOptions,
   const baseFetch = options.fetchImpl ?? fetch;
   const transportOptions: ConstructorParameters<typeof StreamableHTTPClientTransport>[1] = {
     requestInit: { headers: config.headers },
-    fetch: ((input: RequestInfo | URL, init?: RequestInit) => sanitizeContentResponse(baseFetch, rawHolder, input, init)) as typeof fetch,
+    fetch: ((input: RequestInfo | URL, init?: RequestInit) => sanitizeContentResponse(baseFetch, rawHolder, config, input, init)) as typeof fetch,
   };
   return new StreamableHTTPClientTransport(url, transportOptions);
 }
@@ -235,16 +228,36 @@ function createTransport(config: McpServerConfig, options: McpConnectionOptions,
  * when the SDK accepts it, the raw result is still preferred to preserve items
  * the sanitizer stripped for SDK compliance.
  */
-/** Safety bound on response body bytes read by the sanitizer (§7.3). */
+/**
+ * The fetch wrapper enforces the configured per-server timeout (Blocking fix
+ * for Bot Review: the old client used setTimeoutController on every request),
+ * captures the raw tools/call result before SDK Zod validation, and sanitizes
+ * content items the SDK would reject. Only tools/call responses are captured
+ * to prevent cross-contamination of overlapping requests.
+ */
 const maxSanitizerResponseBytes = 32 * 1024 * 1024;
 
 async function sanitizeContentResponse(
   baseFetch: typeof fetch,
   rawHolder: RawResultHolder,
+  config: McpServerConfig,
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  const response = await baseFetch(input, init);
+  // Enforce configured timeout on every HTTP request (Bot Review Blocking fix).
+  const callerSignal = init?.signal;
+  const timeoutMs = Math.max(1, config.timeoutSeconds) * 1000;
+  const timeoutController = new AbortController();
+  const timeoutHandle = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const combinedSignal = callerSignal
+    ? AbortSignal.any([callerSignal, timeoutController.signal])
+    : timeoutController.signal;
+  let response: Response;
+  try {
+    response = await baseFetch(input, { ...init, signal: combinedSignal });
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
   if (!response.ok) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
@@ -264,7 +277,10 @@ async function sanitizeContentResponse(
   if (!isRecord(parsed) || !("result" in parsed)) return new Response(text, { status: response.status, headers: response.headers });
   const result = parsed.result;
   if (!isRecord(result)) return new Response(text, { status: response.status, headers: response.headers });
-  rawHolder.result = result;
+  // Only capture tools/call results to prevent cross-contamination (Bot Review Should-fix).
+  if (isToolsCallRequest(init?.body)) {
+    rawHolder.result = result;
+  }
   if (!Array.isArray(result.content)) return new Response(text, { status: response.status, headers: response.headers });
   const sanitized = result.content.filter((item: unknown) => isRecord(item) && passesSdkContentValidation(item));
   if (sanitized.length === result.content.length) return new Response(text, { status: response.status, headers: response.headers });
@@ -272,6 +288,16 @@ async function sanitizeContentResponse(
     status: response.status,
     headers: { "content-type": "application/json" },
   });
+}
+
+function isToolsCallRequest(body: BodyInit | null | undefined): boolean {
+  if (typeof body !== "string") return false;
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    return isRecord(parsed) && parsed.method === "tools/call";
+  } catch {
+    return false;
+  }
 }
 
 const knownContentTypes = new Set(["text", "image", "audio", "resource", "resource_link"]);
@@ -383,4 +409,22 @@ async function safeClose(client: Client): Promise<void> {
  */
 function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
+}
+
+/**
+ * Reject modern input_required (MRTR) with a stable unsupported-capability
+ * error — no retry, no side effect, never reported as success. Otherwise
+ * normalize normally.
+ */
+function rejectInputRequired(raw: unknown): McpToolCallResult {
+  if (isRecord(raw) && raw.resultType === "input_required") {
+    return {
+      text: [],
+      images: [],
+      deferred: [],
+      diagnostics: [{ code: "invalid-response" }],
+      isError: true,
+    };
+  }
+  return normalizeMcpToolResult(raw);
 }
