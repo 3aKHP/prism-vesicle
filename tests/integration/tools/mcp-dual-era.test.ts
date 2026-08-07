@@ -228,3 +228,81 @@ describe("MCP mixed registry", () => {
     }
   });
 });
+
+// ─── Forbidden fallback and stale-session fault tests ──────────────────────
+
+describe("MCP auto negotiation forbidden fallbacks", () => {
+  test("auth failure (401) during auto does not fall back to legacy", async () => {
+    const result = await createMcpConnection({
+      ...serverConfig("https://mcp.example.test/auth/mcp", "auto"),
+      id: "auth-fail",
+    }, {
+      fetchImpl: (() => Promise.resolve(new Response("Unauthorized", { status: 401 }))) as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failureKind).toBe("auth");
+    }
+  });
+
+  test("server error (5xx) during auto does not fall back to legacy", async () => {
+    const result = await createMcpConnection({
+      ...serverConfig("https://mcp.example.test/err/mcp", "auto"),
+      id: "server-err",
+    }, {
+      fetchImpl: (() => Promise.resolve(new Response("Internal Server Error", { status: 503 }))) as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failureKind).not.toBe("legacy-handshake");
+    }
+  });
+
+  test("network/connection failure during auto does not fall back to legacy", async () => {
+    const result = await createMcpConnection({
+      ...serverConfig("http://127.0.0.1:1/unreachable/mcp", "auto"),
+      id: "net-fail",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failureKind).not.toBe("legacy-handshake");
+    }
+  });
+});
+
+describe("MCP stale-session no-replay", () => {
+  test("connection-level error during tools/call does not replay the call", async () => {
+    let toolCallCount = 0;
+    const result = await createMcpConnection({
+      ...serverConfig("https://mcp.example.test/stale/mcp", "legacy"),
+      id: "stale-test",
+    }, {
+      fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        const method = body.method as string;
+        if (method === "initialize") {
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+            protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "stale", version: "1.0" },
+          }}, { headers: { "Mcp-Session-Id": "session-1" } });
+        }
+        if (method === "notifications/initialized") return new Response("", { status: 202 });
+        if (method === "tools/list") {
+          return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+            tools: [{ name: "write", inputSchema: { type: "object" } }],
+          }});
+        }
+        if (method === "tools/call") {
+          toolCallCount += 1;
+          return new Response("Not Found", { status: 404 });
+        }
+        throw new Error(`unexpected: ${method}`);
+      }) as typeof fetch,
+    });
+
+    if (!result.ok) throw new Error("connection failed");
+    await expect(result.connection.callTool("write", {})).rejects.toThrow();
+    // The key assertion: exactly one tool call reached the server (no replay).
+    expect(toolCallCount).toBe(1);
+    await result.connection.close();
+  });
+});

@@ -159,19 +159,37 @@ function makeConnection(
     },
     async callTool(name: string, args: Record<string, unknown>, callOptions?: { signal?: AbortSignal }): Promise<McpToolCallResult> {
       rawHolder.result = undefined;
+      let sdkResult: unknown = undefined;
       try {
-        await currentClient.callTool({ name, arguments: args }, { signal: callOptions?.signal });
+        sdkResult = await currentClient.callTool({ name, arguments: args }, { signal: callOptions?.signal });
       } catch (error) {
         if (callOptions?.signal?.aborted) throw abortReason(callOptions.signal);
         if (isConnectionLevelError(error)) {
           await reconnect();
-          throw new McpError(`MCP server ${config.id} stale session: tools/call was not replayed.`);
+          throw new McpError(`MCP server ${config.id} connection error: tools/call was not replayed.`);
         }
         // SDK strict validation may reject content Vesicle accepts; fall back
-        // to the raw result captured by the fetch wrapper.
+        // to the raw result captured by the fetch wrapper (if available).
       }
-      if (rawHolder.result !== undefined) return normalizeMcpToolResult(rawHolder.result);
-      throw new McpError(`MCP server ${config.id} returned no processable tools/call result.`);
+      // Prefer the raw result (preserves items stripped by sanitizer for
+      // Vesicle's lenient normalization); fall back to the SDK result for
+      // SSE responses where the sanitizer couldn't capture the raw body.
+      const resultToNormalize = rawHolder.result ?? sdkResult;
+      if (resultToNormalize === undefined) {
+        throw new McpError(`MCP server ${config.id} returned no processable tools/call result.`);
+      }
+      // Reject modern input_required (MRTR) with a stable unsupported-capability
+      // error — no retry, no side effect, never reported as success.
+      if (isRecord(resultToNormalize) && resultToNormalize.resultType === "input_required") {
+        return {
+          text: [],
+          images: [],
+          deferred: [],
+          diagnostics: [{ code: "invalid-response" }],
+          isError: true,
+        };
+      }
+      return normalizeMcpToolResult(resultToNormalize);
     },
     async close(): Promise<void> {
       await safeClose(currentClient);
@@ -217,6 +235,9 @@ function createTransport(config: McpServerConfig, options: McpConnectionOptions,
  * when the SDK accepts it, the raw result is still preferred to preserve items
  * the sanitizer stripped for SDK compliance.
  */
+/** Safety bound on response body bytes read by the sanitizer (§7.3). */
+const maxSanitizerResponseBytes = 32 * 1024 * 1024;
+
 async function sanitizeContentResponse(
   baseFetch: typeof fetch,
   rawHolder: RawResultHolder,
@@ -228,6 +249,11 @@ async function sanitizeContentResponse(
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
   const text = await response.text();
+  if (text.length > maxSanitizerResponseBytes) {
+    return new Response(JSON.stringify({
+      jsonrpc: "2.0", id: null, error: { code: -32603, message: "Response exceeds 32 MiB safety bound" },
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  }
   if (!text.trim()) return response;
   let parsed: unknown;
   try {
@@ -336,7 +362,10 @@ function isConnectionLevelError(error: unknown): boolean {
 }
 
 function safeMessage(error: Error): string {
-  return error.message.replace(/Bearer\s+\S+/gi, "Bearer [redacted]").slice(0, 256);
+  return error.message
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/(Authorization|X-API-Key|X-Auth-Token|Cookie|apiKey|api_key)\s*[:=]\s*[^\s;,$]+/gi, "$1: [redacted]")
+    .slice(0, 256);
 }
 
 async function safeClose(client: Client): Promise<void> {
