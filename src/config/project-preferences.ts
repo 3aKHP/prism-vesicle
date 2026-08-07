@@ -7,12 +7,15 @@ import type { ThemePreference } from "../tui/theme";
 /**
  * Project-local `.vesicle/preferences.yaml` — version 1. This is local ignored
  * host state (not tracked collaborative configuration): it holds UI preferences
- * tied to a working directory. Version 1 stores only the `theme` field.
+ * tied to a working directory. Version 1 stores the `theme` field and the
+ * optional `mcpOutputPersistence` field.
  *
  * Schema rules (plan §8.1):
  *   - `version: 1` is required when the file exists.
  *   - `theme` is optional and accepts exactly dark, light, default, or auto.
  *   - An absent `theme` means no project override.
+ *   - `mcpOutputPersistence` is optional (true/false, defaults false) and enables
+ *     persisting MCP tool-call outputs under `tmp/mcp-output/<sessionId>/`.
  *   - No secrets, URLs, provider definitions, permissions, shell settings, or
  *     arbitrary environment values.
  *   - Unknown fields are invalid: startup warns and falls back; write commands
@@ -29,7 +32,7 @@ export const PROJECT_PREFERENCES_VERSION = 1;
 const VALID_THEMES: readonly ThemePreference[] = ["dark", "light", "default", "auto"];
 
 export type ProjectPreferencesRead =
-  | { ok: true; theme?: ThemePreference; path: string }
+  | { ok: true; theme?: ThemePreference; mcpOutputPersistence?: boolean; path: string }
   | { ok: false; diagnostic: string; path: string };
 
 export function projectPreferencesPath(rootDir: string): string {
@@ -83,8 +86,8 @@ function parsePreferencesSource(source: string, path: string, rootDir: string): 
     return { ok: false, diagnostic: messageOf(error), path };
   }
   for (const key of map.keys()) {
-    if (key !== "version" && key !== "theme") {
-      return { ok: false, diagnostic: `${display}: unknown field "${key}". Only "version" and "theme" are allowed.`, path };
+    if (key !== "version" && key !== "theme" && key !== "mcpOutputPersistence") {
+      return { ok: false, diagnostic: `${display}: unknown field "${key}". Only "version", "theme", and "mcpOutputPersistence" are allowed.`, path };
     }
   }
   const version = map.get("version");
@@ -98,7 +101,16 @@ function parsePreferencesSource(source: string, path: string, rootDir: string): 
   if (theme && !VALID_THEMES.includes(theme.value as ThemePreference)) {
     return { ok: false, diagnostic: `${display}: invalid theme "${theme.value}". Expected one of dark, light, default, auto.`, path };
   }
-  return { ok: true, path, theme: theme?.value as ThemePreference | undefined };
+  const mcpOutputPersistence = map.get("mcpOutputPersistence");
+  if (mcpOutputPersistence && mcpOutputPersistence.value !== "true" && mcpOutputPersistence.value !== "false") {
+    return { ok: false, diagnostic: `${display}: invalid mcpOutputPersistence "${mcpOutputPersistence.value}". Expected true or false.`, path };
+  }
+  return {
+    ok: true,
+    path,
+    theme: theme?.value as ThemePreference | undefined,
+    mcpOutputPersistence: mcpOutputPersistence?.value === "true",
+  };
 }
 
 /**
@@ -114,14 +126,29 @@ export async function writeProjectThemePreference(rootDir: string, theme: ThemeP
   if (!existing.ok) {
     throw new Error(`Refusing to overwrite malformed ${rel(path, rootDir)}: ${existing.diagnostic}`);
   }
-  await atomicWrite(path, `version: ${PROJECT_PREFERENCES_VERSION}\ntheme: ${theme}\n`);
+  // Round-trip mcpOutputPersistence: writing the theme must not wipe an
+  // existing MCP-output-persistence toggle (users edit the file by hand).
+  const lines = [`version: ${PROJECT_PREFERENCES_VERSION}`, `theme: ${theme}`];
+  if (existing.mcpOutputPersistence) lines.push("mcpOutputPersistence: true");
+  await atomicWrite(path, `${lines.join("\n")}\n`);
 }
 
 /**
- * Remove the project theme preference. After removal the file holds only
- * `version: 1`, so the file itself is removed (the `.vesicle/` directory and
- * unrelated state are left untouched). Refuses to modify a malformed file.
- * Removing an already-absent preference is a no-op.
+ * Read the project MCP-output-persistence toggle. Absent, malformed, or
+ * unreadable preferences default to off (persistence is opt-in). Used by the
+ * agent-loop bootstrap paths to gate MCP tool-result spill (#137B).
+ */
+export async function readMcpOutputPersistence(rootDir: string): Promise<boolean> {
+  const read = await readProjectThemePreference(rootDir);
+  return read.ok ? read.mcpOutputPersistence === true : false;
+}
+
+/**
+ * Remove the project theme preference. Other preference fields (e.g.
+ * `mcpOutputPersistence`) are preserved: the file is removed only when no
+ * preference field remains. The `.vesicle/` directory and unrelated state are
+ * left untouched. Refuses to modify a malformed file. Removing an already-absent
+ * theme is a no-op.
  */
 export async function unsetProjectThemePreference(rootDir: string): Promise<void> {
   const path = projectPreferencesPath(rootDir);
@@ -130,6 +157,11 @@ export async function unsetProjectThemePreference(rootDir: string): Promise<void
     throw new Error(`Refusing to modify malformed ${rel(path, rootDir)}: ${existing.diagnostic}`);
   }
   if (existing.theme === undefined) return;
+  if (existing.mcpOutputPersistence) {
+    await rejectSymlinkTarget(path, rootDir);
+    await atomicWrite(path, `version: ${PROJECT_PREFERENCES_VERSION}\nmcpOutputPersistence: true\n`);
+    return;
+  }
   await safeUnlink(path);
 }
 

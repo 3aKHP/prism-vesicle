@@ -187,6 +187,7 @@ async function continuePermissionSequence(
     enginePrompt: context.enginePrompt,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
+    mcpOutputPersistence: context.mcpOutputPersistence,
     messages,
     session: context.session,
     logicalTurnId: context.identity?.logicalTurnId,

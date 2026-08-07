@@ -79,6 +79,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     enginePrompt: continuation.enginePrompt,
     tools: continuation.toolSurface.definitions,
     mcpRegistry: continuation.toolSurface.mcp,
+    mcpOutputPersistence: continuation.mcpOutputPersistence,
     messages,
     session,
     logicalTurnId: continuation.identity?.logicalTurnId,

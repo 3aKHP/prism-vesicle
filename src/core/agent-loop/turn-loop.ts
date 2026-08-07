@@ -1,5 +1,6 @@
 import type { VesicleConfig } from "../../config/env";
 import type { McpRegistry } from "../../mcp/registry";
+import { composeMcpOutputPersistenceHint } from "../../mcp/output-persistence";
 import { createProvider } from "../../providers";
 import type { VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import type { AgentManager } from "../agents/manager";
@@ -71,6 +72,8 @@ export type RunLoopArgs = {
   enginePrompt: string;
   tools: ToolDefinition[];
   mcpRegistry: McpRegistry;
+  /** Whether MCP tool-result persistence (#137B) is enabled for this turn. */
+  mcpOutputPersistence?: boolean;
   messages: VesicleMessage[];
   session: SessionStore;
   /**
@@ -154,6 +157,12 @@ function refreshLiveSystemPrompt(args: RunLoopArgs): void {
     ? composeSkillCatalogBlock(resolveEngineEligibleCatalog(frozenCatalog, args.profile).catalog)
     : "";
   if (catalogBlock) prompt = `${prompt}\n\n${catalogBlock}`;
+  // Re-append the MCP output-persistence hint so it survives the per-round
+  // recompose, mirroring the Skill catalog block. Gated on the toggle and on
+  // the engine actually having MCP tools.
+  if (args.mcpOutputPersistence && args.mcpRegistry.definitions.length > 0) {
+    prompt = `${prompt}\n\n${composeMcpOutputPersistenceHint(args.session.sessionId)}`;
+  }
   args.systemPrompt = prompt;
 }
 
