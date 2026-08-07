@@ -100,6 +100,44 @@ describe("file checkpoints", () => {
     expect(await readFile(join(rootDir, "tmp", "new.md"), "utf8")).toBe("new\n");
   });
 
+  test("ignores scratch tmp/ paths carried by legacy snapshots on restore", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-legacy-"));
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    // Files present after resuming a session whose 137A-era snapshot still tracked tmp/.
+    await writeFile(join(rootDir, "tmp", "draft.md"), "model wrote this\n", "utf8");
+    await writeFile(join(rootDir, "workspace", "new.md"), "model wrote this\n", "utf8");
+
+    const store = await createSessionStore(rootDir, "checkpoint-legacy");
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "resumed turn" });
+    // Legacy snapshot recording both paths as absent at turn start. Under 137B,
+    // restore must honor the content path but ignore the scratch path.
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "file-history-snapshot",
+        messageId: user.uuid,
+        snapshot: {
+          messageId: user.uuid,
+          timestamp: new Date().toISOString(),
+          files: {
+            "tmp/draft.md": { backup: null, kind: "absent" },
+            "workspace/new.md": { backup: null, kind: "absent" },
+          },
+        },
+        isSnapshotUpdate: false,
+      },
+    });
+
+    const restored = await restoreFileCheckpoint(rootDir, store.sessionId, user.uuid);
+    expect(restored).toEqual(["workspace/new.md"]);
+    await expect(stat(join(rootDir, "workspace", "new.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    // Scratch survives: legacy entry did not re-enter the restore state.
+    expect(await readFile(join(rootDir, "tmp", "draft.md"), "utf8")).toBe("model wrote this\n");
+  });
+
   test("persists snapshots in JSONL without exposing them as provider messages", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-session-"));
     const store = await createSessionStore(rootDir, "checkpoint-resume");

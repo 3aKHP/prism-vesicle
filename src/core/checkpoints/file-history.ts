@@ -77,6 +77,7 @@ export class FileCheckpointManager {
     const prior = snapshotsFromRecords(active).at(-1);
     const files: Record<string, FileCheckpointEntry> = {};
     for (const path of Object.keys(prior?.files ?? {})) {
+      if (isScratchProjectPath(path)) continue;
       files[path] = await capturePath(this.rootDir, this.session.sessionId, path);
     }
     this.current = { messageId: this.messageId, files, timestamp: new Date().toISOString() };
@@ -239,7 +240,13 @@ async function checkpointRestoreState(
   const target = [...snapshots].reverse().find((snapshot) => snapshot.messageId === messageId);
   if (!target) return undefined;
 
-  const allPaths = new Set(snapshots.flatMap((snapshot) => Object.keys(snapshot.files)));
+  // Scratch paths carried by 137A-era snapshots are ignored: scratch is not a
+  // rewind target, so legacy entries must not re-enter the restore/diff state.
+  const allPaths = new Set(
+    snapshots
+      .flatMap((snapshot) => Object.keys(snapshot.files))
+      .filter((path) => !isScratchProjectPath(path)),
+  );
   const state: Record<string, FileCheckpointEntry> = {};
   for (const path of allPaths) {
     const targetEntry = target.files[path];
