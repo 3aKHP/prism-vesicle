@@ -36,6 +36,7 @@ Release candidate: **1.0.0-alpha.8**. The `State` column tracks the candidate's 
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
 | Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | released |
 | Tools | Dual-era Streamable HTTP MCP tools: legacy `initialize` and modern `server/discover` with per-server `auto`/`legacy`/`modern` negotiation | released |
+| Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; inline result unchanged | experimental |
 | Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
 | Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | released |
 | Agents | Foreground/background SubAgents with contract-bound Harness delegation | released |

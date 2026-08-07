@@ -196,10 +196,11 @@ If you want a particular working directory to default to a specific theme, place
 ```yaml
 version: 1
 theme: auto   # dark | light | default | auto
+# mcpOutputPersistence: true   # opt in (#137B): persist MCP tool outputs under tmp/mcp-output/
 ```
 
-- `version: 1` is required; `theme` is optional and accepts `dark`/`light`/`default`/`auto`; omitting `theme` means no project override.
-- The file stores only the theme field — no secrets, providers, permissions, shell, or arbitrary environment values; unknown fields are invalid.
+- `version: 1` is required; `theme` is optional and accepts `dark`/`light`/`default`/`auto`; omitting `theme` means no project override. `mcpOutputPersistence` is optional (`true`/`false`, defaults `false`) and enables MCP output persistence (see below).
+- The file stores only these preference fields — no secrets, providers, permissions, shell, or arbitrary environment values; unknown fields are invalid.
 - If the file is a symlink, has an unsupported version, or holds an invalid field, startup surfaces one diagnostic and falls back to lower-priority sources rather than blocking the TUI.
 
 Effective source precedence (highest first): in-session `/theme` override → launch `--dark`/`--light` flag → project `.vesicle/preferences.yaml` → `VESICLE_THEME` env → built-in `default`.
@@ -211,6 +212,14 @@ Effective source precedence (highest first): in-session `/theme` override → la
 - `/theme --unset-project` — remove the project `theme`, clear the session override, and recompute by the precedence above.
 
 `/new` and resuming another session clear the temporary session override and recompute the startup preference; theme never enters session JSONL.
+
+## Project MCP output persistence (optional)
+
+Set `mcpOutputPersistence: true` in `.vesicle/preferences.yaml` to persist every MCP tool call's text and image outputs under the project scratch root: text at `tmp/mcp-output/<session-id>/` and decoded images at `tmp/mcp-output/<session-id>/blob/`, as native files. Filenames derive from the MCP tool and its arguments so a listing stays greppable.
+
+- The inline result the model receives is unchanged; persistence is an additive durable copy the model can re-read later with `read_file`, `grep_files`, and `view_image` instead of repeating an expensive or non-repeatable MCP call.
+- Off by default; applies only in the project where it is set. It is advertised to the model through a system-prompt hint only for engines that actually have MCP tools.
+- Persisted outputs live in `tmp/`, which is not rewind-safe and is never auto-cleaned. Remove them with the file tools when no longer needed.
 
 ## Path resolution order, in short
 
