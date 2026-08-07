@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { EngineId } from "../core/engine/profile";
 import type { ToolDefinition } from "../core/tools/types";
 
+export type { McpToolEvent } from "../core/tools/types";
+
 export type McpTransport = "streamable-http";
 
 export type McpServerConfig = {
@@ -90,17 +92,6 @@ export type McpResultDiagnostic = {
   contentIndex?: number;
   code: "invalid-response" | "invalid-content-item" | "invalid-image" | "unknown-content-type";
   declaredType?: string;
-};
-
-export type McpToolEvent = {
-  kind: "mcp_tool";
-  serverId: string;
-  alias: string;
-  toolName: string;
-  isError: boolean;
-  imageCount?: number;
-  omittedContentCount?: number;
-  hasStructuredContent?: boolean;
 };
 
 export class McpError extends Error {

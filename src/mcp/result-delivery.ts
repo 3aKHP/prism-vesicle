@@ -1,6 +1,7 @@
 import type { VesicleImageAttachment } from "../providers/shared/types";
 import {
   detectImageMediaType,
+  formatImageAttachmentBytes,
   ingestImageBytes,
   maxImageAttachmentBytes,
   type SupportedImageMime,
@@ -73,11 +74,13 @@ export async function deliverMcpToolResult(
       }
       throwIfAborted(context.signal);
       try {
-        images.push(await ingestImageBytes(context.rootDir, decoded.bytes, {
+        const image = await ingestImageBytes(context.rootDir, decoded.bytes, {
           source: "mcp",
           filename: imageLabel(context, candidate.contentIndex, mediaType),
           expectedMediaType: mediaType,
-        }));
+        });
+        throwIfAborted(context.signal);
+        images.push(image);
       } catch (error) {
         if (context.signal?.aborted) throw context.signal.reason ?? error;
         addOmission(omissions, "attachment-write-failed");
@@ -173,7 +176,7 @@ function imageOmissionNotice(reason: ImageOmissionReason, count: number): string
     "vision-disabled": "the selected model does not support vision",
     "unsupported-mime": "the declared MIME type is unsupported",
     "invalid-base64": "the inline data is not strict base64",
-    "over-budget": `the decoded data exceeds the ${formatBytes(maxImageAttachmentBytes)} limit`,
+    "over-budget": `the decoded data exceeds the ${formatImageAttachmentBytes(maxImageAttachmentBytes)} limit`,
     "mime-mismatch": "the declared MIME type does not match the image bytes",
     "attachment-write-failed": "the attachment could not be stored",
   };
@@ -193,8 +196,4 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 
 function formatCount(count: number, singular: string): string {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
-}
-
-function formatBytes(bytes: number): string {
-  return `${Math.round(bytes / 1024 / 1024)} MiB`;
 }

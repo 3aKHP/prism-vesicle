@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
-import type { ImageDetail, VesicleImageAttachment } from "../../providers/shared/types";
+import { cloneProviderStateEnvelope } from "../../providers/shared/state";
+import type { ImageDetail, VesicleImageAttachment, VesicleMessage } from "../../providers/shared/types";
 
 export const maxImageAttachmentBytes = 20 * 1024 * 1024;
 
@@ -20,7 +21,7 @@ export async function ingestImageBytes(
 ): Promise<VesicleImageAttachment> {
   if (bytes.byteLength === 0) throw new Error("Image attachment is empty.");
   if (bytes.byteLength > maxImageAttachmentBytes) {
-    throw new Error(`Image attachment exceeds the ${formatBytes(maxImageAttachmentBytes)} limit.`);
+    throw new Error(`Image attachment exceeds the ${formatImageAttachmentBytes(maxImageAttachmentBytes)} limit.`);
   }
 
   const mediaType = detectImageMediaType(bytes);
@@ -86,6 +87,25 @@ export async function materializeMessageImages(
   }));
 }
 
+export async function prepareProviderMessages(
+  rootDir: string,
+  messages: VesicleMessage[],
+  visionEnabled: boolean,
+): Promise<VesicleMessage[]> {
+  const hasImages = messages.some((message) => (message.images?.length ?? 0) > 0);
+  if (hasImages && !visionEnabled) {
+    throw new Error("The selected model does not declare capabilities.vision: true; image attachments were not sent.");
+  }
+  return Promise.all(messages.map(async (message) => {
+    const images = await materializeMessageImages(rootDir, message.images);
+    return {
+      ...message,
+      ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
+      ...(images ? { images } : {}),
+    };
+  }));
+}
+
 export function persistedImageAttachments(
   images: VesicleImageAttachment[] | undefined,
 ): VesicleImageAttachment[] | undefined {
@@ -138,6 +158,6 @@ function extensionForMime(mime: SupportedImageMime): string {
   return mime.slice("image/".length);
 }
 
-function formatBytes(bytes: number): string {
-  return `${Math.round(bytes / 1024 / 1024)} MB`;
+export function formatImageAttachmentBytes(bytes: number): string {
+  return `${Math.round(bytes / 1024 / 1024)} MiB`;
 }

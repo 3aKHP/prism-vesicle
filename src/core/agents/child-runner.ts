@@ -11,7 +11,7 @@ import { agentToolProgress, executeChildTool } from "./child-tool-executor";
 import { providerRetryLabel } from "../../providers/shared/retry-label";
 import type { AgentRunner } from "./manager";
 import { closeProviderSession } from "../../providers/lifecycle";
-import { prepareProviderMessages } from "../agent-loop/provider-round";
+import { prepareProviderMessages } from "../attachments/store";
 
 export { composeChildSystemPrompts, resolveChildTools } from "./child-bootstrap";
 export { agentToolProgress } from "./child-tool-executor";
