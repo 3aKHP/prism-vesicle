@@ -11,7 +11,6 @@
 enabled: false
 
 servers:
-  # Absent negotiation normalizes to legacy (no probe, unchanged wire behavior).
   example:
     enabled: true
     # "http" is accepted as a compatibility alias for Streamable HTTP.
@@ -32,23 +31,3 @@ servers:
     enabledEngines:
       - etl
       - evaluate
-
-  # negotiation: auto probes with server/discover first, then falls back to
-  # legacy initialize for servers that do not support the modern protocol.
-  # Recommended for newly configured remote servers.
-  #
-  # flexible:
-  #   transport: streamable-http
-  #   url: https://mcp.example.com/flexible/mcp
-  #   negotiation: auto
-  #   supportedProtocolVersions: ["2026-07-28"]
-
-  # negotiation: modern connects only through the 2026-07-28 protocol and
-  # never falls back to legacy initialize.
-  #
-  # modern:
-  #   transport: streamable-http
-  #   url: https://mcp.example.com/modern/mcp
-  #   negotiation: modern
-  #   supportedProtocolVersions:
-  #     - "2026-07-28"

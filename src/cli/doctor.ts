@@ -81,16 +81,9 @@ export async function runDoctor(): Promise<void> {
   console.log(`Skills: ${skillsStatus} (host, harness, user, project, installed)`);
   if (mcp.statuses.length > 0) {
     for (const status of mcp.statuses) {
-      const eraLabel = status.era ? ` [${status.era}]` : "";
-      const modeLabel = status.negotiation ? ` (${status.negotiation})` : "";
-      const revisionLabel = status.protocolVersion && status.connected ? ` ${status.protocolVersion}` : "";
-      const state = status.connected
-        ? `connected${eraLabel}${revisionLabel}, ${status.toolCount} tools`
-        : status.enabled
-          ? `error${eraLabel}${status.failureKind ? ` (${status.failureKind})` : ""}`
-          : "disabled";
+      const state = status.connected ? `connected, ${status.toolCount} tools` : status.enabled ? "error" : "disabled";
       const detail = status.error ?? status.detail;
-      console.log(`MCP server ${status.id}${modeLabel}: ${state}${detail ? ` — ${detail}` : ""}`);
+      console.log(`MCP server ${status.id}: ${state}${detail ? ` (${detail})` : ""}`);
     }
   }
   console.log(`Missing: ${config.missing.length > 0 ? config.missing.join(", ") : "none"}`);

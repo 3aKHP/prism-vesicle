@@ -2,7 +2,7 @@ import { dirname, join } from "node:path";
 import { providerConfigPathFromEnv } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import type { ToolCall, ToolDefinition, ToolResult } from "../core/tools/types";
-import { createMcpConnection, type McpConnection, type McpConnectionOptions } from "./connection";
+import { McpStreamableHttpClient, type McpClientOptions } from "./client";
 import { loadMcpConfig, mcpConfigPathFromEnv } from "./config";
 import { deliverMcpToolResult, type McpResultDeliveryContext } from "./result-delivery";
 import type { McpConfig, McpRawTool, McpServerConfig, McpServerStatus, McpToolBinding, McpToolEvent } from "./types";
@@ -14,7 +14,7 @@ import {
   toolDefinitionFromMcpBinding,
 } from "./types";
 
-export type McpRegistryOptions = McpConnectionOptions & {
+export type McpRegistryOptions = McpClientOptions & {
   env?: NodeJS.ProcessEnv;
 };
 
@@ -111,7 +111,7 @@ async function buildRegistry(
   options: McpRegistryOptions,
   engine?: EngineId,
 ): Promise<McpRegistry> {
-  const connections = new Map<string, McpConnection>();
+  const clients = new Map<string, McpStreamableHttpClient>();
   const bindings = new Map<string, McpToolBinding>();
   const statuses: McpServerStatus[] = [];
 
@@ -125,31 +125,16 @@ async function buildRegistry(
       continue;
     }
 
-    const result = await createMcpConnection(server, options);
-    if (!result.ok) {
-      statuses.push({
-        id: server.id,
-        transport: server.transport,
-        enabled: true,
-        connected: false,
-        toolCount: 0,
-        negotiation: server.negotiation,
-        era: "unknown",
-        failureKind: result.failureKind,
-        error: result.error,
-      });
-      continue;
-    }
-    const connection = result.connection;
+    const client = new McpStreamableHttpClient(server, options);
     try {
-      const tools = await connection.listTools();
+      await client.initialize();
+      const tools = await client.listTools();
       const serverBindings = buildBindings(server, tools);
       const duplicate = serverBindings.find((binding) => bindings.has(binding.alias));
       if (duplicate) {
-        await connection.close();
         throw new Error(`duplicate MCP tool alias "${duplicate.alias}"`);
       }
-      connections.set(server.id, connection);
+      clients.set(server.id, client);
       for (const binding of serverBindings) bindings.set(binding.alias, binding);
       statuses.push({
         id: server.id,
@@ -157,22 +142,15 @@ async function buildRegistry(
         enabled: true,
         connected: true,
         toolCount: serverBindings.length,
-        negotiation: connection.info.negotiation,
-        era: connection.info.era,
-        protocolVersion: connection.info.protocolVersion,
-        detail: describeConnection(server, connection),
+        detail: describeServer(server, client),
       });
     } catch (error) {
-      await connection.close();
       statuses.push({
         id: server.id,
         transport: server.transport,
         enabled: true,
         connected: false,
         toolCount: 0,
-        negotiation: server.negotiation,
-        era: connection.info.era,
-        failureKind: "legacy-handshake",
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -192,8 +170,8 @@ async function buildRegistry(
           content: `Unknown MCP tool: ${call.name}`,
         };
       }
-      const connection = connections.get(binding.serverId);
-      if (!connection) {
+      const client = clients.get(binding.serverId);
+      if (!client) {
         return {
           callId: call.id,
           name: call.name,
@@ -213,7 +191,7 @@ async function buildRegistry(
         };
       }
       try {
-        const result = await connection.callTool(binding.toolName, args.value, { signal: executeContext.signal });
+        const result = await client.callTool(binding.toolName, args.value, { signal: executeContext.signal });
         const delivered = await deliverMcpToolResult(result, {
           ...executeContext,
           serverId: binding.serverId,
@@ -282,10 +260,9 @@ function parseToolArguments(source: string): { ok: true; value: Record<string, u
   }
 }
 
-function describeConnection(server: McpServerConfig, connection: McpConnection): string {
-  const info = connection.info.serverInfo;
-  const name = isRecord(info) && typeof info.name === "string" ? info.name.trim() : "";
-  const version = isRecord(info) && typeof info.version === "string" ? info.version.trim() : "";
+function describeServer(server: McpServerConfig, client: McpStreamableHttpClient): string {
+  const name = typeof client.serverInfo.name === "string" ? client.serverInfo.name.trim() : "";
+  const version = typeof client.serverInfo.version === "string" ? client.serverInfo.version.trim() : "";
   if (name && version) return `${name} ${version}`;
   if (name) return name;
   return server.url;
@@ -298,7 +275,6 @@ function disconnectedStatus(server: McpServerConfig, detail: string): McpServerS
     enabled: false,
     connected: false,
     toolCount: 0,
-    negotiation: server.negotiation,
     detail,
   };
 }

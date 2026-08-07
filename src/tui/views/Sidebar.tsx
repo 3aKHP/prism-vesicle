@@ -166,8 +166,6 @@ export type SidebarMcpServer = {
   enabled: boolean;
   connected: boolean;
   toolCount: number;
-  era?: string;
-  negotiation?: string;
   error?: string;
 };
 
@@ -179,11 +177,10 @@ export function mcpSidebarLines(state: SidebarMcpState, width: number): Array<{ 
   return state.servers.map((server) => {
     if (!server.enabled) return { text: truncateLine(`${server.id}: disabled`, width), ok: true };
     if (!server.connected) return { text: truncateLine(`${server.id}: error`, width), ok: false };
-    // Show era suffix only when it fits without crowding the 80-column line.
-    const base = `${server.id}: ${server.toolCount} tool${server.toolCount === 1 ? "" : "s"}`;
-    const eraSuffix = server.era && server.era !== "unknown" ? ` (${server.era})` : "";
-    const line = eraSuffix && base.length + eraSuffix.length <= width - 2 ? `${base}${eraSuffix}` : base;
-    return { text: truncateLine(line, width), ok: true };
+    return {
+      text: truncateLine(`${server.id}: ${server.toolCount} tool${server.toolCount === 1 ? "" : "s"}`, width),
+      ok: true,
+    };
   });
 }
 

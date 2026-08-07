@@ -65,7 +65,6 @@
     "test:acceptance:responses:openai": "bun test ./tests/acceptance/provider/openai-responses.acceptance.ts",
     "test:acceptance:responses:mimo": "bun test ./tests/acceptance/provider/mimo-responses.acceptance.ts",
     "test:acceptance:responses:deepseek": "bun test ./tests/acceptance/provider/deepseek-responses.acceptance.ts",
-    "test:acceptance:mcp": "bun test ./tests/acceptance/mcp/real-servers.test.ts",
     "prepack": "bun run build:npm",
     "build:npm": "bun run scripts/build-npm-package.ts",
     "pack:check": "bun run scripts/check-npm-pack.ts",
@@ -77,7 +76,6 @@
     "build:installer": "bun run scripts/build-installer.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.0.0",
     "@opentui/core": "0.4.3",
     "web-tree-sitter": "0.25.10"
   },
