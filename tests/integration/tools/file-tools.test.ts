@@ -547,6 +547,56 @@ describe("file tools v2", () => {
   });
 });
 
+describe("read_file bounded byte read and grep excerpt cap", () => {
+  test("offsetBytes/maxBytes reads a bounded slice without a line range", async () => {
+    const body = `${"x".repeat(100)}MARKER${"y".repeat(50)}`;
+    await expectTool("create_file", { path: "workspace/large.txt", content: body }, "Created workspace/large.txt");
+    const slice = await executeFileTool(rootDir, call("read_file", { path: "workspace/large.txt", offsetBytes: 100, maxBytes: 6 }));
+    expect(slice.ok).toBe(true);
+    expect(slice.content).toBe("MARKER");
+    expect(slice.fileEvent).toMatchObject({ bytes: 6, truncated: true });
+  });
+
+  test("maxBytes without offset reads from the start and flags truncation", async () => {
+    await expectTool("create_file", { path: "workspace/head.txt", content: "0123456789" }, "Created workspace/head.txt");
+    const slice = await executeFileTool(rootDir, call("read_file", { path: "workspace/head.txt", maxBytes: 4 }));
+    expect(slice.ok).toBe(true);
+    expect(slice.content).toBe("0123");
+    expect(slice.fileEvent).toMatchObject({ bytes: 4, truncated: true });
+  });
+
+  test("a slice covering the whole file is not truncated", async () => {
+    await expectTool("create_file", { path: "workspace/small.txt", content: "abc" }, "Created workspace/small.txt");
+    const slice = await executeFileTool(rootDir, call("read_file", { path: "workspace/small.txt", maxBytes: 64 }));
+    expect(slice.ok).toBe(true);
+    expect(slice.content).toBe("abc");
+    expect(slice.fileEvent?.truncated).toBeFalsy();
+  });
+
+  test("maxBytes is rejected for the assets namespace", async () => {
+    const result = await executeFileTool(rootDir, call("read_file", { path: "assets/seed.md", maxBytes: 8 }));
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain("assets namespace");
+  });
+
+  test("offsetBytes without maxBytes is rejected (would silently return the whole file)", async () => {
+    await expectTool("create_file", { path: "workspace/edge.txt", content: "data" }, "Created workspace/edge.txt");
+    const result = await executeFileTool(rootDir, call("read_file", { path: "workspace/edge.txt", offsetBytes: 2 }));
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain("offsetBytes requires maxBytes");
+  });
+
+  test("grep caps a giant single-line match", async () => {
+    await expectTool("create_file", { path: "workspace/giant.txt", content: "z".repeat(2000) }, "Created workspace/giant.txt");
+    const grep = await executeFileTool(rootDir, call("grep_files", { path: "workspace/giant.txt", pattern: "z" }));
+    expect(grep.ok).toBe(true);
+    const parsed = JSON.parse(grep.content);
+    expect(parsed.matches).toHaveLength(1);
+    expect(parsed.matches[0].text.length).toBeLessThan(2000);
+    expect(parsed.matches[0].text).toContain("[truncated");
+  });
+});
+
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }

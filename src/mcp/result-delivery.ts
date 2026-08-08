@@ -8,7 +8,7 @@ import {
 } from "../core/attachments/store";
 import type { McpToolCallResult } from "./types";
 import { sanitizeToolName } from "./types";
-import { persistMcpOutput, type PersistableMcpImage } from "./output-persistence";
+import { composeTruncatedMcpPreview, persistMcpOutput, shouldTruncateMcpOutput, type PersistableMcpImage } from "./output-persistence";
 
 export type McpResultDeliveryContext = {
   rootDir: string;
@@ -25,6 +25,12 @@ export type McpResultDeliveryContext = {
     sessionId: string;
     toolCallId: string;
     arguments: string;
+    /**
+     * When true (the auto-truncate sub-toggle), oversized text results are
+     * delivered inline as a bounded preview plus a reference to the persisted
+     * full copy instead of the complete body.
+     */
+    autoTruncate?: boolean;
   };
 };
 
@@ -121,8 +127,14 @@ export async function deliverMcpToolResult(
   }
 
   const safeText = result.text.join("\n").trim();
-  await maybePersistMcpOutput(context, safeText, persistableImages);
-  const baseContent = safeText
+  const persisted = await maybePersistMcpOutput(context, safeText, persistableImages);
+  // Auto-truncate: replace the inline body with a bounded preview + reference
+  // when the sub-toggle is on and the result exceeds the threshold. The full
+  // copy was just persisted (if persistence succeeded with a text path).
+  const inlineText = persisted?.textPath && context.outputPersistence?.autoTruncate && shouldTruncateMcpOutput(safeText)
+    ? composeTruncatedMcpPreview(safeText, persisted.textPath)
+    : safeText;
+  const baseContent = inlineText
     || (result.structuredContent !== undefined ? "MCP tool returned structured content." : "")
     || (images.length > 0 ? `MCP tool returned ${formatCount(images.length, "image")}.` : "")
     || (result.isError
@@ -142,22 +154,25 @@ async function maybePersistMcpOutput(
   context: McpResultDeliveryContext,
   text: string,
   images: PersistableMcpImage[],
-): Promise<void> {
-  if (!context.outputPersistence || context.signal?.aborted) return;
-  await persistMcpOutput(
-    context.rootDir,
-    {
-      sessionId: context.outputPersistence.sessionId,
-      toolCallId: context.outputPersistence.toolCallId,
-      serverId: context.serverId,
-      toolName: context.toolName,
-      arguments: context.outputPersistence.arguments,
-    },
-    text,
-    images,
-  ).catch(() => {
+): Promise<{ textPath?: string } | undefined> {
+  if (!context.outputPersistence || context.signal?.aborted) return undefined;
+  try {
+    return await persistMcpOutput(
+      context.rootDir,
+      {
+        sessionId: context.outputPersistence.sessionId,
+        toolCallId: context.outputPersistence.toolCallId,
+        serverId: context.serverId,
+        toolName: context.toolName,
+        arguments: context.outputPersistence.arguments,
+      },
+      text,
+      images,
+    );
+  } catch {
     // Best-effort: a persistence failure must never alter the tool result.
-  });
+    return undefined;
+  }
 }
 
 function decodeInlineBase64(

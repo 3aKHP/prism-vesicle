@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import {
   projectPreferencesPath,
   readMcpOutputPersistence,
+  readMcpOutputPreferences,
   readProjectThemePreference,
   unsetProjectThemePreference,
   writeProjectThemePreference,
@@ -224,6 +225,38 @@ describe("project mcp-output-persistence toggle", () => {
     const content = await readFile(projectPreferencesPath(root), "utf8");
     expect(content).toContain("theme: light");
     expect(content).toContain("mcpOutputPersistence: true");
+  });
+});
+
+describe("project mcp-output auto-truncate toggle", () => {
+  let root: string;
+  beforeAll(async () => { root = await mkdtemp(join(tmpdir(), "vesicle-prefs-trunc-")); });
+  afterAll(async () => { await rm(root, { recursive: true, force: true }); });
+
+  test("autoTruncate is on only when persistence is also on", async () => {
+    await writePref(root, "version: 1\nmcpOutputPersistence: true\nmcpOutputAutoTruncate: true\n");
+    expect(await readMcpOutputPreferences(root)).toEqual({ persist: true, autoTruncate: true });
+    await writePref(root, "version: 1\nmcpOutputPersistence: true\n");
+    expect(await readMcpOutputPreferences(root)).toEqual({ persist: true, autoTruncate: false });
+    // autoTruncate without persistence reads as both off (the sub-toggle requires the master).
+    await writePref(root, "version: 1\nmcpOutputAutoTruncate: true\n");
+    expect(await readMcpOutputPreferences(root)).toEqual({ persist: false, autoTruncate: false });
+  });
+
+  test("a malformed autoTruncate value is a bounded diagnostic", async () => {
+    await writePref(root, "version: 1\nmcpOutputAutoTruncate: maybe\n");
+    const read = await readProjectThemePreference(root);
+    expect(read.ok).toBe(false);
+    expect(read.ok ? "" : read.diagnostic).toContain("mcpOutputAutoTruncate");
+  });
+
+  test("writing the theme preserves both persistence toggles", async () => {
+    await writePref(root, "version: 1\ntheme: dark\nmcpOutputPersistence: true\nmcpOutputAutoTruncate: true\n");
+    await writeProjectThemePreference(root, "light");
+    const read = await readProjectThemePreference(root);
+    expect(read.ok && read.theme).toBe("light");
+    expect(read.ok && read.mcpOutputPersistence).toBe(true);
+    expect(read.ok && read.mcpOutputAutoTruncate).toBe(true);
   });
 });
 

@@ -197,6 +197,7 @@ If you want a particular working directory to default to a specific theme, place
 version: 1
 theme: auto   # dark | light | default | auto
 # mcpOutputPersistence: true   # opt in (#137B): persist MCP tool outputs under tmp/mcp-output/
+# mcpOutputAutoTruncate: true  # requires mcpOutputPersistence: inline-preview oversized results
 ```
 
 - `version: 1` is required; `theme` is optional and accepts `dark`/`light`/`default`/`auto`; omitting `theme` means no project override. `mcpOutputPersistence` is optional (`true`/`false`, defaults `false`) and enables MCP output persistence (see below).
@@ -218,6 +219,7 @@ Effective source precedence (highest first): in-session `/theme` override → la
 Set `mcpOutputPersistence: true` in `.vesicle/preferences.yaml` to persist every MCP tool call's text and image outputs under the project scratch root: text at `tmp/mcp-output/<session-id>/` and decoded images at `tmp/mcp-output/<session-id>/blob/`, as native files. Filenames derive from the MCP tool and its arguments so a listing stays greppable.
 
 - The inline result the model receives is unchanged; persistence is an additive durable copy the model can re-read later with `read_file`, `grep_files`, and `view_image` instead of repeating an expensive or non-repeatable MCP call.
+- Set `mcpOutputAutoTruncate: true` (requires `mcpOutputPersistence`) to replace oversized MCP text results (≥ 32 KiB) with a 4 KiB inline preview plus a reference to the persisted full copy, so one large result cannot dominate the context. Below the threshold the full body stays inline; either way the complete text is on disk.
 - Off by default; applies only in the project where it is set. It is advertised to the model through a system-prompt hint only for engines that actually have MCP tools.
 - Persisted outputs live in `tmp/`, which is not rewind-safe and is never auto-cleaned. Remove them with the file tools when no longer needed.
 

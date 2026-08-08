@@ -21,7 +21,7 @@ export type McpRegistryOptions = McpConnectionOptions & {
    * `tmp/mcp-output/<sessionId>/` (#137B). The registry captures this at build
    * time so the tool-round executor does not need to know about persistence.
    */
-  outputPersistence?: { sessionId: string };
+  outputPersistence?: { sessionId: string; autoTruncate?: boolean };
 };
 
 export type McpRegistry = {
@@ -230,6 +230,7 @@ async function buildRegistry(
                   sessionId: options.outputPersistence.sessionId,
                   toolCallId: call.id,
                   arguments: call.arguments,
+                  autoTruncate: options.outputPersistence.autoTruncate,
                 },
               }
             : {}),
