@@ -281,6 +281,11 @@ describe("toolResultFooter", () => {
     const event: FileToolEvent = { kind: "file_operation", operation: "grep", changed: false, matches: 3, truncated: true };
     expect(toolResultFooter("grep_files", true, "...", event)).toBe("3 matches · truncated");
   });
+
+  test("grep files_with_matches reports file count", () => {
+    const event: FileToolEvent = { kind: "file_operation", operation: "grep", changed: false, outputMode: "files_with_matches", fileCount: 5, truncated: false };
+    expect(toolResultFooter("grep_files", true, "...", event)).toBe("5 files");
+  });
 });
 
 describe("annotateLineNumbers", () => {

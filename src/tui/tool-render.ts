@@ -367,6 +367,12 @@ function fileEventDetail(e: FileToolEvent): string {
     case "read": return joinDetail("read", e.lines != null ? `${e.lines} lines` : null);
     case "view": return joinDetail("viewed image", bytes);
     case "grep":
+      if (e.outputMode === "files_with_matches") {
+        return joinDetail(
+          e.fileCount != null ? `${e.fileCount} file${e.fileCount === 1 ? "" : "s"}` : "grep",
+          e.truncated ? "truncated" : null,
+        );
+      }
       return joinDetail(
         e.matches != null ? `${e.matches} match${e.matches === 1 ? "" : "es"}` : "grep",
         e.truncated ? "truncated" : null,

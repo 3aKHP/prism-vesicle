@@ -67,7 +67,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "grep_files",
-      description: "Search allowed UTF-8 project files for literal text or a JavaScript regular expression.",
+      description: "Search allowed UTF-8 project files for literal text or a JavaScript regular expression. Returns matching lines with optional context, or switch outputMode to list matching files or count hits per file.",
       parameters: {
         type: "object",
         properties: {
@@ -93,7 +93,16 @@ export const fileToolDefinitions: ToolDefinition[] = [
           },
           maxMatches: {
             type: "number",
-            description: "Maximum matches to return. Defaults to 50 and is capped at 200.",
+            description: "Maximum matches to return. Defaults to 50 and is capped at 200. In files_with_matches and count modes, limits the number of files instead.",
+          },
+          contextLines: {
+            type: "number",
+            description: "Lines of context to show before and after each match. Defaults to 0 (no context). Capped at 10. Only affects outputMode 'content'.",
+          },
+          outputMode: {
+            type: "string",
+            enum: ["content", "files_with_matches", "count"],
+            description: "Output shape. 'content' returns match entries with text (default). 'files_with_matches' returns only file paths that contain matches. 'count' returns per-file match counts.",
           },
         },
         required: ["path", "pattern"],

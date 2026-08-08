@@ -36,8 +36,12 @@ export type FileToolEvent = {
   /** Bytes added by append_file. */
   deltaBytes?: number;
   lines?: number;
-  /** grep_files hit count. */
+  /** grep_files hit count (total across files for content/count modes). */
   matches?: number;
+  /** grep_files files_with_matches/count: number of files with hits. */
+  fileCount?: number;
+  /** grep_files output mode. */
+  outputMode?: "content" | "files_with_matches" | "count";
   /** list_files entry count. */
   entryCount?: number;
   occurrences?: number;

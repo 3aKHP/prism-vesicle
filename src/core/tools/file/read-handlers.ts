@@ -7,6 +7,7 @@ import { fileTextByteLength, parseFileToolArgs, successfulFileToolResult } from 
 import { assertDirectory } from "./mutation-operations";
 import { isAssetPath, readableFileRoots, resolveAllowedPath, toProjectPath } from "./path-policy";
 import { grepAssetFiles, grepFiles, listDirectoryEntries, listFiles, readByteSlice, sliceLines } from "./query-operations";
+import type { GrepOutputMode } from "./query-operations";
 
 export async function executeFileReadOperation(
   rootDir: string,
@@ -97,6 +98,8 @@ export async function executeFileReadOperation(
         caseSensitive?: boolean;
         recursive?: boolean;
         maxMatches?: number;
+        contextLines?: number;
+        outputMode?: GrepOutputMode;
       }>(call.arguments);
       const assetRequest = isAssetPath(args.path);
       const resolved = assetRequest ? undefined : await resolveAllowedPath(rootDir, args.path, readableFileRoots);
@@ -106,14 +109,20 @@ export async function executeFileReadOperation(
       const eventPath = assetRequest
         ? normalizeAssetPath(args.path, { allowRoot: true })
         : toProjectPath(rootDir, resolved!);
-      return successfulFileToolResult(call, JSON.stringify(result), {
-        kind: "file_operation",
-        operation: "grep",
+      const base = {
+        kind: "file_operation" as const,
+        operation: "grep" as const,
         path: eventPath,
         changed: false,
-        matches: result.matches.length,
+        outputMode: result.outputMode,
         truncated: result.truncated,
-      });
+      };
+      const fileEvent = result.outputMode === "content"
+        ? { ...base, matches: result.matches.length }
+        : result.outputMode === "files_with_matches"
+          ? { ...base, fileCount: result.files.length }
+          : { ...base, matches: result.totalMatches, fileCount: result.counts.length };
+      return successfulFileToolResult(call, JSON.stringify(result), fileEvent);
     }
 
     case "read_file": {
