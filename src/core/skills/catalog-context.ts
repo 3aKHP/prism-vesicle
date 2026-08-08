@@ -128,16 +128,14 @@ function computeEntriesHash(entries: readonly { name: string; scope: string; bod
 
 /**
  * Filter the frozen session catalog for the engine being bootstrapped. Stage
- * stays Skill-less; any other engine must declare the Skill activation tools
- * in its profile to receive the catalog. With current profiles this is a
- * no-op except Stage, but the boundary exists so Engine switching recomputes
- * eligibility without re-resolving the store.
+ * is the only Skill-less engine. This boundary exists so Engine switching
+ * recomputes eligibility without re-resolving the store.
  */
 export function resolveEngineEligibleCatalog(
   frozen: ResolvedSkillCatalog,
-  profile: Pick<EngineProfile, "id"> & { defaultTools?: readonly string[] },
+  profile: Pick<EngineProfile, "id">,
 ): ResolvedSkillCatalog {
-  if (profile.id === "stage" || (profile.defaultTools !== undefined && !profile.defaultTools.includes("activate_skill"))) {
+  if (profile.id === "stage") {
     return { catalog: { entries: [], hash: computeEntriesHash([]), omitted: [], diagnostics: [] }, byName: new Map() };
   }
   return frozen;

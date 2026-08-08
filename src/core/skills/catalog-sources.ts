@@ -56,7 +56,9 @@ export async function resolveFilesystemSkills(
 }
 
 async function resolveHostSkillRoots(options: ResolveFilesystemSkillsOptions): Promise<string[]> {
-  const hostDir = options.hostAssetsDirectory ?? bundledHostAssetsDirectory(options.executablePath);
+  const hostDir = options.hostAssetsDirectory
+    ?? process.env.VESICLE_HOST_ASSETS_DIR
+    ?? bundledHostAssetsDirectory(options.executablePath);
   if (!hostDir) return [];
   return listChildSkillRoots(join(hostDir, "skills"));
 }

@@ -63,6 +63,15 @@ export async function createPromptRoot(options: { stopGates?: string[]; validato
   ].join("\n");
   await writeFile(join(enginesDir, "etl.profile.yaml"), profileYaml, "utf8");
 
+  // When skills are not requested, redirect host-assets resolution to the
+  // empty temp root so no bundled Skills enter the catalog. This keeps the
+  // system prompt byte-identical for tests that don't exercise Skills.
+  if (options.skillTools) {
+    delete process.env.VESICLE_HOST_ASSETS_DIR;
+  } else {
+    process.env.VESICLE_HOST_ASSETS_DIR = rootDir;
+  }
+
   return rootDir;
 }
 

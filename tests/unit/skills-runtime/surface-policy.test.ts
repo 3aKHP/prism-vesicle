@@ -45,9 +45,11 @@ describe("skill tool surface gating", () => {
     expect(resolveBuiltInTools(fakeProfile("stage", skillTools), true, true, "auto", { catalogNames: ["alpha"] })).toEqual([]);
   });
 
-  test("skill tools are absent without Engine opt-in, even with a catalog", () => {
+  test("skill tools are injected for non-Stage engines regardless of profile defaultTools", () => {
     const names = toolNames(fakeProfile("runtime", ["read_file"]), { shellExecEnabled: true, catalogNames: ["alpha"] });
-    for (const tool of skillTools) expect(names).not.toContain(tool);
+    expect(names).toContain("activate_skill");
+    expect(names).toContain("read_skill_resource");
+    expect(names).toContain("run_skill_script");
   });
 
   test("declared skill tools stay off while the catalog is empty", () => {
@@ -67,8 +69,9 @@ describe("skill tool surface gating", () => {
   });
 
   test("activate_skill's name enum is the effective catalog", () => {
-    const definitions = resolveBuiltInTools(fakeProfile("runtime", ["activate_skill"]), true, false, "auto", { catalogNames: ["alpha", "beta"] });
-    const parameters = definitions[0]!.function.parameters as { properties: { name: { enum: string[] } } };
+    const definitions = resolveBuiltInTools(fakeProfile("runtime", []), true, false, "auto", { catalogNames: ["alpha", "beta"] });
+    const activateSkill = definitions.find((d) => d.function.name === "activate_skill")!;
+    const parameters = activateSkill.function.parameters as { properties: { name: { enum: string[] } } };
     expect(parameters.properties.name.enum).toEqual(["alpha", "beta"]);
   });
 
