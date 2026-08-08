@@ -19,6 +19,7 @@ async function configure(configYaml: string): Promise<void> {
   await writeFile(join(configDir, ".env"), "TEST_PROVIDER_API_KEY=test-key\n", "utf8");
   process.env.VESICLE_PROVIDERS_FILE = join(configDir, "providers.yaml");
   delete process.env.TEST_PROVIDER_API_KEY;
+  process.env.VESICLE_HOST_ASSETS_DIR = join(tmpdir(), "vesicle-empty-host-assets");
   rootDir = await mkdtemp(join(tmpdir(), "vesicle-preturn-root-"));
   for (const dir of ["assets/prompts/shared", "assets/prompts/engines", "assets/engines", "workspace"]) {
     await mkdir(join(rootDir, dir), { recursive: true });
