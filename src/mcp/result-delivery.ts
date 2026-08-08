@@ -154,7 +154,7 @@ async function maybePersistMcpOutput(
   context: McpResultDeliveryContext,
   text: string,
   images: PersistableMcpImage[],
-): Promise<{ textPath?: string; imagePaths: string[] } | undefined> {
+): Promise<{ textPath?: string } | undefined> {
   if (!context.outputPersistence || context.signal?.aborted) return undefined;
   try {
     return await persistMcpOutput(

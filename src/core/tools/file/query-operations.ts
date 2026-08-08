@@ -40,8 +40,15 @@ export async function readByteSlice(
     const start = Math.min(offsetBytes, totalBytes);
     const length = Math.max(0, Math.min(cap, totalBytes - start));
     const buffer = Buffer.alloc(length);
-    if (length > 0) await handle.read(buffer, 0, length, start);
-    return { content: buffer.toString("utf8"), totalBytes, bytes: length, truncated: start + length < totalBytes };
+    // Use the actual bytes read: a short read (e.g. concurrent truncation) must
+    // not leave a zero-filled tail that would inject NULs into the result.
+    const { bytesRead } = length > 0 ? await handle.read(buffer, 0, length, start) : { bytesRead: 0 };
+    return {
+      content: buffer.subarray(0, bytesRead).toString("utf8"),
+      totalBytes,
+      bytes: bytesRead,
+      truncated: start + bytesRead < totalBytes,
+    };
   } finally {
     await handle.close();
   }

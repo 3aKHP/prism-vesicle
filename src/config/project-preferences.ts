@@ -145,8 +145,7 @@ export async function writeProjectThemePreference(rootDir: string, theme: ThemeP
  * agent-loop bootstrap paths to gate MCP tool-result spill (#137B).
  */
 export async function readMcpOutputPersistence(rootDir: string): Promise<boolean> {
-  const read = await readProjectThemePreference(rootDir);
-  return read.ok ? read.mcpOutputPersistence === true : false;
+  return (await readMcpOutputPreferences(rootDir)).persist;
 }
 
 /**

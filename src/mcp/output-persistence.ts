@@ -3,13 +3,15 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * Opt-in persistence of MCP tool-call outputs (#137B, slice 1). When the
- * project-level master toggle is on, every MCP call's text result is written
- * under `tmp/mcp-output/<sessionId>/` and its decoded images under
- * `.../blob/`, as native files the model can re-read with the existing
- * `read_file` / `grep_files` / `view_image` tools. Persistence is additive:
- * the inline delivery path (#175) is unchanged, and a persistence failure is
- * best-effort and must never change the MCP tool result.
+ * Opt-in persistence of MCP tool-call outputs (#137B). When the project-level
+ * master toggle is on, every MCP call's text result is written under
+ * `tmp/mcp-output/<sessionId>/` and its decoded images under `.../blob/`, as
+ * native files the model can re-read with the existing `read_file` /
+ * `grep_files` / `view_image` tools. Persistence is additive: the inline
+ * delivery path (#175) is unchanged unless the auto-truncate sub-toggle is on,
+ * in which case an oversized text result is replaced inline by a bounded
+ * preview plus a reference to the persisted full copy. A persistence failure
+ * is best-effort and must never change the MCP tool result.
  */
 
 export type McpOutputPersistenceTarget = {
@@ -47,7 +49,7 @@ export async function persistMcpOutput(
   target: McpOutputPersistenceTarget,
   text: string,
   images: PersistableMcpImage[],
-): Promise<{ textPath?: string; imagePaths: string[] }> {
+): Promise<{ textPath?: string }> {
   const sessionRel = mcpOutputSessionDir(target.sessionId);
   const dir = join(rootDir, sessionRel);
   const blobDir = join(dir, "blob");
@@ -65,11 +67,7 @@ export async function persistMcpOutput(
       return writeFile(join(blobDir, `${base}-image-${index + 1}.${extension}`), image.bytes);
     }),
   );
-  const imagePaths = images.map((image, index) => {
-    const extension = imageExtension(image.mediaType);
-    return `${sessionRel}/blob/${base}-image-${index + 1}.${extension}`;
-  });
-  return { ...(textPath ? { textPath } : {}), imagePaths };
+  return textPath ? { textPath } : {};
 }
 
 /**
