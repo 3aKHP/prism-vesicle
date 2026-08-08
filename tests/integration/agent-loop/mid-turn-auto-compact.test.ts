@@ -14,13 +14,14 @@ let rootDir: string | undefined;
 async function configure(): Promise<void> {
   configDir = await mkdtemp(join(tmpdir(), "vesicle-midturn-cfg-"));
   // Tool schemas contribute most of the baseline estimate. The large read_file
-  // result pushes the complete round above the 4k soft trigger.
+  // result pushes the complete round above the soft trigger; the window is sized
+  // with wide margins so small tool-schema changes do not flip the outcome.
   await writeFile(join(configDir, "providers.yaml"), [
     "default:", "  provider: test", "  model: m",
     "providers:", "  test:", "    protocol: openai-chat-compatible",
     "    baseUrl: https://provider.test/v1", "    apiKeyEnv: TEST_PROVIDER_API_KEY",
     "    models:", "      - id: m", "        limits:",
-    "          contextWindow: 5000", "          autoCompact:",
+    "          contextWindow: 8000", "          autoCompact:",
     "            enabled: true", "            threshold: 0.8", "            reserveOutputTokens: 500",
     "", "",
   ].join("\n"), "utf8");
@@ -38,8 +39,9 @@ async function configure(): Promise<void> {
     "systemPrompt:", "  - assets/prompts/shared/vesicle-base.md", "  - assets/prompts/engines/etl.md",
     "defaultTools:", "  - read_file", "validators: []", "stopGates: []", "stateRoots:", "  - workspace", "",
   ].join("\n"), "utf8");
-  // A large source file whose read_file result pushes the mid-turn estimate over.
-  await writeFile(join(rootDir, "workspace", "big.md"), "line\n".repeat(220), "utf8");
+  // A large source file whose read_file result pushes the mid-turn estimate over
+  // the soft trigger while the retained tool round still fits the hard ceiling.
+  await writeFile(join(rootDir, "workspace", "big.md"), "line\n".repeat(1100), "utf8");
 }
 
 beforeEach(() => {

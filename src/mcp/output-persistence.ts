@@ -38,20 +38,25 @@ export function mcpOutputSessionDir(sessionId: string): string {
  * Persist one MCP call's text and images. Filenames are meaningful
  * (`<server>-<tool>__<argSlug>-<callHash>`) and unique per call. May throw for
  * filesystem errors; the caller treats persistence as best-effort (see
- * `maybePersistMcpToolResult`), so a failure never alters the tool result.
+ * `maybePersistMcpOutput`), so a failure never alters the tool result. Returns
+ * the project-relative paths written, so the caller can reference the full copy
+ * when truncating the inline result.
  */
 export async function persistMcpOutput(
   rootDir: string,
   target: McpOutputPersistenceTarget,
   text: string,
   images: PersistableMcpImage[],
-): Promise<void> {
-  const dir = join(rootDir, mcpOutputSessionDir(target.sessionId));
+): Promise<{ textPath?: string; imagePaths: string[] }> {
+  const sessionRel = mcpOutputSessionDir(target.sessionId);
+  const dir = join(rootDir, sessionRel);
   const blobDir = join(dir, "blob");
   await mkdir(blobDir, { recursive: true });
   const base = persistenceBaseName(target);
 
+  let textPath: string | undefined;
   if (text.length > 0) {
+    textPath = `${sessionRel}/${base}.txt`;
     await writeFile(join(dir, `${base}.txt`), text, "utf8");
   }
   await Promise.all(
@@ -60,6 +65,38 @@ export async function persistMcpOutput(
       return writeFile(join(blobDir, `${base}-image-${index + 1}.${extension}`), image.bytes);
     }),
   );
+  const imagePaths = images.map((image, index) => {
+    const extension = imageExtension(image.mediaType);
+    return `${sessionRel}/blob/${base}-image-${index + 1}.${extension}`;
+  });
+  return { ...(textPath ? { textPath } : {}), imagePaths };
+}
+
+/**
+ * Inline hard cap for a single MCP text result (#137B): at or above this UTF-8
+ * byte length, a result is delivered inline as a bounded preview plus a
+ * reference to the persisted full copy (when auto-truncate is on). Byte-based
+ * so CJK and English are bounded consistently; ~8–16K tokens, well under a
+ * typical context-window fraction. Tunable default pending broader fixtures.
+ */
+export const MCP_INLINE_TRUNCATE_THRESHOLD_BYTES = 32 * 1024;
+const MCP_INLINE_PREVIEW_BYTES = 4 * 1024;
+
+/** Whether an MCP text result is large enough to be auto-truncated inline. */
+export function shouldTruncateMcpOutput(text: string): boolean {
+  return Buffer.byteLength(text, "utf8") >= MCP_INLINE_TRUNCATE_THRESHOLD_BYTES;
+}
+
+/**
+ * Compose the inline replacement for a truncated MCP text result: a bounded
+ * preview followed by a reference to the persisted full copy. The preview is
+ * byte-sliced, so it may end mid-character for multi-byte content; the model
+ * reads the referenced file for the exact full body.
+ */
+export function composeTruncatedMcpPreview(text: string, textPath: string): string {
+  const totalBytes = Buffer.byteLength(text, "utf8");
+  const preview = Buffer.from(text, "utf8").subarray(0, MCP_INLINE_PREVIEW_BYTES).toString("utf8");
+  return `${preview}\n\n[MCP output truncated: ${totalBytes} bytes total. Full result persisted at ${textPath} — use read_file (offsetBytes/maxBytes for large files) to view it.]`;
 }
 
 /**

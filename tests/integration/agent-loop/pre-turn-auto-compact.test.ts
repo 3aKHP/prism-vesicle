@@ -179,18 +179,19 @@ describe("pre-turn auto-compaction", () => {
   });
 
   test("a hard-ceiling failure blocks the request without persisting the new input", async () => {
-    // contextWindow 4000, reserve 200 -> hardCeiling = 3800. One medium turn is
-    // sendable with the tool schema, but it plus the incoming
-    // input exceeds 200 ->
-    // hard ceiling; a single complete turn with one round cannot be safely
-    // evicted, so the mandatory compact fails and the request is blocked.
-    await configure(provider("      - id: m\n        limits:\n          contextWindow: 4000\n          autoCompact:\n            enabled: true\n            threshold: 0.95\n            reserveOutputTokens: 200"));
+    // contextWindow 6000, reserve 300 -> hardCeiling = 5700. One medium turn is
+    // sendable with the tool schema, but the medium history plus the oversized
+    // incoming input exceeds the hard ceiling; a single complete turn with one
+    // round cannot be safely evicted, so the mandatory compact fails and the
+    // request is blocked. Wide margins keep this stable across small tool-schema
+    // changes.
+    await configure(provider("      - id: m\n        limits:\n          contextWindow: 6000\n          autoCompact:\n            enabled: true\n            threshold: 0.95\n            reserveOutputTokens: 300"));
     stubReplies();
-    const medium = `turn one: ${"x".repeat(250)}`;
+    const medium = `turn one: ${"x".repeat(1400)}`;
     const first = await runPrompt({ input: medium, rootDir: rootDir!, messages: [{ role: "user", content: medium }] });
     if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
     const recordsBefore = await loadSessionRecords(rootDir!, first.sessionId);
-    const blockedPrompt = `blocked: ${"y".repeat(150)}`;
+    const blockedPrompt = `blocked: ${"y".repeat(3500)}`;
 
     await expect(runPrompt({ input: blockedPrompt, rootDir: rootDir!, sessionId: first.sessionId, messages: [{ role: "user", content: blockedPrompt }] })).rejects.toBeInstanceOf(AutoCompactBlockedError);
 

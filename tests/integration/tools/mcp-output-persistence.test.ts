@@ -4,8 +4,11 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   composeMcpOutputPersistenceHint,
+  composeTruncatedMcpPreview,
+  MCP_INLINE_TRUNCATE_THRESHOLD_BYTES,
   mcpOutputSessionDir,
   persistMcpOutput,
+  shouldTruncateMcpOutput,
 } from "../../../src/mcp/output-persistence";
 import { deliverMcpToolResult } from "../../../src/mcp/result-delivery";
 import { normalizeMcpToolResult } from "../../../src/mcp/types";
@@ -130,6 +133,85 @@ describe("MCP result delivery persistence", () => {
       await deliverMcpToolResult(result, { rootDir: root, visionEnabled: true, serverId: "media", toolName: "render" });
       // No scratch output directory is created when persistence is off.
       await expect(readdir(join(root, "tmp"))).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("MCP output auto-truncate", () => {
+  test("shouldTruncateMcpOutput is threshold-gated on UTF-8 bytes", () => {
+    expect(shouldTruncateMcpOutput("x".repeat(16))).toBe(false);
+    expect(shouldTruncateMcpOutput("x".repeat(MCP_INLINE_TRUNCATE_THRESHOLD_BYTES))).toBe(true);
+    // CJK: 3 bytes/char, so fewer chars still cross the byte threshold.
+    expect(shouldTruncateMcpOutput("字".repeat(MCP_INLINE_TRUNCATE_THRESHOLD_BYTES))).toBe(true);
+  });
+
+  test("composeTruncatedMcpPreview emits a bounded preview plus a reference", () => {
+    const large = "a".repeat(MCP_INLINE_TRUNCATE_THRESHOLD_BYTES + 10);
+    const preview = composeTruncatedMcpPreview(large, "tmp/mcp-output/s/file.txt");
+    expect(preview.length).toBeLessThan(large.length);
+    expect(preview).toContain("MCP output truncated");
+    expect(preview).toContain(String(Buffer.byteLength(large, "utf8")));
+    expect(preview).toContain("tmp/mcp-output/s/file.txt");
+    expect(preview).toContain("read_file");
+  });
+
+  test("auto-truncate delivers a preview inline while persisting the full text", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mcp-trunc-"));
+    try {
+      const large = "a".repeat(MCP_INLINE_TRUNCATE_THRESHOLD_BYTES + 800);
+      const result = normalizeMcpToolResult({ content: [{ type: "text", text: large }] });
+      const delivered = await deliverMcpToolResult(result, {
+        rootDir: root,
+        visionEnabled: false,
+        serverId: "wiki",
+        toolName: "search",
+        outputPersistence: { sessionId: SESSION_ID, toolCallId: "call-trunc", arguments: "{\"q\":\"x\"}", autoTruncate: true },
+      });
+      expect(delivered.content.length).toBeLessThan(large.length);
+      expect(delivered.content).toContain("MCP output truncated");
+      expect(delivered.content).toContain(mcpOutputSessionDir(SESSION_ID));
+      const dir = join(root, mcpOutputSessionDir(SESSION_ID));
+      const textFile = (await readdir(dir)).find((f) => f.endsWith(".txt"));
+      expect(textFile).toBeDefined();
+      expect(await readFile(join(dir, textFile!), "utf8")).toBe(large);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("with auto-truncate off the full body stays inline even when large", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mcp-notrunc-"));
+    try {
+      const large = "b".repeat(MCP_INLINE_TRUNCATE_THRESHOLD_BYTES + 100);
+      const result = normalizeMcpToolResult({ content: [{ type: "text", text: large }] });
+      const delivered = await deliverMcpToolResult(result, {
+        rootDir: root,
+        visionEnabled: false,
+        serverId: "wiki",
+        toolName: "search",
+        outputPersistence: { sessionId: SESSION_ID, toolCallId: "call-full", arguments: "{}" },
+      });
+      expect(delivered.content).toBe(large);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("under the threshold the full body stays inline even with auto-truncate on", async () => {
+    const root = await mkdtemp(join(tmpdir(), "mcp-under-"));
+    try {
+      const small = "c".repeat(256);
+      const result = normalizeMcpToolResult({ content: [{ type: "text", text: small }] });
+      const delivered = await deliverMcpToolResult(result, {
+        rootDir: root,
+        visionEnabled: false,
+        serverId: "wiki",
+        toolName: "search",
+        outputPersistence: { sessionId: SESSION_ID, toolCallId: "call-under", arguments: "{}", autoTruncate: true },
+      });
+      expect(delivered.content).toBe(small);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

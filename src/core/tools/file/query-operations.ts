@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile, stat } from "node:fs/promises";
+import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { normalizeAssetPath, type AssetResolver } from "../../runtime/assets";
 import { toProjectPath } from "./path-policy";
@@ -13,6 +13,38 @@ export function sliceLines(content: string, startLine: number | undefined, endLi
   if (!Number.isInteger(end) && end !== Number.POSITIVE_INFINITY) throw new Error("endLine must be a positive integer.");
   if (end < start) throw new Error("endLine must be greater than or equal to startLine.");
   return content.split(/\r?\n/).slice(start - 1, end).join("\n");
+}
+
+/** Cap a single grep match line so one giant (e.g. minified) line cannot fill the result. */
+const maxGrepExcerptChars = 500;
+function capGrepExcerpt(line: string): string {
+  return line.length > maxGrepExcerptChars ? `${line.slice(0, maxGrepExcerptChars)} … [truncated, ${line.length} chars]` : line;
+}
+
+/**
+ * Read a bounded UTF-8 byte slice of a file without loading the whole file
+ * (#137B): used for large persisted MCP outputs. `offsetBytes`/`maxBytes` are
+ * validated here. The slice may split a multi-byte character at its end; the
+ * caller can shift the offset to recover it.
+ */
+export async function readByteSlice(
+  filePath: string,
+  offsetBytes: number,
+  maxBytes: number,
+): Promise<{ content: string; totalBytes: number; bytes: number; truncated: boolean }> {
+  if (!Number.isInteger(offsetBytes) || offsetBytes < 0) throw new Error("offsetBytes must be a non-negative integer.");
+  const cap = clampPositiveInteger(maxBytes, "maxBytes", 1024 * 1024);
+  const handle = await open(filePath, "r");
+  try {
+    const totalBytes = (await handle.stat()).size;
+    const start = Math.min(offsetBytes, totalBytes);
+    const length = Math.max(0, Math.min(cap, totalBytes - start));
+    const buffer = Buffer.alloc(length);
+    if (length > 0) await handle.read(buffer, 0, length, start);
+    return { content: buffer.toString("utf8"), totalBytes, bytes: length, truncated: start + length < totalBytes };
+  } finally {
+    await handle.close();
+  }
 }
 
 export async function grepFiles(
@@ -35,7 +67,7 @@ export async function grepFiles(
     const lines = (await readFile(file, "utf8")).split(/\r?\n/);
     for (let index = 0; index < lines.length; index++) {
       if (!matcher(lines[index])) continue;
-      matches.push({ path: toProjectPath(rootDir, file), line: index + 1, text: lines[index] });
+      matches.push({ path: toProjectPath(rootDir, file), line: index + 1, text: capGrepExcerpt(lines[index]!) });
       if (matches.length >= limit) return { matches, truncated: true };
     }
   }
@@ -62,7 +94,7 @@ export async function grepAssetFiles(
     const lines = (await assets.readText(file)).split(/\r?\n/);
     for (let index = 0; index < lines.length; index++) {
       if (!matcher(lines[index])) continue;
-      matches.push({ path: file, line: index + 1, text: lines[index] });
+      matches.push({ path: file, line: index + 1, text: capGrepExcerpt(lines[index]!) });
       if (matches.length >= limit) return { matches, truncated: true };
     }
   }

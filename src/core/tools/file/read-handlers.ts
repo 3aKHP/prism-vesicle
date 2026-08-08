@@ -6,7 +6,7 @@ import type { ToolCall, ToolResult } from "../types";
 import { fileTextByteLength, parseFileToolArgs, successfulFileToolResult } from "./handler-contract";
 import { assertDirectory } from "./mutation-operations";
 import { isAssetPath, readableFileRoots, resolveAllowedPath, toProjectPath } from "./path-policy";
-import { grepAssetFiles, grepFiles, listDirectoryEntries, listFiles, sliceLines } from "./query-operations";
+import { grepAssetFiles, grepFiles, listDirectoryEntries, listFiles, readByteSlice, sliceLines } from "./query-operations";
 
 export async function executeFileReadOperation(
   rootDir: string,
@@ -117,7 +117,23 @@ export async function executeFileReadOperation(
     }
 
     case "read_file": {
-      const args = parseFileToolArgs<{ path: string; startLine?: number; endLine?: number }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; startLine?: number; endLine?: number; offsetBytes?: number; maxBytes?: number }>(call.arguments);
+      if (args.maxBytes !== undefined) {
+        // Bounded byte-offset read (#137B): does not load the whole file, so it
+        // suits large persisted MCP outputs and giant single-line payloads.
+        if (isAssetPath(args.path)) throw new Error("read_file offsetBytes/maxBytes is not supported for the assets namespace; use startLine/endLine.");
+        const filePath = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
+        const slice = await readByteSlice(filePath, args.offsetBytes ?? 0, args.maxBytes);
+        return successfulFileToolResult(call, slice.content, {
+          kind: "file_operation",
+          operation: "read",
+          path: toProjectPath(rootDir, filePath),
+          changed: false,
+          bytes: slice.bytes,
+          lines: slice.content ? slice.content.split(/\r?\n/).length : 0,
+          ...(slice.truncated ? { truncated: true } : {}),
+        });
+      }
       if (isAssetPath(args.path)) {
         const resolved = await assets.resolveFile(args.path);
         const content = sliceLines(await assets.readText(resolved.logicalPath), args.startLine, args.endLine);

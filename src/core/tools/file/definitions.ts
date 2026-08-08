@@ -105,7 +105,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "read_file",
-      description: "Read a UTF-8 text file from an allowed Vesicle project directory.",
+      description: "Read a UTF-8 text file from an allowed Vesicle project directory. Use startLine/endLine to read a line range, or offsetBytes/maxBytes to read a bounded byte slice without loading the whole file (preferred for very large files or giant single-line payloads).",
       parameters: {
         type: "object",
         properties: {
@@ -115,11 +115,19 @@ export const fileToolDefinitions: ToolDefinition[] = [
           },
           startLine: {
             type: "number",
-            description: "Optional 1-based first line to read.",
+            description: "Optional 1-based first line to read (ignored when maxBytes is given).",
           },
           endLine: {
             type: "number",
-            description: "Optional 1-based last line to read, inclusive.",
+            description: "Optional 1-based last line to read, inclusive (ignored when maxBytes is given).",
+          },
+          offsetBytes: {
+            type: "number",
+            description: "Optional non-negative byte offset for a bounded slice read (requires maxBytes; project files only).",
+          },
+          maxBytes: {
+            type: "number",
+            description: "Optional maximum bytes to read from offsetBytes. When set, reads a bounded byte slice (project files only) instead of a line range and never loads the whole file.",
           },
         },
         required: ["path"],
