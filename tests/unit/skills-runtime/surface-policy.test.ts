@@ -49,7 +49,8 @@ describe("skill tool surface gating", () => {
     const names = toolNames(fakeProfile("runtime", ["read_file"]), { shellExecEnabled: true, catalogNames: ["alpha"] });
     expect(names).toContain("activate_skill");
     expect(names).toContain("read_skill_resource");
-    expect(names).toContain("run_skill_script");
+    const shellAvailable = Boolean(resolveShellProfile("auto"));
+    expect(names.includes("run_skill_script")).toBe(shellAvailable);
   });
 
   test("declared skill tools stay off while the catalog is empty", () => {
