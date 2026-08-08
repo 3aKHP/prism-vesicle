@@ -62,7 +62,7 @@ describe("initializeSessionIdentity (issue #131)", () => {
       expect(typeof harness?.[key]).toBe("string");
     }
     const skills = records[0]?.metadata?.skills as { entries?: Array<{ name: string }> } | undefined;
-    expect(skills?.entries?.map((entry) => entry.name).sort()).toEqual(["alpha", "skillify", "vesicle-docs"]);
+    expect(skills?.entries?.map((entry) => entry.name).sort()).toEqual(["alpha", "novel-outline-v3", "skillify", "vesicle-docs"]);
 
     // The activation is the second record and chains directly off the header.
     expect(records[1]?.metadata?.kind).toBe("skill-activation");
