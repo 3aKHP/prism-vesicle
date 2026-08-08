@@ -30,11 +30,12 @@ This document defines durable conversation history, provider projection, file ch
 
 ## Attachments And File Checkpoints
 
-- Image bytes live in the ignored content-addressed `.vesicle/attachments/` store. JSONL records ids, hashes, MIME types, sizes, and relative paths, never base64 payloads.
+- Clipboard, guarded-project, and accepted MCP image bytes live in the ignored content-addressed `.vesicle/attachments/` store. JSONL records ids, hashes, MIME types, sizes, origins, host-derived labels, and relative paths, never base64 payloads. Main and child provider requests materialize base64 only on their in-memory request copy; resume and compact projection retain the durable reference.
 - A real user prompt owns the guarded-file checkpoint for the work it initiates.
 - Mutation tools capture every affected writable path before changing it. Checkpoint metadata remains host-only.
 - Checkpoints preserve absent paths, file contents, and directory topology. Directory-tree moves capture both the source tree and target path so empty directories can be restored.
-- Guarded mutations under the scratch root `tmp/` participate in the same per-turn checkpoint and rewind lifecycle as the durable writable roots. The host never auto-cleans scratch state at startup or during a session; cleanup is an explicit user or model action.
+- Guarded mutations under the scratch root `tmp/` are writable but excluded from the per-turn checkpoint and rewind lifecycle: scratch holds ephemeral spills and drafts, and checkpointing it would pollute the durable content-root ledger (issue #137B). The host never auto-cleans scratch state at startup or during a session; cleanup is an explicit user or model action.
+- Cross-root moves across the `tmp/` boundary are not fully reversible on rewind: scratch→content loses the moved body (the promoted copy is deleted and the scratch source is not restored); content→scratch leaves a duplicate in `tmp/`. Prefer `copy_file` to promote scratch work when rewind-safety matters.
 - Rewind moves the in-memory head and restores guarded checkpoint state; the next persisted record creates a new append-only branch.
 - Host configuration changes and shell mutations outside guarded file tools are not rewind-safe. Their tools must disclose the applicable backup or recovery contract.
 

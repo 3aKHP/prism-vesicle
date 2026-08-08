@@ -259,6 +259,36 @@
       }
     },
     {
+      "id": "zh-f1-negative-description",
+      "title": "否定式描写(先写\"不是什么\"再写\"是什么\")",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
+      "id": "zh-f1-decorative-ending",
+      "title": "场景或段落结尾画蛇添足",
+      "severity": "tier2",
+      "maturity": "stable",
+      "targets": [
+        "narrative-prose"
+      ],
+      "source": "self",
+      "evidence": {
+        "mode": "exact-substring",
+        "minCodePoints": 1,
+        "maxCodePoints": 240
+      }
+    },
+    {
       "id": "zh-f3-fragment-no-subject",
       "title": "单独成段短句缺主语",
       "severity": "tier3",

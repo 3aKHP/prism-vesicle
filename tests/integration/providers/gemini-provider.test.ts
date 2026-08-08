@@ -39,6 +39,34 @@ describe("Gemini generateContent request shaping", () => {
       ],
     }]);
   });
+
+  test("serializes MCP tool-result images after the function response", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_mcp", name: "mcp_prts_operator_artwork", arguments: "{}" }],
+        },
+        { role: "tool", toolCallId: "call_mcp", content: "artwork", images: [mcpImage()] },
+      ],
+    });
+    expect((body.contents as unknown[])[1]).toEqual({
+      role: "user",
+      parts: [
+        {
+          functionResponse: {
+            id: "call_mcp",
+            name: "mcp_prts_operator_artwork",
+            response: { content: "artwork" },
+          },
+        },
+        { text: "[Image #1: prts-operator_artwork-image-1.png]" },
+        { inlineData: { mimeType: "image/png", data: "cG5n" } },
+      ],
+    });
+  });
   test("serializes system, messages, tools, tool results, and thinking config", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
@@ -491,6 +519,14 @@ function image(): NonNullable<VesicleRequest["messages"][number]["images"]>[numb
     source: "clipboard",
     filename: "capture.png",
     data: "cG5n",
+  };
+}
+
+function mcpImage(): ReturnType<typeof image> {
+  return {
+    ...image(),
+    source: "mcp",
+    filename: "prts-operator_artwork-image-1.png",
   };
 }
 

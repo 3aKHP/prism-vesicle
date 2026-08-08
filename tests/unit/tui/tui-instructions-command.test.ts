@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
-import type { CommandContext } from "../../../src/tui/commands/types";
+import { createEngineCommands } from "../../../src/tui/commands/engine";
+import type { EngineCommandContext } from "../../../src/tui/commands/types";
 import type { Message } from "../../../src/tui/types";
 
 const originalCwd = process.cwd();
@@ -31,17 +31,17 @@ describe("/instructions command", () => {
     delete process.env.VESICLE_PROVIDERS_FILE;
     process.chdir(project);
 
-    const command = builtinCommands.find((entry) => entry.name === "instructions");
-    if (!command) throw new Error("Missing /instructions command.");
     let messages: Message[] = [];
     const ctx = {
       activeEngine: () => "etl",
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as EngineCommandContext;
+    const command = createEngineCommands(ctx).find((entry) => entry.name === "instructions");
+    if (!command) throw new Error("Missing /instructions command.");
 
-    await command.run(ctx, "", "/instructions");
+    await command.run("", "/instructions");
     const notice = messages.at(-1)?.content ?? "";
     expect(notice).toContain('engine "etl"');
     expect(notice).toContain("VESICLE.md [project]");
@@ -58,16 +58,16 @@ describe("/instructions command", () => {
     delete process.env.VESICLE_PROVIDERS_FILE;
     process.chdir(project);
 
-    const command = builtinCommands.find((entry) => entry.name === "instructions")!;
     let messages: Message[] = [];
     const ctx = {
       activeEngine: () => "runtime",
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as EngineCommandContext;
+    const command = createEngineCommands(ctx).find((entry) => entry.name === "instructions")!;
 
-    await command.run(ctx, "", "/instructions");
+    await command.run("", "/instructions");
     const notice = messages.at(-1)?.content ?? "";
     expect(notice).toContain("No instruction files are active");
     expect(notice).toContain("VESICLE.md");

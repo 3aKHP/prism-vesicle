@@ -30,6 +30,7 @@ function buildController() {
   const [, setMessages] = createSignal<Message[]>([]);
   const controller = createComposerController({
     rootDir: root,
+    commands: () => [],
     activeEngine: () => "etl",
     terminalWidth: () => 80,
     providerRegistry: () => null,
@@ -79,6 +80,7 @@ describe("composer controller: busy Esc interrupt preserves the draft", () => {
       const [, setMessages] = createSignal<Message[]>([]);
       const controller = createComposerController({
         rootDir: root,
+        commands: () => [],
         activeEngine: () => "etl",
         terminalWidth: () => 80,
         providerRegistry: () => null,

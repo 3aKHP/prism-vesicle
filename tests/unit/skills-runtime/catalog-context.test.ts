@@ -120,15 +120,14 @@ describe("persisted snapshot resume", () => {
 });
 
 describe("engine eligibility", () => {
-  test("Stage and engines without declared skill tools get an empty eligible catalog", async () => {
+  test("Stage gets an empty eligible catalog; all other engines get the full catalog", async () => {
     await writeUserSkill("alpha");
     const frozen = await resolveSessionSkillCatalog(scratch, env(), { id: "etl" }, randomUUID(), undefined, undefined, noHost());
     expect(catalogNames(frozen)).toEqual(["alpha"]);
 
     expect(catalogNames(resolveEngineEligibleCatalog(frozen, { id: "stage" }))).toEqual([]);
-    expect(catalogNames(resolveEngineEligibleCatalog(frozen, { id: "etl", defaultTools: ["read_file"] }))).toEqual([]);
-    expect(catalogNames(resolveEngineEligibleCatalog(frozen, { id: "etl", defaultTools: ["read_file", "activate_skill"] }))).toEqual(["alpha"]);
     expect(catalogNames(resolveEngineEligibleCatalog(frozen, { id: "etl" }))).toEqual(["alpha"]);
+    expect(catalogNames(resolveEngineEligibleCatalog(frozen, { id: "runtime" }))).toEqual(["alpha"]);
   });
 
   test("pruning removes ineligible activations so reactivation is not suppressed", async () => {

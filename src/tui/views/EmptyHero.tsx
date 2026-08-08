@@ -1,3 +1,4 @@
+import { ThemedText } from "../theme-text";
 import { For, Show } from "solid-js";
 import { COMPACT_MARK } from "../brand-mark";
 import { palette } from "../theme";
@@ -18,17 +19,17 @@ export function EmptyHero(props: { notices: string[] }) {
       <Show when={props.notices.length > 0} fallback={<box height={0} />}>
         <box flexDirection="column" paddingBottom={1}>
           <For each={props.notices}>
-            {(notice) => <text content={notice} fg={palette.system} wrapMode="none" />}
+            {(notice) => <ThemedText content={notice} fg={palette.system} wrapMode="none" />}
           </For>
         </box>
       </Show>
       <box flexGrow={1} flexDirection="column" alignItems="center" justifyContent="center">
         <BrandMark mark={COMPACT_MARK} />
         <box height={1} />
-        <text content="PRISM VESICLE" fg={palette.brand} attributes={1} wrapMode="none" />
-        <text content="one beam in, the spectrum out" fg={palette.brandDim} wrapMode="none" />
+        <ThemedText content="PRISM VESICLE" fg={palette.brand} attributes={1} wrapMode="none" />
+        <ThemedText content="one beam in, the spectrum out" fg={palette.brandDim} wrapMode="none" />
         <box height={1} />
-        <text content="Type a prompt to begin — /help lists commands" fg={palette.textDim} wrapMode="none" />
+        <ThemedText content="Type a prompt to begin — /help lists commands" fg={palette.textDim} wrapMode="none" />
       </box>
     </box>
   );

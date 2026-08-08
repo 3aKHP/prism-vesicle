@@ -34,7 +34,6 @@ test("turn failure appends a failed-turn marker to the session", async () => {
         conversation = typeof value === "function" ? value(conversation) : value;
         return conversation;
       },
-      messages: () => messages,
       setMessages: (value: unknown[] | ((current: unknown[]) => unknown[])) => {
         messages = typeof value === "function" ? value(messages) : value;
         return messages;

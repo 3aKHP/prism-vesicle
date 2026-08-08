@@ -30,7 +30,7 @@ export type VesicleImageAttachment = {
   bytes: number;
   sha256: string;
   filename?: string;
-  source: "clipboard" | "project";
+  source: "clipboard" | "project" | "mcp";
   sourcePath?: string;
   detail?: ImageDetail;
   data?: string;

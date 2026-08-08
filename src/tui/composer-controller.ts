@@ -22,9 +22,11 @@ import { PromptEscapeController } from "./prompt-escape";
 import { createModelPickerController } from "./model-picker-controller";
 import { createCommandCompletionController } from "./command-completion-controller";
 import { composerStateFromQueuedInput, type InputQueue } from "./input-queue";
+import type { Command } from "./commands/types";
 
 export type ComposerControllerOptions = {
   rootDir: string;
+  commands: () => readonly Command[];
   activeEngine: Accessor<string>;
   terminalWidth: Accessor<number>;
   providerRegistry: Accessor<ProviderRegistry | null>;
@@ -62,6 +64,7 @@ export function createComposerController(options: ComposerControllerOptions) {
   const modelPickerController = createModelPickerController(options);
   const commandCompletionController = createCommandCompletionController({
     rootDir: options.rootDir,
+    commands: options.commands,
     activeEngine: options.activeEngine,
     inputValue,
     applyComposerState: applyState,

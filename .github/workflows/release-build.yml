@@ -57,7 +57,16 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun test
-      - run: bun audit
+      - id: audit
+        run: bun audit
+      - name: Audit failure guidance
+        if: failure() && steps.audit.outcome == 'failure'
+        run: |
+          MESSAGE="bun audit failed. Follow docs/dev/AUDIT_DRIFT.md — if this run did not change bun.lock or package.json, rerunning will not recover it."
+          echo "::error title=bun audit failed::${MESSAGE}"
+          echo "### bun audit failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "${MESSAGE}" >> "$GITHUB_STEP_SUMMARY"
       - run: bun run pack:check
       - run: bun run pack:smoke
 

@@ -159,6 +159,18 @@ Doctor checks route selection only; it does not prove that the proxy or provider
 
 Start from [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml). Each server can set `transport` (streamable-http), `url`, `timeoutSeconds`, `toolPrefix`, `headers` (supports `${ENV_VAR}` expansion from `.env`), `includeTools`/`excludeTools` filters, and `enabledEngines` (which engines can use it). A present `mcp.yaml` defaults to enabled; secrets go in `.env`.
 
+Vesicle supports dual-era Streamable HTTP MCP tools: one Vesicle process can connect to both legacy (`initialize` handshake) and modern (`server/discover`) MCP servers concurrently. Each server can set `negotiation`:
+
+- `legacy` (default when absent): uses the `initialize` path only, no modern probe.
+- `auto`: probes with `server/discover` first, then falls back to legacy for servers that do not support the modern protocol. Recommended for newly configured remote servers.
+- `modern`: connects only through the `2026-07-28` protocol, never falls back to legacy.
+
+`protocolVersion` is the legacy revision pin (default `2025-03-26`); it does not select the era. `supportedProtocolVersions` is an optional modern offer list (default `["2026-07-28"]`).
+
+MCP tool results first cross the host's untrusted-content boundary. Ordinary text keeps its original order. When the selected model declares `capabilities.vision: true`, strictly validated inline PNG, JPEG, GIF, and WebP images are delivered as image attachments. Sessions retain only content-addressed references, never base64. The current 20 MiB decoded-image ceiling is a provisional safety boundary, not a configurable long-term product commitment.
+
+For a non-vision model, images are neither decoded nor persisted; safe text continues with an omission notice. MCP error results also do not import images. Resource, audio, URL/link, and unknown results currently produce only bounded unsupported-item notices; Vesicle does not automatically download, read, transcribe, play, or inject them.
+
 ## Persistent Instructions (optional)
 
 If you keep re-stating the same sub-workflow or specification under an engine, write it into a Persistent Instructions file — the host loads it into the system prompt automatically at the start of every session, so you no longer have to ask the model to write a spec to a file and remind it to read it next session.
@@ -182,10 +194,12 @@ If you want a particular working directory to default to a specific theme, place
 ```yaml
 version: 1
 theme: auto   # dark | light | default | auto
+# mcpOutputPersistence: true   # opt in (#137B): persist MCP tool outputs under tmp/mcp-output/
+# mcpOutputAutoTruncate: true  # requires mcpOutputPersistence: inline-preview oversized results
 ```
 
-- `version: 1` is required; `theme` is optional and accepts `dark`/`light`/`default`/`auto`; omitting `theme` means no project override.
-- The file stores only the theme field — no secrets, providers, permissions, shell, or arbitrary environment values; unknown fields are invalid.
+- `version: 1` is required; `theme` is optional and accepts `dark`/`light`/`default`/`auto`; omitting `theme` means no project override. `mcpOutputPersistence` is optional (`true`/`false`, defaults `false`) and enables MCP output persistence (see below).
+- The file stores only these preference fields — no secrets, providers, permissions, shell, or arbitrary environment values; unknown fields are invalid.
 - If the file is a symlink, has an unsupported version, or holds an invalid field, startup surfaces one diagnostic and falls back to lower-priority sources rather than blocking the TUI.
 
 Effective source precedence (highest first): in-session `/theme` override → launch `--dark`/`--light` flag → project `.vesicle/preferences.yaml` → `VESICLE_THEME` env → built-in `default`.
@@ -197,6 +211,15 @@ Effective source precedence (highest first): in-session `/theme` override → la
 - `/theme --unset-project` — remove the project `theme`, clear the session override, and recompute by the precedence above.
 
 `/new` and resuming another session clear the temporary session override and recompute the startup preference; theme never enters session JSONL.
+
+## Project MCP output persistence (optional)
+
+Set `mcpOutputPersistence: true` in `.vesicle/preferences.yaml` to persist every MCP tool call's text and image outputs under the project scratch root: text at `tmp/mcp-output/<session-id>/` and decoded images at `tmp/mcp-output/<session-id>/blob/`, as native files. Filenames derive from the MCP tool and its arguments so a listing stays greppable.
+
+- The inline result the model receives is unchanged; persistence is an additive durable copy the model can re-read later with `read_file`, `grep_files`, and `view_image` instead of repeating an expensive or non-repeatable MCP call.
+- Set `mcpOutputAutoTruncate: true` (requires `mcpOutputPersistence`) to replace oversized MCP text results (≥ 32 KiB) with a 4 KiB inline preview plus a reference to the persisted full copy, so one large result cannot dominate the context. Below the threshold the full body stays inline; either way the complete text is on disk.
+- Off by default; applies only in the project where it is set. It is advertised to the model through a system-prompt hint only for engines that actually have MCP tools.
+- Persisted outputs live in `tmp/`, which is not rewind-safe and is never auto-cleaned. Remove them with the file tools when no longer needed.
 
 ## Path resolution order, in short
 

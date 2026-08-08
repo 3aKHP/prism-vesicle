@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { For, Show } from "solid-js";
 import { TextAttributes } from "@opentui/core";
 import type { RewindPoint } from "../core/rewind/service";
@@ -48,20 +49,20 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">
       <box height={1} flexDirection="row">
-        <text content="Rewind" fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <ThemedText content="Rewind" fg={palette.brand} attributes={TextAttributes.BOLD} wrapMode="none" />
       </box>
 
       <Show when={props.state.error} fallback={
         <Show when={target()} fallback={
-          <Show when={props.state.points.length > 0} fallback={<text content="Nothing to rewind to yet." fg={palette.textSecondary} wrapMode="none" />}>
-            <text content="Restore the code and/or conversation to the point before…" fg={palette.textSecondary} wrapMode="none" />
+          <Show when={props.state.points.length > 0} fallback={<ThemedText content="Nothing to rewind to yet." fg={palette.textSecondary} wrapMode="none" />}>
+            <ThemedText content="Restore the code and/or conversation to the point before…" fg={palette.textSecondary} wrapMode="none" />
             <For each={visible()}>
               {(row) => {
                 const selected = () => row.index === props.state.selected;
                 return (
                   <box height={1} flexDirection="row">
-                    <text content={selected() ? ">" : " "} fg={palette.brand} attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE} wrapMode="none" />
-                    <text
+                    <ThemedText content={selected() ? ">" : " "} fg={palette.brand} attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE} wrapMode="none" />
+                    <ThemedText
                       content={row.point ? rewindPointLine(row.point, props.width - 5) : "(current)"}
                       fg={selected() ? palette.textPrimary : palette.textSecondary}
                       attributes={selected() ? TextAttributes.BOLD : TextAttributes.NONE}
@@ -71,21 +72,21 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
                 );
               }}
             </For>
-            <text content="Enter to continue · Esc to exit" fg={palette.textDim} wrapMode="none" />
+            <ThemedText content="Enter to continue · Esc to exit" fg={palette.textDim} wrapMode="none" />
           </Show>
         }>
           {(point) => (
             <box flexDirection="column">
-              <text content={truncateLine("Confirm you want to restore to the point before you sent this message:", props.width - 4)} fg={palette.textSecondary} wrapMode="none" />
-              <text content={truncateLine(`  ${point().content.replace(/\s+/g, " ")} · ${formatRelativeTime(point().timestamp)}`, props.width - 4)} fg={palette.textPrimary} wrapMode="none" />
-              <text content={truncateLine(restoreDescription(options()[props.state.restoreSelected]?.value, point()), props.width - 4)} fg={palette.textDim} wrapMode="none" />
+              <ThemedText content={truncateLine("Confirm you want to restore to the point before you sent this message:", props.width - 4)} fg={palette.textSecondary} wrapMode="none" />
+              <ThemedText content={truncateLine(`  ${point().content.replace(/\s+/g, " ")} · ${formatRelativeTime(point().timestamp)}`, props.width - 4)} fg={palette.textPrimary} wrapMode="none" />
+              <ThemedText content={truncateLine(restoreDescription(options()[props.state.restoreSelected]?.value, point()), props.width - 4)} fg={palette.textDim} wrapMode="none" />
               <For each={options()}>
                 {(option, index) => {
                   const selected = () => index() === props.state.restoreSelected;
                   return (
                     <box height={1} flexDirection="row">
-                      <text content={selected() ? ">" : " "} fg={palette.brand} wrapMode="none" />
-                      <text
+                      <ThemedText content={selected() ? ">" : " "} fg={palette.brand} wrapMode="none" />
+                      <ThemedText
                         content={option.value === "summarize" && selected()
                           ? summaryInputLabel(option.label, props.state.summaryFeedback, props.state.summaryCursor, props.width - 6)
                           : option.label}
@@ -98,15 +99,15 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
                 }}
               </For>
               <For each={point().diffStats?.filesChanged.length ? [true] : []}>
-                {() => <text content={truncateLine("⚠ Rewinding does not affect files edited manually outside Vesicle tools.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
+                {() => <ThemedText content={truncateLine("⚠ Rewinding does not affect files edited manually outside Vesicle tools.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
               </For>
               <For each={point().checkpointTainted ? [true] : []}>
-                {() => <text content={truncateLine("⚠ This turn ran shell_exec; its file changes may not be restored.", props.width - 4)} fg={palette.error} wrapMode="none" />}
+                {() => <ThemedText content={truncateLine("⚠ This turn ran shell_exec; its file changes may not be restored.", props.width - 4)} fg={palette.error} wrapMode="none" />}
               </For>
               <For each={point().failedTurn ? [true] : []}>
-                {() => <text content={truncateLine("⚠ This turn failed before a reply; its prompt was not delivered to the provider.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
+                {() => <ThemedText content={truncateLine("⚠ This turn failed before a reply; its prompt was not delivered to the provider.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
               </For>
-              <text content={props.state.busy
+              <ThemedText content={props.state.busy
                 ? props.state.restoringOption === "summarize" ? "Summarizing…" : "Restoring…"
                 : "↑/↓ choose · Enter select · Esc back"} fg={palette.textDim} wrapMode="none" />
             </box>
@@ -115,8 +116,8 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
       }>
         {(error) => (
           <box flexDirection="column">
-            <text content={`Error: ${truncateLine(error(), props.width - 11)}`} fg={palette.error} wrapMode="none" />
-            <text content="Esc to close" fg={palette.textDim} wrapMode="none" />
+            <ThemedText content={`Error: ${truncateLine(error(), props.width - 11)}`} fg={palette.error} wrapMode="none" />
+            <ThemedText content="Esc to close" fg={palette.textDim} wrapMode="none" />
           </box>
         )}
       </Show>

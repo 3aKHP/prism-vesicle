@@ -3,10 +3,13 @@ import { dirname, join } from "node:path";
 import { loadUserConfigEnvironment, providerConfigPathFromEnv } from "../config/providers";
 import { readYamlKeyValue, readYamlLines, unquoteYamlValue } from "../config/yaml-line-reader";
 import { engineIds, type EngineId } from "../core/engine/profile";
-import type { McpConfig, McpServerConfig, McpTransport } from "./types";
+import type { McpConfig, McpServerConfig, McpNegotiationMode, McpTransport } from "./types";
+import { supportedModernProtocolVersions } from "./types";
 
 const defaultProtocolVersion = "2025-03-26";
 const defaultTimeoutSeconds = 30;
+const validNegotiationModes: readonly McpNegotiationMode[] = ["legacy", "modern", "auto"];
+const protocolRevisionPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 export type McpConfigLoadResult =
   | {
@@ -59,7 +62,7 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
   let enabled = true;
   let section: "servers" | null = null;
   let currentServer: Partial<McpServerConfig> | null = null;
-  let currentNested: "headers" | "includeTools" | "excludeTools" | "enabledEngines" | null = null;
+  let currentNested: "headers" | "includeTools" | "excludeTools" | "enabledEngines" | "supportedProtocolVersions" | null = null;
   const servers: McpServerConfig[] = [];
 
   const finishServer = () => {
@@ -69,6 +72,11 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
     if (servers.some((server) => server.id === id)) throw new Error(`Duplicate MCP server id "${id}".`);
     const transport = currentServer.transport ?? "streamable-http";
     if (!currentServer.url) throw new Error(`MCP server "${id}" is missing url.`);
+    const negotiation = currentServer.negotiation ?? "legacy";
+    const supportedProtocolVersions = normalizeSupportedVersions(currentServer.supportedProtocolVersions, id, path);
+    if (negotiation === "modern" && supportedProtocolVersions.length === 0) {
+      throw new Error(`MCP server "${id}" uses negotiation: modern but has no Vesicle-supported modern revision in supportedProtocolVersions.`);
+    }
     servers.push({
       id,
       enabled: currentServer.enabled ?? true,
@@ -77,6 +85,8 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
       headers: currentServer.headers ?? {},
       timeoutSeconds: currentServer.timeoutSeconds ?? defaultTimeoutSeconds,
       protocolVersion: currentServer.protocolVersion ?? defaultProtocolVersion,
+      negotiation,
+      supportedProtocolVersions,
       ...(currentServer.toolPrefix ? { toolPrefix: currentServer.toolPrefix } : {}),
       includeTools: currentServer.includeTools ?? [],
       excludeTools: currentServer.excludeTools ?? [],
@@ -147,6 +157,11 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
         currentServer.enabledEngines = currentServer.enabledEngines ?? [];
         continue;
       }
+      if (line === "supportedProtocolVersions:" || line === "supported_protocol_versions:") {
+        currentNested = "supportedProtocolVersions";
+        currentServer.supportedProtocolVersions = currentServer.supportedProtocolVersions ?? [];
+        continue;
+      }
       currentNested = null;
       const [key, rawValue] = readKeyValue(line, index, path);
       const value = expandEnv(unquoteYamlValue(rawValue), env, index, path);
@@ -162,6 +177,10 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
         currentServer.excludeTools = readInlineList(value, index, path);
       } else if (key === "enabledEngines" || key === "enabled_engines") {
         currentServer.enabledEngines = readEngineList(readInlineList(value, index, path), index, path);
+      } else if (key === "negotiation") {
+        currentServer.negotiation = readNegotiation(value, index, path);
+      } else if (key === "supportedProtocolVersions" || key === "supported_protocol_versions") {
+        currentServer.supportedProtocolVersions = readProtocolVersionList(readInlineList(value, index, path), index, path);
       } else {
         throw new Error(`MCP config parse error on line ${index + 1}: unknown server field "${key}".`);
       }
@@ -183,6 +202,10 @@ export function parseMcpConfig(source: string, path: string, env: NodeJS.Process
       if (currentNested === "includeTools") currentServer.includeTools = [...(currentServer.includeTools ?? []), value];
       if (currentNested === "excludeTools") currentServer.excludeTools = [...(currentServer.excludeTools ?? []), value];
       if (currentNested === "enabledEngines") currentServer.enabledEngines = readEngineList([...(currentServer.enabledEngines ?? []), value], index, path);
+      if (currentNested === "supportedProtocolVersions") {
+        const validated = readProtocolVersionList([value], index, path);
+        currentServer.supportedProtocolVersions = [...(currentServer.supportedProtocolVersions ?? []), ...validated];
+      }
       continue;
     }
 
@@ -247,4 +270,46 @@ function expandEnv(value: string, env: NodeJS.ProcessEnv, index: number, path: s
 
 function readKeyValue(line: string, index: number, path: string): [string, string] {
   return readYamlKeyValue(line, index + 1, path, "MCP config");
+}
+
+function readNegotiation(value: string, index: number, path: string): McpNegotiationMode {
+  const normalized = value.trim();
+  if (validNegotiationModes.includes(normalized as McpNegotiationMode)) return normalized as McpNegotiationMode;
+  throw new Error(`MCP config parse error on line ${index + 1} in ${path}: negotiation must be legacy, modern, or auto.`);
+}
+
+function readProtocolVersionList(values: string[], index: number, path: string): string[] {
+  const result: string[] = [];
+  for (const raw of values) {
+    const version = raw.trim();
+    if (!version) continue;
+    if (!protocolRevisionPattern.test(version)) {
+      throw new Error(`MCP config parse error on line ${index + 1} in ${path}: protocol version "${version}" is not a valid YYYY-MM-DD date.`);
+    }
+    if (!result.includes(version)) result.push(version);
+  }
+  return result;
+}
+
+/**
+ * Default absent supportedProtocolVersions to the Vesicle-supported modern
+ * list, then filter to only Vesicle-supported modern revisions. An explicitly
+ * empty list is rejected — omit the field to use the default. The client
+ * adapter may add legacy compatibility entries internally when the SDK needs
+ * them for auto fallback.
+ */
+function normalizeSupportedVersions(configured: string[] | undefined, id: string, path: string): string[] {
+  if (configured === undefined) return [...supportedModernProtocolVersions];
+  if (configured.length === 0) {
+    throw new Error(`MCP config ${path}: server "${id}" has an empty supportedProtocolVersions list — omit the field to use the default.`);
+  }
+  const supported = new Set(supportedModernProtocolVersions);
+  const filtered = configured.filter((version) => supported.has(version));
+  if (filtered.length === 0) {
+    throw new Error(
+      `MCP config ${path}: server "${id}" supportedProtocolVersions contains no Vesicle-supported modern revision `
+      + `(supported: ${[...supportedModernProtocolVersions].join(", ")}).`,
+    );
+  }
+  return filtered;
 }

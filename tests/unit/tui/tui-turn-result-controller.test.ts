@@ -106,41 +106,53 @@ function createHarness(lastDisplayedContent: string | null = null) {
   let queuedInputReady = false;
   const noop = () => undefined;
   const controller = createTurnResultController({
-    activeEngine: () => "etl",
-    activeModel: () => "test-model",
-    clearGateFeedback: noop,
-    clearQuestionFreeform: noop,
-    lastDisplayedToolAssistantContent: () => lastDisplayedContent,
-    publishTurnUsage: noop,
-    refreshArtifacts: async () => [],
-    refreshQualityWarnings: async () => [],
-    setConversation: noop,
-    setGateFeedbackMode: noop,
-    setGateFocus: noop,
-    setLastDisplayedToolAssistantContent: noop,
-    setMessages: (next) => {
-      messages = typeof next === "function" ? next(messages) : next;
-      return messages;
+    runtime: {
+      activeEngine: () => "etl",
+      activeModel: () => "test-model",
     },
-    setOutput: noop,
-    setPendingEngineSwitch: noop,
-    setPendingGate: noop,
-    setPendingPermission: noop,
-    setPendingQualityDecision: (value) => { pendingQuality = value; return value; },
-    setPendingUserQuestion: noop,
-    setQuestionSelected: noop,
-    setQualitySelected: noop,
-    setSessionId: noop,
-    setSessionPath: noop,
-    setSessionPicker: noop,
+    session: {
+      setConversation: noop,
+      setSessionId: noop,
+      setSessionPath: noop,
+      setSessionPicker: noop,
+    },
+    transcript: {
+      setMessages: (next) => {
+        messages = typeof next === "function" ? next(messages) : next;
+        return messages;
+      },
+      setOutput: noop,
+      setStatus: (value) => {
+        status = typeof value === "function" ? value(status) : value;
+        return status;
+      },
+      lastDisplayedToolAssistantContent: () => lastDisplayedContent,
+      setLastDisplayedToolAssistantContent: noop,
+    },
+    decision: {
+      setPendingGate: noop,
+      setPendingEngineSwitch: noop,
+      setPendingUserQuestion: noop,
+      setPendingPermission: noop,
+      setPendingQualityDecision: (value) => { pendingQuality = value; return value; },
+      clearQuestionFreeform: noop,
+      setGateFocus: noop,
+      setGateFeedbackMode: noop,
+      clearGateFeedback: noop,
+      setQuestionSelected: noop,
+      setQualitySelected: noop,
+    },
+    usage: {
+      publishTurnUsage: noop,
+    },
+    hostAction: {
+      refreshArtifacts: async () => [],
+      refreshQualityWarnings: async () => [],
+    },
     queuedWork: {
       block: () => { queuedInputReady = false; },
       release: () => { queuedInputReady = true; },
     } as any,
-    setStatus: (value) => {
-      status = typeof value === "function" ? value(status) : value;
-      return status;
-    },
   });
   return {
     handle: controller.handleResult,

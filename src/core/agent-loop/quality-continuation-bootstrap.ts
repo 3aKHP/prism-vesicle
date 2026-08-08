@@ -67,6 +67,7 @@ export async function runQualityContinuation(input: {
     enginePrompt: context.enginePrompt,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
+    mcpOutputPersistence: context.mcpOutputPersistence,
     messages: input.messages,
     session: context.session,
     logicalTurnId: context.identity?.logicalTurnId,

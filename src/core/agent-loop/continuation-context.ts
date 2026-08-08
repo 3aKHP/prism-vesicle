@@ -1,5 +1,7 @@
 import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
+import { readMcpOutputPreferences } from "../../config/project-preferences";
+import { composeMcpOutputPersistenceHint } from "../../mcp/output-persistence";
 import { loadExperimentalQualityProfile } from "../../config/quality";
 import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { VesicleRequest } from "../../providers/shared/types";
@@ -104,14 +106,19 @@ export async function loadContinuationContext(
   pruneSessionActivations(options.sessionId, new Set(catalogNames(skillCatalog)));
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
   if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+  const mcpOutputPreferences = await readMcpOutputPreferences(rootDir);
+  const mcpOutputPersistence = mcpOutputPreferences.persist;
   const toolSurface = await resolveToolSurface(
     profile,
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
     permission.shellInterpreter,
-    {},
+    mcpOutputPersistence ? { outputPersistence: { sessionId: options.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate } } : {},
     { catalogNames: catalogNames(skillCatalog) },
   );
+  if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {
+    systemPrompt = `${systemPrompt}\n\n${composeMcpOutputPersistenceHint(options.sessionId)}`;
+  }
   const session = await createSessionStore(rootDir, options.sessionId);
   const proxyPolicy = await resolveProviderProxyPolicy();
   const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
@@ -132,6 +139,7 @@ export async function loadContinuationContext(
     systemPrompt,
     enginePrompt: engineAssets.systemPrompt,
     toolSurface,
+    mcpOutputPersistence,
     skillCatalog,
     session,
     harness,

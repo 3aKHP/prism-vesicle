@@ -6,7 +6,8 @@ import type { ToolCall, ToolResult } from "../types";
 import { fileTextByteLength, parseFileToolArgs, successfulFileToolResult } from "./handler-contract";
 import { assertDirectory } from "./mutation-operations";
 import { isAssetPath, readableFileRoots, resolveAllowedPath, toProjectPath } from "./path-policy";
-import { grepAssetFiles, grepFiles, listDirectoryEntries, listFiles, sliceLines } from "./query-operations";
+import { grepAssetFiles, grepFiles, listDirectoryEntries, listFiles, readByteSlice, sliceLines } from "./query-operations";
+import type { GrepOutputMode } from "./query-operations";
 
 export async function executeFileReadOperation(
   rootDir: string,
@@ -97,6 +98,8 @@ export async function executeFileReadOperation(
         caseSensitive?: boolean;
         recursive?: boolean;
         maxMatches?: number;
+        contextLines?: number;
+        outputMode?: GrepOutputMode;
       }>(call.arguments);
       const assetRequest = isAssetPath(args.path);
       const resolved = assetRequest ? undefined : await resolveAllowedPath(rootDir, args.path, readableFileRoots);
@@ -106,18 +109,43 @@ export async function executeFileReadOperation(
       const eventPath = assetRequest
         ? normalizeAssetPath(args.path, { allowRoot: true })
         : toProjectPath(rootDir, resolved!);
-      return successfulFileToolResult(call, JSON.stringify(result), {
-        kind: "file_operation",
-        operation: "grep",
+      const base = {
+        kind: "file_operation" as const,
+        operation: "grep" as const,
         path: eventPath,
         changed: false,
-        matches: result.matches.length,
+        outputMode: result.outputMode,
         truncated: result.truncated,
-      });
+      };
+      const fileEvent = result.outputMode === "content"
+        ? { ...base, matches: result.matches.length }
+        : result.outputMode === "files_with_matches"
+          ? { ...base, fileCount: result.files.length }
+          : { ...base, matches: result.totalMatches, fileCount: result.counts.length };
+      return successfulFileToolResult(call, JSON.stringify(result), fileEvent);
     }
 
     case "read_file": {
-      const args = parseFileToolArgs<{ path: string; startLine?: number; endLine?: number }>(call.arguments);
+      const args = parseFileToolArgs<{ path: string; startLine?: number; endLine?: number; offsetBytes?: number; maxBytes?: number }>(call.arguments);
+      if (args.offsetBytes !== undefined && args.maxBytes === undefined) {
+        throw new Error("read_file offsetBytes requires maxBytes; provide maxBytes for a bounded slice or use startLine/endLine for a line range.");
+      }
+      if (args.maxBytes !== undefined) {
+        // Bounded byte-offset read (#137B): does not load the whole file, so it
+        // suits large persisted MCP outputs and giant single-line payloads.
+        if (isAssetPath(args.path)) throw new Error("read_file offsetBytes/maxBytes is not supported for the assets namespace; use startLine/endLine.");
+        const filePath = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
+        const slice = await readByteSlice(filePath, args.offsetBytes ?? 0, args.maxBytes);
+        return successfulFileToolResult(call, slice.content, {
+          kind: "file_operation",
+          operation: "read",
+          path: toProjectPath(rootDir, filePath),
+          changed: false,
+          bytes: slice.bytes,
+          lines: slice.content ? slice.content.split(/\r?\n/).length : 0,
+          ...(slice.truncated ? { truncated: true } : {}),
+        });
+      }
       if (isAssetPath(args.path)) {
         const resolved = await assets.resolveFile(args.path);
         const content = sliceLines(await assets.readText(resolved.logicalPath), args.startLine, args.endLine);

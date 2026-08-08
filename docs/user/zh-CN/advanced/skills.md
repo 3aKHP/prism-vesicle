@@ -59,6 +59,14 @@ vesicle skills copy-template <skill> <资源路径> <目标路径>
 
 发布是仅创建的：不覆盖、不升级。草稿始终保留在 `tmp/skillify/` 下。已发布的 Skill 仅在新会话中可发现——当前会话目录不会改变。校验和发布需要进程运行时（已解析的 shell profile）；`.ps1` 脚本通过 PowerShell 7 支持（Windows 上可回退到 Windows PowerShell 5.1，其他平台仅用 `pwsh`）。
 
+## 第一方 `novel-outline-v3` Skill
+
+每个 Vesicle 安装包自带 `novel-outline-v3`（范围 `host`），提供分层长篇小说纲要工作流（卷纲 → 章纲 → 场景）。它教授正文为先的方法论：读齐全部素材 → 维护两本全局档案（角色成长、世界观状态）→ 定卷纲 → 逐章定纲（先定张力总值再分场景）→ 闭合校验 → 回写档案 → 标待确认。
+
+它没有脚本、没有进程权限，仅通过 `read_skill_resource` 提供只读文本参考（纲要模板、档案格式、张力模型）。与 Harness 10.2.0 的张力预算系统互补。
+
+当用户要求「明确前三章」「写某卷纲要」「把大纲细化到场景级」「分配张力」或「列举伏笔收放」时，模型可自动激活此 Skill。
+
 ## Stage 排除
 
 Stage Engine 不解析 Skill 目录，不支持 `activate_skill`、`read_skill_resource` 或 `run_skill_script`。

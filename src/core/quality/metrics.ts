@@ -11,6 +11,7 @@ export const documentMetricSignals = [
 
 export const qualityMetricSignals = [
   "em_dash_per_100_chars",
+  "period_per_100_chars",
   ...documentMetricSignals,
 ] as const satisfies readonly QualityMetricSignal[];
 

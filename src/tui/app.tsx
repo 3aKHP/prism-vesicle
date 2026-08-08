@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
 import { useRenderer, useTerminalDimensions } from "@opentui/solid";
 import type { EngineId } from "../core/engine/profile";
@@ -19,9 +20,9 @@ import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
 import { yoloPanelHeight } from "./YoloPrompt";
 import { qualityRewritePanelHeight } from "./QualityRewritePrompt";
-import { builtinCommands } from "./commands/builtin";
+import { createBuiltinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
-import type { CommandContext } from "./commands/types";
+import type { BuiltinCommandContexts, Command } from "./commands/types";
 import type { ActivityEntry, AgentCardState, Message, SelectedArtifact, SessionPickerState } from "./types";
 import { createRewindController } from "./rewind/controller";
 import { initDebugLogging } from "./debug-log";
@@ -65,15 +66,16 @@ import { createInputQueue } from "./input-queue";
 import { routeCommandSubmission } from "./command-scheduler";
 import { createSideQuestionController } from "./side-question-controller";
 import { createSkillPickerController } from "./skill-picker-controller";
-import { createWorkspaceController } from "./workspace-controller";
+import { createWorkspaceController } from "./workspace";
 import { createQueuedWorkController } from "./queued-work-controller";
 import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
-import { activateSkillForSession } from "../core/skills";
+
 import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-loop/session-init";
 import { createSessionIdentityCoordinator } from "./session-identity-coordinator";
+import { createSkillActivationOwner, type SkillActivationOptions } from "./skills/session-activation";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
-import { WorkspacePage } from "./views/WorkspacePage";
+import { WorkspacePage } from "./workspace/view";
 import { copyTextToClipboard } from "./clipboard";
 import { closeAllProviderSessions, closeProviderSession } from "../providers/lifecycle";
 import { registerHostShutdownCleanup } from "../core/process/shutdown";
@@ -148,6 +150,10 @@ export function App(props: AppProps = {}) {
   const [activeEngine, setActiveEngine] = createSignal<EngineId>("etl");
   const [thinkingTier, setThinkingTier] = createSignal<ReasoningTier | undefined>();
   const [reasoningDisplayMode, setReasoningDisplayMode] = createSignal<ReasoningDisplayMode>("collapsed");
+  // Populated after the domain contexts are wired (later in this component); the
+  // completion controller reads it reactively, and the signal avoids TDZ on the
+  // late-initialised command list during the initial render pass.
+  const [builtinCommands, setBuiltinCommands] = createSignal<readonly Command[]>([]);
   const [messages, setMessages] = createSignal<Message[]>([
     ...(props.dangerouslySkipPermissions ? [{
       role: "system" as const,
@@ -403,9 +409,9 @@ export function App(props: AppProps = {}) {
   });
   const rewindPicker = rewindController.state;
   function submitCommand(raw: string): boolean {
-    return routeCommandSubmission(raw, busy(), builtinCommands, {
+    return routeCommandSubmission(raw, busy(), builtinCommands(), {
       execute: (value) => {
-        void executeCommand(value, commandContext, builtinCommands).catch((error) => turnController.reportError(error));
+        void executeCommand(value, builtinCommands(), { setMessages }).catch((error) => turnController.reportError(error));
       },
       enqueue: (command) => {
         const count = inputQueue.enqueueCommand(command);
@@ -418,6 +424,7 @@ export function App(props: AppProps = {}) {
   }
   const composerController = createComposerController({
     rootDir: process.cwd(),
+    commands: builtinCommands,
     activeEngine,
     terminalWidth: () => dimensions().width,
     providerRegistry,
@@ -504,7 +511,7 @@ export function App(props: AppProps = {}) {
     setStatus,
     setMessages,
     reportError: (error) => turnController.reportError(error),
-    onActivate: (name) => activateSkillCommand(name, { mode: "context-only" }),
+    onActivate: (name) => activateSkill(name, { mode: "context-only" }),
   });
   const {
     skillPicker,
@@ -586,7 +593,7 @@ export function App(props: AppProps = {}) {
     recordActivity,
     recordPromptHistory,
     submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
-    executeLocalCommand: (raw) => executeCommand(raw, commandContext, builtinCommands),
+    executeLocalCommand: (raw) => executeCommand(raw, builtinCommands(), { setMessages }),
     reportError: (error) => turnController.reportError(error),
   });
   turnController = createTurnController({
@@ -611,7 +618,6 @@ export function App(props: AppProps = {}) {
     shellInterpreter,
     sessionId,
     setSessionId,
-    sessionPath,
     setSessionPath,
     conversation,
     setConversation,
@@ -619,7 +625,6 @@ export function App(props: AppProps = {}) {
     setNextSessionParent,
     setOutput,
     setStatus,
-    messages,
     setMessages,
     agentCards,
     setAgentCards,
@@ -665,7 +670,7 @@ export function App(props: AppProps = {}) {
       await resumeSession(target);
     },
     compactSession: (instructions) => sessionActions.compactSession(instructions),
-    executeLocalCommand: (prompt) => executeCommand(prompt, commandContext, builtinCommands),
+    executeLocalCommand: (prompt) => executeCommand(prompt, builtinCommands(), { setMessages }),
     recordPromptHistory,
     applyComposerState,
     composerValue: inputValue,
@@ -990,110 +995,116 @@ export function App(props: AppProps = {}) {
       setSessionPath(identity.sessionPath);
     },
   });
-  async function activateSkillCommand(
-    name: string,
-    options: { mode: "invoke" | "context-only"; taskText?: string },
-  ): Promise<void> {
-    const rootDir = process.cwd();
-    const sid = await sessionIdentityCoordinator.ensure();
-    const branchParent = nextSessionParent();
-    const activation = await activateSkillForSession(rootDir, process.env, sid, name, {
-      profile: { id: activeEngine() },
-      mode: options.mode,
-      ...(branchParent ? { parentUuid: branchParent.uuid } : {}),
-      contextWindow: activeModelLimits()?.contextWindow,
-    });
-    if (branchParent && activation.recordUuid) setNextSessionParent({ uuid: activation.recordUuid });
-    const scriptInfo = activation.scripts.length > 0
-      ? ` · ${activation.scripts.length} script${activation.scripts.length > 1 ? "s" : ""}`
-      : "";
-    const card = activation.alreadyActive
-      ? `Skill "${activation.name}" already active [${activation.scope}].`
-      : `Skill "${activation.name}" activated [${activation.scope}] · ${activation.resources.length} resource${activation.resources.length === 1 ? "" : "s"}${scriptInfo}.`;
-    setMessages((prev) => [...prev, { role: "system", content: card }]);
-    if (options.mode === "invoke") {
-      const prompt = options.taskText ?? `Apply the ${activation.name} skill to the current context.`;
-      await turnController.submitPrompt(prompt);
-    }
+  const skillActivation = createSkillActivationOwner({
+    rootDir: process.cwd(),
+    sessionIdentity: { ensure: () => sessionIdentityCoordinator.ensure() },
+    activeEngine,
+    activeModelLimits,
+    branchParent: nextSessionParent,
+    setBranchParent: setNextSessionParent,
+    onNotice: (card) => setMessages((prev) => [...prev, { role: "system", content: card }]),
+    submitTurn: (prompt) => turnController.submitPrompt(prompt),
+  });
+  // Function declaration (hoisted like the pre-T1 use case) so the picker's
+  // onActivate closure cannot trip a TDZ regardless of construction order;
+  // it only runs post-render, when skillActivation is initialized.
+  async function activateSkill(name: string, options: SkillActivationOptions): Promise<void> {
+    return skillActivation.activate(name, options);
   }
 
-  // Command execution context: the surface slash-command handlers reach
-  // through. Built once from component signals/helpers; submitPrompt passes it
-  // to executeCommand. See src/tui/commands/.
-  const commandContext: CommandContext = {
-    setMessages,
-    activeProvider,
-    activeModel,
-    activeModelGeneration: () => providerRegistry()
-      ?.providers.find((provider) => provider.id === activeProvider())
-      ?.models.find((model) => model.id === activeModel())
-      ?.generation,
-    activeModelLimits,
-    ensureProviderRegistry,
-    applyProviderSelection,
-    persistProviderSwitch,
-    activeEngine,
-    setActiveEngine,
-    persistEngineSwitch,
-    thinkingTier,
-    setThinkingTier,
-    persistThinkingSwitch,
-    reasoningDisplayMode,
-    setReasoningDisplayMode,
-    persistReasoningSwitch,
-    permissionMode,
-    changePermissionMode,
-    artifacts,
-    refreshArtifacts,
-    loadArtifactPreview: (artifact, options) => loadArtifactPreview(process.cwd(), artifact, options),
-    setSelectedArtifact,
-    setStatus,
-    recordActivity,
-    setSessionId: (value) => {
-      if (typeof value !== "function" && value === undefined) {
-        sessionIdentityCoordinator.reset();
-        clearQueuedInputs();
-      }
-      return setSessionId(value);
+  // Slash-command domain contexts: each command family receives only the
+  // fields it reads, built from component signals/helpers. createBuiltinCommands
+  // composes the per-family factories into the registry the dispatcher and the
+  // completion controller consume. See src/tui/commands/.
+  const commandContexts: BuiltinCommandContexts = {
+    provider: {
+      setMessages, setStatus, recordActivity,
+      activeProvider, activeModel,
+      activeModelGeneration: () => providerRegistry()
+        ?.providers.find((provider) => provider.id === activeProvider())
+        ?.models.find((model) => model.id === activeModel())
+        ?.generation,
+      activeModelLimits,
+      ensureProviderRegistry,
+      applyProviderSelection,
+      persistProviderSwitch,
+      openModelPicker,
+      thinkingTier, setThinkingTier, persistThinkingSwitch,
+      reasoningDisplayMode, setReasoningDisplayMode, persistReasoningSwitch,
+      lastTurnUsage, sessionUsage,
     },
-    setSessionPath,
-    setConversation,
-    setOutput,
-    lastTurnUsage,
-    sessionUsage,
-    setLastTurnUsage,
-    setSessionUsage,
-    setPendingGate,
-    setPendingEngineSwitch,
-    setPendingUserQuestion,
-    setResumableSessions,
-    setSessionPicker,
-    listSessions,
-    resumeSession,
-    compactSession,
-    initProject,
-    openRewindPicker: rewindController.open,
-    resetRewindState,
-    agentCommand,
-    startStage: stageSessionController.start,
-    openModelPicker,
-    openQualityPicker,
-    openQualityRewriteConfirm: openRewriteConfirm,
-    openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
-    openSkillPicker,
-    activateSkill: (name, options) => activateSkillCommand(name, options),
-    openWorkspaceTarget: async (relPath?: string) => {
-      setFocusedArtifactPath(null);
-      return workspaceController.openWorkspaceTarget(relPath);
+    engine: {
+      setMessages, setStatus, recordActivity,
+      activeEngine, setActiveEngine, persistEngineSwitch, compactSession,
+    },
+    session: {
+      setMessages, setStatus, recordActivity,
+      activeEngine, setActiveEngine,
+      setSessionId: (value) => {
+        if (typeof value !== "function" && value === undefined) {
+          sessionIdentityCoordinator.reset();
+          clearQueuedInputs();
+        }
+        return setSessionId(value);
+      },
+      setSessionPath, setConversation, setOutput,
+      setLastTurnUsage, setSessionUsage,
+      setPendingGate, setPendingEngineSwitch, setPendingUserQuestion,
+      setResumableSessions, setSessionPicker,
+      listSessions, resumeSession,
+      compactSession, initProject,
+      openRewindPicker: rewindController.open,
+      resetRewindState,
+      theme: { clearOverride: () => themeController.clearOverride() },
+    },
+    quality: {
+      setMessages, setStatus, recordActivity,
+      openQualityPicker,
+      openQualityRewriteConfirm: openRewriteConfirm,
+      ensureProviderRegistry,
+      activeProvider, activeModel,
+    },
+    skills: {
+      setMessages,
+      openSkillPicker,
+      activateSkill: (name, options) => activateSkill(name, options),
+    },
+    workspace: {
+      setMessages, setStatus, recordActivity,
+      openWorkspaceTarget: async (relPath?: string) => {
+        setFocusedArtifactPath(null);
+        return workspaceController.openWorkspaceTarget(relPath);
+      },
+      refreshArtifacts,
+      loadArtifactPreview: (artifact, options) => loadArtifactPreview(process.cwd(), artifact, options),
+      setSelectedArtifact,
     },
     theme: {
-      statusText: () => themeController.statusText(),
-      applyOverride: (pref) => themeController.applyOverride(pref),
-      clearOverride: () => themeController.clearOverride(),
-      persistProject: (pref) => themeController.persistProject(pref),
-      unsetProject: () => themeController.unsetProject(),
+      setMessages, setStatus, recordActivity,
+      theme: {
+        statusText: () => themeController.statusText(),
+        applyOverride: (pref) => themeController.applyOverride(pref),
+        clearOverride: () => themeController.clearOverride(),
+        persistProject: (pref) => themeController.persistProject(pref),
+        unsetProject: () => themeController.unsetProject(),
+      },
+    },
+    agents: {
+      setMessages,
+      agentCommand,
+      startStage: stageSessionController.start,
+      openSideQuestion: (args) => sideQuestionController.openSideQuestion(args),
+    },
+    permissions: {
+      setMessages,
+      permissionMode,
+      changePermissionMode,
+    },
+    help: {
+      setMessages,
     },
   };
+  setBuiltinCommands(createBuiltinCommands(commandContexts));
 
   async function refreshArtifacts(): Promise<ArtifactEntry[]> {
     const entries = await scanArtifacts(process.cwd());
@@ -1148,7 +1159,7 @@ export function App(props: AppProps = {}) {
   return (
     <box flexDirection="column" width="100%" height="100%" backgroundColor={palette.bg}>
       <box height={3} border borderColor={palette.panelBorder} paddingX={1} flexDirection="row">
-        <text
+        <ThemedText
           content={workspaceActive()
             ? workspaceHeaderLine(process.cwd(), layout().width)
             : headerLine(activeEngine(), layout().width, agentActivitySummary(agentCards()), backgroundProcessActivitySummary(backgroundProcesses()))}
@@ -1157,7 +1168,7 @@ export function App(props: AppProps = {}) {
           wrapMode="none"
         />
         <Show when={permissionMode() === "YOLO"} fallback={<box width={0} />}>
-          <text content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} wrapMode="none" />
+          <ThemedText content={props.dangerouslySkipPermissions ? "  YOLO · CLI OVERRIDE" : "  YOLO"} fg={palette.error} attributes={1} wrapMode="none" />
         </Show>
       </box>
 
@@ -1289,7 +1300,7 @@ export function App(props: AppProps = {}) {
       />
       </Show>
       <box height={layout().footerHeight} paddingLeft={1}>
-        <text
+        <ThemedText
           content={footerLine(activeProvider(), activeModel(), providerHasApiKey(), layout().width, lastTurnUsage(), sessionUsage(), activeModelLimits())}
           fg={palette.textMuted}
           wrapMode="none"

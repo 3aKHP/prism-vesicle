@@ -67,7 +67,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "grep_files",
-      description: "Search allowed UTF-8 project files for literal text or a JavaScript regular expression.",
+      description: "Search allowed UTF-8 project files for literal text or a JavaScript regular expression. Returns matching lines with optional context, or switch outputMode to list matching files or count hits per file.",
       parameters: {
         type: "object",
         properties: {
@@ -93,7 +93,16 @@ export const fileToolDefinitions: ToolDefinition[] = [
           },
           maxMatches: {
             type: "number",
-            description: "Maximum matches to return. Defaults to 50 and is capped at 200.",
+            description: "Maximum matches to return. Defaults to 50 and is capped at 200. In files_with_matches and count modes, limits the number of files instead.",
+          },
+          contextLines: {
+            type: "number",
+            description: "Lines of context to show before and after each match. Defaults to 0 (no context). Capped at 10. Only affects outputMode 'content'.",
+          },
+          outputMode: {
+            type: "string",
+            enum: ["content", "files_with_matches", "count"],
+            description: "Output shape. 'content' returns match entries with text (default). 'files_with_matches' returns only file paths that contain matches. 'count' returns per-file match counts.",
           },
         },
         required: ["path", "pattern"],
@@ -105,7 +114,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "read_file",
-      description: "Read a UTF-8 text file from an allowed Vesicle project directory.",
+      description: "Read a UTF-8 text file from an allowed Vesicle project directory. Use startLine/endLine to read a line range, or offsetBytes/maxBytes to read a bounded byte slice without loading the whole file (preferred for very large files or giant single-line payloads).",
       parameters: {
         type: "object",
         properties: {
@@ -115,11 +124,19 @@ export const fileToolDefinitions: ToolDefinition[] = [
           },
           startLine: {
             type: "number",
-            description: "Optional 1-based first line to read.",
+            description: "Optional 1-based first line to read (ignored when maxBytes is given).",
           },
           endLine: {
             type: "number",
-            description: "Optional 1-based last line to read, inclusive.",
+            description: "Optional 1-based last line to read, inclusive (ignored when maxBytes is given).",
+          },
+          offsetBytes: {
+            type: "number",
+            description: "Optional non-negative byte offset for a bounded slice read (requires maxBytes; project files only).",
+          },
+          maxBytes: {
+            type: "number",
+            description: "Optional maximum bytes to read from offsetBytes. When set, reads a bounded byte slice (project files only) instead of a line range and never loads the whole file.",
           },
         },
         required: ["path"],

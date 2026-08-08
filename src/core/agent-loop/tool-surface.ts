@@ -83,10 +83,9 @@ export function resolveBuiltInTools(
     if (name === "view_image" && !visionEnabled) continue;
     if (name === "shell_exec" && (!shellExecEnabled || !shellProfile)) continue;
     if ((name === "shell_output" || name === "shell_stop") && !shellExecEnabled) continue;
-    // Skill tools require both the Engine's opt-in and a non-empty session
-    // catalog; run_skill_script additionally requires process capability.
-    if ((name === "activate_skill" || name === "read_skill_resource") && skillNames.length === 0) continue;
-    if (name === "run_skill_script" && (skillNames.length === 0 || !shellExecEnabled || !shellProfile)) continue;
+    // Skill tools are host-injected after the loop, independent of the
+    // Harness profile's defaultTools.
+    if (name === "activate_skill" || name === "read_skill_resource" || name === "run_skill_script") continue;
     const definition = byName.get(name);
     if (!definition) {
       throw new Error(
@@ -102,5 +101,16 @@ export function resolveBuiltInTools(
   // Persistent Instruction controls are universal host tools for every non-Stage
   // engine. Stage stays strictly tool-less by design.
   resolved.push(...instructionToolDefinitions);
+  // Skill tools are host-owned, not Harness-owned. They are injected for
+  // every non-Stage engine when the session has a non-empty catalog,
+  // independent of the Harness profile's defaultTools so harness bumps
+  // cannot silently clobber them.
+  if (skillNames.length > 0) {
+    resolved.push(byName.get("activate_skill")!);
+    resolved.push(byName.get("read_skill_resource")!);
+    if (shellExecEnabled && shellProfile) {
+      resolved.push(byName.get("run_skill_script")!);
+    }
+  }
   return resolved;
 }

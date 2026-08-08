@@ -1,27 +1,43 @@
 import { resolveUserQuestion } from "../core/agent-loop/run";
+import type { RunPromptResult } from "../core/agent-loop/run";
 import type { UserQuestionAnswer } from "../core/user-question/types";
 import { displayUserQuestionAnswer, type PendingUserQuestionState } from "./decision-interaction";
 import { displayTranscriptFromSnapshot, vesicleMessagesFromResumed } from "./session-presenter";
 import { loadSessionSnapshot } from "../core/session/store";
-import type { DecisionContinuationOptions } from "./turn-controller-options";
+import type { QueuedWorkController } from "./queued-work-controller";
+import type { PermissionContext, TurnAgentPort, TurnDecisionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort, TurnRunCancellable } from "./turn-controller-options";
 
-type UserQuestionContinuationOptions = Pick<DecisionContinuationOptions,
-  | "activeGeneration" | "activeProviderSelection" | "agentCards" | "agentManager" | "beginUsageTurn"
-  | "busy" | "clearQuestionFreeform" | "handleAgentEvent" | "handleInterruptedTurn" | "handleResult"
-  | "onProviderContextSnapshot" | "pendingUserQuestion" | "permissionBroker" | "permissionContext"
-  | "questionFreeformText" | "questionSelected" | "queuedWork" | "recordActivity" | "reportError"
-  | "rootDir" | "runCancellable" | "setBusy" | "setConversation" | "setMessages" | "setPendingUserQuestion"
-  | "setQuestionSelected" | "setStatus"
->;
+type UserQuestionContinuationOptions = {
+  runtime: Pick<TurnRuntimePort, "activeProviderSelection" | "activeGeneration" | "busy" | "setBusy" | "permissionBroker">;
+  decision: Pick<TurnDecisionPort, "pendingUserQuestion" | "setPendingUserQuestion" | "questionSelected" | "setQuestionSelected" | "questionFreeformText" | "clearQuestionFreeform">;
+  transcript: Pick<TurnTranscriptPort, "setMessages" | "setStatus" | "recordActivity">;
+  agent: Pick<TurnAgentPort, "agentCards" | "agentManager" | "handleAgentEvent" | "onProviderContextSnapshot">;
+  usage: Pick<TurnUsagePort, "beginUsageTurn">;
+  session: Pick<TurnSessionPort, "rootDir" | "setConversation">;
+  queuedWork: QueuedWorkController;
+  runCancellable: TurnRunCancellable;
+  handleResult: (result: RunPromptResult) => void;
+  handleInterruptedTurn: () => void;
+  reportError: (error: unknown) => void;
+  permissionContext: () => PermissionContext;
+};
 
 export function createUserQuestionContinuation(options: UserQuestionContinuationOptions) {
+  const { activeProviderSelection, activeGeneration, busy, setBusy, permissionBroker } = options.runtime;
+  const { pendingUserQuestion, setPendingUserQuestion, questionSelected, setQuestionSelected, questionFreeformText, clearQuestionFreeform } = options.decision;
+  const { setMessages, setStatus, recordActivity } = options.transcript;
+  const { agentCards, agentManager, handleAgentEvent, onProviderContextSnapshot } = options.agent;
+  const { beginUsageTurn } = options.usage;
+  const { rootDir, setConversation } = options.session;
+  const { queuedWork, runCancellable, handleResult, handleInterruptedTurn, reportError, permissionContext } = options;
+
   async function submitUserQuestionAnswer(selectedIndex: number): Promise<void> {
-    const pending = options.pendingUserQuestion();
-    if (!pending || options.busy()) return;
+    const pending = pendingUserQuestion();
+    if (!pending || busy()) return;
     const option = pending.question.options[selectedIndex];
     if (!option) return;
     if (option.kind === "freeform") {
-      submitUserQuestionFreeform(options.questionFreeformText());
+      submitUserQuestionFreeform(questionFreeformText());
       return;
     }
     await submitUserQuestionAnswerPayload(pending, {
@@ -34,17 +50,17 @@ export function createUserQuestionContinuation(options: UserQuestionContinuation
   }
 
   function submitUserQuestionFreeform(value: unknown): void {
-    const pending = options.pendingUserQuestion();
-    if (!pending || options.busy()) return;
-    const text = (typeof value === "string" ? value : options.questionFreeformText()).trim();
+    const pending = pendingUserQuestion();
+    if (!pending || busy()) return;
+    const text = (typeof value === "string" ? value : questionFreeformText()).trim();
     if (!text) {
-      options.setStatus("type a free-form answer or press Esc");
+      setStatus("type a free-form answer or press Esc");
       return;
     }
-    const selectedIndex = options.questionSelected();
+    const selectedIndex = questionSelected();
     const option = pending.question.options[selectedIndex];
     if (!option || option.kind !== "freeform") return;
-    options.clearQuestionFreeform();
+    clearQuestionFreeform();
     void submitUserQuestionAnswerPayload(pending, {
       selectedIndex,
       label: option.label,
@@ -61,17 +77,17 @@ export function createUserQuestionContinuation(options: UserQuestionContinuation
   ): Promise<void> {
     let recoveryState: "restored" | "resolved" | "blocked" = "resolved";
     let recoveryStatus: string | undefined;
-    options.setBusy(true);
-    options.queuedWork.block();
-    options.setStatus(`answering question: ${pending.question.header}`);
-    options.recordActivity({ kind: "gate", text: `answering question ${pending.question.header}: ${answer.kind === "freeform" ? "Other" : answer.label}` });
-    options.setPendingUserQuestion(null);
-    options.setQuestionSelected(0);
-    options.clearQuestionFreeform();
-    options.setMessages((previous) => [...previous, { role: "user", content: displayUserQuestionAnswer(pending.question.header, answer) }]);
-    options.beginUsageTurn();
+    setBusy(true);
+    queuedWork.block();
+    setStatus(`answering question: ${pending.question.header}`);
+    recordActivity({ kind: "gate", text: `answering question ${pending.question.header}: ${answer.kind === "freeform" ? "Other" : answer.label}` });
+    setPendingUserQuestion(null);
+    setQuestionSelected(0);
+    clearQuestionFreeform();
+    setMessages((previous) => [...previous, { role: "user", content: displayUserQuestionAnswer(pending.question.header, answer) }]);
+    beginUsageTurn();
     try {
-      const outcome = await options.runCancellable((signal) => resolveUserQuestion({
+      const outcome = await runCancellable((signal) => resolveUserQuestion({
         engine: pending.engine,
         sessionId: pending.sessionId,
         messages: pending.messages,
@@ -79,30 +95,30 @@ export function createUserQuestionContinuation(options: UserQuestionContinuation
         question: pending.question,
         delegationDecision: pending.delegationDecision,
         answer,
-        providerSelection: options.activeProviderSelection(),
-        generation: options.activeGeneration(),
-        permission: options.permissionContext(),
+        providerSelection: activeProviderSelection(),
+        generation: activeGeneration(),
+        permission: permissionContext(),
         signal,
-        onEvent: options.handleAgentEvent,
-        onProviderContextSnapshot: options.onProviderContextSnapshot,
-        agentManager: options.agentManager(),
-        permissionBroker: options.permissionBroker,
-        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
-        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
+        onEvent: handleAgentEvent,
+        onProviderContextSnapshot: onProviderContextSnapshot,
+        agentManager: agentManager(),
+        permissionBroker,
+        takePendingUserInputs: queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: queuedWork.runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
-        if (!await options.queuedWork.handleInterruption(pending.sessionId)) {
+        if (!await queuedWork.handleInterruption(pending.sessionId)) {
           ({ state: recoveryState, status: recoveryStatus } = await reconcileUserQuestionAfterContinuationFailure(pending, selectedIndex));
         }
-        options.handleInterruptedTurn();
-        if (recoveryStatus) options.setStatus(recoveryStatus);
-      } else options.handleResult(outcome.value);
+        handleInterruptedTurn();
+        if (recoveryStatus) setStatus(recoveryStatus);
+      } else handleResult(outcome.value);
     } catch (error) {
       ({ state: recoveryState, status: recoveryStatus } = await reconcileUserQuestionAfterContinuationFailure(pending, selectedIndex));
-      options.reportError(error);
-      if (recoveryStatus) options.setStatus(recoveryStatus);
+      reportError(error);
+      if (recoveryStatus) setStatus(recoveryStatus);
     } finally {
-      options.setBusy(recoveryState === "blocked");
+      setBusy(recoveryState === "blocked");
     }
   }
 
@@ -114,30 +130,30 @@ export function createUserQuestionContinuation(options: UserQuestionContinuation
     status?: string;
   }> {
     try {
-      const snapshot = await loadSessionSnapshot(options.rootDir, pending.sessionId, {
+      const snapshot = await loadSessionSnapshot(rootDir, pending.sessionId, {
         synthesizeDanglingToolResults: false,
       });
       if (snapshot.pendingDelegationRetry || snapshot.pendingDelegationDecisionRecovery) {
-        options.setPendingUserQuestion(null);
+        setPendingUserQuestion(null);
         return {
           state: "blocked",
           status: "Harness delegation recovery pending; restart Vesicle and resume this session",
         };
       }
       if (snapshot.pendingUserQuestion?.toolCallId === pending.toolCallId) {
-        options.setPendingUserQuestion(pending);
-        options.setQuestionSelected(selectedIndex);
+        setPendingUserQuestion(pending);
+        setQuestionSelected(selectedIndex);
         return { state: "restored" };
       }
-      options.setPendingUserQuestion(null);
-      options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
-      options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
+      setPendingUserQuestion(null);
+      setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      setMessages(displayTranscriptFromSnapshot(snapshot.messages, agentCards()));
       return {
         state: "resolved",
         status: "question resolved; provider continuation stopped",
       };
     } catch {
-      options.setPendingUserQuestion(null);
+      setPendingUserQuestion(null);
       return {
         state: "blocked",
         status: "Unable to verify Harness delegation recovery; restart Vesicle and resume this session",

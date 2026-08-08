@@ -2,8 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
-import type { CommandContext } from "../../../src/tui/commands/types";
+import { createThemeCommands } from "../../../src/tui/commands/theme";
+import type { ThemeCommandContext } from "../../../src/tui/commands/types";
 import type { ThemePreferenceController } from "../../../src/tui/theme-preference-controller";
 import { createThemePreferenceController, parseEnvTheme } from "../../../src/tui/theme-preference-controller";
 import { projectPreferencesPath, readProjectThemePreference } from "../../../src/config/project-preferences";
@@ -29,7 +29,7 @@ describe("/theme command grammar", () => {
   });
   afterAll(async () => { await rm(root, { recursive: true, force: true }); });
 
-  function buildContext(): { ctx: CommandContext; messages: () => Message[] } {
+  function buildContext(): { ctx: ThemeCommandContext; messages: () => Message[] } {
     let messages: Message[] = [];
     const ctx = {
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
@@ -42,15 +42,15 @@ describe("/theme command grammar", () => {
         persistProject: (pref: never) => controller.persistProject(pref),
         unsetProject: () => controller.unsetProject(),
       },
-    } as unknown as CommandContext;
+    } as unknown as ThemeCommandContext;
     return { ctx, messages: () => messages };
   }
 
   async function runTheme(args: string): Promise<Message[]> {
-    const command = builtinCommands.find((entry) => entry.name === "theme");
-    if (!command) throw new Error("Missing /theme command.");
     const { ctx, messages } = buildContext();
-    await command.run(ctx, args, args ? `/theme ${args}` : "/theme");
+    const command = createThemeCommands(ctx).find((entry) => entry.name === "theme");
+    if (!command) throw new Error("Missing /theme command.");
+    await command.run(args, args ? `/theme ${args}` : "/theme");
     return messages();
   }
 

@@ -1,5 +1,6 @@
 import type { VesicleConfig } from "../../config/env";
 import type { McpRegistry } from "../../mcp/registry";
+import { composeMcpOutputPersistenceHint } from "../../mcp/output-persistence";
 import { createProvider } from "../../providers";
 import type { VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import type { AgentManager } from "../agents/manager";
@@ -9,10 +10,9 @@ import { defaultPermissionRuntime } from "../permissions";
 import type { PermissionRuntimeOptions, ToolPermissionBroker } from "../permissions";
 import { getProcessManager, type ProcessManager } from "../process/manager";
 import type { SessionStore } from "../session/store";
-import { bindExecutionRound, clearExecutionRound, loadSessionSnapshot, newProviderRoundId, withExecutionRound } from "../session/store";
-import { AutoCompactBlockedError, runAutomaticCompaction } from "../compact/auto-compact";
+import { bindExecutionRound, clearExecutionRound, newProviderRoundId, withExecutionRound } from "../session/store";
+import { AutoCompactBlockedError } from "../compact/auto-compact";
 import { estimateRequestTokens } from "../compact/context-budget";
-import { toVesicleMessage } from "../compact/summary-generator";
 import type { ToolDefinition } from "../tools";
 import { createTurnAgentManager } from "./agent-manager";
 import { recordAssistantToolCalls } from "./assistant-recorder";
@@ -22,6 +22,8 @@ import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { validateToolCallArguments } from "../tools/arguments";
 import { finalizeTurn } from "./turn-finalizer";
+import { createCompactionObservation, runMidTurnCompaction, updateProviderObservation } from "./mid-turn-compaction";
+import type { CompactionObservation, MidTurnCompactionParams } from "./mid-turn-compaction";
 import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
 import { composeSkillCatalogBlock, readFrozenSessionSkillCatalog, resolveEngineEligibleCatalog } from "../skills";
 import type { ResolvedSkillCatalog } from "../skills";
@@ -70,6 +72,8 @@ export type RunLoopArgs = {
   enginePrompt: string;
   tools: ToolDefinition[];
   mcpRegistry: McpRegistry;
+  /** Whether MCP tool-result persistence (#137B) is enabled for this turn. */
+  mcpOutputPersistence?: boolean;
   messages: VesicleMessage[];
   session: SessionStore;
   /**
@@ -115,9 +119,7 @@ type LoopRuntime = {
   quality: QualityRoundState;
   logicalTurnId: string | undefined;
   providerRoundId: string | undefined;
-  /** Most recent provider-observed context occupancy, for mid-turn budget checks. Cleared after a compact (stale). */
-  lastContextInputTokens: number | undefined;
-  lastRequestObservation: { contextInputTokens: number; estimatedRequestTokens: number } | undefined;
+  compactionObservation: CompactionObservation;
   lastRequestEstimateTokens: number | undefined;
 };
 
@@ -155,6 +157,12 @@ function refreshLiveSystemPrompt(args: RunLoopArgs): void {
     ? composeSkillCatalogBlock(resolveEngineEligibleCatalog(frozenCatalog, args.profile).catalog)
     : "";
   if (catalogBlock) prompt = `${prompt}\n\n${catalogBlock}`;
+  // Re-append the MCP output-persistence hint so it survives the per-round
+  // recompose, mirroring the Skill catalog block. Gated on the toggle and on
+  // the engine actually having MCP tools.
+  if (args.mcpOutputPersistence && args.mcpRegistry.definitions.length > 0) {
+    prompt = `${prompt}\n\n${composeMcpOutputPersistenceHint(args.session.sessionId)}`;
+  }
   args.systemPrompt = prompt;
 }
 
@@ -190,21 +198,16 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     if (!round.hadToolCalls) break;
     // The latest provider-observed context occupancy feeds the mid-turn budget
     // checks (the host estimate covers growth since this observation).
-    const observed = response.usage?.contextInputTokens;
-    if (typeof observed === "number" && observed > 0) {
-      runtime.lastContextInputTokens = observed;
-      if (runtime.lastRequestEstimateTokens !== undefined) {
-        runtime.lastRequestObservation = {
-          contextInputTokens: observed,
-          estimatedRequestTokens: runtime.lastRequestEstimateTokens,
-        };
-      }
-    }
+    updateProviderObservation(
+      runtime.compactionObservation,
+      response.usage?.contextInputTokens,
+      runtime.lastRequestEstimateTokens,
+    );
     // Mid-turn soft check: after a complete assistant/tool batch (any pause has
     // been resolved by advanceRound returning, not pausing), before queued
     // steering is drained for the next round. At most one compact per boundary.
     const soft = args.profile.id !== "stage" && args.config.limits?.autoCompact
-      ? await runMidTurnCompaction(args, runtime, false)
+      ? await runMidTurnCompaction(compactionParams(args), runtime.compactionObservation, false)
       : { compacted: false, blocked: false };
     if (soft.blocked) break;
     // A tool round may have refreshed the in-turn frozen instruction snapshot
@@ -465,8 +468,7 @@ function createLoopRuntime(args: RunLoopArgs): LoopRuntime {
     quality: createQualityRoundState(args.qualityState),
     logicalTurnId: args.logicalTurnId,
     providerRoundId: args.providerRoundId,
-    lastContextInputTokens: undefined,
-    lastRequestObservation: undefined,
+    compactionObservation: createCompactionObservation(),
     lastRequestEstimateTokens: undefined,
   };
 }
@@ -536,7 +538,7 @@ async function prepareExactProviderBoundary(
   if (args.profile.id === "stage" || !args.config.limits?.autoCompact) {
     return { compacted: false, blocked: false };
   }
-  return runMidTurnCompaction(args, runtime, true);
+  return runMidTurnCompaction(compactionParams(args), runtime.compactionObservation, true);
 }
 
 async function recordNoProgressBreak(session: SessionStore, consecutiveFailures: number): Promise<void> {
@@ -547,81 +549,22 @@ async function recordNoProgressBreak(session: SessionStore, consecutiveFailures:
   });
 }
 
-/**
- * One mid-turn automatic-compaction check. The soft check (onlyHardCeiling
- * false) runs after a complete tool batch; the hard check (onlyHardCeiling true)
- * runs after queued/background input has been drained, right before the next
- * provider request. On a compact the active in-memory message array is rebound
- * to the post-checkpoint history (replacement + retained frontier), and the
- * stale provider occupancy is cleared so the next check re-estimates. On a
- * hard-ceiling failure the loop is blocked: a system notice is appended and the
- * caller breaks before the unsafe request. The compact provider call is a
- * standalone request (never a bootstrap/loop turn) so it cannot re-enter this
- * check; the outer loop signal cancels it.
- */
-async function runMidTurnCompaction(
-  args: RunLoopArgs,
-  runtime: LoopRuntime,
-  onlyHardCeiling: boolean,
-): Promise<{ compacted: boolean; blocked: boolean; error?: AutoCompactBlockedError }> {
-  const estimatedNextRequestTokens = estimateRequestTokens(args.messages, args.systemPrompt, args.tools);
-  const result = await runAutomaticCompaction({
+function compactionParams(args: RunLoopArgs): MidTurnCompactionParams {
+  return {
     rootDir: args.rootDir,
-    sessionId: args.session.sessionId,
+    session: args.session,
     engine: args.profile.id,
-    providerSelection: { provider: args.config.providerId, model: args.config.model },
+    providerId: args.config.providerId,
+    model: args.config.model,
     generation: args.generation,
     signal: args.signal,
     onEvent: args.onEvent,
-    phase: "mid-turn",
-    onlyHardCeiling,
-    estimateReplacementTokens: (replacement) => estimateRequestTokens(
-      replacement.map(toVesicleMessage),
-      args.systemPrompt,
-      args.tools,
-    ),
-    budget: {
-      config: args.config.limits?.autoCompact,
-      limits: args.config.limits,
-      generation: args.config.generation,
-      turnMaxTokens: args.generation?.maxTokens,
-      lastContextInputTokens: runtime.lastContextInputTokens,
-      lastRequestObservation: runtime.lastRequestObservation,
-      estimatedNextRequestTokens,
-    },
-  });
-  if (result.kind === "cancelled") throw result.error;
-  if (result.kind === "compacted") {
-    runtime.lastContextInputTokens = undefined;
-    runtime.lastRequestObservation = undefined;
-    const snapshot = await loadSessionSnapshot(args.rootDir, args.session.sessionId, { synthesizeDanglingToolResults: false });
-    const rebuilt = snapshot.messages.map(toVesicleMessage);
-    args.messages.length = 0;
-    args.messages.push(...rebuilt);
-    return { compacted: true, blocked: false };
-  }
-  if (result.kind === "hard-failed") {
-    await args.session.append({
-      role: "system",
-      content: `Context budget exceeded and automatic compaction failed: ${result.errorMessage} Run /compact manually or switch to a model with a larger context window.`,
-      metadata: { kind: "compact-blocked" },
-    });
-    return {
-      compacted: false,
-      blocked: true,
-      error: new AutoCompactBlockedError(
-        result.errorMessage,
-        result.check.kind === "hard-ceiling"
-          ? {
-            projectedTokens: result.check.projectedTokens,
-            hardInputCeilingTokens: result.check.hardInputCeilingTokens,
-            softTriggerTokens: result.check.softTriggerTokens,
-            usageSource: result.check.usageSource,
-          }
-          : undefined,
-        true,
-      ),
-    };
-  }
-  return { compacted: false, blocked: false };
+    systemPrompt: args.systemPrompt,
+    tools: args.tools,
+    messages: args.messages,
+    autoCompactConfig: args.config.limits?.autoCompact,
+    limits: args.config.limits,
+    configGeneration: args.config.generation,
+    turnMaxTokens: args.generation?.maxTokens,
+  };
 }

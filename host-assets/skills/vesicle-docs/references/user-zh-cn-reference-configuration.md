@@ -161,6 +161,18 @@ Doctor 只检查路由选择,不会尝试证明代理或供应商实际可达;�
 
 从 [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml) 起步。每个服务器可设 `transport`(streamable-http)、`url`、`timeoutSeconds`、`toolPrefix`、`headers`(支持 `${ENV_VAR}` 从 `.env` 展开)、`includeTools`/`excludeTools` 过滤、`enabledEngines`(限定哪些引擎能用)。文件存在即默认启用;密钥放 `.env`。
 
+Vesicle 支持双纪元 Streamable HTTP MCP 工具兼容:同一个 Vesicle 进程可以同时连接 legacy(`initialize` 协商)和 modern(`server/discover` 协商)的 MCP 服务器。每个服务器可设 `negotiation`:
+
+- `legacy`(默认,缺省值):只走 `initialize` 路径,不发 modern 探测。
+- `auto`:先发 `server/discover` 探测,成功则用 modern,失败再走 legacy。新配置推荐使用。
+- `modern`:只走 `2026-07-28` 协议,不回退 legacy。
+
+`protocolVersion` 是 legacy 版本钉(默认 `2025-03-26`),不决定纪元。`supportedProtocolVersions` 是可选的 modern 版本列表(默认 `[“2026-07-28”]`)。
+
+MCP 工具结果会先经过宿主的不可信内容边界。普通文本保持原顺序；如果当前模型声明 `capabilities.vision: true`，严格校验后的内联 PNG/JPEG/GIF/WebP 图片会作为图片附件交给模型。会话只保存内容寻址引用，不保存 base64。当前解码上限是临时的 20 MiB 安全边界，不是可配置的长期产品承诺。
+
+如果当前模型不支持视觉，图片不会被解码或落盘，安全文本仍会继续并附带省略提示。MCP 错误结果也不会导入图片。resource、audio、URL/link 和未知结果目前只会给出有界的”不支持”提示；Vesicle 不会自动下载、读取、转录、播放或注入这些内容。
+
 ## 持久化指令(可选)
 
 如果你经常要在某个引擎下重复同一套子工作流或规范,可以写进持久化指令文件——宿主在每个会话启动时自动把它们加载进系统 prompt,不需要再让模型写文件、下次会话再提醒它去读。
@@ -184,10 +196,12 @@ Doctor 只检查路由选择,不会尝试证明代理或供应商实际可达;�
 ```yaml
 version: 1
 theme: auto   # dark | light | default | auto
+# mcpOutputPersistence: true   # 可选开启(#137B):把 MCP 工具输出持久化到 tmp/mcp-output/
+# mcpOutputAutoTruncate: true  # 需先开启 mcpOutputPersistence:超长结果只给预览+引用
 ```
 
-- `version: 1` 必填;`theme` 可选,接受 `dark`/`light`/`default`/`auto` 四值;省略 `theme` 等于没有项目级偏好。
-- 该文件只存主题字段,不接受密钥、供应商、权限、shell 或任意环境值;未知字段非法。
+- `version: 1` 必填;`theme` 可选,接受 `dark`/`light`/`default`/`auto` 四值;省略 `theme` 等于没有项目级偏好。`mcpOutputPersistence` 可选(`true`/`false`,默认 `false`),用于开启 MCP 输出持久化(见下文)。
+- 该文件只存这些偏好字段,不接受密钥、供应商、权限、shell 或任意环境值;未知字段非法。
 - 文件被符号链接、版本不符或字段非法时,启动会给出一条诊断并回退到更低优先级的来源,不会阻止 TUI 打开。
 
 主题有效来源优先级(高到低):会话内 `/theme` 临时覆盖 → 启动 `--dark`/`--light` 标志 → 项目 `.vesicle/preferences.yaml` → `VESICLE_THEME` 环境变量 → 内置 `default`。
@@ -199,6 +213,15 @@ theme: auto   # dark | light | default | auto
 - `/theme --unset-project` —— 移除项目 `theme`,清除会话覆盖,按上面优先级重新计算。
 
 `/new` 或恢复另一个会话会清除会话级临时覆盖并重新计算启动偏好;主题从不写入会话 JSONL。
+
+## 项目级 MCP 输出持久化(可选)
+
+在 `.vesicle/preferences.yaml` 中设置 `mcpOutputPersistence: true`,即可把每次 MCP 工具调用的文本与图片输出持久化到项目暂存根:文本落在 `tmp/mcp-output/<session-id>/`,解码后的图片落在 `tmp/mcp-output/<session-id>/blob/`,均为原生文件。文件名由 MCP 工具及其参数派生,便于用工具检索。
+
+- 模型收到的内联结果不变;持久化是一份额外的持久副本,模型之后可用 `read_file`、`grep_files`、`view_image` 重新读取,而不必重复昂贵或不可重试的 MCP 调用。
+- 设置 `mcpOutputAutoTruncate: true`(需先开启 `mcpOutputPersistence`)可将超长 MCP 文本结果(≥ 32 KiB)替换为 4 KiB 内联预览 + 指向完整副本的引用,避免单条大结果挤占上下文。未超阈值时正文照旧内联;无论哪种,完整文本都在磁盘上。
+- 默认关闭;仅在设置了该偏好的项目中生效。仅对实际拥有 MCP 工具的引擎,通过系统提示词注入一条提示告知模型。
+- 持久化输出位于 `tmp/`,不可回退、且从不自动清理。不需要时请用文件工具显式删除。
 
 ## 路径优先级速记
 

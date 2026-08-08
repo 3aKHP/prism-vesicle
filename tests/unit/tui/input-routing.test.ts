@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { consumeKey, createInputRouter, createRoutingKey, isClipboardImagePasteKey, type InputRoutingOptions } from "../../../src/tui/input-routing";
-import { createWorkspaceController } from "../../../src/tui/workspace-controller";
+import { createWorkspaceController } from "../../../src/tui/workspace";
 import type { TuiKeyEvent } from "../../../src/tui/decision-interaction";
 
 describe("TUI input routing", () => {

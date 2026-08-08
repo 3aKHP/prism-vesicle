@@ -114,6 +114,29 @@
       "source": "cn-antislop"
     },
     {
+      "id": "zh-f3-period-density",
+      "tier": "F3",
+      "lang": "zh-CN",
+      "title": "叙事段落句号密度过高(节奏断气)",
+      "severity": "tier3",
+      "maturity": "experimental",
+      "targets": [
+        "narrative-prose"
+      ],
+      "matcher": {
+        "kind": "metric",
+        "unit": "paragraph",
+        "metric": {
+          "signal": "period_per_100_chars",
+          "operator": "gte",
+          "threshold": 6,
+          "minimumMatches": 5,
+          "excludeDialogue": true
+        }
+      },
+      "source": "self"
+    },
+    {
       "id": "zh-f3-micro-action-density",
       "tier": "F3",
       "lang": "zh-CN",

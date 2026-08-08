@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runSkillsCommand } from "../../../src/cli/skills";
+import { runSkillsCommand } from "../../../src/cli/commands/skills";
 
 describe("vesicle skills list resilience", () => {
   // `runList` reads the active index via `process.env` and has no env parameter,

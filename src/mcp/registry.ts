@@ -2,8 +2,9 @@ import { dirname, join } from "node:path";
 import { providerConfigPathFromEnv } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import type { ToolCall, ToolDefinition, ToolResult } from "../core/tools/types";
-import { McpStreamableHttpClient, type McpClientOptions } from "./client";
+import { createMcpConnection, type McpConnection, type McpConnectionOptions } from "./connection";
 import { loadMcpConfig, mcpConfigPathFromEnv } from "./config";
+import { deliverMcpToolResult, type McpResultDeliveryContext } from "./result-delivery";
 import type { McpConfig, McpRawTool, McpServerConfig, McpServerStatus, McpToolBinding, McpToolEvent } from "./types";
 import {
   buildMcpToolAlias,
@@ -13,15 +14,21 @@ import {
   toolDefinitionFromMcpBinding,
 } from "./types";
 
-export type McpRegistryOptions = McpClientOptions & {
+export type McpRegistryOptions = McpConnectionOptions & {
   env?: NodeJS.ProcessEnv;
+  /**
+   * When set, MCP tool-call outputs are persisted under
+   * `tmp/mcp-output/<sessionId>/` (#137B). The registry captures this at build
+   * time so the tool-round executor does not need to know about persistence.
+   */
+  outputPersistence?: { sessionId: string; autoTruncate?: boolean };
 };
 
 export type McpRegistry = {
   definitions: ToolDefinition[];
   statuses: McpServerStatus[];
   hasTool: (name: string) => boolean;
-  execute: (call: ToolCall, options?: { signal?: AbortSignal }) => Promise<ToolResult>;
+  execute: (call: ToolCall, context: Pick<McpResultDeliveryContext, "rootDir" | "visionEnabled" | "signal">) => Promise<ToolResult>;
 };
 
 export type McpInspection = {
@@ -110,7 +117,7 @@ async function buildRegistry(
   options: McpRegistryOptions,
   engine?: EngineId,
 ): Promise<McpRegistry> {
-  const clients = new Map<string, McpStreamableHttpClient>();
+  const connections = new Map<string, McpConnection>();
   const bindings = new Map<string, McpToolBinding>();
   const statuses: McpServerStatus[] = [];
 
@@ -124,16 +131,31 @@ async function buildRegistry(
       continue;
     }
 
-    const client = new McpStreamableHttpClient(server, options);
+    const result = await createMcpConnection(server, options);
+    if (!result.ok) {
+      statuses.push({
+        id: server.id,
+        transport: server.transport,
+        enabled: true,
+        connected: false,
+        toolCount: 0,
+        negotiation: server.negotiation,
+        era: "unknown",
+        failureKind: result.failureKind,
+        error: result.error,
+      });
+      continue;
+    }
+    const connection = result.connection;
     try {
-      await client.initialize();
-      const tools = await client.listTools();
+      const tools = await connection.listTools();
       const serverBindings = buildBindings(server, tools);
       const duplicate = serverBindings.find((binding) => bindings.has(binding.alias));
       if (duplicate) {
+        await connection.close();
         throw new Error(`duplicate MCP tool alias "${duplicate.alias}"`);
       }
-      clients.set(server.id, client);
+      connections.set(server.id, connection);
       for (const binding of serverBindings) bindings.set(binding.alias, binding);
       statuses.push({
         id: server.id,
@@ -141,15 +163,22 @@ async function buildRegistry(
         enabled: true,
         connected: true,
         toolCount: serverBindings.length,
-        detail: describeServer(server, client),
+        negotiation: connection.info.negotiation,
+        era: connection.info.era,
+        protocolVersion: connection.info.protocolVersion,
+        detail: describeConnection(server, connection),
       });
     } catch (error) {
+      await connection.close();
       statuses.push({
         id: server.id,
         transport: server.transport,
         enabled: true,
         connected: false,
         toolCount: 0,
+        negotiation: server.negotiation,
+        era: connection.info.era,
+        failureKind: connection.info.era === "modern" ? "protocol" : "legacy-handshake",
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -159,7 +188,7 @@ async function buildRegistry(
     definitions: [...bindings.values()].map(toolDefinitionFromMcpBinding),
     statuses,
     hasTool: (name) => bindings.has(name),
-    execute: async (call, executeOptions = {}) => {
+    execute: async (call, executeContext) => {
       const binding = bindings.get(call.name);
       if (!binding) {
         return {
@@ -169,8 +198,8 @@ async function buildRegistry(
           content: `Unknown MCP tool: ${call.name}`,
         };
       }
-      const client = clients.get(binding.serverId);
-      if (!client) {
+      const connection = connections.get(binding.serverId);
+      if (!connection) {
         return {
           callId: call.id,
           name: call.name,
@@ -190,16 +219,36 @@ async function buildRegistry(
         };
       }
       try {
-        const result = await client.callTool(binding.toolName, args.value, executeOptions);
+        const result = await connection.callTool(binding.toolName, args.value, { signal: executeContext.signal });
+        const delivered = await deliverMcpToolResult(result, {
+          ...executeContext,
+          serverId: binding.serverId,
+          toolName: binding.toolName,
+          ...(options.outputPersistence
+            ? {
+                outputPersistence: {
+                  sessionId: options.outputPersistence.sessionId,
+                  toolCallId: call.id,
+                  arguments: call.arguments,
+                  autoTruncate: options.outputPersistence.autoTruncate,
+                },
+              }
+            : {}),
+        });
         return {
           callId: call.id,
           name: call.name,
           ok: !result.isError,
-          content: result.content,
-          mcpEvent: eventFromBinding(binding, result.isError),
+          content: delivered.content,
+          ...(delivered.images ? { images: delivered.images } : {}),
+          mcpEvent: eventFromBinding(binding, result.isError, {
+            imageCount: delivered.imageCount,
+            omittedContentCount: delivered.omittedContentCount,
+            hasStructuredContent: result.structuredContent !== undefined,
+          }),
         };
       } catch (error) {
-        if (executeOptions.signal?.aborted) throw error;
+        if (executeContext.signal?.aborted) throw error;
         return {
           callId: call.id,
           name: call.name,
@@ -249,9 +298,10 @@ function parseToolArguments(source: string): { ok: true; value: Record<string, u
   }
 }
 
-function describeServer(server: McpServerConfig, client: McpStreamableHttpClient): string {
-  const name = typeof client.serverInfo.name === "string" ? client.serverInfo.name.trim() : "";
-  const version = typeof client.serverInfo.version === "string" ? client.serverInfo.version.trim() : "";
+function describeConnection(server: McpServerConfig, connection: McpConnection): string {
+  const info = connection.info.serverInfo;
+  const name = isRecord(info) && typeof info.name === "string" ? info.name.trim() : "";
+  const version = isRecord(info) && typeof info.version === "string" ? info.version.trim() : "";
   if (name && version) return `${name} ${version}`;
   if (name) return name;
   return server.url;
@@ -264,17 +314,25 @@ function disconnectedStatus(server: McpServerConfig, detail: string): McpServerS
     enabled: false,
     connected: false,
     toolCount: 0,
+    negotiation: server.negotiation,
     detail,
   };
 }
 
-function eventFromBinding(binding: McpToolBinding, isError: boolean): McpToolEvent {
+function eventFromBinding(
+  binding: McpToolBinding,
+  isError: boolean,
+  summary?: { imageCount: number; omittedContentCount: number; hasStructuredContent: boolean },
+): McpToolEvent {
   return {
     kind: "mcp_tool",
     serverId: binding.serverId,
     alias: binding.alias,
     toolName: binding.toolName,
     isError,
+    ...(summary?.imageCount ? { imageCount: summary.imageCount } : {}),
+    ...(summary?.omittedContentCount ? { omittedContentCount: summary.omittedContentCount } : {}),
+    ...(summary?.hasStructuredContent ? { hasStructuredContent: true } : {}),
   };
 }
 

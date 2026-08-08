@@ -1,3 +1,4 @@
+import { ThemedText } from "./theme-text";
 import { createEffect, createMemo, For, onCleanup } from "solid-js";
 import type { BoxRenderable, CliRenderer } from "@opentui/core";
 import { useRenderer } from "@opentui/solid";
@@ -69,7 +70,7 @@ export function PromptComposer(props: PromptComposerProps) {
       <For each={lines()}>
         {(line) => (
           <box height={1} flexDirection="row">
-            <text
+            <ThemedText
               content={line.text || " "}
               fg={line.placeholder ? palette.textDim : palette.textPrimary}
               wrapMode="none"

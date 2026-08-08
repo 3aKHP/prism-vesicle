@@ -1,27 +1,32 @@
 import { describe, expect, test } from "bun:test";
 import type { EngineTransition } from "../../../src/core/engine/transition";
-import { builtinCommands } from "../../../src/tui/commands/builtin";
-import type { CommandContext } from "../../../src/tui/commands/types";
+import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
+import { createEngineCommands } from "../../../src/tui/commands/engine";
+import { createProviderCommands } from "../../../src/tui/commands/provider";
+import { createSessionCommands } from "../../../src/tui/commands/session";
+import type { BuiltinCommandContexts, EngineCommandContext, ProviderCommandContext, SessionCommandContext } from "../../../src/tui/commands/types";
 import type { Message } from "../../../src/tui/types";
+
+const allCommands = createBuiltinCommands({} as unknown as BuiltinCommandContexts);
 
 describe("/engine command", () => {
   test("replaces the shape-near /engines listing command", () => {
-    expect(builtinCommands.some((command) => command.name === "engine")).toBe(true);
-    expect(builtinCommands.some((command) => command.name === "engines")).toBe(false);
+    expect(allCommands.some((command) => command.name === "engine")).toBe(true);
+    expect(allCommands.some((command) => command.name === "engines")).toBe(false);
   });
 
   test("lists profiles and marks the active engine when invoked without arguments", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "engine");
-    if (!command) throw new Error("Missing /engine command.");
     let messages: Message[] = [];
     const ctx = {
       activeEngine: () => "etl",
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as EngineCommandContext;
+    const command = createEngineCommands(ctx).find((entry) => entry.name === "engine");
+    if (!command) throw new Error("Missing /engine command.");
 
-    await command.run(ctx, "", "/engine");
+    await command.run("", "/engine");
 
     expect(messages[1]?.content).toContain("Prism engines:");
     expect(messages[1]?.content).toContain("* ETL (etl)");
@@ -29,8 +34,6 @@ describe("/engine command", () => {
   });
 
   test("/new resets Stage to ETL because Stage requires /stage bootstrap", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "new");
-    if (!command) throw new Error("Missing /new command.");
     let activeEngine = "stage";
     let messages: Message[] = [];
     const ctx = {
@@ -39,18 +42,18 @@ describe("/engine command", () => {
       resetRewindState() {}, setSessionId() {}, setSessionPath() {}, setConversation() {}, setOutput() {},
       setLastTurnUsage() {}, setSessionUsage() {}, setPendingGate() {}, setPendingEngineSwitch() {}, setPendingUserQuestion() {}, setStatus() {},
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
-      theme: { clearOverride() {} } as unknown as CommandContext["theme"],
-    } as unknown as CommandContext;
+      theme: { clearOverride() {} },
+    } as unknown as SessionCommandContext;
+    const command = createSessionCommands(ctx).find((entry) => entry.name === "new");
+    if (!command) throw new Error("Missing /new command.");
 
-    await command.run(ctx, "", "/new");
+    await command.run("", "/new");
 
     expect(activeEngine).toBe("etl");
     expect(messages.at(-1)?.content).toContain("Start another Stage narrative with /stage");
   });
 
   test("/engine stage preserves the current engine and directs the user to /stage", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "engine");
-    if (!command) throw new Error("Missing /engine command.");
     let activeEngine = "runtime";
     let switched = false;
     let messages: Message[] = [];
@@ -59,9 +62,11 @@ describe("/engine command", () => {
       setActiveEngine(engine: typeof activeEngine) { activeEngine = engine; },
       async persistEngineSwitch() { switched = true; },
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
-    } as unknown as CommandContext;
+    } as unknown as EngineCommandContext;
+    const command = createEngineCommands(ctx).find((entry) => entry.name === "engine");
+    if (!command) throw new Error("Missing /engine command.");
 
-    await command.run(ctx, "stage", "/engine stage");
+    await command.run("stage", "/engine stage");
 
     expect(activeEngine).toBe("runtime");
     expect(switched).toBe(false);
@@ -69,8 +74,6 @@ describe("/engine command", () => {
   });
 
   test("persists manual switches as direct engine transitions", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "engine");
-    if (!command) throw new Error("Missing /engine command.");
     let activeEngine = "etl";
     let transition: EngineTransition | undefined;
     let messages: Message[] = [];
@@ -87,9 +90,11 @@ describe("/engine command", () => {
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as EngineCommandContext;
+    const command = createEngineCommands(ctx).find((entry) => entry.name === "engine");
+    if (!command) throw new Error("Missing /engine command.");
 
-    await command.run(ctx, "runtime", "/engine runtime");
+    await command.run("runtime", "/engine runtime");
 
     expect(activeEngine).toBe("runtime");
     expect(transition).toMatchObject({
@@ -103,8 +108,6 @@ describe("/engine command", () => {
   });
 
   test("switches with summarized context when --summary is requested", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "engine");
-    if (!command) throw new Error("Missing /engine command.");
     let activeEngine = "etl";
     let transition: EngineTransition | undefined;
     let compactInstructions: string | undefined;
@@ -126,9 +129,11 @@ describe("/engine command", () => {
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as EngineCommandContext;
+    const command = createEngineCommands(ctx).find((entry) => entry.name === "engine");
+    if (!command) throw new Error("Missing /engine command.");
 
-    await command.run(ctx, "runtime --summary preserve artifacts", "/engine runtime --summary preserve artifacts");
+    await command.run("runtime --summary preserve artifacts", "/engine runtime --summary preserve artifacts");
 
     expect(activeEngine).toBe("runtime");
     expect(compactInstructions).toBe("preserve artifacts");
@@ -144,8 +149,6 @@ describe("/engine command", () => {
   });
 
   test("/compact delegates to the host compact workflow", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "compact");
-    if (!command) throw new Error("Missing /compact command.");
     let instructions: string | undefined;
     let messages: Message[] = [];
     const ctx = {
@@ -156,9 +159,11 @@ describe("/engine command", () => {
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as SessionCommandContext;
+    const command = createSessionCommands(ctx).find((entry) => entry.name === "compact");
+    if (!command) throw new Error("Missing /compact command.");
 
-    await command.run(ctx, "focus on files", "/compact focus on files");
+    await command.run("focus on files", "/compact focus on files");
 
     expect(instructions).toBe("focus on files");
     expect(messages[0]).toEqual({ role: "user", content: "/compact focus on files" });
@@ -166,8 +171,6 @@ describe("/engine command", () => {
   });
 
   test("/context reports configured limits and latest usage", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "context");
-    if (!command) throw new Error("Missing /context command.");
     let messages: Message[] = [];
     const ctx = {
       activeProvider: () => "deepseek",
@@ -197,9 +200,11 @@ describe("/engine command", () => {
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as ProviderCommandContext;
+    const command = createProviderCommands(ctx).find((entry) => entry.name === "context");
+    if (!command) throw new Error("Missing /context command.");
 
-    await command.run(ctx, "", "/context");
+    await command.run("", "/context");
 
     expect(messages[0]).toEqual({ role: "user", content: "/context" });
     expect(messages[1]?.content).toContain("deepseek/deepseek-v4-flash");
@@ -211,8 +216,6 @@ describe("/engine command", () => {
   });
 
   test("/context reports missing contextWindow without guessing", async () => {
-    const command = builtinCommands.find((entry) => entry.name === "context");
-    if (!command) throw new Error("Missing /context command.");
     let messages: Message[] = [];
     const ctx = {
       activeProvider: () => "local",
@@ -224,9 +227,11 @@ describe("/engine command", () => {
       setMessages(updater: (previous: Message[]) => Message[]) {
         messages = updater(messages);
       },
-    } as unknown as CommandContext;
+    } as unknown as ProviderCommandContext;
+    const command = createProviderCommands(ctx).find((entry) => entry.name === "context");
+    if (!command) throw new Error("Missing /context command.");
 
-    await command.run(ctx, "", "/context");
+    await command.run("", "/context");
 
     expect(messages[1]?.content).toContain("Context window: not configured");
     expect(messages[1]?.content).toContain("providers.yaml");

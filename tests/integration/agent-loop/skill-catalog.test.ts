@@ -65,9 +65,9 @@ describe("skill catalog bootstrap wiring", () => {
     const records = await loadSessionRecords(rootDir, sessionId);
     const skills = records[0]?.metadata?.skills as { catalogHash?: string; entries?: Array<Record<string, unknown>> } | undefined;
     expect(typeof skills?.catalogHash).toBe("string");
-    expect(skills?.entries?.length).toBe(3);
+    expect(skills?.entries?.length).toBe(4);
     const names = skills?.entries?.map((e) => e.name).sort();
-    expect(names).toEqual(["alpha", "skillify", "vesicle-docs"]);
+    expect(names).toEqual(["alpha", "novel-outline-v3", "skillify", "vesicle-docs"]);
     expect(JSON.stringify(skills)).not.toContain(userConfigDir());
   });
 
@@ -81,19 +81,22 @@ describe("skill catalog bootstrap wiring", () => {
     expect(requestBody).toContain("activate_skill");
     const records = await loadSessionRecords(rootDir, sessionId);
     const skills = records[0]?.metadata?.skills as { entries?: Array<Record<string, unknown>> } | undefined;
-    expect(skills?.entries?.length).toBe(2);
+    expect(skills?.entries?.length).toBe(3);
     const hostNames = skills?.entries?.map((e) => e.name).sort();
-    expect(hostNames).toEqual(["skillify", "vesicle-docs"]);
+    expect(hostNames).toEqual(["novel-outline-v3", "skillify", "vesicle-docs"]);
     expect(skills?.entries?.every((e) => e.scope === "host")).toBe(true);
   });
 
-  test("an engine profile without declared skill tools keeps skills out of the surface", async () => {
+  test("skill tools are host-injected regardless of profile defaultTools", async () => {
     await writeUserSkill("alpha");
     const rootDir = await createPromptRoot();
 
     const { snapshot, requestBody } = await runOneTurn(rootDir);
-    expect(snapshot.engineSystemPrompt).toBe("base\n\netl");
-    expect(requestBody).not.toContain("activate_skill");
+    // Skill tools are injected by the host layer for all non-Stage engines,
+    // independent of the Harness profile's defaultTools.
+    expect(snapshot.engineSystemPrompt).toContain('<skill_catalog hash="');
+    expect(snapshot.engineSystemPrompt).toContain("- alpha [user]:");
+    expect(requestBody).toContain("activate_skill");
   });
 
   test("the frozen session catalog does not pick up a new skill mid-session", async () => {

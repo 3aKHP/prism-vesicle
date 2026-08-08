@@ -1,43 +1,37 @@
 import type { RunPromptResult } from "../core/agent-loop/run";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
 import { renderValidationNotice } from "./commands/render";
-import type { TurnControllerOptions } from "./turn-controller-options";
+import type { QueuedWorkController } from "./queued-work-controller";
+import type { TurnDecisionPort, TurnHostActionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort } from "./turn-controller-options";
 import type { Message } from "./types";
 
-type ResultOptions = Pick<TurnControllerOptions,
-  | "activeEngine"
-  | "activeModel"
-  | "clearGateFeedback"
-  | "clearQuestionFreeform"
-  | "lastDisplayedToolAssistantContent"
-  | "publishTurnUsage"
-  | "refreshArtifacts"
-  | "setConversation"
-  | "setGateFeedbackMode"
-  | "setGateFocus"
-  | "setLastDisplayedToolAssistantContent"
-  | "setMessages"
-  | "setOutput"
-  | "setPendingEngineSwitch"
-  | "setPendingGate"
-  | "setPendingPermission"
-  | "setPendingQualityDecision"
-  | "setPendingUserQuestion"
-  | "setQuestionSelected"
-  | "setQualitySelected"
-  | "setSessionId"
-  | "setSessionPath"
-  | "setSessionPicker"
-  | "setStatus"
-  | "queuedWork"
-  | "refreshQualityWarnings"
->;
+type ResultOptions = {
+  runtime: Pick<TurnRuntimePort, "activeEngine" | "activeModel">;
+  session: Pick<TurnSessionPort, "setConversation" | "setSessionId" | "setSessionPath" | "setSessionPicker">;
+  transcript: Pick<TurnTranscriptPort, "setMessages" | "setOutput" | "setStatus" | "lastDisplayedToolAssistantContent" | "setLastDisplayedToolAssistantContent">;
+  decision: Pick<TurnDecisionPort,
+    | "setPendingEngineSwitch" | "setPendingGate" | "setPendingPermission"
+    | "setPendingQualityDecision" | "setPendingUserQuestion"
+    | "clearQuestionFreeform" | "setGateFocus" | "setGateFeedbackMode" | "clearGateFeedback"
+    | "setQuestionSelected" | "setQualitySelected">;
+  usage: Pick<TurnUsagePort, "publishTurnUsage">;
+  hostAction: Pick<TurnHostActionPort, "refreshArtifacts" | "refreshQualityWarnings">;
+  queuedWork: QueuedWorkController;
+};
 
 export function createTurnResultController(options: ResultOptions) {
+  const { activeEngine, activeModel } = options.runtime;
+  const { setConversation, setSessionId, setSessionPath, setSessionPicker } = options.session;
+  const { setMessages, setOutput, setStatus, lastDisplayedToolAssistantContent, setLastDisplayedToolAssistantContent } = options.transcript;
+  const { setPendingEngineSwitch, setPendingGate, setPendingPermission, setPendingQualityDecision, setPendingUserQuestion, clearQuestionFreeform, setGateFocus, setGateFeedbackMode, clearGateFeedback, setQuestionSelected, setQualitySelected } = options.decision;
+  const { publishTurnUsage } = options.usage;
+  const { refreshArtifacts, refreshQualityWarnings } = options.hostAction;
+  const { queuedWork } = options;
+
   function handleResult(result: RunPromptResult): void {
-    options.publishTurnUsage();
-    if (result.kind === "complete") options.queuedWork.release();
-    else options.queuedWork.block();
+    publishTurnUsage();
+    if (result.kind === "complete") queuedWork.release();
+    else queuedWork.block();
     switch (result.kind) {
       case "needs_user":
         applyPendingGateResult(result);
@@ -62,68 +56,68 @@ export function createTurnResultController(options: ResultOptions) {
 
   function applyPendingGateResult(result: Extract<RunPromptResult, { kind: "needs_user" }>): void {
     applyPendingResultBase(result);
-    options.setPendingGate({ ...result, engine: result.profile.id });
-    options.setGateFocus("confirm");
-    options.setGateFeedbackMode(null);
-    options.clearGateFeedback();
+    setPendingGate({ ...result, engine: result.profile.id });
+    setGateFocus("confirm");
+    setGateFeedbackMode(null);
+    clearGateFeedback();
     appendPendingAssistant(result.assistantContent, `Stop gate pending: ${result.gate.gate}. Use ↑/↓ + Enter, or type into the amend box (Tab).`);
-    options.setStatus(`gate pending: ${result.gate.gate}`);
+    setStatus(`gate pending: ${result.gate.gate}`);
   }
 
   function applyPendingEngineSwitchResult(result: Extract<RunPromptResult, { kind: "needs_engine_switch" }>): void {
     applyPendingResultBase(result);
-    options.setPendingEngineSwitch(result);
-    options.setGateFocus("confirm");
-    options.setGateFeedbackMode(null);
-    options.clearGateFeedback();
+    setPendingEngineSwitch(result);
+    setGateFocus("confirm");
+    setGateFeedbackMode(null);
+    clearGateFeedback();
     appendPendingAssistant(result.assistantContent, `Engine switch requested: ${result.profile.id} -> ${result.request.targetEngine}. Confirm below to switch future turns.`);
-    options.setStatus(`engine switch pending: ${result.request.targetEngine}`);
+    setStatus(`engine switch pending: ${result.request.targetEngine}`);
   }
 
   function applyPendingQuestionResult(result: Extract<RunPromptResult, { kind: "needs_user_question" }>): void {
     applyPendingResultBase(result);
-    options.setPendingUserQuestion({ ...result, engine: result.profile.id });
-    options.setQuestionSelected(0);
-    options.clearQuestionFreeform();
+    setPendingUserQuestion({ ...result, engine: result.profile.id });
+    setQuestionSelected(0);
+    clearQuestionFreeform();
     appendPendingAssistant(result.assistantContent, `Question pending: ${result.question.header}. Choose an option below to continue.`);
-    options.setStatus(`question pending: ${result.question.header}`);
+    setStatus(`question pending: ${result.question.header}`);
   }
 
   function applyPendingPermissionResult(result: Extract<RunPromptResult, { kind: "needs_permission" }>): void {
     applyPendingResultBase(result);
-    options.setPendingPermission({ ...result, engine: result.profile.id });
+    setPendingPermission({ ...result, engine: result.profile.id });
     appendPendingAssistant(result.assistantContent, `Permission pending: ${result.request.toolName}.`, Boolean(result.assistantContent));
-    options.setStatus(`permission pending: ${result.request.toolName}`);
+    setStatus(`permission pending: ${result.request.toolName}`);
   }
 
   function applyPendingQualityDecisionResult(result: Extract<RunPromptResult, { kind: "needs_quality_decision" }>): void {
     applyPendingResultBase(result);
-    options.setPendingQualityDecision({ ...result, engine: result.profile.id });
-    options.setQualitySelected(result.decision.canRetry ? 0 : 1);
-    options.setMessages((previous) => [...previous, {
+    setPendingQualityDecision({ ...result, engine: result.profile.id });
+    setQualitySelected(result.decision.canRetry ? 0 : 1);
+    setMessages((previous) => [...previous, {
       role: "system",
       content: `Automatic quality revision is ${result.decision.reason}. The current version still has ${result.decision.findingCount} blocking finding${result.decision.findingCount === 1 ? "" : "s"}.`,
     }]);
-    options.setStatus(`quality decision pending: ${result.decision.findingCount} finding${result.decision.findingCount === 1 ? "" : "s"}`);
-    void options.refreshQualityWarnings(result.sessionId);
+    setStatus(`quality decision pending: ${result.decision.findingCount} finding${result.decision.findingCount === 1 ? "" : "s"}`);
+    void refreshQualityWarnings(result.sessionId);
   }
 
   function applyPendingResultBase(result: Exclude<RunPromptResult, { kind: "complete" }>): void {
-    options.setConversation([...result.messages]);
-    options.setSessionId(result.sessionId);
-    options.setSessionPath(result.sessionPath);
-    options.setPendingGate(null);
-    options.setPendingEngineSwitch(null);
-    options.setPendingUserQuestion(null);
-    options.setPendingPermission(null);
-    options.setPendingQualityDecision(null);
-    options.setSessionPicker(null);
-    options.setOutput(result.assistantContent);
+    setConversation([...result.messages]);
+    setSessionId(result.sessionId);
+    setSessionPath(result.sessionPath);
+    setPendingGate(null);
+    setPendingEngineSwitch(null);
+    setPendingUserQuestion(null);
+    setPendingPermission(null);
+    setPendingQualityDecision(null);
+    setSessionPicker(null);
+    setOutput(result.assistantContent);
   }
 
   function appendPendingAssistant(content: string, notice: string, showAssistant = true): void {
-    const alreadyDisplayed = options.lastDisplayedToolAssistantContent() === content;
-    options.setMessages((previous) => [
+    const alreadyDisplayed = lastDisplayedToolAssistantContent() === content;
+    setMessages((previous) => [
       ...previous,
       ...(!alreadyDisplayed && showAssistant ? [{ role: "assistant" as const, content }] : []),
       { role: "system", content: notice },
@@ -132,17 +126,17 @@ export function createTurnResultController(options: ResultOptions) {
 
   function applyCompleteResult(result: Extract<RunPromptResult, { kind: "complete" }>): void {
     clearPendingInteractions();
-    options.setLastDisplayedToolAssistantContent(null);
-    options.setConversation([...result.messages]);
-    options.setSessionId(result.sessionId);
-    options.setSessionPath(result.sessionPath);
-    options.setOutput(result.response.content);
-    void options.refreshArtifacts();
+    setLastDisplayedToolAssistantContent(null);
+    setConversation([...result.messages]);
+    setSessionId(result.sessionId);
+    setSessionPath(result.sessionPath);
+    setOutput(result.response.content);
+    void refreshArtifacts();
     const appended: Message[] = [];
     const reasoningText = displayTextFromThinkingBlocks(result.response.thinkingBlocks) ?? result.response.reasoningContent;
     if (!result.response.toolCalls?.length && reasoningText?.trim()) appended.push({ role: "system", content: reasoningText, kind: "reasoning" });
     if (!result.response.toolCalls?.length && result.response.content.trim()) {
-      appended.push({ ...(result.assistantRecordUuid ? { id: result.assistantRecordUuid } : {}), role: "assistant", content: result.response.content, engine: options.activeEngine(), model: options.activeModel() });
+      appended.push({ ...(result.assistantRecordUuid ? { id: result.assistantRecordUuid } : {}), role: "assistant", content: result.response.content, engine: activeEngine(), model: activeModel() });
     }
     // A clean auto-validation pass (no errors and no warnings) no longer gets a
     // message-stream card: it is still recorded in the activity log and the
@@ -160,25 +154,25 @@ export function createTurnResultController(options: ResultOptions) {
     if (result.validation && (validationErrors > 0 || validationWarnings > 0)) {
       appended.push({ role: "system", content: renderValidationNotice(result.validation) });
     }
-    options.setMessages((previous) => [...previous, ...appended]);
-    options.setStatus(validationErrors > 0 ? "complete with validation findings"
+    setMessages((previous) => [...previous, ...appended]);
+    setStatus(validationErrors > 0 ? "complete with validation findings"
       : validationWarnings > 0 ? "complete with validation warnings"
         : result.quality?.outcome === "inconclusive" ? "complete; quality check incomplete"
           : result.quality?.outcome === "findings" ? `complete with ${result.quality.findingCount} observed style issue${result.quality.findingCount === 1 ? "" : "s"}`
             : result.quality?.outcome === "clean" ? "complete; no blocking quality rules matched"
               : "complete");
-    void options.refreshQualityWarnings(result.sessionId);
+    void refreshQualityWarnings(result.sessionId);
   }
 
   function clearPendingInteractions(): void {
-    options.setPendingGate(null);
-    options.setPendingEngineSwitch(null);
-    options.setPendingUserQuestion(null);
-    options.setPendingPermission(null);
-    options.setPendingQualityDecision(null);
-    options.clearQuestionFreeform();
-    options.setGateFeedbackMode(null);
-    options.clearGateFeedback();
+    setPendingGate(null);
+    setPendingEngineSwitch(null);
+    setPendingUserQuestion(null);
+    setPendingPermission(null);
+    setPendingQualityDecision(null);
+    clearQuestionFreeform();
+    setGateFeedbackMode(null);
+    clearGateFeedback();
   }
 
   return { handleResult };
