@@ -197,6 +197,7 @@ MCP 工具结果会先经过宿主的不可信内容边界。普通文本保持�
 version: 1
 theme: auto   # dark | light | default | auto
 # mcpOutputPersistence: true   # 可选开启(#137B):把 MCP 工具输出持久化到 tmp/mcp-output/
+# mcpOutputAutoTruncate: true  # 需先开启 mcpOutputPersistence:超长结果只给预览+引用
 ```
 
 - `version: 1` 必填;`theme` 可选,接受 `dark`/`light`/`default`/`auto` 四值;省略 `theme` 等于没有项目级偏好。`mcpOutputPersistence` 可选(`true`/`false`,默认 `false`),用于开启 MCP 输出持久化(见下文)。
@@ -218,6 +219,7 @@ theme: auto   # dark | light | default | auto
 在 `.vesicle/preferences.yaml` 中设置 `mcpOutputPersistence: true`,即可把每次 MCP 工具调用的文本与图片输出持久化到项目暂存根:文本落在 `tmp/mcp-output/<session-id>/`,解码后的图片落在 `tmp/mcp-output/<session-id>/blob/`,均为原生文件。文件名由 MCP 工具及其参数派生,便于用工具检索。
 
 - 模型收到的内联结果不变;持久化是一份额外的持久副本,模型之后可用 `read_file`、`grep_files`、`view_image` 重新读取,而不必重复昂贵或不可重试的 MCP 调用。
+- 设置 `mcpOutputAutoTruncate: true`(需先开启 `mcpOutputPersistence`)可将超长 MCP 文本结果(≥ 32 KiB)替换为 4 KiB 内联预览 + 指向完整副本的引用,避免单条大结果挤占上下文。未超阈值时正文照旧内联;无论哪种,完整文本都在磁盘上。
 - 默认关闭;仅在设置了该偏好的项目中生效。仅对实际拥有 MCP 工具的引擎,通过系统提示词注入一条提示告知模型。
 - 持久化输出位于 `tmp/`,不可回退、且从不自动清理。不需要时请用文件工具显式删除。
 
