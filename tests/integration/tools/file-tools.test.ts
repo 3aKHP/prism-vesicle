@@ -579,6 +579,13 @@ describe("read_file bounded byte read and grep excerpt cap", () => {
     expect(result.content).toContain("assets namespace");
   });
 
+  test("offsetBytes without maxBytes is rejected (would silently return the whole file)", async () => {
+    await expectTool("create_file", { path: "workspace/edge.txt", content: "data" }, "Created workspace/edge.txt");
+    const result = await executeFileTool(rootDir, call("read_file", { path: "workspace/edge.txt", offsetBytes: 2 }));
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain("offsetBytes requires maxBytes");
+  });
+
   test("grep caps a giant single-line match", async () => {
     await expectTool("create_file", { path: "workspace/giant.txt", content: "z".repeat(2000) }, "Created workspace/giant.txt");
     const grep = await executeFileTool(rootDir, call("grep_files", { path: "workspace/giant.txt", pattern: "z" }));

@@ -118,6 +118,9 @@ export async function executeFileReadOperation(
 
     case "read_file": {
       const args = parseFileToolArgs<{ path: string; startLine?: number; endLine?: number; offsetBytes?: number; maxBytes?: number }>(call.arguments);
+      if (args.offsetBytes !== undefined && args.maxBytes === undefined) {
+        throw new Error("read_file offsetBytes requires maxBytes; provide maxBytes for a bounded slice or use startLine/endLine for a line range.");
+      }
       if (args.maxBytes !== undefined) {
         // Bounded byte-offset read (#137B): does not load the whole file, so it
         // suits large persisted MCP outputs and giant single-line payloads.
