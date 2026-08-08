@@ -111,6 +111,21 @@ function matchMetric(
       threshold: metric.threshold,
     });
   }
+  if (metric.signal === "period_per_100_chars") {
+    const trimmed = trimUnit(unit);
+    const source = metric.excludeDialogue ? metricProse(trimmed.text) : trimmed.text;
+    const count = source.match(/。/g)?.length ?? 0;
+    if (count < (metric.minimumMatches ?? 1)) return undefined;
+    const value = (count / Math.max(1, [...source].length)) * 100;
+    if (!compareMetric(value, metric.operator, metric.threshold)) return undefined;
+    const local = source.indexOf("。");
+    const start = trimmed.start + local;
+    return finding(rule, original, start, start + 1, {
+      signal: metric.signal,
+      value,
+      threshold: metric.threshold,
+    });
+  }
 
   const narrative = metric.excludeDialogue ? metricProse(unit.text) : unit.text;
   let firstMatch: { start: number; end: number } | undefined;

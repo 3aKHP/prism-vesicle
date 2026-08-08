@@ -441,6 +441,16 @@ function parseMatcher(value: unknown, index: number): QualityMatcher {
       metric: { signal, operator, threshold: metric.threshold },
     };
   }
+  if (signal === "period_per_100_chars") {
+    strictKeys(metric, metricLabel, ["signal", "operator", "threshold", "minimumMatches", "excludeDialogue"]);
+    if (metric.excludeDialogue !== true) throw new Error(`${metricLabel} must exclude dialogue.`);
+    const minimumMatches = positiveInteger(metric.minimumMatches, `${metricLabel} minimumMatches`);
+    return {
+      kind: "metric",
+      unit,
+      metric: { signal, operator, threshold: metric.threshold, minimumMatches, excludeDialogue: true },
+    };
+  }
 
   strictKeys(metric, metricLabel, [
     "signal", "operator", "threshold", "minimumMatches", "minimumCoreMatches", "minimumBuckets",

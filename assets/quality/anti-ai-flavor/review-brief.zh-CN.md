@@ -1,5 +1,5 @@
 <!-- Generated from knowledge-source.yaml by shared/rule-assets. Do not edit directly. -->
-<!-- Rule Pack: anti-ai-flavor@0.3.0-alpha.4; audience: review. -->
+<!-- Rule Pack: anti-ai-flavor@0.4.0; audience: review. -->
 
 # 叙事审阅重点
 

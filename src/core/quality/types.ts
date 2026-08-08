@@ -24,7 +24,7 @@ export type QualityDocumentMetricSignal =
   | "reasoning_chain_per_1000_chars"
   | "abstract_summary_per_1000_chars";
 
-export type QualityMetricSignal = "em_dash_per_100_chars" | QualityDocumentMetricSignal;
+export type QualityMetricSignal = "em_dash_per_100_chars" | "period_per_100_chars" | QualityDocumentMetricSignal;
 
 export type QualityMetricPattern = {
   id: string;

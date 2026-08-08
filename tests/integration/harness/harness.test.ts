@@ -52,7 +52,7 @@ describe("Harness Pack foundation", () => {
       expect(runtime?.pack.assetCount).toBe(73);
       expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-detector/document-metrics@1");
       expect(runtime?.pack.manifest.requiredCapabilities).toContain("quality-judge/anti-ai-flavor@1");
-      expect(runtime?.harness.quality?.judge?.rules).toHaveLength(21);
+      expect(runtime?.harness.quality?.judge?.rules).toHaveLength(23);
       expect(runtime?.harness.quality?.semanticRewritePolicy).toBeUndefined();
       expect((await runtime!.assets.resolveFile("assets/engines/etl.profile.yaml")).source).toBe("bundled");
       expect((await runtime!.assets.resolveFile("assets/prompts/host/authoring.md")).source).toBe("bundled");

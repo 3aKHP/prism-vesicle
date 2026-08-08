@@ -17,9 +17,6 @@ defaultTools:
   - write_file
   - replace_in_file
   - append_file
-  - activate_skill
-  - read_skill_resource
-  - run_skill_script
 validators:
   - runtime-packet
 stopGates:
