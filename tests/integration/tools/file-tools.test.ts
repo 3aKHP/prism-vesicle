@@ -597,6 +597,173 @@ describe("read_file bounded byte read and grep excerpt cap", () => {
   });
 });
 
+describe("grep context lines and output modes", () => {
+  test("contextLines returns surrounding lines for each match", async () => {
+    await writeFile(join(rootDir, "workspace", "multi.md"), "line1\nline2\nMARKER\nline4\nline5\n", "utf8");
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace/multi.md",
+      pattern: "MARKER",
+      contextLines: 2,
+    }));
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(result.content);
+    expect(parsed.matches).toHaveLength(1);
+    expect(parsed.matches[0]).toMatchObject({ line: 3, text: "MARKER" });
+    expect(parsed.matches[0].before).toEqual([
+      { line: 1, text: "line1" },
+      { line: 2, text: "line2" },
+    ]);
+    expect(parsed.matches[0].after).toEqual([
+      { line: 4, text: "line4" },
+      { line: 5, text: "line5" },
+    ]);
+  });
+
+  test("contextLines at file boundaries yields empty before/after", async () => {
+    await writeFile(join(rootDir, "workspace", "boundary.md"), "FIRST\nmiddle\nLAST\n", "utf8");
+
+    const first = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace/boundary.md",
+      pattern: "FIRST",
+      contextLines: 2,
+    }));
+    const firstParsed = JSON.parse(first.content);
+    expect(firstParsed.matches[0].before).toEqual([]);
+    expect(firstParsed.matches[0].after).toEqual([
+      { line: 2, text: "middle" },
+      { line: 3, text: "LAST" },
+    ]);
+
+    const last = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace/boundary.md",
+      pattern: "LAST",
+      contextLines: 2,
+    }));
+    const lastParsed = JSON.parse(last.content);
+    expect(lastParsed.matches[0].before).toEqual([
+      { line: 1, text: "FIRST" },
+      { line: 2, text: "middle" },
+    ]);
+    expect(lastParsed.matches[0].after).toEqual([]);
+  });
+
+  test("contextLines is capped at 10", async () => {
+    const lines = Array.from({ length: 25 }, (_, i) => `line${i + 1}`);
+    lines[12] = "MARKER";
+    await writeFile(join(rootDir, "workspace", "cap.md"), lines.join("\n") + "\n", "utf8");
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace/cap.md",
+      pattern: "MARKER",
+      contextLines: 99,
+    }));
+    const parsed = JSON.parse(result.content);
+    expect(parsed.matches[0].before).toHaveLength(10);
+    expect(parsed.matches[0].after).toHaveLength(10);
+  });
+
+  test("outputMode files_with_matches returns only file paths", async () => {
+    await writeFile(join(rootDir, "workspace", "a.md"), "alpha\n", "utf8");
+    await writeFile(join(rootDir, "workspace", "b.md"), "beta\n", "utf8");
+    await mkdir(join(rootDir, "workspace", "sub"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "sub", "c.md"), "alpha\n", "utf8");
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace",
+      pattern: "alpha",
+      outputMode: "files_with_matches",
+    }));
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(result.content);
+    expect(parsed.outputMode).toBe("files_with_matches");
+    expect(parsed.files).toHaveLength(2);
+    expect(parsed.files).toContain("workspace/a.md");
+    expect(parsed.files).toContain("workspace/sub/c.md");
+    expect(parsed).not.toHaveProperty("matches");
+    expect(result.fileEvent).toMatchObject({
+      operation: "grep",
+      outputMode: "files_with_matches",
+      fileCount: 2,
+    });
+  });
+
+  test("outputMode count returns per-file match counts", async () => {
+    await writeFile(join(rootDir, "workspace", "count_a.md"), "alpha\nbeta\nalpha\n", "utf8");
+    await writeFile(join(rootDir, "workspace", "count_b.md"), "alpha\n", "utf8");
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace",
+      pattern: "alpha",
+      outputMode: "count",
+    }));
+    expect(result.ok).toBe(true);
+    const parsed = JSON.parse(result.content);
+    expect(parsed.outputMode).toBe("count");
+    expect(parsed.totalMatches).toBe(3);
+    expect(parsed.counts).toHaveLength(2);
+    const countA = parsed.counts.find((c: { path: string }) => c.path === "workspace/count_a.md");
+    expect(countA.matches).toBe(2);
+    expect(result.fileEvent).toMatchObject({
+      operation: "grep",
+      outputMode: "count",
+      matches: 3,
+      fileCount: 2,
+    });
+  });
+
+  test("files_with_matches respects maxMatches as file limit", async () => {
+    for (const name of ["f1", "f2", "f3"]) {
+      await writeFile(join(rootDir, "workspace", `${name}.md`), "target\n", "utf8");
+    }
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace",
+      pattern: "target",
+      outputMode: "files_with_matches",
+      maxMatches: 2,
+    }));
+    const parsed = JSON.parse(result.content);
+    expect(parsed.files).toHaveLength(2);
+    expect(parsed.truncated).toBe(true);
+  });
+
+  test("count mode respects maxMatches as file limit", async () => {
+    for (const name of ["f1", "f2", "f3"]) {
+      await writeFile(join(rootDir, "workspace", `${name}.md`), "target\n", "utf8");
+    }
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace",
+      pattern: "target",
+      outputMode: "count",
+      maxMatches: 2,
+    }));
+    const parsed = JSON.parse(result.content);
+    expect(parsed.counts).toHaveLength(2);
+    expect(parsed.truncated).toBe(true);
+  });
+
+  test("content mode output budget truncates before maxMatches", async () => {
+    const padding = "x".repeat(300);
+    const lines = Array.from({ length: 200 }, () => `MATCH${padding}`);
+    await writeFile(join(rootDir, "workspace", "big.md"), lines.join("\n"), "utf8");
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace/big.md",
+      pattern: "MATCH",
+      maxMatches: 200,
+    }));
+    const parsed = JSON.parse(result.content);
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.matches.length).toBeLessThan(200);
+  });
+
+  test("outputMode rejects unknown values", async () => {
+    await writeFile(join(rootDir, "workspace", "safe.md"), "hello\n", "utf8");
+    const result = await executeFileTool(rootDir, call("grep_files", {
+      path: "workspace/safe.md",
+      pattern: "hello",
+      outputMode: "bogus",
+    }));
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain("outputMode must be one of");
+  });
+});
+
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
