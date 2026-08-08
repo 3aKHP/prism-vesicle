@@ -54,11 +54,156 @@ export async function readByteSlice(
   }
 }
 
+export type GrepOutputMode = "content" | "files_with_matches" | "count";
+
+export type GrepContextLine = { line: number; text: string };
+
+export type GrepContentMatch = {
+  path: string;
+  line: number;
+  text: string;
+  before?: GrepContextLine[];
+  after?: GrepContextLine[];
+};
+
+export type GrepResult =
+  | { outputMode: "content"; matches: GrepContentMatch[]; truncated: boolean }
+  | { outputMode: "files_with_matches"; files: string[]; truncated: boolean }
+  | { outputMode: "count"; counts: Array<{ path: string; matches: number }>; totalMatches: number; truncated: boolean };
+
+type GrepArgs = {
+  pattern: string;
+  regex?: boolean;
+  caseSensitive?: boolean;
+  recursive?: boolean;
+  maxMatches?: number;
+  contextLines?: number;
+  outputMode?: GrepOutputMode;
+};
+
+const maxContextLines = 10;
+
+/** Host-side safety valve on total grep output text (~8K tokens). */
+const maxGrepResultChars = 32768;
+
+type GrepScanInput = {
+  files: string[];
+  readText: (file: string) => Promise<string>;
+  toResultPath: (file: string) => string;
+};
+
+/** Split into lines and strip the trailing empty element produced by a terminal newline. */
+function normalizeLines(content: string): string[] {
+  const lines = content.split(/\r?\n/);
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+async function executeGrepScan(
+  input: GrepScanInput,
+  args: { matcher: (line: string) => boolean; limit: number; contextLines: number; outputMode: GrepOutputMode },
+): Promise<GrepResult> {
+  const { matcher, limit, contextLines, outputMode } = args;
+
+  if (outputMode === "files_with_matches") {
+    const files: string[] = [];
+    for (const file of input.files) {
+      const lines = normalizeLines(await input.readText(file));
+      for (let index = 0; index < lines.length; index++) {
+        if (!matcher(lines[index]!)) continue;
+        files.push(input.toResultPath(file));
+        break; // first match in this file is enough
+      }
+      if (files.length >= limit) return { outputMode: "files_with_matches", files, truncated: true };
+    }
+    return { outputMode: "files_with_matches", files, truncated: false };
+  }
+
+  if (outputMode === "count") {
+    const counts: Array<{ path: string; matches: number }> = [];
+    let totalMatches = 0;
+    for (const file of input.files) {
+      const lines = normalizeLines(await input.readText(file));
+      let fileCount = 0;
+      for (let index = 0; index < lines.length; index++) {
+        if (matcher(lines[index]!)) fileCount++;
+      }
+      if (fileCount > 0) {
+        counts.push({ path: input.toResultPath(file), matches: fileCount });
+        totalMatches += fileCount;
+      }
+      if (counts.length >= limit) return { outputMode: "count", counts, totalMatches, truncated: true };
+    }
+    return { outputMode: "count", counts, totalMatches, truncated: false };
+  }
+
+  // content mode
+  const matches: GrepContentMatch[] = [];
+  let outputChars = 0;
+  for (const file of input.files) {
+    const lines = normalizeLines(await input.readText(file));
+    for (let index = 0; index < lines.length; index++) {
+      if (!matcher(lines[index]!)) continue;
+      const text = capGrepExcerpt(lines[index]!);
+      const entry: GrepContentMatch = {
+        path: input.toResultPath(file),
+        line: index + 1,
+        text,
+      };
+      outputChars += text.length;
+      if (contextLines > 0) {
+        entry.before = collectContextLines(lines, index, contextLines, "before");
+        entry.after = collectContextLines(lines, index, contextLines, "after");
+        outputChars += entry.before.reduce((sum, c) => sum + c.text.length, 0)
+          + entry.after.reduce((sum, c) => sum + c.text.length, 0);
+      }
+      matches.push(entry);
+      if (matches.length >= limit || outputChars >= maxGrepResultChars) {
+        return { outputMode: "content", matches, truncated: true };
+      }
+    }
+  }
+  return { outputMode: "content", matches, truncated: false };
+}
+
+function collectContextLines(
+  lines: string[],
+  matchIndex: number,
+  count: number,
+  direction: "before" | "after",
+): GrepContextLine[] {
+  const result: GrepContextLine[] = [];
+  if (direction === "before") {
+    const start = Math.max(0, matchIndex - count);
+    for (let i = start; i < matchIndex; i++) {
+      result.push({ line: i + 1, text: capGrepExcerpt(lines[i]!) });
+    }
+  } else {
+    const end = Math.min(lines.length - 1, matchIndex + count);
+    for (let i = matchIndex + 1; i <= end; i++) {
+      result.push({ line: i + 1, text: capGrepExcerpt(lines[i]!) });
+    }
+  }
+  return result;
+}
+
+function clampContextLines(value: number | undefined): number {
+  if (value === undefined) return 0;
+  if (!Number.isInteger(value) || value < 0) throw new Error("contextLines must be a non-negative integer.");
+  return Math.min(value, maxContextLines);
+}
+
+function validateOutputMode(value: GrepOutputMode | undefined): GrepOutputMode {
+  if (value === undefined) return "content";
+  if (value === "content" || value === "files_with_matches" || value === "count") return value;
+  throw new Error("outputMode must be one of: content, files_with_matches, count.");
+}
+
 export async function grepFiles(
   rootDir: string,
   targetPath: string,
-  args: { pattern: string; regex?: boolean; caseSensitive?: boolean; recursive?: boolean; maxMatches?: number },
-): Promise<{ matches: Array<{ path: string; line: number; text: string }>; truncated: boolean }> {
+  args: GrepArgs,
+): Promise<GrepResult> {
   if (!args.pattern) throw new Error("pattern must not be empty.");
   const limit = clampPositiveInteger(args.maxMatches ?? 50, "maxMatches", 200);
   const matcher = createMatcher(args.pattern, Boolean(args.regex), Boolean(args.caseSensitive));
@@ -68,25 +213,21 @@ export async function grepFiles(
     : info.isDirectory()
       ? await listFiles(targetPath, args.recursive ?? true)
       : [];
-  const matches: Array<{ path: string; line: number; text: string }> = [];
-
-  for (const file of files) {
-    const lines = (await readFile(file, "utf8")).split(/\r?\n/);
-    for (let index = 0; index < lines.length; index++) {
-      if (!matcher(lines[index])) continue;
-      matches.push({ path: toProjectPath(rootDir, file), line: index + 1, text: capGrepExcerpt(lines[index]!) });
-      if (matches.length >= limit) return { matches, truncated: true };
-    }
-  }
-
-  return { matches, truncated: false };
+  return executeGrepScan(
+    {
+      files,
+      readText: (file) => readFile(file, "utf8"),
+      toResultPath: (file) => toProjectPath(rootDir, file),
+    },
+    { matcher, limit, contextLines: clampContextLines(args.contextLines), outputMode: validateOutputMode(args.outputMode) },
+  );
 }
 
 export async function grepAssetFiles(
   assets: AssetResolver,
   requestedPath: string,
-  args: { pattern: string; regex?: boolean; caseSensitive?: boolean; recursive?: boolean; maxMatches?: number },
-): Promise<{ matches: Array<{ path: string; line: number; text: string }>; truncated: boolean }> {
+  args: GrepArgs,
+): Promise<GrepResult> {
   if (!args.pattern) throw new Error("pattern must not be empty.");
   const limit = clampPositiveInteger(args.maxMatches ?? 50, "maxMatches", 200);
   const matcher = createMatcher(args.pattern, Boolean(args.regex), Boolean(args.caseSensitive));
@@ -95,17 +236,14 @@ export async function grepAssetFiles(
   const files = info.type === "file"
     ? [logicalPath]
     : await assets.listFiles(logicalPath, args.recursive ?? true);
-  const matches: Array<{ path: string; line: number; text: string }> = [];
-
-  for (const file of files) {
-    const lines = (await assets.readText(file)).split(/\r?\n/);
-    for (let index = 0; index < lines.length; index++) {
-      if (!matcher(lines[index])) continue;
-      matches.push({ path: file, line: index + 1, text: capGrepExcerpt(lines[index]!) });
-      if (matches.length >= limit) return { matches, truncated: true };
-    }
-  }
-  return { matches, truncated: false };
+  return executeGrepScan(
+    {
+      files,
+      readText: (file) => assets.readText(file),
+      toResultPath: (file) => file,
+    },
+    { matcher, limit, contextLines: clampContextLines(args.contextLines), outputMode: validateOutputMode(args.outputMode) },
+  );
 }
 
 function createMatcher(pattern: string, regex: boolean, caseSensitive: boolean): (line: string) => boolean {
