@@ -14,9 +14,9 @@
  *
  * Engine eligibility is a separate boundary: the frozen catalog is per
  * session, while `resolveEngineEligibleCatalog` filters it for the engine
- * currently being bootstrapped (Stage stays Skill-less; an engine must also
- * declare the Skill tools). Engine switching therefore recomputes eligibility
- * without touching the frozen session catalog.
+ * currently being bootstrapped (Stage is the only Skill-less engine). Engine
+ * switching therefore recomputes eligibility without touching the frozen
+ * session catalog.
  */
 
 import { createHash } from "node:crypto";
