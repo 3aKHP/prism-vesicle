@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.0.0-alpha.9] - 2026-08-09
+
 ### Added
 
 - **`grep_files` output modes, context lines, and output budget.** `grep_files` gains two optional parameters: `outputMode` (`content` for match entries with text, `files_with_matches` for just file paths, `count` for per-file hit counts) and `contextLines` (0–10 lines of surrounding context per match in content mode). A host-side 32 KiB output-text ceiling in content mode acts as a safety valve alongside the existing `maxMatches` cap (50 default, 200 max). In `files_with_matches` and `count` modes, `maxMatches` limits the number of files returned. The per-line 500-character excerpt cap is unchanged.
