@@ -14,9 +14,9 @@
  *
  * Engine eligibility is a separate boundary: the frozen catalog is per
  * session, while `resolveEngineEligibleCatalog` filters it for the engine
- * currently being bootstrapped (Stage stays Skill-less; an engine must also
- * declare the Skill tools). Engine switching therefore recomputes eligibility
- * without touching the frozen session catalog.
+ * currently being bootstrapped (Stage is the only Skill-less engine). Engine
+ * switching therefore recomputes eligibility without touching the frozen
+ * session catalog.
  */
 
 import { createHash } from "node:crypto";
@@ -128,16 +128,14 @@ function computeEntriesHash(entries: readonly { name: string; scope: string; bod
 
 /**
  * Filter the frozen session catalog for the engine being bootstrapped. Stage
- * stays Skill-less; any other engine must declare the Skill activation tools
- * in its profile to receive the catalog. With current profiles this is a
- * no-op except Stage, but the boundary exists so Engine switching recomputes
- * eligibility without re-resolving the store.
+ * is the only Skill-less engine. This boundary exists so Engine switching
+ * recomputes eligibility without re-resolving the store.
  */
 export function resolveEngineEligibleCatalog(
   frozen: ResolvedSkillCatalog,
-  profile: Pick<EngineProfile, "id"> & { defaultTools?: readonly string[] },
+  profile: Pick<EngineProfile, "id">,
 ): ResolvedSkillCatalog {
-  if (profile.id === "stage" || (profile.defaultTools !== undefined && !profile.defaultTools.includes("activate_skill"))) {
+  if (profile.id === "stage") {
     return { catalog: { entries: [], hash: computeEntriesHash([]), omitted: [], diagnostics: [] }, byName: new Map() };
   }
   return frozen;

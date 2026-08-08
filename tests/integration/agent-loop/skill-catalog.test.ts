@@ -87,13 +87,16 @@ describe("skill catalog bootstrap wiring", () => {
     expect(skills?.entries?.every((e) => e.scope === "host")).toBe(true);
   });
 
-  test("an engine profile without declared skill tools keeps skills out of the surface", async () => {
+  test("skill tools are host-injected regardless of profile defaultTools", async () => {
     await writeUserSkill("alpha");
     const rootDir = await createPromptRoot();
 
     const { snapshot, requestBody } = await runOneTurn(rootDir);
-    expect(snapshot.engineSystemPrompt).toBe("base\n\netl");
-    expect(requestBody).not.toContain("activate_skill");
+    // Skill tools are injected by the host layer for all non-Stage engines,
+    // independent of the Harness profile's defaultTools.
+    expect(snapshot.engineSystemPrompt).toContain('<skill_catalog hash="');
+    expect(snapshot.engineSystemPrompt).toContain("- alpha [user]:");
+    expect(requestBody).toContain("activate_skill");
   });
 
   test("the frozen session catalog does not pick up a new skill mid-session", async () => {

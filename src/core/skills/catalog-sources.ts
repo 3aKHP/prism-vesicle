@@ -38,7 +38,7 @@ export async function resolveFilesystemSkills(
   env: NodeJS.ProcessEnv = process.env,
   options: ResolveFilesystemSkillsOptions = {},
 ): Promise<FilesystemSkillInspection> {
-  const hostRoots = await resolveHostSkillRoots(options);
+  const hostRoots = await resolveHostSkillRoots(options, env);
   const harnessRoots = await resolveHarnessSkillRoots(projectRoot, env);
   const userRoots = await listChildSkillRoots(join(userConfigDirectory(env), "skills"));
   const projectRoots = await listChildSkillRoots(join(projectRoot, ".agents", "skills"));
@@ -55,8 +55,10 @@ export async function resolveFilesystemSkills(
   };
 }
 
-async function resolveHostSkillRoots(options: ResolveFilesystemSkillsOptions): Promise<string[]> {
-  const hostDir = options.hostAssetsDirectory ?? bundledHostAssetsDirectory(options.executablePath);
+async function resolveHostSkillRoots(options: ResolveFilesystemSkillsOptions, env: NodeJS.ProcessEnv): Promise<string[]> {
+  const hostDir = options.hostAssetsDirectory
+    ?? env.VESICLE_HOST_ASSETS_DIR
+    ?? bundledHostAssetsDirectory(options.executablePath);
   if (!hostDir) return [];
   return listChildSkillRoots(join(hostDir, "skills"));
 }
