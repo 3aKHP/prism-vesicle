@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { userConfigDirectory } from "../../../config/paths";
-import { providerConfigPathFromEnv } from "../../../config/providers";
+import { providerConfigPathFromEnv, loadProviderRegistry } from "../../../config/providers";
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
 import { qualitySettingsPath, loadExperimentalQualitySettings } from "../../../config/quality";
 import { settingsPath, loadSettings } from "../../../config/settings";
@@ -116,7 +116,7 @@ export async function runValidate(): Promise<void> {
   const results: Array<{ file: string; ok: boolean; detail: string }> = [];
 
   try {
-    const registry = await import("../../../config/providers").then((module) => module.loadProviderRegistry());
+    const registry = await loadProviderRegistry();
     results.push({ file: "providers.yaml", ok: true, detail: `${registry.providers.length} provider(s), default: ${registry.default.provider}/${registry.default.model}` });
   } catch (error) {
     results.push({ file: "providers.yaml", ok: false, detail: messageOf(error) });

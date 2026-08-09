@@ -66,10 +66,12 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
   const effectiveEnv = { ...process.env, ...parseEnvFile(existingEnv || "", envPath) };
   parseProviderConfig(source, providerPath, effectiveEnv);
 
-  // Write providers.yaml and create the empty .env slot atomically.
-  await atomicWrite(providerPath, source, false);
+  // Write .env first: if providers.yaml fails after, the extra empty slot is
+  // harmless (no provider references it). The reverse order would leave a
+  // provider without its apiKeyEnv slot — a broken state.
   const updatedEnv = setEnvValues(existingEnv, { [profile.apiKeyEnv]: "" });
   await atomicWrite(envPath, updatedEnv, true);
+  await atomicWrite(providerPath, source, false);
 
   return {
     ok: true,
@@ -86,8 +88,8 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
 
 function validateProviderEntry(entry: Record<string, unknown>): ProviderProfile {
   const id = requireString(entry, "id");
-  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(id) && id.length > 1) {
-    throw new Error(`Provider id "${id}" must be lowercase alphanumeric with hyphens.`);
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(id)) {
+    throw new Error(`Provider id "${id}" must be lowercase alphanumeric with hyphens, starting and ending with a letter or digit.`);
   }
   const protocol = requireString(entry, "protocol");
   if (protocol !== "openai-chat-compatible" && protocol !== "openai-responses"
@@ -100,8 +102,11 @@ function validateProviderEntry(entry: Record<string, unknown>): ProviderProfile 
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error(`baseUrl must use http:// or https://.`);
     }
+    if (parsed.username || parsed.password) {
+      throw new Error(`baseUrl must not contain credentials. providers.yaml is a non-secret file.`);
+    }
   } catch (error) {
-    if (error instanceof Error && error.message.includes("http")) throw error;
+    if (error instanceof Error && (error.message.includes("http") || error.message.includes("credentials"))) throw error;
     throw new Error(`Invalid baseUrl "${baseUrl}". Must be a complete URL.`);
   }
   const apiKeyEnv = requireString(entry, "apiKeyEnv");

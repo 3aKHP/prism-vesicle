@@ -125,6 +125,25 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("env-set-proxy rejects URLs with credentials", async () => {
+    await withTempProject("vesicle-config-proxy-creds-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "env-set-proxy", "http://user:pass@proxy.example.com:8080"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("must not be passed as arguments");
+    });
+  });
+
+  test("env-set-proxy accepts URLs without credentials", async () => {
+    await withTempProject("vesicle-config-proxy-ok-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "env-set-proxy", "http://proxy.example.com:8080"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("VESICLE_PROVIDER_PROXY=http://proxy.example.com:8080");
+    });
+  });
+
   test("validate reports ok for a well-formed config", async () => {
     await withTempProject("vesicle-config-validate-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

@@ -48,6 +48,14 @@ export async function runEnvSetProxy(url: string): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  if (parsed.username || parsed.password) {
+    console.error(
+      "Proxy URLs with credentials must not be passed as arguments. "
+      + "Edit .env manually to set VESICLE_PROVIDER_PROXY with credentials.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   try {
     const result = await setEnvKey("VESICLE_PROVIDER_PROXY", url);
     console.log(JSON.stringify(result, null, 2));
@@ -112,9 +120,7 @@ async function readEnvFile(path: string): Promise<string> {
 
 function validateEnvKey(key: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-    console.error(`Invalid environment variable name "${key}".`);
-    process.exitCode = 1;
-    process.exit(1);
+    throw new Error(`Invalid environment variable name "${key}".`);
   }
 }
 

@@ -7,7 +7,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
-import { settingsPath } from "../../../config/settings";
+import { settingsPath, loadSettings } from "../../../config/settings";
 import { loadProviderRegistry, providerConfigPathFromEnv } from "../../../config/providers";
 import { serializeProviderRegistry } from "../../../setup/config-writer";
 import { loadExperimentalQualitySettings, writeExperimentalQualitySettings } from "../../../config/quality";
@@ -144,6 +144,9 @@ async function setPreferences(key: string, value: string): Promise<SetResult> {
   if (mcpOutputPersistence) lines.push("mcpOutputPersistence: true");
   if (mcpOutputAutoTruncate) lines.push("mcpOutputAutoTruncate: true");
   await atomicWrite(path, `${lines.join("\n")}\n`);
+  // Verify round-trip.
+  const verify = await readProjectThemePreference(rootDir);
+  if (!verify.ok) throw new Error(`Post-write validation failed: ${verify.diagnostic}`);
   return { ok: true, operation: "set", file: "preferences", key, value, path, restartRequired: false };
 }
 
@@ -178,6 +181,8 @@ async function setSettings(key: string, value: string): Promise<SetResult> {
     "",
   ].join("\n");
   await atomicWrite(path, source);
+  // Verify round-trip.
+  await loadSettings();
   return { ok: true, operation: "set", file: "settings", key, value, path, restartRequired: true };
 }
 
@@ -210,6 +215,8 @@ async function setProvidersDefault(key: string, value: string): Promise<SetResul
   const path = providerConfigPathFromEnv();
   const source = serializeProviderRegistry(registry);
   await atomicWrite(path, source);
+  // Verify round-trip.
+  await loadProviderRegistry();
   return { ok: true, operation: "set", file: "providers", key, value, path, restartRequired: true };
 }
 
@@ -217,7 +224,7 @@ async function atomicWrite(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const staging = `${path}.staging-${randomUUID()}`;
   try {
-    await writeFile(staging, content, { encoding: "utf8", flag: "wx" });
+    await writeFile(staging, content, { encoding: "utf8", flag: "wx", mode: 0o644 });
     await rename(staging, path);
   } finally {
     await rm(staging, { force: true });

@@ -83,7 +83,7 @@ update_config.sh set providers default.model <id>
 update_config.sh add-provider --json '<entry>'
 
 # Permissions
-update_config.sh set permissions defaultMode <MOMENTUM|CAUTIOUS|PARANOID>
+update_config.sh set permissions defaultMode <MANUAL|INERTIA|MOMENTUM>
 update_config.sh set permissions shellExec <true|false>
 
 # Project preferences
