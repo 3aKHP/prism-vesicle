@@ -6,7 +6,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
-import { providerConfigPathFromEnv } from "../../../config/providers";
+import { providerConfigPathFromEnv, parseEnvFile } from "../../../config/providers";
 import { setEnvValues } from "../../../setup/config-writer";
 
 type EnvResult = {
@@ -26,6 +26,20 @@ export async function runEnvSetEmpty(key: string): Promise<void> {
     return;
   }
   try {
+    // Refuse to overwrite an existing value — the model cannot distinguish
+    // <set> keys via show env and must not silently destroy a stored secret.
+    const envPath = envFilePath();
+    const existing = await readEnvFile(envPath);
+    const fileEnv = parseEnvFile(existing || "", envPath);
+    const existingValue = fileEnv[key];
+    if (existingValue !== undefined && existingValue !== "") {
+      console.error(
+        `${key} already has a value in .env. Refusing to overwrite it with an empty slot. `
+        + `Use env-remove first if you intend to clear it, or edit .env manually.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
     const result = await setEnvKey(key, "");
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {

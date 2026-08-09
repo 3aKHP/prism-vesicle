@@ -23,6 +23,7 @@ describe("vesicle config CLI", () => {
       await writeFile(join(configDir, ".env"), [
         "SECRET_API_KEY=sk-abc123def456secret",
         "EMPTY_KEY=",
+        'QUOTED_EMPTY=""',
         "VESICLE_PROVIDER_PROXY=http://user:pass@proxy.example.com:8080",
         "",
       ].join("\n"), "utf8");
@@ -34,7 +35,24 @@ describe("vesicle config CLI", () => {
       // Structural markers must be present.
       expect(result.stdout).toContain("SECRET_API_KEY=<set>");
       expect(result.stdout).toContain("EMPTY_KEY=<empty>");
+      // Quoted empty (KEY="") must also be classified as <empty>.
+      expect(result.stdout).toContain("QUOTED_EMPTY=<empty>");
       expect(result.stdout).toContain("VESICLE_PROVIDER_PROXY=http://<credentials>@proxy.example.com:8080");
+    });
+  });
+
+  test("show env masks unparseable lines instead of echoing them", async () => {
+    await withTempProject("vesicle-config-unparseable-", async (projectDir, configDir) => {
+      await writeFile(join(configDir, ".env"), [
+        "VALID_KEY=value",
+        "sk-bare-secret-without-key-prefix",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "show", "env"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).not.toContain("sk-bare-secret-without-key-prefix");
+      expect(result.stdout).toContain("<unparseable-line>");
+      expect(result.stdout).toContain("VALID_KEY=<set>");
     });
   });
 
@@ -51,6 +69,19 @@ describe("vesicle config CLI", () => {
       const newKeyLine = envContent.split("\n").find((line) => line.startsWith("NEW_API_KEY="));
       expect(newKeyLine).toBeDefined();
       expect(newKeyLine!.trim()).toMatch(/^NEW_API_KEY=("")?$/);
+    });
+  });
+
+  test("env-set-empty refuses to overwrite an existing value", async () => {
+    await withTempProject("vesicle-config-setempty-refuse-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, ".env"), "EXISTING_KEY=secret-value\n", "utf8");
+      const result = await runCli(["config", "env-set-empty", "EXISTING_KEY"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("already has a value");
+      // Original value must be preserved.
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("EXISTING_KEY=secret-value");
     });
   });
 
@@ -106,6 +137,29 @@ describe("vesicle config CLI", () => {
       const slotLine = envContent.split("\n").find((line) => line.startsWith("TEST_PROVIDER_API_KEY="));
       expect(slotLine).toBeDefined();
       expect(slotLine!.trim()).toMatch(/^TEST_PROVIDER_API_KEY=("")?$/);
+    });
+  });
+
+  test("add-provider preserves existing apiKeyEnv value when key is already set", async () => {
+    await withTempProject("vesicle-config-preserve-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, ".env"), "SHARED_API_KEY=sk-existing-secret\n", "utf8");
+      const entry = JSON.stringify({
+        id: "second-provider",
+        protocol: "openai-chat-compatible",
+        baseUrl: "https://api.second.example.com/v1",
+        apiKeyEnv: "SHARED_API_KEY",
+        models: [{ id: "shared-model" }],
+      });
+      const result = await runCli(["config", "add-provider", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      // The existing secret must NOT be overwritten.
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("SHARED_API_KEY=sk-existing-secret");
+      expect(envContent).not.toContain('SHARED_API_KEY=""');
+      // Provider should still be added to providers.yaml.
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("second-provider:");
     });
   });
 

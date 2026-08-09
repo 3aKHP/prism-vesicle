@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { userConfigDirectory } from "../../../config/paths";
-import { providerConfigPathFromEnv, loadProviderRegistry } from "../../../config/providers";
+import { providerConfigPathFromEnv, loadProviderRegistry, parseEnvFile } from "../../../config/providers";
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
 import { qualitySettingsPath, loadExperimentalQualitySettings } from "../../../config/quality";
 import { settingsPath, loadSettings } from "../../../config/settings";
@@ -89,15 +89,27 @@ async function showEnvSanitized(): Promise<void> {
     }
     const equals = trimmed.indexOf("=");
     if (equals === -1) {
-      console.log(raw);
+      // Never echo unparseable lines — a bare secret on a line without KEY=
+      // would leak to stdout.
+      console.log("<unparseable-line>");
       continue;
     }
     const key = trimmed.slice(0, equals).trim();
-    const value = trimmed.slice(equals + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      console.log("<unparseable-line>");
+      continue;
+    }
+    const rawValue = trimmed.slice(equals + 1).trim();
+    // Strip surrounding quotes before classifying: env-set-empty writes
+    // KEY="" which is truthy but semantically empty.
+    const unquoted = rawValue.length >= 2
+      && ((rawValue.startsWith('"') && rawValue.endsWith('"')) || (rawValue.startsWith("'") && rawValue.endsWith("'")))
+      ? rawValue.slice(1, -1).trim()
+      : rawValue;
     if (key === "VESICLE_PROVIDER_PROXY") {
-      console.log(value ? `${key}=${maskProxyUrl(value)}` : `${key}=<empty>`);
+      console.log(unquoted ? `${key}=${maskProxyUrl(unquoted)}` : `${key}=<empty>`);
     } else {
-      console.log(value ? `${key}=<set>` : `${key}=<empty>`);
+      console.log(unquoted ? `${key}=<set>` : `${key}=<empty>`);
     }
   }
 }
@@ -131,7 +143,8 @@ export async function runValidate(): Promise<void> {
     if (source === undefined) {
       results.push({ file: ".env", ok: true, detail: "not configured" });
     } else {
-      const keys = source.split(/\r?\n/).filter((line) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(line.trim())).length;
+      const parsed = parseEnvFile(source, envPath);
+      const keys = Object.keys(parsed).length;
       results.push({ file: ".env", ok: true, detail: `${keys} variable(s) defined` });
     }
   } catch (error) {

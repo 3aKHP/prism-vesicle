@@ -69,8 +69,14 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
   // Write .env first: if providers.yaml fails after, the extra empty slot is
   // harmless (no provider references it). The reverse order would leave a
   // provider without its apiKeyEnv slot — a broken state.
-  const updatedEnv = setEnvValues(existingEnv, { [profile.apiKeyEnv]: "" });
-  await atomicWrite(envPath, updatedEnv, true);
+  // Only create the empty slot when the key is absent; never overwrite an
+  // existing value (another provider may share this apiKeyEnv).
+  const fileEnv = parseEnvFile(existingEnv || "", envPath);
+  const keyAlreadyExists = fileEnv[profile.apiKeyEnv] !== undefined;
+  if (!keyAlreadyExists) {
+    const updatedEnv = setEnvValues(existingEnv, { [profile.apiKeyEnv]: "" });
+    await atomicWrite(envPath, updatedEnv, true);
+  }
   await atomicWrite(providerPath, source, false);
 
   return {
@@ -80,8 +86,11 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
     apiKeyEnv: profile.apiKeyEnv,
     path: providerPath,
     envPath,
-    summary: `Provider "${profile.id}" added with ${profile.models.length} model(s). `
-      + `${profile.apiKeyEnv} created in .env with empty value — edit ${envPath} and paste your API key, then restart Vesicle.`,
+    summary: keyAlreadyExists
+      ? `Provider "${profile.id}" added with ${profile.models.length} model(s). `
+        + `${profile.apiKeyEnv} already has a value in .env — no changes made to it. Restart Vesicle to use the new provider.`
+      : `Provider "${profile.id}" added with ${profile.models.length} model(s). `
+        + `${profile.apiKeyEnv} created in .env with empty value — edit ${envPath} and paste your API key, then restart Vesicle.`,
     restartRequired: true,
   };
 }
