@@ -81,7 +81,7 @@ describe("rewind service", () => {
     expect(rewound.prompt).toBe("change card");
   });
 
-  test("marks rewind points whose file completeness was tainted by shell_exec", async () => {
+  test("marks rewind points whose file completeness was tainted by a host process", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-rewind-tainted-"));
     const store = await createSessionStore(rootDir, "rewind-tainted");
     await store.append({ role: "system", content: "prompt" });

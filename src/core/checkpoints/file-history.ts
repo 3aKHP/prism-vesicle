@@ -24,7 +24,7 @@ export type FileCheckpointSnapshot = {
   messageId: string;
   files: Record<string, FileCheckpointEntry>;
   timestamp: string;
-  /** shell_exec may mutate paths outside the guarded file-tool ledger. */
+  /** Host processes may mutate paths outside the guarded file-tool ledger. */
   taintedByHostProcess?: true;
 };
 

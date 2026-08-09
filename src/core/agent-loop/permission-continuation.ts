@@ -253,12 +253,19 @@ async function executeApprovedEntry(
       content: `Permission was not applied because ${call.name} is no longer in the current Engine's effective tool surface. The tool was not executed.`,
     };
   }
-  if (call.name === "shell_exec") {
+  if (call.name === "shell_exec" || call.name === "run_skill_script") {
     await context.checkpoint?.markTaintedByHostProcess();
     await context.session.append({
       role: "system",
-      content: "Approved shell process started.",
-      metadata: withExecutionRound(context.session.sessionId, { kind: "process-started", requestId: entry.request.id, toolCallId: call.id, planHash: approvedShellPlanHash, checkpointTainted: true }),
+      content: "Approved host process started.",
+      metadata: withExecutionRound(context.session.sessionId, {
+        kind: "process-started",
+        requestId: entry.request.id,
+        toolCallId: call.id,
+        toolName: call.name,
+        ...(approvedShellPlanHash ? { planHash: approvedShellPlanHash } : {}),
+        checkpointTainted: true,
+      }),
     });
   }
   if (agentToolNames.has(call.name)) {

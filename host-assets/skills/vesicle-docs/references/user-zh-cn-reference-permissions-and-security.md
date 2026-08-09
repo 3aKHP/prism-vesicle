@@ -61,12 +61,12 @@ shellInterpreter: auto  # auto / posix-sh / powershell-7 / windows-powershell-5.
 
 ## Skill 脚本:不依赖 Shell 开关的结构化执行
 
-`run_skill_script` 只能执行已激活 Skill 的 `scripts/` 资源,脚本路径受 Skill 虚拟根守卫,参数以结构化 argv 传递,不经过 Shell 插值。它不受 `permissions.yaml` 的 `shellExec` 或 `shellInterpreter` 控制;运行时按扩展名解析 `sh`、Python、Node、Bun 或 PowerShell 等所需解释器,缺少解释器时明确失败。
+`run_skill_script` 只能执行已激活 Skill 的 `scripts/` 资源,脚本路径受 Skill 虚拟根守卫,并会在执行前重新校验 catalog 绑定的资源哈希;参数以结构化 argv 传递,不经过 Shell 插值。它不受 `permissions.yaml` 的 `shellExec` 或 `shellInterpreter` 控制;运行时按扩展名解析 `sh`、Python、Node、Bun 或 PowerShell 等所需解释器,缺少解释器或资源发生漂移时明确失败。
 
 - MANUAL / INERTIA:每次执行前询问。
 - MOMENTUM / YOLO:按当前模式自动放行。
 - 环境过滤、超时、输出上限、取消和进程树清理始终生效。
-- 脚本仍可能以宿主用户权限访问项目外文件或网络;它造成的文件改动不保证可由 `/rewind` 恢复。
+- 脚本仍可能以宿主用户权限访问项目外文件或网络;它造成的文件改动会使检查点完整性变为 tainted,不保证可由 `/rewind` 恢复。
 
 这不会为 Skill 增加权限:工具面、当前权限模式和 Process Runtime 仍由 Vesicle Host 决定。它只是把“选择一个可检查的 Skill 脚本”与“执行模型生成的自由 Shell 命令”分成两个权限类别。
 

@@ -34,7 +34,7 @@ describe("tui: yolo and rewind surfaces", () => {
     expect(frame.split("\n").at(-2)).toContain("└");
   });
 
-  test("warns when a rewind checkpoint was tainted by shell_exec", async () => {
+  test("warns when a rewind checkpoint was tainted by a host process", async () => {
     const point = {
       uuid: "user-1",
       parentUuid: null,
@@ -55,7 +55,7 @@ describe("tui: yolo and rewind surfaces", () => {
     await setup.flush();
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
-    expect(frame).toContain("ran shell_exec");
+    expect(frame).toContain("ran a host process");
     expect(frame).toContain("may not be restored");
   });
 
@@ -151,7 +151,7 @@ describe("tui: yolo and rewind surfaces", () => {
 
     expect(frame).toContain(">Never mind");
     expect(frame).toContain("Rewinding does not affect files edited manually outside Vesicle tools.");
-    expect(frame).toContain("This turn ran shell_exec");
+    expect(frame).toContain("This turn ran a host process");
     expect(frame).toContain("↑/↓ choose");
     const rows = frame.split("\n");
     const confirmRow = rows.findIndex((line) => line.includes("Confirm you want"));

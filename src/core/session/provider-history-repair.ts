@@ -37,7 +37,7 @@ function appendIndeterminateProcessResults(messages: ResumedMessage[], records: 
     const toolCallId = record.metadata.toolCallId;
     if (typeof requestId !== "string" || typeof toolCallId !== "string") continue;
     if (finishedRequestIds.has(requestId) || answeredToolCallIds.has(toolCallId)) continue;
-    messages.push({ role: "tool", toolCallId, toolOk: false, kind: "process-indeterminate", content: JSON.stringify({ ok: false, result: "The approved shell process started before Vesicle stopped, but no completion record exists. Its side effects are indeterminate and the command was not replayed." }) });
+    messages.push({ role: "tool", toolCallId, toolOk: false, kind: "process-indeterminate", content: JSON.stringify({ ok: false, result: "The approved host process started before Vesicle stopped, but no completion record exists. Its side effects are indeterminate and the call was not replayed." }) });
     answeredToolCallIds.add(toolCallId);
   }
 }

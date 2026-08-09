@@ -59,12 +59,12 @@ Without this file, the defaults are `MOMENTUM` + `shellExec: false` + `shellInte
 
 ## Skill scripts: structured execution without the Shell switch
 
-`run_skill_script` can only execute a `scripts/` resource from an activated Skill. The script path is guarded inside the Skill virtual root, arguments are passed as structured argv, and no shell interpolation occurs. It is not controlled by `permissions.yaml`'s `shellExec` or `shellInterpreter`; the runtime resolves the required `sh`, Python, Node, Bun, or PowerShell interpreter from the file extension and fails clearly when it is unavailable.
+`run_skill_script` can only execute a `scripts/` resource from an activated Skill. The script path is guarded inside the Skill virtual root, its catalog-pinned content hash is rechecked immediately before execution, arguments are passed as structured argv, and no shell interpolation occurs. It is not controlled by `permissions.yaml`'s `shellExec` or `shellInterpreter`; the runtime resolves the required `sh`, Python, Node, Bun, or PowerShell interpreter from the file extension and fails clearly when it is unavailable or the resource has changed.
 
 - MANUAL / INERTIA ask before each execution.
 - MOMENTUM / YOLO auto-allow according to the active mode.
 - Environment filtering, timeout, output limits, cancellation, and process-tree cleanup always remain active.
-- A script may still access project-external files or the network with host-user authority; its file changes are not guaranteed to rewind.
+- A script may still access project-external files or the network with host-user authority; its file changes taint checkpoint completeness and are not guaranteed to rewind.
 
 This does not grant a Skill new authority: Vesicle Host still owns the effective tool surface, active permission mode, and Process Runtime. It only separates “run this inspectable Skill script” from “run a model-authored free-form shell command” as two permission classes.
 

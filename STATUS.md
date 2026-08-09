@@ -152,7 +152,7 @@ Model-visible tools and their write scope. Path guards, permissions, process aut
 | `wait_agent` | No filesystem access (foreground join / background inbox) |
 | `shell_exec` | Host-user filesystem/process/network authority; **not** path-guarded (opt-in) |
 | `activate_skill` / `read_skill_resource` | Activate an effective catalog entry / read a guarded Skill resource |
-| `run_skill_script` | Fixed activated-Skill script via structured argv and Process Runtime; host-user process authority; independent of `shellExec` |
+| `run_skill_script` | Fixed activated-Skill script with a catalog-pinned content hash, structured argv, Process Runtime, host-process checkpoint taint, and host-user process authority; independent of `shellExec` |
 | `shell_output` | Reads bounded `.vesicle/processes/` runtime state |
 | `shell_stop` | Terminates the managed process group/tree |
 | `config.load` / `prompt.load` | Internal contract |
@@ -190,7 +190,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Filesystem & Session
 
 - Directory tools intentionally omit recursive deletion and directory-tree copying. Models must delete contents explicitly before `delete_directory`; `move_directory` never overwrites an existing target.
-- Rewind file checkpoints track only mutations performed through Vesicle's guarded filesystem tools under the durable content and artifact roots (not the scratch root `tmp/`), including nested directory topology. Files or directories changed only by the user, an external process, or `shell_exec` are outside that ledger and are not independently discovered as rewind targets. Moves across the `tmp/` boundary are asymmetric under rewind: scratch→content loses the moved body; content→scratch leaves a duplicate in `tmp/`.
+- Rewind file checkpoints track only mutations performed through Vesicle's guarded filesystem tools under the durable content and artifact roots (not the scratch root `tmp/`), including nested directory topology. Files or directories changed only by the user, an external process, `shell_exec`, or `run_skill_script` are outside that ledger and are not independently discovered as rewind targets. Moves across the `tmp/` boundary are asymmetric under rewind: scratch→content loses the moved body; content→scratch leaves a duplicate in `tmp/`.
 - Persistent Instruction targets are host configuration outside the guarded writable roots, so `/rewind` and double-Esc do not restore changes made by `update_instructions`. Rewinding the conversation can therefore remove the visible tool call while leaving the instruction file changed on disk. The tool reports the single `.previous` backup location after each mutation; recovery is manual until a dedicated restore command exists.
 
 ### Providers & Streaming
@@ -220,7 +220,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ### Host Shell
 
-- `shell_exec` is a user-authorized host command, **not an OS sandbox**. Its child environment is filtered and its process lifetime/output are bounded, but an approved command can still read or mutate project-external files and use the network. Shell-created file changes taint the turn's checkpoint completeness and are not guaranteed to rewind.
+- `shell_exec` and `run_skill_script` are user-authorized host processes, **not an OS sandbox**. Their child environment is filtered and their process lifetime/output are bounded, but an approved process can still read or mutate project-external files and use the network. Host-process file changes taint the turn's checkpoint completeness and are not guaranteed to rewind.
 - Process cleanup terminates the managed shell and ordinary descendants in its process group/tree; an explicitly approved command can still escape that tree through a new session or external service manager. See [`docs/dev/TOOLS.md`](./docs/dev/TOOLS.md) for the runtime contract and [`docs/user/en/advanced/shell-exec.md`](./docs/user/en/advanced/shell-exec.md) for the user-facing surface.
 
 ### Quality Guard & Stage

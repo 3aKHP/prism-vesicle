@@ -3,6 +3,8 @@
 // filtering, timeout, output caps, and progress events all go through the same
 // process-hardening policy as any host process action.
 
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { buildProcessEnvironment, executeProcessArgv } from "../../process/runtime";
 import { DEFAULT_PROCESS_TIMEOUT_MS, MAX_PROCESS_TIMEOUT_MS } from "../../process/runtime";
 import type { ProcessExecutionResult } from "../../process/runtime";
@@ -24,6 +26,10 @@ const SIMPLE_SCRIPT_INTERPRETERS: Record<string, { identity: string; command: st
   ".mjs": { identity: "node", command: "node" },
   ".cjs": { identity: "node", command: "node" },
   ".ts": { identity: "bun", command: "bun" },
+};
+const INTERPRETER_SHELL_IDS: Partial<Record<string, ProcessShellId>> = {
+  pwsh: "powershell-7",
+  "powershell-5.1": "windows-powershell-5.1",
 };
 
 const POWERSHELL_FLAGS = ["-NoLogo", "-NoProfile", "-NonInteractive", "-File"];
@@ -113,6 +119,17 @@ export async function executeRunSkillScriptTool(
   }
   const file = await resolveSkillFile(skill, relPath);
   if ("error" in file) return fail(call, file.error);
+  const expectedResourceHash = skill.parsed.resources.find((resource) => resource.path === relPath)?.sha256;
+  if (!expectedResourceHash) return fail(call, `Skill script "${relPath}" has no catalog content hash; refresh the Skill catalog before executing it.`);
+  let resourceHash: string;
+  try {
+    resourceHash = createHash("sha256").update(await readFile(file.absolutePath)).digest("hex");
+  } catch (error) {
+    return fail(call, `Unable to verify Skill script "${relPath}" before execution: ${error instanceof Error ? error.message : String(error)}.`);
+  }
+  if (resourceHash !== expectedResourceHash) {
+    return fail(call, `Skill script "${relPath}" changed after catalog discovery; refresh the Skill catalog before executing it. The script was not executed.`);
+  }
 
   const extension = extensionOf(relPath);
   const platform = options.platform ?? process.platform;
@@ -128,6 +145,7 @@ export async function executeRunSkillScriptTool(
     kind: "skill_script_exec",
     name: skill.name,
     contentHash: skill.parsed.bodySha256,
+    resourceHash,
     path: relPath,
     interpreter: interpreter.identity,
     args: scriptArgs,
@@ -136,13 +154,7 @@ export async function executeRunSkillScriptTool(
   // No shell is spawned. The legacy process-event field records the selected
   // interpreter family when representable, without consulting shell_exec's
   // independently configured shell profile.
-  const shellId: ProcessShellId = interpreter.identity === "pwsh"
-    ? "powershell-7"
-    : interpreter.identity === "powershell-5.1"
-      ? "windows-powershell-5.1"
-      : platform === "win32"
-        ? "cmd"
-        : "posix-sh";
+  const shellId: ProcessShellId = INTERPRETER_SHELL_IDS[interpreter.identity] ?? "posix-sh";
   const progressEvent = (progress: { durationMs: number; stdoutTail: string; stderrTail: string; stdoutBytes: number; stderrBytes: number; stdoutTruncated: boolean; stderrTruncated: boolean }): ProcessToolEvent => ({
     kind: "process_exec",
     executionMode: "foreground",
