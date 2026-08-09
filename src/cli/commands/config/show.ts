@@ -88,9 +88,9 @@ async function showEnvSanitized(): Promise<void> {
       continue;
     }
     if (trimmed.startsWith("#")) {
-      // Mask comment lines that contain a KEY= pattern — a commented-out
-      // credential assignment (e.g. # OPENAI_API_KEY=sk-...) is a common
-      // .env pattern and must not leak through the sanitization boundary.
+      // Conservatively mask any comment containing "=" — a commented-out
+      // credential assignment (e.g. # OPENAI_API_KEY=sk-...) must not leak
+      // through the sanitization boundary.
       console.log(trimmed.includes("=") ? "<comment>" : raw);
       continue;
     }

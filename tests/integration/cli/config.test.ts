@@ -12,8 +12,8 @@ import { runCli, seedProvidersConfig, withTempProject } from "./support";
 describe("vesicle config CLI", () => {
   test("config path honors VESICLE_HOST_CONFIG_DIR when explicit overrides are absent", async () => {
     await withTempProject("vesicle-config-hostdir-", async (projectDir, configDir) => {
-      // Simulate a run_skill_script child: no VESICLE_CONFIG_DIR, no APPDATA,
-      // no XDG_CONFIG_HOME — only the Host-injected resolved value.
+      // No explicit VESICLE_CONFIG_DIR; VESICLE_HOST_CONFIG_DIR must win
+      // over any passed-through platform defaults (APPDATA, HOME).
       const result = await runCli(["config", "path"], {
         cwd: projectDir,
         env: { VESICLE_HOST_CONFIG_DIR: configDir },
