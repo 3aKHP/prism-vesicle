@@ -10,6 +10,36 @@ import { runCli, seedProvidersConfig, withTempProject } from "./support";
  * resulting config files.
  */
 describe("vesicle config CLI", () => {
+  test("config path honors VESICLE_HOST_CONFIG_DIR when explicit overrides are absent", async () => {
+    await withTempProject("vesicle-config-hostdir-", async (projectDir, configDir) => {
+      // Simulate a run_skill_script child: no VESICLE_CONFIG_DIR, no APPDATA,
+      // no XDG_CONFIG_HOME — only the Host-injected resolved value.
+      const result = await runCli(["config", "path"], {
+        cwd: projectDir,
+        env: { VESICLE_HOST_CONFIG_DIR: configDir },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe(configDir);
+    });
+  });
+
+  test("show env masks comment lines containing KEY= patterns", async () => {
+    await withTempProject("vesicle-config-comment-", async (projectDir, configDir) => {
+      await writeFile(join(configDir, ".env"), [
+        "ACTIVE_KEY=value",
+        "# OPENAI_API_KEY=sk-commented-out-secret",
+        "# This is a plain comment without equals",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "show", "env"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).not.toContain("sk-commented-out-secret");
+      expect(result.stdout).toContain("<comment>");
+      expect(result.stdout).toContain("# This is a plain comment without equals");
+      expect(result.stdout).toContain("ACTIVE_KEY=<set>");
+    });
+  });
+
   test("config path prints the resolved config directory", async () => {
     await withTempProject("vesicle-config-path-", async (projectDir, configDir) => {
       const result = await runCli(["config", "path"], { cwd: projectDir, configDir });

@@ -83,8 +83,15 @@ async function showEnvSanitized(): Promise<void> {
   console.log("");
   for (const raw of source.split(/\r?\n/)) {
     const trimmed = raw.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
+    if (!trimmed) {
       console.log(raw);
+      continue;
+    }
+    if (trimmed.startsWith("#")) {
+      // Mask comment lines that contain a KEY= pattern — a commented-out
+      // credential assignment (e.g. # OPENAI_API_KEY=sk-...) is a common
+      // .env pattern and must not leak through the sanitization boundary.
+      console.log(trimmed.includes("=") ? "<comment>" : raw);
       continue;
     }
     const equals = trimmed.indexOf("=");
