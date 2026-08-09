@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { EngineProfile } from "../../../src/core/engine/profile";
 import { resolveBuiltInTools } from "../../../src/core/agent-loop/tool-surface";
-import { resolveShellProfile } from "../../../src/core/process/shell-profile";
 import { permissionClassForTool } from "../../../src/core/permissions/policy";
 import { hostToolDefinitions } from "../../../src/core/tools";
 
@@ -32,11 +31,11 @@ function toolNames(profile: EngineProfile, options: { shellExecEnabled?: boolean
 }
 
 describe("skill tool permission classes", () => {
-  test("activate_skill fails closed as mutate, resource reads observe, scripts share shell_exec's class", () => {
+  test("activate_skill fails closed as mutate, resource reads observe, and scripts use skill_exec", () => {
     expect(permissionClassForTool("activate_skill")).toBe("mutate");
     expect(permissionClassForTool("read_skill_resource")).toBe("observe");
-    expect(permissionClassForTool("run_skill_script")).toBe("arbitrary_exec");
-    expect(permissionClassForTool("run_skill_script")).toBe(permissionClassForTool("shell_exec"));
+    expect(permissionClassForTool("run_skill_script")).toBe("skill_exec");
+    expect(permissionClassForTool("run_skill_script")).not.toBe(permissionClassForTool("shell_exec"));
   });
 });
 
@@ -46,11 +45,10 @@ describe("skill tool surface gating", () => {
   });
 
   test("skill tools are injected for non-Stage engines regardless of profile defaultTools", () => {
-    const names = toolNames(fakeProfile("runtime", ["read_file"]), { shellExecEnabled: true, catalogNames: ["alpha"] });
+    const names = toolNames(fakeProfile("runtime", ["read_file"]), { catalogNames: ["alpha"] });
     expect(names).toContain("activate_skill");
     expect(names).toContain("read_skill_resource");
-    const shellAvailable = Boolean(resolveShellProfile("auto"));
-    expect(names.includes("run_skill_script")).toBe(shellAvailable);
+    expect(names).toContain("run_skill_script");
   });
 
   test("declared skill tools stay off while the catalog is empty", () => {
@@ -58,15 +56,12 @@ describe("skill tool surface gating", () => {
     for (const tool of skillTools) expect(names).not.toContain(tool);
   });
 
-  test("a non-empty catalog enables activate/read; scripts additionally need process capability", () => {
-    const withoutProcess = toolNames(fakeProfile("runtime", skillTools), { catalogNames: ["alpha", "beta"] });
-    expect(withoutProcess).toContain("activate_skill");
-    expect(withoutProcess).toContain("read_skill_resource");
-    expect(withoutProcess).not.toContain("run_skill_script");
-
-    const shellAvailable = Boolean(resolveShellProfile("auto"));
-    const withProcess = toolNames(fakeProfile("runtime", skillTools), { shellExecEnabled: true, catalogNames: ["alpha", "beta"] });
-    expect(withProcess.includes("run_skill_script")).toBe(shellAvailable);
+  test("a non-empty catalog enables scripts without enabling shell_exec", () => {
+    const names = toolNames(fakeProfile("runtime", skillTools), { catalogNames: ["alpha", "beta"] });
+    expect(names).toContain("activate_skill");
+    expect(names).toContain("read_skill_resource");
+    expect(names).toContain("run_skill_script");
+    expect(names).not.toContain("shell_exec");
   });
 
   test("activate_skill's name enum is the effective catalog", () => {

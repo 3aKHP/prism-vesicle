@@ -96,6 +96,8 @@ export interface SkillResource {
   path: string;
   kind: SkillResourceKind;
   bytes: number;
+  /** SHA-256 of the exact resource bytes observed during catalog discovery. */
+  sha256: string;
 }
 
 /**

@@ -119,7 +119,7 @@ async function executeNonAgentCalls(
       }
       if (agentToolNames.has(call.name)) continue;
       options.onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
-      const processExecutionPlan = await recordPolicyApprovedShellStart(options, call);
+      const processExecutionPlan = await recordPolicyApprovedHostProcessStart(options, call);
       const result = await executeHostCall(options, call, processExecutionPlan);
       await recordToolResult({
         result,
@@ -298,23 +298,26 @@ async function executeHostCall(
   }
 }
 
-async function recordPolicyApprovedShellStart(
+async function recordPolicyApprovedHostProcessStart(
   options: ExecuteToolRoundOptions,
   call: ToolCall,
 ): Promise<ProcessExecutionPlan | undefined> {
-  if (call.name !== "shell_exec") return undefined;
+  if (call.name !== "shell_exec" && call.name !== "run_skill_script") return undefined;
   try {
-    const plan = parseShellExecPlan(call, options.permission.shellInterpreter);
-    const planHash = executionPlanHash(plan);
+    const plan = call.name === "shell_exec"
+      ? parseShellExecPlan(call, options.permission.shellInterpreter)
+      : undefined;
+    const planHash = plan ? executionPlanHash(plan) : undefined;
     await options.markCheckpointTainted();
     await options.session.append({
       role: "system",
-      content: "Policy-approved shell process started.",
+      content: "Policy-approved host process started.",
       metadata: {
         kind: "process-started",
         requestId: `policy:${call.id}`,
         toolCallId: call.id,
-        planHash,
+        toolName: call.name,
+        ...(planHash ? { planHash } : {}),
         permissionMode: options.permission.mode,
         decisionSource: decisionSource(options.permission),
         checkpointTainted: true,
@@ -322,7 +325,7 @@ async function recordPolicyApprovedShellStart(
     });
     return plan;
   } catch {
-    // Invalid arguments are returned through the normal tool wrapper.
+    // Invalid host-process arguments are returned through the normal tool wrapper.
     return undefined;
   }
 }

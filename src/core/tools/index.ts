@@ -250,7 +250,6 @@ export async function executeHostTool(
       catalog: options.skillCatalog,
       sessionId: options.parentSessionId,
       signal: options.signal,
-      shellInterpreter: options.shellInterpreter,
       onProcessProgress: options.onProcessProgress,
     };
     if (call.name === "activate_skill") return executeActivateSkillTool(call, skillOptions);

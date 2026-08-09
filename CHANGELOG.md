@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Skill-script execution no longer depends on the free-form Shell gate.** `run_skill_script` now uses its own `skill_exec` permission class and is available for every non-Stage session with a non-empty Skill catalog, even when `permissions.yaml` keeps `shellExec: false`. MANUAL and INERTIA still ask before execution; the default MOMENTUM and process-scoped YOLO follow their normal auto-allow behavior. The selected script remains a fixed, inspectable Skill resource whose catalog-pinned content hash is rechecked immediately before execution, and it retains structured argv plus the existing Process Runtime environment filtering, timeout, output cap, cancellation, process-tree cleanup, and host-process checkpoint taint. Interpreter absence or resource drift still fails clearly without execution. `shell_exec` remains separately opt-in and retains its `arbitrary_exec` approval path. Legacy pending `run_skill_script` approvals recorded as `arbitrary_exec` migrate on resume. This restores the intended out-of-box `skillify` validate/publish flow without enabling a general Shell.
+
 ## [1.0.0-alpha.9] - 2026-08-09
 
 ### Added

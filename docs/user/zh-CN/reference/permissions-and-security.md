@@ -26,7 +26,7 @@
   - `source_materials/` 存放导入、研究或模型生成的素材;最终产物落在其余四个根。
   - `tmp/` 是项目相对的暂存根(`<项目>/tmp/`,不是操作系统 `/tmp`),用于草稿和中间工作;它受同样的路径守卫与权限模式约束,其改动可写入但不纳入回合级文件检查点/回退,因此暂存区编辑不可回退。跨 `tmp/` 边界的移动在回退时不可完全逆转:从 `tmp/` 移入内容根的文件会被删除且无法恢复;从内容根移入 `tmp/` 的文件会还原到原位,而 `tmp/` 中的副本仍保留。若可能回退,请用 `copy_file` 提升暂存内容。它不会进入制品列表、`/validate`、`/init`、Stage 输入或自动发布。宿主不会自动创建或清空 `tmp/`;需要清理时请显式删除文件。
 - Host 侧栏的制品列表只索引 `workspace/`、`novels/`、`reports/`、`test_runs/`(不含 `source_materials/`,也不含 `tmp/`)。
-- `shell_exec` 是**唯一**的显式例外:它有宿主用户权限,刻意不走路径守卫(见下)。
+- 进程工具是显式例外:`shell_exec` 和 Skill 自带脚本可能拥有宿主用户权限,其进程内文件操作不走模型文件工具的路径守卫。二者的调用面不同:`shell_exec` 接受模型生成的自由命令并需单独开启;`run_skill_script` 只能选择已激活 Skill 中的固定脚本并传结构化参数。
 
 > 校验器(角色卡 / 情景卡等)是**建议性**信号:它指出结构问题,但不会强行中断你的回合。
 
@@ -56,6 +56,17 @@ shellInterpreter: auto  # auto / posix-sh / powershell-7 / windows-powershell-5.
 `shellInterpreter`:`auto` 在 Linux/WSL 是 `/bin/sh`,Windows 优先 PowerShell 7 并只在 PowerShell 家族内兜底;显式选 `posix-sh`/`cmd`/`git-bash` 等不会跨 shell 家族静默切换。
 
 > 完整的 Process Runtime(后台任务、解释器档案全集、进程树清理、计划绑定)见 [高级:宿主 Shell](../advanced/shell-exec.md)。
+
+## Skill 脚本:不依赖 Shell 开关的结构化执行
+
+`run_skill_script` 只能执行已激活 Skill 的 `scripts/` 资源,脚本路径受 Skill 虚拟根守卫,并会在执行前重新校验 catalog 绑定的资源哈希;参数以结构化 argv 传递,不经过 Shell 插值。它不受 `permissions.yaml` 的 `shellExec` 或 `shellInterpreter` 控制;运行时按扩展名解析 `sh`、Python、Node、Bun 或 PowerShell 等所需解释器,缺少解释器或资源发生漂移时明确失败。
+
+- MANUAL / INERTIA:每次执行前询问。
+- MOMENTUM / YOLO:按当前模式自动放行。
+- 环境过滤、超时、输出上限、取消和进程树清理始终生效。
+- 脚本仍可能以宿主用户权限访问项目外文件或网络;它造成的文件改动会使检查点完整性变为 tainted,不保证可由 `/rewind` 恢复。
+
+这不会为 Skill 增加权限:工具面、当前权限模式和 Process Runtime 仍由 Vesicle Host 决定。它只是把“选择一个可检查的 Skill 脚本”与“执行模型生成的自由 Shell 命令”分成两个权限类别。
 
 ## 进程级跳过确认
 

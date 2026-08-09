@@ -10,6 +10,8 @@ import { displayWidth, truncateLine, visibleDisplayLines } from "./format";
 export const permissionPanelHeight = 14;
 const permissionContentRows = permissionPanelHeight - 2;
 const hostAuthorityWarning = "This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
+const skillScriptAuthorityWarning = "This selected Skill script uses structured arguments but may access files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
+type PermissionPromptKind = "host-command" | "skill-script" | "default";
 
 export type PermissionPromptProps = {
   request: PermissionRequest;
@@ -21,7 +23,11 @@ export type PermissionPromptProps = {
 };
 
 export function PermissionPrompt(props: PermissionPromptProps) {
-  const dangerous = () => props.request.permissionClass === "arbitrary_exec";
+  const kind = (): PermissionPromptKind => props.request.permissionClass === "arbitrary_exec"
+    ? "host-command"
+    : props.request.permissionClass === "skill_exec"
+      ? "skill-script"
+      : "default";
   const detail = () => {
     if (props.request.executionPlan) return props.request.executionPlan.command;
     try {
@@ -35,14 +41,28 @@ export function PermissionPrompt(props: PermissionPromptProps) {
     - 5
     - (props.request.executionPlan?.executablePath ? 1 : 0)
     - (props.feedbackMode === "reject" ? 2 : 0));
-  const warningLines = () => dangerous()
-    ? visibleDisplayLines(hostAuthorityWarning, contentWidth(), flexibleLineBudget() - 1)
-    : [];
+  const warningLines = () => {
+    const warning = kind() === "host-command"
+      ? hostAuthorityWarning
+      : kind() === "skill-script"
+        ? skillScriptAuthorityWarning
+        : undefined;
+    return warning ? visibleDisplayLines(warning, contentWidth(), flexibleLineBudget() - 1) : [];
+  };
   const detailLineBudget = () => Math.max(1, flexibleLineBudget() - warningLines().length);
   const detailLines = () => visibleDisplayLines(detail(), contentWidth(), detailLineBudget());
   const title = () => {
-    const full = dangerous() ? "Permission required · HOST COMMAND" : "Permission required";
-    return displayWidth(full) <= contentWidth() ? full : "Permission · HOST COMMAND";
+    const full = kind() === "host-command"
+      ? "Permission required · HOST COMMAND"
+      : kind() === "skill-script"
+        ? "Permission required · SKILL SCRIPT"
+        : "Permission required";
+    if (displayWidth(full) <= contentWidth()) return full;
+    return kind() === "host-command"
+      ? "Permission · HOST COMMAND"
+      : kind() === "skill-script"
+        ? "Permission · SKILL SCRIPT"
+        : "Permission";
   };
   const hint = () => {
     const full = "↑/↓ choose · Enter confirm · Tab feedback · Esc reject";
@@ -51,7 +71,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
   return (
     <box
       border
-      borderColor={dangerous() ? palette.error : palette.gateBorder}
+      borderColor={kind() === "host-command" ? palette.error : palette.gateBorder}
       paddingX={1}
       flexDirection="column"
       width={props.width}
@@ -59,14 +79,14 @@ export function PermissionPrompt(props: PermissionPromptProps) {
     >
       <ThemedText
         content={title()}
-        fg={dangerous() ? palette.error : palette.gateAccent}
+        fg={kind() === "host-command" ? palette.error : palette.gateAccent}
         wrapMode="none"
       />
       <ThemedText content={truncateLine(`${props.request.toolName} · mode ${props.request.mode} · cwd .${props.request.executionPlan?.runInBackground ? " · background" : ""}${props.request.executionPlan ? ` · ${processShellDisplay(props.request.executionPlan)}` : ""}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
       {props.request.executionPlan?.executablePath ? (
         <ThemedText content={truncateLine(`Interpreter: ${props.request.executionPlan.executablePath}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
       ) : null}
-      <For each={warningLines()}>{(line) => <ThemedText content={line} fg={palette.error} wrapMode="none" />}</For>
+      <For each={warningLines()}>{(line) => <ThemedText content={line} fg={kind() === "host-command" ? palette.error : palette.gateAccent} wrapMode="none" />}</For>
       <For each={detailLines()}>{(line) => <ThemedText content={line || " "} fg={palette.textPrimary} wrapMode="none" />}</For>
       <ThemedText content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} wrapMode="none" />
       <ThemedText content={`${props.focused === "reject" ? "›" : " "} Reject`} fg={props.focused === "reject" ? palette.error : palette.textDim} wrapMode="none" />

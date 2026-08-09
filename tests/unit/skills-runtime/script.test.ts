@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { realpath, rm } from "node:fs/promises";
+import { realpath, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import type { ToolCall } from "../../../src/core/tools/types";
 import { executeActivateSkillTool, executeRunSkillScriptTool } from "../../../src/core/skills";
 import { clearSessionActivations } from "../../../src/core/skills";
@@ -117,6 +118,19 @@ describe("run_skill_script executor", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.content).toContain('Interpreter "python3"');
+    expect(result.content).toContain("was not executed");
+    expect(result.processEvent).toBeUndefined();
+  });
+
+  test("rejects a script changed after catalog discovery", async () => {
+    const root = await writeSkill(scratch, "alpha", { files: { "scripts/tool.sh": "echo original\n" } });
+    const catalog = catalogFor(await loadWritten(root));
+    const activation = await executeActivateSkillTool(call("activate_skill", { name: "alpha" }), { catalog, sessionId });
+    expect(activation.ok).toBe(true);
+    await writeFile(join(root, "scripts", "tool.sh"), "echo changed\n", "utf8");
+    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/tool.sh" }), { catalog, sessionId });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain("changed after catalog discovery");
     expect(result.content).toContain("was not executed");
     expect(result.processEvent).toBeUndefined();
   });

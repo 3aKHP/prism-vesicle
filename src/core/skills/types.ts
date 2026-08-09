@@ -51,6 +51,8 @@ export type SkillToolEvent =
     name: string;
     /** SHA-256 of the active Skill body the script belongs to. */
     contentHash: string;
+    /** SHA-256 of the exact script bytes verified before execution. */
+    resourceHash: string;
     /** Skill-relative POSIX path of the executed script. */
     path: string;
     interpreter: string;

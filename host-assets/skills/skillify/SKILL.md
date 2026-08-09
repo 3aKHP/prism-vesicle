@@ -61,7 +61,7 @@ The draft directory is always project-relative, starting with `tmp/skillify/`. T
 
 ## Failure handling
 
-- **Process unavailable:** If `run_skill_script` is not available in this session, retain the draft and explain that validation and publication require Process Runtime with a resolved shell profile. Do not claim success or write to `.agents/skills/` directly.
+- **Interpreter unavailable:** If the selected wrapper's interpreter is unavailable, retain the draft and report the exact missing interpreter. `run_skill_script` does not require `shellExec`, but it still fails closed when the wrapper cannot be executed. Do not claim success or write to `.agents/skills/` directly.
 - **Invalid bundle:** Edit only the draft under `tmp/skillify/`, then retry validation. Never attempt to fix the bundle by copying files into the destination.
 - **Target exists:** Stop, retain the draft, and explain that first-version `skillify` does not overwrite or upgrade an existing Skill. The user should choose a new name.
 - **Publication failure:** Report the structured error code from the wrapper output, retain the draft, and do not attempt manual copying.

@@ -96,7 +96,9 @@ async function main(): Promise<void> {
     },
   });
 
-  await writeFile(join(configDir, "providers.yaml"), providersYaml(server.port ?? 0), "utf8");
+  // Keep the complete bundled Skill catalog available; this smoke exercises
+  // skillify itself rather than catalog-budget omission behavior.
+  await writeFile(join(configDir, "providers.yaml"), providersYaml(server.port ?? 0, 32_000), "utf8");
   await writeFile(join(configDir, ".env"), MOCK_ENV, "utf8");
   await mkdir(join(project, "assets", "prompts", "shared"), { recursive: true });
   await mkdir(join(project, "assets", "prompts", "engines"), { recursive: true });
@@ -108,12 +110,15 @@ async function main(): Promise<void> {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     VESICLE_PROVIDERS_FILE: join(configDir, "providers.yaml"),
+    // An absent file exercises the product defaults: MOMENTUM with shell_exec
+    // disabled. run_skill_script must remain usable without either override.
+    VESICLE_PERMISSIONS_FILE: join(configDir, "permissions.yaml"),
     VESICLE_REDUCED_MOTION: "1",
     TERM: "xterm-256color",
   };
 
   const start = async (): Promise<Pty> => {
-    const command = `stty cols ${WIDTH} rows ${HEIGHT}; ${launchCommand} --dangerously-skip-permissions ${quote(project)}`;
+    const command = `stty cols ${WIDTH} rows ${HEIGHT}; ${launchCommand} ${quote(project)}`;
     const child = Bun.spawn(["script", "-qfe", "-c", command, join(root, `pty-${calls}.log`)], {
       cwd: REPO_ROOT,
       env,
@@ -168,7 +173,11 @@ async function main(): Promise<void> {
   check(publishedBody === SKILL_MD, "project publication is missing or not byte-exact");
 
   const firstRequests = JSON.stringify(requests.slice(0, 10));
-  check(firstRequests.includes("not available") || firstRequests.includes("not in the active Skill catalog"), "current session did not refuse activation from its frozen catalog");
+  check(
+    (firstRequests.includes("not available") || firstRequests.includes("not in the active Skill catalog") || firstRequests.includes("Unknown skill"))
+      && firstRequests.includes(NAME),
+    "current session did not refuse activation from its frozen catalog",
+  );
 
   const fresh = await start();
   await fresh.send("Activate the new project Skill and read its guide.");

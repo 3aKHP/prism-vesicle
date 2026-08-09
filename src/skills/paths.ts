@@ -10,7 +10,8 @@
  * the future Phase 2 `read_skill_resource` tool.
  */
 
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
 import type { SkillDiagnostic, SkillResource, SkillResourceKind } from "./types";
@@ -199,7 +200,12 @@ export async function enumerateSkillResources(
         message: `${file.path} exceeds the ${MAX_TEXT_REFERENCE_BYTES}-byte text reference limit.`,
       });
     }
-    resources.push({ path: file.path, kind, bytes: file.bytes });
+    try {
+      const raw = await readFile(join(rootDirectory, ...file.path.split("/")));
+      resources.push({ path: file.path, kind, bytes: file.bytes, sha256: createHash("sha256").update(raw).digest("hex") });
+    } catch (error) {
+      diagnostics.push({ kind: "read-error", message: `${file.path}: ${readErrorMessage(error)}` });
+    }
   }
   return { resources, diagnostics };
 }
