@@ -9,6 +9,7 @@ import {
 } from "../core/process/shutdown";
 import { closeAllProviderSessions } from "../providers/lifecycle";
 import { configureSelfInvocation } from "../core/runtime/self-invocation";
+import { userConfigDirectory } from "../config/paths";
 
 declare const VESICLE_COMPILED_BINARY: boolean | undefined;
 declare const VESICLE_NPM_BUNDLE: boolean | undefined;
@@ -31,8 +32,8 @@ const isNpmBundle = typeof VESICLE_NPM_BUNDLE === "boolean" && VESICLE_NPM_BUNDL
 // self-contained; source and npm-bundle runs also need the entrypoint module.
 configureSelfInvocation(
   isCompiledBinary
-    ? { executablePath: process.execPath }
-    : { executablePath: process.execPath, entrypoint: Bun.main },
+    ? { executablePath: process.execPath, configDir: userConfigDirectory() }
+    : { executablePath: process.execPath, entrypoint: Bun.main, configDir: userConfigDirectory() },
 );
 
 async function loadOpenTuiPreload(): Promise<void> {
@@ -62,7 +63,7 @@ and \`setup\` commands. They are an initial preference; /theme may override them
 after launch. They are rejected by --version/--help and non-interactive commands.
 
 Commands:
-  setup, launch, doctor, once, prompt, quality, debug, assets, skills, dev`;
+  setup, launch, doctor, once, prompt, quality, debug, assets, skills, config, dev`;
 
 async function configureTreeSitterRuntime(): Promise<void> {
   // Compiled executables receive an explicit flat worker entrypoint through
@@ -144,7 +145,7 @@ switch (parsed.kind) {
   case "error":
     console.error(parsed.message);
     if (parsed.message.startsWith("Unknown command or project directory")) {
-      console.error("Commands: setup, launch, doctor, once, prompt, quality, debug, assets, skills, dev");
+      console.error("Commands: setup, launch, doctor, once, prompt, quality, debug, assets, skills, config, dev");
     }
     process.exitCode = 1;
     break;
@@ -289,6 +290,16 @@ switch (parsed.kind) {
         const { runSkillsCommand } = await import("./commands/skills");
         try {
           await runSkillsCommand(args);
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : String(error));
+          process.exitCode = 1;
+        }
+        break;
+      }
+      case "config": {
+        const { runConfigCommand } = await import("./commands/config");
+        try {
+          await runConfigCommand(args);
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));
           process.exitCode = 1;

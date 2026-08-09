@@ -65,9 +65,9 @@ describe("skill catalog bootstrap wiring", () => {
     const records = await loadSessionRecords(rootDir, sessionId);
     const skills = records[0]?.metadata?.skills as { catalogHash?: string; entries?: Array<Record<string, unknown>> } | undefined;
     expect(typeof skills?.catalogHash).toBe("string");
-    expect(skills?.entries?.length).toBe(4);
+    expect(skills?.entries?.length).toBe(5);
     const names = skills?.entries?.map((e) => e.name).sort();
-    expect(names).toEqual(["alpha", "novel-outline-v3", "skillify", "vesicle-docs"]);
+    expect(names).toEqual(["alpha", "novel-outline-v3", "skillify", "update-config", "vesicle-docs"]);
     expect(JSON.stringify(skills)).not.toContain(userConfigDir());
   });
 
@@ -81,9 +81,9 @@ describe("skill catalog bootstrap wiring", () => {
     expect(requestBody).toContain("activate_skill");
     const records = await loadSessionRecords(rootDir, sessionId);
     const skills = records[0]?.metadata?.skills as { entries?: Array<Record<string, unknown>> } | undefined;
-    expect(skills?.entries?.length).toBe(3);
+    expect(skills?.entries?.length).toBe(4);
     const hostNames = skills?.entries?.map((e) => e.name).sort();
-    expect(hostNames).toEqual(["novel-outline-v3", "skillify", "vesicle-docs"]);
+    expect(hostNames).toEqual(["novel-outline-v3", "skillify", "update-config", "vesicle-docs"]);
     expect(skills?.entries?.every((e) => e.scope === "host")).toBe(true);
   });
 
