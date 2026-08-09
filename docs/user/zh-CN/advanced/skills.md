@@ -57,7 +57,7 @@ vesicle skills copy-template <skill> <资源路径> <目标路径>
 
 每个 Vesicle 安装包自带 `skillify`（范围 `host`）。当你要求 Vesicle 把当前对话中经过验证的重复性工作流捕获、保存或转化为可复用的 Skill 时，模型激活 `skillify`。它会用普通的受保护文件工具在 `tmp/skillify/<名称>/` 下编写草稿，校验完整的 bundle，然后在你选择目标后以仅创建（create-only）方式发布到项目（`.agents/skills/<名称>/`）或已安装的 Skill Store。
 
-发布是仅创建的：不覆盖、不升级。草稿始终保留在 `tmp/skillify/` 下。已发布的 Skill 仅在新会话中可发现——当前会话目录不会改变。校验和发布需要进程运行时（已解析的 shell profile）；`.ps1` 脚本通过 PowerShell 7 支持（Windows 上可回退到 Windows PowerShell 5.1，其他平台仅用 `pwsh`）。
+发布是仅创建的：不覆盖、不升级。草稿始终保留在 `tmp/skillify/` 下。已发布的 Skill 仅在新会话中可发现——当前会话目录不会改变。校验和发布通过结构化 `run_skill_script` 执行,不需要开启 `shellExec`;POSIX 使用 `sh`,`.ps1` 脚本优先使用 PowerShell 7（Windows 上可回退到 Windows PowerShell 5.1，其他平台仅用 `pwsh`）。缺少对应解释器时会明确失败并保留草稿。
 
 ## 第一方 `novel-outline-v3` Skill
 

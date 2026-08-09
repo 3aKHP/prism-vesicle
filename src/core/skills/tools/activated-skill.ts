@@ -9,7 +9,6 @@ import type { LoadedSkill } from "../../../skills/types";
 import { getActivatedSkill } from "../activation-state";
 import type { ResolvedSkillCatalog } from "../catalog";
 import type { ProcessToolEvent, ToolCall, ToolResult } from "../../tools/types";
-import type { ShellInterpreterPreference } from "../../process/shell-profile";
 
 export type SkillToolRuntimeOptions = {
   /**
@@ -20,7 +19,6 @@ export type SkillToolRuntimeOptions = {
   /** Session id owning the activation registry. */
   sessionId?: string;
   signal?: AbortSignal;
-  shellInterpreter?: ShellInterpreterPreference;
   platform?: NodeJS.Platform;
   /** Interpreter lookup against the filtered PATH; injectable for tests. */
   which?: (command: string, env: NodeJS.ProcessEnv) => string | undefined;

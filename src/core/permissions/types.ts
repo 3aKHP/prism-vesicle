@@ -4,7 +4,7 @@ export const permissionModes = ["MANUAL", "INERTIA", "MOMENTUM", "YOLO"] as cons
 
 export type PermissionMode = (typeof permissionModes)[number];
 
-export type PermissionClass = "observe" | "mutate" | "arbitrary_exec" | "interaction";
+export type PermissionClass = "observe" | "mutate" | "skill_exec" | "arbitrary_exec" | "interaction";
 
 export type PermissionPolicyDecision = "allow" | "ask";
 
@@ -55,7 +55,7 @@ export type PermissionRuntimeOptions = {
   mode: PermissionMode;
   /** True only when the process was launched with --dangerously-skip-permissions. */
   dangerouslySkipPermissions?: boolean;
-  /** User-level host capability opt-in; the dangerous CLI override also enables it. */
+  /** User-level opt-in for the free-form `shell_exec` capability only. */
   shellExecEnabled?: boolean;
   /** Selected host shell profile. Auto stays within the platform's default shell family. */
   shellInterpreter?: ShellInterpreterPreference;

@@ -51,12 +51,21 @@ export function parsePermissionRequest(value: unknown): PermissionRequest | unde
     || typeof request.toolName !== "string"
     || typeof request.arguments !== "string"
     || typeof request.createdAt !== "string"
-    || (request.permissionClass !== "observe" && request.permissionClass !== "mutate" && request.permissionClass !== "arbitrary_exec")
+    || (request.permissionClass !== "observe"
+      && request.permissionClass !== "mutate"
+      && request.permissionClass !== "skill_exec"
+      && request.permissionClass !== "arbitrary_exec")
     || (request.mode !== "MANUAL" && request.mode !== "INERTIA" && request.mode !== "MOMENTUM" && request.mode !== "YOLO")
   ) return undefined;
-  if (permissionClassForTool(request.toolName) !== request.permissionClass) return undefined;
+  const expectedClass = permissionClassForTool(request.toolName);
+  const legacySkillScriptClass = request.toolName === "run_skill_script"
+    && request.permissionClass === "arbitrary_exec";
+  if (expectedClass !== request.permissionClass && !legacySkillScriptClass) return undefined;
   if (request.qualityState && !validQualityState(request.qualityState)) return undefined;
-  return request as PermissionRequest;
+  return {
+    ...request,
+    permissionClass: expectedClass,
+  } as PermissionRequest;
 }
 
 function validQualityState(value: unknown): boolean {

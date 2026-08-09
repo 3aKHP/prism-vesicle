@@ -51,7 +51,7 @@ Repeated warnings should be avoided when the source, version, requested authorit
 
 ### Keep equivalent actions equivalent
 
-Controls should attach to the effect, not to a label such as "third-party," "generated," "script," or "extension." Running a bundled Skill script through Process Runtime should follow the same process, environment, network, cancellation, output, and permission contracts as an equivalent process action. A new source category is not by itself evidence that a new security tier is needed.
+Controls should attach to the concrete invocation and effect, not to a label such as "third-party," "generated," "script," or "extension." A Skill script selects a fixed, inspectable catalog resource and structured argv rather than accepting a model-authored shell command, so `skill_exec` has lower approval friction than `arbitrary_exec`. It still keeps the same Process Runtime environment, network authority, cancellation, output, and cleanup boundaries, and its source category does not imply that the code was certified benign.
 
 ### Prefer provenance and reversibility
 
@@ -105,7 +105,7 @@ Do not introduce these patterns without a concrete, reviewed reason:
 | Scenario | Correct treatment |
 |---|---|
 | Install a Skill from a GitHub URL | Show repository, selected Skill root, requested ref, resolved commit, bundle inventory, and scripts. Install the immutable snapshot without a redundant trust confirmation when the command is unambiguous. |
-| Execute a bundled Skill script | Show the script and effective process authority, then use the current Process and Tool Permission Runtime behavior. Do not impose a Skill-only approval mode. |
+| Execute a bundled Skill script | Show the fixed script and effective process authority, then use Process Runtime under `skill_exec`; do not require the separately configured free-form `shell_exec` capability. |
 | A Skill declares `allowed-tools` | Preserve and display the metadata for compatibility. It neither grants tools nor forces a denial; the current effective tool surface remains authoritative. |
 | A repository contains an escaping symlink or socket | Reject the affected portable bundle because it cannot be represented within the declared root, not because the repository is presumed malicious. |
 | A remote branch changes | Resolve installations to immutable commits, show the update diff, and retain rollback. This is reproducibility and recovery, not a trust score. |

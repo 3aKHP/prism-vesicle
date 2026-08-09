@@ -20,7 +20,7 @@ export function stripAnsi(input: string): string {
 }
 
 /** Mock OpenAI-compatible provider registry pointing at a local server `port`. */
-export function providersYaml(port: number): string {
+export function providersYaml(port: number, contextWindow = 8000): string {
   return [
     "default:",
     "  provider: mock",
@@ -33,7 +33,7 @@ export function providersYaml(port: number): string {
     "    models:",
     "      - id: mock-model",
     "        limits:",
-    "          contextWindow: 8000",
+    `          contextWindow: ${contextWindow}`,
     "",
   ].join("\n");
 }

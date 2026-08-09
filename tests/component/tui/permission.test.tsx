@@ -46,6 +46,35 @@ describe("tui: permission surfaces", () => {
     expect(frame).toContain("/bin/sh");
   });
 
+  test("labels Skill-script approval separately while disclosing host authority", async () => {
+    const setup = await testRender(() => (
+      <PermissionPrompt
+        request={{
+          id: "permission-skill-script",
+          sessionId: "session",
+          toolCallId: "call-script",
+          toolName: "run_skill_script",
+          arguments: JSON.stringify({ skill: "skillify", path: "scripts/publish_skill.sh", args: ["validate", "tmp/skillify/example"] }),
+          permissionClass: "skill_exec",
+          mode: "INERTIA",
+          createdAt: new Date().toISOString(),
+        }}
+        focused="confirm"
+        feedbackMode={null}
+        feedback=""
+        feedbackCursor={0}
+        width={80}
+      />
+    ), { width: 80, height: permissionPanelHeight });
+    await setup.flush();
+    const frame = setup.captureCharFrame();
+    setup.renderer.destroy();
+    expect(frame).toContain("SKILL SCRIPT");
+    expect(frame).toContain("structured arguments");
+    expect(frame).toContain("host-user authority");
+    expect(frame).not.toContain("HOST COMMAND");
+  });
+
   test("bounds long permission details without hiding the decision controls", async () => {
     const command = `echo ${"非常长的命令参数".repeat(30)}`;
     const setup = await testRender(() => (

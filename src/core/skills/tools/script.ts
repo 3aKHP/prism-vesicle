@@ -133,11 +133,16 @@ export async function executeRunSkillScriptTool(
     args: scriptArgs,
   };
   const display = [interpreter.identity, `${skill.name}/${relPath}`, ...scriptArgs].map(quoteDisplay).join(" ");
-  // No shell is spawned; the event's `shell` field records the resolved host
-  // shell profile that gated process capability for this Engine, matching the
-  // process capability contract of shell_exec.
-  const shellId: ProcessShellId = resolveShellProfile(options.shellInterpreter ?? "auto", { platform })?.id
-    ?? (platform === "win32" ? "cmd" : "posix-sh");
+  // No shell is spawned. The legacy process-event field records the selected
+  // interpreter family when representable, without consulting shell_exec's
+  // independently configured shell profile.
+  const shellId: ProcessShellId = interpreter.identity === "pwsh"
+    ? "powershell-7"
+    : interpreter.identity === "powershell-5.1"
+      ? "windows-powershell-5.1"
+      : platform === "win32"
+        ? "cmd"
+        : "posix-sh";
   const progressEvent = (progress: { durationMs: number; stdoutTail: string; stderrTail: string; stdoutBytes: number; stderrBytes: number; stdoutTruncated: boolean; stderrTruncated: boolean }): ProcessToolEvent => ({
     kind: "process_exec",
     executionMode: "foreground",
