@@ -2,7 +2,7 @@
 
 # Audit Database Drift
 
-Dependency audit gates compare the local lockfile against a live vulnerability database that only grows. A newly published advisory can therefore turn CI red on a commit that changed nothing — the same lockfile was green the day before. This document is the standing response plan for that situation, codified from the convention established by PR #48 and PR #92 (`chore(deps): patch brace-expansion audit finding`).
+Dependency audit gates compare the local lockfile against a live vulnerability database that only grows. A newly published advisory can therefore turn CI red on a commit that changed nothing — the same lockfile was green the day before. This document is the standing response plan for that situation, codified from the established convention (`chore(deps): patch brace-expansion audit finding`).
 
 ## Gates Covered
 
@@ -30,12 +30,12 @@ When the `bun audit` step fails in the shared CI workflow, a follow-up step anno
 
 ## Standard Response: Fix Forward
 
-Follow the PR #48 / #92 convention. The audit gate stays blocking; the response is a fast, dedicated repair.
+Follow the established convention. The audit gate stays blocking; the response is a fast, dedicated repair.
 
 1. Triage the advisory: severity, whether the package is a direct or transitive dependency, the dependency chain that pulls it in, and whether Vesicle actually executes the affected code (shipped production dependency vs. build-only or dev-only chain). Record a real-risk assessment from this triage.
 2. Open a dedicated `chore(deps): patch <package> audit finding` PR. Never bundle the fix into a feature PR, and never widen an in-flight feature PR to absorb it.
 3. For a transitive finding, pin the patched release through `package.json` `overrides` and regenerate `bun.lock`. For a direct finding, bump the declared version normally.
-4. The commit message must name the GHSA/CVE id, the dependency chain, the reachability/real-risk assessment, and the verification list (see PR #92 for the shape).
+4. The commit message must name the GHSA/CVE id, the dependency chain, the reachability/real-risk assessment, and the verification list.
 5. Verify: `bun audit` green, plus `bun run lint`, `bun run typecheck`, `bun test`, `bun run doctor`, `bun run pack:check`, and `bun run pack:smoke` (which includes the consumer `npm audit` gate). An exact override bump adds no tests, per the test value discipline in `AGENTS.md`.
 6. Land the patch PR on `develop` first; in-flight PRs rebase or re-run afterwards. One drift fix unblocks the whole pipeline.
 

@@ -32,7 +32,7 @@ Command cheatsheet, configuration files, the permission and security model, chec
 
 ## Advanced and experimental
 
-Host shell, Output Quality Guard, SubAgents, Stage, and other advanced capabilities live in the [advanced section](./advanced/README.md).
+Host shell, Output Quality Guard, SubAgents, Stage, MCP tools, and other advanced capabilities live in the [advanced section](./advanced/README.md).
 
 ## Manual status
 

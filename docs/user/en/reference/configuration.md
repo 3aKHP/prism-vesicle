@@ -194,7 +194,7 @@ If you want a particular working directory to default to a specific theme, place
 ```yaml
 version: 1
 theme: auto   # dark | light | default | auto
-# mcpOutputPersistence: true   # opt in (#137B): persist MCP tool outputs under tmp/mcp-output/
+# mcpOutputPersistence: true   # opt in: persist MCP tool outputs under tmp/mcp-output/
 # mcpOutputAutoTruncate: true  # requires mcpOutputPersistence: inline-preview oversized results
 ```
 

@@ -34,7 +34,7 @@ Prism Vesicle 是一个在终端里运行 Prism Engine 创作工作流的宿主�
 
 ## 高级与实验特性
 
-宿主 Shell、Output Quality Guard、SubAgents、Stage 等进阶能力见[高级区](./advanced/README.md)。
+宿主 Shell、Output Quality Guard、SubAgents、Stage、MCP 工具等进阶能力见[高级区](./advanced/README.md)。
 
 ## 手册状态
 

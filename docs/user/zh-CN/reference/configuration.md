@@ -194,7 +194,7 @@ MCP 工具结果会先经过宿主的不可信内容边界。普通文本保持�
 ```yaml
 version: 1
 theme: auto   # dark | light | default | auto
-# mcpOutputPersistence: true   # 可选开启(#137B):把 MCP 工具输出持久化到 tmp/mcp-output/
+# mcpOutputPersistence: true   # 可选开启:把 MCP 工具输出持久化到 tmp/mcp-output/
 # mcpOutputAutoTruncate: true  # 需先开启 mcpOutputPersistence:超长结果只给预览+引用
 ```
 

@@ -17,6 +17,7 @@ This section covers capabilities that the tutorials and reference do not expand 
 | [SubAgents](./subagents.md) | 🟢 Implemented | Foreground/background child tasks; generic and Driver-contract agents |
 | [Stage consumer engine](./stage.md) | 🟢 Implemented | Open a continuous narrative session from a character card + scenario card |
 | [Skills](./skills.md) | 🟢 Implemented | On-demand procedural context: discovery, activation, resource reads, `/skill` command |
+| [MCP tools](./mcp.md) | 🟢 MCP tools · 🟡 Output persistence experimental | Connect external tools: connection setup, tool permissions, optional result archiving |
 
 ## Prerequisites
 
