@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig } from "../../../config/providers";
 import { serializeProviderRegistry } from "../../../setup/config-writer";
+import { loadExperimentalQualitySettings } from "../../../config/quality";
 
 type RemoveModelResult = {
   ok: true;
@@ -100,6 +101,14 @@ async function removeProvider(providerId: string): Promise<RemoveProviderResult>
     throw new Error(
       `Cannot remove provider "${providerId}" because it is the current default provider. `
       + `Switch the default first with: vesicle config set providers default.provider <another-provider-id>`,
+    );
+  }
+
+  const quality = await loadExperimentalQualitySettings();
+  if (quality.mode !== "off" && quality.providerAlias === providerId) {
+    throw new Error(
+      `Cannot remove provider "${providerId}" because it is configured as the Semantic Judge in quality.yaml. `
+      + `Switch the judge provider first or turn off the judge with: vesicle config set quality mode off`,
     );
   }
 

@@ -197,7 +197,7 @@ update_config.sh set providers providers.agent-gateway.userAgent "Prism-Vesicle-
 update_config.sh set providers providers.agent-gateway.defaultModel kimi-k3
 ```
 
-Common fields include `userAgent` and `defaultModel`. Fields like `protocol`, `baseUrl`, and `apiKeyEnv` are also writable, but an incorrect value will usually break the connection. Propose these changes clearly and ask the user to confirm.
+Common fields include `userAgent` and `defaultModel`. The supported writable fields are: `protocol`, `baseUrl`, `apiKeyEnv`, `authMethod`, `responsesProfile`, `responsesTransport`, `userAgent`, and `defaultModel`. Structural fields (`id`, `models`, `apiKey`) cannot be modified through this command. Fields like `protocol`, `baseUrl`, and `apiKeyEnv` are validated, but an incorrect value will usually break the connection; propose these changes clearly and ask the user to confirm.
 
 ### Removing a model
 

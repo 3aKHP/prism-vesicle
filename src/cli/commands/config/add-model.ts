@@ -85,6 +85,13 @@ async function addModel(providerId: string, entry: Record<string, unknown>): Pro
 }
 
 function validateModelEntry(entry: Record<string, unknown>): ProviderModelProfile {
+  const allowedKeys = new Set(["id", "generation", "capabilities", "limits"]);
+  for (const key of Object.keys(entry)) {
+    if (!allowedKeys.has(key)) {
+      throw new Error(`Unknown model entry field "${key}". Allowed: ${[...allowedKeys].join(", ")}.`);
+    }
+  }
+
   const id = requireString(entry, "id");
   if (!/^[^\s]+$/.test(id)) {
     throw new Error(`Model id "${id}" must not contain whitespace.`);

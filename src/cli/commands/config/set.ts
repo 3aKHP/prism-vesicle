@@ -8,8 +8,15 @@ import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
 import { settingsPath, loadSettings } from "../../../config/settings";
-import { loadProviderRegistry, providerConfigPathFromEnv } from "../../../config/providers";
+import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig } from "../../../config/providers";
 import type { ProviderProfile } from "../../../config/providers";
+import {
+  readProtocol,
+  readAuthMethod,
+  readResponsesProfile,
+  readResponsesTransport,
+  readUserAgent,
+} from "../../../config/providers";
 import { serializeProviderRegistry } from "../../../setup/config-writer";
 import { loadExperimentalQualitySettings, writeExperimentalQualitySettings } from "../../../config/quality";
 import type { ExperimentalQualityMode } from "../../../config/quality";
@@ -213,6 +220,19 @@ async function setProviders(key: string, value: string): Promise<SetResult> {
   return setProviderField(providerId, field, value);
 }
 
+const SETTABLE_PROVIDER_FIELDS: readonly string[] = [
+  "protocol",
+  "baseUrl",
+  "apiKeyEnv",
+  "authMethod",
+  "responsesProfile",
+  "responsesTransport",
+  "userAgent",
+  "defaultModel",
+];
+
+const PROTECTED_PROVIDER_FIELDS: readonly string[] = ["id", "models", "apiKey"];
+
 async function setProviderField(providerId: string, field: string, value: string): Promise<SetResult> {
   const registry = await loadProviderRegistry();
   const provider = registry.providers.find((entry) => entry.id === providerId);
@@ -225,6 +245,12 @@ async function setProviderField(providerId: string, field: string, value: string
 
   const path = providerConfigPathFromEnv();
   const source = serializeProviderRegistry(registry);
+
+  // Validate the serialized output before writing so a failed cross-field
+  // constraint (e.g. protocol openai-responses without responsesProfile)
+  // never leaves a corrupted file on disk.
+  parseProviderConfig(source, path, process.env);
+
   await atomicWrite(path, source);
   // Verify round-trip.
   await loadProviderRegistry();
@@ -241,14 +267,17 @@ async function setProviderField(providerId: string, field: string, value: string
 }
 
 function validateProviderField(provider: ProviderProfile, field: string, value: string): unknown {
+  if (PROTECTED_PROVIDER_FIELDS.includes(field)) {
+    throw new Error(`Field "${field}" cannot be modified directly.`);
+  }
+  if (!SETTABLE_PROVIDER_FIELDS.includes(field)) {
+    throw new Error(`Unknown provider field "${field}". Supported fields: ${SETTABLE_PROVIDER_FIELDS.join(", ")}.`);
+  }
+
+  const fieldLabel = `provider "${provider.id}"`;
   switch (field) {
-    case "protocol": {
-      const valid = ["openai-chat-compatible", "openai-responses", "anthropic-messages", "gemini-generate-content"];
-      if (!valid.includes(value)) {
-        throw new Error(`Invalid protocol "${value}". Must be one of: ${valid.join(", ")}.`);
-      }
-      return value;
-    }
+    case "protocol":
+      return readProtocol(value, fieldLabel);
     case "baseUrl": {
       let parsed: URL;
       try {
@@ -270,33 +299,14 @@ function validateProviderField(provider: ProviderProfile, field: string, value: 
       }
       return value;
     }
-    case "authMethod": {
-      const valid = ["bearer", "x-api-key", "x-goog-api-key"];
-      if (!valid.includes(value)) {
-        throw new Error(`Invalid authMethod "${value}". Must be one of: ${valid.join(", ")}.`);
-      }
-      return value;
-    }
-    case "responsesProfile": {
-      const valid = ["openai-public", "codex-http-relay", "codex-beta-2026-02-06", "mimo-subset-2026-07-30", "deepseek-subset-2026-07-31"];
-      if (!valid.includes(value)) {
-        throw new Error(`Invalid responsesProfile "${value}". Must be one of: ${valid.join(", ")}.`);
-      }
-      return value;
-    }
-    case "responsesTransport": {
-      const valid = ["http", "websocket"];
-      if (!valid.includes(value)) {
-        throw new Error(`Invalid responsesTransport "${value}". Must be one of: ${valid.join(", ")}.`);
-      }
-      return value;
-    }
-    case "userAgent": {
-      if (/[\x00-\x1f\x7f]/.test(value)) {
-        throw new Error(`userAgent contains an invalid control character.`);
-      }
-      return value;
-    }
+    case "authMethod":
+      return readAuthMethod(value, fieldLabel);
+    case "responsesProfile":
+      return readResponsesProfile(value, fieldLabel);
+    case "responsesTransport":
+      return readResponsesTransport(value, fieldLabel);
+    case "userAgent":
+      return readUserAgent(value, fieldLabel);
     case "defaultModel": {
       if (!provider.models.some((model) => model.id === value)) {
         throw new Error(
@@ -307,8 +317,7 @@ function validateProviderField(provider: ProviderProfile, field: string, value: 
       return value;
     }
     default:
-      // Unknown field: write the raw string and let the parser validate on re-parse.
-      // This keeps the command forward-compatible with new provider fields.
+      // Exhaustive check above makes this unreachable, but TypeScript needs it.
       return value;
   }
 }

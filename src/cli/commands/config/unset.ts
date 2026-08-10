@@ -2,7 +2,7 @@
 // Currently supports project preferences (theme, mcpOutputPersistence, mcpOutputAutoTruncate)
 // and host settings (editor). Removing the last field from preferences removes the file.
 
-import { mkdir, rename, rm, writeFile, unlink } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile, unlink, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import {
@@ -107,7 +107,32 @@ async function unsetSettings(key: string): Promise<UnsetResult> {
   if (key === "editor" && existing.editor === undefined) {
     return { ok: true, operation: "unset", file: "settings", key, path, removed: false, restartRequired: true };
   }
-  await atomicWrite(path, "version: 1\n");
+
+  // Read the existing source and drop only the target key line, preserving
+  // any other fields and comments for forward compatibility.
+  let source: string;
+  try {
+    source = await readFile(path, "utf8");
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "ENOENT") {
+      return { ok: true, operation: "unset", file: "settings", key, path, removed: false, restartRequired: true };
+    }
+    throw error;
+  }
+
+  const keyPattern = new RegExp(`^\\s*${key}\\s*:`);
+  const remaining = source.split(/\r?\n/).filter((line) => !keyPattern.test(line));
+  const hasContent = remaining.some((line) => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith("#") && !/^version\s*:/.test(trimmed);
+  });
+
+  if (hasContent) {
+    await atomicWrite(path, `${remaining.join("\n")}\n`);
+  } else {
+    await safeUnlink(path);
+  }
+
   return { ok: true, operation: "unset", file: "settings", key, path, removed: true, restartRequired: true };
 }
 

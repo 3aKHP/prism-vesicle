@@ -381,6 +381,75 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("set providers <id>.<field> rejects unknown and protected fields", async () => {
+    await withTempProject("vesicle-config-set-badfield-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const unknown = await runCli(["config", "set", "providers", "providers.local.unknownField", "x"], { cwd: projectDir, configDir });
+      expect(unknown.exitCode).toBe(1);
+      expect(unknown.stderr).toContain("Unknown provider field");
+      const protectedField = await runCli(["config", "set", "providers", "providers.local.id", "newid"], { cwd: projectDir, configDir });
+      expect(protectedField.exitCode).toBe(1);
+      expect(protectedField.stderr).toContain("cannot be modified directly");
+    });
+  });
+
+  test("set providers <id>.<field> does not corrupt file on cross-field constraint failure", async () => {
+    await withTempProject("vesicle-config-set-nocorrupt-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const before = await readFile(join(configDir, "providers.yaml"), "utf8");
+      const result = await runCli(["config", "set", "providers", "providers.local.protocol", "openai-responses"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      const after = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(after).toBe(before);
+    });
+  });
+
+  test("add-model rejects unknown JSON keys", async () => {
+    await withTempProject("vesicle-config-addmodel-unknownkey-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", unknownKey: "value" });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unknown model entry field");
+    });
+  });
+
+  test("remove-provider rejects provider referenced by quality judge", async () => {
+    await withTempProject("vesicle-config-rmprovider-quality-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "quality.yaml"), [
+        "version: 1",
+        "mode: observe",
+        "providerAlias: local",
+        "modelId: qwen3",
+        "judgeTimeoutMs: 15000",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "remove-provider", "local"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("configured as the Semantic Judge");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("local:");
+    });
+  });
+
+  test("unset settings editor preserves other fields", async () => {
+    await withTempProject("vesicle-config-unset-settings-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "settings.yaml"), [
+        "version: 1",
+        "editor: code --wait",
+        "futureField: kept",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "unset", "settings", "editor"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const settingsContent = await readFile(join(configDir, "settings.yaml"), "utf8");
+      expect(settingsContent).not.toContain("editor:");
+      expect(settingsContent).toContain("futureField: kept");
+    });
+  });
+
   test("validate reports ok for a well-formed config", async () => {
     await withTempProject("vesicle-config-validate-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

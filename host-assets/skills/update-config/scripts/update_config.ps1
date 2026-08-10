@@ -12,7 +12,7 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 if ($args.Count -lt 1) {
-  [Console]::Error.WriteLine("Usage: update_config.ps1 <path|show|set|add-provider|env-set-empty|env-set-proxy|env-remove|validate> [args...]")
+  [Console]::Error.WriteLine("Usage: update_config.ps1 <path|show|set|add-provider|add-model|remove-model|remove-provider|unset|env-set-empty|env-set-proxy|env-remove|validate> [args...]")
   exit 2
 }
 
