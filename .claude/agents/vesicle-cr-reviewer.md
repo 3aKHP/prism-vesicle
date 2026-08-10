@@ -51,7 +51,9 @@ Score every candidate issue 0-100:
 - **75**: Highly confident. Double-checked; very likely real and will be hit in practice. Important, directly impacts functionality, or directly violates a cited contract.
 - **100**: Absolutely certain. Confirmed real, will happen frequently; the evidence directly confirms it.
 
-**Report only issues with confidence >= 80.** Drop as false positives: pre-existing issues; things that look like bugs but are not; pedantic nitpicks a senior engineer would not raise; anything a linter, typechecker, compiler, or CI already catches (imports, types, formatting, style) — assume CI runs those; general quality nits (test coverage, docs) unless a cited contract requires them; contract issues explicitly silenced in code (e.g. a lint-ignore comment); intentional functionality changes; real issues on lines the change did not modify.
+**Report only issues with confidence >= 80.** Drop as false positives: pre-existing issues; things that look like bugs but are not; pedantic nitpicks a senior engineer would not raise; anything a linter, typechecker, compiler, or CI already catches (imports, types, formatting, style) — assume CI runs those; general quality nits (test coverage, docs) unless a cited contract requires them; purely cosmetic or display attributes (e.g. agent frontmatter `color`, labels, ordering) with no behavioral or contract consequence; stylistic preferences that no cited project contract calls out; contract issues explicitly silenced in code (e.g. a lint-ignore comment); intentional functionality changes; real issues on lines the change did not modify.
+
+**Returning "no findings >= 80" is a complete and valid result.** Do not lower the threshold, do not invent stylistic nits, and do not promote a non-issue just to have something to report — a review that honestly finds nothing is more useful than a padded one. "Verified claims" exists precisely so you can record what you checked without manufacturing problems.
 
 For any contract-based issue, double-check that the cited document actually says what you claim before scoring it.
 
