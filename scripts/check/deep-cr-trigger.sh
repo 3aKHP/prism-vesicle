@@ -20,13 +20,13 @@ if [ "$committed_ok" -eq 1 ] && [ -n "$mb_out" ]; then
   mb="$mb_out"
 fi
 
-# Collect changed files (committed + staged + unstaged) via command substitution.
-# NOTE: do NOT pipe git output into a function that mutates a variable — bash runs
-# pipeline commands in a subshell, so the mutation would be lost and the set empty.
+# Collect the changed file set (committed branch diff only — the same set the
+# deep-cr finders review via `git diff $(git merge-base HEAD <base>) HEAD`). The
+# gate and the review must evaluate the same scope, so staged/unstaged changes
+# are NOT included. Capture via command substitution, not a pipeline into a
+# function — bash runs pipeline commands in a subshell and would lose the value.
 changed_raw=""
 if [ -n "$mb" ]; then changed_raw="${changed_raw}$(git diff --name-only "$mb" HEAD 2>/dev/null)"$'\n'; fi
-changed_raw="${changed_raw}$(git diff --name-only 2>/dev/null)"$'\n'          # unstaged
-changed_raw="${changed_raw}$(git diff --name-only --cached 2>/dev/null)"$'\n'  # staged
 
 # distinct file list + count
 distinct_files=$(printf '%s' "$changed_raw" | grep . | sort -u)
@@ -36,13 +36,15 @@ if [ -n "$distinct_files" ]; then
 fi
 
 # ---- map a path to its high-risk domain category (or empty) ------------------
+# Mirrors LENSES[].prefixes in .claude/workflows/deep-cr.js and the list in
+# docs/dev/WORKFLOW.md "Two-Tier Code Review" — keep all three in sync. TUI is
+# intentionally absent: Tier 2 has no TUI lens, so TUI-only changes stay on Tier 1.
 classify() {
   case "$1" in
     src/providers/*)               echo provider ;;
     src/core/tools/*)              echo tool ;;
     src/core/session/*|src/core/checkpoints/*) echo session ;;
     src/core/prompt/*|assets/prompts/*|assets/engines/*) echo prompt ;;
-    src/tui/*)                     echo tui ;;
     src/core/gate/*)               echo gate ;;
     src/core/validators/*)         echo validators ;;
     src/core/engine/*)             echo engine ;;
@@ -64,15 +66,13 @@ category_match=0
 cross_boundary=0
 [ "$category_count" -ge 2 ] && cross_boundary=1
 
-# ---- size floor: >= 8 files OR >= 300 net LOC --------------------------------
+# ---- size floor: >= 8 files OR >= 300 net LOC (committed branch diff only) ---
 loc=0
-# numstat: "added\tdeleted\tpath"; "-" for binary. Sum added+deleted integers
-# across committed (if base resolvable), unstaged, and staged.
-loc_raw=""
-if [ -n "$mb" ]; then loc_raw="${loc_raw}$(git diff --numstat "$mb" HEAD 2>/dev/null)"$'\n'; fi
-loc_raw="${loc_raw}$(git diff --numstat 2>/dev/null)"$'\n'
-loc_raw="${loc_raw}$(git diff --numstat --cached 2>/dev/null)"$'\n'
-loc=$(printf '%s' "$loc_raw" | awk '{ a=($1=="-"?0:$1)+0; d=($2=="-"?0:$2)+0; s+=a+d } END { print s+0 }')
+if [ -n "$mb" ]; then
+  # numstat: "added\tdeleted\tpath"; "-" for binary. Sum added+deleted integers.
+  loc=$(git diff --numstat "$mb" HEAD 2>/dev/null \
+        | awk '{ a=($1=="-"?0:$1)+0; d=($2=="-"?0:$2)+0; s+=a+d } END { print s+0 }')
+fi
 size_floor=0
 if [ "$file_count" -ge 8 ] || [ "$loc" -ge 300 ]; then
   size_floor=1
@@ -93,7 +93,7 @@ esac
 # ---- evaluate ---------------------------------------------------------------
 reasons=()
 if [ "$category_match" -eq 1 ]; then
-  reasons+=("category_match: touches $(printf '%s' "$categories" | paste -sd', ' -)")
+  reasons+=("category_match: touches $(printf '%s' "$categories" | paste -sd, - | sed 's/,/, /g')")
 else
   reasons+=("no_category_match: no high-risk domain file changed")
 fi
@@ -117,8 +117,10 @@ for r in "${reasons[@]}"; do
   if [ -z "$joined" ]; then joined="\"${esc}\""; else joined="${joined}, \"${esc}\""; fi
 done
 
+base_esc=${base//\\/\\\\}
+base_esc=${base_esc//\"/\\\"}
 printf '{"trigger":%s,"base":"%s","reasons":[%s]}\n' \
   "$([ "$trigger" -eq 1 ] && echo true || echo false)" \
-  "$base" \
+  "$base_esc" \
   "$joined"
 exit 0

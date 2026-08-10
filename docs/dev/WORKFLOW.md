@@ -287,7 +287,7 @@ scripts/check/deep-cr-trigger.sh <base>     # base defaults to develop
 
 `trigger = CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH)`:
 
-- **CATEGORY_MATCH** — at least one changed file is under a high-risk domain: `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/tui`, `src/core/gate`, `src/core/validators`, `src/core/engine`.
+- **CATEGORY_MATCH** — at least one changed file is under a high-risk domain: `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/core/gate`, `src/core/validators`, `src/core/engine`. (TUI changes use Tier 1 — Tier 2 has no TUI lens.)
 - **CROSS_BOUNDARY** — the change touches 2 or more of those distinct domains.
 - **SIZE_FLOOR** — 8 or more changed files, or 300 or more net diff lines.
 - **RELEASE_BRANCH** — the branch is `release/*` or `main`, or the base is `main` (or a `v*` tag).

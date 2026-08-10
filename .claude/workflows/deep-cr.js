@@ -78,7 +78,7 @@ const LENSES = [
     name: 'L4 - Prompt honesty & gates',
     brief:
       'Success-path honesty for prompt/engine paths, stop gates (only stopGates an Engine declares may pause; undeclared gates must fail the tool result, not pause), validator contracts, engine profiles, and the no-hardcoded-prompt rule. NOTE: there is NO PROMPTS.md / GATES.md / VALIDATORS.md / ENGINE.md under docs/dev/. Gates are governed by TOOLS.md "Gates, Questions, And Engine Handoffs"; prompt composition by ASSETS.md + src/core/prompt/loader.ts (the engine profile systemPrompt list is the single source of truth; no prompt text is hardcoded in source); engine profiles by assets/engines/*.profile.yaml; validators by QUALITY_GUARD.md.',
-    prefixes: ['src/core/prompt', 'assets/prompts', 'assets/engines', 'src/core/gate', 'src/core/validators'],
+    prefixes: ['src/core/prompt', 'assets/prompts', 'assets/engines', 'src/core/gate', 'src/core/validators', 'src/core/engine'], // domain prefixes mirror deep-cr-trigger.sh classify() + docs/dev/WORKFLOW.md; keep all three in sync
     docs: [
       'docs/dev/TOOLS.md "Gates, Questions, And Engine Handoffs"',
       'docs/dev/ASSETS.md (Static Prompt Asset Ledger; Prompt Customization Boundary)',
@@ -250,8 +250,8 @@ ${fence(JSON.stringify({
     evidence: finding.evidence,
   }, null, 2))}
 
-STEP 1 - Verify the citation. Open ${finding.claimedContract.doc}. Does it actually say what claimedContract.clause claims? If not (mis-cited, section moved, rule is the opposite), set docVerified=false and quote what the doc actually says in docMismatch.
-STEP 2 - Verify the bug. Open ${finding.file} at line ${finding.line} and its context. Is this a real issue INTRODUCED BY THIS CHANGE? Use git diff against ${base} to confirm the line is part of this branch's diff. Pre-existing issues on unchanged lines are NOT real. Intentional behavior changes are NOT real.
+STEP 1 - Verify the citation. Open the cited document (the claimedContract.doc value in the candidate block above; do not copy it from elsewhere). Does it actually say what claimedContract.clause claims? If not (mis-cited, section moved, rule is the opposite), set docVerified=false and quote what the doc actually says in docMismatch.
+STEP 2 - Verify the bug. Open the cited file at the cited line (from the candidate block above) and its context. Is this a real issue INTRODUCED BY THIS CHANGE? Use git diff against ${base} to confirm the line is part of this branch's diff. Pre-existing issues on unchanged lines are NOT real. Intentional behavior changes are NOT real.
 STEP 3 - Score confidence 0-100 using this rubric (pick the nearest anchor):
   0   - Not confident. False positive, or a pre-existing issue not introduced by this change.
   25  - Somewhat confident. Might be real, might not; could not verify. Stylistic only and not required by a cited contract.
