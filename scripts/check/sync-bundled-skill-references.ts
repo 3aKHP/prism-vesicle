@@ -2,8 +2,8 @@
  * Synchronize the bundled vesicle-docs Skill references from public source.
  *
  * Usage:
- *   bun run scripts/sync-bundled-skill-references.ts          # write mode
- *   bun run scripts/sync-bundled-skill-references.ts --check  # read-only check
+ *   bun run scripts/check/sync-bundled-skill-references.ts          # write mode
+ *   bun run scripts/check/sync-bundled-skill-references.ts --check  # read-only check
  *
  * Reads only from the closed public-source allowlist (README.md, docs/user/**,
  * docs/dev/**, docs/examples/**), flattens each page into a deterministic
@@ -15,7 +15,7 @@
 import { mkdir, lstat, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
-const PROJECT_ROOT = resolve(import.meta.dir, "..");
+const PROJECT_ROOT = resolve(import.meta.dir, "..", "..");
 const SKILL_ROOT = join(PROJECT_ROOT, "host-assets", "skills", "vesicle-docs");
 const REFERENCES_DIR = join(SKILL_ROOT, "references");
 

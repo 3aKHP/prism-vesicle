@@ -10,7 +10,7 @@
  *
  * Usage:
  *   bun run build:exe linux      # (or windows) -> ./prism-vesicle[.exe]
- *   bun run scripts/smoke-binary.ts
+ *   bun run scripts/smoke/smoke-binary.ts
  *
  * Override the binary path with VESICLE_BIN. Exits non-zero if any scenario
  * fails. Does not run under `bun test`; invoke it explicitly (CI release lane).
@@ -18,13 +18,13 @@
 import { copyFile, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import packageJson from "../package.json";
+import packageJson from "../../package.json";
 
 export {};
 
 // Resolve from this module's location so the script works regardless of the
 // invocation cwd (e.g. `bun run smoke:binary` from anywhere, not just root).
-const REPO_ROOT = join(import.meta.dir, "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..");
 const BINARY_PATH =
   process.env.VESICLE_BIN ??
   join(REPO_ROOT, process.platform === "win32" ? "prism-vesicle.exe" : "prism-vesicle");

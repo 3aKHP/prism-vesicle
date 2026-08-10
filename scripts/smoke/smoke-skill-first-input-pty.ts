@@ -18,7 +18,7 @@
  *     harness, assets, and host-assets);
  *   - VESICLE_BIN=<path>: stages the real release shape (binary + assets +
  *     host-assets + harness-manifest.json beside the executable, mirroring
- *     scripts/smoke-binary.ts) and drives the compiled artifact. Point it at a
+ *     scripts/smoke/smoke-binary.ts) and drives the compiled artifact. Point it at a
  *     `bun run build:exe` ELF or an installed npm binary.
  *
  * Assertions are deliberately rendering-independent. The activation card is a
@@ -38,8 +38,8 @@
  * space to dismiss the completion menu mis-parses under a `script` PTY.
  *
  * Usage:
- *   bun run scripts/smoke-skill-first-input-pty.ts [width] [height]
- *   VESICLE_BIN=./prism-vesicle bun run scripts/smoke-skill-first-input-pty.ts
+ *   bun run scripts/smoke/smoke-skill-first-input-pty.ts [width] [height]
+ *   VESICLE_BIN=./prism-vesicle bun run scripts/smoke/smoke-skill-first-input-pty.ts
  * Exits non-zero if the identity guard fires, the request accounting is wrong,
  * or the durable ordering is wrong.
  */
@@ -58,7 +58,7 @@ export {};
 
 const WIDTH = Number(process.argv[2] ?? 80);
 const HEIGHT = Number(process.argv[3] ?? 24);
-const REPO_ROOT = join(import.meta.dir, "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..");
 const IDENTITY_ERROR = "Harness identity does not match";
 const FOLLOW_UP_PROMPT = "continue now";
 

@@ -6,7 +6,7 @@ const PROJECT_ROOT = resolve(import.meta.dir, "../../..");
 
 describe("bundled skill references synchronization", () => {
   test("--check passes when references are in sync with public source", () => {
-    const result = spawnSync("bun", ["run", "scripts/sync-bundled-skill-references.ts", "--check"], {
+    const result = spawnSync("bun", ["run", "skills:docs:check"], {
       cwd: PROJECT_ROOT,
       encoding: "utf8",
       timeout: 30_000,
@@ -16,13 +16,13 @@ describe("bundled skill references synchronization", () => {
   });
 
   test("sync is deterministic (second run produces no change)", () => {
-    const first = spawnSync("bun", ["run", "scripts/sync-bundled-skill-references.ts"], {
+    const first = spawnSync("bun", ["run", "skills:docs:sync"], {
       cwd: PROJECT_ROOT,
       encoding: "utf8",
       timeout: 30_000,
     });
     expect(first.status).toBe(0);
-    const check = spawnSync("bun", ["run", "scripts/sync-bundled-skill-references.ts", "--check"], {
+    const check = spawnSync("bun", ["run", "skills:docs:check"], {
       cwd: PROJECT_ROOT,
       encoding: "utf8",
       timeout: 30_000,
