@@ -32,7 +32,7 @@ When you raise a problem, cite the specific document and section it violates.
 - **Tool safety**: path guards, allowed roots, write semantics, tool-result handling. No model-visible filesystem access outside `src/core/tools` path guards.
 - **Provider protocol**: OpenAI-compatible message shape, the tool_calls loop, streaming, and error cases. Provider adapters must not read/write files or run host tools.
 - **Session semantics**: history reuse, JSONL persistence, replay/debug usefulness, resume and migration behavior.
-- **Prompt honesty**: the model must not be able to claim a write or external effect unless the tool actually succeeded.
+- **Prompt honesty**: the model must not be able to claim a write or external effect unless the tool actually succeeded. Audit every success-shaped return path (`ok: true`, a success result object): when the requested durable work was skipped, caught and swallowed, downgraded, or turned into a quiet no-op, returning success is a violation — it must be `ok: false` or an explicit partial marker. A `catch` block that returns success is the canonical smell; cite the "Make partial success explicit" rule in `docs/dev/STYLE.md` and the CLAUDE.md prompt-honesty boundary.
 - **TUI behavior**: input, exit, copy, and layout stability.
 - **Tests**: whether a real failure mode has regression coverage with an oracle independent of the implementation.
 - **Docs**: README / STATUS / CHANGELOG / STYLE consistency with the new behavior.
