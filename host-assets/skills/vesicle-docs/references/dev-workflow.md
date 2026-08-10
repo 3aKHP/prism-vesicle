@@ -272,6 +272,52 @@ Return:
 - Nits: apply when cheap and consistent with local style.
 - Verified claims: keep them in the PR body or merge notes when useful.
 
+## Two-Tier Code Review
+
+Vesicle uses two independent-CR tiers. They compose; Tier 2 never replaces Tier 1.
+
+- **Tier 1 (default)** — the `vesicle-cr-reviewer` subagent (`.claude/agents/vesicle-cr-reviewer.md`): one independent single-pass review for any non-trivial PR, the step described above in "Independent CR".
+- **Tier 2 (deep-cr)** — the `deep-cr` Workflow (`.claude/workflows/deep-cr.js`) plus the `/deep-cr` command (`.claude/commands/deep-cr.md`): a heavy multi-agent review reserved for high-risk diffs.
+
+### When to use which tier
+
+Run Tier 2 only when the high-risk trigger fires. The trigger mirrors the "Rapid Development Exception" list above and is implemented as a read-only check that prints `{"trigger":bool,"reasons":[...]}` and never changes state:
+
+```bash
+scripts/check/deep-cr-trigger.sh <base>     # base defaults to develop
+```
+
+`trigger = CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH)`:
+
+- **CATEGORY_MATCH** — at least one changed file is under a high-risk domain: `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/tui`, `src/core/gate`, `src/core/validators`, `src/core/engine`.
+- **CROSS_BOUNDARY** — the change touches 2 or more of those distinct domains.
+- **SIZE_FLOOR** — 8 or more changed files, or 300 or more net diff lines.
+- **RELEASE_BRANCH** — the branch is `release/*` or `main`, or the base is `main` (or a `v*` tag).
+
+Everything else stays on Tier 1. `/deep-cr` runs the gate itself; when it reports `trigger:false` it stops and recommends Tier 1 rather than spending the Tier 2 budget.
+
+### What Tier 2 does
+
+Five lens finders (sonnet) each run `git diff` on their own domain prefixes; then one independent scorer (haiku) per candidate finding re-opens the cited contract and the cited `file:line` before scoring 0–100 on the 0/25/50/75/100 rubric; survivors at confidence ≥ 80 with a verified citation pass to a synthesis pass (sonnet) that classifies them into Blocking / Should-fix / Nits / Verified claims, which the command renders via `ReportFindings`. The finder/scorer separation is what Tier 2 adds over Tier 1's single pass: a confident-sounding finding must survive an independent re-check against the contract it cites.
+
+The five lenses and the contracts they cite:
+
+- L1 tool safety & write semantics — `docs/dev/TOOLS.md`, `docs/dev/STYLE.md` ("Make partial success explicit").
+- L2 provider protocol — `docs/dev/PROVIDERS.md`, `docs/dev/OPENAI_RESPONSES_CONFORMANCE.md`.
+- L3 session & durability — `docs/dev/SESSIONS.md`, `docs/dev/STYLE.md` ("State And Side Effects").
+- L4 prompt honesty & gates — `docs/dev/TOOLS.md` ("Gates, Questions, And Engine Handoffs"), `docs/dev/ASSETS.md`, `docs/dev/QUALITY_GUARD.md`, `src/core/prompt/loader.ts`.
+- L5 structure & boundaries — `docs/dev/STYLE.md` ("Prohibited God Structures", "Module Boundaries"), `docs/dev/ARCHITECTURE.md` ("Dependency Direction").
+
+There is intentionally **no** `PROMPTS.md`, `GATES.md`, `VALIDATORS.md`, or `ENGINE.md` under `docs/dev/`. Gate behavior is owned by `TOOLS.md`, prompt composition by `ASSETS.md` plus `src/core/prompt/loader.ts` (the engine profile `systemPrompt` list is the single source of truth — no prompt text is hardcoded in source), engine profiles by `assets/engines/*.profile.yaml`, and validators by `QUALITY_GUARD.md`. Reviewers must not invent those filenames as citations.
+
+### Output handling
+
+Tier 2 uses the same vocabulary and the same "Handling CR Results" rules directly above: Blocking must fix before merge; Should-fix unless there is a documented deferral; Nits optional; Verified claims go in merge notes.
+
+### Scope (v1)
+
+The first version is deliberately minimal: five lenses, finder/scorer separation, the ≥ 80 confidence filter, and `ReportFindings` rendering. Out of scope for v1: a git-blame/history lens, a previous-PR-comments lens, a cross-lens dedup stage, and budget-aware lens skipping.
+
 ## PR Body Shape
 
 ```markdown
