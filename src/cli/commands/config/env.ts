@@ -107,8 +107,16 @@ async function removeEnvKey(key: string): Promise<EnvResult> {
   const envPath = envFilePath();
   const existing = await readEnvFile(envPath);
   if (!existing) {
-    return { ok: true, operation: "env-remove", key, path: envPath, summary: `${key} not found (no .env file).`, restartRequired: false };
+    console.warn(`${key} was not set in .env (no .env file); no changes needed.`);
+    return { ok: true, operation: "env-remove", key, path: envPath, summary: `${key} was not set (no .env file).`, restartRequired: false };
   }
+
+  const fileEnv = parseEnvFile(existing, envPath);
+  if (!(key in fileEnv)) {
+    console.warn(`${key} was not set in .env; no changes needed.`);
+    return { ok: true, operation: "env-remove", key, path: envPath, summary: `${key} was not set in .env.`, restartRequired: false };
+  }
+
   const lines = existing.split(/\r?\n/);
   const filtered = lines.filter((line) => {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line);

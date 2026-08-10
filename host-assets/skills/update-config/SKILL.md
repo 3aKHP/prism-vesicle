@@ -100,6 +100,8 @@ update_config.sh set providers default.model <id>
 update_config.sh set providers <provider-id>.<field> <value>  # e.g. userAgent, defaultModel, baseUrl, protocol, apiKeyEnv
 update_config.sh add-provider --json '<entry>'
 update_config.sh add-model <provider-id> --json '<model entry>'
+update_config.sh remove-model <provider-id> <model-id>
+update_config.sh remove-provider <provider-id>
 
 # Permissions
 update_config.sh set permissions defaultMode <MANUAL|INERTIA|MOMENTUM>
@@ -109,12 +111,16 @@ update_config.sh set permissions shellExec <true|false>
 update_config.sh set preferences theme <dark|light|default|auto>
 update_config.sh set preferences mcpOutputPersistence <true|false>
 update_config.sh set preferences mcpOutputAutoTruncate <true|false>
+update_config.sh unset preferences theme
+update_config.sh unset preferences mcpOutputPersistence
+update_config.sh unset preferences mcpOutputAutoTruncate
 
 # Quality guard
 update_config.sh set quality mode <off|observe|rewrite>
 
 # Host settings
 update_config.sh set settings editor <command>
+update_config.sh unset settings editor
 
 # .env (non-secret operations only)
 update_config.sh env-set-empty <KEY>           # Create empty variable slot
@@ -192,6 +198,34 @@ update_config.sh set providers providers.agent-gateway.defaultModel kimi-k3
 ```
 
 Common fields include `userAgent` and `defaultModel`. Fields like `protocol`, `baseUrl`, and `apiKeyEnv` are also writable, but an incorrect value will usually break the connection. Propose these changes clearly and ask the user to confirm.
+
+### Removing a model
+
+```bash
+update_config.sh remove-model agent-gateway kimi-k3
+```
+
+The CLI refuses to remove a model if it is the provider's current `defaultModel`. Switch the default first with `set providers <provider-id>.defaultModel <another-model-id>`.
+
+### Removing a provider
+
+```bash
+update_config.sh remove-provider old-provider
+```
+
+The CLI refuses to remove the current `default.provider`. Switch the default first with `set providers default.provider <another-provider-id>`.
+
+### Unsetting preferences or settings
+
+Use `unset` to remove a project preference or host setting:
+
+```bash
+update_config.sh unset preferences theme
+update_config.sh unset preferences mcpOutputPersistence
+update_config.sh unset settings editor
+```
+
+Removing the last preference field removes the project `.vesicle/preferences.yaml` file. Removing a setting that is not set returns `ok: true` with `removed: false`.
 
 ## Boundaries
 

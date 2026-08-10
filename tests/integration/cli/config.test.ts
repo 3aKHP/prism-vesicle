@@ -306,6 +306,81 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("remove-model deletes a model from a provider", async () => {
+    await withTempProject("vesicle-config-rmmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-model", "deepseek", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; providerId: string; modelId: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.providerId).toBe("deepseek");
+      expect(parsed.modelId).toBe("deepseek-reasoner");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).not.toContain("deepseek-reasoner");
+    });
+  });
+
+  test("remove-model refuses to delete the provider defaultModel", async () => {
+    await withTempProject("vesicle-config-rmmodel-default-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-model", "deepseek", "deepseek-v4-flash"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("is the default model");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("deepseek-v4-flash");
+    });
+  });
+
+  test("remove-provider deletes a non-default provider", async () => {
+    await withTempProject("vesicle-config-rmprovider-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-provider", "local"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; providerId: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.providerId).toBe("local");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).not.toContain("local:");
+    });
+  });
+
+  test("remove-provider refuses to delete the default provider", async () => {
+    await withTempProject("vesicle-config-rmprovider-default-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-provider", "deepseek"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("is the current default provider");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("deepseek:");
+    });
+  });
+
+  test("unset preferences theme removes the project theme", async () => {
+    await withTempProject("vesicle-config-unset-theme-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await runCli(["config", "set", "preferences", "theme", "dark"], { cwd: projectDir, configDir });
+      const result = await runCli(["config", "unset", "preferences", "theme"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; removed: boolean };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.removed).toBe(true);
+      const prefsPath = join(projectDir, ".vesicle", "preferences.yaml");
+      await expect(readFile(prefsPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    });
+  });
+
+  test("env-remove warns but exits 0 when key does not exist", async () => {
+    await withTempProject("vesicle-config-envrm-missing-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, ".env"), "KEEP_ME=value\n", "utf8");
+      const result = await runCli(["config", "env-remove", "MISSING_KEY"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toContain("was not set");
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("KEEP_ME=value");
+    });
+  });
+
   test("validate reports ok for a well-formed config", async () => {
     await withTempProject("vesicle-config-validate-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
