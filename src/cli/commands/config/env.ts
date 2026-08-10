@@ -3,11 +3,11 @@
 // empty slots, manages the proxy URL, or removes variables. The user fills in
 // actual secret values by editing .env directly.
 
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { providerConfigPathFromEnv, parseEnvFile } from "../../../config/providers";
 import { setEnvValues } from "../../../setup/config-writer";
+import { atomicWrite } from "../../../config/atomic-write";
 
 type EnvResult = {
   ok: true;
@@ -94,7 +94,7 @@ async function setEnvKey(key: string, value: string): Promise<EnvResult> {
   const envPath = envFilePath();
   const existing = await readEnvFile(envPath);
   const updated = setEnvValues(existing, { [key]: value });
-  await atomicWrite(envPath, updated, true);
+  await atomicWrite(envPath, updated, 0o600);
   const summary = value === ""
     ? `${key} created with empty value. Edit ${envPath} and paste the value after the = sign, then restart Vesicle.`
     : key === "VESICLE_PROVIDER_PROXY"
@@ -123,7 +123,7 @@ async function removeEnvKey(key: string): Promise<EnvResult> {
     return match?.[1] !== key;
   });
   const updated = filtered.join("\n");
-  await atomicWrite(envPath, updated, true);
+  await atomicWrite(envPath, updated, 0o600);
   return { ok: true, operation: "env-remove", key, path: envPath, summary: `${key} removed. Restart Vesicle to apply.`, restartRequired: true };
 }
 
@@ -153,17 +153,6 @@ function maskProxyUrl(url: string): string {
     return `${parsed.protocol}//${auth}${parsed.host}`;
   } catch {
     return "<invalid-url>";
-  }
-}
-
-async function atomicWrite(path: string, content: string, secret: boolean): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const staging = `${path}.staging-${randomUUID()}`;
-  try {
-    await writeFile(staging, content, { encoding: "utf8", flag: "wx", mode: secret ? 0o600 : 0o644 });
-    await rename(staging, path);
-  } finally {
-    await rm(staging, { force: true });
   }
 }
 

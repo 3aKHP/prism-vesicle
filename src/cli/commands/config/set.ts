@@ -3,12 +3,9 @@
 // re-parsed by its owning parser to confirm validity. All writes are atomic
 // (temp file + rename) and output a single JSON result envelope.
 
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
-import { dirname } from "node:path";
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
 import { settingsPath, loadSettings } from "../../../config/settings";
-import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig } from "../../../config/providers";
+import { loadProviderRegistry } from "../../../config/providers";
 import type { ProviderProfile } from "../../../config/providers";
 import {
   readProtocol,
@@ -17,7 +14,8 @@ import {
   readResponsesTransport,
   readUserAgent,
 } from "../../../config/providers";
-import { serializeProviderRegistry } from "../../../setup/config-writer";
+import { writeProviderRegistry } from "../../../setup/config-writer";
+import { atomicWrite } from "../../../config/atomic-write";
 import { loadExperimentalQualitySettings, writeExperimentalQualitySettings } from "../../../config/quality";
 import type { ExperimentalQualityMode } from "../../../config/quality";
 import { projectPreferencesPath, readProjectThemePreference } from "../../../config/project-preferences";
@@ -240,8 +238,7 @@ async function setProviderField(providerId: string, field: string, value: string
     throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
   }
 
-  const typedValue = validateProviderField(provider, field, value);
-  (provider as Record<string, unknown>)[field] = typedValue;
+  applyProviderField(provider, field, value);
 
   // Keep the global default selection consistent with a provider-level
   // defaultModel change so the two default concepts cannot diverge.
@@ -249,17 +246,7 @@ async function setProviderField(providerId: string, field: string, value: string
     registry.default.model = value;
   }
 
-  const path = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
-
-  // Validate the serialized output before writing so a failed cross-field
-  // constraint (e.g. protocol openai-responses without responsesProfile)
-  // never leaves a corrupted file on disk.
-  parseProviderConfig(source, path, process.env);
-
-  await atomicWrite(path, source);
-  // Verify round-trip.
-  await loadProviderRegistry();
+  const path = await writeProviderRegistry(registry);
 
   return {
     ok: true,
@@ -272,18 +259,12 @@ async function setProviderField(providerId: string, field: string, value: string
   };
 }
 
-function validateProviderField(provider: ProviderProfile, field: string, value: string): unknown {
-  if (PROTECTED_PROVIDER_FIELDS.includes(field)) {
-    throw new Error(`Field "${field}" cannot be modified directly.`);
-  }
-  if (!SETTABLE_PROVIDER_FIELDS.includes(field)) {
-    throw new Error(`Unknown provider field "${field}". Supported fields: ${SETTABLE_PROVIDER_FIELDS.join(", ")}.`);
-  }
-
+function applyProviderField(provider: ProviderProfile, field: string, value: string): void {
   const fieldLabel = `provider "${provider.id}"`;
   switch (field) {
     case "protocol":
-      return readProtocol(value, fieldLabel);
+      provider.protocol = readProtocol(value, fieldLabel);
+      return;
     case "baseUrl": {
       let parsed: URL;
       try {
@@ -297,22 +278,28 @@ function validateProviderField(provider: ProviderProfile, field: string, value: 
       if (parsed.username || parsed.password) {
         throw new Error(`baseUrl must not contain credentials. providers.yaml is a non-secret file.`);
       }
-      return value.replace(/\/+$/, "");
+      provider.baseUrl = value.replace(/\/+$/, "");
+      return;
     }
     case "apiKeyEnv": {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
         throw new Error(`Invalid apiKeyEnv "${value}". Must be a valid environment variable name.`);
       }
-      return value;
+      provider.apiKeyEnv = value;
+      return;
     }
     case "authMethod":
-      return readAuthMethod(value, fieldLabel);
+      provider.authMethod = readAuthMethod(value, fieldLabel);
+      return;
     case "responsesProfile":
-      return readResponsesProfile(value, fieldLabel);
+      provider.responsesProfile = readResponsesProfile(value, fieldLabel);
+      return;
     case "responsesTransport":
-      return readResponsesTransport(value, fieldLabel);
+      provider.responsesTransport = readResponsesTransport(value, fieldLabel);
+      return;
     case "userAgent":
-      return readUserAgent(value, fieldLabel);
+      provider.userAgent = readUserAgent(value, fieldLabel);
+      return;
     case "defaultModel": {
       if (!provider.models.some((model) => model.id === value)) {
         throw new Error(
@@ -320,11 +307,14 @@ function validateProviderField(provider: ProviderProfile, field: string, value: 
           + `Available: ${provider.models.map((model) => model.id).join(", ")}.`,
         );
       }
-      return value;
+      provider.defaultModel = value;
+      return;
     }
     default:
-      // Exhaustive check above makes this unreachable, but TypeScript needs it.
-      return value;
+      if (PROTECTED_PROVIDER_FIELDS.includes(field)) {
+        throw new Error(`Field "${field}" cannot be modified directly.`);
+      }
+      throw new Error(`Unknown provider field "${field}". Supported fields: ${SETTABLE_PROVIDER_FIELDS.join(", ")}.`);
   }
 }
 
@@ -354,21 +344,6 @@ async function setProvidersDefault(key: string, value: string): Promise<SetResul
     }
     registry.default.model = value;
   }
-  const path = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
-  await atomicWrite(path, source);
-  // Verify round-trip.
-  await loadProviderRegistry();
+  const path = await writeProviderRegistry(registry);
   return { ok: true, operation: "set", file: "providers", key, value, path, restartRequired: true };
-}
-
-async function atomicWrite(path: string, content: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const staging = `${path}.staging-${randomUUID()}`;
-  try {
-    await writeFile(staging, content, { encoding: "utf8", flag: "wx", mode: 0o644 });
-    await rename(staging, path);
-  } finally {
-    await rm(staging, { force: true });
-  }
 }

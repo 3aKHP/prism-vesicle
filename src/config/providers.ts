@@ -40,6 +40,137 @@ export type ProviderRegistry = {
   path?: string;
 };
 
+/**
+ * Canonical model-entry field names, shared between the YAML parser below and
+ * the JSON-shape validator used by `vesicle config add-model`. Keep these in
+ * sync with readGenerationField/readCapabilityField/readLimitsField/
+ * readAutoCompactField; both live in this module so drift is visible in one diff.
+ */
+export const modelEntryFieldNames = ["id", "generation", "capabilities", "limits"] as const;
+export const generationFieldNames = ["temperature", "maxTokens"] as const;
+export const capabilityFieldNames = [
+  "streaming",
+  "tools",
+  "reasoningTier",
+  "reasoningContent",
+  "temperature",
+  "maxTokens",
+  "vision",
+  "remoteCompact",
+] as const;
+export const limitsFieldNames = ["contextWindow", "maxOutputTokens"] as const;
+export const autoCompactFieldNames = ["enabled", "threshold", "reserveOutputTokens"] as const;
+
+/**
+ * Validate a JSON-shaped model entry (as passed to `vesicle config add-model
+ * --json`) into a ProviderModelProfile. Unlike the YAML readers below, values
+ * here are already JSON-typed, so booleans must be real booleans and numbers
+ * real numbers — no string coercion. Unknown keys are rejected.
+ */
+export function validateModelEntryShape(entry: unknown): ProviderModelProfile {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    throw new Error("Model entry must be a JSON object.");
+  }
+  const source = entry as Record<string, unknown>;
+  for (const key of Object.keys(source)) {
+    if (!(modelEntryFieldNames as readonly string[]).includes(key)) {
+      throw new Error(`Unknown model entry field "${key}". Allowed: ${modelEntryFieldNames.join(", ")}.`);
+    }
+  }
+
+  const id = source.id;
+  if (typeof id !== "string" || !id.trim()) {
+    throw new Error(`Model entry requires a non-empty "id" string.`);
+  }
+  const modelId = id.trim();
+  if (/\s/.test(modelId)) {
+    throw new Error(`Model id "${modelId}" must not contain whitespace.`);
+  }
+
+  const model: ProviderModelProfile = { id: modelId };
+  if (source.generation !== undefined) model.generation = readGenerationObject(source.generation);
+  if (source.capabilities !== undefined) model.capabilities = readCapabilitiesObject(source.capabilities);
+  if (source.limits !== undefined) model.limits = readLimitsObject(source.limits);
+  return model;
+}
+
+function readGenerationObject(value: unknown): GenerationDefaults {
+  const source = readObjectField(value, "generation", generationFieldNames);
+  const result: GenerationDefaults = {};
+  if (source.temperature !== undefined) result.temperature = readJsonFiniteNumber(source.temperature, "temperature");
+  if (source.maxTokens !== undefined) result.maxTokens = readJsonPositiveInteger(source.maxTokens, "maxTokens");
+  return result;
+}
+
+function readCapabilitiesObject(value: unknown): ModelCapabilities {
+  const source = readObjectField(value, "capabilities", capabilityFieldNames);
+  const result: Record<string, boolean> = {};
+  for (const [key, val] of Object.entries(source)) {
+    if (typeof val !== "boolean") {
+      throw new Error(`Capability "${key}" must be true or false.`);
+    }
+    result[key] = val;
+  }
+  return result as ModelCapabilities;
+}
+
+function readLimitsObject(value: unknown): ModelLimits {
+  const source = readObjectField(value, "limits", limitsFieldNames);
+  const result: ModelLimits = {};
+  if (source.contextWindow !== undefined) result.contextWindow = readJsonPositiveInteger(source.contextWindow, "contextWindow");
+  if (source.maxOutputTokens !== undefined) result.maxOutputTokens = readJsonPositiveInteger(source.maxOutputTokens, "maxOutputTokens");
+  if (source.autoCompact !== undefined) result.autoCompact = readAutoCompactObject(source.autoCompact);
+  return result;
+}
+
+function readAutoCompactObject(value: unknown): AutoCompactLimits {
+  const source = readObjectField(value, "autoCompact", autoCompactFieldNames);
+  const result: AutoCompactLimits = {};
+  if (source.enabled !== undefined) {
+    if (typeof source.enabled !== "boolean") throw new Error("autoCompact.enabled must be true or false.");
+    result.enabled = source.enabled;
+  }
+  if (source.threshold !== undefined) {
+    const threshold = source.threshold;
+    if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) {
+      throw new Error("autoCompact.threshold must be a number greater than 0 and less than 1.");
+    }
+    result.threshold = threshold;
+  }
+  if (source.reserveOutputTokens !== undefined) {
+    result.reserveOutputTokens = readJsonPositiveInteger(source.reserveOutputTokens, "autoCompact.reserveOutputTokens");
+  }
+  return result;
+}
+
+function readObjectField(value: unknown, field: string, allowed: readonly string[]): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field} must be an object.`);
+  }
+  const source = value as Record<string, unknown>;
+  for (const key of Object.keys(source)) {
+    if (!allowed.includes(key)) {
+      throw new Error(`Unknown ${field} field "${key}". Allowed: ${allowed.join(", ")}.`);
+    }
+  }
+  return source;
+}
+
+function readJsonFiniteNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${field} must be a finite number.`);
+  }
+  return value;
+}
+
+function readJsonPositiveInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`${field} must be a positive integer.`);
+  }
+  return value;
+}
+
+
 export type ProviderConfigStatus = VesicleConfig & {
   hasApiKey: boolean;
   missing: string[];

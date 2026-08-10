@@ -34,6 +34,10 @@ import type { ThemePreference } from "../tui/theme";
 export const PROJECT_PREFERENCES_VERSION = 1;
 const VALID_THEMES: readonly ThemePreference[] = ["dark", "light", "default", "auto"];
 
+/** Preference fields the CLI may set/unset; shared by set and unset commands. */
+export const PROJECT_PREFERENCE_KEYS = ["theme", "mcpOutputPersistence", "mcpOutputAutoTruncate"] as const;
+export type ProjectPreferenceKey = (typeof PROJECT_PREFERENCE_KEYS)[number];
+
 export type ProjectPreferencesRead =
   | { ok: true; theme?: ThemePreference; mcpOutputPersistence?: boolean; mcpOutputAutoTruncate?: boolean; path: string }
   | { ok: false; diagnostic: string; path: string };
@@ -170,18 +174,39 @@ export async function readMcpOutputPreferences(
  * theme is a no-op.
  */
 export async function unsetProjectThemePreference(rootDir: string): Promise<void> {
+  await unsetProjectPreference(rootDir, "theme");
+}
+
+/**
+ * Remove one project preference field, preserving the others. The file is
+ * removed when no preference field remains. Returns true when the field was
+ * present and removed, false when it was already absent (a no-op). Refuses to
+ * modify a malformed file.
+ */
+export async function unsetProjectPreference(rootDir: string, key: ProjectPreferenceKey): Promise<boolean> {
   const path = projectPreferencesPath(rootDir);
   const existing = await readProjectThemePreference(rootDir);
   if (!existing.ok) {
     throw new Error(`Refusing to modify malformed ${rel(path, rootDir)}: ${existing.diagnostic}`);
   }
-  if (existing.theme === undefined) return;
-  if (existing.mcpOutputPersistence || existing.mcpOutputAutoTruncate) {
-    await rejectSymlinkTarget(path, rootDir);
-    await atomicWrite(path, preferencesBody(undefined, existing.mcpOutputPersistence === true, existing.mcpOutputAutoTruncate === true));
-    return;
+
+  const present =
+    (key === "theme" && existing.theme !== undefined)
+    || (key === "mcpOutputPersistence" && existing.mcpOutputPersistence === true)
+    || (key === "mcpOutputAutoTruncate" && existing.mcpOutputAutoTruncate === true);
+  if (!present) return false;
+
+  const theme = key === "theme" ? undefined : existing.theme;
+  const persist = key === "mcpOutputPersistence" ? false : existing.mcpOutputPersistence === true;
+  const truncate = key === "mcpOutputAutoTruncate" ? false : existing.mcpOutputAutoTruncate === true;
+
+  if (!theme && !persist && !truncate) {
+    await safeUnlink(path);
+    return true;
   }
-  await safeUnlink(path);
+  await rejectSymlinkTarget(path, rootDir);
+  await atomicWrite(path, preferencesBody(theme, persist, truncate));
+  return true;
 }
 
 function preferencesBody(

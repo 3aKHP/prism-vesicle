@@ -3,12 +3,12 @@
 // canonical serializer, writes atomically, and creates the empty .env slot for
 // the provider's apiKeyEnv. Full re-parse validation after write.
 
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig, parseEnvFile } from "../../../config/providers";
 import type { ProviderProfile, ProviderModelProfile } from "../../../config/providers";
 import { serializeProviderRegistry, setEnvValues } from "../../../setup/config-writer";
+import { atomicWrite } from "../../../config/atomic-write";
 
 type AddResult = {
   ok: true;
@@ -75,9 +75,9 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
   const keyAlreadyExists = fileEnv[profile.apiKeyEnv] !== undefined;
   if (!keyAlreadyExists) {
     const updatedEnv = setEnvValues(existingEnv, { [profile.apiKeyEnv]: "" });
-    await atomicWrite(envPath, updatedEnv, true);
+    await atomicWrite(envPath, updatedEnv, 0o600);
   }
-  await atomicWrite(providerPath, source, false);
+  await atomicWrite(providerPath, source);
 
   return {
     ok: true,
@@ -187,17 +187,6 @@ async function readEnvFile(path: string): Promise<string> {
   } catch (error) {
     if (isEnoent(error)) return "";
     throw error;
-  }
-}
-
-async function atomicWrite(path: string, content: string, secret: boolean): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const staging = `${path}.staging-${randomUUID()}`;
-  try {
-    await writeFile(staging, content, { encoding: "utf8", flag: "wx", mode: secret ? 0o600 : 0o644 });
-    await rename(staging, path);
-  } finally {
-    await rm(staging, { force: true });
   }
 }
 

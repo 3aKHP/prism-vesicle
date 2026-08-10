@@ -15,6 +15,7 @@ import {
 } from "../config/providers";
 import { parseMcpConfig, mcpConfigPathFromEnv } from "../mcp/config";
 import { loadPermissionSettings } from "../config/permissions";
+import { atomicWrite } from "../config/atomic-write";
 
 export type SetupMcpServer = {
   name: string;
@@ -134,8 +135,22 @@ export function setEnvValues(source: string, updates: Record<string, string>): s
   return `${output.join("\n")}\n`;
 }
 
-export function serializeProviderRegistry(registry: ProviderRegistry): string {
-  const lines = [
+/**
+ * Shared provider-registry write pipeline for config CLI commands:
+ * serialize → validate by re-parsing (before touching disk) → atomic write →
+ * reload to confirm the round-trip. A failed cross-field constraint throws
+ * before any bytes land on disk, leaving the existing providers.yaml intact.
+ */
+export async function writeProviderRegistry(registry: ProviderRegistry): Promise<string> {
+  const path = providerConfigPathFromEnv();
+  const source = serializeProviderRegistry(registry);
+  parseProviderConfig(source, path, process.env);
+  await atomicWrite(path, source);
+  await loadProviderRegistry();
+  return path;
+}
+
+export function serializeProviderRegistry(registry: ProviderRegistry): string {  const lines = [
     "default:",
     `  provider: ${yamlScalar(registry.default.provider)}`,
     `  model: ${yamlScalar(registry.default.model)}`,
