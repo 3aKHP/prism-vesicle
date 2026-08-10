@@ -4,7 +4,7 @@
 // (temp file + rename) and output a single JSON result envelope.
 
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
-import { settingsPath, loadSettings } from "../../../config/settings";
+import { settingsPath, loadSettings, SETTINGS_KEYS } from "../../../config/settings";
 import { loadProviderRegistry } from "../../../config/providers";
 import type { ProviderProfile } from "../../../config/providers";
 import {
@@ -18,7 +18,7 @@ import { writeProviderRegistry } from "../../../setup/config-writer";
 import { atomicWrite } from "../../../config/atomic-write";
 import { loadExperimentalQualitySettings, writeExperimentalQualitySettings } from "../../../config/quality";
 import type { ExperimentalQualityMode } from "../../../config/quality";
-import { projectPreferencesPath, readProjectThemePreference } from "../../../config/project-preferences";
+import { projectPreferencesPath, readProjectThemePreference, PROJECT_PREFERENCE_KEYS } from "../../../config/project-preferences";
 import { permissionModes } from "../../../core/permissions";
 import type { ThemePreference } from "../../../tui/theme";
 
@@ -26,9 +26,9 @@ type SettableFile = "permissions" | "preferences" | "quality" | "settings" | "pr
 
 const SETTABLE_KEYS: Record<SettableFile, readonly string[]> = {
   permissions: ["defaultMode", "shellExec"],
-  preferences: ["theme", "mcpOutputPersistence", "mcpOutputAutoTruncate"],
+  preferences: PROJECT_PREFERENCE_KEYS,
   quality: ["mode"],
-  settings: ["editor"],
+  settings: SETTINGS_KEYS,
   providers: ["default.provider", "default.model", "providers.<id>.<field>"],
 };
 

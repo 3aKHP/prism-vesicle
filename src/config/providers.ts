@@ -699,12 +699,17 @@ function readKeyValue(line: string, index: number, path: string): [string, strin
 }
 
 function readGenerationField(key: string, value: string, index: number, path: string): GenerationDefaults {
+  if (!(generationFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown generation field "${key}".`);
+  }
   if (key === "temperature") return { temperature: readFiniteNumber(value, key, index, path) };
-  if (key === "maxTokens") return { maxTokens: readPositiveInteger(value, key, index, path) };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown generation field "${key}".`);
+  return { maxTokens: readPositiveInteger(value, key, index, path) };
 }
 
 function readCapabilityField(key: string, value: string, index: number, path: string): ModelCapabilities {
+  if (!(capabilityFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
+  }
   const enabled = readBoolean(value, key, index, path);
   if (key === "streaming") return { streaming: enabled };
   if (key === "tools") return { tools: enabled };
@@ -713,21 +718,24 @@ function readCapabilityField(key: string, value: string, index: number, path: st
   if (key === "temperature") return { temperature: enabled };
   if (key === "maxTokens") return { maxTokens: enabled };
   if (key === "vision") return { vision: enabled };
-  if (key === "remoteCompact") return { remoteCompact: enabled };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
+  return { remoteCompact: enabled };
 }
 
 function readLimitsField(key: string, value: string, index: number, path: string): ModelLimits {
+  if (!(limitsFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown limits field "${key}".`);
+  }
   if (key === "contextWindow") return { contextWindow: readPositiveInteger(value, key, index, path) };
-  if (key === "maxOutputTokens") return { maxOutputTokens: readPositiveInteger(value, key, index, path) };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown limits field "${key}".`);
+  return { maxOutputTokens: readPositiveInteger(value, key, index, path) };
 }
 
 function readAutoCompactField(key: string, value: string, index: number, path: string): AutoCompactLimits {
+  if (!(autoCompactFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown autoCompact field "${key}".`);
+  }
   if (key === "enabled") return { enabled: readBoolean(value, key, index, path) };
   if (key === "threshold") return { threshold: readFraction(value, key, index, path) };
-  if (key === "reserveOutputTokens") return { reserveOutputTokens: readPositiveInteger(value, key, index, path) };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown autoCompact field "${key}".`);
+  return { reserveOutputTokens: readPositiveInteger(value, key, index, path) };
 }
 
 function readFiniteNumber(value: string, key: string, index: number, path: string): number {

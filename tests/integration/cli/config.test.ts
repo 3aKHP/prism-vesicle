@@ -504,6 +504,18 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("add-model rejects unknown nested keys in limits", async () => {
+    await withTempProject("vesicle-config-addmodel-nestedkey-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", limits: { contextWindow: 4096, contextWidnow: 1 } });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unknown limits field");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).not.toContain("local-extra");
+    });
+  });
+
   test("add-model rejects non-numeric JSON values for numeric fields", async () => {
     await withTempProject("vesicle-config-addmodel-nonnum-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

@@ -1,7 +1,8 @@
-import { lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import type { Stats } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { readYamlKeyValue, readYamlLines } from "./yaml-line-reader";
+import { atomicWrite, safeUnlink } from "./atomic-write";
 import type { ThemePreference } from "../tui/theme";
 
 /**
@@ -229,27 +230,6 @@ async function rejectSymlinkTarget(path: string, rootDir: string): Promise<void>
     }
   } catch (error) {
     if (!isEnoent(error)) throw error;
-  }
-}
-
-async function atomicWrite(path: string, content: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.${process.pid}.tmp`;
-  await writeFile(tmp, content, "utf8");
-  try {
-    await rename(tmp, path);
-  } catch (error) {
-    await safeUnlink(tmp);
-    throw error;
-  }
-}
-
-async function safeUnlink(path: string): Promise<void> {
-  try {
-    await unlink(path);
-  } catch (error) {
-    if (isEnoent(error)) return;
-    throw error;
   }
 }
 
