@@ -99,7 +99,7 @@ export async function runDoctor(): Promise<void> {
 const responsesTierLabels: Record<ResponsesProfile, string> = {
   "openai-public": "OpenAI public conformance profile",
   "codex-http-relay": "narrow third-party relay profile",
-  "codex-beta-2026-02-06": "frozen Codex application profile",
+  "codex-beta-2026-02-06": "Codex V2 fingerprint profile",
   "mimo-subset-2026-07-30": "third-party compatible subset",
   "deepseek-subset-2026-07-31": "DeepSeek Responses compatible subset",
 };

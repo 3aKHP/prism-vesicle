@@ -291,6 +291,34 @@ describe("OpenAI Responses WebSocket transport", () => {
     }
   });
 
+  test("codex-beta-2026-02-06 downgrades to HTTP after WebSocket exhaustion like Codex", async () => {
+    const originalFetch = globalThis.fetch;
+    let sockets = 0;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      return responseStream([event(0, "response.completed", { response: responseBody(`http_${fetches}`, "http") })]);
+    }) as unknown as typeof fetch;
+    try {
+      const factory: ResponsesSocketFactory = () => {
+        sockets += 1;
+        return new FakeSocket((_message, socket) => socket.close());
+      };
+      // codex-beta mirrors Codex's transport policy: WebSocket preferred, HTTPS/SSE fallback on exhaustion.
+      const adapter = websocketAdapter(factory, { responsesProfile: "codex-beta-2026-02-06" });
+      const first = await collect(adapter.stream(request([{ role: "user", content: "fallback" }])));
+      const second = await collect(adapter.stream(request([{ role: "user", content: "still-http" }], "request-2")));
+
+      expect(sockets).toBe(6);
+      expect(fetches).toBe(2);
+      expect(first.filter((item) => item.type === "attempt_discarded")).toHaveLength(6);
+      expect(first.at(-1)).toMatchObject({ type: "complete", attempt: 7, response: { content: "http" } });
+      expect(second.at(-1)).toMatchObject({ type: "complete", attempt: 1, response: { content: "http" } });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("retains successful prewarm billing when generation retries downgrade to HTTP", async () => {
     const originalFetch = globalThis.fetch;
     let sockets = 0;
