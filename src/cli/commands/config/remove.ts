@@ -78,6 +78,12 @@ async function removeModel(providerId: string, modelId: string): Promise<RemoveM
       + `Switch the default first with: vesicle config set providers providers.${providerId}.defaultModel <another-model-id>`,
     );
   }
+  if (registry.default.provider === providerId && registry.default.model === modelId) {
+    throw new Error(
+      `Cannot remove model "${modelId}" because it is the current default model. `
+      + `Switch the default first with: vesicle config set providers default.model <another-model-id>`,
+    );
+  }
 
   provider.models.splice(modelIndex, 1);
 
@@ -105,7 +111,7 @@ async function removeProvider(providerId: string): Promise<RemoveProviderResult>
   }
 
   const quality = await loadExperimentalQualitySettings();
-  if (quality.mode !== "off" && quality.providerAlias === providerId) {
+  if (quality.providerAlias === providerId) {
     throw new Error(
       `Cannot remove provider "${providerId}" because it is configured as the Semantic Judge in quality.yaml. `
       + `Switch the judge provider first or turn off the judge with: vesicle config set quality mode off`,

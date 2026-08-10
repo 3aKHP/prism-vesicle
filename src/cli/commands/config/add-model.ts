@@ -193,27 +193,24 @@ function requireString(entry: Record<string, unknown>, field: string): string {
 }
 
 function readFiniteNumber(value: unknown, field: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new Error(`${field} must be a finite number.`);
   }
-  return parsed;
+  return value;
 }
 
 function readPositiveInteger(value: unknown, field: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new Error(`${field} must be a positive integer.`);
   }
-  return parsed;
+  return value;
 }
 
 function readFraction(value: unknown, field: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= 1) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value >= 1) {
     throw new Error(`${field} must be a number greater than 0 and less than 1.`);
   }
-  return parsed;
+  return value;
 }
 
 async function atomicWrite(path: string, content: string): Promise<void> {

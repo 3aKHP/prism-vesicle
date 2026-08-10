@@ -243,6 +243,12 @@ async function setProviderField(providerId: string, field: string, value: string
   const typedValue = validateProviderField(provider, field, value);
   (provider as Record<string, unknown>)[field] = typedValue;
 
+  // Keep the global default selection consistent with a provider-level
+  // defaultModel change so the two default concepts cannot diverge.
+  if (field === "defaultModel" && registry.default.provider === providerId) {
+    registry.default.model = value;
+  }
+
   const path = providerConfigPathFromEnv();
   const source = serializeProviderRegistry(registry);
 

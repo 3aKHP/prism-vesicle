@@ -450,6 +450,57 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("env-remove still removes a key when .env contains unparseable lines", async () => {
+    await withTempProject("vesicle-config-envrm-unparseable-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, ".env"), [
+        "REMOVE_ME=gone",
+        "bare-token-line-without-equals",
+        "KEEP_ME=value",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "env-remove", "REMOVE_ME"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).not.toContain("REMOVE_ME");
+      expect(envContent).toContain("KEEP_ME=value");
+      expect(envContent).toContain("bare-token-line-without-equals");
+    });
+  });
+
+  test("remove-model refuses to delete the global default model", async () => {
+    await withTempProject("vesicle-config-rmmodel-global-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      // Diverge: global default.model != provider defaultModel.
+      await runCli(["config", "set", "providers", "default.model", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      const result = await runCli(["config", "remove-model", "deepseek", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("current default model");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("deepseek-reasoner");
+    });
+  });
+
+  test("set providers <id>.defaultModel syncs the global default model", async () => {
+    await withTempProject("vesicle-config-set-sync-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.deepseek.defaultModel", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("  model: deepseek-reasoner");
+    });
+  });
+
+  test("add-model rejects non-numeric JSON values for numeric fields", async () => {
+    await withTempProject("vesicle-config-addmodel-nonnum-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", limits: { contextWindow: true } });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("must be a positive integer");
+    });
+  });
+
   test("validate reports ok for a well-formed config", async () => {
     await withTempProject("vesicle-config-validate-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
