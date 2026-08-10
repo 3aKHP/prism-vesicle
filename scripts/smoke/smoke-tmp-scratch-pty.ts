@@ -16,7 +16,7 @@
  * the deterministic integration suites cover the path/checkpoint/exclusion
  * contracts in depth.
  *
- * Usage: bun run scripts/smoke-tmp-scratch-pty.ts [width] [height]
+ * Usage: bun run scripts/smoke/smoke-tmp-scratch-pty.ts [width] [height]
  * Exits non-zero if any scratch-boundary signature is detected.
  */
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -33,7 +33,7 @@ export {};
 
 const WIDTH = Number(process.argv[2] ?? 100);
 const HEIGHT = Number(process.argv[3] ?? 28);
-const REPO_ROOT = join(import.meta.dir, "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..");
 const DRAFT_PATH = "tmp/137a-smoke/draft.md";
 const DRAFT_CONTENT = "SCRATCH DRAFT CONTENT\n";
 const SEED_CONTENT = "ARTIFACT SEED CONTENT\n";

@@ -13,7 +13,7 @@
  * stay non-blank after the next send. A headless frame cannot prove mounted
  * scroll/remount behavior, so this is the authority for the mounted lifecycle.
  *
- * Usage: bun run scripts/smoke-compact-pty.ts [width] [height]
+ * Usage: bun run scripts/smoke/smoke-compact-pty.ts [width] [height]
  * Exits non-zero if any regression signature is detected.
  */
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -32,7 +32,7 @@ export {};
 
 const WIDTH = Number(process.argv[2] ?? 80);
 const HEIGHT = Number(process.argv[3] ?? 24);
-const REPO_ROOT = join(import.meta.dir, "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..");
 
 async function main(): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-compact-pty-"));

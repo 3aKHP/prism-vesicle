@@ -15,7 +15,7 @@ export {};
 
 const width = Number(process.argv[2] ?? 80);
 const height = Number(process.argv[3] ?? 24);
-const repoRoot = join(import.meta.dir, "..");
+const repoRoot = join(import.meta.dir, "..", "..");
 const engineProfile = [
   "id: etl", "displayName: Smoke ETL", "protocolVersion: v9.0-state-space",
   "systemPrompt:", "  - assets/prompts/shared/vesicle-base.md", "  - assets/prompts/engines/etl.md",

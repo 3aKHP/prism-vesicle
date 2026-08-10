@@ -16,7 +16,7 @@ export {};
 
 const WIDTH = Number(process.argv[2] ?? 80);
 const HEIGHT = Number(process.argv[3] ?? 24);
-const REPO_ROOT = join(import.meta.dir, "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..");
 const NAME = "pty-published";
 const SOURCE = `tmp/skillify/${NAME}`;
 const SKILL_MD = `---\nname: ${NAME}\ndescription: "复用已验证的 PTY 工作流"\n---\n\n# PTY published\n\nFollow the verified workflow.\n`;

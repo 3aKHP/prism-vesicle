@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { findSuspiciousMarkdownWraps } from "../../../scripts/check-staged-markdown-wrap.ts";
+import { findSuspiciousMarkdownWraps } from "../../../scripts/check/check-staged-markdown-wrap.ts";
 
 function added(...lines: number[]): Set<number> {
   return new Set(lines);

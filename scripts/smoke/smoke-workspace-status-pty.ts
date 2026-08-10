@@ -27,7 +27,7 @@
  * width measurement, or the production preload path, so this is the authority
  * for the mounted lifecycle at 80 columns and a wider size.
  *
- * Usage: bun run scripts/smoke-workspace-status-pty.ts [width] [height]
+ * Usage: bun run scripts/smoke/smoke-workspace-status-pty.ts [width] [height]
  * Exits non-zero if any regression signature is detected.
  */
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -46,7 +46,7 @@ export {};
 
 const WIDTH = Number(process.argv[2] ?? 80);
 const HEIGHT = Number(process.argv[3] ?? 24);
-const REPO_ROOT = join(import.meta.dir, "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..");
 // A deliberately invalid character card with a CJK filename: missing every
 // mandatory Module A section, so the validator reports errors, and the name
 // exercises CJK display width in the status row.

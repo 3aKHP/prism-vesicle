@@ -4,7 +4,7 @@ import {
   TREE_SITTER_WORKER_ENTRYPOINT,
   TREE_SITTER_WORKER_RUNTIME_NAME,
   treeSitterWorkerPathForTarget,
-} from "../../../scripts/build-exe";
+} from "../../../scripts/build/build-exe";
 
 describe("standalone build worker", () => {
   test("uses a flat emitted worker entrypoint for each Bun target", () => {

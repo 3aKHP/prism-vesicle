@@ -1,4 +1,4 @@
-// This must remain a root-level compile entrypoint. See scripts/build-exe.ts
+// This must remain a root-level compile entrypoint. See scripts/build/build-exe.ts
 // for the Bun standalone Worker path contract.
 // Force Bun to retain the parser runtime that OpenTUI imports from inside its
 // worker. Without this explicit edge, the compiled worker can still resolve

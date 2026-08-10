@@ -18,7 +18,7 @@
  * editable editor, OpenTUI's real TextareaRenderable.handlePaste inserts it,
  * and Ctrl+S persists it.
  *
- * Usage: bun run scripts/smoke-workspace-paste-pty.ts [width] [height]
+ * Usage: bun run scripts/smoke/smoke-workspace-paste-pty.ts [width] [height]
  * Exits non-zero if any regression signature is detected.
  */
 import { mkdtemp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
@@ -37,7 +37,7 @@ export {};
 
 const WIDTH = Number(process.argv[2] ?? 80);
 const HEIGHT = Number(process.argv[3] ?? 24);
-const REPO_ROOT = join(import.meta.dir, "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..");
 const NOTES_REL = "notes.txt";
 const PREFIX = "prefix line\n";
 const PASTE_MARKER = "PASTE-LINE-1\nPASTE-LINE-2";
