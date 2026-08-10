@@ -1,8 +1,29 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./brand/prism-vesicle.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./brand/prism-vesicle-light.svg">
+    <img alt="Prism Vesicle mark" src="./brand/prism-vesicle-light.svg" width="176">
+  </picture>
+</p>
+
 # Prism Vesicle
+
+[![npm](https://img.shields.io/npm/v/prism-vesicle?logo=npm&label=npm)](https://www.npmjs.com/package/prism-vesicle)
+[![Release](https://img.shields.io/github/v/release/3aKHP/prism-vesicle?include_prereleases&label=release)](https://github.com/3aKHP/prism-vesicle/releases)
+[![CI](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/status-public_alpha-f59e0b)](#scope-and-lineage)
+[![License](https://img.shields.io/github/license/3aKHP/prism-vesicle)](./LICENSE)
+
+[![Agent Harness](https://img.shields.io/badge/Agent_Harness-Prism_Engine-059669)](#what-vesicle-supports)
+[![DeepSeek V4](https://img.shields.io/badge/DeepSeek_V4-supported-4d6bfe)](#configure-providers)
+[![MCP](https://img.shields.io/badge/MCP-dual--era_client-7c3aed)](#what-vesicle-supports)
+[![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3.14-000000?logo=bun&logoColor=white)](https://bun.sh/)
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Prism Vesicle is a Bun + TypeScript terminal host for Prism Engine workflows. It starts from a verified bundled V10 Harness, can select a project-pinned managed Harness Pack, connects the active runtime to direct model providers and host tools, and keeps conversations and artifact work durable across sessions.
+**An open-source Agent Harness host and terminal workbench for durable Prism Engine workflows.**
+
+Built with Bun and TypeScript, Vesicle connects versioned Harness Packs to DeepSeek V4 and other direct model providers, MCP tools, permission-gated host tools, foreground and background SubAgents, and durable sessions.
 
 > **Alpha status:** `1.0.0-alpha.9` is a public dogfood candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 

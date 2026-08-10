@@ -1,7 +1,7 @@
 {
   "name": "prism-vesicle",
   "version": "1.0.0-alpha.9",
-  "description": "Bun terminal host for Prism Engine prompt workflows.",
+  "description": "Open-source Agent Harness host and TUI for durable Prism Engine workflows.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -12,10 +12,16 @@
     "url": "https://github.com/3aKHP/prism-vesicle/issues"
   },
   "keywords": [
+    "agent-harness",
+    "ai-agent",
     "bun",
-    "tui",
+    "deepseek",
+    "llm",
+    "mcp",
     "prism",
-    "ai"
+    "subagents",
+    "tui",
+    "workflow"
   ],
   "type": "module",
   "packageManager": "bun@1.3.14",

@@ -1,8 +1,29 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./brand/prism-vesicle.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./brand/prism-vesicle-light.svg">
+    <img alt="Prism Vesicle 标志" src="./brand/prism-vesicle-light.svg" width="176">
+  </picture>
+</p>
+
 # Prism Vesicle
+
+[![npm](https://img.shields.io/npm/v/prism-vesicle?logo=npm&label=npm)](https://www.npmjs.com/package/prism-vesicle)
+[![Release](https://img.shields.io/github/v/release/3aKHP/prism-vesicle?include_prereleases&label=release)](https://github.com/3aKHP/prism-vesicle/releases)
+[![CI](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/status-public_alpha-f59e0b)](#范围与来源)
+[![License](https://img.shields.io/github/license/3aKHP/prism-vesicle)](./LICENSE)
+
+[![Agent Harness](https://img.shields.io/badge/Agent_Harness-Prism_Engine-059669)](#vesicle-当前支持的能力)
+[![DeepSeek V4](https://img.shields.io/badge/DeepSeek_V4-supported-4d6bfe)](#配置模型供应商)
+[![MCP](https://img.shields.io/badge/MCP-dual--era_client-7c3aed)](#vesicle-当前支持的能力)
+[![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3.14-000000?logo=bun&logoColor=white)](https://bun.sh/)
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Prism Vesicle 是一个使用 Bun 与 TypeScript 开发的 Prism Engine 终端工作流宿主。它默认启动经过验证的内置 V10 Harness，也可以选择项目固定的托管 Harness Pack，将当前运行时连接到模型供应商与宿主工具，并通过持久化会话保存对话和制品生产过程。
+**一个面向持久化 Prism Engine 工作流的开源 Agent Harness 宿主与终端工作台。**
+
+Vesicle 使用 Bun 与 TypeScript 开发，将版本化 Harness Pack 连接到 DeepSeek V4 等直连模型供应商、MCP 工具、受权限门禁约束的宿主工具、前后台 SubAgent 与持久化会话。
 
 > **Alpha 状态：**`1.0.0-alpha.9` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
 
