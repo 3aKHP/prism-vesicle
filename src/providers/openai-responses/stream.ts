@@ -142,10 +142,35 @@ function reconcileRelayTerminal(
 ): ResponsesBody {
   if (context.profile !== "codex-http-relay" || completedItems.length === 0) return terminal;
   if (!terminal.output || terminal.output.length === 0) return { ...terminal, output: completedItems };
-  if (!isDeepStrictEqual(terminal.output, completedItems)) {
-    throw malformed("Completed codex-http-relay output Items did not match response.output_item.done Items.", context.providerId);
+  if (isDeepStrictEqual(terminal.output, completedItems)) return terminal;
+  // Trusted relays may carry the full item in the output_item.done stream while
+  // the terminal `output` omits optional or empty fields (envelope id/status/
+  // phase, content-part annotations/logprobs, and similar). Treat the two as
+  // consistent when the terminal is a recursive subset of the completed-Item
+  // stream — same semantic payload, fewer optional fields — and prefer the
+  // fuller output_item.done items for replay fidelity.
+  if (terminal.output.length === completedItems.length
+    && terminal.output.every((item, index) => isRelaySubset(item, completedItems[index]))) {
+    return { ...terminal, output: completedItems };
   }
-  return terminal;
+  throw malformed("Completed codex-http-relay output Items did not match response.output_item.done Items.", context.providerId);
+}
+
+function isRelaySubset(partial: unknown, full: unknown): boolean {
+  if (partial === full) return true;
+  if (partial === null || full === null) return partial === full;
+  if (Array.isArray(partial) || Array.isArray(full)) {
+    if (!Array.isArray(partial) || !Array.isArray(full) || partial.length !== full.length) return false;
+    return partial.every((value, index) => isRelaySubset(value, full[index]));
+  }
+  if (typeof partial !== "object" || typeof full !== "object") {
+    return isDeepStrictEqual(partial, full);
+  }
+  const partialRecord = partial as Record<string, unknown>;
+  const fullRecord = full as Record<string, unknown>;
+  return Object.keys(partialRecord).every(
+    (key) => key in fullRecord && isRelaySubset(partialRecord[key], fullRecord[key]),
+  );
 }
 
 function parseEvent(payload: string, providerId: string): ResponsesEvent {

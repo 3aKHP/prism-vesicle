@@ -77,6 +77,29 @@ describe("OpenAI Responses request codec", () => {
     }, context(), false, "openai-public")).toThrow("Unsupported reasoning tier: invalid");
   });
 
+  test("omits service_tier from the codex-http-relay compatibility-tier request", () => {
+    const body = toResponsesBody({
+      ...request(),
+      tools: [{ type: "function", function: { name: "read_file", description: "Read", parameters: { type: "object" } } }],
+      generation: { reasoningTier: "high", temperature: 0.3, maxTokens: 1234 },
+    }, context(), true, "codex-http-relay");
+
+    // codex-http-relay is the maximum-compatibility tier; service_tier is omitted on
+    // the wire so relays that reject OpenAI tier values (e.g. sssai) stay usable,
+    // while the rest of the public request surface matches openai-public.
+    const wire = JSON.parse(JSON.stringify(body));
+    expect(wire).not.toHaveProperty("service_tier");
+    expect(wire).toMatchObject({
+      store: false,
+      stream: true,
+      parallel_tool_calls: true,
+      stream_options: { include_obfuscation: false },
+      include: ["reasoning.encrypted_content"],
+      prompt_cache_key: "req_1",
+      reasoning: { effort: "high", summary: "auto" },
+    });
+  });
+
   test("replays same-owner native Items without reconstructing encrypted reasoning", () => {
     const outputItems: ProviderStateJson[] = [
       { id: "rs_1", type: "reasoning", encrypted_content: "opaque-ciphertext", summary: [] },
@@ -522,6 +545,34 @@ describe("OpenAI Responses typed SSE", () => {
     ]), {
       ...streamContext(), profile: "codex-http-relay",
     }))).rejects.toThrow("did not include ordered output Items");
+  });
+
+  test("accepts codex-http-relay terminal output that strips optional fields from completed Items", async () => {
+    const events = await collect(readResponsesStream(responseStream([
+      event(0, "response.output_item.done", { output_index: 0, item: {
+        id: "msg_strip", status: "completed", type: "message", role: "assistant", phase: "final_answer",
+        content: [{ type: "output_text", annotations: [], logprobs: [], text: "ok" }],
+      } }),
+      event(1, "response.completed", { response: {
+        id: "resp_strip", status: "completed",
+        output: [{
+          type: "message", role: "assistant",
+          content: [{ type: "output_text", text: "ok" }],
+        }],
+      } }),
+    ]), {
+      ...streamContext(), profile: "codex-http-relay",
+    }));
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        id: "resp_strip",
+        content: "ok",
+        providerState: { payload: { profile: "codex-http-relay", outputItems: [
+          { id: "msg_strip", type: "message" },
+        ] } },
+      },
+    });
   });
 
   test("rejects inconsistent or non-contiguous codex-http-relay completed Items", async () => {

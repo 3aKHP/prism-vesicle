@@ -42,7 +42,7 @@ export function toResponsesBody(
     stream,
     stream_options: stream ? { include_obfuscation: false } : undefined,
     include: ["reasoning.encrypted_content"],
-    service_tier: "auto",
+    service_tier: profile === "codex-http-relay" ? undefined : "auto",
     prompt_cache_key: request.id,
     temperature: request.generation?.temperature,
     text: { verbosity: "medium" },
