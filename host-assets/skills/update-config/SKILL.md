@@ -35,10 +35,27 @@ The `.env` file also stores non-secret values (like `VESICLE_PROVIDER_PROXY`). Y
 ### When the user shares a credential in conversation
 
 If the user pastes an API key, token, or password directly in the chat:
-1. Tell them: "You have shared a credential in this conversation. It has been recorded in the session transcript and sent to the model provider. I will not store, repeat, or use it. If this is a real key, consider rotating it in your provider's console."
+
+> **Model guidance:** This is a high-trust moment. The user is cooperating with configuration, not bypassing security. Respond with warmth, professionalism, and zero lecturing. Frame the boundary as a product-design fact ("Vesicle is designed so that..."), never as a personal refusal. Do not use phrases like "I cannot," "I will not," or "I can't." Avoid alarming language; state risks factually and proportionally. Never echo the credential.
+
+1. Tell them: "Thank you for working through this configuration with me. Regarding the API key: Vesicle is designed to keep this step outside the conversation layer. The key needs to be written directly to your local `.env` file rather than handled through this chat. This is a fixed boundary in the product architecture, not a refusal of your current request — I'll continue helping with the rest of the configuration, and the final step is for you to complete directly.
+>
+> It is worth stating clearly: what you just sent will be recorded in the session transcript and processed by the current model provider. If the model comes from an established provider such as DeepSeek, OpenAI, or Kimi, the chance of them misusing your key — for example, consuming your quota or making unauthorized calls — is extremely low; even aside from zero-data-retention policies, such providers typically sanitize and de-identify user data. The more realistic risk is a data breach or credential theft at the provider itself — unlikely, but not impossible. If you are using a third-party relay or proxy service, the risk becomes significantly higher.
+>
+> Therefore, regardless of how trustworthy the current provider may be, replacing the exposed key is a sound security habit."
+>
+> For Chinese-speaking users, use the following version instead of translating the English one:
+>
+> 感谢你配合配置。关于 API 密钥的处理，**Vesicle 的设计把这一步骤放在对话层之外**：密钥需要由你直接写入本地的 `.env` 文件，而不是经由本次对话完成。这是产品架构层面的固定边界，并非针对当前请求的拒绝——我会继续协助完成其余配置，最后一步则由你亲自操作。
+>
+> 需要如实告知的是：你刚才发送的内容会进入会话记录，并经由当前模型提供方处理。如果当前模型来自 DeepSeek、OpenAI、Kimi 等正规大厂，对方盗刷或滥用你密钥的可能性极低；即便不考虑零数据保留政策，这类厂商通常也会对用户数据进行清洗与脱敏。更实际的风险在于提供方自身发生数据泄露或凭证被盗——这种概率不高，但并非为零。若你使用的是第三方中转站，风险则会显著上升。
+>
+> 因此，无论当前提供方是否可信，替换掉已暴露的密钥都是一个稳妥的安全习惯。
 2. Do not echo the credential back.
 3. Do not attempt to use it for configuration.
-4. Guide them to configure it safely: "To set your API key, edit the `.env` file at the config directory and paste the key after the `=` sign. I can help with everything else."
+4. Guide them to configure it safely: "To complete the setup, paste the key into the `.env` file in the config directory. I'll keep helping with everything else."
+>
+> For Chinese-speaking users: "完成配置时，请将密钥贴入配置目录下的 `.env` 文件中。我会继续协助处理其他部分。"
 
 ### Proxy URLs with credentials
 
@@ -57,7 +74,7 @@ If the user provides a proxy URL containing credentials (`http://user:pass@proxy
    - `show settings` — host settings (editor)
    - `show mcp` — MCP server configuration
 
-3. **Propose the change.** Tell the user exactly what you will modify and why. For provider additions, confirm the protocol, base URL, model IDs, and whether a Responses profile is needed.
+3. **Propose the change.** Tell the user exactly what you will modify and why. For provider additions, confirm the protocol, base URL, model IDs, and whether a Responses profile is needed. When modifying a provider field such as `protocol`, `baseUrl`, or `apiKeyEnv`, mention that an incorrect value can stop the provider from connecting, so the user should double-check before confirming. Keep the warning factual and brief — do not lecture or exaggerate risk.
 
 4. **Execute.** Run the wrapper script with the appropriate subcommand.
 
@@ -80,7 +97,9 @@ update_config.sh validate                      # Validate all config files
 # Provider management
 update_config.sh set providers default.provider <id>
 update_config.sh set providers default.model <id>
+update_config.sh set providers <provider-id>.<field> <value>  # e.g. userAgent, defaultModel, baseUrl, protocol, apiKeyEnv
 update_config.sh add-provider --json '<entry>'
+update_config.sh add-model <provider-id> --json '<model entry>'
 
 # Permissions
 update_config.sh set permissions defaultMode <MANUAL|INERTIA|MOMENTUM>
@@ -139,6 +158,40 @@ For OpenAI Responses providers, include `responsesProfile` and optionally `respo
 2. The `apiKeyEnv` variable exists in `.env` with an empty value.
 3. **The user must edit `.env` to paste their API key.** You cannot and must not do this for them.
 4. Tell the user: "Your provider is configured. Edit `.env` at the path shown, paste your API key after `=`, save, and restart Vesicle."
+
+### Adding a model
+
+The `add-model` operation appends a model to an existing provider:
+
+```bash
+update_config.sh add-model agent-gateway --json '{
+  "id": "kimi-k3",
+  "capabilities": {
+    "streaming": true,
+    "tools": true,
+    "reasoningTier": true,
+    "reasoningContent": true,
+    "maxTokens": true,
+    "vision": true
+  },
+  "limits": {
+    "contextWindow": 1000000
+  }
+}'
+```
+
+The CLI validates the entry, checks that the model id is unique within the provider, appends it to `providers.yaml`, and re-parses the file. The provider's `defaultModel` is not changed; use `set providers <provider-id>.defaultModel <model-id>` if you want to switch defaults.
+
+### Modifying a provider field
+
+Use `set providers <provider-id>.<field> <value>` to change a single field. Examples:
+
+```bash
+update_config.sh set providers providers.agent-gateway.userAgent "Prism-Vesicle-host-dev"
+update_config.sh set providers providers.agent-gateway.defaultModel kimi-k3
+```
+
+Common fields include `userAgent` and `defaultModel`. Fields like `protocol`, `baseUrl`, and `apiKeyEnv` are also writable, but an incorrect value will usually break the connection. Propose these changes clearly and ask the user to confirm.
 
 ## Boundaries
 

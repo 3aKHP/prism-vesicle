@@ -6,6 +6,7 @@ import { runShow, runPath, runValidate } from "./show";
 import { runSet } from "./set";
 import { runEnvSetEmpty, runEnvSetProxy, runEnvRemove } from "./env";
 import { runAddProvider } from "./add";
+import { runAddModel } from "./add-model";
 
 export async function runConfigCommand(args: string[]): Promise<void> {
   const command = args[0];
@@ -23,6 +24,10 @@ export async function runConfigCommand(args: string[]): Promise<void> {
   }
   if (command === "add-provider" && args.length >= 2) {
     await runAddProvider(args.slice(1));
+    return;
+  }
+  if (command === "add-model" && args.length >= 2) {
+    await runAddModel(args.slice(1));
     return;
   }
   if (command === "env-set-empty" && args.length === 2) {
@@ -51,6 +56,7 @@ function printUsage(): void {
   console.error("  vesicle config show <providers|env|permissions|mcp|quality|settings|preferences>");
   console.error("  vesicle config set <file> <key> <value>");
   console.error("  vesicle config add-provider --json '<entry>'");
+  console.error("  vesicle config add-model <provider-id> --json '<entry>'");
   console.error("  vesicle config env-set-empty <KEY>");
   console.error("  vesicle config env-set-proxy <URL>");
   console.error("  vesicle config env-remove <KEY>");

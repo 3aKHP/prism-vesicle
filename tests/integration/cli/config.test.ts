@@ -228,6 +228,84 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("set providers <id>.userAgent updates the provider userAgent", async () => {
+    await withTempProject("vesicle-config-set-ua-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.local.userAgent", "Prism-Vesicle-host-dev"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; key: string; value: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.key).toBe("providers.local.userAgent");
+      expect(parsed.value).toBe("Prism-Vesicle-host-dev");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("userAgent: Prism-Vesicle-host-dev");
+    });
+  });
+
+  test("set providers <id>.defaultModel switches to an existing model", async () => {
+    await withTempProject("vesicle-config-set-defaultmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.deepseek.defaultModel", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; key: string; value: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.key).toBe("providers.deepseek.defaultModel");
+      expect(parsed.value).toBe("deepseek-reasoner");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("defaultModel: deepseek-reasoner");
+    });
+  });
+
+  test("set providers <id>.defaultModel rejects unknown model", async () => {
+    await withTempProject("vesicle-config-set-badmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.deepseek.defaultModel", "no-such-model"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("does not declare model \"no-such-model\"");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("defaultModel: deepseek-v4-flash");
+    });
+  });
+
+  test("add-model appends a model to an existing provider", async () => {
+    await withTempProject("vesicle-config-addmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({
+        id: "local-extra",
+        capabilities: { streaming: true, tools: true },
+        limits: { contextWindow: 4096 },
+      });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; providerId: string; modelId: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.providerId).toBe("local");
+      expect(parsed.modelId).toBe("local-extra");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("local-extra");
+    });
+  });
+
+  test("add-model rejects duplicate model id", async () => {
+    await withTempProject("vesicle-config-addmodel-dup-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "qwen3" });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("already declares model \"qwen3\"");
+    });
+  });
+
+  test("add-model rejects invalid capability value", async () => {
+    await withTempProject("vesicle-config-addmodel-badcap-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", capabilities: { streaming: "yes" } });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("must be true or false");
+    });
+  });
+
   test("validate reports ok for a well-formed config", async () => {
     await withTempProject("vesicle-config-validate-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
