@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { userConfigDirectory } from "./paths";
+import { atomicWrite, safeUnlink } from "./atomic-write";
 
 /**
  * User-level `settings.yaml` — a new, deliberately tiny user config file that
@@ -10,6 +11,10 @@ import { userConfigDirectory } from "./paths";
  * is the reserved home for future user settings (#86 theme persistence, …),
  * so unknown fields are ignored rather than rejected.
  */
+
+/** Settings fields the CLI may set/unset; shared by set and unset commands. */
+export const SETTINGS_KEYS = ["editor"] as const;
+export type SettingsKey = (typeof SETTINGS_KEYS)[number];
 
 export type Settings = {
   /** Raw external-editor command line (e.g. `code --wait`, `nano`), if set. */
@@ -50,4 +55,36 @@ export async function loadSettings(env: NodeJS.ProcessEnv = process.env): Promis
   }
   const editor = values.get("editor");
   return { editor: editor && editor.length > 0 ? editor : undefined, exists: true, path };
+}
+
+/**
+ * Remove one settings key by dropping only its line, preserving every other
+ * field and comment for forward compatibility. The file is removed when no
+ * non-version content remains. Returns true when the key was present with a
+ * value and removed, false when it was absent or empty (a no-op). Malformed
+ * or unsupported-version files are refused via loadSettings.
+ */
+export async function unsetSettingsKey(key: SettingsKey, env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  const path = settingsPath(env);
+  // Refuse to touch a malformed or unsupported-version file (e.g. written by
+  // a newer Vesicle): parse first and let loadSettings throw.
+  const settings = await loadSettings(env);
+  if (!settings.exists) return false;
+  if (settings[key] === undefined) return false;
+
+  const source = await readFile(path, "utf8");
+  const keyPattern = new RegExp(`^\\s*${key}\\s*:`);
+  const remaining = source.split(/\r?\n/).filter((line) => !keyPattern.test(line));
+
+  const hasContent = remaining.some((line) => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith("#") && !/^version\s*:/.test(trimmed);
+  });
+  if (!hasContent) {
+    await safeUnlink(path);
+    return true;
+  }
+
+  await atomicWrite(path, `${remaining.join("\n")}\n`);
+  return true;
 }

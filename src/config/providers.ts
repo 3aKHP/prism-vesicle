@@ -40,6 +40,142 @@ export type ProviderRegistry = {
   path?: string;
 };
 
+/**
+ * Canonical model-entry field names, shared between the YAML parser below and
+ * the JSON-shape validator used by `vesicle config add-model`. Keep these in
+ * sync with readGenerationField/readCapabilityField/readLimitsField/
+ * readAutoCompactField; both live in this module so drift is visible in one diff.
+ */
+export const modelEntryFieldNames = ["id", "generation", "capabilities", "limits"] as const;
+export const generationFieldNames = ["temperature", "maxTokens"] as const;
+export const capabilityFieldNames = [
+  "streaming",
+  "tools",
+  "reasoningTier",
+  "reasoningContent",
+  "temperature",
+  "maxTokens",
+  "vision",
+  "remoteCompact",
+] as const;
+export const limitsFieldNames = ["contextWindow", "maxOutputTokens"] as const;
+export const autoCompactFieldNames = ["enabled", "threshold", "reserveOutputTokens"] as const;
+
+/**
+ * Validate a JSON-shaped model entry (as passed to `vesicle config add-model
+ * --json`) into a ProviderModelProfile. Unlike the YAML readers below, values
+ * here are already JSON-typed, so booleans must be real booleans and numbers
+ * real numbers — no string coercion. Unknown keys are rejected.
+ */
+export function validateModelEntryShape(entry: unknown): ProviderModelProfile {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    throw new Error("Model entry must be a JSON object.");
+  }
+  const source = entry as Record<string, unknown>;
+  for (const key of Object.keys(source)) {
+    if (!(modelEntryFieldNames as readonly string[]).includes(key)) {
+      throw new Error(`Unknown model entry field "${key}". Allowed: ${modelEntryFieldNames.join(", ")}.`);
+    }
+  }
+
+  const id = source.id;
+  if (typeof id !== "string" || !id.trim()) {
+    throw new Error(`Model entry requires a non-empty "id" string.`);
+  }
+  const modelId = id.trim();
+  if (/\s/.test(modelId)) {
+    throw new Error(`Model id "${modelId}" must not contain whitespace.`);
+  }
+
+  const model: ProviderModelProfile = { id: modelId };
+  if (source.generation !== undefined) model.generation = readGenerationObject(source.generation);
+  if (source.capabilities !== undefined) model.capabilities = readCapabilitiesObject(source.capabilities);
+  if (source.limits !== undefined) model.limits = readLimitsObject(source.limits);
+  return model;
+}
+
+function readGenerationObject(value: unknown): GenerationDefaults {
+  const source = readObjectField(value, "generation", generationFieldNames);
+  const result: GenerationDefaults = {};
+  if (source.temperature !== undefined) result.temperature = readJsonFiniteNumber(source.temperature, "temperature");
+  if (source.maxTokens !== undefined) result.maxTokens = readJsonPositiveInteger(source.maxTokens, "maxTokens");
+  return result;
+}
+
+function readCapabilitiesObject(value: unknown): ModelCapabilities {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("capabilities must be an object.");
+  }
+  const result: Record<string, boolean> = {};
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (!(capabilityFieldNames as readonly string[]).includes(key)) {
+      throw new Error(`Unknown capability "${key}". Allowed: ${capabilityFieldNames.join(", ")}.`);
+    }
+    if (typeof val !== "boolean") {
+      throw new Error(`Capability "${key}" must be true or false.`);
+    }
+    result[key] = val;
+  }
+  return result as ModelCapabilities;
+}
+
+function readLimitsObject(value: unknown): ModelLimits {
+  const source = readObjectField(value, "limits", limitsFieldNames);
+  const result: ModelLimits = {};
+  if (source.contextWindow !== undefined) result.contextWindow = readJsonPositiveInteger(source.contextWindow, "contextWindow");
+  if (source.maxOutputTokens !== undefined) result.maxOutputTokens = readJsonPositiveInteger(source.maxOutputTokens, "maxOutputTokens");
+  if (source.autoCompact !== undefined) result.autoCompact = readAutoCompactObject(source.autoCompact);
+  return result;
+}
+
+function readAutoCompactObject(value: unknown): AutoCompactLimits {
+  const source = readObjectField(value, "autoCompact", autoCompactFieldNames);
+  const result: AutoCompactLimits = {};
+  if (source.enabled !== undefined) {
+    if (typeof source.enabled !== "boolean") throw new Error("autoCompact.enabled must be true or false.");
+    result.enabled = source.enabled;
+  }
+  if (source.threshold !== undefined) {
+    const threshold = source.threshold;
+    if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold <= 0 || threshold >= 1) {
+      throw new Error("autoCompact.threshold must be a number greater than 0 and less than 1.");
+    }
+    result.threshold = threshold;
+  }
+  if (source.reserveOutputTokens !== undefined) {
+    result.reserveOutputTokens = readJsonPositiveInteger(source.reserveOutputTokens, "autoCompact.reserveOutputTokens");
+  }
+  return result;
+}
+
+function readObjectField(value: unknown, field: string, allowed: readonly string[]): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field} must be an object.`);
+  }
+  const source = value as Record<string, unknown>;
+  for (const key of Object.keys(source)) {
+    if (!allowed.includes(key)) {
+      throw new Error(`Unknown ${field} field "${key}". Allowed: ${allowed.join(", ")}.`);
+    }
+  }
+  return source;
+}
+
+function readJsonFiniteNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${field} must be a finite number.`);
+  }
+  return value;
+}
+
+function readJsonPositiveInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`${field} must be a positive integer.`);
+  }
+  return value;
+}
+
+
 export type ProviderConfigStatus = VesicleConfig & {
   hasApiKey: boolean;
   missing: string[];
@@ -563,12 +699,17 @@ function readKeyValue(line: string, index: number, path: string): [string, strin
 }
 
 function readGenerationField(key: string, value: string, index: number, path: string): GenerationDefaults {
+  if (!(generationFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown generation field "${key}".`);
+  }
   if (key === "temperature") return { temperature: readFiniteNumber(value, key, index, path) };
-  if (key === "maxTokens") return { maxTokens: readPositiveInteger(value, key, index, path) };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown generation field "${key}".`);
+  return { maxTokens: readPositiveInteger(value, key, index, path) };
 }
 
 function readCapabilityField(key: string, value: string, index: number, path: string): ModelCapabilities {
+  if (!(capabilityFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
+  }
   const enabled = readBoolean(value, key, index, path);
   if (key === "streaming") return { streaming: enabled };
   if (key === "tools") return { tools: enabled };
@@ -577,21 +718,24 @@ function readCapabilityField(key: string, value: string, index: number, path: st
   if (key === "temperature") return { temperature: enabled };
   if (key === "maxTokens") return { maxTokens: enabled };
   if (key === "vision") return { vision: enabled };
-  if (key === "remoteCompact") return { remoteCompact: enabled };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown capability field "${key}".`);
+  return { remoteCompact: enabled };
 }
 
 function readLimitsField(key: string, value: string, index: number, path: string): ModelLimits {
+  if (!(limitsFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown limits field "${key}".`);
+  }
   if (key === "contextWindow") return { contextWindow: readPositiveInteger(value, key, index, path) };
-  if (key === "maxOutputTokens") return { maxOutputTokens: readPositiveInteger(value, key, index, path) };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown limits field "${key}".`);
+  return { maxOutputTokens: readPositiveInteger(value, key, index, path) };
 }
 
 function readAutoCompactField(key: string, value: string, index: number, path: string): AutoCompactLimits {
+  if (!(autoCompactFieldNames as readonly string[]).includes(key)) {
+    throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown autoCompact field "${key}".`);
+  }
   if (key === "enabled") return { enabled: readBoolean(value, key, index, path) };
   if (key === "threshold") return { threshold: readFraction(value, key, index, path) };
-  if (key === "reserveOutputTokens") return { reserveOutputTokens: readPositiveInteger(value, key, index, path) };
-  throw new Error(`Provider config parse error on line ${index + 1} in ${path}: unknown autoCompact field "${key}".`);
+  return { reserveOutputTokens: readPositiveInteger(value, key, index, path) };
 }
 
 function readFiniteNumber(value: string, key: string, index: number, path: string): number {

@@ -3,11 +3,8 @@
 // cannot be removed without first switching it, and the global default provider
 // cannot be removed without first switching the default.
 
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
-import { dirname } from "node:path";
-import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig } from "../../../config/providers";
-import { serializeProviderRegistry } from "../../../setup/config-writer";
+import { loadProviderRegistry } from "../../../config/providers";
+import { writeProviderRegistry } from "../../../setup/config-writer";
 import { loadExperimentalQualitySettings } from "../../../config/quality";
 
 type RemoveModelResult = {
@@ -87,12 +84,7 @@ async function removeModel(providerId: string, modelId: string): Promise<RemoveM
 
   provider.models.splice(modelIndex, 1);
 
-  const path = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
-  parseProviderConfig(source, path, process.env);
-
-  await atomicWrite(path, source);
-  await loadProviderRegistry();
+  const path = await writeProviderRegistry(registry);
 
   return { ok: true, operation: "remove-model", providerId, modelId, path, restartRequired: true };
 }
@@ -120,23 +112,7 @@ async function removeProvider(providerId: string): Promise<RemoveProviderResult>
 
   registry.providers.splice(providerIndex, 1);
 
-  const path = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
-  parseProviderConfig(source, path, process.env);
-
-  await atomicWrite(path, source);
-  await loadProviderRegistry();
+  const path = await writeProviderRegistry(registry);
 
   return { ok: true, operation: "remove-provider", providerId, path, restartRequired: true };
-}
-
-async function atomicWrite(path: string, content: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const staging = `${path}.staging-${randomUUID()}`;
-  try {
-    await writeFile(staging, content, { encoding: "utf8", flag: "wx", mode: 0o644 });
-    await rename(staging, path);
-  } finally {
-    await rm(staging, { force: true });
-  }
 }

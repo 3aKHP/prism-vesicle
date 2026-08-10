@@ -450,6 +450,19 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("unset settings refuses an unsupported-version settings.yaml", async () => {
+    await withTempProject("vesicle-config-unset-settings-v2-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const original = ["version: 2", "editor: nano", ""].join("\n");
+      await writeFile(join(configDir, "settings.yaml"), original, "utf8");
+      const result = await runCli(["config", "unset", "settings", "editor"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("unsupported version");
+      const after = await readFile(join(configDir, "settings.yaml"), "utf8");
+      expect(after).toBe(original);
+    });
+  });
+
   test("env-remove still removes a key when .env contains unparseable lines", async () => {
     await withTempProject("vesicle-config-envrm-unparseable-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
@@ -488,6 +501,18 @@ describe("vesicle config CLI", () => {
       expect(result.exitCode).toBe(0);
       const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
       expect(providersContent).toContain("  model: deepseek-reasoner");
+    });
+  });
+
+  test("add-model rejects unknown nested keys in limits", async () => {
+    await withTempProject("vesicle-config-addmodel-nestedkey-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", limits: { contextWindow: 4096, contextWidnow: 1 } });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unknown limits field");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).not.toContain("local-extra");
     });
   });
 
