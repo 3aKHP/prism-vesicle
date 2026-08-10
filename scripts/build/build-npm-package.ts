@@ -2,7 +2,7 @@ import solidPlugin from "@opentui/solid/bun-plugin";
 import { mkdir, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const OUTPUT_DIRECTORY = join(import.meta.dir, "..", "..","dist", "npm");
+const OUTPUT_DIRECTORY = join(import.meta.dir, "..", "..", "dist", "npm");
 const OUTPUT_ENTRY = join(OUTPUT_DIRECTORY, "vesicle.mjs");
 const METAFILE = join(OUTPUT_DIRECTORY, "vesicle.meta.json");
 // Bundle the patched core JavaScript so npm consumers do not depend on their
@@ -19,7 +19,7 @@ await rm(OUTPUT_DIRECTORY, { recursive: true, force: true });
 await mkdir(OUTPUT_DIRECTORY, { recursive: true });
 
 const result = await Bun.build({
-  entrypoints: [join(import.meta.dir, "..", "..","src", "cli", "main.ts")],
+  entrypoints: [join(import.meta.dir, "..", "..", "src", "cli", "main.ts")],
   target: "bun",
   format: "esm",
   outdir: OUTPUT_DIRECTORY,
