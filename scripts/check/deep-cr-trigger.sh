@@ -20,23 +20,16 @@ if [ "$committed_ok" -eq 1 ] && [ -n "$mb_out" ]; then
   mb="$mb_out"
 fi
 
-changed_files=""
-add_chunk() {
-  # append non-empty lines from stdin to the newline-separated changed_files
-  local line
-  while IFS= read -r line || [ -n "$line" ]; do
-    [ -z "$line" ] && continue
-    changed_files="${changed_files}${line}"$'\n'
-  done
-}
-if [ -n "$mb" ]; then
-  git diff --name-only "$mb" HEAD 2>/dev/null | add_chunk
-fi
-git diff --name-only 2>/dev/null | add_chunk          # unstaged
-git diff --name-only --cached 2>/dev/null | add_chunk  # staged
+# Collect changed files (committed + staged + unstaged) via command substitution.
+# NOTE: do NOT pipe git output into a function that mutates a variable — bash runs
+# pipeline commands in a subshell, so the mutation would be lost and the set empty.
+changed_raw=""
+if [ -n "$mb" ]; then changed_raw="${changed_raw}$(git diff --name-only "$mb" HEAD 2>/dev/null)"$'\n'; fi
+changed_raw="${changed_raw}$(git diff --name-only 2>/dev/null)"$'\n'          # unstaged
+changed_raw="${changed_raw}$(git diff --name-only --cached 2>/dev/null)"$'\n'  # staged
 
 # distinct file list + count
-distinct_files=$(printf '%s' "$changed_files" | sort -u)
+distinct_files=$(printf '%s' "$changed_raw" | grep . | sort -u)
 file_count=0
 if [ -n "$distinct_files" ]; then
   file_count=$(printf '%s\n' "$distinct_files" | grep -c .)
@@ -73,11 +66,13 @@ cross_boundary=0
 
 # ---- size floor: >= 8 files OR >= 300 net LOC --------------------------------
 loc=0
-if [ -n "$mb" ]; then
-  # numstat: "added\tdeleted\tpath"; "-" for binary. Sum added+deleted integers.
-  loc=$(git diff --numstat "$mb" HEAD 2>/dev/null \
-        | awk '{ a=($1=="-"?0:$1)+0; d=($2=="-"?0:$2)+0; s+=a+d } END { print s+0 }')
-fi
+# numstat: "added\tdeleted\tpath"; "-" for binary. Sum added+deleted integers
+# across committed (if base resolvable), unstaged, and staged.
+loc_raw=""
+if [ -n "$mb" ]; then loc_raw="${loc_raw}$(git diff --numstat "$mb" HEAD 2>/dev/null)"$'\n'; fi
+loc_raw="${loc_raw}$(git diff --numstat 2>/dev/null)"$'\n'
+loc_raw="${loc_raw}$(git diff --numstat --cached 2>/dev/null)"$'\n'
+loc=$(printf '%s' "$loc_raw" | awk '{ a=($1=="-"?0:$1)+0; d=($2=="-"?0:$2)+0; s+=a+d } END { print s+0 }')
 size_floor=0
 if [ "$file_count" -ge 8 ] || [ "$loc" -ge 300 ]; then
   size_floor=1
