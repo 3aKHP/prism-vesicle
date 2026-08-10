@@ -8,7 +8,15 @@ import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
 import { settingsPath, loadSettings } from "../../../config/settings";
-import { loadProviderRegistry, providerConfigPathFromEnv } from "../../../config/providers";
+import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig } from "../../../config/providers";
+import type { ProviderProfile } from "../../../config/providers";
+import {
+  readProtocol,
+  readAuthMethod,
+  readResponsesProfile,
+  readResponsesTransport,
+  readUserAgent,
+} from "../../../config/providers";
 import { serializeProviderRegistry } from "../../../setup/config-writer";
 import { loadExperimentalQualitySettings, writeExperimentalQualitySettings } from "../../../config/quality";
 import type { ExperimentalQualityMode } from "../../../config/quality";
@@ -23,8 +31,10 @@ const SETTABLE_KEYS: Record<SettableFile, readonly string[]> = {
   preferences: ["theme", "mcpOutputPersistence", "mcpOutputAutoTruncate"],
   quality: ["mode"],
   settings: ["editor"],
-  providers: ["default.provider", "default.model"],
+  providers: ["default.provider", "default.model", "providers.<id>.<field>"],
 };
+
+const PROVIDER_ID_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
 export async function runSet(args: string[]): Promise<void> {
   const [file, key, ...valueParts] = args;
@@ -40,7 +50,7 @@ export async function runSet(args: string[]): Promise<void> {
     return;
   }
   const allowed = SETTABLE_KEYS[file];
-  if (!allowed.includes(key)) {
+  if (!allowed.includes(key) && !(file === "providers" && isProviderFieldKey(key))) {
     console.error(`Key "${key}" is not settable on ${file}. Allowed: ${allowed.join(", ")}.`);
     process.exitCode = 1;
     return;
@@ -53,6 +63,16 @@ export async function runSet(args: string[]): Promise<void> {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
+}
+
+function isProviderFieldKey(key: string): boolean {
+  if (!key.startsWith("providers.")) return false;
+  const rest = key.slice("providers.".length);
+  const dotIndex = rest.indexOf(".");
+  if (dotIndex <= 0) return false;
+  const providerId = rest.slice(0, dotIndex);
+  const field = rest.slice(dotIndex + 1);
+  return PROVIDER_ID_PATTERN.test(providerId) && field.length > 0;
 }
 
 function isSettableFile(file: string): file is SettableFile {
@@ -80,7 +100,7 @@ async function applySet(file: SettableFile, key: string, value: string): Promise
     case "settings":
       return setSettings(key, value);
     case "providers":
-      return setProvidersDefault(key, value);
+      return setProviders(key, value);
   }
 }
 
@@ -184,6 +204,128 @@ async function setSettings(key: string, value: string): Promise<SetResult> {
   // Verify round-trip.
   await loadSettings();
   return { ok: true, operation: "set", file: "settings", key, value, path, restartRequired: true };
+}
+
+async function setProviders(key: string, value: string): Promise<SetResult> {
+  if (key === "default.provider" || key === "default.model") {
+    return setProvidersDefault(key, value);
+  }
+
+  const match = /^providers\.([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\.(.+)$/.exec(key);
+  if (!match) {
+    throw new Error(`Key "${key}" is not settable on providers. Allowed: ${SETTABLE_KEYS.providers.join(", ")}.`);
+  }
+  const providerId = match[1]!;
+  const field = match[2]!;
+  return setProviderField(providerId, field, value);
+}
+
+const SETTABLE_PROVIDER_FIELDS: readonly string[] = [
+  "protocol",
+  "baseUrl",
+  "apiKeyEnv",
+  "authMethod",
+  "responsesProfile",
+  "responsesTransport",
+  "userAgent",
+  "defaultModel",
+];
+
+const PROTECTED_PROVIDER_FIELDS: readonly string[] = ["id", "models", "apiKey"];
+
+async function setProviderField(providerId: string, field: string, value: string): Promise<SetResult> {
+  const registry = await loadProviderRegistry();
+  const provider = registry.providers.find((entry) => entry.id === providerId);
+  if (!provider) {
+    throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
+  }
+
+  const typedValue = validateProviderField(provider, field, value);
+  (provider as Record<string, unknown>)[field] = typedValue;
+
+  // Keep the global default selection consistent with a provider-level
+  // defaultModel change so the two default concepts cannot diverge.
+  if (field === "defaultModel" && registry.default.provider === providerId) {
+    registry.default.model = value;
+  }
+
+  const path = providerConfigPathFromEnv();
+  const source = serializeProviderRegistry(registry);
+
+  // Validate the serialized output before writing so a failed cross-field
+  // constraint (e.g. protocol openai-responses without responsesProfile)
+  // never leaves a corrupted file on disk.
+  parseProviderConfig(source, path, process.env);
+
+  await atomicWrite(path, source);
+  // Verify round-trip.
+  await loadProviderRegistry();
+
+  return {
+    ok: true,
+    operation: "set",
+    file: "providers",
+    key: `providers.${providerId}.${field}`,
+    value,
+    path,
+    restartRequired: true,
+  };
+}
+
+function validateProviderField(provider: ProviderProfile, field: string, value: string): unknown {
+  if (PROTECTED_PROVIDER_FIELDS.includes(field)) {
+    throw new Error(`Field "${field}" cannot be modified directly.`);
+  }
+  if (!SETTABLE_PROVIDER_FIELDS.includes(field)) {
+    throw new Error(`Unknown provider field "${field}". Supported fields: ${SETTABLE_PROVIDER_FIELDS.join(", ")}.`);
+  }
+
+  const fieldLabel = `provider "${provider.id}"`;
+  switch (field) {
+    case "protocol":
+      return readProtocol(value, fieldLabel);
+    case "baseUrl": {
+      let parsed: URL;
+      try {
+        parsed = new URL(value);
+      } catch {
+        throw new Error(`Invalid baseUrl "${value}". Must be a complete URL.`);
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new Error(`baseUrl must use http:// or https://.`);
+      }
+      if (parsed.username || parsed.password) {
+        throw new Error(`baseUrl must not contain credentials. providers.yaml is a non-secret file.`);
+      }
+      return value.replace(/\/+$/, "");
+    }
+    case "apiKeyEnv": {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+        throw new Error(`Invalid apiKeyEnv "${value}". Must be a valid environment variable name.`);
+      }
+      return value;
+    }
+    case "authMethod":
+      return readAuthMethod(value, fieldLabel);
+    case "responsesProfile":
+      return readResponsesProfile(value, fieldLabel);
+    case "responsesTransport":
+      return readResponsesTransport(value, fieldLabel);
+    case "userAgent":
+      return readUserAgent(value, fieldLabel);
+    case "defaultModel": {
+      if (!provider.models.some((model) => model.id === value)) {
+        throw new Error(
+          `Provider "${provider.id}" does not declare model "${value}". `
+          + `Available: ${provider.models.map((model) => model.id).join(", ")}.`,
+        );
+      }
+      return value;
+    }
+    default:
+      // Exhaustive check above makes this unreachable, but TypeScript needs it.
+      return value;
+  }
 }
 
 async function setProvidersDefault(key: string, value: string): Promise<SetResult> {

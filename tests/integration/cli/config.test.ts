@@ -228,6 +228,279 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("set providers <id>.userAgent updates the provider userAgent", async () => {
+    await withTempProject("vesicle-config-set-ua-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.local.userAgent", "Prism-Vesicle-host-dev"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; key: string; value: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.key).toBe("providers.local.userAgent");
+      expect(parsed.value).toBe("Prism-Vesicle-host-dev");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("userAgent: Prism-Vesicle-host-dev");
+    });
+  });
+
+  test("set providers <id>.defaultModel switches to an existing model", async () => {
+    await withTempProject("vesicle-config-set-defaultmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.deepseek.defaultModel", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; key: string; value: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.key).toBe("providers.deepseek.defaultModel");
+      expect(parsed.value).toBe("deepseek-reasoner");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("defaultModel: deepseek-reasoner");
+    });
+  });
+
+  test("set providers <id>.defaultModel rejects unknown model", async () => {
+    await withTempProject("vesicle-config-set-badmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.deepseek.defaultModel", "no-such-model"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("does not declare model \"no-such-model\"");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("defaultModel: deepseek-v4-flash");
+    });
+  });
+
+  test("add-model appends a model to an existing provider", async () => {
+    await withTempProject("vesicle-config-addmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({
+        id: "local-extra",
+        capabilities: { streaming: true, tools: true },
+        limits: { contextWindow: 4096 },
+      });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; providerId: string; modelId: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.providerId).toBe("local");
+      expect(parsed.modelId).toBe("local-extra");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("local-extra");
+    });
+  });
+
+  test("add-model rejects duplicate model id", async () => {
+    await withTempProject("vesicle-config-addmodel-dup-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "qwen3" });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("already declares model \"qwen3\"");
+    });
+  });
+
+  test("add-model rejects invalid capability value", async () => {
+    await withTempProject("vesicle-config-addmodel-badcap-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", capabilities: { streaming: "yes" } });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("must be true or false");
+    });
+  });
+
+  test("remove-model deletes a model from a provider", async () => {
+    await withTempProject("vesicle-config-rmmodel-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-model", "deepseek", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; providerId: string; modelId: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.providerId).toBe("deepseek");
+      expect(parsed.modelId).toBe("deepseek-reasoner");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).not.toContain("deepseek-reasoner");
+    });
+  });
+
+  test("remove-model refuses to delete the provider defaultModel", async () => {
+    await withTempProject("vesicle-config-rmmodel-default-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-model", "deepseek", "deepseek-v4-flash"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("is the default model");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("deepseek-v4-flash");
+    });
+  });
+
+  test("remove-provider deletes a non-default provider", async () => {
+    await withTempProject("vesicle-config-rmprovider-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-provider", "local"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; providerId: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.providerId).toBe("local");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).not.toContain("local:");
+    });
+  });
+
+  test("remove-provider refuses to delete the default provider", async () => {
+    await withTempProject("vesicle-config-rmprovider-default-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "remove-provider", "deepseek"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("is the current default provider");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("deepseek:");
+    });
+  });
+
+  test("unset preferences theme removes the project theme", async () => {
+    await withTempProject("vesicle-config-unset-theme-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await runCli(["config", "set", "preferences", "theme", "dark"], { cwd: projectDir, configDir });
+      const result = await runCli(["config", "unset", "preferences", "theme"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; removed: boolean };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.removed).toBe(true);
+      const prefsPath = join(projectDir, ".vesicle", "preferences.yaml");
+      await expect(readFile(prefsPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    });
+  });
+
+  test("env-remove warns but exits 0 when key does not exist", async () => {
+    await withTempProject("vesicle-config-envrm-missing-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, ".env"), "KEEP_ME=value\n", "utf8");
+      const result = await runCli(["config", "env-remove", "MISSING_KEY"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toContain("was not set");
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("KEEP_ME=value");
+    });
+  });
+
+  test("set providers <id>.<field> rejects unknown and protected fields", async () => {
+    await withTempProject("vesicle-config-set-badfield-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const unknown = await runCli(["config", "set", "providers", "providers.local.unknownField", "x"], { cwd: projectDir, configDir });
+      expect(unknown.exitCode).toBe(1);
+      expect(unknown.stderr).toContain("Unknown provider field");
+      const protectedField = await runCli(["config", "set", "providers", "providers.local.id", "newid"], { cwd: projectDir, configDir });
+      expect(protectedField.exitCode).toBe(1);
+      expect(protectedField.stderr).toContain("cannot be modified directly");
+    });
+  });
+
+  test("set providers <id>.<field> does not corrupt file on cross-field constraint failure", async () => {
+    await withTempProject("vesicle-config-set-nocorrupt-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const before = await readFile(join(configDir, "providers.yaml"), "utf8");
+      const result = await runCli(["config", "set", "providers", "providers.local.protocol", "openai-responses"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      const after = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(after).toBe(before);
+    });
+  });
+
+  test("add-model rejects unknown JSON keys", async () => {
+    await withTempProject("vesicle-config-addmodel-unknownkey-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", unknownKey: "value" });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unknown model entry field");
+    });
+  });
+
+  test("remove-provider rejects provider referenced by quality judge", async () => {
+    await withTempProject("vesicle-config-rmprovider-quality-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "quality.yaml"), [
+        "version: 1",
+        "mode: observe",
+        "providerAlias: local",
+        "modelId: qwen3",
+        "judgeTimeoutMs: 15000",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "remove-provider", "local"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("configured as the Semantic Judge");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("local:");
+    });
+  });
+
+  test("unset settings editor preserves other fields", async () => {
+    await withTempProject("vesicle-config-unset-settings-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "settings.yaml"), [
+        "version: 1",
+        "editor: code --wait",
+        "futureField: kept",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "unset", "settings", "editor"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const settingsContent = await readFile(join(configDir, "settings.yaml"), "utf8");
+      expect(settingsContent).not.toContain("editor:");
+      expect(settingsContent).toContain("futureField: kept");
+    });
+  });
+
+  test("env-remove still removes a key when .env contains unparseable lines", async () => {
+    await withTempProject("vesicle-config-envrm-unparseable-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, ".env"), [
+        "REMOVE_ME=gone",
+        "bare-token-line-without-equals",
+        "KEEP_ME=value",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "env-remove", "REMOVE_ME"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).not.toContain("REMOVE_ME");
+      expect(envContent).toContain("KEEP_ME=value");
+      expect(envContent).toContain("bare-token-line-without-equals");
+    });
+  });
+
+  test("remove-model refuses to delete the global default model", async () => {
+    await withTempProject("vesicle-config-rmmodel-global-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      // Diverge: global default.model != provider defaultModel.
+      await runCli(["config", "set", "providers", "default.model", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      const result = await runCli(["config", "remove-model", "deepseek", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("current default model");
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("deepseek-reasoner");
+    });
+  });
+
+  test("set providers <id>.defaultModel syncs the global default model", async () => {
+    await withTempProject("vesicle-config-set-sync-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "providers", "providers.deepseek.defaultModel", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
+      expect(providersContent).toContain("  model: deepseek-reasoner");
+    });
+  });
+
+  test("add-model rejects non-numeric JSON values for numeric fields", async () => {
+    await withTempProject("vesicle-config-addmodel-nonnum-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const entry = JSON.stringify({ id: "local-extra", limits: { contextWindow: true } });
+      const result = await runCli(["config", "add-model", "local", "--json", entry], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("must be a positive integer");
+    });
+  });
+
   test("validate reports ok for a well-formed config", async () => {
     await withTempProject("vesicle-config-validate-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

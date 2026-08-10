@@ -520,14 +520,14 @@ function requireModel(profile: ProviderProfile, modelId: string): ProviderModelP
   return model;
 }
 
-function readProtocol(value: string, field: string): ProviderProtocol {
+export function readProtocol(value: string, field: string): ProviderProtocol {
   if (value !== "openai-chat-compatible" && value !== "openai-responses" && value !== "anthropic-messages" && value !== "gemini-generate-content") {
     throw new Error(`Unsupported provider protocol "${value}" in ${field}.`);
   }
   return value;
 }
 
-function readResponsesProfile(value: string, field: string): ResponsesProfile {
+export function readResponsesProfile(value: string, field: string): ResponsesProfile {
   if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06"
     && value !== "mimo-subset-2026-07-30" && value !== "deepseek-subset-2026-07-31") {
     throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
@@ -535,21 +535,21 @@ function readResponsesProfile(value: string, field: string): ResponsesProfile {
   return value;
 }
 
-function readResponsesTransport(value: string, field: string): ResponsesTransport {
+export function readResponsesTransport(value: string, field: string): ResponsesTransport {
   if (value !== "http" && value !== "websocket") {
     throw new Error(`Unsupported Responses transport "${value}" in ${field}.`);
   }
   return value;
 }
 
-function readAuthMethod(value: string, field: string): ProviderAuthMethod {
+export function readAuthMethod(value: string, field: string): ProviderAuthMethod {
   if (value !== "bearer" && value !== "x-api-key" && value !== "x-goog-api-key") {
     throw new Error(`Unsupported provider authMethod "${value}" in ${field}.`);
   }
   return value;
 }
 
-function readUserAgent(value: string, field: string): string {
+export function readUserAgent(value: string, field: string): string {
   if (/[\x00-\x1f\x7f]/.test(value)) {
     throw new Error(`Provider ${field} userAgent contains an invalid control character.`);
   }
