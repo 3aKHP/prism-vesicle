@@ -103,9 +103,14 @@ function readGenerationObject(value: unknown): GenerationDefaults {
 }
 
 function readCapabilitiesObject(value: unknown): ModelCapabilities {
-  const source = readObjectField(value, "capabilities", capabilityFieldNames);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("capabilities must be an object.");
+  }
   const result: Record<string, boolean> = {};
-  for (const [key, val] of Object.entries(source)) {
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (!(capabilityFieldNames as readonly string[]).includes(key)) {
+      throw new Error(`Unknown capability "${key}". Allowed: ${capabilityFieldNames.join(", ")}.`);
+    }
     if (typeof val !== "boolean") {
       throw new Error(`Capability "${key}" must be true or false.`);
     }

@@ -150,7 +150,8 @@ export async function writeProviderRegistry(registry: ProviderRegistry): Promise
   return path;
 }
 
-export function serializeProviderRegistry(registry: ProviderRegistry): string {  const lines = [
+export function serializeProviderRegistry(registry: ProviderRegistry): string {
+  const lines = [
     "default:",
     `  provider: ${yamlScalar(registry.default.provider)}`,
     `  model: ${yamlScalar(registry.default.model)}`,

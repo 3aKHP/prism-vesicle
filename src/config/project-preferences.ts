@@ -187,7 +187,7 @@ export async function unsetProjectPreference(rootDir: string, key: ProjectPrefer
   const path = projectPreferencesPath(rootDir);
   const existing = await readProjectThemePreference(rootDir);
   if (!existing.ok) {
-    throw new Error(`Refusing to modify malformed ${rel(path, rootDir)}: ${existing.diagnostic}`);
+    throw new Error(`Refusing to modify malformed preferences: ${existing.diagnostic}`);
   }
 
   const present =

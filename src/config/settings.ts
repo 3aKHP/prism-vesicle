@@ -60,22 +60,21 @@ export async function loadSettings(env: NodeJS.ProcessEnv = process.env): Promis
 /**
  * Remove one settings key by dropping only its line, preserving every other
  * field and comment for forward compatibility. The file is removed when no
- * non-version content remains. Returns true when the key was present and
- * removed, false when it was already absent (a no-op, including a missing file).
+ * non-version content remains. Returns true when the key was present with a
+ * value and removed, false when it was absent or empty (a no-op). Malformed
+ * or unsupported-version files are refused via loadSettings.
  */
 export async function unsetSettingsKey(key: SettingsKey, env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
   const path = settingsPath(env);
-  let source: string;
-  try {
-    source = await readFile(path, "utf8");
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "ENOENT") return false;
-    throw error;
-  }
+  // Refuse to touch a malformed or unsupported-version file (e.g. written by
+  // a newer Vesicle): parse first and let loadSettings throw.
+  const settings = await loadSettings(env);
+  if (!settings.exists) return false;
+  if (settings[key] === undefined) return false;
 
+  const source = await readFile(path, "utf8");
   const keyPattern = new RegExp(`^\\s*${key}\\s*:`);
   const remaining = source.split(/\r?\n/).filter((line) => !keyPattern.test(line));
-  if (remaining.length === source.split(/\r?\n/).length) return false;
 
   const hasContent = remaining.some((line) => {
     const trimmed = line.trim();

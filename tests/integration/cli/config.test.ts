@@ -450,6 +450,19 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("unset settings refuses an unsupported-version settings.yaml", async () => {
+    await withTempProject("vesicle-config-unset-settings-v2-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const original = ["version: 2", "editor: nano", ""].join("\n");
+      await writeFile(join(configDir, "settings.yaml"), original, "utf8");
+      const result = await runCli(["config", "unset", "settings", "editor"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("unsupported version");
+      const after = await readFile(join(configDir, "settings.yaml"), "utf8");
+      expect(after).toBe(original);
+    });
+  });
+
   test("env-remove still removes a key when .env contains unparseable lines", async () => {
     await withTempProject("vesicle-config-envrm-unparseable-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

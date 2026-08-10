@@ -16,24 +16,13 @@ type AddModelResult = {
 };
 
 export async function runAddModel(args: string[]): Promise<void> {
-  if (args.length < 1) {
+  if (args.length !== 3 || args[1] !== "--json") {
     console.error("Usage: vesicle config add-model <provider-id> --json '<entry>'");
     process.exitCode = 1;
     return;
   }
   const providerId = args[0]!;
-  const jsonFlag = args.indexOf("--json");
-  if (jsonFlag === -1 || jsonFlag + 1 >= args.length) {
-    console.error("Usage: vesicle config add-model <provider-id> --json '<entry>'");
-    process.exitCode = 1;
-    return;
-  }
-  if (args.length !== jsonFlag + 2) {
-    console.error("Unexpected extra arguments. Usage: vesicle config add-model <provider-id> --json '<entry>'");
-    process.exitCode = 1;
-    return;
-  }
-  const jsonStr = args[jsonFlag + 1]!;
+  const jsonStr = args[2]!;
   let entry: unknown;
   try {
     entry = JSON.parse(jsonStr);
