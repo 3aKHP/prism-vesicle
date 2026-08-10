@@ -406,9 +406,6 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (currentProvider.responsesProfile === "codex-http-relay" && currentProvider.responsesTransport === "websocket") {
       throw new Error(`Provider "${id}" cannot use codex-http-relay with responsesTransport websocket.`);
     }
-    if (currentProvider.responsesProfile === "codex-beta-2026-02-06" && currentProvider.responsesTransport !== "websocket") {
-      throw new Error(`Provider "${id}" must use responsesTransport websocket with codex-beta-2026-02-06.`);
-    }
     if (currentProvider.responsesProfile === "mimo-subset-2026-07-30" && currentProvider.responsesTransport === "websocket") {
       throw new Error(`Provider "${id}" cannot use mimo-subset-2026-07-30 with responsesTransport websocket.`);
     }

@@ -86,9 +86,10 @@ providers:
 - `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
 - `mimo-subset-2026-07-30` 是固定日期的第三方兼容子集,只支持 HTTP。它会省略 MiMo 未声明或明确不支持的 `background`、`context_management`、`previous_response_id`、`parallel_tool_calls`、`store`、远程压缩和 WebSocket 字段,每轮回放完整上下文,并把 `response.reasoning_text.*` 显式映射为 Vesicle reasoning。它不是 OpenAI 或 Codex conformance。
 - `deepseek-subset-2026-07-31` 是 DeepSeek 为 `deepseek-v4-flash` 提供的固定日期 HTTP 子集。它使用 Bearer 鉴权,省略不支持的 continuation、Conversations、存储、background、WebSocket 和远程压缩字段,每轮回放包含明文 reasoning Item 的完整上下文,并按 DeepSeek 文档映射 `none`/`low`/`high`/`max` effort。`deepseek-v4-pro` 在官方 8 月支持实际上线并完成独立验收前不属于此档案。
-- `codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案:既接受公开协议式的终态有序 output,也接受 Codex 的事件/终态分离格式——由连续 completed Items 承载响应内容,随后合法的 `response.completed` 可省略 `output` 或返回空数组。Vesicle 仍会等成功终态后才提交工具,非空的双重表示必须一致,failed/incomplete/EOF 尝试一律拒绝。`codex-beta-2026-02-06` 仍是冻结的 WebSocket 指纹档案;两者都不会为了“像 Codex”而复制私有身份、attestation 或 `x-codex-*` 头。
+- `codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案:既接受公开协议式的终态有序 output,也接受 Codex 的事件/终态分离格式——由连续 completed Items 承载响应内容,随后合法的 `response.completed` 可省略 `output` 或返回空数组。Vesicle 仍会等成功终态后才提交工具,非空的双重表示必须一致,failed/incomplete/EOF 尝试一律拒绝。
+- `codex-beta-2026-02-06` 是指纹级 Codex 模拟档案:用 WebSocket 传输时发送 Codex V2 beta 线材形态(`openai-beta: responses_websockets=2026-02-06` 头 + `stream: true`),并在 WebSocket 耗尽时回退 HTTPS/SSE——与 Codex 完全一致;走 HTTPS/SSE 时与 `openai-public` 无法区分。需要 WebSocket 流量对齐 Codex V2 beta 形态时选用。这些 Codex 形态档案都不会复制私有身份、attestation 或 `x-codex-*` 头。
 
-`responsesTransport` 可为 `http` 或 `websocket`;不写时运行时走 HTTP。只有 `openai-public` 与冻结 Codex beta 档案允许 WebSocket;MiMo 与 DeepSeek 子集均只支持 HTTP。原生 Items 与 compact state 由精确档案拥有;同一端点切换档案时会回退到 portable history。无论是否启用远程压缩,portable `/compact` checkpoint 都是恢复权威;远程端点不可用不会让已有会话不可读。运行 `vesicle doctor` 可查看当前 Responses 档案、层级、传输和远程压缩声明。
+`responsesTransport` 可为 `http` 或 `websocket`;不写时运行时走 HTTP。只有 `openai-public` 与 `codex-beta-2026-02-06` 允许 WebSocket;MiMo 与 DeepSeek 子集均只支持 HTTP。原生 Items 与 compact state 由精确档案拥有;同一端点切换档案时会回退到 portable history。无论是否启用远程压缩,portable `/compact` checkpoint 都是恢复权威;远程端点不可用不会让已有会话不可读。运行 `vesicle doctor` 可查看当前 Responses 档案、层级、传输和远程压缩声明。
 
 ## .env
 
