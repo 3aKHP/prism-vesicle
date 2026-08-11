@@ -63,7 +63,7 @@ Publication is create-only: no overwrite or upgrade. The draft is always retaine
 
 Every Vesicle installation ships with `novel-outline-v3` (scope `host`), a hierarchical novel-outline workflow (volume outline → chapter outline → scene). It teaches a text-first methodology: read all source material, maintain two living-document ledgers (character growth and world state), draft volume/chapter/scene outlines, allocate a per-chapter tension budget with closed-form checks (Σ scenes = chapter total), track foreshadow plant/resolve, write back ledgers, and mark uncertain items.
 
-It has no scripts, no process capability, and provides read-only text references through `read_skill_resource` (outline templates, ledger formats, tension model). It complements the Harness 10.2.0 tension-budget system.
+It has no scripts, no process capability, and provides read-only text references through `read_skill_resource` (outline templates, ledger formats, tension model). It complements the Harness tension-budget system.
 
 When the user asks to "outline the first three chapters", "write a volume outline", "break the outline down to scene level", "allocate tension", or "track foreshadow", the model may automatically activate this Skill.
 
