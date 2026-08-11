@@ -1,10 +1,34 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runMarkdownRuntimeDiagnostic } from "../../../src/tui/markdown-runtime-diagnostic";
 import { configureTreeSitterWorkerPath } from "../../../src/tui/tree-sitter-runtime";
 
+type GlobalWithWorkerPath = typeof globalThis & { OTUI_TREE_SITTER_WORKER_PATH?: string };
+
 describe("Markdown runtime diagnostic", () => {
+  // configureTreeSitterWorkerPath short-circuits on OTUI_TREE_SITTER_WORKER_PATH
+  // and writes its resolved value back into process.env and globalThis. Snapshot
+  // and clear both so the assertion is independent of the host environment.
+  let previousEnv: string | undefined;
+  let previousGlobal: string | undefined;
+
+  beforeEach(() => {
+    previousEnv = process.env.OTUI_TREE_SITTER_WORKER_PATH;
+    previousGlobal = (globalThis as GlobalWithWorkerPath).OTUI_TREE_SITTER_WORKER_PATH;
+    delete process.env.OTUI_TREE_SITTER_WORKER_PATH;
+    delete (globalThis as GlobalWithWorkerPath).OTUI_TREE_SITTER_WORKER_PATH;
+  });
+
+  afterEach(() => {
+    if (previousEnv === undefined) delete process.env.OTUI_TREE_SITTER_WORKER_PATH;
+    else process.env.OTUI_TREE_SITTER_WORKER_PATH = previousEnv;
+    if (previousGlobal === undefined) delete (globalThis as GlobalWithWorkerPath).OTUI_TREE_SITTER_WORKER_PATH;
+    else (globalThis as GlobalWithWorkerPath).OTUI_TREE_SITTER_WORKER_PATH = previousGlobal;
+  });
+
   test("resolves the installed worker independently of the active project and proves fixed Markdown and TypeScript highlighting", async () => {
-    expect(configureTreeSitterWorkerPath()).toContain("node_modules/@opentui/core/parser.worker.js");
+    // path.join yields backslashes on Windows; normalize before the substring check.
+    const workerPath = configureTreeSitterWorkerPath();
+    expect(workerPath?.replace(/\\/g, "/")).toContain("node_modules/@opentui/core/parser.worker.js");
 
     const diagnostic = await runMarkdownRuntimeDiagnostic();
     expect(diagnostic.ok).toBe(true);
