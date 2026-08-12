@@ -510,17 +510,43 @@ export function createTurnController(options: TurnControllerOptions) {
     }
   }
 
+  function clearPendingInteractions(): void {
+    decision.setPendingGate(null);
+    decision.setPendingEngineSwitch(null);
+    decision.setPendingUserQuestion(null);
+    decision.setPendingPermission(null);
+    decision.setPendingQualityDecision(null);
+  }
+
+  // Whether `forkPointUuid` is still the active branch's last turn. Once a later
+  // user turn has been appended after a candidate marker, the fork point is
+  // stale and switching would re-point the active branch backward, orphaning the
+  // later turns (Bot Review blocking finding).
+  async function forkPointIsLastTurn(forkPointUuid: string): Promise<boolean> {
+    const points = await listRewindPoints(session.rootDir, session.sessionId() ?? "");
+    return points.at(-1)?.uuid === forkPointUuid;
+  }
+
   /**
    * Switch the active candidate of the current turn by one step (#88 horizontal
    * branch). Appends a selection marker, reloads the selected candidate's branch
    * into both the provider context and the display transcript, and advances the
-   * switcher index. Pending interactions are cleared so a switched-away gate does
-   * not linger; switching to a paused candidate is a known MVP limitation.
+   * switcher index. Refuses (and disarms) if the conversation has moved past the
+   * fork point since the switcher was armed. Pending interactions are cleared so
+   * a switched-away gate does not linger; switching to a paused candidate is a
+   * known MVP limitation.
    */
   async function switchCandidate(direction: -1 | 1): Promise<void> {
     const id = session.sessionId();
     const current = candidateSwitcher();
     if (!id || !current || current.total < 2 || runtime.busy()) return;
+    // Re-verify: a turn may have landed (e.g. a background SubAgent delivery)
+    // since the switcher was armed, making the fork point stale.
+    if (!await forkPointIsLastTurn(current.forkPointUuid)) {
+      setCandidateSwitcher(null);
+      transcript.setStatus("the conversation moved past the switched turn");
+      return;
+    }
     const nextIndex = (current.index + direction + current.total) % current.total;
     const nextLeaf = current.leaves[nextIndex];
     if (!nextLeaf) return;
@@ -531,11 +557,7 @@ export function createTurnController(options: TurnControllerOptions) {
       const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
       session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
       transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
-      decision.setPendingGate(null);
-      decision.setPendingEngineSwitch(null);
-      decision.setPendingUserQuestion(null);
-      decision.setPendingPermission(null);
-      decision.setPendingQualityDecision(null);
+      clearPendingInteractions();
       transcript.setOutput("");
       setCandidateSwitcher({ ...current, index: nextIndex });
       await hostAction.refreshArtifacts();
@@ -552,6 +574,9 @@ export function createTurnController(options: TurnControllerOptions) {
       const records = await loadSessionRecords(session.rootDir, id);
       const selection = findLatestSelection(records);
       if (!selection) { setCandidateSwitcher(null); return; }
+      // Only arm when the fork point is still the active branch's last turn —
+      // otherwise switching would orphan the turns that came after it.
+      if (!await forkPointIsLastTurn(selection.forkPointUuid)) { setCandidateSwitcher(null); return; }
       const leaves = enumerateCandidateLeaves(records, selection.forkPointUuid).map((record) => record.uuid);
       if (leaves.length < 2) { setCandidateSwitcher(null); return; }
       const index = Math.max(0, leaves.indexOf(selection.selectedLeafUuid));

@@ -71,4 +71,35 @@ describe("agent loop: regenerate turn", () => {
       regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: "not-on-the-branch" }),
     ).rejects.toBeInstanceOf(RegenerateBlockedError);
   });
+
+  test("a failed regenerate round restores the previous candidate as the active branch", async () => {
+    const rootDir = await createPromptRoot();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) return Response.json({ id: "c1", choices: [{ message: { content: "candidate-A1" } }] });
+      // The regenerate provider round fails.
+      throw new Error("provider down");
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({ input: "the prompt", rootDir, messages: [{ role: "user", content: "the prompt" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const recordsAfterFirst = await loadSessionRecords(rootDir, first.sessionId);
+    const userA = recordsAfterFirst.find((record) => record.role === "user")!;
+
+    // bootstrap appended the new candidate's file-history snapshot before the
+    // failed provider round; without a restore marker the default head would be
+    // stuck on that incomplete snapshot. The catch must re-arm the old candidate.
+    await expect(
+      regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: userA.uuid }),
+    ).rejects.toThrow("provider down");
+
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    const snapshot = await loadSessionSnapshot(rootDir, first.sessionId);
+    // The old candidate is still the active branch (visible in projection)...
+    const contents = snapshot.messages.map((message) => message.content).join("\n");
+    expect(contents).toContain("candidate-A1");
+    // ...because a restore selection marker was appended for the fork point.
+    expect(findLatestSelection(records)?.forkPointUuid).toBe(userA.uuid);
+  });
 });

@@ -75,22 +75,34 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
     throw new RegenerateBlockedError("The target record is not a regenerable user prompt.");
   }
 
-  // Fork a sibling candidate subtree off the shared user record. sessionParentUuid
-  // forks the append chain; branchHeadUuid scopes bootstrap's snapshot to the
-  // fresh-context branch (and skips pre-turn compaction); prePersistedInputUuid
-  // reuses the user record without re-appending. Background-delegation safety
-  // (a turn is not done until its background SubAgents finish) is guarded by the
-  // TUI caller, which owns the AgentManager.
-  const result = await runPrompt({
-    ...runOptions,
-    rootDir,
-    sessionId,
-    input: userRecord.content,
-    sessionParentUuid: userRecordUuid,
-    branchHeadUuid: userRecordUuid,
-    prePersistedInputUuid: userRecordUuid,
-    messages: snapshot.messages.map(toVesicleMessage),
-  });
+  // Capture the pre-regenerate physical tail. bootstrap appends the new
+  // candidate's file-history snapshot BEFORE the first provider round, so a
+  // failed or interrupted runPrompt would leave the default head on the
+  // incomplete candidate with no marker to switch back. On failure we append a
+  // marker chained off the previous leaf so the old candidate stays active.
+  const previousLeaf = (await loadSessionRecords(rootDir, sessionId)).at(-1)?.uuid;
+
+  let result: RunPromptResult;
+  try {
+    result = await runPrompt({
+      ...runOptions,
+      rootDir,
+      sessionId,
+      input: userRecord.content,
+      sessionParentUuid: userRecordUuid,
+      branchHeadUuid: userRecordUuid,
+      prePersistedInputUuid: userRecordUuid,
+      messages: snapshot.messages.map(toVesicleMessage),
+    });
+  } catch (error) {
+    if (previousLeaf) {
+      await appendCandidateSelection(rootDir, sessionId, {
+        forkPointUuid: userRecordUuid,
+        selectedLeafUuid: previousLeaf,
+      });
+    }
+    throw error;
+  }
 
   // Persist a selection marker so findLatestSelection reports the new candidate
   // as active. The new candidate is already the physical tail (the default
