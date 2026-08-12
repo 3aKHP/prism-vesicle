@@ -21,6 +21,8 @@ export { resumeQualityRewrite } from "./quality-continuation";
 export { resolveQualityDecision } from "./quality-continuation";
 export { refreshQualityDecisionArtifacts } from "./quality-continuation";
 export { resolveUserQuestion } from "./user-question-continuation";
+export { regenerateTurn, RegenerateBlockedError } from "./regenerate";
+export type { RegenerateTurnOptions } from "./regenerate";
 
 export async function runPrompt(options: RunPromptOptions): Promise<RunPromptResult> {
   return runLoop(await bootstrapTurn(options));

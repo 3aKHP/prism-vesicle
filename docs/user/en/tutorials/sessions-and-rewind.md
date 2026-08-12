@@ -49,6 +49,25 @@ Shortcut: with the input box **empty**, press Esc twice (within 800ms) to open t
 
 > The rewind file checkpoints cover only files changed by Vesicle's own tools. Files you change by hand outside Vesicle are not in this ledger and are not rewind targets.
 
+## Regenerate and switch candidates
+
+Not happy with the last reply? Have it **try again**; the old version is kept, and you can switch between the two at any time:
+
+```
+/regenerate
+```
+
+`/regenerate` re-runs the **entire last turn** with the same prompt and produces a new reply as a new candidate. The old candidate is not deleted. Once the re-run finishes, a marker like `< 1/2 >` appears under the reply — use **Option+← / Option+→** to switch between candidates:
+
+- Switching only changes which version is shown and which one later messages build on; it does not call the model again.
+- On the chat-only Stage engine a regenerate is cheap (a single model call); on file-writing authoring engines the whole workflow re-runs, which costs more.
+
+> **About files**: regenerate does **not** switch the files Vesicle wrote between candidates yet. The Stage engine writes no files, so it is unaffected; but authoring engines (which write chapter and setting files) generate the new candidate on top of the files the previous candidate left behind, and switching back to an older candidate does not switch the files back either. Full "files switch with the candidate" support is coming in a later release.
+
+> Each regenerate and each switch appends to the session record, and old candidates are kept forever. The session file grows and loads more slowly as candidates accumulate; Vesicle does not clean this up automatically — start a fresh session with `/new`, or delete unneeded files under `.vesicle/sessions/` by hand when you want to.
+
+Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise it prompts you to resolve those first.
+
 ## When context gets long: compact
 
 After a conversation grows, you can compact it into a summary and continue, saving context:

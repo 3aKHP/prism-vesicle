@@ -73,7 +73,13 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   // resume authority for the frozen catalog and the activation registry.
   let snapshot: SessionSnapshot | undefined;
   if (options.sessionId) {
-    snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
+    snapshot = await loadSessionSnapshot(rootDir, options.sessionId, {
+      synthesizeDanglingToolResults: false,
+      // A branched turn (regenerate) reads the snapshot ending at the fork
+      // point, excluding later sibling subtrees, so harness identity, Skill
+      // hydration, and the round-0 message list reflect the fresh-context branch.
+      ...(options.branchHeadUuid ? { headUuid: options.branchHeadUuid } : {}),
+    });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
     if (engine === "stage") {
       if (!snapshot.stageBootstrap) throw new Error("Stage session is missing frozen bootstrap metadata.");
@@ -136,7 +142,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     // draft. New sessions and Stage (no compaction) skip it. The compact
     // provider request is a standalone call, never a bootstrap turn, so it
     // cannot re-enter automatic evaluation.
-    if (engine !== "stage" && config.limits?.autoCompact) {
+    // Pre-turn auto-compaction is skipped for branched turns (branchHeadUuid
+    // set): the compaction service appends to the physical tail and is not
+    // branch-fork-aware, so compacting before the forked store's first append
+    // would fold the old sibling subtree's summary into the fresh-context
+    // branch. A regenerate re-runs history that already met the budget when the
+    // original turn ran, so skipping is safe; mid-turn compaction (by which
+    // point the branch IS the physical tail) still guards the hard ceiling.
+    if (engine !== "stage" && config.limits?.autoCompact && !options.branchHeadUuid) {
       const compacted = await runExistingSessionPreTurnCompaction({
         rootDir,
         sessionId: options.sessionId,

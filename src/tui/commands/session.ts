@@ -49,6 +49,16 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
     },
 
     {
+      name: "regenerate",
+      busyBehavior: afterAgentLoop,
+      description: "Re-run the last turn as a new candidate (switch with Option+Left/Option+Right)",
+      async run(_args, raw) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+        await ctx.regenerateTurn();
+      },
+    },
+
+    {
       name: "new",
       busyBehavior: afterAgentLoop,
       description: "Start a fresh session",
