@@ -139,11 +139,11 @@ describe("guided Setup configuration writer", () => {
       providerPreset: "deepseek-responses",
       baseUrl: "https://api.deepseek.com",
       apiKey: "secret",
-      modelIds: ["deepseek-v4-pro"],
-      defaultModel: "deepseek-v4-pro",
+      modelIds: ["deepseek-chat"],
+      defaultModel: "deepseek-chat",
       permissionMode: "MOMENTUM",
     }, { VESICLE_CONFIG_DIR: join(root, "config") })).rejects.toThrow(
-      "DeepSeek Responses currently supports only deepseek-v4-flash",
+      "DeepSeek Responses currently supports only deepseek-v4-flash and deepseek-v4-pro",
     );
   });
 

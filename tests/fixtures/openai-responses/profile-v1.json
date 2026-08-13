@@ -216,7 +216,7 @@
       "previousResponseId": false,
       "remoteCompact": false,
       "websocket": false,
-      "supportedModels": ["deepseek-v4-flash"],
+      "supportedModels": ["deepseek-v4-flash", "deepseek-v4-pro"],
       "supportedRequestFields": [
         "model",
         "instructions",

@@ -428,8 +428,8 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       throw new Error(`Provider "${id}" cannot enable remoteCompact with deepseek-subset-2026-07-31.`);
     }
     if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
-      && models.some((model) => model.id !== "deepseek-v4-flash")) {
-      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash with deepseek-subset-2026-07-31.`);
+      && models.some((model) => model.id !== "deepseek-v4-flash" && model.id !== "deepseek-v4-pro")) {
+      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash or deepseek-v4-pro with deepseek-subset-2026-07-31.`);
     }
     registry.providers.push({
       id,

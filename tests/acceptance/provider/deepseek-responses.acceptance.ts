@@ -16,8 +16,8 @@ const resolved = await resolveResponsesAcceptance({
 });
 const precondition = resolved.config && new URL(resolved.config.baseUrl).hostname !== "api.deepseek.com"
   ? { reason: `${resolved.config.providerId} is not the official api.deepseek.com endpoint` }
-  : resolved.config && resolved.config.model !== "deepseek-v4-flash"
-    ? { reason: `${resolved.config.providerId}/${resolved.config.model} is not deepseek-v4-flash` }
+  : resolved.config && resolved.config.model !== "deepseek-v4-flash" && resolved.config.model !== "deepseek-v4-pro"
+    ? { reason: `${resolved.config.providerId}/${resolved.config.model} is not deepseek-v4-flash or deepseek-v4-pro` }
     : resolved;
 if (!precondition.config) console.log(`[acceptance:deepseek-responses] unavailable: ${precondition.reason}`);
 const liveTest: typeof test = precondition.config ? test : test.skip;

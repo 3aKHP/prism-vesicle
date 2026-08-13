@@ -107,15 +107,25 @@ providers:
 
   deepseek-responses:
     protocol: openai-responses
-    baseUrl: https://api.deepseek.com
+    # DeepSeek serves /v1/responses; the adapter appends /responses to baseUrl.
+    baseUrl: https://api.deepseek.com/v1
     apiKeyEnv: DEEPSEEK_API_KEY
     # This dated profile follows DeepSeek's stateless HTTP Responses subset.
-    # As of 2026-07-31, only deepseek-v4-flash supports this endpoint.
+    # As of 2026-08-13, deepseek-v4-flash and deepseek-v4-pro support this endpoint.
     responsesProfile: deepseek-subset-2026-07-31
     responsesTransport: http
     defaultModel: deepseek-v4-flash
     models:
       - id: deepseek-v4-flash
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
+          temperature: true
+          maxTokens: true
+          remoteCompact: false
+      - id: deepseek-v4-pro
         capabilities:
           streaming: true
           tools: true

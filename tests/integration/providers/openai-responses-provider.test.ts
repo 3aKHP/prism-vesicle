@@ -813,12 +813,12 @@ describe("OpenAI Responses typed SSE", () => {
     try {
       const adapter = new OpenAIResponsesAdapter({
         provider: "openai-responses", providerId: "deepseek", baseUrl: "https://api.deepseek.com",
-        model: "deepseek-v4-pro", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
+        model: "deepseek-chat", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
         responsesTransport: "http",
       });
       await expect(adapter.complete({
-        ...request(), model: { provider: "deepseek", model: "deepseek-v4-pro" },
-      })).rejects.toThrow("currently supports only deepseek-v4-flash");
+        ...request(), model: { provider: "deepseek", model: "deepseek-chat" },
+      })).rejects.toThrow("currently supports only deepseek-v4-flash and deepseek-v4-pro");
       expect(fetches).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;

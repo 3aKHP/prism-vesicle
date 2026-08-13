@@ -352,8 +352,9 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
-    if (this.config.responsesProfile === "deepseek-subset-2026-07-31" && this.config.model !== "deepseek-v4-flash") {
-      throw new ProviderError("deepseek-subset-2026-07-31 currently supports only deepseek-v4-flash.", {
+    if (this.config.responsesProfile === "deepseek-subset-2026-07-31"
+      && this.config.model !== "deepseek-v4-flash" && this.config.model !== "deepseek-v4-pro") {
+      throw new ProviderError("deepseek-subset-2026-07-31 currently supports only deepseek-v4-flash and deepseek-v4-pro.", {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
