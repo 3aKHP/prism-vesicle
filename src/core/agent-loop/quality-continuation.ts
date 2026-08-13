@@ -1,4 +1,5 @@
 import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
+import { clearFrozenProjectStateBlock } from "../prompt/project-state";
 import { loadSessionSnapshot } from "../session/store";
 import {
   refreshQualityDecisionArtifacts,
@@ -44,6 +45,7 @@ export async function resolveQualityDecision(
   const rewrite = snapshot.pendingQualityRewrite;
   if (!point && !rewrite && activeQuality) {
     clearFrozenInstructionBlocks(options.sessionId);
+    clearFrozenProjectStateBlock(options.sessionId);
     return {
       kind: "quality_resolved",
       sessionId: options.sessionId,
@@ -67,6 +69,7 @@ export async function resolveQualityDecision(
     await settleInterruptedQualityRewrite(rootDir, options.sessionId, snapshot, options.resolution);
   }
   clearFrozenInstructionBlocks(options.sessionId);
+  clearFrozenProjectStateBlock(options.sessionId);
   return { kind: "quality_resolved", sessionId: options.sessionId, resolution: options.resolution };
 }
 

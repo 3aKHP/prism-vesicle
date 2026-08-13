@@ -8,7 +8,6 @@ export type BuiltInToolName =
   | "web_crawl"
   | "web_research"
   | "stat_path"
-  | "list_files"
   | "list_directory"
   | "grep_files"
   | "read_file"
@@ -135,10 +134,6 @@ export const m0Tools: ToolContract[] = [
   {
     name: "stat_path",
     description: "Inspect an allowed project path.",
-  },
-  {
-    name: "list_files",
-    description: "List allowed project files.",
   },
   {
     name: "list_directory",

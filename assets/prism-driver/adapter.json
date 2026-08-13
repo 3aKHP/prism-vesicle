@@ -15,7 +15,6 @@
       "kind": "tool-group",
       "tools": [
         "stat_path",
-        "list_files",
         "list_directory",
         "grep_files",
         "read_file",

@@ -1,39 +1,21 @@
 import type { ToolDefinition } from "../types";
+import { readableFileRoots } from "./path-policy";
+
+const readableRoots = readableFileRoots.join(", ");
+const guardedReadPath = `Project-relative path beginning with one of: ${readableRoots}. Do not use '.' or absolute paths; paths outside these logical roots are rejected. Project-root VESICLE*.md files are host-managed Persistent Instructions, not file-tool paths.`;
 
 export const fileToolDefinitions: ToolDefinition[] = [
   {
     type: "function",
     function: {
       name: "stat_path",
-      description: "Inspect an allowed project-relative file or directory path.",
+      description: "Inspect an allowed path. Missing paths are returned as a successful structured not_found observation.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Project-relative path under an allowed read root.",
-          },
-        },
-        required: ["path"],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_files",
-      description: "List files under an allowed Vesicle project directory.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "Project-relative directory path, such as source_materials or workspace.",
-          },
-          recursive: {
-            type: "boolean",
-            description: "Whether to list files recursively. Defaults to false.",
+            description: guardedReadPath,
           },
         },
         required: ["path"],
@@ -45,17 +27,22 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "list_directory",
-      description: "List files, directories, and symbolic links under an allowed Vesicle project directory.",
+      description: "Query the model-visible logical filesystem. Use path '.' to discover the safe logical roots; no host project files are exposed. Other paths must begin with a listed root. Results distinguish missing paths, non-directory targets, true empty directories, and truncation; fileCount/directoryCount/otherCount preserve directory shape even when detail is names.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "Project-relative directory path, such as workspace or workspace/part_01.",
+            description: `Use '.' for the virtual root, or a directory beginning with one of: ${readableRoots}. Example: workspace or assets/templates.`,
           },
           recursive: {
             type: "boolean",
             description: "Whether to list descendants recursively. Defaults to false.",
+          },
+          detail: {
+            type: "string",
+            enum: ["full", "names"],
+            description: "Output detail. 'full' returns typed entries and metadata (default); 'names' returns file paths only. For path '.', names returns the logical root names for discovery. Both modes return fileCount, directoryCount, otherCount, empty, and truncation metadata.",
           },
         },
         required: ["path"],
@@ -73,7 +60,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file or directory path under an allowed read root.",
+            description: guardedReadPath,
           },
           pattern: {
             type: "string",
@@ -120,7 +107,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative file path.",
+            description: guardedReadPath,
           },
           startLine: {
             type: "number",
@@ -154,7 +141,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: "Project-relative image path under an allowed read root.",
+            description: guardedReadPath,
           },
           detail: {
             type: "string",

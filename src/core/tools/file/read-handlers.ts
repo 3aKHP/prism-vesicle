@@ -1,12 +1,11 @@
-import { stat, readFile } from "node:fs/promises";
+import { lstat, stat, readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { ingestImageBytes, ingestImageFile } from "../../attachments/store";
 import { normalizeAssetPath, type AssetResolver } from "../../runtime/assets";
 import type { ToolCall, ToolResult } from "../types";
 import { fileTextByteLength, parseFileToolArgs, successfulFileToolResult } from "./handler-contract";
-import { assertDirectory } from "./mutation-operations";
-import { isAssetPath, readableFileRoots, resolveAllowedPath, toProjectPath } from "./path-policy";
-import { grepAssetFiles, grepFiles, listDirectoryEntries, listFiles, readByteSlice, sliceLines } from "./query-operations";
+import { isAssetPath, isMissingPathError, readableFileRoots, resolveAllowedPath, toProjectPath } from "./path-policy";
+import { grepAssetFiles, grepFiles, listDirectoryEntries, readByteSlice, sliceLines } from "./query-operations";
 import type { GrepOutputMode } from "./query-operations";
 
 export async function executeFileReadOperation(
@@ -18,7 +17,9 @@ export async function executeFileReadOperation(
     case "stat_path": {
       const args = parseFileToolArgs<{ path: string }>(call.arguments);
       if (isAssetPath(args.path)) {
-        const info = await assets.stat(args.path);
+        const logicalPath = normalizeAssetPath(args.path, { allowRoot: true });
+        const info = await assets.statIfExists(logicalPath);
+        if (!info) return statNotFound(call, logicalPath);
         return successfulFileToolResult(call, JSON.stringify({
           path: info.logicalPath,
           type: info.type,
@@ -33,61 +34,60 @@ export async function executeFileReadOperation(
         });
       }
       const resolved = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
-      const info = await stat(resolved);
+      const info = await stat(resolved).catch((error: unknown) => {
+        if (isMissingPathError(error)) return undefined;
+        throw error;
+      });
+      const projectPath = toProjectPath(rootDir, resolved);
+      if (!info) return statNotFound(call, projectPath);
       return successfulFileToolResult(call, JSON.stringify({
-        path: toProjectPath(rootDir, resolved),
+        path: projectPath,
         type: info.isDirectory() ? "directory" : info.isFile() ? "file" : "other",
         size: info.size,
         modifiedAt: info.mtime.toISOString(),
       }), {
         kind: "file_operation",
         operation: "stat",
-        path: toProjectPath(rootDir, resolved),
+        path: projectPath,
         changed: false,
         bytes: info.size,
       });
     }
 
-    case "list_files": {
-      const args = parseFileToolArgs<{ path: string; recursive?: boolean }>(call.arguments);
+    case "list_directory": {
+      const args = parseFileToolArgs<{ path: string; recursive?: boolean; detail?: "full" | "names" }>(call.arguments);
+      const detail = args.detail ?? "full";
+      if (detail !== "full" && detail !== "names") throw new Error("list_directory.detail must be full or names.");
+      if (isVirtualRoot(args.path)) return listVirtualRoot(call, detail);
       if (isAssetPath(args.path)) {
         const logicalPath = normalizeAssetPath(args.path, { allowRoot: true });
-        const entries = await assets.listFiles(logicalPath, Boolean(args.recursive));
-        return successfulFileToolResult(call, entries.join("\n") || "(empty)", {
-          kind: "file_operation",
-          operation: "list",
-          path: logicalPath,
-          changed: false,
-          entryCount: entries.length,
+        const info = await assets.statIfExists(logicalPath);
+        if (!info) return directoryListResult(call, logicalPath, detail, "not_found", [], false, 0, 0, 0);
+        if (info.type !== "directory") return directoryListResult(call, logicalPath, detail, "not_directory", [], false, 0, 0, 0);
+        const result = await assets.listDirectory(logicalPath, {
+          recursive: Boolean(args.recursive),
+          filesOnly: detail === "names",
         });
+        if (!result) return directoryListResult(call, logicalPath, detail, "not_found", [], false, 0, 0, 0);
+        const entries = detail === "names"
+          ? result.entries.map((entry) => entry.path)
+          : result.entries.map((entry) => ({ ...entry, modifiedAt: entry.modifiedAt.toISOString() }));
+        return directoryListResult(call, logicalPath, detail, "ok", entries, result.truncated, result.fileCount, result.directoryCount, 0);
       }
       const dir = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
-      const entries = await listFiles(dir, Boolean(args.recursive));
-      return successfulFileToolResult(call, entries.map((entry) => toProjectPath(rootDir, entry)).join("\n") || "(empty)", {
-        kind: "file_operation",
-        operation: "list",
-        path: toProjectPath(rootDir, dir),
-        changed: false,
-        entryCount: entries.length,
+      const projectPath = toProjectPath(rootDir, dir);
+      const info = await lstat(dir).catch((error: unknown) => {
+        if (isMissingPathError(error)) return undefined;
+        throw error;
       });
-    }
-
-    case "list_directory": {
-      const args = parseFileToolArgs<{ path: string; recursive?: boolean }>(call.arguments);
-      if (isAssetPath(args.path)) {
-        throw new Error("list_directory does not support the layered assets namespace; use list_files for assets.");
-      }
-      const dir = await resolveAllowedPath(rootDir, args.path, readableFileRoots);
-      await assertDirectory(dir);
-      const result = await listDirectoryEntries(rootDir, dir, Boolean(args.recursive));
-      return successfulFileToolResult(call, JSON.stringify(result), {
-        kind: "file_operation",
-        operation: "list_directory",
-        path: toProjectPath(rootDir, dir),
-        changed: false,
-        entryCount: result.entries.length,
-        truncated: result.truncated,
+      if (!info) return directoryListResult(call, projectPath, detail, "not_found", [], false, 0, 0, 0);
+      if (!info.isDirectory()) return directoryListResult(call, projectPath, detail, "not_directory", [], false, 0, 0, 0);
+      const result = await listDirectoryEntries(rootDir, dir, {
+        recursive: Boolean(args.recursive),
+        filesOnly: detail === "names",
       });
+      const entries = detail === "names" ? result.entries.map((entry) => entry.path) : result.entries;
+      return directoryListResult(call, projectPath, detail, "ok", entries, result.truncated, result.fileCount, result.directoryCount, result.otherCount);
     }
 
     case "grep_files": {
@@ -205,4 +205,60 @@ export async function executeFileReadOperation(
     default:
       throw new Error(`Unknown read/query tool: ${call.name}`);
   }
+}
+
+function isVirtualRoot(path: string): boolean {
+  const normalized = path.replaceAll("\\", "/");
+  return normalized === "." || normalized === "./";
+}
+
+function listVirtualRoot(call: ToolCall, detail: "full" | "names"): ToolResult {
+  const entries = detail === "names"
+    ? [...readableFileRoots]
+    : readableFileRoots.map((path) => ({
+      path,
+      type: "directory" as const,
+      ...(path === "assets" ? { readOnly: true } : {}),
+    }));
+  return directoryListResult(call, ".", detail, "ok", entries, false, 0, readableFileRoots.length, 0);
+}
+
+function statNotFound(call: ToolCall, path: string): ToolResult {
+  return successfulFileToolResult(call, JSON.stringify({ path, type: "not_found" }), {
+    kind: "file_operation",
+    operation: "stat",
+    path,
+    changed: false,
+  });
+}
+
+function directoryListResult(
+  call: ToolCall,
+  path: string,
+  detail: "full" | "names",
+  status: "ok" | "not_found" | "not_directory",
+  entries: unknown[],
+  truncated: boolean,
+  fileCount: number,
+  directoryCount: number,
+  otherCount: number,
+): ToolResult {
+  return successfulFileToolResult(call, JSON.stringify({
+    path,
+    status,
+    detail,
+    entries,
+    fileCount,
+    directoryCount,
+    otherCount,
+    empty: status === "ok" && fileCount === 0 && directoryCount === 0 && otherCount === 0,
+    truncated,
+  }), {
+    kind: "file_operation",
+    operation: "list_directory",
+    path,
+    changed: false,
+    entryCount: entries.length,
+    truncated,
+  });
 }

@@ -1,8 +1,8 @@
 import { lstat, realpath } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
-import { modelWritableRoots } from "../../project/roots";
+import { modelReadableRoots, modelWritableRoots } from "../../project/roots";
 
-export const readableFileRoots = ["assets", ...modelWritableRoots] as const;
+export const readableFileRoots = modelReadableRoots;
 export const writableFileRoots = [...modelWritableRoots] as const;
 
 /** The single project-relative path policy for model-visible file tools. */
@@ -19,7 +19,10 @@ export async function resolveAllowedPath(rootDir: string, requestedPath: string,
 
   const normalized = rel.split(sep).join("/");
   if (!roots.includes(normalized.split("/")[0])) {
-    throw new Error(`Path must be under one of: ${roots.join(", ")}`);
+    if (/^VESICLE(?:\.[^.\/]+)?\.md$/i.test(normalized)) {
+      throw new Error("VESICLE.md and VESICLE.<engine>.md are host-managed Persistent Instruction files outside the model-visible file roots.");
+    }
+    throw new Error(`Path must be under one of: ${roots.join(", ")}. Use list_directory with path "." to discover the logical roots.`);
   }
 
   const realRoot = await realpath(root);
@@ -27,7 +30,7 @@ export async function resolveAllowedPath(rootDir: string, requestedPath: string,
   for (const part of normalized.split("/")) {
     current = resolve(current, part);
     const info = await lstat(current).catch((error: unknown) => {
-      if (isEnoent(error)) return undefined;
+      if (isMissingPathError(error)) return undefined;
       throw error;
     });
     if (!info) break;
@@ -50,6 +53,12 @@ export function toProjectPath(rootDir: string, filePath: string): string {
 
 export function isEnoent(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
+}
+
+/** Missing terminals and descendants below a file are both absent observations. */
+export function isMissingPathError(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error
+    && (error.code === "ENOENT" || error.code === "ENOTDIR"));
 }
 
 function isWithin(rootPath: string, candidatePath: string): boolean {

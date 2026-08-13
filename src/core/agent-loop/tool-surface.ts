@@ -78,7 +78,7 @@ export function resolveBuiltInTools(
   byName.set("activate_skill", createActivateSkillToolDefinition(skillNames));
   const resolved: ToolDefinition[] = [];
 
-  for (const name of profile.defaultTools) {
+  for (const name of [...new Set(profile.defaultTools)]) {
     if (hostContractNames.has(name)) continue;
     if (name === "view_image" && !visionEnabled) continue;
     if (name === "shell_exec" && (!shellExecEnabled || !shellProfile)) continue;

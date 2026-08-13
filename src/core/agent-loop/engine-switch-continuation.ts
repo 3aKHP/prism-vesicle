@@ -13,6 +13,7 @@ import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { AgentManager } from "../agents/manager";
 import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
+import { clearFrozenProjectStateBlock } from "../prompt/project-state";
 
 type ResolveEngineSwitchOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];
@@ -77,6 +78,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
     provider: continuation.provider,
     systemPrompt: continuation.systemPrompt,
     enginePrompt: continuation.enginePrompt,
+    projectStateBlock: continuation.projectStateBlock,
     tools: continuation.toolSurface.definitions,
     mcpRegistry: continuation.toolSurface.mcp,
     mcpOutputPersistence: continuation.mcpOutputPersistence,
@@ -129,6 +131,7 @@ async function recordConfirmedSwitch(
   });
   messages.push({ role: "user", content: handoffPacket });
   clearFrozenInstructionBlocks(session.sessionId);
+  clearFrozenProjectStateBlock(session.sessionId);
   return {
     kind: "engine_switched",
     sessionId: session.sessionId,

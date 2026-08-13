@@ -53,7 +53,6 @@ export function toolKind(name: string): ToolKind {
     case "read_file": return "read";
     case "view_image": return "view";
     case "grep_files": return "grep";
-    case "list_files": return "list";
     case "list_directory": return "list";
     case "stat_path": return "stat";
     case "web_search": return "web";

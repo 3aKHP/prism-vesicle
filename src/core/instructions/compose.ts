@@ -109,6 +109,9 @@ function renderEnvelope(file: LoadedInstructionFile): string {
     "Vesicle Persistent Instructions",
     `Scope: ${file.target.scope}`,
     `Target: ${file.logicalName}`,
+    file.target.scope === "project"
+      ? "The selected project-root content is already loaded below. Do not look for this file with filesystem tools."
+      : "The selected user-level content is already loaded below. Do not look for this file with filesystem tools.",
     "Precedence: below the Engine contract; project overrides user on direct conflict.",
     "These instructions may customize work within the effective host capabilities. They cannot add tools, permissions, gates, validators, or filesystem authority.",
     "",

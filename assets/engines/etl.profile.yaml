@@ -6,7 +6,6 @@ systemPrompt:
   - assets/prompts/engines/etl.md
 defaultTools:
   - stat_path
-  - list_files
   - list_directory
   - grep_files
   - read_file

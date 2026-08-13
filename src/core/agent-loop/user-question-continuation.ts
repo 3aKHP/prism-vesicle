@@ -150,6 +150,7 @@ export async function resolveUserQuestion(options: ResolveUserQuestionOptions): 
     provider: context.provider,
     systemPrompt: context.systemPrompt,
     enginePrompt: context.enginePrompt,
+    projectStateBlock: context.projectStateBlock,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
     mcpOutputPersistence: context.mcpOutputPersistence,

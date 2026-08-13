@@ -10,7 +10,7 @@ Release candidate: **1.0.0-alpha.9**. The `State` column tracks the candidate's 
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10`, verified 73-file inventory) | released |
+| Assets | Bundled V10 Harness (`prism-engine-v10@10.3.0-alpha.1`, verified 73-file inventory) | experimental |
 | Assets | Managed Harness Packs: offline verify/install/pin/use/status/rollback | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
 | Providers | Explicit Responses profiles: official OpenAI HTTP/SSE/WebSocket + remote compact, and frozen MiMo/DeepSeek HTTP subsets | experimental |
@@ -35,6 +35,7 @@ Release candidate: **1.0.0-alpha.9**. The `State` column tracks the candidate's 
 | TUI | Rewind: conversation branches plus per-turn file checkpoints | released |
 | TUI | Horizontal candidate branching: Chat-page `Ctrl+R` re-runs the last turn as a switchable candidate (`Option+←/→`); append-only sibling subtrees off the shared user record, selection persisted | released |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
+| Tools | Unified `list_directory` query, bounded Project State orientation, and structured missing-path observations (#205/#206) | experimental |
 | Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | released |
 | Tools | Dual-era Streamable HTTP MCP tools: legacy `initialize` and modern `server/discover` with per-server `auto`/`legacy`/`modern` negotiation | released |
 | Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; optional `mcpOutputAutoTruncate` sub-toggle replaces oversized inline results with a bounded preview + reference; inline default unchanged | experimental |
@@ -123,9 +124,8 @@ Model-visible tools and their write scope. Path guards, permissions, process aut
 
 | Tool | Write scope |
 |------|-------------|
-| `stat_path` | Read-only |
-| `list_files` | Read-only |
-| `list_directory` | Read-only, structured entries with bounded recursion |
+| `stat_path` | Read-only existence/type probe; allowed missing paths return structured `not_found` |
+| `list_directory` | Read-only unified directory query; `.` is a safe virtual root, `full`/`names` results are structured and bounded, and layered `assets/` is supported |
 | `grep_files` | Read-only |
 | `read_file` | Read-only, with optional line ranges |
 | `view_image` | Read-only, guarded image attachment (vision-capable models only) |
@@ -243,6 +243,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 - Persistent Instructions are model context, not capability enforcement: they can customize workflow, tone, ordering, artifacts, and user-defined specs within the active Engine, but cannot change the tool surface, permission mode, path roots, stop gates, validators, Harness identity, or provider configuration. A conflict with the Engine contract is ignored in favor of the Engine contract.
 - Instruction files are user-authored with a text editor, `/init`, or the `read_instructions` / `update_instructions` model tools (non-Stage Engines). `/init` refuses to replace an existing project `VESICLE.md` unless the user supplies `--force`, which stores the previous file under `.vesicle/init-backups/`. `update_instructions` is a `mutate` tool routed through the Tool Permission Runtime (MANUAL/INERTIA pause via the standard permission request; MOMENTUM/YOLO execute); it uses a fixed `{ scope, engine }` enum target, atomic write, optimistic concurrency (`ifMatchSha256`), a single previous-state backup, and a 32 KiB budget check across affected Engines. A successful update refreshes the in-turn frozen snapshot so it applies on the next provider round. A custom unified-diff permission preview, automatic backup restore, and per-turn change-detection audit records remain deferred.
 - Instruction target files are resolved by a fixed enum `{ scope, engine }` and never by an arbitrary path. They live outside the guarded `assets/` namespace and the writable artifact roots, so they do not perturb the Harness integrity fingerprint or widen the model-visible write surface.
+- File-capable Engine turns receive a bounded `<project_state>` snapshot at turn start. It is live Host prompt context rather than session identity or conversation history: in-process pauses reuse the frozen snapshot, while restarts and new top-level turns observe again.
 
 ### Other
 

@@ -44,6 +44,10 @@ import {
 } from "../skills";
 import type { EngineId } from "../engine/profile";
 import type { ToolDefinition } from "../tools";
+import { createAssetResolver } from "../runtime/assets";
+import { appendHostContext } from "../prompt/host-context";
+import { composeProjectStateBlock, freezeProjectStateBlock } from "../prompt/project-state";
+import { declaresDirectoryQuery } from "../tools/directory-query";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
@@ -115,7 +119,15 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     pruneSessionActivations(session.sessionId, new Set(catalogNames(skillCatalog)));
   }
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
-  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+  systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock);
+  // Project State is live Host context, not session identity or conversation
+  // history. It is frozen in process for pauses and observed again after a
+  // restart or at the next top-level turn.
+  let identitySystemPrompt = systemPrompt;
+  const projectStateBlock = declaresDirectoryQuery(profile.defaultTools)
+    ? await composeProjectStateBlock(rootDir, assets ?? createAssetResolver(rootDir))
+    : "";
+  systemPrompt = appendHostContext(systemPrompt, projectStateBlock);
 
   const mcpOutputPreferences = await readMcpOutputPreferences(rootDir);
   const mcpOutputPersistence = mcpOutputPreferences.persist;
@@ -128,7 +140,9 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     { catalogNames: catalogNames(skillCatalog) },
   );
   if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {
-    systemPrompt = `${systemPrompt}\n\n${composeMcpOutputPersistenceHint(session.sessionId)}`;
+    const hint = composeMcpOutputPersistenceHint(session.sessionId);
+    systemPrompt = appendHostContext(systemPrompt, hint);
+    identitySystemPrompt = appendHostContext(identitySystemPrompt, hint);
   }
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   let compactedSnapshot: SessionSnapshot | undefined;
@@ -184,7 +198,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   if (isNewSession) {
     await session.append(
       buildSessionHeaderRecord({
-        systemPrompt,
+        systemPrompt: identitySystemPrompt,
         engine,
         config,
         permission,
@@ -217,9 +231,11 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     diagnostics: instructional.selection.diagnostics,
   });
 
-  const userRecord = options.prePersistedInputUuid
-    ? { uuid: options.prePersistedInputUuid }
-    : await session.append({
+  let userRecord: { uuid: string };
+  if (options.prePersistedInputUuid) {
+    userRecord = { uuid: options.prePersistedInputUuid };
+  } else {
+    userRecord = await session.append({
       role: "user",
       content: options.input,
       metadata: {
@@ -233,12 +249,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
         ...(options.images ? { images: persistedImageAttachments(options.images) } : {}),
       },
     });
+  }
   const checkpoint = new FileCheckpointManager(rootDir, session, userRecord.uuid);
   await checkpoint.createSnapshot();
   options.onSessionReady?.(session.sessionId, session.sessionPath);
   // Freeze only after bootstrap's fallible persistence work is complete. From
   // here, runLoop owns cleanup on completion or failure, while pauses retain it.
   freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
+  freezeProjectStateBlock(session.sessionId, projectStateBlock);
   // Bind the active round last, after every fallible append above has succeeded.
   // runLoop's finally clears it on completion/pause/error; a throw before this
   // point leaves no leaked entry.
@@ -258,6 +276,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     provider,
     systemPrompt,
     enginePrompt: engineAssets.systemPrompt,
+    projectStateBlock,
     tools: toolSurface.definitions,
     mcpRegistry: toolSurface.mcp,
     mcpOutputPersistence,
