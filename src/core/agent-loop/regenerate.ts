@@ -127,7 +127,12 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
   // branch already walks to it), but the marker keeps the active-candidate
   // oracle consistent for the inline switcher.
   const records = await loadSessionRecords(rootDir, sessionId);
-  const newLeaf = records.at(-1)?.uuid;
+  // Validation and other host records may follow the final assistant. Prefer
+  // the durable assistant identity returned by finalizeTurn; enumerate the
+  // candidate content leaf only as a compatibility fallback for tool-bearing
+  // or legacy completion paths that do not expose it.
+  const newLeaf = (result.kind === "complete" ? result.assistantRecordUuid : undefined)
+    ?? enumerateCandidateLeaves(records, userRecordUuid).at(-1)?.uuid;
   if (newLeaf) {
     await appendCandidateSelection(rootDir, sessionId, {
       forkPointUuid: userRecordUuid,

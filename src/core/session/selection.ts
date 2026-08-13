@@ -30,18 +30,12 @@ export function isCandidateSelectionRecord(record: SessionRecord): boolean {
   return record.metadata?.kind === CANDIDATE_SELECTION_KIND;
 }
 
-const hostOnlyKinds = new Set([
-  "provider-switch",
-  "engine-switch",
-  "thinking-switch",
-  "reasoning-switch",
-  "permission-mode-switch",
-  "file-history-snapshot",
-]);
-
 function isContentRecord(record: SessionRecord): boolean {
-  return !isCandidateSelectionRecord(record)
-    && (record.role !== "system" || !hostOnlyKinds.has(String(record.metadata?.kind ?? "")));
+  // System records are host metadata (validation, checkpoints, preferences,
+  // quality state, and candidate markers), never candidate content. Keeping the
+  // boundary role-based avoids a fragile whitelist as new host record kinds are
+  // added. User, assistant, and tool records remain content leaves.
+  return record.role !== "system";
 }
 
 /**

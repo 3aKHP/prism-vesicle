@@ -100,6 +100,31 @@ describe("agent loop: regenerate turn", () => {
     ]);
   });
 
+  test("selects the assistant leaf when finalization appends validation host metadata", async () => {
+    const rootDir = await createPromptRoot({ validators: ["runtime-packet"] });
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return Response.json({
+        id: `chatcmpl-${calls}`,
+        choices: [{ message: { content: `[Beat] candidate-${calls}` } }],
+      });
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({ input: "the prompt", rootDir, messages: [{ role: "user", content: "the prompt" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const user = (await loadSessionRecords(rootDir, first.sessionId)).find((record) => record.role === "user")!;
+    const regenerated = await regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: user.uuid });
+    if (regenerated.kind !== "complete") throw new Error(`expected complete regenerate, got ${regenerated.kind}`);
+
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    const selection = findLatestSelection(records)!;
+    const selected = records.find((record) => record.uuid === selection.selectedLeafUuid)!;
+    expect(selected.role).toBe("assistant");
+    expect(records.find((record) => record.metadata?.kind === "validation")).toBeDefined();
+    expect(enumerateCandidateLeaves(records, user.uuid).every((record) => record.role !== "system")).toBe(true);
+  });
+
   test("rejects a target that is not on the current branch", async () => {
     const rootDir = await createPromptRoot();
     globalThis.fetch = (async () => Response.json({ id: "x", choices: [{ message: { content: "ok" } }] })) as unknown as typeof fetch;
