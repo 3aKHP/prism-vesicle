@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { regenerateTurn, RegenerateBlockedError } from "../../../src/core/agent-loop/regenerate";
@@ -290,5 +290,78 @@ describe("agent loop: regenerate turn", () => {
     const selection = findLatestSelection(await loadSessionRecords(rootDir, first.sessionId));
     expect(selection?.forkPointUuid).toBe(userA.uuid);
     expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("A version\n");
+  });
+
+  test("a failed regenerate that wrote files bundles the partial candidate and restores the old candidate", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "workspace", "existing.md"), "before\n", "utf8");
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return Response.json({
+          id: "c1",
+          choices: [{
+            message: {
+              content: "",
+              tool_calls: [{
+                id: "call-a-write",
+                type: "function",
+                function: { name: "write_file", arguments: JSON.stringify({ path: "workspace/existing.md", content: "A version\n" }) },
+              }],
+            },
+          }],
+        });
+      }
+      if (calls === 2) {
+        return Response.json({ id: "c2", choices: [{ message: { content: "candidate-A1" } }] });
+      }
+      if (calls === 3) {
+        // The failed candidate writes before its second provider round fails.
+        return Response.json({
+          id: "c3",
+          choices: [{
+            message: {
+              content: "",
+              tool_calls: [
+                {
+                  id: "call-c-write",
+                  type: "function",
+                  function: { name: "write_file", arguments: JSON.stringify({ path: "workspace/existing.md", content: "C partial\n" }) },
+                },
+                {
+                  id: "call-c-create",
+                  type: "function",
+                  function: { name: "write_file", arguments: JSON.stringify({ path: "workspace/partial.md", content: "partial body\n" }) },
+                },
+              ],
+            },
+          }],
+        });
+      }
+      throw new Error("provider down");
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({ input: "the prompt", rootDir, messages: [{ role: "user", content: "the prompt" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const recordsAfterFirst = await loadSessionRecords(rootDir, first.sessionId);
+    const userA = recordsAfterFirst.find((record) => record.role === "user")!;
+    const assistantA1 = enumerateCandidateLeaves(recordsAfterFirst, userA.uuid)[0]!;
+
+    await expect(regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: userA.uuid }))
+      .rejects.toThrow("provider down");
+
+    // The old candidate regains its files; the failed candidate's creation is
+    // deleted, and its partial post-state survives as a switchable bundle.
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("A version\n");
+    await expect(stat(join(rootDir, "workspace", "partial.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    const selection = findLatestSelection(records);
+    expect(selection?.selectedLeafUuid).toBe(assistantA1.uuid);
+    const bundles = records.filter((record) => record.metadata?.kind === "candidate-file-state");
+    expect(bundles.map((record) => record.metadata?.leafUuid).sort())
+      .toEqual([assistantA1.uuid, enumerateCandidateLeaves(records, userA.uuid).map((record) => record.uuid).filter((leaf) => leaf !== assistantA1.uuid)[0]].sort());
+    const failedBundle = bundles.find((record) => record.metadata?.leafUuid !== assistantA1.uuid);
+    expect(Object.keys(failedBundle?.metadata?.files as Record<string, unknown>)).toContain("workspace/partial.md");
   });
 });

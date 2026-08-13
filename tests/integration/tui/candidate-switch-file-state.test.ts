@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
@@ -24,6 +24,9 @@ function controllerOptions(rootDir: string, sessionId: string, overrides: { agen
     setStatus: (status: string) => { statuses.push(status); },
     setMessages: () => undefined,
     setOutput: () => undefined,
+    setStreamingAssistant: () => undefined,
+    setStreamingReasoning: () => undefined,
+    recordActivity: () => undefined,
     refreshArtifacts: async () => undefined,
     agentCards: () => overrides.agentCards ?? [],
     setPendingGate: () => undefined,
@@ -121,5 +124,43 @@ test("switchCandidate refuses while a background SubAgent is running", async () 
     expect(statuses.at(-1)).toBe("wait for active SubAgents before switching candidates");
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a hostile filesystem aborts the switch before the marker is written", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vesicle-tui-switch-fail-"));
+  const outside = await mkdtemp(join(tmpdir(), "vesicle-tui-switch-fail-outside-"));
+  try {
+    const { user, asstB } = await twoFileWritingCandidates(root);
+    const markersBefore = (await loadSessionRecords(root, "s"))
+      .filter((record) => record.metadata?.kind === "candidate-selection").length;
+    // B departs with a clean bundle before the sabotage below.
+    await ensureCandidatePostState(root, "s", { forkPointUuid: user.uuid, leafUuid: asstB.uuid });
+
+    const { options, statuses } = controllerOptions(root, "s");
+    const controller = createTurnController(options);
+    await controller.refreshCandidateSwitcher("s");
+    expect(controller.candidateSwitcher()?.total).toBe(2);
+
+    // Externally introduced symlink ancestor after arming: the restore must
+    // refuse to write through it (same contract as /rewind) and throw.
+    await rm(join(root, "workspace"), { recursive: true, force: true });
+    await writeFile(join(outside, "doc.md"), "outside\n", "utf8");
+    await symlink(outside, join(root, "workspace"), "dir");
+
+    await controller.switchCandidate(-1);
+
+    // No marker appended; the switcher and the active candidate are unchanged,
+    // and the symlink target was never written through.
+    const markersAfter = (await loadSessionRecords(root, "s"))
+      .filter((record) => record.metadata?.kind === "candidate-selection").length;
+    expect(markersAfter).toBe(markersBefore);
+    expect(findLatestSelection(await loadSessionRecords(root, "s"))?.selectedLeafUuid).toBe(asstB.uuid);
+    expect(controller.candidateSwitcher()?.index).toBe(1);
+    expect(statuses.at(-1)).toBe("error");
+    expect(await readFile(join(outside, "doc.md"), "utf8")).toBe("outside\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
   }
 });

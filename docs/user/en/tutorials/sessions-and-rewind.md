@@ -62,7 +62,7 @@ Ctrl+R re-runs the **entire last turn** with the same prompt and produces a new 
 
 > Each regenerate and each switch appends to the session record, and old candidates are kept forever. The session file grows and loads more slowly as candidates accumulate; Vesicle does not clean this up automatically — start a fresh session with `/new`, or delete unneeded files under `.vesicle/sessions/` by hand when you want to.
 
-Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise the status line tells you to resolve those first. Switching candidates is likewise paused while a background SubAgent is running, so its file writes cannot race the switch.
+Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise the status line tells you to resolve those first. Switching candidates is likewise paused while a background SubAgent is running or queued, so its file writes cannot race the switch.
 
 ## When context gets long: compact
 
