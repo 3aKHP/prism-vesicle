@@ -15,11 +15,11 @@ afterEach(restoreAgentLoopTestState);
 // chain off the shared user record; branchHeadUuid scopes the bootstrap snapshot
 // to the fork-point branch; prePersistedInputUuid reuses the user record without
 // re-appending; messages supplies the fresh-context provider list) — must append
-// a SIBLING candidate subtree with a fresh logical turn id, preserve the old
+// a SIBLING candidate subtree in the shared user's logical turn, preserve the old
 // candidate (append-only), and send the provider a fresh context that excludes
 // the old candidate's assistant reply.
 describe("agent loop: branched turn (regenerate precursor)", () => {
-  test("forks a sibling candidate subtree off the shared user record with a fresh logical turn id", async () => {
+  test("forks a sibling candidate subtree off the shared user record in the same logical turn", async () => {
     const rootDir = await createPromptRoot();
     const requests: Array<{ messages: Array<{ role: string; content?: string }> }> = [];
     let calls = 0;
@@ -52,6 +52,7 @@ describe("agent loop: branched turn (regenerate precursor)", () => {
       sessionParentUuid: userA.uuid,
       branchHeadUuid: userA.uuid,
       prePersistedInputUuid: userA.uuid,
+      prePersistedInputLogicalTurnId: userA.metadata?.logicalTurnId as string,
       messages: [{ role: "user", content: userA.content }],
     });
     if (second.kind !== "complete") throw new Error(`expected complete regenerate, got ${second.kind}`);
@@ -66,7 +67,8 @@ describe("agent loop: branched turn (regenerate precursor)", () => {
     const candidateRoots = records.filter((record) => record.parentUuid === userA.uuid);
     expect(candidateRoots.length).toBe(2);
 
-    // The new candidate's assistant leaf carries a fresh logical turn id.
+    // The new candidate's assistant leaf stays in the shared user's logical turn
+    // so compaction cannot separate the prompt from the selected response.
     const assistantA2 = records
       .filter((record) => record.role === "assistant" && record.uuid !== assistantA1.uuid)
       .at(-1)!;
@@ -74,7 +76,7 @@ describe("agent loop: branched turn (regenerate precursor)", () => {
     expect(assistantA2.content).toBe("candidate-A2");
     const turnA2 = assistantA2.metadata?.logicalTurnId as string | undefined;
     expect(typeof turnA2).toBe("string");
-    expect(turnA2).not.toBe(turnA1);
+    expect(turnA2).toBe(turnA1);
 
     // Fresh-context exclusion: the regenerate provider request ended at the user
     // record and never included the old candidate's assistant reply.

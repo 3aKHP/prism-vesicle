@@ -171,12 +171,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     }
   }
 
-  // A new top-level Agent Loop gets a fresh logical turn id, and its first
-  // provider round is allocated alongside the initiating input. The ids stamp
-  // the user record directly; the active-round map is bound only after all
+  // A new top-level Agent Loop gets a fresh logical turn id unless it is a
+  // regenerate candidate rooted at a deliberately reused user record. In that
+  // case the candidate must share the user's id so compaction retains the
+  // prompt and selected response as one indivisible logical turn. The first
+  // provider round is always new. The active-round map is bound only after all
   // fallible bootstrap appends succeed (just before return) so a failed append
   // can never leak a stale entry that runLoop's finally would never clear.
-  const logicalTurnId = newLogicalTurnId();
+  const logicalTurnId = options.prePersistedInputLogicalTurnId ?? newLogicalTurnId();
   const providerRoundId = newProviderRoundId();
 
   if (isNewSession) {

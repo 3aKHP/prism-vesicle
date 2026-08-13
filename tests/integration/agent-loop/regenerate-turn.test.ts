@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { regenerateTurn, RegenerateBlockedError } from "../../../src/core/agent-loop/regenerate";
 import { runPrompt } from "../../../src/core/agent-loop/run";
+import { compactConversation } from "../../../src/core/compact/service";
 import { enumerateCandidateLeaves, findLatestSelection } from "../../../src/core/session/selection";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import {
@@ -13,7 +14,7 @@ beforeEach(configureTestProviderEnv);
 afterEach(restoreAgentLoopTestState);
 
 describe("agent loop: regenerate turn", () => {
-  test("forks a sibling candidate with a fresh logical turn id, preserves the old candidate, and marks the new one active", async () => {
+  test("forks a sibling candidate in the shared logical turn, preserves the old candidate, and marks the new one active", async () => {
     const rootDir = await createPromptRoot();
     let calls = 0;
     globalThis.fetch = (async () => {
@@ -44,7 +45,7 @@ describe("agent loop: regenerate turn", () => {
     expect(assistantA2).toBeDefined();
     expect(assistantA2.content).toBe("candidate-A2");
     const turnA2 = assistantA2.metadata?.logicalTurnId as string;
-    expect(turnA2).not.toBe(turnA1);
+    expect(turnA2).toBe(turnA1);
 
     // The new candidate is the active branch (default snapshot walks to it).
     const snapshot = await loadSessionSnapshot(rootDir, first.sessionId);
@@ -59,6 +60,44 @@ describe("agent loop: regenerate turn", () => {
     // The regenerate result's provider context excluded the old candidate.
     const resultContents = result.messages.map((message) => message.content ?? "").join("\n");
     expect(resultContents).not.toContain("candidate-A1");
+  });
+
+  test("keeps the regenerated prompt and selected response together through compaction", async () => {
+    const rootDir = await createPromptRoot();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      const content = calls === 1
+        ? "earlier-response"
+        : calls === 2
+          ? "candidate-A1"
+          : calls === 3
+            ? "candidate-A2"
+            : "<summary>Earlier context.</summary>";
+      return Response.json({ id: `chatcmpl-${calls}`, choices: [{ message: { content } }] });
+    }) as unknown as typeof fetch;
+
+    const earlier = await runPrompt({ input: "earlier prompt", rootDir, messages: [{ role: "user", content: "earlier prompt" }] });
+    if (earlier.kind !== "complete") throw new Error(`expected complete, got ${earlier.kind}`);
+    const target = await runPrompt({
+      input: "the prompt",
+      rootDir,
+      sessionId: earlier.sessionId,
+      messages: [...earlier.messages, { role: "user", content: "the prompt" }],
+    });
+    if (target.kind !== "complete") throw new Error(`expected complete, got ${target.kind}`);
+    const targetUser = (await loadSessionRecords(rootDir, earlier.sessionId))
+      .filter((record) => record.role === "user")
+      .at(-1)!;
+
+    const regenerated = await regenerateTurn({ rootDir, sessionId: earlier.sessionId, userRecordUuid: targetUser.uuid });
+    if (regenerated.kind !== "complete") throw new Error(`expected complete regenerate, got ${regenerated.kind}`);
+    const compacted = await compactConversation({ rootDir, sessionId: earlier.sessionId, engine: "etl" });
+
+    expect(compacted.snapshot.messages.slice(-2).map((message) => [message.role, message.content])).toEqual([
+      ["user", "the prompt"],
+      ["assistant", "candidate-A2"],
+    ]);
   });
 
   test("rejects a target that is not on the current branch", async () => {

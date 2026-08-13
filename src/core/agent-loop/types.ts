@@ -37,6 +37,13 @@ export type RunPromptOptions = {
   images?: VesicleImageAttachment[];
   inputMetadata?: Record<string, unknown>;
   prePersistedInputUuid?: string;
+  /**
+   * Logical-turn identity for a deliberately reused input record. Regenerate
+   * supplies the shared user record's identity so its sibling candidate cannot
+   * be separated from that prompt by compaction. Other pre-persisted inputs
+   * retain the normal fresh-turn behavior unless they opt in explicitly.
+   */
+  prePersistedInputLogicalTurnId?: string;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;

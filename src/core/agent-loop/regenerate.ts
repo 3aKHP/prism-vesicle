@@ -1,16 +1,16 @@
 // Horizontal candidate regeneration for #88.
 //
 // regenerateTurn re-runs a completed turn as a NEW candidate: it forks a sibling
-// subtree off the shared user record, mints a fresh logicalTurnId (via
-// bootstrap), and persists a selection marker so the new candidate becomes the
-// active branch. It is a thin wrapper over runPrompt — the fork plumbing
+// subtree off the shared user record, retains that record's logicalTurnId, and
+// persists a selection marker so the new candidate becomes the active branch.
+// It is a thin wrapper over runPrompt — the fork plumbing
 // (sessionParentUuid), the fresh-context snapshot scoping (branchHeadUuid,
 // Phase 0), and the shared user record reuse (prePersistedInputUuid, Model B)
 // are the same primitives the rewind flow already exercises. Routing through
 // bootstrap (not a hand-built RunLoopArgs) reuses harness-identity assertion,
-// Skill hydration, and tool-surface resolution, and mints the fresh turn id
-// unconditionally (the resolveGate/continuation path that REUSES the old id is
-// the anti-pattern).
+// Skill hydration, and tool-surface resolution. Its provider round is fresh,
+// while its shared logical turn prevents compaction from splitting the prompt
+// from the selected candidate.
 //
 // MVP file policy: regenerate does NOT roll back the old candidate's on-disk
 // artifacts. A regenerated tool-bearing turn executes against the previous
@@ -19,6 +19,7 @@
 
 import { toVesicleMessage } from "../compact/summary-generator";
 import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection, isCandidateSelectionRecord } from "../session/selection";
+import { readLogicalTurnId } from "../session/execution-identity";
 import { loadSessionRecords, loadSessionSnapshot } from "../session/store";
 import { runPrompt } from "./run";
 import type { RunPromptOptions, RunPromptResult } from "./types";
@@ -38,6 +39,7 @@ export type RegenerateTurnOptions =
     | "sessionParentUuid"
     | "branchHeadUuid"
     | "prePersistedInputUuid"
+    | "prePersistedInputLogicalTurnId"
     | "rootDir"
     | "sessionId"
   >
@@ -46,7 +48,7 @@ export type RegenerateTurnOptions =
 /**
  * Re-run the turn rooted at `userRecordUuid` as a new candidate. The old
  * candidate's records remain in the append-only transcript; a fresh sibling
- * subtree is forked off the shared user record with a new logical turn id, and a
+ * subtree is forked off the shared user record in that record's logical turn, and a
  * selection marker makes it the active branch. Throws {@link RegenerateBlockedError}
  * when the target record is not on the current branch or is not a user prompt.
  */
@@ -107,6 +109,7 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
       sessionParentUuid: userRecordUuid,
       branchHeadUuid: userRecordUuid,
       prePersistedInputUuid: userRecordUuid,
+      ...(readLogicalTurnId(userRecord) ? { prePersistedInputLogicalTurnId: readLogicalTurnId(userRecord) } : {}),
       messages: snapshot.messages.map(toVesicleMessage),
     });
   } catch (error) {
