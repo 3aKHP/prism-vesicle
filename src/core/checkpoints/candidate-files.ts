@@ -39,7 +39,7 @@
 // taint flag), scratch tmp/, and manual edits — are documented, not solved.
 
 import { enumerateCandidateLeaves } from "../session/selection";
-import { buildActiveSessionBranch, createSessionStore, loadSessionRecords, type SessionRecord } from "../session/store";
+import { createSessionStore, loadSessionRecords, type SessionRecord } from "../session/store";
 import { modelWritableRoots } from "../project/roots";
 import {
   applyFileCheckpointEntries,
@@ -88,17 +88,16 @@ export function findCandidatePostState(records: SessionRecord[], leafUuid: strin
 }
 
 /**
- * Whether the branch ending at `leafUuid` carries a degradation marker for it:
- * the disk was not this candidate's post-state when it became active (a
- * conversation-only switch), so capturing it would freeze a wrong state.
+ * Whether `leafUuid` carries a degradation marker: the disk was not this
+ * candidate's post-state when it became active (a conversation-only switch),
+ * so capturing it would freeze a wrong state. Markers chain OFF the leaf they
+ * name, so the leaf's own branch walk never contains them — scan all records;
+ * a marker is only ever created for the leaf it names.
  */
 export function isCandidateFileDegraded(records: SessionRecord[], leafUuid: string): boolean {
-  const branch = buildActiveSessionBranch(records, { headUuid: leafUuid });
-  for (let index = branch.length - 1; index >= 0; index -= 1) {
-    const metadata = branch[index]!.metadata;
-    if (metadata?.kind === CANDIDATE_FILE_DEGRADED_KIND && metadata.leafUuid === leafUuid) return true;
-  }
-  return false;
+  return records.some(
+    (record) => record.metadata?.kind === CANDIDATE_FILE_DEGRADED_KIND && record.metadata.leafUuid === leafUuid,
+  );
 }
 
 /**

@@ -289,6 +289,70 @@ describe("candidate file coexistence", () => {
     void assistantA;
   });
 
+  test("a degraded candidate with a ledger is still never captured against a foreign disk", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-ledger-degraded-"));
+    const sessionId = "candidate-files-ledger-degraded";
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "doc.md"), "before\n", "utf8");
+
+    const store = await createSessionStore(rootDir, sessionId);
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "write" });
+
+    // Candidate A writes against the true baseline.
+    const checkpointA = new FileCheckpointManager(rootDir, store, user.uuid);
+    await checkpointA.createSnapshot();
+    await executeFileTool(rootDir, {
+      id: "a-write",
+      name: "write_file",
+      arguments: JSON.stringify({ path: "workspace/doc.md", content: "A version\n" }),
+    }, { beforeMutation: (paths: string[]) => checkpointA.trackBeforeMutation(paths) });
+    const assistantA = await store.append({ role: "assistant", content: "candidate A" });
+
+    // MVP-era shape: candidate B forks WITHOUT a baseline restore, so it runs
+    // against A's files. Both candidates have a ledger; neither has a bundle.
+    const storeB = await createSessionStore(rootDir, sessionId, { parentUuid: user.uuid });
+    const checkpointB = new FileCheckpointManager(rootDir, storeB, user.uuid);
+    await checkpointB.createSnapshot();
+    await executeFileTool(rootDir, {
+      id: "b-write",
+      name: "write_file",
+      arguments: JSON.stringify({ path: "workspace/doc.md", content: "B version\n" }),
+    }, { beforeMutation: (paths: string[]) => checkpointB.trackBeforeMutation(paths) });
+    const assistantB = await storeB.append({ role: "assistant", content: "candidate B" });
+
+    // Switch B -> A: A has no bundle, so the switch degrades and marks A; the
+    // departing B is still captured truthfully (disk equals B's post-state).
+    const toA = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(toA).toEqual({ restored: false, changed: [], reason: "missing" });
+    expect(await readFile(join(rootDir, "workspace", "doc.md"), "utf8")).toBe("B version\n");
+
+    // The disk now holds B's files while the marker points at the degraded A.
+    // Leaving A must NOT capture B's files as A's authoritative bundle, even
+    // though A has a ledger — this is the regression the marker exists for.
+    const toB = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantA.uuid,
+      toLeaf: assistantB.uuid,
+    });
+    expect(toB.restored).toBe(true);
+    expect(await readFile(join(rootDir, "workspace", "doc.md"), "utf8")).toBe("B version\n");
+
+    const records = await loadSessionRecords(rootDir, sessionId);
+    const bundlesForA = records.filter(
+      (record) => record.metadata?.kind === "candidate-file-state" && record.metadata?.leafUuid === assistantA.uuid,
+    );
+    expect(bundlesForA).toHaveLength(0);
+    const bundlesForB = records.filter(
+      (record) => record.metadata?.kind === "candidate-file-state" && record.metadata?.leafUuid === assistantB.uuid,
+    );
+    expect(bundlesForB).toHaveLength(1);
+  });
+
   test("malformed bundle entries are rejected at parse and degrade to conversation-only", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-malformed-"));
     const sessionId = "candidate-files-malformed";
