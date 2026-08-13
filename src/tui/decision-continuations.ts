@@ -28,6 +28,7 @@ export type DecisionContinuationBundle = {
   handleInterruptedTurn: () => void;
   reportError: (error: unknown) => void;
   permissionContext: () => PermissionContext;
+  refreshCandidateSwitcher: (sessionId: string) => Promise<void>;
   resolveQualityDecision?: typeof resolveQualityDecisionImport;
 };
 

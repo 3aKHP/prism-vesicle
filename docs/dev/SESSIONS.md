@@ -7,7 +7,12 @@ This document defines durable conversation history, provider projection, file ch
 - One interactive TUI run keeps one active session until the user starts or resumes another session.
 - Session JSONL is append-only. Rewind, compaction, recovery, and branching append records and never truncate or rewrite prior records.
 - Conversational records carry stable `uuid` and `parentUuid` links. Legacy linear records project as an implicit parent chain.
+- A regenerated response is a sibling candidate subtree off its shared user record. The reused user record and every record the new candidate produces share one `logicalTurnId`; its provider attempt receives a fresh `providerRoundId`.
+- Candidate selection appends a `role: "system"`, `kind: "candidate-selection"` marker whose `forkPointUuid` names the shared user record and whose `selectedLeafUuid` names the active candidate content leaf. The physical tail follows that marker back to the selected leaf, so the normal active-head walk selects that candidate without rewriting earlier JSONL.
+- Candidate-selection markers are transparent to provider-history projection, rewind-point enumeration, and pending-interaction recovery. Continuation traversal likewise crosses a marker, so a candidate paused at an interaction keeps the continuation records appended after it.
+- A candidate is exposed only after it has an assistant response; an incomplete failed regenerate remains in the append-only audit trail but cannot become an active candidate.
 - Provider and Engine selection, usage metadata, validation, gates, questions, permissions, quality decisions, tool calls, and tool results persist when required for replay or recovery.
+- Engine, provider/model, reasoning, and permission preferences are session-level Host state. Resume projects their latest values from physical JSONL order across the whole session, independently of the selected conversational branch.
 - The initial session system record stores SHA-256 hashes, logical asset paths, safe layer ids for the effective merged tree, and the exact bundled or managed Pack, manifest, source, and Adapter identity. It never stores prompt text, image bytes, secrets, or absolute paths.
 - Resume and continuation reverify the active Harness identity against that initial record and block continuation on mismatch rather than silently switching runtime contracts; see [`ASSETS.md`](./ASSETS.md).
 - Host-only metadata may support replay and rendering but must not be forwarded to providers unless its record kind explicitly defines provider-visible context.

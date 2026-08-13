@@ -28,6 +28,9 @@ export function MessageStream(props: {
   showHero?: boolean;
   onStageViewChange?: (id: string, source: boolean) => void;
   registerStageKeyHandler?: (handler: (key: TuiKeyEvent) => boolean) => void;
+  /** Active horizontal-candidate switcher for the current turn (#88), or null. */
+  candidateSwitcher?: Accessor<{ index: number; total: number } | null>;
+  onCandidateSwitch?: (direction: -1 | 1) => void;
 }) {
   const renderer = useRenderer();
   const [focusedStageMessageId, setFocusedStageMessageId] = createSignal<string | undefined>();
@@ -106,9 +109,24 @@ export function MessageStream(props: {
   }
 
   function handleStageMessageKey(key: TuiKeyEvent): boolean {
-    const navigation = key.option && (key.name === "up" || key.name === "down");
+    // Alt is reported as `meta` by legacy terminals and `option` by enhanced
+    // protocols (see stage-message-interaction.ts); accept both.
+    const altLike = key.meta === true || key.option === true;
+    const navigation = altLike && !key.ctrl && (key.name === "up" || key.name === "down");
     const toggle = isStageMessageToggleShortcut(key);
-    if (!navigation && !toggle) return false;
+    // Horizontal candidate switching (#88): Alt+Left/Alt+Right cycle the
+    // current turn's candidates. No composer collision — plain letters and bare
+    // arrows carry no Alt modifier and fall through to the composer.
+    const candidateCycle = altLike && !key.ctrl && (key.name === "left" || key.name === "right");
+    if (!navigation && !toggle && !candidateCycle) return false;
+    if (candidateCycle) {
+      const switcher = props.candidateSwitcher?.();
+      if (switcher && switcher.total > 1) {
+        props.onCandidateSwitch?.(key.name === "left" ? -1 : 1);
+        return true;
+      }
+      return false;
+    }
     const ids = eligibleStageMessageIds();
     if (ids.length === 0) return false;
     if (navigation) {
@@ -133,6 +151,12 @@ export function MessageStream(props: {
 
   props.registerStageKeyHandler?.(handleStageMessageKey);
   onCleanup(() => props.registerStageKeyHandler?.(() => false));
+
+  const candidateLabel = createMemo(() => {
+    const switcher = props.candidateSwitcher?.();
+    if (!switcher || switcher.total <= 1) return null;
+    return `< ${switcher.index + 1}/${switcher.total} >  Option+←/→ switch · Ctrl+R regenerate`;
+  });
 
   const stream = (
     <scrollbox
@@ -174,6 +198,11 @@ export function MessageStream(props: {
               width={props.contentWidth}
               streaming
             />
+          </box>
+        </Show>
+        <Show when={candidateLabel()} fallback={<box height={0} />}>
+          <box height={1}>
+            <ThemedText content={candidateLabel()!} fg={palette.brand} attributes={1} />
           </box>
         </Show>
       </box>

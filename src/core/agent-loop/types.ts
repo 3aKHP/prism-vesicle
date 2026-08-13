@@ -22,10 +22,28 @@ export type RunPromptOptions = {
   rootDir?: string;
   sessionId?: string;
   sessionParentUuid?: string | null;
+  /**
+   * Snapshot branch head. When set, bootstrap loads the session snapshot ending
+   * at this record (via loadSessionSnapshot's headUuid) instead of the physical
+   * tail, so harness-identity assertion, Skill hydration, and the round-0
+   * message list derive from the fork-point branch (used by regenerate). The
+   * append-chain fork is still controlled by sessionParentUuid; this field only
+   * scopes the snapshot READ. Pre-turn compaction is skipped while it is set
+   * (the compaction service appends to the physical tail and is not
+   * branch-fork-aware — see turn-bootstrap.ts).
+   */
+  branchHeadUuid?: string | null;
   messages?: VesicleMessage[];
   images?: VesicleImageAttachment[];
   inputMetadata?: Record<string, unknown>;
   prePersistedInputUuid?: string;
+  /**
+   * Logical-turn identity for a deliberately reused input record. Regenerate
+   * supplies the shared user record's identity so its sibling candidate cannot
+   * be separated from that prompt by compaction. Other pre-persisted inputs
+   * retain the normal fresh-turn behavior unless they opt in explicitly.
+   */
+  prePersistedInputLogicalTurnId?: string;
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
   signal?: AbortSignal;

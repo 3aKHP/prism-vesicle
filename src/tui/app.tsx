@@ -760,7 +760,11 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformKillBuffer,
     clearQueuedInputs,
     clearThemeOverride: () => themeController.clearOverride(),
-    onSessionActive: (id) => { void sideQuestionController.rebuildForResume(id).catch(reportError); },
+    onSessionActive: (id) => {
+      void sideQuestionController.rebuildForResume(id).catch(reportError);
+      // Re-arm the candidate switcher so `<n/m>` and Option+←/→ survive reload.
+      void turnController.refreshCandidateSwitcher(id).catch(reportError);
+    },
   }));
   sessionActions = createSessionActionsController({
     rootDir: process.cwd(),
@@ -931,6 +935,7 @@ export function App(props: AppProps = {}) {
     handleDecisionPaste,
     insertComposerPaste,
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
+    triggerRegenerate: () => void turnController.regenerateTurn(),
     sideQuestionOverlay: sideQuestionController.overlay,
     handleSideQuestionKey: sideQuestionController.handleKey,
     artifactFocusActive: () => focusedArtifactPath() !== null,
@@ -1227,6 +1232,8 @@ export function App(props: AppProps = {}) {
             showHero={showHero()}
             onStageViewChange={(id, source) => setMessages((current) => current.map((message) => message.id === id ? { ...message, stageSource: source } : message))}
             registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
+            candidateSwitcher={turnController.candidateSwitcher}
+            onCandidateSwitch={(direction) => turnController.switchCandidate(direction)}
           />
         </Show>
 

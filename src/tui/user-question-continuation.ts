@@ -20,6 +20,7 @@ type UserQuestionContinuationOptions = {
   handleInterruptedTurn: () => void;
   reportError: (error: unknown) => void;
   permissionContext: () => PermissionContext;
+  refreshCandidateSwitcher: (sessionId: string) => Promise<void>;
 };
 
 export function createUserQuestionContinuation(options: UserQuestionContinuationOptions) {
@@ -112,7 +113,10 @@ export function createUserQuestionContinuation(options: UserQuestionContinuation
         }
         handleInterruptedTurn();
         if (recoveryStatus) setStatus(recoveryStatus);
-      } else handleResult(outcome.value);
+      } else {
+        handleResult(outcome.value);
+        await options.refreshCandidateSwitcher(pending.sessionId);
+      }
     } catch (error) {
       ({ state: recoveryState, status: recoveryStatus } = await reconcileUserQuestionAfterContinuationFailure(pending, selectedIndex));
       reportError(error);

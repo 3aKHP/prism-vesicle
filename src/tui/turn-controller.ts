@@ -1,8 +1,11 @@
+import { createSignal } from "solid-js";
+import { regenerateTurn as coreRegenerateTurn } from "../core/agent-loop/run";
 import { runPrompt } from "../core/agent-loop/run";
 import { AutoCompactBlockedError } from "../core/compact/auto-compact";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
-import { createSessionStore, loadSessionSnapshot, FAILED_TURN_KIND } from "../core/session/store";
+import { createSessionStore, loadSessionRecords, loadSessionSnapshot, FAILED_TURN_KIND } from "../core/session/store";
+import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection } from "../core/session/selection";
 import { listRewindPoints, rewindConversation } from "../core/rewind/service";
 import type { VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerElement } from "./composer";
@@ -12,12 +15,23 @@ import { combineIndependentUsage } from "./telemetry";
 import { createTurnResultController } from "./turn-result-controller";
 import { createDecisionContinuations } from "./decision-continuations";
 import { ProviderError, cleanProviderMessage, providerFailureCategoryLabel, summarizeProviderFailure } from "../providers/shared/errors";
-import { vesicleMessagesFromResumed } from "./session-presenter";
+import { displayTranscriptFromSnapshot, vesicleMessagesFromResumed } from "./session-presenter";
+
+type CandidateSwitcherState = {
+  /** The shared user record the current turn's candidates hang off. */
+  forkPointUuid: string;
+  /** Content-leaf uuids of each candidate, ordered oldest-first. */
+  leaves: string[];
+  /** Index of the active candidate within `leaves`. */
+  index: number;
+  total: number;
+};
 
 export type { TurnControllerOptions, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnDecisionPort, TurnAgentPort, TurnUsagePort, TurnComposerPort, TurnHostActionPort } from "./turn-controller-options";
 import type { TurnAgentPort, TurnComposerPort, TurnDecisionPort, TurnHostActionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort, TurnControllerOptions } from "./turn-controller-options";
 export function createTurnController(options: TurnControllerOptions) {
   let activeTurnSawResponse = false;
+  const [candidateSwitcher, setCandidateSwitcher] = createSignal<CandidateSwitcherState | null>(null);
 
   // Named turn-domain ports (plan §4.3): the composition root hands each
   // downstream owner only the ports — and only the port slices — it consumes.
@@ -128,6 +142,7 @@ export function createTurnController(options: TurnControllerOptions) {
     handleInterruptedTurn,
     reportError,
     permissionContext,
+    refreshCandidateSwitcher,
   });
 
   function markTurnSawResponse(): void {
@@ -191,6 +206,7 @@ export function createTurnController(options: TurnControllerOptions) {
     elements: ComposerElement[],
   ): Promise<void> {
     composer.recordPromptHistory(originalValue, elements, images);
+    setCandidateSwitcher(null);
     const id = session.sessionId();
     if (id) agent.pausedAgentDeliveries.delete(id);
     composer.setHistoryIndex(null);
@@ -440,11 +456,180 @@ export function createTurnController(options: TurnControllerOptions) {
     return Boolean(decision.pendingGate() || decision.pendingEngineSwitch() || decision.pendingUserQuestion() || decision.pendingPermission() || decision.pendingQualityDecision() || decision.pendingChildPermission());
   }
 
+  /**
+   * Re-run the last turn as a new candidate (#88). Forks a sibling subtree off
+   * the shared user record, updates the display via the normal turn-result path,
+   * and arms the inline `<n/m>` switcher. Refuses while busy, while a pending
+   * interaction is unresolved, or while a background SubAgent is still running
+   * (its eventual delivery could land on the wrong branch). MVP does NOT roll
+   * back the old candidate's on-disk artifacts — see the user-manual caveat.
+   */
+  async function regenerateTurn(): Promise<void> {
+    const id = session.sessionId();
+    if (!id) { transcript.setStatus("no session to regenerate"); return; }
+    if (runtime.busy()) { transcript.setStatus("wait for the current turn"); return; }
+    if (hasPendingInteraction()) { transcript.setStatus("resolve the pending interaction before regenerating"); return; }
+    if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
+      transcript.setStatus("wait for active SubAgents before regenerating");
+      return;
+    }
+    if (!await ensureRuntimeReady()) return;
+    const points = await listRewindPoints(session.rootDir, id);
+    const target = points.at(-1);
+    if (!target) { transcript.setStatus("no turn to regenerate"); return; }
+    runtime.setBusy(true);
+    transcript.setStatus("regenerating turn");
+    transcript.recordActivity({ kind: "provider", text: "regenerating last turn" });
+    // Regenerate replaces the old candidate on screen: scope the display and
+    // provider-facing conversation to the fork point (the same branch core
+    // regenerate runs against) so the previous reply disappears and the new
+    // candidate streams in its place.
+    setCandidateSwitcher(null);
+    try {
+      const forkSnapshot = await loadSessionSnapshot(session.rootDir, id, { headUuid: target.uuid, synthesizeDanglingToolResults: false });
+      session.setConversation(vesicleMessagesFromResumed(forkSnapshot.messages));
+      transcript.setMessages(displayTranscriptFromSnapshot(forkSnapshot.messages, agent.agentCards()));
+      transcript.setOutput("");
+    } catch (error) {
+      runtime.setBusy(false);
+      reportError(error);
+      return;
+    }
+    usage.beginUsageTurn();
+    try {
+      const outcome = await options.runCancellable((signal) => coreRegenerateTurn({
+        rootDir: session.rootDir,
+        sessionId: id,
+        userRecordUuid: target.uuid,
+        engine: runtime.activeEngine(),
+        providerSelection: runtime.activeProviderSelection(),
+        generation: runtime.activeGeneration(),
+        permission: permissionContext(),
+        signal,
+        onEvent: agent.handleAgentEvent,
+        onProviderContextSnapshot: agent.onProviderContextSnapshot,
+        agentManager: agent.agentManager(),
+        permissionBroker: runtime.permissionBroker,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
+      }));
+      if (outcome.kind === "interrupted") {
+        await reloadActiveBranchDisplay(id);
+        handleInterruptedTurn();
+      } else {
+        handleResult(outcome.value);
+      }
+      await refreshCandidateSwitcher(id);
+    } catch (error) {
+      // coreRegenerateTurn re-points the selection marker at the previous
+      // candidate before rethrowing, so the default branch is authoritative
+      // again — restore it on screen.
+      await reloadActiveBranchDisplay(id);
+      reportError(error);
+    } finally {
+      runtime.setBusy(false);
+    }
+  }
+
+  async function reloadActiveBranchDisplay(sessionId: string): Promise<void> {
+    try {
+      const snapshot = await loadSessionSnapshot(session.rootDir, sessionId, { synthesizeDanglingToolResults: false });
+      session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
+      transcript.setOutput("");
+    } catch {
+      // Best-effort: keep whatever the transcript currently shows.
+    }
+  }
+
+  function clearPendingInteractions(): void {
+    decision.setPendingGate(null);
+    decision.setPendingEngineSwitch(null);
+    decision.setPendingUserQuestion(null);
+    decision.setPendingPermission(null);
+    decision.setPendingQualityDecision(null);
+  }
+
+  // Whether `forkPointUuid` is still the active branch's last turn. Once a later
+  // user turn has been appended after a candidate marker, the fork point is
+  // stale and switching would re-point the active branch backward, orphaning the
+  // later turns (Bot Review blocking finding).
+  async function forkPointIsLastTurn(forkPointUuid: string): Promise<boolean> {
+    const points = await listRewindPoints(session.rootDir, session.sessionId() ?? "");
+    return points.at(-1)?.uuid === forkPointUuid;
+  }
+
+  /**
+   * Switch the active candidate of the current turn by one step (#88 horizontal
+   * branch). Appends a selection marker, reloads the selected candidate's branch
+   * into both the provider context and the display transcript, and advances the
+   * switcher index. Refuses (and disarms) if the conversation has moved past the
+   * fork point since the switcher was armed. Pending interactions are cleared so
+   * a switched-away gate does not linger; switching to a paused candidate is a
+   * known MVP limitation.
+   */
+  async function switchCandidate(direction: -1 | 1): Promise<void> {
+    const id = session.sessionId();
+    const current = candidateSwitcher();
+    if (!id || !current || current.total < 2 || runtime.busy()) return;
+    // Re-verify: a turn may have landed (e.g. a background SubAgent delivery)
+    // since the switcher was armed, making the fork point stale.
+    if (!await forkPointIsLastTurn(current.forkPointUuid)) {
+      setCandidateSwitcher(null);
+      transcript.setStatus("the conversation moved past the switched turn");
+      return;
+    }
+    const nextIndex = (current.index + direction + current.total) % current.total;
+    const nextLeaf = current.leaves[nextIndex];
+    if (!nextLeaf) return;
+    runtime.setBusy(true);
+    transcript.setStatus(`switching to candidate ${nextIndex + 1}/${current.total}`);
+    try {
+      await appendCandidateSelection(session.rootDir, id, { forkPointUuid: current.forkPointUuid, selectedLeafUuid: nextLeaf });
+      const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
+      session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
+      clearPendingInteractions();
+      transcript.setOutput("");
+      setCandidateSwitcher({ ...current, index: nextIndex });
+      await hostAction.refreshArtifacts();
+      transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
+    } catch (error) {
+      reportError(error);
+    } finally {
+      runtime.setBusy(false);
+    }
+  }
+
+  async function refreshCandidateSwitcher(id: string): Promise<void> {
+    try {
+      const records = await loadSessionRecords(session.rootDir, id);
+      const selection = findLatestSelection(records);
+      if (!selection) { setCandidateSwitcher(null); return; }
+      // Only arm when the fork point is still the active branch's last turn —
+      // otherwise switching would orphan the turns that came after it.
+      if (!await forkPointIsLastTurn(selection.forkPointUuid)) { setCandidateSwitcher(null); return; }
+      const leaves = enumerateCandidateLeaves(records, selection.forkPointUuid).map((record) => record.uuid);
+      if (leaves.length < 2) { setCandidateSwitcher(null); return; }
+      const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
+      const activeUuids = new Set(snapshot.records.map((record) => record.uuid));
+      const activeIndex = leaves.findIndex((leaf) => activeUuids.has(leaf));
+      const index = activeIndex >= 0 ? activeIndex : Math.max(0, leaves.indexOf(selection.selectedLeafUuid));
+      setCandidateSwitcher({ forkPointUuid: selection.forkPointUuid, leaves, index, total: leaves.length });
+    } catch {
+      setCandidateSwitcher(null);
+    }
+  }
+
   return {
     ...decisionContinuations,
     deliverAgentResults,
     markTurnSawResponse,
     reportError,
     submitPrompt,
+    regenerateTurn,
+    switchCandidate,
+    candidateSwitcher,
+    refreshCandidateSwitcher,
   };
 }

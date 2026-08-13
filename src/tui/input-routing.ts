@@ -39,6 +39,8 @@ export type InputRoutingOptions = {
   handleDecisionPaste: (text: string) => boolean;
   insertComposerPaste: (text: string) => void;
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
+  /** Ctrl+R on the Chat page: re-run the last turn as a new candidate (#88). */
+  triggerRegenerate?: () => void;
   sideQuestionOverlay?: Accessor<unknown>;
   handleSideQuestionKey?: (key: TuiKeyEvent) => boolean;
   splashActive?: Accessor<boolean>;
@@ -176,9 +178,18 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     // Tri-state routing: consumed → done; false + composer focus → fall
     // through to shared composer (image paste, text keys); false + other
     // region → native widget (textarea) handles the key, stop here.
-    if (options.workspaceActive?.() && options.handleWorkspaceKey) {
+    const workspaceActive = options.workspaceActive?.() === true;
+    if (workspaceActive && options.handleWorkspaceKey) {
       if (options.handleWorkspaceKey(key)) { consumeKey(key); return; }
       if (options.workspaceFocusRegion?.() !== "composer") return;
+    }
+    // Regenerate (#88): plain Ctrl+R is representable as the same 0x12 byte in
+    // traditional VT terminals on Windows, macOS, and Linux. Keep this after
+    // Workspace routing so that page retains its existing Ctrl+R file reload.
+    if (!workspaceActive && key.ctrl && !key.shift && key.name === "r" && options.triggerRegenerate) {
+      options.triggerRegenerate();
+      consumeKey(key);
+      return;
     }
     if (options.artifactFocusActive?.()) {
       if (options.handleArtifactFocusKey?.(key)) consumeKey(key);
