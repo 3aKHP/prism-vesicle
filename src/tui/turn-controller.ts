@@ -479,6 +479,21 @@ export function createTurnController(options: TurnControllerOptions) {
     runtime.setBusy(true);
     transcript.setStatus("regenerating turn");
     transcript.recordActivity({ kind: "provider", text: "regenerating last turn" });
+    // Regenerate replaces the old candidate on screen: scope the display and
+    // provider-facing conversation to the fork point (the same branch core
+    // regenerate runs against) so the previous reply disappears and the new
+    // candidate streams in its place.
+    setCandidateSwitcher(null);
+    try {
+      const forkSnapshot = await loadSessionSnapshot(session.rootDir, id, { headUuid: target.uuid, synthesizeDanglingToolResults: false });
+      session.setConversation(vesicleMessagesFromResumed(forkSnapshot.messages));
+      transcript.setMessages(displayTranscriptFromSnapshot(forkSnapshot.messages, agent.agentCards()));
+      transcript.setOutput("");
+    } catch (error) {
+      runtime.setBusy(false);
+      reportError(error);
+      return;
+    }
     usage.beginUsageTurn();
     try {
       const outcome = await options.runCancellable((signal) => coreRegenerateTurn({
@@ -498,15 +513,31 @@ export function createTurnController(options: TurnControllerOptions) {
         runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
       }));
       if (outcome.kind === "interrupted") {
+        await reloadActiveBranchDisplay(id);
         handleInterruptedTurn();
       } else {
         handleResult(outcome.value);
       }
       await refreshCandidateSwitcher(id);
     } catch (error) {
+      // coreRegenerateTurn re-points the selection marker at the previous
+      // candidate before rethrowing, so the default branch is authoritative
+      // again — restore it on screen.
+      await reloadActiveBranchDisplay(id);
       reportError(error);
     } finally {
       runtime.setBusy(false);
+    }
+  }
+
+  async function reloadActiveBranchDisplay(sessionId: string): Promise<void> {
+    try {
+      const snapshot = await loadSessionSnapshot(session.rootDir, sessionId, { synthesizeDanglingToolResults: false });
+      session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
+      transcript.setOutput("");
+    } catch {
+      // Best-effort: keep whatever the transcript currently shows.
     }
   }
 

@@ -142,7 +142,6 @@ export type SessionCommandContext = CommandActivityPort & {
   compactSession: (instructions?: string) => Promise<{ summary: string; messagesSummarized: number }>;
   initProject: (options?: { notes?: string; force?: boolean }) => Promise<{ path: string; overwritten: boolean }>;
   openRewindPicker: () => Promise<void>;
-  regenerateTurn: () => Promise<void>;
   resetRewindState: () => void;
   theme: { clearOverride: () => void };
 };

@@ -53,13 +53,9 @@ Shortcut: with the input box **empty**, press Esc twice (within 800ms) to open t
 
 ## Regenerate and switch candidates
 
-Not happy with the last reply? Have it **try again**; the old version is kept, and you can switch between the two at any time:
+Not happy with the last reply? Have it **try again**; the old version is kept, and you can switch between the two at any time — on the Chat page, press **Ctrl+R**.
 
-```
-/regenerate
-```
-
-`/regenerate` re-runs the **entire last turn** with the same prompt and produces a new reply as a new candidate. The old candidate is not deleted. Once the re-run finishes, a marker like `< 1/2 >` appears under the reply — use **Option+← / Option+→** to switch between candidates:
+Ctrl+R re-runs the **entire last turn** with the same prompt and produces a new reply as a new candidate. Once the re-run starts, the old reply is cleared from the screen and the new candidate streams in its place; the old candidate is not deleted, it just no longer occupies the view. Once the re-run finishes, a marker like `< 1/2 >` appears under the reply — use **Option+← / Option+→** to switch between candidates. On the Workspace page, `Ctrl+R` continues to reload the active file from disk instead:
 
 - Switching only changes which version is shown and which one later messages build on; it does not call the model again.
 - On the chat-only Stage engine a regenerate is cheap (a single model call); on file-writing authoring engines the whole workflow re-runs, which costs more.
@@ -68,7 +64,7 @@ Not happy with the last reply? Have it **try again**; the old version is kept, a
 
 > Each regenerate and each switch appends to the session record, and old candidates are kept forever. The session file grows and loads more slowly as candidates accumulate; Vesicle does not clean this up automatically — start a fresh session with `/new`, or delete unneeded files under `.vesicle/sessions/` by hand when you want to.
 
-Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise it prompts you to resolve those first.
+Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise the status line tells you to resolve those first.
 
 ## When context gets long: compact
 

@@ -109,12 +109,15 @@ export function MessageStream(props: {
   }
 
   function handleStageMessageKey(key: TuiKeyEvent): boolean {
-    const navigation = key.option && (key.name === "up" || key.name === "down");
+    // Alt is reported as `meta` by legacy terminals and `option` by enhanced
+    // protocols (see stage-message-interaction.ts); accept both.
+    const altLike = key.meta === true || key.option === true;
+    const navigation = altLike && !key.ctrl && (key.name === "up" || key.name === "down");
     const toggle = isStageMessageToggleShortcut(key);
-    // Horizontal candidate switching (#88): Option+Left/Option+Right cycle the
+    // Horizontal candidate switching (#88): Alt+Left/Alt+Right cycle the
     // current turn's candidates. No composer collision — plain letters and bare
-    // arrows have no Option modifier and fall through to the composer.
-    const candidateCycle = key.option && (key.name === "left" || key.name === "right");
+    // arrows carry no Alt modifier and fall through to the composer.
+    const candidateCycle = altLike && !key.ctrl && (key.name === "left" || key.name === "right");
     if (!navigation && !toggle && !candidateCycle) return false;
     if (candidateCycle) {
       const switcher = props.candidateSwitcher?.();
@@ -152,7 +155,7 @@ export function MessageStream(props: {
   const candidateLabel = createMemo(() => {
     const switcher = props.candidateSwitcher?.();
     if (!switcher || switcher.total <= 1) return null;
-    return `< ${switcher.index + 1}/${switcher.total} >  Option+←/→ to switch candidate`;
+    return `< ${switcher.index + 1}/${switcher.total} >  Option+←/→ switch · Ctrl+R regenerate`;
   });
 
   const stream = (
