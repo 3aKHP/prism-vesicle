@@ -167,11 +167,18 @@ function parseCandidateFileState(metadata: Record<string, unknown> | undefined):
   if (metadata?.kind !== CANDIDATE_FILE_STATE_KIND) return undefined;
   if (typeof metadata.forkPointUuid !== "string" || typeof metadata.leafUuid !== "string") return undefined;
   if (!metadata.files || typeof metadata.files !== "object") return undefined;
+  const files: Record<string, FileCheckpointEntry> = {};
+  for (const [path, value] of Object.entries(metadata.files as Record<string, unknown>)) {
+    if (!value || typeof value !== "object") return undefined;
+    const backup = (value as FileCheckpointEntry).backup;
+    if (backup !== null && typeof backup !== "string") return undefined;
+    files[path] = value as FileCheckpointEntry;
+  }
   return {
     kind: CANDIDATE_FILE_STATE_KIND,
     forkPointUuid: metadata.forkPointUuid,
     leafUuid: metadata.leafUuid,
-    files: metadata.files as Record<string, FileCheckpointEntry>,
+    files,
     timestamp: typeof metadata.timestamp === "string" ? metadata.timestamp : "",
     ...(metadata.taintedByHostProcess === true ? { taintedByHostProcess: true as const } : {}),
   };

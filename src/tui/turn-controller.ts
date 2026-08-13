@@ -32,6 +32,10 @@ export type { TurnControllerOptions, TurnRuntimePort, TurnSessionPort, TurnTrans
 import type { TurnAgentPort, TurnComposerPort, TurnDecisionPort, TurnHostActionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort, TurnControllerOptions } from "./turn-controller-options";
 export function createTurnController(options: TurnControllerOptions) {
   let activeTurnSawResponse = false;
+  // Synchronous latch for candidate actions (regenerate/switch): both await
+  // JSONL reads before runtime.setBusy lands, so a key-repeat inside that
+  // window could otherwise run two file-restoring actions concurrently.
+  let candidateActionInFlight = false;
   const [candidateSwitcher, setCandidateSwitcher] = createSignal<CandidateSwitcherState | null>(null);
 
   // Named turn-domain ports (plan §4.3): the composition root hands each
@@ -469,15 +473,23 @@ export function createTurnController(options: TurnControllerOptions) {
   async function regenerateTurn(): Promise<void> {
     const id = session.sessionId();
     if (!id) { transcript.setStatus("no session to regenerate"); return; }
-    if (runtime.busy()) { transcript.setStatus("wait for the current turn"); return; }
+    if (runtime.busy() || candidateActionInFlight) { transcript.setStatus("wait for the current turn"); return; }
     if (hasPendingInteraction()) { transcript.setStatus("resolve the pending interaction before regenerating"); return; }
     if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
       transcript.setStatus("wait for active SubAgents before regenerating");
       return;
     }
-    if (!await ensureRuntimeReady()) return;
-    const points = await listRewindPoints(session.rootDir, id);
-    const target = points.at(-1);
+    // Latch spans the awaits before runtime.setBusy lands; no await sits
+    // between the release and setBusy(true), so no key-repeat can interleave.
+    let target: Awaited<ReturnType<typeof listRewindPoints>>[number] | undefined;
+    candidateActionInFlight = true;
+    try {
+      if (!await ensureRuntimeReady()) return;
+      const points = await listRewindPoints(session.rootDir, id);
+      target = points.at(-1);
+    } finally {
+      candidateActionInFlight = false;
+    }
     if (!target) { transcript.setStatus("no turn to regenerate"); return; }
     runtime.setBusy(true);
     transcript.setStatus("regenerating turn");
@@ -578,51 +590,63 @@ export function createTurnController(options: TurnControllerOptions) {
   async function switchCandidate(direction: -1 | 1): Promise<void> {
     const id = session.sessionId();
     const current = candidateSwitcher();
-    if (!id || !current || current.total < 2 || runtime.busy()) return;
-    if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
-      transcript.setStatus("wait for active SubAgents before switching candidates");
-      return;
-    }
-    // Re-verify: a turn may have landed (e.g. a background SubAgent delivery)
-    // since the switcher was armed, making the fork point stale.
-    if (!await forkPointIsLastTurn(current.forkPointUuid)) {
-      setCandidateSwitcher(null);
-      transcript.setStatus("the conversation moved past the switched turn");
-      return;
-    }
-    const nextIndex = (current.index + direction + current.total) % current.total;
-    const nextLeaf = current.leaves[nextIndex];
-    const fromLeaf = current.leaves[current.index];
-    if (!nextLeaf || !fromLeaf) return;
-    runtime.setBusy(true);
-    transcript.setStatus(`switching to candidate ${nextIndex + 1}/${current.total}`);
+    if (!id || !current || current.total < 2 || runtime.busy() || candidateActionInFlight) return;
+    candidateActionInFlight = true;
     try {
-      const fileOutcome = await switchCandidateFileState(session.rootDir, id, {
-        forkPointUuid: current.forkPointUuid,
-        fromLeaf,
-        toLeaf: nextLeaf,
-      });
-      await appendCandidateSelection(session.rootDir, id, { forkPointUuid: current.forkPointUuid, selectedLeafUuid: nextLeaf });
-      const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
-      session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
-      transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
-      clearPendingInteractions();
-      transcript.setOutput("");
-      setCandidateSwitcher({ ...current, index: nextIndex });
-      await hostAction.refreshArtifacts();
-      if (fileOutcome.tainted) {
-        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: ran a host process; some file changes may not have switched`);
-      } else if (!fileOutcome.restored && fileOutcome.reason === "missing") {
-        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: legacy candidate, files not switched`);
-      } else {
-        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
+      if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
+        transcript.setStatus("wait for active SubAgents before switching candidates");
+        return;
       }
-    } catch (error) {
-      // The marker has not been written unless the restore already succeeded,
-      // so conversation and disk still agree; retrying the switch converges.
-      reportError(error);
+      try {
+        // Re-verify: a turn may have landed (e.g. a background SubAgent delivery)
+        // since the switcher was armed, making the fork point stale.
+        if (!await forkPointIsLastTurn(current.forkPointUuid)) {
+          setCandidateSwitcher(null);
+          transcript.setStatus("the conversation moved past the switched turn");
+          return;
+        }
+      } catch (error) {
+        reportError(error);
+        return;
+      }
+      const nextIndex = (current.index + direction + current.total) % current.total;
+      const nextLeaf = current.leaves[nextIndex];
+      const fromLeaf = current.leaves[current.index];
+      if (!nextLeaf || !fromLeaf) return;
+      runtime.setBusy(true);
+      transcript.setStatus(`switching to candidate ${nextIndex + 1}/${current.total}`);
+      try {
+        const fileOutcome = await switchCandidateFileState(session.rootDir, id, {
+          forkPointUuid: current.forkPointUuid,
+          fromLeaf,
+          toLeaf: nextLeaf,
+        });
+        await appendCandidateSelection(session.rootDir, id, { forkPointUuid: current.forkPointUuid, selectedLeafUuid: nextLeaf });
+        const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
+        session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+        transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
+        clearPendingInteractions();
+        transcript.setOutput("");
+        setCandidateSwitcher({ ...current, index: nextIndex });
+        await hostAction.refreshArtifacts();
+        if (fileOutcome.tainted) {
+          transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: ran a host process; some file changes may not have switched`);
+        } else if (!fileOutcome.restored && fileOutcome.reason === "missing") {
+          transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: legacy candidate, files not switched`);
+        } else {
+          transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
+        }
+      } catch (error) {
+        // A failed restore aborts before the marker, so conversation and disk
+        // still point at the same candidate; even when a later step fails,
+        // retrying the same switch converges (restore is idempotent, bundles
+        // are captured once).
+        reportError(error);
+      } finally {
+        runtime.setBusy(false);
+      }
     } finally {
-      runtime.setBusy(false);
+      candidateActionInFlight = false;
     }
   }
 
