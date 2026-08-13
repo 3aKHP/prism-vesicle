@@ -1,3 +1,5 @@
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { regenerateTurn, RegenerateBlockedError } from "../../../src/core/agent-loop/regenerate";
 import { runPrompt } from "../../../src/core/agent-loop/run";
@@ -201,5 +203,92 @@ describe("agent loop: regenerate turn", () => {
     const selection = findLatestSelection(records)!;
     const leaves = enumerateCandidateLeaves(records, user.uuid).map((record) => record.uuid);
     expect(leaves).toContain(selection.selectedLeafUuid);
+  });
+
+  test("restores the fork baseline and bundles the old candidate before the new candidate runs", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "workspace", "existing.md"), "before\n", "utf8");
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return Response.json({
+          id: "c1",
+          choices: [{
+            message: {
+              content: "",
+              tool_calls: [{
+                id: "call-write",
+                type: "function",
+                function: { name: "write_file", arguments: JSON.stringify({ path: "workspace/existing.md", content: "A version\n" }) },
+              }],
+            },
+          }],
+        });
+      }
+      return Response.json({ id: `c${calls}`, choices: [{ message: { content: `candidate-A${calls}` } }] });
+    }) as unknown as typeof fetch;
+
+    // Candidate A1's turn performs a real file write through the guarded tool.
+    const first = await runPrompt({ input: "the prompt", rootDir, messages: [{ role: "user", content: "the prompt" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("A version\n");
+    const recordsAfterFirst = await loadSessionRecords(rootDir, first.sessionId);
+    const userA = recordsAfterFirst.find((record) => record.role === "user")!;
+    const assistantA1 = enumerateCandidateLeaves(recordsAfterFirst, userA.uuid)[0]!;
+
+    const result = await regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: userA.uuid });
+    if (result.kind !== "complete") throw new Error(`expected complete regenerate, got ${result.kind}`);
+
+    // The new candidate ran against the restored baseline (it performs no file
+    // writes itself, so the disk stays at the baseline).
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("before\n");
+    // The old candidate's post-state was bundled for later switching.
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    const bundle = records.find((record) => record.metadata?.kind === "candidate-file-state");
+    expect(bundle?.metadata?.leafUuid).toBe(assistantA1.uuid);
+  });
+
+  test("a failed regenerate restores the old candidate's bundled files as well as its marker", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "workspace", "existing.md"), "before\n", "utf8");
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return Response.json({
+          id: "c1",
+          choices: [{
+            message: {
+              content: "",
+              tool_calls: [{
+                id: "call-write",
+                type: "function",
+                function: { name: "write_file", arguments: JSON.stringify({ path: "workspace/existing.md", content: "A version\n" }) },
+              }],
+            },
+          }],
+        });
+      }
+      if (calls === 2) {
+        return Response.json({ id: "c2", choices: [{ message: { content: "candidate-A1" } }] });
+      }
+      // The regenerate provider round fails.
+      throw new Error("provider down");
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({ input: "the prompt", rootDir, messages: [{ role: "user", content: "the prompt" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const userA = (await loadSessionRecords(rootDir, first.sessionId)).find((record) => record.role === "user")!;
+
+    await expect(regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: userA.uuid }))
+      .rejects.toThrow("provider down");
+
+    // Conversation compensation (existing) and file compensation (new): the old
+    // candidate is active again AND the disk is back at its post-state, not at
+    // the baseline the failed regenerate had restored.
+    const selection = findLatestSelection(await loadSessionRecords(rootDir, first.sessionId));
+    expect(selection?.forkPointUuid).toBe(userA.uuid);
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("A version\n");
   });
 });
