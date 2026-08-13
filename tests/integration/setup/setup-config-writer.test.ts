@@ -116,7 +116,7 @@ describe("guided Setup configuration writer", () => {
     const configDir = join(root, "config");
     await writeSetupConfiguration({
       providerPreset: "deepseek-responses",
-      baseUrl: "https://api.deepseek.com",
+      baseUrl: "https://api.deepseek.com/v1",
       apiKey: "secret",
       modelIds: ["deepseek-v4-flash"],
       defaultModel: "deepseek-v4-flash",
@@ -137,7 +137,7 @@ describe("guided Setup configuration writer", () => {
     const root = await tempRoot();
     await expect(writeSetupConfiguration({
       providerPreset: "deepseek-responses",
-      baseUrl: "https://api.deepseek.com",
+      baseUrl: "https://api.deepseek.com/v1",
       apiKey: "secret",
       modelIds: ["deepseek-chat"],
       defaultModel: "deepseek-chat",
