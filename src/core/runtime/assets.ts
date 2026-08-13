@@ -34,6 +34,20 @@ export type AssetStat = {
   modifiedAt: Date;
 };
 
+export type AssetDirectoryEntry = {
+  path: string;
+  type: "file" | "directory";
+  size?: number;
+  modifiedAt: Date;
+};
+
+export type AssetDirectoryListing = {
+  entries: AssetDirectoryEntry[];
+  fileCount: number;
+  directoryCount: number;
+  truncated: boolean;
+};
+
 export type AssetFingerprint = {
   sha256: string;
   files: Array<{ path: string; sha256: string; source: AssetSource }>;
@@ -51,6 +65,11 @@ export type AssetResolverOptions = {
     source?: "managed" | "bundled";
   };
 };
+
+function clampListingLimit(value: number): number {
+  if (!Number.isInteger(value) || value <= 0) throw new Error("Asset listing limit must be a positive integer.");
+  return Math.min(value, 2_000);
+}
 
 export type BundledHarnessLayout = {
   rootDirectory: string;
@@ -117,8 +136,26 @@ export class AssetResolver {
 
   async stat(logicalPath: string): Promise<AssetStat> {
     const normalized = normalizeAssetPath(logicalPath, { allowRoot: true });
+    const info = await this.statIfExists(normalized);
+    if (info) return info;
+    throw new Error(`Prism asset not found: ${normalized}.`);
+  }
+
+  async statIfExists(logicalPath: string): Promise<AssetStat | undefined> {
+    const normalized = normalizeAssetPath(logicalPath, { allowRoot: true });
     for (const layer of this.layers) {
-      const entry = await resolveLayerEntry(layer, normalized);
+      // A file in a higher overlay shadows all descendants in lower layers.
+      // `resolveLayerEntry` reports that boundary explicitly; do not fall
+      // through to a lower layer with a contradictory logical shape.
+      let shadowed = false;
+      const entry = await resolveLayerEntry(layer, normalized).catch((error: unknown) => {
+        if (error instanceof AssetPathShadowError) {
+          shadowed = true;
+          return undefined;
+        }
+        throw error;
+      });
+      if (shadowed) return undefined;
       if (!entry) continue;
       if (!entry.info.isFile() && !entry.info.isDirectory()) {
         throw new Error(`Asset path is neither a file nor a directory: ${normalized}.`);
@@ -131,7 +168,64 @@ export class AssetResolver {
         modifiedAt: entry.info.mtime,
       };
     }
-    throw new Error(`Prism asset not found: ${normalized}.`);
+    return undefined;
+  }
+
+  /** List the effective sparse overlay without exposing any physical layer. */
+  async listDirectory(
+    logicalDirectory = "assets",
+    options: { recursive?: boolean; limit?: number; filesOnly?: boolean; directoryLimit?: number; maxDepth?: number } = {},
+  ): Promise<AssetDirectoryListing | undefined> {
+    const normalized = normalizeAssetPath(logicalDirectory, { allowRoot: true });
+    const highest = await this.statIfExists(normalized);
+    if (!highest) return undefined;
+    if (highest.type !== "directory") throw new Error(`Asset path is not a directory: ${normalized}.`);
+
+    const limit = clampListingLimit(options.limit ?? 500);
+    const directoryLimit = Math.max(1, Math.min(options.directoryLimit ?? 2_000, 10_000));
+    const maxDepth = Math.max(0, Math.min(options.maxDepth ?? 8, 32));
+    const entries: AssetDirectoryEntry[] = [];
+    let fileCount = 0;
+    let directoryCount = 0;
+    let visitedDirectories = 0;
+    let truncated = false;
+    let hardStop = false;
+    const visit = async (directory: string, depth: number): Promise<void> => {
+      if (hardStop) return;
+      if (visitedDirectories >= directoryLimit) {
+        truncated = true;
+        return;
+      }
+      visitedDirectories++;
+      const merged = await this.mergedDirectoryChildren(directory);
+      for (const [name, child] of merged) {
+        if (hardStop) return;
+        const path = `${directory}/${name}`;
+        const included = !options.filesOnly || child.info.isFile();
+        if (included && entries.length >= limit) {
+          truncated = true;
+          hardStop = true;
+          return;
+        }
+        if (child.info.isFile()) fileCount++;
+        else directoryCount++;
+        if (included) {
+          entries.push({
+            path,
+            type: child.info.isDirectory() ? "directory" : "file",
+            ...(child.info.isFile() ? { size: child.info.size } : {}),
+            modifiedAt: child.info.mtime,
+          });
+        }
+        if (options.recursive && child.info.isDirectory()) {
+          if (depth < maxDepth) await visit(path, depth + 1);
+          else truncated = true;
+        }
+      }
+    };
+    await visit(normalized, 0);
+    entries.sort((left, right) => left.path.localeCompare(right.path));
+    return { entries, fileCount, directoryCount, truncated };
   }
 
   async listFiles(logicalDirectory = "assets", recursive = false): Promise<string[]> {
@@ -143,31 +237,46 @@ export class AssetResolver {
   }
 
   private async listMergedDirectory(logicalDirectory: string, recursive: boolean): Promise<string[]> {
-    const merged = new Map<string, "file" | "directory" | "symlink">();
+    const files: string[] = [];
+    for (const [name, entry] of await this.mergedDirectoryChildren(logicalDirectory)) {
+      const logicalPath = `${logicalDirectory}/${name}`;
+      if (entry.info.isFile()) files.push(logicalPath);
+      else if (recursive) files.push(...await this.listMergedDirectory(logicalPath, true));
+    }
+    return files;
+  }
+
+  private async mergedDirectoryChildren(
+    logicalDirectory: string,
+  ): Promise<Map<string, { info: Stats }>> {
+    const merged = new Map<string, { info: Stats }>();
     for (const layer of this.layers) {
-      const entry = await resolveLayerEntry(layer, logicalDirectory);
-      if (!entry || !entry.info.isDirectory()) continue;
+      let shadowed = false;
+      const entry = await resolveLayerEntry(layer, logicalDirectory).catch((error: unknown) => {
+        if (error instanceof AssetPathShadowError) {
+          shadowed = true;
+          return undefined;
+        }
+        throw error;
+      });
+      if (shadowed || entry?.info.isFile()) break;
+      if (!entry?.info.isDirectory()) continue;
       const entries = await readdir(entry.absolutePath, { withFileTypes: true }).catch((error: unknown) => {
         throw assetAccessError(logicalDirectory, error);
       });
       for (const child of entries) {
         const childPath = `${logicalDirectory}/${child.name}`;
-        if (layerAllowsPath(layer, childPath)
-          && !merged.has(child.name)
-          && (child.isFile() || child.isDirectory() || child.isSymbolicLink())) {
-          merged.set(child.name, child.isSymbolicLink() ? "symlink" : child.isDirectory() ? "directory" : "file");
-        }
+        if (!layerAllowsPath(layer, childPath) || merged.has(child.name)) continue;
+        if (child.isSymbolicLink()) throw new Error(`Asset symlinks are not supported: ${childPath}.`);
+        if (!child.isFile() && !child.isDirectory()) continue;
+        // `logicalDirectory` has already been resolved through the same strict
+        // layer guard. Resolve the child for metadata and boundary validation;
+        // the first visible child wins, matching ordinary overlay reads.
+        const childEntry = await resolveLayerEntry(layer, childPath);
+        if (childEntry) merged.set(child.name, { info: childEntry.info });
       }
     }
-
-    const files: string[] = [];
-    for (const [name, type] of [...merged.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-      const logicalPath = `${logicalDirectory}/${name}`;
-      if (type === "symlink") throw new Error(`Asset symlinks are not supported: ${logicalPath}.`);
-      if (type === "file") files.push(logicalPath);
-      else if (recursive) files.push(...await this.listMergedDirectory(logicalPath, true));
-    }
-    return files;
+    return new Map([...merged.entries()].sort(([left], [right]) => left.localeCompare(right)));
   }
 
   async readText(logicalPath: string): Promise<string> {
@@ -327,7 +436,7 @@ async function resolveLayerEntry(
   const entry = await lstat(candidate).catch((error: unknown) => {
     if (isMissing(error)) return undefined;
     if (errorCode(error) === "ENOTDIR") {
-      throw new Error(`Asset path is shadowed by a file in a higher layer: ${logicalPath}.`);
+      throw new AssetPathShadowError(logicalPath);
     }
     throw assetAccessError(logicalPath, error);
   });
@@ -354,6 +463,13 @@ async function resolveLayerEntry(
     throw assetAccessError(logicalPath, error);
   });
   return { absolutePath, info };
+}
+
+class AssetPathShadowError extends Error {
+  constructor(logicalPath: string) {
+    super(`Asset path is shadowed by a file in a higher layer: ${logicalPath}.`);
+    this.name = "AssetPathShadowError";
+  }
 }
 
 function layerAllowsPath(layer: AssetLayer, logicalPath: string): boolean {

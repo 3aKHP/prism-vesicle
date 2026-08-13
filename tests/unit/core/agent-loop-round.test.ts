@@ -66,6 +66,7 @@ describe("agent loop tool round", () => {
     }]);
     expect(order).toEqual(["session", "event"]);
   });
+
 });
 
 function definition(name: string): ToolDefinition {

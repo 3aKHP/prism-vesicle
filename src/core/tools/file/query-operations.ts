@@ -1,6 +1,6 @@
-import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { open, readFile, stat } from "node:fs/promises";
 import { normalizeAssetPath, type AssetResolver } from "../../runtime/assets";
+import { observeDirectory } from "../../project/directory-observation";
 import { toProjectPath } from "./path-policy";
 
 export function sliceLines(content: string, startLine: number | undefined, endLine: number | undefined): string {
@@ -211,7 +211,13 @@ export async function grepFiles(
   const files = info.isFile()
     ? [targetPath]
     : info.isDirectory()
-      ? await listFiles(targetPath, args.recursive ?? true)
+      ? (await observeDirectory(targetPath, {
+        recursive: args.recursive ?? true,
+        entryLimit: 10_000,
+        directoryLimit: 10_000,
+        maxDepth: 32,
+        includeTypes: new Set(["file"]),
+      })).entries.map((entry) => entry.absolutePath)
       : [];
   return executeGrepScan(
     {
@@ -263,76 +269,46 @@ function clampPositiveInteger(value: number, name: string, max: number): number 
   return Math.min(value, max);
 }
 
-export async function listFiles(dir: string, recursive: boolean): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true }).catch((error: unknown) => {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
-    throw error;
-  });
-  const result: string[] = [];
-
-  for (const entry of entries) {
-    const fullPath = resolve(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (recursive) {
-        result.push(...await listFiles(fullPath, true));
-      }
-      continue;
-    }
-
-    if (entry.isFile()) {
-      result.push(fullPath);
-      continue;
-    }
-
-    // Symbolic links and other special entries are deliberately not followed.
-  }
-
-  return result.sort();
-}
-
-type DirectoryEntry = {
+export type DirectoryEntry = {
   path: string;
   type: "file" | "directory" | "symlink" | "other";
   size?: number;
   modifiedAt: string;
 };
 
+export type DirectoryObservation = {
+  entries: DirectoryEntry[];
+  fileCount: number;
+  directoryCount: number;
+  otherCount: number;
+  truncated: boolean;
+};
+
 export async function listDirectoryEntries(
   rootDir: string,
   directoryPath: string,
-  recursive: boolean,
-): Promise<{ entries: DirectoryEntry[]; truncated: boolean }> {
-  const limit = 500;
-  const entries: DirectoryEntry[] = [];
-  let truncated = false;
-
-  const visit = async (dir: string): Promise<void> => {
-    for (const child of await readdir(dir, { withFileTypes: true })) {
-      if (entries.length >= limit) {
-        truncated = true;
-        return;
-      }
-      const fullPath = resolve(dir, child.name);
-      const info = await lstat(fullPath);
-      const type = info.isSymbolicLink()
-        ? "symlink"
-        : info.isDirectory()
-          ? "directory"
-          : info.isFile()
-            ? "file"
-            : "other";
-      entries.push({
-        path: toProjectPath(rootDir, fullPath),
-        type,
-        ...(type === "file" ? { size: info.size } : {}),
-        modifiedAt: info.mtime.toISOString(),
-      });
-      if (recursive && type === "directory") await visit(fullPath);
-      if (truncated) return;
-    }
+  options: {
+    recursive?: boolean;
+    filesOnly?: boolean;
+    entryLimit?: number;
+    directoryLimit?: number;
+    maxDepth?: number;
+  } = {},
+): Promise<DirectoryObservation> {
+  const observed = await observeDirectory(directoryPath, {
+    recursive: options.recursive,
+    entryLimit: options.entryLimit,
+    directoryLimit: options.directoryLimit,
+    maxDepth: options.maxDepth,
+    ...(options.filesOnly ? { includeTypes: new Set<DirectoryEntry["type"]>(["file"]) } : {}),
+  });
+  return {
+    ...observed,
+    entries: observed.entries.map((entry) => ({
+      path: toProjectPath(rootDir, entry.absolutePath),
+      type: entry.type,
+      ...(entry.size !== undefined ? { size: entry.size } : {}),
+      modifiedAt: entry.modifiedAt.toISOString(),
+    })),
   };
-
-  await visit(directoryPath);
-  entries.sort((left, right) => left.path.localeCompare(right.path));
-  return { entries, truncated };
 }

@@ -16,6 +16,10 @@ import { changedAssetPaths, loadEngineAssetRuntime } from "../runtime/engine-ass
 import type { AssetFingerprint } from "../runtime/assets";
 import type { AssetResolver } from "../runtime/assets";
 import type { HarnessRuntimeContext } from "../harness/driver";
+import { appendHostContext } from "../prompt/host-context";
+import { composeProjectStateBlock, freezeProjectStateBlock, readFrozenProjectStateBlock } from "../prompt/project-state";
+import { declaresDirectoryQuery } from "../tools/directory-query";
+import { createAssetResolver } from "../runtime/assets";
 import { mergeGeneration } from "./generation";
 import type { AgentLoopEvent, PendingUserInput } from "./types";
 import type { SideQuestionContextSnapshot } from "../side-question/types";
@@ -105,7 +109,13 @@ export async function loadContinuationContext(
   hydrateSessionActivations(options.sessionId, deriveSessionActivations(snapshot.records));
   pruneSessionActivations(options.sessionId, new Set(catalogNames(skillCatalog)));
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
-  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+  systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock);
+  const frozenProjectState = readFrozenProjectStateBlock(options.sessionId);
+  const projectStateBlock = frozenProjectState ?? (declaresDirectoryQuery(profile.defaultTools)
+    ? await composeProjectStateBlock(rootDir, assets ?? createAssetResolver(rootDir))
+    : "");
+  if (frozenProjectState === undefined) freezeProjectStateBlock(options.sessionId, projectStateBlock);
+  systemPrompt = appendHostContext(systemPrompt, projectStateBlock);
   const mcpOutputPreferences = await readMcpOutputPreferences(rootDir);
   const mcpOutputPersistence = mcpOutputPreferences.persist;
   const toolSurface = await resolveToolSurface(
@@ -117,7 +127,7 @@ export async function loadContinuationContext(
     { catalogNames: catalogNames(skillCatalog) },
   );
   if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {
-    systemPrompt = `${systemPrompt}\n\n${composeMcpOutputPersistenceHint(options.sessionId)}`;
+    systemPrompt = appendHostContext(systemPrompt, composeMcpOutputPersistenceHint(options.sessionId));
   }
   const session = await createSessionStore(rootDir, options.sessionId);
   const proxyPolicy = await resolveProviderProxyPolicy();
@@ -138,6 +148,7 @@ export async function loadContinuationContext(
     profile,
     systemPrompt,
     enginePrompt: engineAssets.systemPrompt,
+    projectStateBlock,
     toolSurface,
     mcpOutputPersistence,
     skillCatalog,

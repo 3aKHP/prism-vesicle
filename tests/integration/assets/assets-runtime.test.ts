@@ -118,6 +118,17 @@ describe("runtime assets", () => {
       expect((await resolver.resolveFile("assets/prompts/shared/base.md")).source).toBe("user");
       expect((await resolver.resolveFile("assets/specs/module-a.md")).source).toBe("bundled");
 
+      const listing = await resolver.listDirectory("assets", { recursive: true, filesOnly: true });
+      expect(listing?.entries.map((entry) => entry.path)).toEqual([
+        "assets/manifest.json",
+        "assets/masked",
+        "assets/prompts/engines/etl.md",
+        "assets/prompts/engines/runtime.md",
+        "assets/prompts/shared/base.md",
+        "assets/replaced/visible.md",
+        "assets/specs/module-a.md",
+      ]);
+
       expect(await resolver.listFiles("assets", true)).toEqual([
         "assets/manifest.json",
         "assets/masked",
@@ -132,6 +143,17 @@ describe("runtime assets", () => {
       expect(maskedError).toBeInstanceOf(Error);
       expect((maskedError as Error).message).toContain("shadowed by a file");
       expect((maskedError as Error).message).not.toContain(fixture.root);
+
+      await write(join(fixture.config, "assets", "project-wins"), "user file blocks lower layers");
+      await write(join(fixture.project, "assets", "project-wins", "visible.md"), "project remains visible");
+      await write(join(fixture.bundled, "user-wins", "hidden.md"), "must stay hidden");
+      await write(join(fixture.config, "assets", "user-wins"), "user file masks bundled directory");
+      const shadowListing = await resolver.listDirectory("assets", { recursive: true, filesOnly: true });
+      expect(shadowListing?.entries.map((entry) => entry.path)).toContain("assets/project-wins/visible.md");
+      expect(shadowListing?.entries.map((entry) => entry.path)).not.toContain("assets/user-wins/hidden.md");
+      const shadowFiles = await resolver.listFiles("assets", true);
+      expect(shadowFiles).toContain("assets/project-wins/visible.md");
+      expect(shadowFiles).not.toContain("assets/user-wins/hidden.md");
 
       const fingerprint = await resolver.fingerprint([
         "assets/specs/module-a.md",

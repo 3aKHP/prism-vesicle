@@ -18,6 +18,10 @@ import {
 import type { ResolvedSkillCatalog } from "../../core/skills";
 import type { ShellInterpreterPreference } from "../../core/process/shell-profile";
 import type { AssetResolver } from "../../core/runtime/assets";
+import { createAssetResolver } from "../../core/runtime/assets";
+import { appendHostContext } from "../../core/prompt/host-context";
+import { composeProjectStateBlock } from "../../core/prompt/project-state";
+import { declaresDirectoryQuery } from "../../core/tools/directory-query";
 
 /**
  * `vesicle prompt dump` — print the fully composed system prompt the model
@@ -53,7 +57,10 @@ export async function runPromptDump(args: string[]): Promise<void> {
   // The Skill catalog a new session would freeze, filtered for this engine.
   const skills = resolveEngineEligibleCatalog(await resolveSkillCatalog(rootDir, process.env, profile), profile);
   const skillCatalogBlock = composeSkillCatalogBlock(skills.catalog);
-  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+  const projectStateBlock = declaresDirectoryQuery(profile.defaultTools)
+    ? await composeProjectStateBlock(rootDir, harness?.assets ?? createAssetResolver(rootDir))
+    : "";
+  systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock, projectStateBlock);
 
   if (shapeOnly) {
     await printShape(profile, bundle, systemPrompt, instructional.selection, permissions.shellExec, permissions.shellInterpreter, harness?.assets, skills, skillCatalogBlock);

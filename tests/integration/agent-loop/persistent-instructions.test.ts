@@ -50,6 +50,9 @@ describe("persistent instructions reach the provider system authority", () => {
     expect(engineIndex).toBeGreaterThan(-1);
     expect(userIndex).toBeGreaterThan(engineIndex);
     expect(projectIndex).toBeGreaterThan(userIndex);
+    expect(system).toContain("selected user-level content");
+    expect(system).toContain("selected project-root content");
+    expect(system).not.toContain("Do not look for this project-root file");
     // The wire request carries the same composed system content.
     expect(requestBody).toContain("USER-BODY-MARKER");
     expect(requestBody).toContain("PROJECT-BODY-MARKER");
@@ -65,15 +68,16 @@ describe("persistent instructions reach the provider system authority", () => {
     expect(snapshot.engineSystemPrompt).not.toContain("USER-GENERAL");
   });
 
-  test("no instruction files leaves the engine prompt unchanged", async () => {
+  test("no instruction files adds only the bounded project-state orientation", async () => {
     const rootDir = await createPromptRoot();
     const events: AgentLoopEvent[] = [];
     const { snapshot, sessionId } = await runOneTurn(rootDir, (event) => events.push(event));
-    expect(snapshot.engineSystemPrompt).toBe("base\n\netl");
+    expect(snapshot.engineSystemPrompt).toStartWith("base\n\netl\n\n<project_state>");
+    expect(snapshot.engineSystemPrompt).toContain("workspace: empty (0 files)");
     expect(events).toContainEqual({ type: "instruction_warning", sessionId, engine: "etl", diagnostics: [] });
   });
 
-  test("a new session records the instruction resolution in the system record metadata", async () => {
+  test("a new session records stable identity without persisting live turn state", async () => {
     await writeFile(join(userConfigDir(), "VESICLE.md"), "USER-BODY", "utf8");
     const rootDir = await createPromptRoot();
     await writeFile(join(rootDir, "VESICLE.md"), "PROJECT-BODY", "utf8");
@@ -82,6 +86,8 @@ describe("persistent instructions reach the provider system authority", () => {
     const records = await loadSessionRecords(rootDir, result.sessionId);
     const systemRecord = records.find((record) => record.role === "system" && record.metadata?.engine === "etl");
     expect(systemRecord).toBeDefined();
+    expect(systemRecord?.content).not.toContain("<project_state>");
+    expect(records.some((record) => record.metadata?.kind === "project-state")).toBe(false);
     const instructions = systemRecord?.metadata?.instructions as { files: { logicalName: string; bytes: number }[] } | undefined;
     expect(instructions).toBeDefined();
     expect(instructions?.files.map((file) => file.logicalName)).toEqual(["VESICLE.md", "VESICLE.md"]);

@@ -42,7 +42,7 @@ export type FileToolEvent = {
   fileCount?: number;
   /** grep_files output mode. */
   outputMode?: "content" | "files_with_matches" | "count";
-  /** list_files entry count. */
+  /** Directory-query entry count. */
   entryCount?: number;
   occurrences?: number;
   truncated?: boolean;

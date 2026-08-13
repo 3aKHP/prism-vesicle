@@ -52,12 +52,10 @@ describe("agent loop: provider session", () => {
     if (second.kind !== "complete") throw new Error("expected complete");
 
     expect(second.sessionId).toBe(first.sessionId);
-    expect(requestBodies[1].messages.map((message) => message.content)).toEqual([
-      "base\n\netl",
-      "first",
-      "reply 1",
-      "second",
-    ]);
+    const sent = requestBodies[1].messages.map((message) => message.content);
+    expect(sent[0]).toStartWith("base\n\netl\n\n<project_state>");
+    expect(sent[0]).toContain("workspace: empty (0 files)");
+    expect(sent.slice(1)).toEqual(["first", "reply 1", "second"]);
 
     const jsonl = await readFile(first.sessionPath, "utf8");
     const records = jsonl.trim().split("\n").map((line) => JSON.parse(line));
@@ -70,6 +68,7 @@ describe("agent loop: provider session", () => {
       "system",
       "assistant",
     ]);
+    expect(records.some((record) => record.metadata?.kind === "project-state")).toBe(false);
     expect(records[0].metadata.assets).toMatchObject({
       sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       files: expect.arrayContaining([

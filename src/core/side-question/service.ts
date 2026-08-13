@@ -20,6 +20,9 @@ import { createAssetResolver } from "../runtime/assets";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "./types";
 import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import { projectSideQuestionReference } from "./reference";
+import { appendHostContext } from "../prompt/host-context";
+import { composeProjectStateBlock } from "../prompt/project-state";
+import { declaresDirectoryQuery } from "../tools/directory-query";
 
 const SIDE_QUESTION_PROMPT_PATH = "assets/prompts/shared/side-question.md";
 
@@ -133,6 +136,13 @@ export async function resolveSideQuestionSnapshot(options: {
   let engineSystemPrompt = (
     await composeSystemPromptWithInstructions(options.engine, engineAssets.systemPrompt, options.rootDir)
   ).systemPrompt;
+  if (declaresDirectoryQuery(engineAssets.profile.defaultTools)) {
+    const projectStateBlock = await composeProjectStateBlock(options.rootDir, projectHarness.assets);
+    engineSystemPrompt = appendHostContext(
+      engineSystemPrompt,
+      projectStateBlock,
+    );
+  }
   if (options.engine === "stage" && snapshot.stageBootstrap) {
     engineSystemPrompt = `${engineSystemPrompt}\n\n${snapshot.stageBootstrap.renderedCharacterContext}`;
   }

@@ -6,7 +6,6 @@ import type {
 
 const observeTools = new Set([
   "stat_path",
-  "list_files",
   "list_directory",
   "grep_files",
   "read_file",
