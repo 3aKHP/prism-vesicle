@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { regenerateTurn, RegenerateBlockedError } from "../../../src/core/agent-loop/regenerate";
 import { runPrompt } from "../../../src/core/agent-loop/run";
 import { findLatestSelection } from "../../../src/core/session/selection";
-import { loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
+import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import {
   configureTestProviderEnv,
   createPromptRoot,
@@ -101,5 +101,18 @@ describe("agent loop: regenerate turn", () => {
     expect(contents).toContain("candidate-A1");
     // ...because a restore selection marker was appended for the fork point.
     expect(findLatestSelection(records)?.forkPointUuid).toBe(userA.uuid);
+  });
+
+  test("rejects regenerate while an interaction is pending at the core boundary", async () => {
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "pending-regenerate");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    const user = await store.append({ role: "user", content: "prompt" });
+    await store.append({
+      role: "assistant",
+      content: "confirm",
+      metadata: { toolCalls: [{ id: "gate", name: "request_confirmation", arguments: JSON.stringify({ gate: "runtime-turn", summary: "confirm" }) }] },
+    });
+    await expect(regenerateTurn({ rootDir, sessionId: "pending-regenerate", userRecordUuid: user.uuid })).rejects.toThrow(/pending interaction/);
   });
 });

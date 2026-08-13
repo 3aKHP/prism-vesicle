@@ -24,7 +24,7 @@ import {
 import type { HarnessRuntimeIdentity } from "../harness/driver";
 import { parseStageBootstrapMetadata, type StageBootstrapMetadata } from "../stage/types";
 import { buildActiveSessionBranch, normalizeSessionRecords, type ResumedToolCall, type SessionRecord } from "./record-model";
-import { projectSessionHistory } from "./history-projector";
+import { projectSessionHistory, projectSessionHostState } from "./history-projector";
 import { repairProviderHistory } from "./provider-history-repair";
 import { findPendingQualityDecision, findPendingQualityRewrite, findQualityEvents, findQualityWarnings } from "./quality-recovery";
 import { recoverSessionInteractions, type PendingDelegationRetry } from "./interaction-recovery";
@@ -338,6 +338,12 @@ export async function loadSessionSnapshot(
   const records = buildActiveSessionBranch(allRecords, options);
 
   const projection = projectSessionHistory(records);
+  const hostState = projectSessionHostState(allRecords);
+  projection.engine = hostState.engine;
+  projection.providerSelection = hostState.providerSelection;
+  projection.reasoningTier = hostState.reasoningTier;
+  projection.reasoningDisplayMode = hostState.reasoningDisplayMode;
+  projection.permissionMode = hostState.permissionMode;
   const messages = projection.messages;
 
   const {

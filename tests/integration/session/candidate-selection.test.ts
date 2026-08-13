@@ -75,6 +75,7 @@ describe("session: horizontal candidate selection", () => {
     expect(after.length).toBe(before.length + 1);
     expect(after.some((record) => record.uuid === marker.uuid)).toBe(true);
     expect(after.some((record) => record.metadata?.kind === CANDIDATE_SELECTION_KIND)).toBe(true);
+    expect(enumerateCandidateLeaves(after, userUuid).map((record) => record.uuid)).toContain(leafA1);
 
     // The default branch now walks through the marker to candidate A1.
     const snapshot = await loadSessionSnapshot(rootDir, "cand-sel");
@@ -118,5 +119,55 @@ describe("session: horizontal candidate selection", () => {
     await expect(
       appendCandidateSelection(rootDir, "cand-sel", { forkPointUuid: userUuid, selectedLeafUuid: "not-a-real-uuid" }),
     ).rejects.toThrow(/not in session/);
+  });
+
+  test("continues through a selection marker when a paused candidate is later resolved", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candsel-"));
+    const store = await createSessionStore(rootDir, "cand-cont");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    const user = await store.append({ role: "user", content: "prompt" });
+    const first = await store.append({ role: "assistant", content: "first" });
+    const secondStore = await createSessionStore(rootDir, "cand-cont", { parentUuid: user.uuid });
+    const paused = await secondStore.append({
+      role: "assistant",
+      content: "paused",
+      metadata: { toolCalls: [{ id: "gate", name: "request_confirmation", arguments: "{}" }] },
+    });
+    const marker = await appendCandidateSelection(rootDir, "cand-cont", { forkPointUuid: user.uuid, selectedLeafUuid: paused.uuid });
+    const continuation = await createSessionStore(rootDir, "cand-cont", { parentUuid: marker.uuid });
+    await continuation.append({ role: "tool", content: "approved", metadata: { toolCallId: "gate", ok: true } });
+    const final = await continuation.append({ role: "assistant", content: "completed" });
+
+    const records = await loadSessionRecords(rootDir, "cand-cont");
+    expect(enumerateCandidateLeaves(records, user.uuid).map((record) => record.uuid)).toEqual([first.uuid, final.uuid]);
+    await appendCandidateSelection(rootDir, "cand-cont", { forkPointUuid: user.uuid, selectedLeafUuid: final.uuid });
+    const snapshot = await loadSessionSnapshot(rootDir, "cand-cont", { synthesizeDanglingToolResults: false });
+    expect(snapshot.messages.map((message) => message.content)).toContain("completed");
+    expect(snapshot.pendingGate).toBeUndefined();
+  });
+
+  test("does not expose a failed file-history-only regenerate branch", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candsel-"));
+    const store = await createSessionStore(rootDir, "cand-failed");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    const user = await store.append({ role: "user", content: "prompt" });
+    const completed = await store.append({ role: "assistant", content: "completed" });
+    const failed = await createSessionStore(rootDir, "cand-failed", { parentUuid: user.uuid });
+    await failed.append({ role: "system", content: "snapshot", metadata: { kind: "file-history-snapshot" } });
+    const records = await loadSessionRecords(rootDir, "cand-failed");
+    expect(enumerateCandidateLeaves(records, user.uuid).map((record) => record.uuid)).toEqual([completed.uuid]);
+  });
+
+  test("keeps host preferences appended after selection when switching candidates", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candsel-"));
+    const { userUuid, leafA1, leafA2 } = await twoCandidateSession(rootDir);
+    const marker = await appendCandidateSelection(rootDir, "cand-sel", { forkPointUuid: userUuid, selectedLeafUuid: leafA1 });
+    const host = await createSessionStore(rootDir, "cand-sel", { parentUuid: marker.uuid });
+    await host.append({ role: "system", content: "switched", metadata: { kind: "provider-switch", providerId: "p2", model: "m2" } });
+    let snapshot = await loadSessionSnapshot(rootDir, "cand-sel");
+    expect(snapshot.providerSelection).toEqual({ provider: "p2", model: "m2" });
+    await appendCandidateSelection(rootDir, "cand-sel", { forkPointUuid: userUuid, selectedLeafUuid: leafA2 });
+    snapshot = await loadSessionSnapshot(rootDir, "cand-sel");
+    expect(snapshot.providerSelection).toEqual({ provider: "p2", model: "m2" });
   });
 });

@@ -18,7 +18,7 @@
 // coexistence is a committed follow-up (post-state capture bundles).
 
 import { toVesicleMessage } from "../compact/summary-generator";
-import { appendCandidateSelection } from "../session/selection";
+import { appendCandidateSelection, isCandidateSelectionRecord } from "../session/selection";
 import { loadSessionRecords, loadSessionSnapshot } from "../session/store";
 import { runPrompt } from "./run";
 import type { RunPromptOptions, RunPromptResult } from "./types";
@@ -74,13 +74,21 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
   if (!userRecord || userRecord.role !== "user") {
     throw new RegenerateBlockedError("The target record is not a regenerable user prompt.");
   }
+  if (defaultSnapshot.pendingGate || defaultSnapshot.pendingEngineSwitch || defaultSnapshot.pendingUserQuestion
+    || defaultSnapshot.pendingPermission || defaultSnapshot.pendingQualityDecision || defaultSnapshot.pendingQualityRewrite) {
+    throw new RegenerateBlockedError("Resolve the pending interaction before regenerating.");
+  }
 
   // Capture the pre-regenerate physical tail. bootstrap appends the new
   // candidate's file-history snapshot BEFORE the first provider round, so a
   // failed or interrupted runPrompt would leave the default head on the
   // incomplete candidate with no marker to switch back. On failure we append a
   // marker chained off the previous leaf so the old candidate stays active.
-  const previousLeaf = (await loadSessionRecords(rootDir, sessionId)).at(-1)?.uuid;
+  const existingRecords = await loadSessionRecords(rootDir, sessionId);
+  const physicalTail = existingRecords.at(-1);
+  const previousLeaf = physicalTail && isCandidateSelectionRecord(physicalTail)
+    ? String(physicalTail.metadata?.selectedLeafUuid ?? physicalTail.uuid)
+    : physicalTail?.uuid;
 
   let result: RunPromptResult;
   try {

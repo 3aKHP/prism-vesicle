@@ -26,8 +26,22 @@ export type CandidateSelection = {
   selectedLeafUuid: string;
 };
 
-function isSelectionEvent(record: SessionRecord): boolean {
+export function isCandidateSelectionRecord(record: SessionRecord): boolean {
   return record.metadata?.kind === CANDIDATE_SELECTION_KIND;
+}
+
+const hostOnlyKinds = new Set([
+  "provider-switch",
+  "engine-switch",
+  "thinking-switch",
+  "reasoning-switch",
+  "permission-mode-switch",
+  "file-history-snapshot",
+]);
+
+function isContentRecord(record: SessionRecord): boolean {
+  return !isCandidateSelectionRecord(record)
+    && (record.role !== "system" || !hostOnlyKinds.has(String(record.metadata?.kind ?? "")));
 }
 
 /**
@@ -67,8 +81,10 @@ export async function appendCandidateSelection(
  * point that is not itself a selection marker; its content leaf is the deepest
  * descendant that is not a selection marker (selection markers chain off a
  * content leaf when that candidate is selected, and must not be mistaken for the
- * candidate's own leaf). Loading the session at any content leaf projects that
- * candidate's branch.
+ * candidate's own leaf). Selection markers are transparent during traversal so
+ * a paused candidate's later continuation remains part of that candidate. A
+ * subtree is exposed only after it contains an assistant response, excluding a
+ * failed regenerate that stopped after its file-history snapshot.
  */
 export function enumerateCandidateLeaves(records: SessionRecord[], forkPointUuid: string): SessionRecord[] {
   const childrenOf = new Map<string | null, SessionRecord[]>();
@@ -78,20 +94,30 @@ export function enumerateCandidateLeaves(records: SessionRecord[], forkPointUuid
     childrenOf.set(record.parentUuid, siblings);
   }
   const roots = (childrenOf.get(forkPointUuid) ?? [])
-    .filter((record) => !isSelectionEvent(record))
+    .filter((record) => !isCandidateSelectionRecord(record))
     .sort((a, b) => a.ts.localeCompare(b.ts));
-  return roots.map((root) => contentLeaf(root, childrenOf));
+  return roots.flatMap((root) => {
+    const candidate = contentLeaf(root, childrenOf);
+    return candidate.hasAssistant && candidate.leaf ? [candidate.leaf] : [];
+  });
 }
 
-function contentLeaf(start: SessionRecord, childrenOf: Map<string | null, SessionRecord[]>): SessionRecord {
-  let current = start;
-  while (true) {
-    const children = (childrenOf.get(current.uuid) ?? []).filter((record) => !isSelectionEvent(record));
-    if (children.length === 0) return current;
-    // Candidate subtrees are linear chains. If a branch ever appears, take the
-    // latest child so the most recent append defines the active leaf.
-    current = children.sort((a, b) => b.ts.localeCompare(a.ts))[0]!;
+function contentLeaf(
+  start: SessionRecord,
+  childrenOf: Map<string | null, SessionRecord[]>,
+): { leaf?: SessionRecord; hasAssistant: boolean } {
+  let leaf = isContentRecord(start) ? start : undefined;
+  let hasAssistant = start.role === "assistant";
+  const children = (childrenOf.get(start.uuid) ?? []).sort((a, b) => b.ts.localeCompare(a.ts));
+  for (const child of children) {
+    const descendant = contentLeaf(child, childrenOf);
+    hasAssistant ||= descendant.hasAssistant;
+    if (descendant.leaf) {
+      leaf = descendant.leaf;
+      break;
+    }
   }
+  return { leaf, hasAssistant };
 }
 
 /**

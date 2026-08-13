@@ -28,6 +28,28 @@ export type HistoryProjection = {
   skillCatalogSnapshot?: SkillCatalogSnapshot;
 };
 
+/** Project host preferences from the append-only session tail, independent of the selected content branch. */
+export function projectSessionHostState(records: SessionRecord[]): Pick<HistoryProjection, "engine" | "providerSelection" | "reasoningTier" | "reasoningDisplayMode" | "permissionMode"> {
+  let engine: EngineId | undefined;
+  let providerSelection: ProviderSelection | undefined;
+  let reasoningTier: ReasoningTier | undefined;
+  let reasoningDisplayMode: ReasoningDisplayMode | undefined;
+  let permissionMode: PermissionMode | undefined;
+  for (const record of records) {
+    const metadata = record.metadata;
+    if (!metadata) continue;
+    const nextEngine = readEngineId(metadata.engine);
+    if (nextEngine) engine = nextEngine;
+    if (typeof metadata.providerId === "string" && typeof metadata.model === "string") {
+      providerSelection = { provider: metadata.providerId, model: metadata.model };
+    }
+    if (Object.hasOwn(metadata, "reasoningTier")) reasoningTier = readReasoningTier(metadata.reasoningTier);
+    if (Object.hasOwn(metadata, "reasoningDisplayMode")) reasoningDisplayMode = readReasoningDisplayMode(metadata.reasoningDisplayMode);
+    if (isPermissionMode(metadata.permissionMode)) permissionMode = metadata.permissionMode as PermissionMode;
+  }
+  return { engine, providerSelection, reasoningTier, reasoningDisplayMode, permissionMode };
+}
+
 /**
  * Host-only marker appended after a user turn whose provider round never reached
  * a successful assistant reply. `projectSessionHistory` reads it as the cue to
