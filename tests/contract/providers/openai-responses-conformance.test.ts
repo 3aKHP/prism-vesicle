@@ -149,7 +149,7 @@ describe("OpenAI Responses conformance evidence", () => {
       previousResponseId: false,
       remoteCompact: false,
       websocket: false,
-      supportedModels: ["deepseek-v4-flash"],
+      supportedModels: ["deepseek-v4-flash", "deepseek-v4-pro"],
     });
     expect(deepseek.supportedEventFamilies).toContain("response.reasoning_text.*");
     for (const unsupported of deepseek.unsupportedRequestFields) {

@@ -79,11 +79,11 @@ providers:
 
 `openai-responses` 必须再明确写出 `responsesProfile`;Vesicle 不会根据 URL、供应商 id 或模型名猜测能力。Guided Setup 可直接选择 OpenAI Responses、MiMo Responses 或 DeepSeek Responses 子集,并写入保守的 HTTP 配置。完整可复制示例在 [`docs/examples/providers.yaml`](../../../examples/providers.yaml)。
 
-独立 Responses 协议在当前 alpha 中仍为 opt-in experimental;完整 `openai-public` 真实供应商门槛已于 2026-08-11 通过(HTTP/typed SSE、非流式 JSON、standalone compact、public WebSocket 四项,`3` pass、`0` fail),并计划在下个版本从 experimental 毕业。2026-07-31,充值后的 MiMo 端点与 DeepSeek v4 Flash 均分别通过了 reasoning 与函数调用闭环两个用例(`2` pass、`0` fail)。
+独立 Responses 协议在当前 alpha 中仍为 opt-in experimental;完整 `openai-public` 真实供应商门槛已于 2026-08-11 通过(HTTP/typed SSE、非流式 JSON、standalone compact、public WebSocket 四项,`3` pass、`0` fail),并计划在下个版本从 experimental 毕业。2026-07-31,充值后的 MiMo 端点与 DeepSeek v4 Flash 均分别通过了 reasoning 与函数调用闭环两个用例(`2` pass、`0` fail)。2026-08-13,DeepSeek 官方开放 v4 Pro 的 Responses 支持后,`deepseek-v4-pro` 通过了同样的 reasoning 与函数调用闭环用例(`2` pass、`0` fail),`deepseek-v4-flash` 回归验收保持通过。
 
 - `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
 - `mimo-subset-2026-07-30` 是固定日期的第三方兼容子集,只支持 HTTP。它会省略 MiMo 未声明或明确不支持的 `background`、`context_management`、`previous_response_id`、`parallel_tool_calls`、`store`、远程压缩和 WebSocket 字段,每轮回放完整上下文,并把 `response.reasoning_text.*` 显式映射为 Vesicle reasoning。它不是 OpenAI 或 Codex conformance。
-- `deepseek-subset-2026-07-31` 是 DeepSeek 为 `deepseek-v4-flash` 提供的固定日期 HTTP 子集。它使用 Bearer 鉴权,省略不支持的 continuation、Conversations、存储、background、WebSocket 和远程压缩字段,每轮回放包含明文 reasoning Item 的完整上下文,并按 DeepSeek 文档映射 `none`/`low`/`high`/`max` effort。`deepseek-v4-pro` 在官方 8 月支持实际上线并完成独立验收前不属于此档案。
+- `deepseek-subset-2026-07-31` 是 DeepSeek 为 `deepseek-v4-flash` 与 `deepseek-v4-pro` 提供的固定日期 HTTP 子集。它使用 Bearer 鉴权,省略不支持的 continuation、Conversations、存储、background、WebSocket 和远程压缩字段,每轮回放包含明文 reasoning Item 的完整上下文,并按 DeepSeek 文档映射 `none`/`low`/`high`/`max` effort。两个模型已于 2026-08-13 在官方端点完成独立验收;其余模型仍不属于此档案。
 - `codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案:既接受公开协议式的终态有序 output,也接受 Codex 的事件/终态分离格式——由连续 completed Items 承载响应内容,随后合法的 `response.completed` 可省略 `output` 或返回空数组。Vesicle 仍会等成功终态后才提交工具,非空的双重表示必须一致,failed/incomplete/EOF 尝试一律拒绝。
 - `codex-beta-2026-02-06` 是指纹级 Codex 模拟档案:用 WebSocket 传输时发送 Codex V2 beta 线材形态(`openai-beta: responses_websockets=2026-02-06` 头 + `stream: true`),并在 WebSocket 耗尽时回退 HTTPS/SSE——与 Codex 完全一致;走 HTTPS/SSE 时与 `openai-public` 无法区分。需要 WebSocket 流量对齐 Codex V2 beta 形态时选用。这些 Codex 形态档案都不会复制私有身份、attestation 或 `x-codex-*` 头。
 

@@ -813,13 +813,36 @@ describe("OpenAI Responses typed SSE", () => {
     try {
       const adapter = new OpenAIResponsesAdapter({
         provider: "openai-responses", providerId: "deepseek", baseUrl: "https://api.deepseek.com",
-        model: "deepseek-v4-pro", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
+        model: "deepseek-chat", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
         responsesTransport: "http",
       });
       await expect(adapter.complete({
-        ...request(), model: { provider: "deepseek", model: "deepseek-v4-pro" },
-      })).rejects.toThrow("currently supports only deepseek-v4-flash");
+        ...request(), model: { provider: "deepseek", model: "deepseek-chat" },
+      })).rejects.toThrow("currently supports only deepseek-v4-flash and deepseek-v4-pro");
       expect(fetches).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("admits deepseek-v4-pro through the adapter pre-network check", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      return Response.json({
+        id: "resp_deepseek", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }],
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "deepseek", baseUrl: "https://api.deepseek.com/v1",
+        model: "deepseek-v4-pro", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
+        responsesTransport: "http",
+      });
+      await expect(adapter.complete(request())).resolves.toMatchObject({ content: "ok" });
+      expect(fetches).toBe(1);
     } finally {
       globalThis.fetch = originalFetch;
     }

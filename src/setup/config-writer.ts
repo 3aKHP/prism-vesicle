@@ -200,8 +200,8 @@ function mergeProvider(
     : {};
   const models = [...new Set(input.modelIds.map((model) => model.trim()).filter(Boolean))]
     .map((id) => existingModels.get(id) ?? { id });
-  if (preset === "deepseek-responses" && models.some((model) => model.id !== "deepseek-v4-flash")) {
-    throw new Error("DeepSeek Responses currently supports only deepseek-v4-flash; deselect other models before saving.");
+  if (preset === "deepseek-responses" && models.some((model) => model.id !== "deepseek-v4-flash" && model.id !== "deepseek-v4-pro")) {
+    throw new Error("DeepSeek Responses currently supports only deepseek-v4-flash and deepseek-v4-pro; deselect other models before saving.");
   }
   const profile: ProviderProfile = {
     id: providerId,
