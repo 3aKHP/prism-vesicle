@@ -30,7 +30,7 @@ export function isCandidateSelectionRecord(record: SessionRecord): boolean {
   return record.metadata?.kind === CANDIDATE_SELECTION_KIND;
 }
 
-function isContentRecord(record: SessionRecord): boolean {
+export function isContentRecord(record: SessionRecord): boolean {
   // System records are host metadata (validation, checkpoints, preferences,
   // quality state, and candidate markers), never candidate content. Keeping the
   // boundary role-based avoids a fragile whitelist as new host record kinds are
@@ -128,6 +128,22 @@ export function findLatestSelection(records: SessionRecord[]): CandidateSelectio
         selectedLeafUuid: String(metadata.selectedLeafUuid),
       };
     }
+  }
+  return undefined;
+}
+
+/**
+ * The nearest content (non-system) record at or above `uuid` in the parent
+ * chain. Host records such as validation metadata trail a candidate's content
+ * leaf; this resolves the chain back to the leaf itself.
+ */
+export function contentLeafAtOrAbove(records: SessionRecord[], uuid: string | undefined): string | undefined {
+  if (!uuid) return undefined;
+  const byUuid = new Map(records.map((record) => [record.uuid, record] as const));
+  let current = byUuid.get(uuid);
+  while (current) {
+    if (isContentRecord(current)) return current.uuid;
+    current = current.parentUuid ? byUuid.get(current.parentUuid) : undefined;
   }
   return undefined;
 }

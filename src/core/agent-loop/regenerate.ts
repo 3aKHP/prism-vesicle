@@ -12,13 +12,19 @@
 // while its shared logical turn prevents compaction from splitting the prompt
 // from the selected candidate.
 //
-// MVP file policy: regenerate does NOT roll back the old candidate's on-disk
-// artifacts. A regenerated tool-bearing turn executes against the previous
-// candidate's files (documented as a user-manual caveat). Per-candidate file
-// coexistence is a committed follow-up (post-state capture bundles).
+// File policy (#88 Phase 2, per-candidate file coexistence): before the new
+// candidate runs, the old candidate's post-state is captured into a branch
+// candidate-file-state bundle (if not captured already) and the disk is
+// restored to the fork baseline — the first-wins merge of every candidate's
+// pre-turn state — so the new candidate runs against the files the fork turn
+// actually started from. On runPrompt failure or interruption the old candidate
+// regains both the selection marker and (best-effort) its post-state files.
+// MCP tool writes, host-process writes (taint), scratch tmp/, and manual edits
+// remain outside the ledger, as with /rewind.
 
+import { compensateFailedRegenerateFileState, ensureCandidatePostState, restoreForkBaseline } from "../checkpoints/candidate-files";
 import { toVesicleMessage } from "../compact/summary-generator";
-import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection, isCandidateSelectionRecord } from "../session/selection";
+import { appendCandidateSelection, contentLeafAtOrAbove, enumerateCandidateLeaves, findLatestSelection, isCandidateSelectionRecord } from "../session/selection";
 import { readLogicalTurnId } from "../session/execution-identity";
 import { loadSessionRecords, loadSessionSnapshot } from "../session/store";
 import { runPrompt } from "./run";
@@ -98,6 +104,24 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
     ?? (physicalTail && isCandidateSelectionRecord(physicalTail)
       ? String(physicalTail.metadata?.selectedLeafUuid ?? physicalTail.uuid)
       : physicalTail?.uuid);
+  // Host records (validation, provider switches) may follow the old candidate's
+  // content leaf; file bundles key on the content leaf so candidate switching —
+  // which enumerates content leaves — always finds them.
+  const bundleLeaf = contentLeafAtOrAbove(existingRecords, previousLeaf) ?? previousLeaf;
+
+  // Per-candidate file coexistence: preserve the old candidate's post-state
+  // (disk equals it by invariant) before restoring the fork baseline, so the
+  // new candidate starts from the files the fork turn actually saw. A
+  // candidate that produces no bundle — no checkpoint ledger, degraded by a
+  // conversation-only switch, or checkpointing disabled — stays truly
+  // conversation-only: the baseline restore is skipped so a failed regenerate
+  // cannot strand its files away from the disk state it started with.
+  if (bundleLeaf) {
+    const preserved = await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: userRecordUuid, leafUuid: bundleLeaf });
+    if (preserved) {
+      await restoreForkBaseline(rootDir, sessionId, userRecordUuid);
+    }
+  }
 
   let result: RunPromptResult;
   try {
@@ -113,6 +137,17 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
       messages: snapshot.messages.map(toVesicleMessage),
     });
   } catch (error) {
+    // Best-effort file compensation, owned by the candidate-files module: the
+    // failed candidate keeps whatever it left on disk as its bundle, and the
+    // old candidate regains its bundled post-state when one exists.
+    // Compensation failures are swallowed so the original error surfaces.
+    try {
+      if (bundleLeaf) {
+        await compensateFailedRegenerateFileState(rootDir, sessionId, userRecordUuid, bundleLeaf, existingRecords);
+      }
+    } catch {
+      // Best-effort: keep the conversation compensation below authoritative.
+    }
     if (previousLeaf) {
       await appendCandidateSelection(rootDir, sessionId, {
         forkPointUuid: userRecordUuid,

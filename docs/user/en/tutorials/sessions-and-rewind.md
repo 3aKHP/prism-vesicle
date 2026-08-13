@@ -55,14 +55,14 @@ Not happy with the last reply? Have it **try again**; the old version is kept, a
 
 Ctrl+R re-runs the **entire last turn** with the same prompt and produces a new reply as a new candidate. Once the re-run starts, the old reply is cleared from the screen and the new candidate streams in its place; the old candidate is not deleted, it just no longer occupies the view. Once the re-run finishes, a marker like `< 1/2 >` appears under the reply — use **Option+← / Option+→** to switch between candidates. On the Workspace page, `Ctrl+R` continues to reload the active file from disk instead:
 
-- Switching only changes which version is shown and which one later messages build on; it does not call the model again.
+- Switching changes which version is shown, which one later messages build on, and which files are on disk; it does not call the model again.
 - On the chat-only Stage engine a regenerate is cheap (a single model call); on file-writing authoring engines the whole workflow re-runs, which costs more.
 
-> **About files**: regenerate does **not** switch the files Vesicle wrote between candidates yet. The Stage engine writes no files, so it is unaffected; but authoring engines (which write chapter and setting files) generate the new candidate on top of the files the previous candidate left behind, and switching back to an older candidate does not switch the files back either. Full "files switch with the candidate" support is coming in a later release.
+> **About files**: the files Vesicle wrote switch with the candidate. Regenerate re-runs the turn against the files as they were when the turn first started, and switching candidates restores the selected candidate's files. The Stage engine writes no files, so it is unaffected. Some writes stay outside this ledger, as with `/rewind`: changes made by MCP tools, by host processes (`shell_exec` / skill scripts — Vesicle warns you when a candidate is affected), under the scratch `tmp/` root, or by hand. Candidates created before this feature existed and never left since have no saved file state; switching to them changes the conversation only, and Vesicle says so in the status line.
 
 > Each regenerate and each switch appends to the session record, and old candidates are kept forever. The session file grows and loads more slowly as candidates accumulate; Vesicle does not clean this up automatically — start a fresh session with `/new`, or delete unneeded files under `.vesicle/sessions/` by hand when you want to.
 
-Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise the status line tells you to resolve those first.
+Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise the status line tells you to resolve those first. Switching candidates is likewise paused while a background SubAgent is running or queued, so its file writes cannot race the switch.
 
 ## When context gets long: compact
 

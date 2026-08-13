@@ -192,6 +192,37 @@ export async function restoreFileCheckpoint(
   if (!fileCheckpointingEnabled()) return [];
   const state = await checkpointRestoreState(rootDir, sessionId, messageId, options);
   if (!state) throw new Error("The selected file checkpoint was not found.");
+  return applyFileCheckpointEntries(rootDir, sessionId, state);
+}
+
+/**
+ * The branch-scoped pre-turn restore state of a fork point: the merged
+ * checkpoint state of `forkPointUuid`'s turn as seen from branch `headUuid`.
+ * Candidate file coexistence uses it both as the per-candidate baseline and as
+ * the capture-domain path union for post-state bundles.
+ */
+export async function forkTurnPreState(
+  rootDir: string,
+  sessionId: string,
+  forkPointUuid: string,
+  options: { headUuid: string },
+): Promise<Record<string, FileCheckpointEntry> | undefined> {
+  if (!fileCheckpointingEnabled()) return undefined;
+  return checkpointRestoreState(rootDir, sessionId, forkPointUuid, options);
+}
+
+/**
+ * Three-phase idempotent restore of an explicit entry map: delete absent paths
+ * deepest-first, recreate directories shallowest-first, rewrite files. Each
+ * path is checked independently (pathMatchesEntry), so a failed apply can be
+ * re-run with the same state to converge. No journaling: a mid-apply crash
+ * leaves a mixed on-disk state, matching /rewind's existing contract.
+ */
+export async function applyFileCheckpointEntries(
+  rootDir: string,
+  sessionId: string,
+  state: Record<string, FileCheckpointEntry>,
+): Promise<string[]> {
   const changed: string[] = [];
   const entries = Object.entries(state);
 
@@ -306,7 +337,7 @@ function parseEnvelope(metadata: Record<string, unknown> | undefined): SnapshotE
   };
 }
 
-async function capturePath(rootDir: string, sessionId: string, projectPath: string): Promise<FileCheckpointEntry> {
+export async function capturePath(rootDir: string, sessionId: string, projectPath: string): Promise<FileCheckpointEntry> {
   const filePath = resolve(rootDir, projectPath);
   const info = await lstat(filePath).catch((error: unknown) => {
     if (isEnoent(error)) return undefined;
