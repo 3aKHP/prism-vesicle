@@ -1,6 +1,7 @@
 import { createSignal } from "solid-js";
 import { regenerateTurn as coreRegenerateTurn } from "../core/agent-loop/run";
 import { runPrompt } from "../core/agent-loop/run";
+import { switchCandidateFileState } from "../core/checkpoints/candidate-files";
 import { AutoCompactBlockedError } from "../core/compact/auto-compact";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
@@ -461,8 +462,9 @@ export function createTurnController(options: TurnControllerOptions) {
    * the shared user record, updates the display via the normal turn-result path,
    * and arms the inline `<n/m>` switcher. Refuses while busy, while a pending
    * interaction is unresolved, or while a background SubAgent is still running
-   * (its eventual delivery could land on the wrong branch). MVP does NOT roll
-   * back the old candidate's on-disk artifacts — see the user-manual caveat.
+   * (its eventual delivery could land on the wrong branch). The old candidate's
+   * post-state is bundled and the disk is restored to the fork baseline before
+   * the new candidate runs (per-candidate file coexistence).
    */
   async function regenerateTurn(): Promise<void> {
     const id = session.sessionId();
@@ -561,17 +563,26 @@ export function createTurnController(options: TurnControllerOptions) {
 
   /**
    * Switch the active candidate of the current turn by one step (#88 horizontal
-   * branch). Appends a selection marker, reloads the selected candidate's branch
-   * into both the provider context and the display transcript, and advances the
-   * switcher index. Refuses (and disarms) if the conversation has moved past the
-   * fork point since the switcher was armed. Pending interactions are cleared so
-   * a switched-away gate does not linger; switching to a paused candidate is a
+   * branch). Restores the target candidate's on-disk post-state first, then
+   * appends a selection marker and reloads the selected candidate's branch into
+   * both the provider context and the display transcript. Files move before the
+   * marker because the restore is idempotent-convergent (retryable) while the
+   * marker is a one-shot pointer flip: on restore failure the switch aborts and
+   * conversation and disk still point at the same candidate. Refuses (and
+   * disarms) if the conversation has moved past the fork point since the
+   * switcher was armed, or while a background SubAgent is still running (its
+   * writes would race the restore). Pending interactions are cleared so a
+   * switched-away gate does not linger; switching to a paused candidate is a
    * known MVP limitation.
    */
   async function switchCandidate(direction: -1 | 1): Promise<void> {
     const id = session.sessionId();
     const current = candidateSwitcher();
     if (!id || !current || current.total < 2 || runtime.busy()) return;
+    if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
+      transcript.setStatus("wait for active SubAgents before switching candidates");
+      return;
+    }
     // Re-verify: a turn may have landed (e.g. a background SubAgent delivery)
     // since the switcher was armed, making the fork point stale.
     if (!await forkPointIsLastTurn(current.forkPointUuid)) {
@@ -581,10 +592,16 @@ export function createTurnController(options: TurnControllerOptions) {
     }
     const nextIndex = (current.index + direction + current.total) % current.total;
     const nextLeaf = current.leaves[nextIndex];
-    if (!nextLeaf) return;
+    const fromLeaf = current.leaves[current.index];
+    if (!nextLeaf || !fromLeaf) return;
     runtime.setBusy(true);
     transcript.setStatus(`switching to candidate ${nextIndex + 1}/${current.total}`);
     try {
+      const fileOutcome = await switchCandidateFileState(session.rootDir, id, {
+        forkPointUuid: current.forkPointUuid,
+        fromLeaf,
+        toLeaf: nextLeaf,
+      });
       await appendCandidateSelection(session.rootDir, id, { forkPointUuid: current.forkPointUuid, selectedLeafUuid: nextLeaf });
       const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
       session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
@@ -593,8 +610,16 @@ export function createTurnController(options: TurnControllerOptions) {
       transcript.setOutput("");
       setCandidateSwitcher({ ...current, index: nextIndex });
       await hostAction.refreshArtifacts();
-      transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
+      if (fileOutcome.tainted) {
+        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: ran a host process; some file changes may not have switched`);
+      } else if (!fileOutcome.restored && fileOutcome.reason === "missing") {
+        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: legacy candidate, files not switched`);
+      } else {
+        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
+      }
     } catch (error) {
+      // The marker has not been written unless the restore already succeeded,
+      // so conversation and disk still agree; retrying the switch converges.
       reportError(error);
     } finally {
       runtime.setBusy(false);
