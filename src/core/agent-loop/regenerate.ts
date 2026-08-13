@@ -22,12 +22,11 @@
 // MCP tool writes, host-process writes (taint), scratch tmp/, and manual edits
 // remain outside the ledger, as with /rewind.
 
-import { ensureCandidatePostState, restoreForkBaseline, switchCandidateFileState } from "../checkpoints/candidate-files";
-import { applyFileCheckpointEntries } from "../checkpoints/file-history";
+import { compensateFailedRegenerateFileState, ensureCandidatePostState, restoreForkBaseline } from "../checkpoints/candidate-files";
 import { toVesicleMessage } from "../compact/summary-generator";
-import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection, isCandidateSelectionRecord } from "../session/selection";
+import { appendCandidateSelection, contentLeafAtOrAbove, enumerateCandidateLeaves, findLatestSelection, isCandidateSelectionRecord } from "../session/selection";
 import { readLogicalTurnId } from "../session/execution-identity";
-import { loadSessionRecords, loadSessionSnapshot, type SessionRecord } from "../session/store";
+import { loadSessionRecords, loadSessionSnapshot } from "../session/store";
 import { runPrompt } from "./run";
 import type { RunPromptOptions, RunPromptResult } from "./types";
 
@@ -112,11 +111,16 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
 
   // Per-candidate file coexistence: preserve the old candidate's post-state
   // (disk equals it by invariant) before restoring the fork baseline, so the
-  // new candidate starts from the files the fork turn actually saw. Both are
-  // no-ops when file checkpointing is disabled.
+  // new candidate starts from the files the fork turn actually saw. A
+  // candidate that produces no bundle — no checkpoint ledger, degraded by a
+  // conversation-only switch, or checkpointing disabled — stays truly
+  // conversation-only: the baseline restore is skipped so a failed regenerate
+  // cannot strand its files away from the disk state it started with.
   if (bundleLeaf) {
-    await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: userRecordUuid, leafUuid: bundleLeaf });
-    await restoreForkBaseline(rootDir, sessionId, userRecordUuid);
+    const preserved = await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: userRecordUuid, leafUuid: bundleLeaf });
+    if (preserved) {
+      await restoreForkBaseline(rootDir, sessionId, userRecordUuid);
+    }
   }
 
   let result: RunPromptResult;
@@ -133,32 +137,13 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
       messages: snapshot.messages.map(toVesicleMessage),
     });
   } catch (error) {
-    // Best-effort file compensation: capture whatever the failed candidate left
-    // on disk as its post-state, then hand the disk back to the previous
-    // candidate. A failure before the first assistant response performs no
-    // file writes, so restoring the previous bundle alone suffices then.
+    // Best-effort file compensation, owned by the candidate-files module: the
+    // failed candidate keeps whatever it left on disk as its bundle, and the
+    // old candidate regains its bundled post-state when one exists.
     // Compensation failures are swallowed so the original error surfaces.
     try {
       if (bundleLeaf) {
-        // Only a candidate whose leaf was appended by this failed runPrompt is
-        // the failed candidate; pre-existing candidates must never be
-        // re-captured against a half-restored disk.
-        const preRunUuids = new Set(existingRecords.map((record) => record.uuid));
-        const afterRecords = await loadSessionRecords(rootDir, sessionId);
-        const failedLeaf = enumerateCandidateLeaves(afterRecords, userRecordUuid)
-          .map((record) => record.uuid)
-          .filter((leaf) => leaf !== bundleLeaf && !preRunUuids.has(leaf))
-          .at(-1);
-        if (failedLeaf) {
-          await switchCandidateFileState(rootDir, sessionId, {
-            forkPointUuid: userRecordUuid,
-            fromLeaf: failedLeaf,
-            toLeaf: bundleLeaf,
-          });
-        } else {
-          const bundle = await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: userRecordUuid, leafUuid: bundleLeaf });
-          if (bundle) await applyFileCheckpointEntries(rootDir, sessionId, bundle.files);
-        }
+        await compensateFailedRegenerateFileState(rootDir, sessionId, userRecordUuid, bundleLeaf, existingRecords);
       }
     } catch {
       // Best-effort: keep the conversation compensation below authoritative.
@@ -190,20 +175,4 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
     });
   }
   return result;
-}
-
-/**
- * The nearest content (non-system) record at or above `uuid` in the parent
- * chain. Host records such as validation metadata trail a candidate's content
- * leaf; this resolves the chain back to the leaf file bundles key on.
- */
-function contentLeafAtOrAbove(records: SessionRecord[], uuid: string | undefined): string | undefined {
-  if (!uuid) return undefined;
-  const byUuid = new Map(records.map((record) => [record.uuid, record] as const));
-  let current = byUuid.get(uuid);
-  while (current) {
-    if (current.role !== "system") return current.uuid;
-    current = current.parentUuid ? byUuid.get(current.parentUuid) : undefined;
-  }
-  return undefined;
 }

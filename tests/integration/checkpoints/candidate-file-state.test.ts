@@ -253,4 +253,83 @@ describe("candidate file coexistence", () => {
       delete process.env.VESICLE_DISABLE_FILE_CHECKPOINTING;
     }
   });
+
+  test("conversation-only switches mark degradation and never freeze a wrong bundle", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-degraded-"));
+    const sessionId = "candidate-files-degraded";
+    const { user, assistantA, assistantB } = await buildTwoCandidateSession(rootDir, sessionId);
+
+    // Candidate C forks with no checkpoint ledger and is selected by a
+    // conversation-only operation: nothing is restored, so the disk still
+    // holds B's post-state while the marker points at C.
+    const storeC = await createSessionStore(rootDir, sessionId, { parentUuid: user.uuid });
+    const assistantC = await storeC.append({ role: "assistant", content: "candidate C" });
+    const toC = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantC.uuid,
+    });
+    expect(toC).toEqual({ restored: false, changed: [], reason: "missing" });
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("B version\n");
+
+    // Leaving the degraded candidate must NOT capture B's files as C's
+    // authoritative bundle — the disk is not C's post-state.
+    expect(await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: user.uuid, leafUuid: assistantC.uuid })).toBeUndefined();
+
+    // Switching to a bundled candidate restores truthfully again.
+    const toB = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantC.uuid,
+      toLeaf: assistantB.uuid,
+    });
+    expect(toB.restored).toBe(true);
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("B version\n");
+    expect(await readFile(join(rootDir, "workspace", "b.md"), "utf8")).toBe("b body\n");
+    await expect(stat(join(rootDir, "workspace", "a.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    void assistantA;
+  });
+
+  test("malformed bundle entries are rejected at parse and degrade to conversation-only", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-malformed-"));
+    const sessionId = "candidate-files-malformed";
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "existing.md"), "before\n", "utf8");
+
+    const store = await createSessionStore(rootDir, sessionId);
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "write" });
+    const assistantA = await store.append({ role: "assistant", content: "candidate A" });
+    const storeB = await createSessionStore(rootDir, sessionId, { parentUuid: user.uuid });
+    const assistantB = await storeB.append({ role: "assistant", content: "candidate B" });
+
+    // A crafted session record tries to steer the restore outside the project:
+    // a path-traversal entry key and a non-content-addressed backup name.
+    const hostile = await createSessionStore(rootDir, sessionId, { parentUuid: assistantA.uuid });
+    await hostile.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "candidate-file-state",
+        forkPointUuid: user.uuid,
+        leafUuid: assistantA.uuid,
+        timestamp: new Date().toISOString(),
+        files: {
+          "../../evil.md": { backup: "4".repeat(64), kind: "file" },
+          "workspace/existing.md": { backup: "../../../../etc/passwd", kind: "file" },
+        },
+      },
+    });
+
+    // The malformed bundle is ignored entirely; the switch degrades instead of
+    // reading or writing through the crafted entries.
+    const outcome = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(outcome.restored).toBe(false);
+    expect(outcome.reason).toBe("missing");
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("before\n");
+    await expect(stat(join(rootDir, "..", "evil.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
 });

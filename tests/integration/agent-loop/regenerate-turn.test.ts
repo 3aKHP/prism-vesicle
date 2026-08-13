@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { regenerateTurn, RegenerateBlockedError } from "../../../src/core/agent-loop/regenerate";
 import { runPrompt } from "../../../src/core/agent-loop/run";
 import { compactConversation } from "../../../src/core/compact/service";
-import { enumerateCandidateLeaves, findLatestSelection } from "../../../src/core/session/selection";
+import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection } from "../../../src/core/session/selection";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import {
   configureTestProviderEnv,
@@ -363,5 +363,55 @@ describe("agent loop: regenerate turn", () => {
       .toEqual([assistantA1.uuid, enumerateCandidateLeaves(records, userA.uuid).map((record) => record.uuid).filter((leaf) => leaf !== assistantA1.uuid)[0]].sort());
     const failedBundle = bundles.find((record) => record.metadata?.leafUuid !== assistantA1.uuid);
     expect(Object.keys(failedBundle?.metadata?.files as Record<string, unknown>)).toContain("workspace/partial.md");
+  });
+
+  test("regenerating over a bundle-less candidate never moves the disk", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "workspace", "existing.md"), "before\n", "utf8");
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return Response.json({
+          id: "c1",
+          choices: [{
+            message: {
+              content: "",
+              tool_calls: [{
+                id: "call-write",
+                type: "function",
+                function: { name: "write_file", arguments: JSON.stringify({ path: "workspace/existing.md", content: "A version\n" }) },
+              }],
+            },
+          }],
+        });
+      }
+      if (calls === 2) {
+        return Response.json({ id: "c2", choices: [{ message: { content: "candidate-A1" } }] });
+      }
+      throw new Error("provider down");
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({ input: "the prompt", rootDir, messages: [{ role: "user", content: "the prompt" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const recordsAfterFirst = await loadSessionRecords(rootDir, first.sessionId);
+    const userA = recordsAfterFirst.find((record) => record.role === "user")!;
+
+    // A bundle-less sibling candidate selected conversation-only: the marker
+    // points at it while the disk still holds A1's files (the documented
+    // degradation). No bundle is ever captured for it, so regenerate must skip
+    // the baseline restore entirely — a failed regenerate cannot strand the
+    // disk away from the state it started from.
+    const forked = await createSessionStore(rootDir, first.sessionId, { parentUuid: userA.uuid });
+    const bareCandidate = await forked.append({ role: "assistant", content: "bare candidate", metadata: { logicalTurnId: "t1", providerRoundId: "r9" } });
+    await appendCandidateSelection(rootDir, first.sessionId, { forkPointUuid: userA.uuid, selectedLeafUuid: bareCandidate.uuid });
+
+    await expect(regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: userA.uuid }))
+      .rejects.toThrow("provider down");
+
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("A version\n");
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    expect(records.some((record) => record.metadata?.kind === "candidate-file-state")).toBe(false);
+    expect(findLatestSelection(records)?.selectedLeafUuid).toBe(bareCandidate.uuid);
   });
 });

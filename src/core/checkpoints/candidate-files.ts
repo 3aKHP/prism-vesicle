@@ -14,14 +14,24 @@
 //   half-restored disk for the candidate's true post-state.
 // - Switching to a candidate applies pre(to) ∪ pre(from) ∪ bundle(to): the
 //   target bundle carries the real post-state, pre(from) contributes deletion
-//   entries for files the departing candidate created, and pre(to) fills paths
-//   neither candidate touched.
+//   entries for files the departing candidate created, and pre(to) covers
+//   tracked paths outside the bundle's capture domain.
 // - Regenerate restores the fork baseline first — the first-wins merge of
 //   every candidate's pre-turn state in creation order — so a new candidate
 //   runs against the state the fork turn actually started from, even when
 //   MVP-era candidates ran against each other's files.
 //
-// Bundles use a dedicated envelope kind: they never enter
+// Degradation: a switch whose target has no bundle restores nothing, so the
+// invariant no longer holds for the now-active candidate. Such a switch (and
+// every conversation-only switch chained after it) appends a
+// `candidate-file-degraded` marker chained off the target leaf; captures for a
+// marked leaf are refused so a wrong disk state can never be frozen into an
+// authoritative bundle. The same applies to forks whose turn has no checkpoint
+// ledger (file checkpointing disabled while it ran): there is no truthful
+// post-state to capture and no baseline to restore, so regenerate skips the
+// file dance entirely and a failed regenerate never touches the disk.
+//
+// Bundles and markers use dedicated envelope kinds: they never enter
 // snapshotsFromRecords (immune to the 100-snapshot window), are ignored by
 // provider projection (unknown system records), and are transparent to
 // candidate enumeration (system records are never content leaves). Blind spots
@@ -29,7 +39,8 @@
 // taint flag), scratch tmp/, and manual edits — are documented, not solved.
 
 import { enumerateCandidateLeaves } from "../session/selection";
-import { createSessionStore, loadSessionRecords, type SessionRecord } from "../session/store";
+import { buildActiveSessionBranch, createSessionStore, loadSessionRecords, type SessionRecord } from "../session/store";
+import { modelWritableRoots } from "../project/roots";
 import {
   applyFileCheckpointEntries,
   capturePath,
@@ -40,6 +51,9 @@ import {
 } from "./file-history";
 
 export const CANDIDATE_FILE_STATE_KIND = "candidate-file-state";
+export const CANDIDATE_FILE_DEGRADED_KIND = "candidate-file-degraded";
+
+const BACKUP_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 export type CandidateFileStateEnvelope = {
   kind: typeof CANDIDATE_FILE_STATE_KIND;
@@ -74,9 +88,24 @@ export function findCandidatePostState(records: SessionRecord[], leafUuid: strin
 }
 
 /**
+ * Whether the branch ending at `leafUuid` carries a degradation marker for it:
+ * the disk was not this candidate's post-state when it became active (a
+ * conversation-only switch), so capturing it would freeze a wrong state.
+ */
+export function isCandidateFileDegraded(records: SessionRecord[], leafUuid: string): boolean {
+  const branch = buildActiveSessionBranch(records, { headUuid: leafUuid });
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const metadata = branch[index]!.metadata;
+    if (metadata?.kind === CANDIDATE_FILE_DEGRADED_KIND && metadata.leafUuid === leafUuid) return true;
+  }
+  return false;
+}
+
+/**
  * Capture the departing candidate's post-state if it has no bundle yet.
- * Returns undefined when checkpointing is disabled or the candidate's branch
- * carries no checkpoint history (nothing to capture).
+ * Returns undefined when checkpointing is disabled, the candidate's branch
+ * carries no checkpoint history (nothing truthful to capture), or the
+ * candidate is degradation-marked (the disk is not its post-state).
  */
 export async function ensureCandidatePostState(
   rootDir: string,
@@ -84,8 +113,10 @@ export async function ensureCandidatePostState(
   selection: { forkPointUuid: string; leafUuid: string },
 ): Promise<CandidateFileStateEnvelope | undefined> {
   if (!fileCheckpointingEnabled()) return undefined;
-  const existing = findCandidatePostState(await loadSessionRecords(rootDir, sessionId), selection.leafUuid);
+  const records = await loadSessionRecords(rootDir, sessionId);
+  const existing = findCandidatePostState(records, selection.leafUuid);
   if (existing) return existing;
+  if (isCandidateFileDegraded(records, selection.leafUuid)) return undefined;
 
   const preState = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.leafUuid });
   if (!preState) return undefined;
@@ -111,9 +142,11 @@ export async function ensureCandidatePostState(
 
 /**
  * Move the filesystem from candidate `fromLeaf` to candidate `toLeaf`.
- * Captures the departing candidate's post-state first, then applies the target
- * state. When the target has no bundle (produced before this feature and never
- * departed since) the switch degrades to the MVP behavior: conversation only.
+ * Captures the departing candidate's post-state first — but only while the
+ * invariant holds for it — then applies the target state. When the target has
+ * no bundle the switch degrades to conversation-only: nothing is captured or
+ * restored, and a degradation marker records that the invariant no longer
+ * holds for the new active candidate.
  */
 export async function switchCandidateFileState(
   rootDir: string,
@@ -121,10 +154,19 @@ export async function switchCandidateFileState(
   selection: { forkPointUuid: string; fromLeaf: string; toLeaf: string },
 ): Promise<CandidateFileStateOutcome> {
   if (!fileCheckpointingEnabled()) return { restored: false, changed: [], reason: "disabled" };
-  await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: selection.forkPointUuid, leafUuid: selection.fromLeaf });
+  // Capture the departing candidate first: at this moment the disk still
+  // truthfully equals its post-state, even when the switch is about to degrade
+  // conversation-only below. A degradation-marked fromLeaf was never truthful,
+  // so skip it.
   const records = await loadSessionRecords(rootDir, sessionId);
-  const bundle = findCandidatePostState(records, selection.toLeaf);
-  if (!bundle) return { restored: false, changed: [], reason: "missing" };
+  if (!isCandidateFileDegraded(records, selection.fromLeaf)) {
+    await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: selection.forkPointUuid, leafUuid: selection.fromLeaf });
+  }
+  const bundle = findCandidatePostState(await loadSessionRecords(rootDir, sessionId), selection.toLeaf);
+  if (!bundle) {
+    await appendDegradedMarker(rootDir, sessionId, selection);
+    return { restored: false, changed: [], reason: "missing" };
+  }
 
   const preTo = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.toLeaf });
   const preFrom = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.fromLeaf });
@@ -163,15 +205,74 @@ export async function restoreForkBaseline(rootDir: string, sessionId: string, fo
   return applyFileCheckpointEntries(rootDir, sessionId, baseline);
 }
 
+/**
+ * File-state compensation for a failed or interrupted regenerate, owned here
+ * because the disk-equals-active-candidate invariant belongs to this module.
+ * A candidate whose leaf was appended by the failed run keeps whatever it left
+ * on disk as its bundle; the disk then returns to `previousLeaf`'s bundled
+ * post-state when that bundle exists. Best-effort: callers surface the
+ * original error regardless.
+ */
+export async function compensateFailedRegenerateFileState(
+  rootDir: string,
+  sessionId: string,
+  forkPointUuid: string,
+  previousLeaf: string,
+  preRunRecords: SessionRecord[],
+): Promise<void> {
+  if (!fileCheckpointingEnabled()) return;
+  const preRunUuids = new Set(preRunRecords.map((record) => record.uuid));
+  const afterRecords = await loadSessionRecords(rootDir, sessionId);
+  const failedLeaf = enumerateCandidateLeaves(afterRecords, forkPointUuid)
+    .map((record) => record.uuid)
+    .filter((leaf) => leaf !== previousLeaf && !preRunUuids.has(leaf))
+    .at(-1);
+  if (failedLeaf) {
+    await switchCandidateFileState(rootDir, sessionId, { forkPointUuid, fromLeaf: failedLeaf, toLeaf: previousLeaf });
+    return;
+  }
+  const bundle = await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid, leafUuid: previousLeaf });
+  if (bundle) await applyFileCheckpointEntries(rootDir, sessionId, bundle.files);
+}
+
+/**
+ * Append a degradation marker chained off the switch target leaf: the disk did
+ * not equal that candidate's post-state when it became active, so later
+ * captures for it must be refused. Branch-private like bundles; multiple
+ * markers may chain across conversation-only switches, and the latest one on
+ * the branch decides.
+ */
+async function appendDegradedMarker(
+  rootDir: string,
+  sessionId: string,
+  selection: { forkPointUuid: string; toLeaf: string },
+): Promise<void> {
+  const store = await createSessionStore(rootDir, sessionId, { parentUuid: selection.toLeaf });
+  await store.append({
+    role: "system",
+    content: "",
+    metadata: {
+      kind: CANDIDATE_FILE_DEGRADED_KIND,
+      forkPointUuid: selection.forkPointUuid,
+      leafUuid: selection.toLeaf,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
 function parseCandidateFileState(metadata: Record<string, unknown> | undefined): CandidateFileStateEnvelope | undefined {
   if (metadata?.kind !== CANDIDATE_FILE_STATE_KIND) return undefined;
   if (typeof metadata.forkPointUuid !== "string" || typeof metadata.leafUuid !== "string") return undefined;
   if (!metadata.files || typeof metadata.files !== "object") return undefined;
   const files: Record<string, FileCheckpointEntry> = {};
   for (const [path, value] of Object.entries(metadata.files as Record<string, unknown>)) {
+    if (!isValidBundlePath(path)) return undefined;
     if (!value || typeof value !== "object") return undefined;
     const backup = (value as FileCheckpointEntry).backup;
-    if (backup !== null && typeof backup !== "string") return undefined;
+    // Legitimate backups are content-addressed sha256 names written by
+    // capturePath; anything else could steer readBackup/join outside the
+    // backup store.
+    if (backup !== null && (typeof backup !== "string" || !BACKUP_HASH_PATTERN.test(backup))) return undefined;
     files[path] = value as FileCheckpointEntry;
   }
   return {
@@ -182,4 +283,17 @@ function parseCandidateFileState(metadata: Record<string, unknown> | undefined):
     timestamp: typeof metadata.timestamp === "string" ? metadata.timestamp : "",
     ...(metadata.taintedByHostProcess === true ? { taintedByHostProcess: true as const } : {}),
   };
+}
+
+/**
+ * Bundle paths are restore targets resolved against the project root, so a
+ * crafted session file must not be able to steer them outside the writable
+ * roots: reject absolute paths, `.`/`..` segments, and anything not under a
+ * model-writable root.
+ */
+function isValidBundlePath(path: string): boolean {
+  if (path.length === 0 || path.startsWith("/") || path.includes("\\")) return false;
+  const segments = path.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) return false;
+  return modelWritableRoots.some((root) => root === segments[0]);
 }

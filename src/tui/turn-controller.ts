@@ -591,15 +591,17 @@ export function createTurnController(options: TurnControllerOptions) {
     const id = session.sessionId();
     const current = candidateSwitcher();
     if (!id || !current || current.total < 2 || runtime.busy() || candidateActionInFlight) return;
+    if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
+      transcript.setStatus("wait for active SubAgents before switching candidates");
+      return;
+    }
     candidateActionInFlight = true;
     try {
-      if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
-        transcript.setStatus("wait for active SubAgents before switching candidates");
-        return;
-      }
+      // Re-verify: a turn may have landed (e.g. a background SubAgent delivery)
+      // since the switcher was armed, making the fork point stale. The check
+      // stats tracked paths and can throw on a hostile filesystem; report and
+      // abort rather than leaving an unhandled rejection in the key handler.
       try {
-        // Re-verify: a turn may have landed (e.g. a background SubAgent delivery)
-        // since the switcher was armed, making the fork point stale.
         if (!await forkPointIsLastTurn(current.forkPointUuid)) {
           setCandidateSwitcher(null);
           transcript.setStatus("the conversation moved past the switched turn");
@@ -609,44 +611,48 @@ export function createTurnController(options: TurnControllerOptions) {
         reportError(error);
         return;
       }
-      const nextIndex = (current.index + direction + current.total) % current.total;
-      const nextLeaf = current.leaves[nextIndex];
-      const fromLeaf = current.leaves[current.index];
-      if (!nextLeaf || !fromLeaf) return;
-      runtime.setBusy(true);
-      transcript.setStatus(`switching to candidate ${nextIndex + 1}/${current.total}`);
-      try {
-        const fileOutcome = await switchCandidateFileState(session.rootDir, id, {
-          forkPointUuid: current.forkPointUuid,
-          fromLeaf,
-          toLeaf: nextLeaf,
-        });
-        await appendCandidateSelection(session.rootDir, id, { forkPointUuid: current.forkPointUuid, selectedLeafUuid: nextLeaf });
-        const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
-        session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
-        transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
-        clearPendingInteractions();
-        transcript.setOutput("");
-        setCandidateSwitcher({ ...current, index: nextIndex });
-        await hostAction.refreshArtifacts();
-        if (fileOutcome.tainted) {
-          transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: ran a host process; some file changes may not have switched`);
-        } else if (!fileOutcome.restored && fileOutcome.reason === "missing") {
-          transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: legacy candidate, files not switched`);
-        } else {
-          transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
-        }
-      } catch (error) {
-        // A failed restore aborts before the marker, so conversation and disk
-        // still point at the same candidate; even when a later step fails,
-        // retrying the same switch converges (restore is idempotent, bundles
-        // are captured once).
-        reportError(error);
-      } finally {
-        runtime.setBusy(false);
-      }
+      await applyCandidateSwitch(id, current, direction);
     } finally {
       candidateActionInFlight = false;
+    }
+  }
+
+  async function applyCandidateSwitch(id: string, current: CandidateSwitcherState, direction: -1 | 1): Promise<void> {
+    const nextIndex = (current.index + direction + current.total) % current.total;
+    const nextLeaf = current.leaves[nextIndex];
+    const fromLeaf = current.leaves[current.index];
+    if (!nextLeaf || !fromLeaf) return;
+    runtime.setBusy(true);
+    transcript.setStatus(`switching to candidate ${nextIndex + 1}/${current.total}`);
+    try {
+      const fileOutcome = await switchCandidateFileState(session.rootDir, id, {
+        forkPointUuid: current.forkPointUuid,
+        fromLeaf,
+        toLeaf: nextLeaf,
+      });
+      await appendCandidateSelection(session.rootDir, id, { forkPointUuid: current.forkPointUuid, selectedLeafUuid: nextLeaf });
+      const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
+      session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
+      transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
+      clearPendingInteractions();
+      transcript.setOutput("");
+      setCandidateSwitcher({ ...current, index: nextIndex });
+      await hostAction.refreshArtifacts();
+      if (fileOutcome.tainted) {
+        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: ran a host process; some file changes may not have switched`);
+      } else if (!fileOutcome.restored && fileOutcome.reason === "missing") {
+        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: no saved file state, files not switched`);
+      } else {
+        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
+      }
+    } catch (error) {
+      // A failed restore aborts before the marker, so conversation and disk
+      // still point at the same candidate; even when a later step fails,
+      // retrying the same switch converges (restore is idempotent, bundles
+      // are captured once).
+      reportError(error);
+    } finally {
+      runtime.setBusy(false);
     }
   }
 
