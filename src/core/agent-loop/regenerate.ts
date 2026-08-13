@@ -18,7 +18,7 @@
 // coexistence is a committed follow-up (post-state capture bundles).
 
 import { toVesicleMessage } from "../compact/summary-generator";
-import { appendCandidateSelection, isCandidateSelectionRecord } from "../session/selection";
+import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection, isCandidateSelectionRecord } from "../session/selection";
 import { loadSessionRecords, loadSessionSnapshot } from "../session/store";
 import { runPrompt } from "./run";
 import type { RunPromptOptions, RunPromptResult } from "./types";
@@ -86,9 +86,16 @@ export async function regenerateTurn(options: RegenerateTurnOptions): Promise<Ru
   // marker chained off the previous leaf so the old candidate stays active.
   const existingRecords = await loadSessionRecords(rootDir, sessionId);
   const physicalTail = existingRecords.at(-1);
-  const previousLeaf = physicalTail && isCandidateSelectionRecord(physicalTail)
-    ? String(physicalTail.metadata?.selectedLeafUuid ?? physicalTail.uuid)
-    : physicalTail?.uuid;
+  const latestSelection = findLatestSelection(existingRecords);
+  const activeRecordUuids = new Set(defaultSnapshot.records.map((record) => record.uuid));
+  const selectedContentLeaf = latestSelection
+    ? enumerateCandidateLeaves(existingRecords, latestSelection.forkPointUuid)
+      .find((record) => activeRecordUuids.has(record.uuid))
+    : undefined;
+  const previousLeaf = selectedContentLeaf?.uuid
+    ?? (physicalTail && isCandidateSelectionRecord(physicalTail)
+      ? String(physicalTail.metadata?.selectedLeafUuid ?? physicalTail.uuid)
+      : physicalTail?.uuid);
 
   let result: RunPromptResult;
   try {

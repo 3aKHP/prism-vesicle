@@ -21,6 +21,7 @@ type QualityContinuationOptions = {
   reportError: (error: unknown) => void;
   permissionContext: () => PermissionContext;
   resolveQualityDecision?: typeof resolveQualityDecision;
+  refreshCandidateSwitcher: (sessionId: string) => Promise<void>;
 };
 
 export function createQualityDecisionContinuation(options: QualityContinuationOptions) {
@@ -31,7 +32,7 @@ export function createQualityDecisionContinuation(options: QualityContinuationOp
   const { beginUsageTurn } = options.usage;
   const { rootDir } = options.session;
   const { refreshQualityWarnings, resumeQualitySession } = options.hostAction;
-  const { queuedWork, runCancellable, handleResult, handleInterruptedTurn, reportError, permissionContext, resolveQualityDecision: resolveQualityDecisionOverride } = options;
+  const { queuedWork, runCancellable, handleResult, handleInterruptedTurn, reportError, permissionContext, resolveQualityDecision: resolveQualityDecisionOverride, refreshCandidateSwitcher } = options;
 
   async function submitQualityDecision(resolution: "retry" | "accept" | "stop"): Promise<void> {
     const pending = pendingQualityDecision();
@@ -78,6 +79,7 @@ export function createQualityDecisionContinuation(options: QualityContinuationOp
           await applyQualityResolution(outcome.value.sessionId);
         } else {
           handleResult(outcome.value);
+          await refreshCandidateSwitcher(pending.sessionId);
         }
       } else {
         const result = await execute();
@@ -96,6 +98,7 @@ export function createQualityDecisionContinuation(options: QualityContinuationOp
     await refreshQualityWarnings(sessionId);
     await resumeQualitySession(sessionId);
     queuedWork.release();
+    await refreshCandidateSwitcher(sessionId);
   }
 
   async function reconcileQualityDecision(pending: PendingQualityDecisionState): Promise<void> {

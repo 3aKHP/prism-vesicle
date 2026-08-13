@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { regenerateTurn, RegenerateBlockedError } from "../../../src/core/agent-loop/regenerate";
 import { runPrompt } from "../../../src/core/agent-loop/run";
-import { findLatestSelection } from "../../../src/core/session/selection";
+import { enumerateCandidateLeaves, findLatestSelection } from "../../../src/core/session/selection";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import {
   configureTestProviderEnv,
@@ -114,5 +114,28 @@ describe("agent loop: regenerate turn", () => {
       metadata: { toolCalls: [{ id: "gate", name: "request_confirmation", arguments: JSON.stringify({ gate: "runtime-turn", summary: "confirm" }) }] },
     });
     await expect(regenerateTurn({ rootDir, sessionId: "pending-regenerate", userRecordUuid: user.uuid })).rejects.toThrow(/pending interaction/);
+  });
+
+  test("failed regenerate restores the candidate content leaf after later host records", async () => {
+    const rootDir = await createPromptRoot();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls < 3) return Response.json({ id: `c${calls}`, choices: [{ message: { content: `candidate-A${calls}` } }] });
+      throw new Error("provider down");
+    }) as unknown as typeof fetch;
+    const first = await runPrompt({ input: "the prompt", rootDir, messages: [{ role: "user", content: "the prompt" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const initialRecords = await loadSessionRecords(rootDir, first.sessionId);
+    const user = initialRecords.find((record) => record.role === "user")!;
+    await regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: user.uuid });
+    const host = await createSessionStore(rootDir, first.sessionId);
+    await host.append({ role: "system", content: "switched", metadata: { kind: "provider-switch", providerId: "p2", model: "m2" } });
+
+    await expect(regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: user.uuid })).rejects.toThrow("provider down");
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    const selection = findLatestSelection(records)!;
+    const leaves = enumerateCandidateLeaves(records, user.uuid).map((record) => record.uuid);
+    expect(leaves).toContain(selection.selectedLeafUuid);
   });
 });

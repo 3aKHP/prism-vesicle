@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { createSessionStore } from "../../../src/core/session/store";
+import { createSessionStore, loadSessionRecords } from "../../../src/core/session/store";
 import { appendCandidateSelection } from "../../../src/core/session/selection";
 import { createTurnController } from "../../../src/tui/turn-controller";
 
@@ -66,6 +66,38 @@ test("candidate switcher arms when the fork point is still the last turn", async
     expect(switcher).not.toBeNull();
     expect(switcher?.forkPointUuid).toBe(user1);
     expect(switcher?.total).toBe(2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("candidate switcher refresh replaces a paused leaf with its completed continuation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vesicle-cand-cont-"));
+  try {
+    const session = await createSessionStore(root, "s");
+    await session.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    const user = await session.append({ role: "user", content: "turn 1" });
+    await session.append({ role: "assistant", content: "A1" });
+    const forked = await createSessionStore(root, "s", { parentUuid: user.uuid });
+    const paused = await forked.append({
+      role: "assistant",
+      content: "paused",
+      metadata: { toolCalls: [{ id: "gate", name: "request_confirmation", arguments: "{}" }] },
+    });
+    const marker = await appendCandidateSelection(root, "s", { forkPointUuid: user.uuid, selectedLeafUuid: paused.uuid });
+    const controller = createTurnController(minimalControllerOptions(root, "s"));
+    await controller.refreshCandidateSwitcher("s");
+    expect(controller.candidateSwitcher()?.leaves).toContain(paused.uuid);
+
+    const continuation = await createSessionStore(root, "s", { parentUuid: marker.uuid });
+    await continuation.append({ role: "tool", content: "approved", metadata: { toolCallId: "gate", ok: true } });
+    const final = await continuation.append({ role: "assistant", content: "completed" });
+    await controller.refreshCandidateSwitcher("s");
+
+    expect(controller.candidateSwitcher()?.leaves).toContain(final.uuid);
+    expect(controller.candidateSwitcher()?.leaves).not.toContain(paused.uuid);
+    expect(controller.candidateSwitcher()?.index).toBe(1);
+    expect((await loadSessionRecords(root, "s")).at(-1)?.uuid).toBe(final.uuid);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

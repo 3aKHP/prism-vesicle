@@ -16,6 +16,7 @@ type GateContinuationOptions = {
   handleInterruptedTurn: () => void;
   reportError: (error: unknown) => void;
   permissionContext: () => PermissionContext;
+  refreshCandidateSwitcher: (sessionId: string) => Promise<void>;
 };
 
 export function createGateContinuation(options: GateContinuationOptions) {
@@ -24,7 +25,7 @@ export function createGateContinuation(options: GateContinuationOptions) {
   const { setMessages, setStatus, recordActivity } = options.transcript;
   const { agentManager, handleAgentEvent, onProviderContextSnapshot } = options.agent;
   const { beginUsageTurn } = options.usage;
-  const { queuedWork, runCancellable, handleResult, handleInterruptedTurn, reportError, permissionContext } = options;
+  const { queuedWork, runCancellable, handleResult, handleInterruptedTurn, reportError, permissionContext, refreshCandidateSwitcher } = options;
 
   async function submitGateResolution(resolution: GateResolution): Promise<void> {
     const gate = pendingGate();
@@ -52,7 +53,10 @@ export function createGateContinuation(options: GateContinuationOptions) {
       if (outcome.kind === "interrupted") {
         if (!await queuedWork.handleInterruption(gate.sessionId)) setPendingGate(gate);
         handleInterruptedTurn();
-      } else handleResult(outcome.value);
+      } else {
+        handleResult(outcome.value);
+        await refreshCandidateSwitcher(gate.sessionId);
+      }
     } catch (error) {
       setPendingGate(gate);
       reportError(error);

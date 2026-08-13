@@ -142,6 +142,7 @@ export function createTurnController(options: TurnControllerOptions) {
     handleInterruptedTurn,
     reportError,
     permissionContext,
+    refreshCandidateSwitcher,
   });
 
   function markTurnSawResponse(): void {
@@ -610,7 +611,10 @@ export function createTurnController(options: TurnControllerOptions) {
       if (!await forkPointIsLastTurn(selection.forkPointUuid)) { setCandidateSwitcher(null); return; }
       const leaves = enumerateCandidateLeaves(records, selection.forkPointUuid).map((record) => record.uuid);
       if (leaves.length < 2) { setCandidateSwitcher(null); return; }
-      const index = Math.max(0, leaves.indexOf(selection.selectedLeafUuid));
+      const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
+      const activeUuids = new Set(snapshot.records.map((record) => record.uuid));
+      const activeIndex = leaves.findIndex((leaf) => activeUuids.has(leaf));
+      const index = activeIndex >= 0 ? activeIndex : Math.max(0, leaves.indexOf(selection.selectedLeafUuid));
       setCandidateSwitcher({ forkPointUuid: selection.forkPointUuid, leaves, index, total: leaves.length });
     } catch {
       setCandidateSwitcher(null);
