@@ -398,6 +398,7 @@ GitHub auto-closes an issue only when a supported closing keyword is immediately
 - Use `Refs #<issue>` or plain `#<issue>` for related work that does not complete the issue.
 - `Implements #<issue>`, `Closes the follow-up in #<issue>`, and issue references in the PR title do not close issues.
 - For staged work, only the final PR uses `Closes #<issue>`; earlier PRs use `Refs #<issue>`.
+- When an issue is resolved and merged into `develop` but has not yet reached `main`, append a tracking comment at the end of the issue: `This issue has been solved in #<pr-number>.`
 
 ## PR Body Shape
 
