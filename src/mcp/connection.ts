@@ -18,6 +18,7 @@ import type {
   McpToolCallResult,
 } from "./types";
 import { isRecord, McpError, normalizeMcpToolResult } from "./types";
+import { abortReason } from "../shared/cancellation";
 
 export type McpConnectionOptions = {
   fetchImpl?: typeof fetch;
@@ -407,13 +408,10 @@ async function safeClose(client: Client): Promise<void> {
 }
 
 /**
- * The SDK wraps caller abort reasons in SdkError. Re-throw the original abort
- * reason so callers see their own DOMException (name: "AbortError") rather
- * than an SDK-internal error type.
+ * The SDK wraps caller abort reasons in SdkError; abort checks above rethrow
+ * through the shared `abortReason` helper so callers see their own abort
+ * reason rather than an SDK-internal error type.
  */
-export function abortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
-}
 
 /**
  * Normalize a tools/call result, rejecting modern `input_required` (MRTR)

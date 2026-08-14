@@ -35,7 +35,7 @@ function allocateFreePort(): Promise<number> {
   });
 }
 
-async function startServer(
+async function startServerOnce(
   command: string,
   args: string[],
   env: Record<string, string> = {},
@@ -88,6 +88,24 @@ async function startServer(
       }
     });
   });
+}
+
+/**
+ * The allocated port can be grabbed between the probe's close and the real
+ * server's bind; retry with a fresh port before declaring the server
+ * unavailable.
+ */
+async function startServer(
+  command: string,
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<{ url: string; process: ChildProcess } | { error: string }> {
+  let last: { url: string; process: ChildProcess } | { error: string } = { error: "no attempt made" };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    last = await startServerOnce(command, args, env);
+    if (!("error" in last)) return last;
+  }
+  return last;
 }
 
 function stopServer(proc: ChildProcess): Promise<void> {

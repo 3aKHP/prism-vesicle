@@ -9,7 +9,7 @@ import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { withExecutionRound } from "../session/store";
 import type { AgentManager } from "../agents/manager";
-import { abortReason } from "../../mcp/connection";
+import { throwIfAborted } from "../../shared/cancellation";
 import type { AgentMetadata } from "../agents/types";
 import { AgentStore } from "../agents/store";
 import { agentTerminalToolResult } from "../agents/tools";
@@ -38,7 +38,7 @@ type ResolveUserQuestionOptions = ContinuationContextOptions & {
 
 export async function resolveUserQuestion(options: ResolveUserQuestionOptions): Promise<RunPromptResult> {
   const context = await loadContinuationContext(options);
-  if (options.signal?.aborted) throw abortReason(options.signal);
+  throwIfAborted(options.signal);
   const contractOption = resolveContractOption(options);
   const preparedRetry = contractOption?.id === "retry"
     ? await prepareAuthorizedDelegationRetry(context, options.delegationDecision!)
