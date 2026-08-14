@@ -22,12 +22,14 @@ import {
 } from "./quality-continuation-bootstrap";
 import { loadContinuationContext } from "./continuation-context";
 import type { QualityDecisionResolution, RunPromptResult } from "./types";
+import { abortReason } from "../../mcp/connection";
 
 export async function retryQualityDecision(
   options: QualityContinuationOptions,
   point: QualityDecisionPoint,
 ): Promise<RunPromptResult> {
   const context = await loadContinuationContext(options);
+  if (options.signal?.aborted) throw abortReason(options.signal);
   assertQualityIdentity(context.harness?.quality, point.qualityState);
   assertExperimentalJudgeIdentity(context.experimentalQuality, point.qualityState.experimentalJudge);
   const snapshot = await loadSessionSnapshot(context.rootDir, options.sessionId, {

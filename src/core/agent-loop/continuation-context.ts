@@ -46,6 +46,8 @@ export type ContinuationContextOptions = {
   providerSelection?: Partial<ProviderSelection>;
   generation?: VesicleRequest["generation"];
   permission?: PermissionRuntimeOptions;
+  /** Cancels slow context rebuild steps (notably the MCP surface) when the turn is interrupted. */
+  signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
   onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
   harness?: HarnessRuntimeContext;
@@ -123,7 +125,9 @@ export async function loadContinuationContext(
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
     permission.shellInterpreter,
-    mcpOutputPersistence ? { outputPersistence: { sessionId: options.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate } } : {},
+    mcpOutputPersistence
+      ? { outputPersistence: { sessionId: options.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate }, signal: options.signal }
+      : { signal: options.signal },
     { catalogNames: catalogNames(skillCatalog) },
   );
   if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {

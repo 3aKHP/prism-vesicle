@@ -105,6 +105,88 @@ describe("agent loop: MCP multimodal results", () => {
     expect(JSON.stringify(providerBodies[1])).toContain("data:image/png;base64,");
   });
 
+  test("an aborted permission continuation appends no durable resolution records", async () => {
+    const rootDir = await createPromptRoot();
+    await configureMcp();
+    const providerBodies: Record<string, any>[] = [];
+    const normalFetch = multimodalFetch(providerBodies);
+    globalThis.fetch = normalFetch;
+
+    const paused = await runPrompt({
+      input: "show the artwork after approval",
+      rootDir,
+      permission: { mode: "MANUAL" },
+    });
+    expect(paused.kind).toBe("needs_permission");
+    if (paused.kind !== "needs_permission") throw new Error("expected MCP permission pause");
+
+    const resolution = { decision: "allow_once", resolvedAt: new Date().toISOString() } as const;
+    const assertNoResolutionRecords = async () => {
+      const records = await loadSessionRecords(rootDir, paused.sessionId);
+      const kinds = records.map((record) => record.metadata?.kind);
+      expect(kinds).not.toContain("permission-resolution");
+      expect(kinds).not.toContain("process-started");
+      expect(kinds).not.toContain("quality-check-pending");
+    };
+
+    // A cancellation that lands before the continuation starts must reject
+    // without touching the session at all.
+    const preAborted = new AbortController();
+    preAborted.abort("user-cancel");
+    await resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: paused.request,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution,
+      permission: { mode: "MANUAL" },
+      signal: preAborted.signal,
+    }).then(
+      () => { throw new Error("expected the pre-aborted continuation to reject"); },
+      () => {},
+    );
+    await assertNoResolutionRecords();
+
+    // A cancellation that lands while the continuation rebuilds the MCP tool
+    // surface (tools/list) must also leave nothing durable behind.
+    const midFlight = new AbortController();
+    globalThis.fetch = abortOnToolsListFetch(midFlight);
+    await resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: paused.request,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution,
+      permission: { mode: "MANUAL" },
+      signal: midFlight.signal,
+    }).then(
+      () => { throw new Error("expected the mid-flight aborted continuation to reject"); },
+      () => {},
+    );
+    await assertNoResolutionRecords();
+    expect(providerBodies).toHaveLength(1);
+
+    // The interrupted attempts must not corrupt the pause: the same request
+    // resolves cleanly afterwards without a signal.
+    globalThis.fetch = normalFetch;
+    const resumed = await resolvePermission({
+      engine: "etl",
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: paused.messages,
+      request: paused.request,
+      remainingToolCalls: paused.remainingToolCalls,
+      resolution,
+      permission: { mode: "MANUAL" },
+    });
+    expect(resumed.kind).toBe("complete");
+    expect(providerBodies).toHaveLength(2);
+  });
+
   test("materializes and persists MCP image results inside a SubAgent tool loop", async () => {
     await configureTestProviderEnv({ vision: true });
     const rootDir = await createPromptRoot();
@@ -193,6 +275,26 @@ function multimodalFetch(providerBodies: Record<string, any>[]): typeof fetch {
       });
     }
     return Response.json({ id: "chat-mcp-image-2", choices: [{ message: { content: "seen" } }] });
+  }) as typeof fetch;
+}
+
+function abortOnToolsListFetch(controller: AbortController): typeof fetch {
+  return (async (input, init) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, any>;
+    if (String(input).startsWith("https://mcp.test/")) {
+      if (body.method === "initialize") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "prts", version: "1.0" },
+        } });
+      }
+      if (body.method === "notifications/initialized") return new Response("", { status: 202 });
+      if (body.method === "tools/list") {
+        controller.abort("user-cancel");
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+      throw new Error(`unexpected MCP method ${String(body.method)}`);
+    }
+    throw new Error("unexpected provider request during the aborted continuation");
   }) as typeof fetch;
 }
 

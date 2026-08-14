@@ -12,6 +12,7 @@ import { loadContinuationContext } from "./continuation-context";
 import { runLoop } from "./turn-loop";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { AgentManager } from "../agents/manager";
+import { abortReason } from "../../mcp/connection";
 import { clearFrozenInstructionBlocks } from "../instructions/instruction-context";
 import { clearFrozenProjectStateBlock } from "../prompt/project-state";
 
@@ -32,6 +33,7 @@ export async function resolveEngineSwitch(options: ResolveEngineSwitchOptions): 
   const rootDir = options.rootDir ?? process.cwd();
   const confirmed = options.resolution.decision === "confirm";
   const continuation = confirmed ? undefined : await loadContinuationContext(options);
+  if (options.signal?.aborted) throw abortReason(options.signal);
   const session = continuation?.session ?? await createSessionStore(rootDir, options.sessionId);
   const transition = createModelEngineTransition(
     options.engine,

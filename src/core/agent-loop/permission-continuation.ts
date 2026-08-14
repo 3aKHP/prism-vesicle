@@ -5,6 +5,7 @@ import { FileCheckpointManager } from "../checkpoints/file-history";
 import type { PermissionRequest, PermissionResolution, ToolPermissionBroker } from "../permissions";
 import { createPermissionRequest } from "../permissions";
 import { getProcessManager } from "../process/manager";
+import { abortReason } from "../../mcp/connection";
 import { loadSessionRecords, withExecutionRound } from "../session/store";
 import type { ToolCall, ToolResult } from "../tools";
 import { executeHostTool } from "../tools";
@@ -42,11 +43,18 @@ type PermissionContext = Awaited<ReturnType<typeof loadContinuationContext>> & {
 };
 
 export async function resolvePermission(options: ResolvePermissionOptions): Promise<RunPromptResult> {
+  throwIfTurnAborted(options.signal);
   const state = await preparePermissionResolution(options);
+  throwIfTurnAborted(options.signal);
   const batch = await collectPermissionBatch(options, state);
   if (batch.pause) return batch.pause;
+  throwIfTurnAborted(options.signal);
   await executeAndRecordEntries(options, state, batch.entries);
   return continuePermissionSequence(options, state);
+}
+
+function throwIfTurnAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortReason(signal);
 }
 
 async function preparePermissionResolution(options: ResolvePermissionOptions) {
@@ -85,6 +93,7 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
 
   if (options.resolution.decision === "allow_once" && qualityState
     && isQualityArtifactMutationCall(call, qualityState.producer)) {
+    throwIfTurnAborted(options.signal);
     const pendingState = {
       ...qualityState,
       candidateParts: [...qualityState.candidateParts],
@@ -101,6 +110,7 @@ async function preparePermissionResolution(options: ResolvePermissionOptions) {
       metadata: withExecutionRound(context.session.sessionId, { kind: "quality-check-pending", qualityRewrite: pendingState }),
     });
   }
+  throwIfTurnAborted(options.signal);
   await context.session.append({
     role: "system",
     content: `Permission ${options.resolution.decision} for ${call.name}.`,
