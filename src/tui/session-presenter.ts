@@ -131,6 +131,7 @@ export function displayMessagesFromResumed(
   }
   if (message.role === "user") {
     return [{
+      ...(message.recordUuid ? { id: message.recordUuid } : {}),
       role: message.role,
       content: message.content,
       ...(message.images ? { images: message.images.map((image) => ({ ...image })) } : {}),

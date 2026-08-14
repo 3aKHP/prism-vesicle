@@ -7,8 +7,9 @@ import type { ReasoningTier } from "../providers/shared/types";
 import { engineAccent, palette, reportTerminalThemeMode, themePreference } from "./theme";
 import { createThemeScheduler } from "./theme-runtime";
 import { createThemePreferenceController, parseEnvTheme, type ThemePreferenceController } from "./theme-preference-controller";
-import { listSessions, loadSessionSnapshot } from "../core/session/store";
+import { listSessions, loadSessionRecords, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
+import { turnAnchorsFromSnapshot, type TurnAnchor } from "./turn-anchors";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { QualityWarning } from "../core/quality";
@@ -427,6 +428,37 @@ export function App(props: AppProps = {}) {
     regenerateAt: (forkUuid) => turnController.regenerateTurn(forkUuid),
   });
   const branchPicker = branchController.state;
+  // Unified turn-focus cursor (Alt+↑/↓): anchors are recomputed from the
+  // durable records after transcript changes settle; the 150 ms debounce keeps
+  // streaming updates from re-reading the session file per delta.
+  const [turnAnchors, setTurnAnchors] = createSignal<TurnAnchor[]>([]);
+  const [focusedTurn, setFocusedTurn] = createSignal<string | null>(null);
+  createEffect(() => {
+    sessionId();
+    messages();
+    busy();
+    const timer = setTimeout(() => {
+      const id = sessionId();
+      if (!id) {
+        setTurnAnchors([]);
+        setFocusedTurn(null);
+        return;
+      }
+      void loadSessionRecords(process.cwd(), id).then((records) => {
+        const anchors = turnAnchorsFromSnapshot(records);
+        setTurnAnchors(anchors);
+        const focused = focusedTurn();
+        if (focused && !anchors.some((anchor) => anchor.forkUuid === focused)) setFocusedTurn(null);
+      }).catch(() => {});
+    }, 150);
+    onCleanup(() => clearTimeout(timer));
+  });
+  function rejectCandidateSwitch(): void {
+    const fork = focusedTurn();
+    const anchor = fork ? turnAnchors().find((entry) => entry.forkUuid === fork) : undefined;
+    if (anchor?.hasCandidates) setStatus("this turn has candidates; Ctrl+B opens the candidate tree");
+    else setStatus("no candidates to switch here; Ctrl+R regenerates the last turn");
+  }
   function submitCommand(raw: string): boolean {
     return routeCommandSubmission(raw, busy(), builtinCommands(), {
       execute: (value) => {
@@ -960,6 +992,7 @@ export function App(props: AppProps = {}) {
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
     triggerRegenerate: () => void turnController.regenerateTurn(),
     triggerBranch: () => void branchController.open(),
+    onRejectedCandidateSwitch: rejectCandidateSwitch,
     sideQuestionOverlay: sideQuestionController.overlay,
     handleSideQuestionKey: sideQuestionController.handleKey,
     artifactFocusActive: () => focusedArtifactPath() !== null,
@@ -1259,6 +1292,10 @@ export function App(props: AppProps = {}) {
             registerStageKeyHandler={(handler) => { handleStageMessageKey = handler; }}
             candidateSwitcher={turnController.candidateSwitcher}
             onCandidateSwitch={(direction) => turnController.switchCandidate(direction)}
+            onCandidateSwitchRejected={rejectCandidateSwitch}
+            turnAnchors={turnAnchors}
+            focusedTurn={focusedTurn}
+            onFocusTurn={setFocusedTurn}
           />
         </Show>
 

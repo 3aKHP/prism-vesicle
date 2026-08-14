@@ -48,6 +48,9 @@ export type InputRoutingOptions = {
   triggerRegenerate?: () => void;
   /** Ctrl+B on both pages: open the candidate-tree panel (any-depth switching). */
   triggerBranch?: () => void;
+  /** Alt+←/→ reached a surface without the candidate switcher (Workspace/hero):
+   * report guidance instead of swallowing the key silently. */
+  onRejectedCandidateSwitch?: () => void;
   sideQuestionOverlay?: Accessor<unknown>;
   handleSideQuestionKey?: (key: TuiKeyEvent) => boolean;
   splashActive?: Accessor<boolean>;
@@ -240,6 +243,12 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     }
     if (isComposerDirectionKey(key)) {
       // ScrollBox handles modified arrows too, but composer intentionally does not.
+      // Alt+←/→ here means the candidate switcher is out of reach on this
+      // surface (Workspace page or hero): guide instead of swallowing silently.
+      const altLike = key.meta === true || key.option === true;
+      if (altLike && !key.ctrl && (key.name === "left" || key.name === "right")) {
+        options.onRejectedCandidateSwitch?.();
+      }
       consumeKey(key);
       return;
     }

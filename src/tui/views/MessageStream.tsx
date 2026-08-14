@@ -10,6 +10,7 @@ import type { AgentCardState, Message as StreamMessage } from "../types";
 import type { TuiKeyEvent } from "../decision-interaction";
 import { parseStageMessageContent, type StageMessageContent } from "../stage-message-content";
 import { isStageMessageToggleShortcut } from "../stage-message-interaction";
+import type { TurnAnchor } from "../turn-anchors";
 
 /**
  * The hero conversation surface: a sticky-bottom scrollbox of messages plus the
@@ -31,6 +32,12 @@ export function MessageStream(props: {
   /** Active horizontal-candidate switcher for the current turn (#88), or null. */
   candidateSwitcher?: Accessor<{ index: number; total: number } | null>;
   onCandidateSwitch?: (direction: -1 | 1) => void;
+  /** Called when Alt+←/→ cannot switch (no armed switcher); never silent. */
+  onCandidateSwitchRejected?: () => void;
+  /** Turn-level focus anchors for the unified Alt+↑/↓ cursor. */
+  turnAnchors?: Accessor<TurnAnchor[]>;
+  focusedTurn?: Accessor<string | null>;
+  onFocusTurn?: (forkUuid: string) => void;
 }) {
   const renderer = useRenderer();
   const [focusedStageMessageId, setFocusedStageMessageId] = createSignal<string | undefined>();
@@ -125,8 +132,45 @@ export function MessageStream(props: {
         props.onCandidateSwitch?.(key.name === "left" ? -1 : 1);
         return true;
       }
+      // Never swallow this silently: the app guides toward the candidate tree
+      // (Ctrl+B) or regenerate (Ctrl+R) depending on the focused turn.
+      if (props.onCandidateSwitchRejected) {
+        props.onCandidateSwitchRejected();
+        return true;
+      }
       return false;
     }
+    const anchors = props.turnAnchors?.() ?? [];
+    if (navigation && anchors.length > 0) {
+      const focused = props.focusedTurn?.() ?? null;
+      const currentIndex = focused ? anchors.findIndex((anchor) => anchor.forkUuid === focused) : -1;
+      const direction = key.name === "up" ? -1 : 1;
+      const nextIndex = currentIndex < 0
+        ? (direction > 0 ? 0 : anchors.length - 1)
+        : (currentIndex + direction + anchors.length) % anchors.length;
+      const anchor = anchors[nextIndex]!;
+      props.onFocusTurn?.(anchor.forkUuid);
+      scrollbox?.scrollChildIntoView(anchor.userMessageId);
+      // Keep the Stage mechanism's focus in sync so Ctrl+Alt+S and mouse
+      // toggling keep working on eligible focused turns.
+      if (anchor.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)) {
+        setFocusedStageMessageId(anchor.assistantMessageId);
+      }
+      return true;
+    }
+    if (toggle && anchors.length > 0) {
+      const focusedFork = props.focusedTurn?.() ?? null;
+      const anchor = focusedFork ? anchors.find((entry) => entry.forkUuid === focusedFork) : undefined;
+      const target = anchor?.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)
+        ? anchor.assistantMessageId
+        : focusedStageMessageId();
+      if (target && eligibleStageMessageIds().includes(target)) {
+        toggleStageMessage(target);
+        return true;
+      }
+      return false;
+    }
+    // Fallback (no turn anchors provided): Stage-only navigation.
     const ids = eligibleStageMessageIds();
     if (ids.length === 0) return false;
     if (navigation) {
@@ -158,6 +202,15 @@ export function MessageStream(props: {
     return `< ${switcher.index + 1}/${switcher.total} >  Option+←/→ switch · Ctrl+R regenerate`;
   });
 
+  /** Display ids highlighted by the turn-focus cursor (prompt + final reply). */
+  const focusedMessageIds = createMemo(() => {
+    const focusedFork = props.focusedTurn?.() ?? null;
+    if (!focusedFork) return new Set<string>();
+    const anchor = (props.turnAnchors?.() ?? []).find((entry) => entry.forkUuid === focusedFork);
+    if (!anchor) return new Set<string>();
+    return new Set([anchor.userMessageId, ...(anchor.assistantMessageId ? [anchor.assistantMessageId] : [])]);
+  });
+
   const stream = (
     <scrollbox
       ref={scrollbox}
@@ -184,6 +237,7 @@ export function MessageStream(props: {
             expanded={() => message.stageSource === true}
             parsed={stageMessageMetadata().parsedById.get(id)}
             onToggle={() => toggleStageMessage(id)}
+            focused={focusedMessageIds().has(id)}
           />;
         }}</For>
         <Show when={props.streamingReasoning.trim().length > 0 && props.reasoningMode !== "hidden"} fallback={<box height={0} />}>
@@ -227,6 +281,7 @@ function StageStreamMessage(props: {
   expanded: Accessor<boolean>;
   parsed?: StageMessageContent;
   onToggle: () => void;
+  focused?: boolean;
 }) {
   const message = (stageSource: boolean) => <Message
     message={props.message}
@@ -236,6 +291,7 @@ function StageStreamMessage(props: {
     stageSource={stageSource}
     stageParsed={props.parsed}
     onStageToggle={props.onToggle}
+    focused={props.focused}
   />;
   return <Show when={props.expanded()} fallback={message(false)}>{message(true)}</Show>;
 }
