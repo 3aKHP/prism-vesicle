@@ -36,7 +36,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<void> {
     // force a normal exit. Waiting for onDestroy before cleanup leaves Bun stuck
     // after this App has rendered (observed with `bun run dev` Ctrl+C).
     onExit: () => {
-      void runHostShutdownCleanups().finally(() => process.exit(0));
+      void runHostShutdownCleanups().finally(() => process.exit(process.exitCode ?? 0));
     },
   };
   await render(() => <App {...themeProps} />, {

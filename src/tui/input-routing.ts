@@ -82,6 +82,10 @@ function resolveWorkspacePasteOwnership(options: InputRoutingOptions): Workspace
  */
 export function createInputRouter(options: InputRoutingOptions): InputRouter {
   let lastCtrlCAt = 0;
+  const quit = () => process.nextTick(() => {
+    options.renderer.destroy();
+    options.onExit?.();
+  });
   const bottomSurfaceMode = () => resolveBottomSurfaceMode({
     yoloStage: options.yoloConfirmStage(),
     permissionRequest: options.activePermissionRequest(),
@@ -109,10 +113,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
         }
         const now = Date.now();
         if (now - lastCtrlCAt < 3000) {
-          process.nextTick(() => {
-            options.renderer.destroy();
-            options.onExit?.();
-          });
+          quit();
           return;
         }
         lastCtrlCAt = now;
@@ -121,10 +122,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     if (key.ctrl && key.name === "q") {
-      process.nextTick(() => {
-        options.renderer.destroy();
-        options.onExit?.();
-      });
+      quit();
       return;
     }
     // The startup splash swallows all other input: the first keypress ends it
