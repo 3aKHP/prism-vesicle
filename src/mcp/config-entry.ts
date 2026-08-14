@@ -3,9 +3,13 @@
 // an empty .env slot instead, following the add-provider precedent.
 
 import { sanitizeId, uniqueId } from "../config/yaml-writer";
-import { engineIds, type EngineId } from "../core/engine/profile";
+import { engineIds, isEngineId, type EngineId } from "../core/engine/profile";
 import { collectEnvReferences, mcpTokenEnvKey, type McpServerBlock } from "./config-edit";
-import type { McpNegotiationMode } from "./types";
+import {
+  protocolRevisionPattern,
+  validNegotiationModes,
+  type McpNegotiationMode,
+} from "./types";
 
 const entryFieldNames = [
   "name",
@@ -26,8 +30,8 @@ const entryFieldNames = [
 ] as const;
 
 const authModes = ["none", "bearer", "custom-header"] as const;
-const negotiationModes: readonly McpNegotiationMode[] = ["legacy", "modern", "auto"];
-const protocolRevisionPattern = /^\d{4}-\d{2}-\d{2}$/;
+const exactEnvReferencePattern = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
+const httpTokenPattern = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
 export type AddMcpServerEntry = {
   name?: string;
@@ -112,6 +116,9 @@ export function parseAddMcpServerEntry(input: unknown): ParsedAddMcpServerEntry 
 
   const auth = readAuth(source.auth);
   const headerName = optionalNonEmptyString(source.headerName, "headerName");
+  if (headerName !== undefined && !httpTokenPattern.test(headerName)) {
+    throw new Error(`MCP server entry field "headerName" is not a valid HTTP header token: "${headerName}".`);
+  }
   if (auth === "custom-header" && !headerName) {
     throw new Error(`MCP server entry requires "headerName" when auth is custom-header.`);
   }
@@ -205,18 +212,23 @@ function readHeaders(value: unknown): Record<string, string> | undefined {
   }
   const headers: Record<string, string> = {};
   for (const [name, headerValue] of Object.entries(value as Record<string, unknown>)) {
-    if (!name.trim()) throw new Error(`MCP header names must not be empty.`);
+    const headerName = name.trim();
+    if (!headerName) throw new Error(`MCP header names must not be empty.`);
+    if (!httpTokenPattern.test(headerName)) {
+      throw new Error(`MCP header name "${headerName}" is not a valid HTTP header token.`);
+    }
     if (typeof headerValue !== "string" || !headerValue.trim()) {
-      throw new Error(`MCP header "${name}" must be a non-empty string.`);
+      throw new Error(`MCP header "${headerName}" must be a non-empty string.`);
     }
     const trimmed = headerValue.trim();
-    if (collectEnvReferences([trimmed]).length === 0) {
+    const references = [...trimmed.matchAll(/\$\{[^}]*\}/g)].map((match) => match[0]);
+    if (references.length === 0 || references.some((reference) => !exactEnvReferencePattern.test(reference))) {
       throw new Error(
-        `MCP header "${name}" must reference an environment variable such as "\${MY_TOKEN}". `
-        + `Secrets are not accepted through add-mcp.`,
+        `MCP header "${headerName}" must reference environment variables using only exact "\${NAME}" syntax. `
+        + `Fallback/default forms and literal secrets are not accepted through add-mcp.`,
       );
     }
-    headers[name.trim()] = trimmed;
+    headers[headerName] = trimmed;
   }
   return headers;
 }
@@ -234,8 +246,8 @@ function readPositiveNumber(value: unknown, field: string): number {
 }
 
 function readNegotiation(value: unknown): McpNegotiationMode {
-  if (typeof value !== "string" || !(negotiationModes as readonly string[]).includes(value)) {
-    throw new Error(`MCP server entry field "negotiation" must be one of: ${negotiationModes.join(", ")}.`);
+  if (typeof value !== "string" || !(validNegotiationModes as readonly string[]).includes(value)) {
+    throw new Error(`MCP server entry field "negotiation" must be one of: ${validNegotiationModes.join(", ")}.`);
   }
   return value as McpNegotiationMode;
 }
@@ -286,11 +298,10 @@ function readEnabledEngines(value: unknown): EngineId[] {
       throw new Error(`MCP server entry field "enabledEngines" entries must be non-empty strings.`);
     }
     const engine = raw.trim();
-    if (!engineIds.includes(engine as EngineId)) {
+    if (!isEngineId(engine)) {
       throw new Error(`MCP server entry field "enabledEngines" contains unknown engine "${engine}". Allowed: ${engineIds.join(", ")}.`);
     }
-    const engineId = engine as EngineId;
-    if (!result.includes(engineId)) result.push(engineId);
+    if (!result.includes(engine)) result.push(engine);
   }
   return result;
 }

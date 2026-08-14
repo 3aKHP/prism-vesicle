@@ -17,6 +17,10 @@ export const engineIds: readonly EngineId[] = [
   "stage",
 ];
 
+export function isEngineId(value: string): value is EngineId {
+  return (engineIds as readonly string[]).includes(value);
+}
+
 export type EngineProfile = {
   id: EngineId;
   displayName: string;

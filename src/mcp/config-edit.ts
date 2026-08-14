@@ -2,7 +2,6 @@
 // Only new server blocks are generated here; existing source lines are kept
 // byte-for-byte so comments, ordering, and `${ENV}` references survive.
 
-import { readYamlLines } from "../config/yaml-line-reader";
 import { yamlKey, yamlScalar } from "../config/yaml-writer";
 import type { EngineId } from "../core/engine/profile";
 import type { McpNegotiationMode, McpTransport } from "./types";
@@ -89,25 +88,4 @@ export function appendMcpServerBlock(source: string | undefined, blockLines: str
 
   if (!/^servers:\s*(?:#.*)?$/m.test(result)) result += "\n\nservers:";
   return `${result}\n${blockLines.join("\n")}\n`;
-}
-
-/**
- * Server ids already declared at indent 2 under the top-level servers:
- * section. This deliberately does not expand `${ENV}`, so add-mcp can inspect
- * a disabled example file before its referenced secrets exist.
- */
-export function existingMcpServerIds(source: string | undefined): string[] {
-  if (source === undefined) return [];
-  let inServers = false;
-  const ids: string[] = [];
-  for (const line of readYamlLines(source)) {
-    if (line.indent === 0) {
-      inServers = line.text === "servers:";
-      continue;
-    }
-    if (inServers && line.indent === 2 && line.text.endsWith(":")) {
-      ids.push(line.text.slice(0, -1).trim());
-    }
-  }
-  return ids;
 }

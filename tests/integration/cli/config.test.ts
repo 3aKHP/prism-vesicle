@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { runCli, seedProvidersConfig, withTempProject } from "./support";
 
@@ -238,6 +238,28 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("add-mcp writes the token slot beside providers.yaml when VESICLE_MCP_FILE points elsewhere", async () => {
+    await withTempProject("vesicle-config-addmcp-altfile-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const altMcpPath = join(configDir, "alternate", "mcp.yaml");
+      const entry = JSON.stringify({
+        name: "Alt Server",
+        url: "https://alt.example/mcp",
+        auth: "bearer",
+      });
+      const result = await runCli(["config", "add-mcp", "--json", entry], {
+        cwd: projectDir,
+        configDir,
+        env: { VESICLE_MCP_FILE: altMcpPath },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(await readFile(altMcpPath, "utf8")).toContain("alt-server:");
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("MCP_ALT_SERVER_TOKEN=");
+      await expect(readFile(join(dirname(altMcpPath), ".env"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    });
+  });
+
   test("add-mcp preserves existing comments, header references, and flips a disabled registry on", async () => {
     await withTempProject("vesicle-config-addmcp-existing-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
@@ -337,6 +359,25 @@ describe("vesicle config CLI", () => {
       const unknownResult = await runCli(["config", "add-mcp", "--json", unknownEntry], { cwd: projectDir, configDir });
       expect(unknownResult.exitCode).toBe(1);
       expect(unknownResult.stderr).toContain("Unknown MCP server entry field");
+
+      const fallbackEntry = JSON.stringify({
+        name: "Fallback Server",
+        url: "https://fallback.example/mcp",
+        headers: { Authorization: "Bearer ${REAL}${FAKE:-sk-do-not-accept}" },
+      });
+      const fallbackResult = await runCli(["config", "add-mcp", "--json", fallbackEntry], { cwd: projectDir, configDir });
+      expect(fallbackResult.exitCode).toBe(1);
+      expect(fallbackResult.stderr).toContain("only exact \"${NAME}\" syntax");
+
+      const badHeaderName = JSON.stringify({
+        name: "Bad Header",
+        url: "https://header.example/mcp",
+        headers: { "X-Token": "Bearer ${OK_TOKEN}" },
+        headerName: "Bad Header Name",
+      });
+      const badHeaderResult = await runCli(["config", "add-mcp", "--json", badHeaderName], { cwd: projectDir, configDir });
+      expect(badHeaderResult.exitCode).toBe(1);
+      expect(badHeaderResult.stderr).toContain("not a valid HTTP header token");
     });
   });
 

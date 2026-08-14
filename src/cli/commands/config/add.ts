@@ -3,12 +3,12 @@
 // canonical serializer, writes atomically, and creates the empty .env slot for
 // the provider's apiKeyEnv. Full re-parse validation after write.
 
-import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig, parseEnvFile } from "../../../config/providers";
 import type { ProviderProfile, ProviderModelProfile } from "../../../config/providers";
 import { serializeProviderRegistry, setEnvValues } from "../../../setup/config-writer";
 import { atomicWrite } from "../../../config/atomic-write";
+import { readOptionalText } from "../../../config/file-read";
 
 type AddResult = {
   ok: true;
@@ -182,14 +182,5 @@ function optionalString(entry: Record<string, unknown>, field: string): string |
 }
 
 async function readEnvFile(path: string): Promise<string> {
-  try {
-    return await readFile(path, "utf8");
-  } catch (error) {
-    if (isEnoent(error)) return "";
-    throw error;
-  }
-}
-
-function isEnoent(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "ENOENT");
+  return (await readOptionalText(path)) ?? "";
 }

@@ -10,6 +10,9 @@ export type McpProtocolEra = "legacy" | "modern";
 
 export type McpNegotiationMode = "legacy" | "modern" | "auto";
 
+export const validNegotiationModes: readonly McpNegotiationMode[] = ["legacy", "modern", "auto"];
+export const protocolRevisionPattern = /^\d{4}-\d{2}-\d{2}$/;
+
 export type McpFailureKind =
   | "config"
   | "probe"

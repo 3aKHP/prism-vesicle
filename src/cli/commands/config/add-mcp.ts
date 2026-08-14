@@ -3,13 +3,12 @@
 // an `${ENV}` reference in mcp.yaml and an empty slot in the sibling .env.
 // Existing mcp.yaml lines are preserved; only the new server block is appended.
 
-import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { loadUserConfigEnvironment, parseEnvFile } from "../../../config/providers";
 import { setEnvValues } from "../../../setup/config-writer";
 import { atomicWrite } from "../../../config/atomic-write";
+import { readOptionalText as readOptional } from "../../../config/file-read";
 import { parseMcpConfig, mcpConfigPathFromEnv } from "../../../mcp/config";
-import { appendMcpServerBlock, existingMcpServerIds, serializeMcpServerBlock } from "../../../mcp/config-edit";
+import { appendMcpServerBlock, serializeMcpServerBlock } from "../../../mcp/config-edit";
 import { materializeMcpServerBlock, parseAddMcpServerEntry } from "../../../mcp/config-entry";
 
 type AddMcpResult = {
@@ -51,18 +50,19 @@ export async function runAddMcp(args: string[]): Promise<void> {
 async function addMcp(input: unknown): Promise<AddMcpResult> {
   const entry = parseAddMcpServerEntry(input);
   const path = mcpConfigPathFromEnv();
-  const envPath = join(dirname(path), ".env");
   const existingSource = await readOptional(path);
   const userEnv = await loadUserConfigEnvironment();
+  const envPath = userEnv.path;
 
   // Validate the existing file before editing. A missing `${ENV}` referenced
   // by an existing server is a pre-existing broken state: refuse rather than
   // silently papering over it with empty slots.
+  const usedIds = new Set<string>();
   if (existingSource !== undefined) {
-    parseMcpConfig(existingSource, path, userEnv.effectiveEnv);
+    const parsed = parseMcpConfig(existingSource, path, userEnv.effectiveEnv);
+    for (const server of parsed.servers) usedIds.add(server.id);
   }
 
-  const usedIds = new Set(existingMcpServerIds(existingSource));
   const { block, envKeys } = materializeMcpServerBlock(entry, usedIds);
   const nextSource = appendMcpServerBlock(existingSource, serializeMcpServerBlock(block));
 
@@ -104,13 +104,4 @@ async function addMcp(input: unknown): Promise<AddMcpResult> {
     summary,
     restartRequired: true,
   };
-}
-
-async function readOptional(path: string): Promise<string | undefined> {
-  try {
-    return await readFile(path, "utf8");
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  }
 }

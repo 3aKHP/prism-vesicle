@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { PermissionMode } from "../core/permissions";
 import type { EngineId } from "../core/engine/profile";
@@ -17,6 +17,7 @@ import { parseMcpConfig, mcpConfigPathFromEnv } from "../mcp/config";
 import { appendMcpServerBlock, mcpTokenEnvKey, serializeMcpServerBlock, type McpServerBlock } from "../mcp/config-edit";
 import { loadPermissionSettings } from "../config/permissions";
 import { atomicWrite } from "../config/atomic-write";
+import { readOptionalText as readOptional } from "../config/file-read";
 import { sanitizeId, uniqueId, yamlKey, yamlScalar } from "../config/yaml-writer";
 
 export type SetupMcpServer = {
@@ -384,11 +385,4 @@ function validateMcpServer(server: SetupMcpServer): void {
 function dotenvScalar(value: string): string {
   if (/^[A-Za-z0-9_./:@+\-=]+$/.test(value)) return value;
   return JSON.stringify(value);
-}
-
-async function readOptional(path: string): Promise<string | undefined> {
-  return readFile(path, "utf8").catch((error: unknown) => {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  });
 }

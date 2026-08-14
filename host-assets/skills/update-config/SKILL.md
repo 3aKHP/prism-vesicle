@@ -185,7 +185,7 @@ update_config.sh add-mcp --json '{
 
 For bearer or custom-header auth the CLI derives `MCP_<ID>_TOKEN`, writes the header as an `${ENV_VAR}` reference in `mcp.yaml`, and creates that variable as an empty `.env` slot. The user must edit `.env` and paste the token after `=`; you cannot and must not do it for them.
 
-Optional full fields include `id`, `enabled`, `timeoutSeconds`, `protocolVersion`, `negotiation`, `supportedProtocolVersions`, `toolPrefix`, `includeTools`, `excludeTools`, and `headers`. Explicit `headers` values must reference environment variables (`"Bearer ${MY_TOKEN}"`) rather than literal secrets. If the user pastes an MCP token into the conversation, follow the credential guidance in the security rules and do not pass it through the CLI.
+Optional full fields include `id`, `enabled`, `timeoutSeconds`, `protocolVersion`, `negotiation`, `supportedProtocolVersions`, `toolPrefix`, `includeTools`, `excludeTools`, and `headers`. Explicit `headers` values must use exact environment references (`"Bearer ${MY_TOKEN}"`); fallback/default forms such as `${TOKEN:-literal}` are rejected rather than written to `mcp.yaml`. If the user pastes an MCP token into the conversation, follow the credential guidance in the security rules and do not pass it through the CLI.
 
 ### Adding a model
 
