@@ -189,6 +189,9 @@ Doctor 只检查路由选择,不会尝试证明代理或供应商实际可达;�
 
 从 [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml) 起步。每个服务器可设 `transport`(streamable-http)、`url`、`timeoutSeconds`、`toolPrefix`、`headers`(支持 `${ENV_VAR}` 从 `.env` 展开)、`includeTools`/`excludeTools` 过滤、`enabledEngines`(限定哪些引擎能用)。文件存在即默认启用;密钥放 `.env`。
 
+也可以用 `vesicle config add-mcp --json '<entry>'` 添加服务器,或 `vesicle config remove-mcp <server-id>` 移除;最后一个服务器被移除时删除整个 `mcp.yaml`。这两个命令都不会接收密钥,而是创建/保留 `.env` 槽位供你手工填写。用法见 [MCP 工具](../advanced/mcp.md)。
+
+
 Vesicle 支持双纪元 Streamable HTTP MCP 工具兼容:同一个 Vesicle 进程可以同时连接 legacy(`initialize` 协商)和 modern(`server/discover` 协商)的 MCP 服务器。每个服务器可设 `negotiation`:
 
 - `legacy`(默认,缺省值):只走 `initialize` 路径,不发 modern 探测。

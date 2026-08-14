@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Added
 
 - **`vesicle config add-mcp`.** Adds an MCP server to `mcp.yaml` from a JSON entry without hand-editing YAML. The command never accepts secret values: `auth: bearer` or `auth: custom-header` writes a `${ENV_VAR}` reference in `mcp.yaml` and creates the corresponding empty `.env` slot for the user to fill in; explicit `headers` entries must use exact `${NAME}` references (fallback/default forms are rejected). Entries may declare the full current server shape (`enabled`, `timeoutSeconds`, `protocolVersion`, `toolPrefix`, `negotiation`, `supportedProtocolVersions`, `includeTools`, `excludeTools`, `enabledEngines`), names are sanitized into unique ids, and explicit duplicate ids are rejected. The existing file is edited line-preservingly (comments, ordering, and untouched server lines survive), adding a server flips a top-level `enabled: false` to `true`, and the exact output is re-parsed before the atomic write.
+- **`vesicle config remove-mcp`.** Removes one MCP server by a line-preserving block edit that keeps surrounding comments, ordering, untouched server lines, and `${ENV}` header references. Removing the last configured server deletes `mcp.yaml` entirely (the same runtime state as "MCP not configured") and leaves sibling `.env` slots untouched. The output is re-parsed before the atomic write, and unknown ids or missing `${ENV}` references fail without changing the file.
 
 ## [1.0.0-alpha.10] - 2026-08-14
 

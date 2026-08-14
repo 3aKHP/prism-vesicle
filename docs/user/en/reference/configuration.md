@@ -187,6 +187,9 @@ Doctor checks route selection only; it does not prove that the proxy or provider
 
 Start from [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml). Each server can set `transport` (streamable-http), `url`, `timeoutSeconds`, `toolPrefix`, `headers` (supports `${ENV_VAR}` expansion from `.env`), `includeTools`/`excludeTools` filters, and `enabledEngines` (which engines can use it). A present `mcp.yaml` defaults to enabled; secrets go in `.env`.
 
+You can also add servers with `vesicle config add-mcp --json '<entry>'` and remove them with `vesicle config remove-mcp <server-id>`; removing the last server deletes the whole `mcp.yaml`. Neither command accepts secrets—they create or preserve `.env` slots for you to fill in manually. See [MCP tools](../advanced/mcp.md).
+
+
 Vesicle supports dual-era Streamable HTTP MCP tools: one Vesicle process can connect to both legacy (`initialize` handshake) and modern (`server/discover`) MCP servers concurrently. Each server can set `negotiation`:
 
 - `legacy` (default when absent): uses the `initialize` path only, no modern probe.
