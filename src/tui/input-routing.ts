@@ -11,6 +11,8 @@ import type { SkillPickerState } from "./skill-picker-controller";
 
 export type InputRoutingOptions = {
   renderer: ReturnType<typeof useRenderer>;
+  /** Called after the renderer has been destroyed when the user quits the TUI. */
+  onExit?: () => void;
   setStatus: Setter<string>;
   rewindPicker: Accessor<RewindPickerState | null>;
   handleRewindKey: (key: TuiKeyEvent) => boolean;
@@ -107,7 +109,10 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
         }
         const now = Date.now();
         if (now - lastCtrlCAt < 3000) {
-          process.nextTick(() => options.renderer.destroy());
+          process.nextTick(() => {
+            options.renderer.destroy();
+            options.onExit?.();
+          });
           return;
         }
         lastCtrlCAt = now;
@@ -116,7 +121,10 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     if (key.ctrl && key.name === "q") {
-      process.nextTick(() => options.renderer.destroy());
+      process.nextTick(() => {
+        options.renderer.destroy();
+        options.onExit?.();
+      });
       return;
     }
     // The startup splash swallows all other input: the first keypress ends it
