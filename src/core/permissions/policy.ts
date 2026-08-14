@@ -6,7 +6,6 @@ import type {
 
 const observeTools = new Set([
   "stat_path",
-  "list_files",
   "list_directory",
   "grep_files",
   "read_file",
@@ -36,9 +35,11 @@ const interactionTools = new Set([
  */
 export function permissionClassForTool(toolName: string): PermissionClass {
   if (interactionTools.has(toolName)) return "interaction";
-  // run_skill_script executes bundled code with the user's process authority,
-  // so it shares shell_exec's class; no Skill-specific approval layer exists.
-  if (toolName === "shell_exec" || toolName === "run_skill_script") return "arbitrary_exec";
+  // Skill scripts select a fixed, inspectable bundled file and pass structured
+  // argv without shell interpolation. They retain Process Runtime hardening but
+  // do not share free-form shell_exec's capability gate or approval friction.
+  if (toolName === "run_skill_script") return "skill_exec";
+  if (toolName === "shell_exec") return "arbitrary_exec";
   if (observeTools.has(toolName)) return "observe";
   return "mutate";
 }

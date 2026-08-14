@@ -24,7 +24,7 @@ export type FileCheckpointSnapshot = {
   messageId: string;
   files: Record<string, FileCheckpointEntry>;
   timestamp: string;
-  /** shell_exec may mutate paths outside the guarded file-tool ledger. */
+  /** Host processes may mutate paths outside the guarded file-tool ledger. */
   taintedByHostProcess?: true;
 };
 
@@ -192,6 +192,37 @@ export async function restoreFileCheckpoint(
   if (!fileCheckpointingEnabled()) return [];
   const state = await checkpointRestoreState(rootDir, sessionId, messageId, options);
   if (!state) throw new Error("The selected file checkpoint was not found.");
+  return applyFileCheckpointEntries(rootDir, sessionId, state);
+}
+
+/**
+ * The branch-scoped pre-turn restore state of a fork point: the merged
+ * checkpoint state of `forkPointUuid`'s turn as seen from branch `headUuid`.
+ * Candidate file coexistence uses it both as the per-candidate baseline and as
+ * the capture-domain path union for post-state bundles.
+ */
+export async function forkTurnPreState(
+  rootDir: string,
+  sessionId: string,
+  forkPointUuid: string,
+  options: { headUuid: string },
+): Promise<Record<string, FileCheckpointEntry> | undefined> {
+  if (!fileCheckpointingEnabled()) return undefined;
+  return checkpointRestoreState(rootDir, sessionId, forkPointUuid, options);
+}
+
+/**
+ * Three-phase idempotent restore of an explicit entry map: delete absent paths
+ * deepest-first, recreate directories shallowest-first, rewrite files. Each
+ * path is checked independently (pathMatchesEntry), so a failed apply can be
+ * re-run with the same state to converge. No journaling: a mid-apply crash
+ * leaves a mixed on-disk state, matching /rewind's existing contract.
+ */
+export async function applyFileCheckpointEntries(
+  rootDir: string,
+  sessionId: string,
+  state: Record<string, FileCheckpointEntry>,
+): Promise<string[]> {
   const changed: string[] = [];
   const entries = Object.entries(state);
 
@@ -278,6 +309,7 @@ async function diffCheckpointState(
   rootDir: string,
   sessionId: string,
   state: Record<string, FileCheckpointEntry>,
+  extraDeletionPaths: string[] = [],
 ): Promise<FileCheckpointDiffStats> {
   const result: FileCheckpointDiffStats = { filesChanged: [], insertions: 0, deletions: 0 };
   for (const [path, entry] of Object.entries(state)) {
@@ -287,6 +319,15 @@ async function diffCheckpointState(
     const current = await currentFileContent(filePath);
     const target = await entryFileContent(rootDir, sessionId, entry);
     const counts = lineChangeCounts(current?.toString("utf8") ?? "", target?.toString("utf8") ?? "");
+    result.insertions += counts.insertions;
+    result.deletions += counts.deletions;
+  }
+  for (const path of extraDeletionPaths) {
+    const filePath = resolve(rootDir, path);
+    const current = await currentFileContent(filePath);
+    if (current === null) continue;
+    result.filesChanged.push(path);
+    const counts = lineChangeCounts(current.toString("utf8"), "");
     result.insertions += counts.insertions;
     result.deletions += counts.deletions;
   }
@@ -306,7 +347,7 @@ function parseEnvelope(metadata: Record<string, unknown> | undefined): SnapshotE
   };
 }
 
-async function capturePath(rootDir: string, sessionId: string, projectPath: string): Promise<FileCheckpointEntry> {
+export async function capturePath(rootDir: string, sessionId: string, projectPath: string): Promise<FileCheckpointEntry> {
   const filePath = resolve(rootDir, projectPath);
   const info = await lstat(filePath).catch((error: unknown) => {
     if (isEnoent(error)) return undefined;
@@ -341,6 +382,112 @@ async function capturePaths(
     Object.assign(result, await capturePaths(rootDir, sessionId, childPath));
   }
   return result;
+}
+
+export type ProjectTreeNodeKind = "file" | "directory" | "untracked";
+
+/**
+ * Shared lstat-based walk of the on-disk project tree under `roots` — the
+ * single owner of the traversal and of what counts as `untracked` (symlinks
+ * and special files, reported and never descended into, so a link pointing
+ * outside the project can never pull foreign content into a restore).
+ * Descent continues through every regular directory regardless of the visit.
+ */
+async function walkProjectTree(
+  rootDir: string,
+  roots: readonly string[],
+  visit: (projectPath: string, kind: ProjectTreeNodeKind) => Promise<void> | void,
+): Promise<void> {
+  for (const root of roots) {
+    await walkProjectNode(rootDir, root, visit);
+  }
+}
+
+async function walkProjectNode(
+  rootDir: string,
+  projectPath: string,
+  visit: (projectPath: string, kind: ProjectTreeNodeKind) => Promise<void> | void,
+): Promise<void> {
+  const fullPath = resolve(rootDir, projectPath);
+  const info = await lstat(fullPath).catch((error: unknown) => {
+    if (isEnoent(error)) return undefined;
+    throw error;
+  });
+  if (!info) return;
+  if (info.isSymbolicLink() || (!info.isFile() && !info.isDirectory())) {
+    await visit(projectPath, "untracked");
+    return;
+  }
+  await visit(projectPath, info.isDirectory() ? "directory" : "file");
+  if (!info.isDirectory()) return;
+  for (const child of await readdir(fullPath, { withFileTypes: true })) {
+    await walkProjectNode(rootDir, `${projectPath}/${child.name}`, visit);
+  }
+}
+
+export type ProjectTreeListing = {
+  /** Regular files and directories under the roots, project-relative paths. */
+  paths: Map<string, "file" | "directory">;
+  /** Symlinks and special files: listed, never descended into, never restored. */
+  untracked: string[];
+};
+
+/**
+ * Cheap enumeration of the on-disk project tree (no content reads, no
+ * hashing); the listing side of the shared walk.
+ */
+export async function listProjectTreePaths(rootDir: string, roots: readonly string[]): Promise<ProjectTreeListing> {
+  const paths = new Map<string, "file" | "directory">();
+  const untracked: string[] = [];
+  await walkProjectTree(rootDir, roots, (projectPath, kind) => {
+    if (kind === "untracked") untracked.push(projectPath);
+    else paths.set(projectPath, kind);
+  });
+  return { paths, untracked };
+}
+
+export type ProjectTreeCapture = {
+  files: Record<string, FileCheckpointEntry>;
+  untracked: string[];
+};
+
+/**
+ * Full-manifest capture of everything on disk under `roots`: directories and
+ * content-addressed files as checkpoint entries, symlinks/special files listed
+ * as `untracked` (exempt from capture and restore); the capturing side of the
+ * shared walk. Distinct from `capturePaths`, which throws on symlinks to
+ * preserve the explicit-path semantics of trackBeforeMutation.
+ */
+export async function captureProjectTree(
+  rootDir: string,
+  sessionId: string,
+  roots: readonly string[],
+): Promise<ProjectTreeCapture> {
+  const files: Record<string, FileCheckpointEntry> = {};
+  const untracked: string[] = [];
+  await walkProjectTree(rootDir, roots, async (projectPath, kind) => {
+    if (kind === "untracked") {
+      untracked.push(projectPath);
+      return;
+    }
+    files[projectPath] = await capturePath(rootDir, sessionId, projectPath);
+  });
+  return { files, untracked };
+}
+
+/**
+ * Diff the current disk against an explicit entry map, plus paths slated for
+ * deletion that carry no target entry (`extraDeletionPaths`, counted as
+ * current-content -> absent). The deletion list serves manifest-based
+ * candidate switching, where out-of-manifest disk paths disappear.
+ */
+export function diffDiskAgainstEntries(
+  rootDir: string,
+  sessionId: string,
+  entries: Record<string, FileCheckpointEntry>,
+  extraDeletionPaths: string[] = [],
+): Promise<FileCheckpointDiffStats> {
+  return diffCheckpointState(rootDir, sessionId, entries, extraDeletionPaths);
 }
 
 async function readBackup(rootDir: string, sessionId: string, entry: FileCheckpointEntry): Promise<Buffer | null> {

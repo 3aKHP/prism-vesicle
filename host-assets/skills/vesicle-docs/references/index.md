@@ -18,6 +18,7 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 
 ## User Manual
 
+- `docs/user/en/advanced/mcp.md` → `references/user-en-advanced-mcp.md` — MCP tools [en]
 - `docs/user/en/advanced/quality-guard.md` → `references/user-en-advanced-quality-guard.md` — Output Quality Guard [en]
 - `docs/user/en/advanced/README.md` → `references/user-en-advanced-readme.md` — Advanced and experimental features [en]
 - `docs/user/en/advanced/shell-exec.md` → `references/user-en-advanced-shell-exec.md` — Host shell and Process Runtime [en]
@@ -45,6 +46,7 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 - `docs/user/en/tutorials/sessions-and-rewind.md` → `references/user-en-tutorials-sessions-and-rewind.md` — Sessions and rewind [en]
 - `docs/user/en/tutorials/work-while-running.md` → `references/user-en-tutorials-work-while-running.md` — Keep working during a turn: queue and side questions [en]
 - `docs/user/en/tutorials/workspace-page.md` → `references/user-en-tutorials-workspace-page.md` — View and edit artifacts in the Workspace page [en]
+- `docs/user/zh-CN/advanced/mcp.md` → `references/user-zh-cn-advanced-mcp.md` — MCP 工具 [zh-CN]
 - `docs/user/zh-CN/advanced/quality-guard.md` → `references/user-zh-cn-advanced-quality-guard.md` — Output Quality Guard [zh-CN]
 - `docs/user/zh-CN/advanced/README.md` → `references/user-zh-cn-advanced-readme.md` — 高级与实验特性 [zh-CN]
 - `docs/user/zh-CN/advanced/shell-exec.md` → `references/user-zh-cn-advanced-shell-exec.md` — 宿主 Shell 与 Process Runtime [zh-CN]

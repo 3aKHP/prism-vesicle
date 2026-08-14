@@ -6,7 +6,7 @@ English | [简体中文](../../zh-CN/advanced/README.md)
 
 This section covers capabilities that the tutorials and reference do not expand on. Best read after the [tutorials](../tutorials/README.md).
 
-> **Status convention:** each page opens with 🟢 Implemented / 🟡 Experimental, reflecting maturity in `1.0.0-alpha.9`. Experimental features may stabilize over releases — **[`STATUS.md`](../../../../STATUS.md) is the authoritative current state**; the markers here may lag. When a feature graduates, update the table on this page and the status line on its page.
+> **Status convention:** each page opens with 🟢 Implemented / 🟡 Experimental, reflecting maturity in `1.0.0-alpha.10`. Experimental features may stabilize over releases — **[`STATUS.md`](../../../../STATUS.md) is the authoritative current state**; the markers here may lag. When a feature graduates, update the table on this page and the status line on its page.
 
 ## Feature overview
 
@@ -17,6 +17,7 @@ This section covers capabilities that the tutorials and reference do not expand 
 | [SubAgents](./subagents.md) | 🟢 Implemented | Foreground/background child tasks; generic and Driver-contract agents |
 | [Stage consumer engine](./stage.md) | 🟢 Implemented | Open a continuous narrative session from a character card + scenario card |
 | [Skills](./skills.md) | 🟢 Implemented | On-demand procedural context: discovery, activation, resource reads, `/skill` command |
+| [MCP tools](./mcp.md) | 🟢 MCP tools · 🟡 Output persistence experimental | Connect external tools: connection setup, tool permissions, optional result archiving |
 
 ## Prerequisites
 

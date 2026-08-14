@@ -210,12 +210,20 @@ describe("config loading", () => {
     );
 
     const unsupportedModel = valid.map((line) => line === "      - deepseek-v4-flash"
-      ? "      - deepseek-v4-pro"
+      ? "      - deepseek-chat"
       : line);
     const invalidModel = await writeProvidersFile(unsupportedModel, ["DEEPSEEK_API_KEY=secret"]);
     await expect(loadConfigForSelection(undefined, invalidModel.env)).rejects.toThrow(
-      "can declare only deepseek-v4-flash with deepseek-subset-2026-07-31",
+      "can declare only deepseek-v4-flash or deepseek-v4-pro with deepseek-subset-2026-07-31",
     );
+
+    const bothModels = valid.flatMap((line) => line === "      - deepseek-v4-flash"
+      ? ["      - deepseek-v4-flash", "      - deepseek-v4-pro"]
+      : [line]);
+    const bothEnv = await writeProvidersFile(bothModels, ["DEEPSEEK_API_KEY=secret"]);
+    await expect(loadConfigForSelection(undefined, bothEnv.env)).resolves.toMatchObject({
+      responsesProfile: "deepseek-subset-2026-07-31",
+    });
   });
 
   test("loads a provider-level User-Agent override", async () => {

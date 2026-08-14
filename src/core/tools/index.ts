@@ -8,7 +8,6 @@ export type BuiltInToolName =
   | "web_crawl"
   | "web_research"
   | "stat_path"
-  | "list_files"
   | "list_directory"
   | "grep_files"
   | "read_file"
@@ -137,10 +136,6 @@ export const m0Tools: ToolContract[] = [
     description: "Inspect an allowed project path.",
   },
   {
-    name: "list_files",
-    description: "List allowed project files.",
-  },
-  {
     name: "list_directory",
     description: "List files and directories under an allowed project directory.",
   },
@@ -250,7 +245,6 @@ export async function executeHostTool(
       catalog: options.skillCatalog,
       sessionId: options.parentSessionId,
       signal: options.signal,
-      shellInterpreter: options.shellInterpreter,
       onProcessProgress: options.onProcessProgress,
     };
     if (call.name === "activate_skill") return executeActivateSkillTool(call, skillOptions);

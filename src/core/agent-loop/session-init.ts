@@ -35,6 +35,7 @@ import {
 import { generationMetadata, mergeGeneration } from "./generation";
 import { resolveToolSurface } from "./tool-surface";
 import type { RunPromptOptions } from "./types";
+import { appendHostContext } from "../prompt/host-context";
 
 export type InitializeSessionIdentityOptions = Pick<
   RunPromptOptions,
@@ -142,7 +143,10 @@ export async function initializeSessionIdentity(
   const skillCatalog = resolveEngineEligibleCatalog(frozenSkillCatalog, profile);
   const skillCatalogSnapshot = snapshotSkillCatalog(frozenSkillCatalog);
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
-  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+  // Project State is a turn-start observation, not session identity. Keeping it
+  // out of this pre-created header prevents the header prompt from diverging
+  // from the first provider request when files change before the turn starts.
+  systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock);
 
   const toolSurface = await resolveToolSurface(
     profile,

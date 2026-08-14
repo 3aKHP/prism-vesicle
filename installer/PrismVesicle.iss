@@ -1,14 +1,14 @@
 #ifndef AppVersion
-  #error AppVersion must be supplied by scripts/build-installer.ts
+  #error AppVersion must be supplied by scripts/build/build-installer.ts
 #endif
 #ifndef SourceRoot
-  #error SourceRoot must be supplied by scripts/build-installer.ts
+  #error SourceRoot must be supplied by scripts/build/build-installer.ts
 #endif
 #ifndef FileVersion
-  #error FileVersion must be supplied by scripts/build-installer.ts
+  #error FileVersion must be supplied by scripts/build/build-installer.ts
 #endif
 #ifndef OutputDir
-  #error OutputDir must be supplied by scripts/build-installer.ts
+  #error OutputDir must be supplied by scripts/build/build-installer.ts
 #endif
 
 #define AppName "Prism Vesicle"

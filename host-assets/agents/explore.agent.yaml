@@ -6,7 +6,6 @@ systemPrompt:
   - assets/prompts/agents/explore.md
 tools:
   - stat_path
-  - list_files
   - list_directory
   - grep_files
   - read_file

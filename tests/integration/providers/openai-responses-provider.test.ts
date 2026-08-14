@@ -77,6 +77,29 @@ describe("OpenAI Responses request codec", () => {
     }, context(), false, "openai-public")).toThrow("Unsupported reasoning tier: invalid");
   });
 
+  test("omits service_tier from the codex-http-relay compatibility-tier request", () => {
+    const body = toResponsesBody({
+      ...request(),
+      tools: [{ type: "function", function: { name: "read_file", description: "Read", parameters: { type: "object" } } }],
+      generation: { reasoningTier: "high", temperature: 0.3, maxTokens: 1234 },
+    }, context(), true, "codex-http-relay");
+
+    // codex-http-relay is the maximum-compatibility tier; service_tier is omitted on
+    // the wire so relays that reject OpenAI tier values (e.g. sssai) stay usable,
+    // while the rest of the public request surface matches openai-public.
+    const wire = JSON.parse(JSON.stringify(body));
+    expect(wire).not.toHaveProperty("service_tier");
+    expect(wire).toMatchObject({
+      store: false,
+      stream: true,
+      parallel_tool_calls: true,
+      stream_options: { include_obfuscation: false },
+      include: ["reasoning.encrypted_content"],
+      prompt_cache_key: "req_1",
+      reasoning: { effort: "high", summary: "auto" },
+    });
+  });
+
   test("replays same-owner native Items without reconstructing encrypted reasoning", () => {
     const outputItems: ProviderStateJson[] = [
       { id: "rs_1", type: "reasoning", encrypted_content: "opaque-ciphertext", summary: [] },
@@ -524,6 +547,34 @@ describe("OpenAI Responses typed SSE", () => {
     }))).rejects.toThrow("did not include ordered output Items");
   });
 
+  test("accepts codex-http-relay terminal output that strips optional fields from completed Items", async () => {
+    const events = await collect(readResponsesStream(responseStream([
+      event(0, "response.output_item.done", { output_index: 0, item: {
+        id: "msg_strip", status: "completed", type: "message", role: "assistant", phase: "final_answer",
+        content: [{ type: "output_text", annotations: [], logprobs: [], text: "ok" }],
+      } }),
+      event(1, "response.completed", { response: {
+        id: "resp_strip", status: "completed",
+        output: [{
+          type: "message", role: "assistant",
+          content: [{ type: "output_text", text: "ok" }],
+        }],
+      } }),
+    ]), {
+      ...streamContext(), profile: "codex-http-relay",
+    }));
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        id: "resp_strip",
+        content: "ok",
+        providerState: { payload: { profile: "codex-http-relay", outputItems: [
+          { id: "msg_strip", type: "message" },
+        ] } },
+      },
+    });
+  });
+
   test("rejects inconsistent or non-contiguous codex-http-relay completed Items", async () => {
     await expect(collect(readResponsesStream(responseStream([
       event(0, "response.output_item.done", { output_index: 1, item: {
@@ -762,13 +813,36 @@ describe("OpenAI Responses typed SSE", () => {
     try {
       const adapter = new OpenAIResponsesAdapter({
         provider: "openai-responses", providerId: "deepseek", baseUrl: "https://api.deepseek.com",
-        model: "deepseek-v4-pro", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
+        model: "deepseek-chat", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
         responsesTransport: "http",
       });
       await expect(adapter.complete({
-        ...request(), model: { provider: "deepseek", model: "deepseek-v4-pro" },
-      })).rejects.toThrow("currently supports only deepseek-v4-flash");
+        ...request(), model: { provider: "deepseek", model: "deepseek-chat" },
+      })).rejects.toThrow("currently supports only deepseek-v4-flash and deepseek-v4-pro");
       expect(fetches).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("admits deepseek-v4-pro through the adapter pre-network check", async () => {
+    const originalFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = (async () => {
+      fetches += 1;
+      return Response.json({
+        id: "resp_deepseek", status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] }],
+      });
+    }) as unknown as typeof fetch;
+    try {
+      const adapter = new OpenAIResponsesAdapter({
+        provider: "openai-responses", providerId: "deepseek", baseUrl: "https://api.deepseek.com/v1",
+        model: "deepseek-v4-pro", apiKey: "test-key", responsesProfile: "deepseek-subset-2026-07-31",
+        responsesTransport: "http",
+      });
+      await expect(adapter.complete(request())).resolves.toMatchObject({ content: "ok" });
+      expect(fetches).toBe(1);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -25,6 +25,117 @@ afterEach(async () => {
 });
 
 describe("file tools v2", () => {
+  test("orients at the virtual root without exposing host project files", async () => {
+    await writeFile(join(rootDir, "package.json"), "{}", "utf8");
+    await mkdir(join(rootDir, ".vesicle"), { recursive: true });
+
+    const result = await executeFileTool(rootDir, call("list_directory", { path: "." }));
+
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(result.content)).toEqual({
+      path: ".",
+      status: "ok",
+      detail: "full",
+      entries: [
+        { path: "assets", type: "directory", readOnly: true },
+        { path: "source_materials", type: "directory" },
+        { path: "workspace", type: "directory" },
+        { path: "novels", type: "directory" },
+        { path: "reports", type: "directory" },
+        { path: "test_runs", type: "directory" },
+        { path: "tmp", type: "directory" },
+      ],
+      fileCount: 0,
+      directoryCount: 7,
+      otherCount: 0,
+      empty: false,
+      truncated: false,
+    });
+    expect(result.content).not.toContain("package.json");
+    expect(result.content).not.toContain(".vesicle");
+  });
+
+  test("returns typed observations for missing and non-directory paths", async () => {
+    await writeFile(join(rootDir, "workspace", "file.md"), "body", "utf8");
+
+    const missingStat = await executeFileTool(rootDir, call("stat_path", { path: "workspace/missing.md" }));
+    expect(missingStat.ok).toBe(true);
+    expect(JSON.parse(missingStat.content)).toEqual({ path: "workspace/missing.md", type: "not_found" });
+
+    const nestedBelowFile = await executeFileTool(rootDir, call("stat_path", { path: "workspace/file.md/child" }));
+    expect(nestedBelowFile.ok).toBe(true);
+    expect(JSON.parse(nestedBelowFile.content)).toEqual({ path: "workspace/file.md/child", type: "not_found" });
+
+    const missingList = await executeFileTool(rootDir, call("list_directory", { path: "workspace/missing" }));
+    expect(missingList.ok).toBe(true);
+    expect(JSON.parse(missingList.content)).toMatchObject({ status: "not_found", entries: [] });
+
+    const fileList = await executeFileTool(rootDir, call("list_directory", { path: "workspace/file.md" }));
+    expect(fileList.ok).toBe(true);
+    expect(JSON.parse(fileList.content)).toMatchObject({ status: "not_directory", entries: [] });
+
+    await expectToolFailure("stat_path", { path: "VESICLE.md" }, "host-managed Persistent Instruction");
+    await expectToolFailure("stat_path", { path: "../outside" }, "escapes project root");
+  });
+
+  test("bounds recursive full and names listings across directory-only trees", async () => {
+    await Promise.all(Array.from({ length: 2_100 }, (_, index) =>
+      mkdir(join(rootDir, "workspace", `empty-${index}`), { recursive: true })));
+
+    const full = await executeFileTool(rootDir, call("list_directory", { path: "workspace", recursive: true }));
+    const names = await executeFileTool(rootDir, call("list_directory", { path: "workspace", recursive: true, detail: "names" }));
+
+    expect(full.ok).toBe(true);
+    expect(names.ok).toBe(true);
+    expect(JSON.parse(full.content).truncated).toBe(true);
+    expect(JSON.parse(names.content).truncated).toBe(true);
+  });
+
+  test("names mode distinguishes an empty directory from one containing only directories", async () => {
+    await mkdir(join(rootDir, "workspace", "nested"), { recursive: true });
+
+    const root = JSON.parse((await executeFileTool(rootDir, call("list_directory", {
+      path: "workspace",
+      detail: "names",
+    }))).content);
+    const nested = JSON.parse((await executeFileTool(rootDir, call("list_directory", {
+      path: "workspace/nested",
+      detail: "names",
+    }))).content);
+
+    expect(root).toMatchObject({ entries: [], fileCount: 0, directoryCount: 1, empty: false });
+    expect(nested).toMatchObject({ entries: [], fileCount: 0, directoryCount: 0, empty: true });
+  });
+
+  test("does not report a directory containing only a symlink as empty", async () => {
+    await symlink(join(rootDir, "source_materials", "seed.md"), join(rootDir, "workspace", "linked.md"));
+
+    const listed = JSON.parse((await executeFileTool(rootDir, call("list_directory", {
+      path: "workspace",
+    }))).content);
+
+    expect(listed).toMatchObject({ fileCount: 0, directoryCount: 0, otherCount: 1, empty: false });
+    expect(listed.entries).toContainEqual(expect.objectContaining({ path: "workspace/linked.md", type: "symlink" }));
+  });
+
+  test("continues scanning root siblings after one recursive branch reaches max depth", async () => {
+    let deep = join(rootDir, "workspace", "a-deep");
+    for (let depth = 0; depth < 10; depth++) {
+      deep = join(deep, `level-${depth}`);
+      await mkdir(deep, { recursive: true });
+    }
+    await writeFile(join(rootDir, "workspace", "z-visible.md"), "visible", "utf8");
+
+    const listed = JSON.parse((await executeFileTool(rootDir, call("list_directory", {
+      path: "workspace",
+      recursive: true,
+      detail: "names",
+    }))).content);
+
+    expect(listed.truncated).toBe(true);
+    expect(listed.entries).toContain("workspace/z-visible.md");
+  });
+
   test("views guarded project images as structured attachments", async () => {
     const result = await expectTool("view_image", {
       path: "source_materials/reference.png",
@@ -118,14 +229,24 @@ describe("file tools v2", () => {
       type: "file",
     });
 
-    const listResult = await executeFileTool(rootDir, call("list_files", { path: "workspace" }));
+    const listResult = await executeFileTool(rootDir, call("list_directory", { path: "workspace", detail: "names" }));
     expect(listResult.ok).toBe(true);
     expect(listResult.fileEvent).toMatchObject({
       kind: "file_operation",
-      operation: "list",
+      operation: "list_directory",
       path: "workspace",
       changed: false,
       entryCount: 1,
+    });
+    expect(JSON.parse(listResult.content)).toMatchObject({
+      path: "workspace",
+      status: "ok",
+      detail: "names",
+      entries: ["workspace/a.md"],
+      fileCount: 1,
+      directoryCount: 0,
+      empty: false,
+      truncated: false,
     });
 
     const grepResult = await executeFileTool(rootDir, call("grep_files", {
@@ -242,6 +363,9 @@ describe("file tools v2", () => {
     expect(listed.ok).toBe(true);
     expect(listed.fileEvent).toMatchObject({ operation: "list_directory", entryCount: 3 });
     expect(JSON.parse(listed.content)).toMatchObject({
+      path: "workspace",
+      status: "ok",
+      detail: "full",
       entries: [
         { path: "workspace/part_01", type: "directory" },
         { path: "workspace/part_01/chapter.md", type: "file", size: 11 },
@@ -384,18 +508,35 @@ describe("file tools v2", () => {
         executablePath: join(assetRoot, "missing", "vesicle"),
       });
 
-      const list = await executeFileTool(rootDir, call("list_files", {
+      const list = await executeFileTool(rootDir, call("list_directory", {
         path: "assets/specs",
         recursive: true,
+        detail: "names",
       }), { assets });
       expect(list.ok).toBe(true);
-      expect(list.content.split("\n")).toEqual([
+      expect(JSON.parse(list.content).entries).toEqual([
         "assets/specs/default.md",
         "assets/specs/global.md",
         "assets/specs/global.png",
         "assets/specs/project.md",
       ]);
       expect(list.content).not.toContain(assetRoot);
+
+      const fullList = await executeFileTool(rootDir, call("list_directory", {
+        path: "assets/specs",
+        recursive: true,
+      }), { assets });
+      expect(fullList.ok).toBe(true);
+      const full = JSON.parse(fullList.content);
+      expect(full).toMatchObject({
+        path: "assets/specs",
+        status: "ok",
+        detail: "full",
+        truncated: false,
+      });
+      expect(full.entries).toContainEqual(expect.objectContaining({ path: "assets/specs/default.md", type: "file", size: 14 }));
+      expect(full.entries).toContainEqual(expect.objectContaining({ path: "assets/specs/project.md", type: "file", size: 14 }));
+      expect(fullList.content).not.toContain(assetRoot);
 
       const read = await executeFileTool(rootDir, call("read_file", {
         path: "assets/specs/global.md",

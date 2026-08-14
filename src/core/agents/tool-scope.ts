@@ -19,7 +19,8 @@ export function assertChildToolDeclaration(
   availableNames: ReadonlySet<string>,
 ): void {
   if (declared[0] === "*") return;
-  for (const name of declared) {
+  for (const declaredName of declared) {
+    const name = declaredName;
     if (unsupportedChildToolNames.has(name)) {
       throw new Error(`Agent profile cannot use interactive or recursive tool "${name}".`);
     }

@@ -20,12 +20,17 @@ describe("agent loop: subagent background", () => {
     const manager = new AgentManager(store, runChildAgent);
     let resolveChild: (response: Response) => void = () => undefined;
     let childStarted = false;
+    let childSystem = "";
     let parentRequests = 0;
     globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
-      const system = String(body.messages?.[0]?.content ?? "");
+      const system = body.messages
+        ?.filter((message: { role?: string }) => message.role === "system")
+        .map((message: { content?: string }) => String(message.content ?? ""))
+        .join("\n\n") ?? "";
       if (system.includes("Explore Agent")) {
         childStarted = true;
+        childSystem = system;
         return new Promise<Response>((resolve) => { resolveChild = resolve; });
       }
       parentRequests += 1;
@@ -53,6 +58,8 @@ describe("agent loop: subagent background", () => {
     expect(result.response.content).toBe("Parent is free.");
     expect(manager.listActive(result.sessionId)).toHaveLength(1);
     await eventually(() => expect(childStarted).toBe(true));
+    expect(childSystem).toContain("<project_state>");
+    expect(childSystem).toContain("workspace: empty (0 files)");
     resolveChild(Response.json({ id: "child-later", choices: [{ message: { content: "late result" } }] }));
     await eventually(async () => expect(await store.listInbox(result.sessionId, "pending")).toHaveLength(1));
   });

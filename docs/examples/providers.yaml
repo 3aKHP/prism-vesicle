@@ -64,6 +64,26 @@ providers:
           reasoningContent: true
           remoteCompact: true
 
+  # codex-beta-2026-02-06: a fingerprint-level Codex simulation profile. With
+  # websocket transport it sends Codex's V2 beta wire shape (openai-beta:
+  # responses_websockets=2026-02-06 header + stream:true) and falls back to
+  # HTTPS/SSE on exhaustion like Codex; over HTTPS/SSE it equals openai-public.
+  # Use openai-public unless you need the Codex V2 beta WebSocket fingerprint.
+  # openai-codex-beta:
+  #   protocol: openai-responses
+  #   baseUrl: https://api.openai.com/v1
+  #   apiKeyEnv: OPENAI_API_KEY
+  #   responsesProfile: codex-beta-2026-02-06
+  #   responsesTransport: websocket
+  #   defaultModel: gpt-5.6
+  #   models:
+  #     - id: gpt-5.6
+  #       capabilities:
+  #         streaming: true
+  #         tools: true
+  #         reasoningTier: true
+  #         reasoningContent: true
+
   mimo-responses:
     protocol: openai-responses
     baseUrl: https://api.xiaomimimo.com/v1
@@ -87,15 +107,25 @@ providers:
 
   deepseek-responses:
     protocol: openai-responses
-    baseUrl: https://api.deepseek.com
+    # DeepSeek serves /v1/responses; the adapter appends /responses to baseUrl.
+    baseUrl: https://api.deepseek.com/v1
     apiKeyEnv: DEEPSEEK_API_KEY
     # This dated profile follows DeepSeek's stateless HTTP Responses subset.
-    # As of 2026-07-31, only deepseek-v4-flash supports this endpoint.
+    # As of 2026-08-13, deepseek-v4-flash and deepseek-v4-pro support this endpoint.
     responsesProfile: deepseek-subset-2026-07-31
     responsesTransport: http
     defaultModel: deepseek-v4-flash
     models:
       - id: deepseek-v4-flash
+        capabilities:
+          streaming: true
+          tools: true
+          reasoningTier: true
+          reasoningContent: true
+          temperature: true
+          maxTokens: true
+          remoteCompact: false
+      - id: deepseek-v4-pro
         capabilities:
           streaming: true
           tools: true

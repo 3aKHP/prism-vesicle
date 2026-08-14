@@ -59,15 +59,21 @@ vesicle skills copy-template <skill> <资源路径> <目标路径>
 
 每个 Vesicle 安装包自带 `skillify`（范围 `host`）。当你要求 Vesicle 把当前对话中经过验证的重复性工作流捕获、保存或转化为可复用的 Skill 时，模型激活 `skillify`。它会用普通的受保护文件工具在 `tmp/skillify/<名称>/` 下编写草稿，校验完整的 bundle，然后在你选择目标后以仅创建（create-only）方式发布到项目（`.agents/skills/<名称>/`）或已安装的 Skill Store。
 
-发布是仅创建的：不覆盖、不升级。草稿始终保留在 `tmp/skillify/` 下。已发布的 Skill 仅在新会话中可发现——当前会话目录不会改变。校验和发布需要进程运行时（已解析的 shell profile）；`.ps1` 脚本通过 PowerShell 7 支持（Windows 上可回退到 Windows PowerShell 5.1，其他平台仅用 `pwsh`）。
+发布是仅创建的：不覆盖、不升级。草稿始终保留在 `tmp/skillify/` 下。已发布的 Skill 仅在新会话中可发现——当前会话目录不会改变。校验和发布通过结构化 `run_skill_script` 执行,不需要开启 `shellExec`;POSIX 使用 `sh`,`.ps1` 脚本优先使用 PowerShell 7（Windows 上可回退到 Windows PowerShell 5.1，其他平台仅用 `pwsh`）。缺少对应解释器时会明确失败并保留草稿。
 
 ## 第一方 `novel-outline-v3` Skill
 
 每个 Vesicle 安装包自带 `novel-outline-v3`（范围 `host`），提供分层长篇小说纲要工作流（卷纲 → 章纲 → 场景）。它教授正文为先的方法论：读齐全部素材 → 维护两本全局档案（角色成长、世界观状态）→ 定卷纲 → 逐章定纲（先定张力总值再分场景）→ 闭合校验 → 回写档案 → 标待确认。
 
-它没有脚本、没有进程权限，仅通过 `read_skill_resource` 提供只读文本参考（纲要模板、档案格式、张力模型）。与 Harness 10.2.0 的张力预算系统互补。
+它没有脚本、没有进程权限，仅通过 `read_skill_resource` 提供只读文本参考（纲要模板、档案格式、张力模型）。与 Harness 的张力预算系统互补。
 
 当用户要求「明确前三章」「写某卷纲要」「把大纲细化到场景级」「分配张力」或「列举伏笔收放」时，模型可自动激活此 Skill。
+
+## 第一方 `update-config` Skill
+
+每个 Vesicle 安装包自带 `update-config`（范围 `host`）。当你要求查看或修改供应商、权限、偏好、质量或设置配置时，模型激活该 Skill，通过经过校验的原子 `vesicle config` CLI 命令引导修改，而不是手改 YAML。完整命令面见 [`vesicle config` 命令参考](../reference/configuration.md#vesicle-config-命令参考)。
+
+密钥值被结构性排除：`show` 把 `.env` 脱敏为 `<set>`/`<empty>` 标记，任何操作都不接受密钥作为参数；API 密钥仍需手动编辑用户级 `.env`。脚本通过两个薄 `.sh`/`.ps1` 包装经结构化 `run_skill_script` 执行（独立 `skill_exec` 审批类），无需开启 `shellExec`。
 
 ## Stage 排除
 

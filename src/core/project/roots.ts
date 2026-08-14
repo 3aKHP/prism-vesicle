@@ -13,6 +13,9 @@ export const projectContentRoots = [...sourceRoots, ...artifactRoots] as const;
 /** Every project root writable through ordinary guarded file tools. */
 export const modelWritableRoots = [...projectContentRoots, ...scratchRoots] as const;
 
+/** Every logical root readable through ordinary model-visible file tools. */
+export const modelReadableRoots = ["assets", ...modelWritableRoots] as const;
+
 export type SourceRoot = (typeof sourceRoots)[number];
 export type ArtifactRoot = (typeof artifactRoots)[number];
 export type ScratchRoot = (typeof scratchRoots)[number];

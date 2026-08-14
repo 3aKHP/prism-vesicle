@@ -121,9 +121,9 @@
     },
     "weaver": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2485,
-      "remainingCharacters": 21515,
-      "usedBytes": 4851,
+      "usedCharacters": 3289,
+      "remainingCharacters": 20711,
+      "usedBytes": 6823,
       "sections": [
         {
           "path": "assets/prompts/host/writing.md",
@@ -137,16 +137,16 @@
         },
         {
           "path": "assets/prompts/engines/weaver.md",
-          "characters": 2173,
-          "bytes": 4247
+          "characters": 2977,
+          "bytes": 6219
         }
       ]
     },
     "weaver-orch": {
       "budgetCharacters": 24000,
-      "usedCharacters": 3235,
-      "remainingCharacters": 20765,
-      "usedBytes": 5440,
+      "usedCharacters": 3305,
+      "remainingCharacters": 20695,
+      "usedBytes": 5572,
       "sections": [
         {
           "path": "assets/prompts/host/writing.md",
@@ -160,8 +160,8 @@
         },
         {
           "path": "assets/prompts/engines/weaver-orch.md",
-          "characters": 2923,
-          "bytes": 4836
+          "characters": 2993,
+          "bytes": 4968
         }
       ]
     }
@@ -169,9 +169,9 @@
   "agents": {
     "chapter-reviewer": {
       "budgetCharacters": 24000,
-      "usedCharacters": 1903,
-      "remainingCharacters": 22097,
-      "usedBytes": 3425,
+      "usedCharacters": 2090,
+      "remainingCharacters": 21910,
+      "usedBytes": 3872,
       "sections": [
         {
           "path": "assets/prompts/host/review.md",
@@ -185,8 +185,8 @@
         },
         {
           "path": "assets/prompts/agents/chapter-reviewer.md",
-          "characters": 1594,
-          "bytes": 2822
+          "characters": 1781,
+          "bytes": 3269
         }
       ]
     },
@@ -210,9 +210,9 @@
     },
     "scene-writer": {
       "budgetCharacters": 24000,
-      "usedCharacters": 1901,
-      "remainingCharacters": 22099,
-      "usedBytes": 4043,
+      "usedCharacters": 2516,
+      "remainingCharacters": 21484,
+      "usedBytes": 5554,
       "sections": [
         {
           "path": "assets/prompts/host/writing.md",
@@ -226,8 +226,8 @@
         },
         {
           "path": "assets/prompts/agents/scene-writer.md",
-          "characters": 1589,
-          "bytes": 3439
+          "characters": 2204,
+          "bytes": 4950
         }
       ]
     }

@@ -15,6 +15,7 @@
 
 const ENV_EXECUTABLE = "VESICLE_SELF_EXECUTABLE";
 const ENV_ENTRYPOINT = "VESICLE_SELF_ENTRYPOINT";
+const ENV_CONFIG_DIR = "VESICLE_HOST_CONFIG_DIR";
 
 export type VesicleSelfInvocation = {
   /** Absolute path to the executable that can re-invoke Vesicle (`process.execPath`). */
@@ -24,6 +25,12 @@ export type VesicleSelfInvocation = {
    * compiled single-file executables, which are self-contained.
    */
   entrypoint?: string;
+  /**
+   * Resolved user-level configuration directory. Injected so bundled Skill
+   * scripts can locate config files without re-deriving platform paths or
+   * environment overrides.
+   */
+  configDir?: string;
 };
 
 let configured: VesicleSelfInvocation | undefined;
@@ -57,5 +64,6 @@ export function selfInvocationEnvironment(): Record<string, string> {
   if (!config) return {};
   const env: Record<string, string> = { [ENV_EXECUTABLE]: config.executablePath };
   if (config.entrypoint !== undefined) env[ENV_ENTRYPOINT] = config.entrypoint;
+  if (config.configDir !== undefined) env[ENV_CONFIG_DIR] = config.configDir;
   return env;
 }

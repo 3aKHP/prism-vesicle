@@ -124,7 +124,12 @@ function isNewTurnBoundary(current: SegmentedTurn, record: SessionRecord, logica
   return isAuthoredPrompt(record);
 }
 
-function isAuthoredPrompt(record: SessionRecord): boolean {
+/**
+ * Whether a record is a user-authored prompt: the turn-boundary oracle shared
+ * with candidate-tree enumeration. Host-injected user-role continuations are
+ * never authored prompts.
+ */
+export function isAuthoredPrompt(record: SessionRecord): boolean {
   if (record.role !== "user") return false;
   const kind = record.metadata?.kind;
   if (typeof kind === "string" && HOST_INJECTED_USER_KINDS.has(kind)) return false;

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveGate, runPrompt } from "../../../src/core/agent-loop/run";
 import type { AgentLoopEvent } from "../../../src/core/agent-loop/run";
 import { AutoCompactBlockedError } from "../../../src/core/compact/auto-compact";
+import { clearFrozenProjectStateBlock } from "../../../src/core/prompt/project-state";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
 
 beforeEach(configureTestProviderEnv);
@@ -157,6 +158,55 @@ describe("agent loop: gate continuation", () => {
       fingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
       changedPaths: ["assets/prompts/engines/etl.md"],
     }));
+  });
+
+  test("restart recovery observes a fresh project-state boundary", async () => {
+    const rootDir = await createPromptRoot({ stopGates: ["blueprint-confirmation"] });
+    const systemPrompts: string[] = [];
+    let callCount = 0;
+    globalThis.fetch = (async (_input: unknown, init: RequestInit & { body?: unknown }) => {
+      callCount += 1;
+      const body = JSON.parse(String(init.body)) as { messages: Array<{ role: string; content: string }> };
+      systemPrompts.push(body.messages[0]!.content);
+      if (callCount === 1) {
+        return Response.json({
+          id: "state-before-pause",
+          choices: [{ message: {
+            content: "Confirm.",
+            tool_calls: [{
+              id: "call-state-gate",
+              type: "function",
+              function: {
+                name: "request_confirmation",
+                arguments: JSON.stringify({ gate: "blueprint-confirmation", summary: "Ready" }),
+              },
+            }],
+          } }],
+        });
+      }
+      return Response.json({ id: "state-after-pause", choices: [{ message: { content: "continued" } }] });
+    }) as unknown as typeof fetch;
+
+    const paused = await runPrompt({ input: "start", rootDir });
+    if (paused.kind !== "needs_user") throw new Error("expected gate pause");
+    await writeFile(join(rootDir, "workspace", "created-while-paused.md"), "new", "utf8");
+    clearFrozenProjectStateBlock(paused.sessionId);
+
+    const resumed = await resolveGate({
+      rootDir,
+      sessionId: paused.sessionId,
+      engine: "etl",
+      messages: paused.messages,
+      toolCallId: paused.toolCallId,
+      gate: paused.gate,
+      resolution: { decision: "confirm" },
+    });
+
+    expect(resumed.kind).toBe("complete");
+    expect(systemPrompts).toHaveLength(2);
+    expect(systemPrompts[0]).toContain("workspace: empty (0 files)");
+    expect(systemPrompts[1]).toContain("workspace: 1 file");
+    expect(systemPrompts[1]).not.toContain("workspace: empty (0 files)");
   });
 
   test("resolveGate reject threads feedback into the follow-up turn", async () => {

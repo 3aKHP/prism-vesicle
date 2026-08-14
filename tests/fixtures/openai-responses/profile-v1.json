@@ -58,7 +58,7 @@
       ]
     },
     "thirdPartyDocs": {
-      "checkedAt": "2026-07-31",
+      "checkedAt": "2026-08-13",
       "urls": [
         "https://mimo.mi.com/docs/zh-CN/api/chat/responses",
         "https://api-docs.deepseek.com/zh-cn/guides/responses_api",
@@ -216,7 +216,7 @@
       "previousResponseId": false,
       "remoteCompact": false,
       "websocket": false,
-      "supportedModels": ["deepseek-v4-flash"],
+      "supportedModels": ["deepseek-v4-flash", "deepseek-v4-pro"],
       "supportedRequestFields": [
         "model",
         "instructions",

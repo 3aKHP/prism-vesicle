@@ -4,7 +4,7 @@
 
 English | [简体中文](../../zh-CN/advanced/stage.md)
 
-> **Status (as of `1.0.0-alpha.9`):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.0.0-alpha.10`):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 Stage is Prism's **consumer-side** collaborative fiction engine: feed it a character card (Module A) and a scenario card (Module B) and it opens a third-person continuous narrative session — your messages are your character's actions, and it narrates the response.
 
@@ -32,7 +32,7 @@ The only validation is `runtime-packet` (the three-part turn packet).
 
 Each Stage turn outputs three parts:
 
-1. **Hidden Neural Chain** (`<!-- [!Neural Chain] … -->`): perception/instinct/state/strategy. Collapsed by default on the consumer side; click that message (or focus it with `Ctrl+Alt+S`) to inspect the raw content.
+1. **Hidden Neural Chain** (`<!-- [!Neural Chain] … -->`): perception/instinct/state/strategy. Collapsed by default on the consumer side; click that message (or move the turn-focus cursor onto that turn with `Alt+↑/↓`, then press `Ctrl+Alt+S`) to inspect the raw content.
 2. **Dynamic HUD** (`【Status】`/`[Space-Time]`/`[Physical]`/`[Psychology]`/`[Beat]`/`[Impression]`): shown as a low-key indicator.
 3. **Prose**: the default-visible main narrative (200–800 Chinese characters, high density, at least two sensory modalities).
 

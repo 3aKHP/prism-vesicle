@@ -121,6 +121,8 @@ async function buildHarness(root: string, sessionId: string): Promise<Harness> {
     setStatus,
     rewindPicker: () => null,
     handleRewindKey: () => false,
+    branchPicker: () => null,
+    handleBranchKey: () => false,
     modelPicker: () => null,
     handleModelPickerKey: () => false,
     qualityPicker: () => null,

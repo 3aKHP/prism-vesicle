@@ -342,11 +342,6 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
-    if (this.config.responsesProfile === "codex-beta-2026-02-06" && this.config.responsesTransport !== "websocket") {
-      throw new ProviderError("codex-beta-2026-02-06 requires responsesTransport websocket.", {
-        kind: "malformed_response", providerId: this.config.providerId,
-      });
-    }
     if (this.config.responsesProfile === "mimo-subset-2026-07-30" && this.config.responsesTransport === "websocket") {
       throw new ProviderError("mimo-subset-2026-07-30 supports HTTP only.", {
         kind: "malformed_response", providerId: this.config.providerId,
@@ -357,8 +352,9 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
-    if (this.config.responsesProfile === "deepseek-subset-2026-07-31" && this.config.model !== "deepseek-v4-flash") {
-      throw new ProviderError("deepseek-subset-2026-07-31 currently supports only deepseek-v4-flash.", {
+    if (this.config.responsesProfile === "deepseek-subset-2026-07-31"
+      && this.config.model !== "deepseek-v4-flash" && this.config.model !== "deepseek-v4-pro") {
+      throw new ProviderError("deepseek-subset-2026-07-31 currently supports only deepseek-v4-flash and deepseek-v4-pro.", {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }

@@ -113,6 +113,16 @@ describe("TUI prompt composer", () => {
     expect(setComposerValue(value, 3).cursor).toBe(1 + family.length);
   });
 
+  test("Ctrl+B is not consumed by the composer since it opens the candidate tree", () => {
+    const ctrlB = applyComposerKey(setComposerValue("abc"), { name: "b", ctrl: true });
+    expect(ctrlB.handled).toBe(false);
+    expect(ctrlB.state.cursor).toBe(3);
+    // Meta+b word movement is unaffected.
+    const metaB = applyComposerKey(setComposerValue("two words"), { name: "b", meta: true });
+    expect(metaB.handled).toBe(true);
+    expect(metaB.state.cursor).toBe(4);
+  });
+
   test("plain enter submits, shift enter is inert, and ctrl enter inserts newlines", () => {
     const shift = applyComposerKey(setComposerValue("line one"), { name: "enter", shift: true });
     expect(shift.handled).toBe(true);

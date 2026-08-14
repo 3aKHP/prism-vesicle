@@ -7,7 +7,7 @@ if ! command -v bun >/dev/null 2>&1; then
 	exit 0
 fi
 
-bun run scripts/check-staged-markdown-wrap.ts || {
+bun run docs:check:staged || {
 	echo >&2 "Markdown wrap advisory failed unexpectedly. Commit was not blocked."
 }
 

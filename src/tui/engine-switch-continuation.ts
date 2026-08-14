@@ -19,6 +19,7 @@ type EngineSwitchContinuationOptions = {
   handleInterruptedTurn: () => void;
   reportError: (error: unknown) => void;
   permissionContext: () => PermissionContext;
+  refreshCandidateSwitcher: (sessionId: string) => Promise<void>;
 };
 
 export function createEngineSwitchContinuation(options: EngineSwitchContinuationOptions) {
@@ -29,7 +30,7 @@ export function createEngineSwitchContinuation(options: EngineSwitchContinuation
   const { beginUsageTurn } = options.usage;
   const { setConversation, setSessionId, setSessionPath } = options.session;
   const { compactSession } = options.hostAction;
-  const { queuedWork, runCancellable, handleResult, handleInterruptedTurn, reportError, permissionContext } = options;
+  const { queuedWork, runCancellable, handleResult, handleInterruptedTurn, reportError, permissionContext, refreshCandidateSwitcher } = options;
 
   async function submitEngineSwitchResolution(
     resolution: GateResolution,
@@ -69,6 +70,7 @@ export function createEngineSwitchContinuation(options: EngineSwitchContinuation
         switchApplied = true;
         await applyEngineSwitchResult(outcome.value, summarizeContext);
       } else handleResult(outcome.value);
+      await refreshCandidateSwitcher(pending.sessionId);
     } catch (error) {
       if (!switchApplied) setPendingEngineSwitch(pending);
       reportError(error);

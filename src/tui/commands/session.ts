@@ -49,6 +49,15 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
     },
 
     {
+      name: "branch",
+      busyBehavior: afterAgentLoop,
+      description: "Browse and switch candidate branches at any depth (Ctrl+B)",
+      async run() {
+        await ctx.openBranchPicker();
+      },
+    },
+
+    {
       name: "new",
       busyBehavior: afterAgentLoop,
       description: "Start a fresh session",

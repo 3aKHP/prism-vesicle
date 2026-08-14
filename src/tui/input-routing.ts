@@ -7,13 +7,18 @@ import { normalizeKeyName } from "./composer";
 import type { PendingQualityDecisionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
 import { resolveBottomSurfaceMode, type ModelPickerState, type QualityPickerState, type QualityRewriteConfirmState } from "./views/BottomSurface";
 import type { RewindPickerState, SessionPickerState } from "./types";
+import type { BranchPickerState } from "./branch/controller";
 import type { SkillPickerState } from "./skill-picker-controller";
 
 export type InputRoutingOptions = {
   renderer: ReturnType<typeof useRenderer>;
+  /** Called after the renderer has been destroyed when the user quits the TUI. */
+  onExit?: () => void;
   setStatus: Setter<string>;
   rewindPicker: Accessor<RewindPickerState | null>;
   handleRewindKey: (key: TuiKeyEvent) => boolean;
+  branchPicker: Accessor<BranchPickerState | null>;
+  handleBranchKey: (key: TuiKeyEvent) => boolean;
   modelPicker: Accessor<ModelPickerState | null>;
   handleModelPickerKey: (key: TuiKeyEvent) => boolean;
   qualityPicker: Accessor<QualityPickerState | null>;
@@ -36,9 +41,20 @@ export type InputRoutingOptions = {
   pasteClipboardImage: () => Promise<void>;
   handleComposerKey: (key: TuiKeyEvent) => boolean;
   handlePromptEscape: () => void;
+  /** When a turn is in flight, an Escape no modal handles falls back to the
+   * global prompt interrupt instead of being swallowed (busy continuation
+   * windows — e.g. "resolving permission" — must stay cancellable). */
+  busy?: () => boolean;
   handleDecisionPaste: (text: string) => boolean;
   insertComposerPaste: (text: string) => void;
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
+  /** Ctrl+R on the Chat page: re-run the last turn as a new candidate (#88). */
+  triggerRegenerate?: () => void;
+  /** Ctrl+B on both pages: open the candidate-tree panel (any-depth switching). */
+  triggerBranch?: () => void;
+  /** Alt+←/→ reached a surface without the candidate switcher (Workspace/hero):
+   * report guidance instead of swallowing the key silently. */
+  onRejectedCandidateSwitch?: () => void;
   sideQuestionOverlay?: Accessor<unknown>;
   handleSideQuestionKey?: (key: TuiKeyEvent) => boolean;
   splashActive?: Accessor<boolean>;
@@ -78,6 +94,10 @@ function resolveWorkspacePasteOwnership(options: InputRoutingOptions): Workspace
  */
 export function createInputRouter(options: InputRoutingOptions): InputRouter {
   let lastCtrlCAt = 0;
+  const quit = () => process.nextTick(() => {
+    options.renderer.destroy();
+    options.onExit?.();
+  });
   const bottomSurfaceMode = () => resolveBottomSurfaceMode({
     yoloStage: options.yoloConfirmStage(),
     permissionRequest: options.activePermissionRequest(),
@@ -85,6 +105,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     quality: options.pendingQualityDecision?.() ?? null,
     gate: options.activeGateRequest(),
     rewind: options.rewindPicker(),
+    branch: options.branchPicker(),
     session: options.sessionPicker(),
     skillPicker: options.skillPicker(),
     qualityPicker: options.qualityPicker(),
@@ -105,7 +126,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
         }
         const now = Date.now();
         if (now - lastCtrlCAt < 3000) {
-          process.nextTick(() => options.renderer.destroy());
+          quit();
           return;
         }
         lastCtrlCAt = now;
@@ -114,7 +135,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     if (key.ctrl && key.name === "q") {
-      process.nextTick(() => options.renderer.destroy());
+      quit();
       return;
     }
     // The startup splash swallows all other input: the first keypress ends it
@@ -129,37 +150,53 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     const mode = bottomSurfaceMode();
+    // While a turn is in flight, an Escape that no modal handles must not be
+    // dropped: it falls back to the global prompt interrupt so busy windows
+    // that decline keys (e.g. the permission panel while its continuation
+    // rebuilds a slow MCP surface) stay cancellable. Non-busy Escape
+    // semantics of every modal are unchanged.
+    const busyEscapeFallback = (handled: boolean | undefined): boolean => {
+      if (handled) return true;
+      if (key.name === "escape" && options.busy?.() === true) {
+        options.handlePromptEscape();
+        return true;
+      }
+      return false;
+    };
     switch (mode.kind) {
       case "yolo":
-        if (options.handleYoloKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleYoloKey(key))) consumeKey(key);
         return;
       case "permission":
       case "gate":
-        if (options.handleGateKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleGateKey(key))) consumeKey(key);
         return;
       case "question":
-        if (options.handleQuestionKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleQuestionKey(key))) consumeKey(key);
         return;
       case "quality":
-        if (options.handleQualityKey?.(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleQualityKey?.(key))) consumeKey(key);
         return;
       case "rewind":
-        if (options.handleRewindKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleRewindKey(key))) consumeKey(key);
+        return;
+      case "branch":
+        if (busyEscapeFallback(options.handleBranchKey(key))) consumeKey(key);
         return;
       case "session":
-        if (options.handleSessionPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleSessionPickerKey(key))) consumeKey(key);
         return;
       case "skill-picker":
-        if (options.handleSkillPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleSkillPickerKey(key))) consumeKey(key);
         return;
       case "model":
-        if (options.handleModelPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleModelPickerKey(key))) consumeKey(key);
         return;
       case "quality-picker":
-        if (options.handleQualityPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleQualityPickerKey(key))) consumeKey(key);
         return;
       case "quality-rewrite-confirm":
-        if (options.handleRewriteConfirmKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleRewriteConfirmKey(key))) consumeKey(key);
         return;
       case "composer":
         break;
@@ -172,13 +209,33 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       consumeKey(key);
       return;
     }
+    // Candidate tree (Ctrl+B) sits at the same layer: above workspace routing
+    // so the Workspace tree's catch-all never swallows it, after the modal
+    // switch so an open panel keeps its keys. Plain Ctrl+B is 0x02 in
+    // traditional VT terminals on all three platforms. Taking it over
+    // supersedes the composer's Emacs backward-char (bare left arrow and
+    // Meta+b word movement remain).
+    if (key.ctrl && !key.shift && key.name === "b" && options.triggerBranch) {
+      options.triggerBranch();
+      consumeKey(key);
+      return;
+    }
     // The Workspace page owns keys next (tree/viewer/quick-open/focus).
     // Tri-state routing: consumed → done; false + composer focus → fall
     // through to shared composer (image paste, text keys); false + other
     // region → native widget (textarea) handles the key, stop here.
-    if (options.workspaceActive?.() && options.handleWorkspaceKey) {
+    const workspaceActive = options.workspaceActive?.() === true;
+    if (workspaceActive && options.handleWorkspaceKey) {
       if (options.handleWorkspaceKey(key)) { consumeKey(key); return; }
       if (options.workspaceFocusRegion?.() !== "composer") return;
+    }
+    // Regenerate (#88): plain Ctrl+R is representable as the same 0x12 byte in
+    // traditional VT terminals on Windows, macOS, and Linux. Keep this after
+    // Workspace routing so that page retains its existing Ctrl+R file reload.
+    if (!workspaceActive && key.ctrl && !key.shift && key.name === "r" && options.triggerRegenerate) {
+      options.triggerRegenerate();
+      consumeKey(key);
+      return;
     }
     if (options.artifactFocusActive?.()) {
       if (options.handleArtifactFocusKey?.(key)) consumeKey(key);
@@ -203,6 +260,12 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     }
     if (isComposerDirectionKey(key)) {
       // ScrollBox handles modified arrows too, but composer intentionally does not.
+      // Alt+←/→ here means the candidate switcher is out of reach on this
+      // surface (Workspace page or hero): guide instead of swallowing silently.
+      const altLike = key.meta === true || key.option === true;
+      if (altLike && !key.ctrl && (key.name === "left" || key.name === "right")) {
+        options.onRejectedCandidateSwitch?.();
+      }
       consumeKey(key);
       return;
     }

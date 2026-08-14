@@ -44,6 +44,10 @@ import {
 } from "../skills";
 import type { EngineId } from "../engine/profile";
 import type { ToolDefinition } from "../tools";
+import { createAssetResolver } from "../runtime/assets";
+import { appendHostContext } from "../prompt/host-context";
+import { composeProjectStateBlock, freezeProjectStateBlock } from "../prompt/project-state";
+import { declaresDirectoryQuery } from "../tools/directory-query";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
   const engine = options.engine ?? "etl";
@@ -73,7 +77,13 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   // resume authority for the frozen catalog and the activation registry.
   let snapshot: SessionSnapshot | undefined;
   if (options.sessionId) {
-    snapshot = await loadSessionSnapshot(rootDir, options.sessionId, { synthesizeDanglingToolResults: false });
+    snapshot = await loadSessionSnapshot(rootDir, options.sessionId, {
+      synthesizeDanglingToolResults: false,
+      // A branched turn (regenerate) reads the snapshot ending at the fork
+      // point, excluding later sibling subtrees, so harness identity, Skill
+      // hydration, and the round-0 message list reflect the fresh-context branch.
+      ...(options.branchHeadUuid ? { headUuid: options.branchHeadUuid } : {}),
+    });
     assertSessionHarnessIdentity(snapshot.harness, harness?.identity);
     if (engine === "stage") {
       if (!snapshot.stageBootstrap) throw new Error("Stage session is missing frozen bootstrap metadata.");
@@ -109,7 +119,15 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     pruneSessionActivations(session.sessionId, new Set(catalogNames(skillCatalog)));
   }
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
-  if (skillCatalogBlock) systemPrompt = `${systemPrompt}\n\n${skillCatalogBlock}`;
+  systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock);
+  // Project State is live Host context, not session identity or conversation
+  // history. It is frozen in process for pauses and observed again after a
+  // restart or at the next top-level turn.
+  let identitySystemPrompt = systemPrompt;
+  const projectStateBlock = declaresDirectoryQuery(profile.defaultTools)
+    ? await composeProjectStateBlock(rootDir, assets ?? createAssetResolver(rootDir))
+    : "";
+  systemPrompt = appendHostContext(systemPrompt, projectStateBlock);
 
   const mcpOutputPreferences = await readMcpOutputPreferences(rootDir);
   const mcpOutputPersistence = mcpOutputPreferences.persist;
@@ -118,11 +136,15 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
     permission.shellInterpreter,
-    mcpOutputPersistence ? { outputPersistence: { sessionId: session.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate } } : {},
+    mcpOutputPersistence
+      ? { outputPersistence: { sessionId: session.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate }, signal: options.signal }
+      : { signal: options.signal },
     { catalogNames: catalogNames(skillCatalog) },
   );
   if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {
-    systemPrompt = `${systemPrompt}\n\n${composeMcpOutputPersistenceHint(session.sessionId)}`;
+    const hint = composeMcpOutputPersistenceHint(session.sessionId);
+    systemPrompt = appendHostContext(systemPrompt, hint);
+    identitySystemPrompt = appendHostContext(identitySystemPrompt, hint);
   }
   const agentManager = options.agentManager ?? createTurnAgentManager(rootDir, options.onEvent);
   let compactedSnapshot: SessionSnapshot | undefined;
@@ -136,7 +158,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     // draft. New sessions and Stage (no compaction) skip it. The compact
     // provider request is a standalone call, never a bootstrap turn, so it
     // cannot re-enter automatic evaluation.
-    if (engine !== "stage" && config.limits?.autoCompact) {
+    // Pre-turn auto-compaction is skipped for branched turns (branchHeadUuid
+    // set): the compaction service appends to the physical tail and is not
+    // branch-fork-aware, so compacting before the forked store's first append
+    // would fold the old sibling subtree's summary into the fresh-context
+    // branch. A regenerate re-runs history that already met the budget when the
+    // original turn ran, so skipping is safe; mid-turn compaction (by which
+    // point the branch IS the physical tail) still guards the hard ceiling.
+    if (engine !== "stage" && config.limits?.autoCompact && !options.branchHeadUuid) {
       const compacted = await runExistingSessionPreTurnCompaction({
         rootDir,
         sessionId: options.sessionId,
@@ -158,18 +187,20 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     }
   }
 
-  // A new top-level Agent Loop gets a fresh logical turn id, and its first
-  // provider round is allocated alongside the initiating input. The ids stamp
-  // the user record directly; the active-round map is bound only after all
+  // A new top-level Agent Loop gets a fresh logical turn id unless it is a
+  // regenerate candidate rooted at a deliberately reused user record. In that
+  // case the candidate must share the user's id so compaction retains the
+  // prompt and selected response as one indivisible logical turn. The first
+  // provider round is always new. The active-round map is bound only after all
   // fallible bootstrap appends succeed (just before return) so a failed append
   // can never leak a stale entry that runLoop's finally would never clear.
-  const logicalTurnId = newLogicalTurnId();
+  const logicalTurnId = options.prePersistedInputLogicalTurnId ?? newLogicalTurnId();
   const providerRoundId = newProviderRoundId();
 
   if (isNewSession) {
     await session.append(
       buildSessionHeaderRecord({
-        systemPrompt,
+        systemPrompt: identitySystemPrompt,
         engine,
         config,
         permission,
@@ -202,9 +233,11 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     diagnostics: instructional.selection.diagnostics,
   });
 
-  const userRecord = options.prePersistedInputUuid
-    ? { uuid: options.prePersistedInputUuid }
-    : await session.append({
+  let userRecord: { uuid: string };
+  if (options.prePersistedInputUuid) {
+    userRecord = { uuid: options.prePersistedInputUuid };
+  } else {
+    userRecord = await session.append({
       role: "user",
       content: options.input,
       metadata: {
@@ -218,12 +251,14 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
         ...(options.images ? { images: persistedImageAttachments(options.images) } : {}),
       },
     });
+  }
   const checkpoint = new FileCheckpointManager(rootDir, session, userRecord.uuid);
   await checkpoint.createSnapshot();
   options.onSessionReady?.(session.sessionId, session.sessionPath);
   // Freeze only after bootstrap's fallible persistence work is complete. From
   // here, runLoop owns cleanup on completion or failure, while pauses retain it.
   freezeInstructionBlocks(session.sessionId, composeInstructionBlocks(instructional.selection));
+  freezeProjectStateBlock(session.sessionId, projectStateBlock);
   // Bind the active round last, after every fallible append above has succeeded.
   // runLoop's finally clears it on completion/pause/error; a throw before this
   // point leaves no leaked entry.
@@ -243,6 +278,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     provider,
     systemPrompt,
     enginePrompt: engineAssets.systemPrompt,
+    projectStateBlock,
     tools: toolSurface.definitions,
     mcpRegistry: toolSurface.mcp,
     mcpOutputPersistence,

@@ -11,10 +11,10 @@ import { parseCliInvocation } from "../../../src/cli/args";
 
 describe("permission modes", () => {
   const expected: Record<PermissionMode, Record<PermissionClass, "allow" | "ask">> = {
-    MANUAL: { observe: "ask", mutate: "ask", arbitrary_exec: "ask", interaction: "allow" },
-    INERTIA: { observe: "allow", mutate: "ask", arbitrary_exec: "ask", interaction: "allow" },
-    MOMENTUM: { observe: "allow", mutate: "allow", arbitrary_exec: "ask", interaction: "allow" },
-    YOLO: { observe: "allow", mutate: "allow", arbitrary_exec: "allow", interaction: "allow" },
+    MANUAL: { observe: "ask", mutate: "ask", skill_exec: "ask", arbitrary_exec: "ask", interaction: "allow" },
+    INERTIA: { observe: "allow", mutate: "ask", skill_exec: "ask", arbitrary_exec: "ask", interaction: "allow" },
+    MOMENTUM: { observe: "allow", mutate: "allow", skill_exec: "allow", arbitrary_exec: "ask", interaction: "allow" },
+    YOLO: { observe: "allow", mutate: "allow", skill_exec: "allow", arbitrary_exec: "allow", interaction: "allow" },
   };
 
   for (const [mode, classes] of Object.entries(expected) as Array<[PermissionMode, Record<PermissionClass, "allow" | "ask">]>) {
@@ -25,14 +25,28 @@ describe("permission modes", () => {
     });
   }
 
-  test("classifies built-in, interaction, shell, and unknown MCP tools", () => {
+  test("classifies built-in, interaction, Skill script, shell, and unknown MCP tools", () => {
     expect(permissionClassForTool("read_file")).toBe("observe");
     expect(permissionClassForTool("write_file")).toBe("mutate");
     expect(permissionClassForTool("request_confirmation")).toBe("interaction");
+    expect(permissionClassForTool("run_skill_script")).toBe("skill_exec");
     expect(permissionClassForTool("shell_exec")).toBe("arbitrary_exec");
     expect(permissionClassForTool("shell_output")).toBe("observe");
     expect(permissionClassForTool("shell_stop")).toBe("mutate");
     expect(permissionClassForTool("mcp_remote_claimed_readonly")).toBe("mutate");
+  });
+
+  test("migrates legacy durable Skill-script requests from arbitrary_exec", () => {
+    expect(parsePermissionRequest({
+      id: "legacy-skill-script",
+      sessionId: "session",
+      toolCallId: "call-script",
+      toolName: "run_skill_script",
+      arguments: JSON.stringify({ skill: "skillify", path: "scripts/publish_skill.sh" }),
+      permissionClass: "arbitrary_exec",
+      mode: "MOMENTUM",
+      createdAt: new Date().toISOString(),
+    })?.permissionClass).toBe("skill_exec");
   });
 
   test("accepts legacy quality state and rejects malformed durable artifact targets", () => {

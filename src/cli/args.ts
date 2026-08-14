@@ -48,6 +48,7 @@ const KNOWN_COMMANDS = new Set([
   "debug",
   "assets",
   "skills",
+  "config",
   "dev",
 ]);
 

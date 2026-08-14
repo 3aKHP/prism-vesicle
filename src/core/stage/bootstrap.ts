@@ -46,7 +46,7 @@ export async function listStageCardPaths(rootDir: string): Promise<string[]> {
       throw error;
     });
     if (!directory) continue;
-    const result = await listDirectoryEntries(rootDir, directory, true).catch((error: unknown) => {
+    const result = await listDirectoryEntries(rootDir, directory, { recursive: true }).catch((error: unknown) => {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
       throw error;
     });

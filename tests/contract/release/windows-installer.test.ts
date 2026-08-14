@@ -2,15 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { INSTALLER_FILENAME, INSTALLER_FILE_VERSION, innoCompilerCandidates, numericFileVersion } from "../../../scripts/build-installer";
-import { INSTALLER_PAYLOAD, stageWindowsInstaller } from "../../../scripts/stage-windows-installer";
+import { INSTALLER_FILENAME, INSTALLER_FILE_VERSION, innoCompilerCandidates, numericFileVersion } from "../../../scripts/build/build-installer";
+import { INSTALLER_PAYLOAD, stageWindowsInstaller } from "../../../scripts/build/stage-windows-installer";
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 // Scope: these guard the Inno Setup source (.iss) and the staged payload —
 // the stable installer shape. The PowerShell smoke
-// (scripts/smoke-windows-installer.ps1) is NOT source-asserted here; it is
+// (scripts/smoke/smoke-windows-installer.ps1) is NOT source-asserted here; it is
 // exercised for real by the release-lane installer smoke in CI. Asserting its
 // text was a redundant test-of-the-test (removed in the test-layer refactor);
 // .ps1 structural breakage is therefore caught at release time, not per-PR,

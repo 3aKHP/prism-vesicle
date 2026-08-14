@@ -67,6 +67,12 @@ describe("prompt audit tool surface", () => {
 
       expect(reported.modelVisible).toEqual(names);
       if (engine === "stage") {
+        expect(names).not.toContain("list_directory");
+      } else {
+        expect(names.filter((name) => name === "list_directory")).toHaveLength(1);
+        expect(names).not.toContain("list_files");
+      }
+      if (engine === "stage") {
         expect(names).toEqual([]);
       } else {
         expect(names).toContain("ask_user_question");
@@ -78,7 +84,7 @@ describe("prompt audit tool surface", () => {
     for (const agent of ["scene-writer", "continuity-editor", "chapter-reviewer"] as const) {
       const profile = await loadAgentProfile(agent);
       const tools = resolveChildTools(profile.tools, [], createEmptyMcpRegistry(), true);
-      expect(tools.map((definition) => definition.function.name)).toEqual(profile.tools);
+      expect(tools.map((definition) => definition.function.name)).toEqual([...new Set(profile.tools)]);
     }
   });
 

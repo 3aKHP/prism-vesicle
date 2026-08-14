@@ -7,7 +7,6 @@ systemPrompt:
   - assets/prompts/agents/scene-writer.md
 tools:
   - stat_path
-  - list_files
   - list_directory
   - grep_files
   - read_file

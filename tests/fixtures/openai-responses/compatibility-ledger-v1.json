@@ -54,7 +54,7 @@
     {
       "id": "deepseek-subset",
       "codex": "Codex exercises OpenAI continuation, encrypted reasoning and WebSocket behavior.",
-      "public": "DeepSeek documents a stateless HTTP Responses subset for deepseek-v4-flash with plaintext response.reasoning_text events.",
+      "public": "DeepSeek documents a stateless HTTP Responses subset for deepseek-v4-flash and deepseek-v4-pro with plaintext response.reasoning_text events.",
       "selected": "DeepSeek uses a dated HTTP-only profile with full replay, no previous_response_id/remote compact/WebSocket, and exact documented reasoning effort mapping.",
       "test": "DeepSeek profile omits unsupported request fields, admits only plaintext reasoning events, and has a live reasoning/function acceptance lane"
     },

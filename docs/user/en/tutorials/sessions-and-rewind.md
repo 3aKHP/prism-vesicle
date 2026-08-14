@@ -49,6 +49,39 @@ Shortcut: with the input box **empty**, press Esc twice (within 800ms) to open t
 
 > The rewind file checkpoints cover only files changed by Vesicle's own tools. Files you change by hand outside Vesicle are not in this ledger and are not rewind targets.
 
+## Regenerate and switch candidates
+
+Not happy with the last reply? Have it **try again**; the old version is kept, and you can switch between the two at any time — on the Chat page, press **Ctrl+R**.
+
+Ctrl+R re-runs the **entire last turn** with the same prompt and produces a new reply as a new candidate. Once the re-run starts, the old reply is cleared from the screen and the new candidate streams in its place; the old candidate is not deleted, it just no longer occupies the view. Once the re-run finishes, a marker like `< 1/2 >` appears under the reply — use **Option+← / Option+→** to switch between candidates. On the Workspace page, `Ctrl+R` continues to reload the active file from disk instead:
+
+- Switching changes which version is shown, which one later messages build on, and which files are on disk; it does not call the model again.
+- On the chat-only Stage engine a regenerate is cheap (a single model call); on file-writing authoring engines the whole workflow re-runs, which costs more.
+
+> **About files**: the files Vesicle wrote switch with the candidate. When a candidate is left, **every file** under the content roots (`source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`) is snapshotted into that candidate's full file manifest; switching candidates makes the disk strictly equal to the selected candidate's manifest — entries in it restore, paths outside it are deleted. Manual edits and MCP-tool writes made while a candidate is active are therefore snapshotted too, and deleted or restored along with everything else on switch. Regenerate re-runs the turn against the files as they were when the turn first started. The Stage engine writes no files, so it is unaffected. Some content stays outside authoritative restoration, as with `/rewind`: host processes (`shell_exec` / skill scripts — Vesicle warns you when a candidate is affected) only produce a warning, the scratch `tmp/` root stays outside manifests, and symbolic links and special files are kept as-is — never restored, never deleted (recorded as `untracked` in the switch outcome). Candidates created before this upgrade and never left since carry old-format file snapshots that are no longer read; switching to them changes the conversation only, and Vesicle says so in the status line.
+
+> Each regenerate and each switch appends to the session record, and old candidates are kept forever. The session file grows and loads more slowly as candidates accumulate; Vesicle does not clean this up automatically — start a fresh session with `/new`, or delete unneeded files under `.vesicle/sessions/` by hand when you want to.
+
+Regenerate runs only once the current turn has finished and there is no unresolved confirmation / permission / question and no background SubAgent still running; otherwise the status line tells you to resolve those first. Switching candidates is likewise paused while a background SubAgent is running or queued, so its file writes cannot race the switch.
+
+## The candidate tree: browse and switch branches at any depth
+
+The inline `< n/m >` switcher only covers the last turn. To return to an earlier fork — even one whose candidates were continued and forked again afterwards — use the **`/branch`** command or **Ctrl+B** (works on both the Chat and Workspace pages):
+
+- The panel renders **every** fork point and candidate in the session, including subtrees inside branches that are no longer active; the current active path is expanded by default and marked with `●`.
+- `↑/↓` move, `←/→` fold/unfold, `Enter` selects a candidate, `Esc` (or Ctrl+B again) closes the panel.
+- Selecting a candidate opens a **confirm step**: a read-only preview of the file changes first (which files change, `+/-` line counts), then the conversation and disk switch only after you confirm. The confirm step warns about missing file state and host-process taint. After the switch, the active branch moves to the selected candidate; turns that came after it stay in the session but leave the active path.
+- Press `r` on a fork row to **regenerate that turn** (equivalent to Ctrl+R on a historical turn); later turns leave the active path.
+- Switching follows the same constraints as the inline switcher: refused while busy or while a background SubAgent is running; files move before the selection marker.
+
+> Ctrl+B used to be the composer's Emacs backward-char key; it now opens the candidate tree instead. Bare `←` cursor movement and `Meta+b` word movement are unaffected.
+
+## Message focus: Alt+↑ / Alt+↓
+
+**Alt+↑ / Alt+↓** moves a **turn-level focus cursor** across the whole transcript (every engine): each press stops on the previous/next turn's prompt and final reply, wrapping at the edges; the focused messages are highlighted in the brand color and scrolled into view. When the focus lands on a Stage message, **Ctrl+Alt+S** still expands/collapses it. With the cursor on a turn, **Ctrl+R regenerates that turn** (without a focus it still regenerates the last turn).
+
+**Alt+← / Alt+→** performs candidate switching first; when the current turn has no switchable candidates, Vesicle no longer stays silent — the status line guides you: Ctrl+B opens the candidate tree when the focused turn has candidates, otherwise Ctrl+R regenerates that turn.
+
 ## When context gets long: compact
 
 After a conversation grows, you can compact it into a summary and continue, saving context:
@@ -64,7 +97,7 @@ Switching engines can also compact on the way: `/engine <id> --summary`.
 ## Exit and interrupt
 
 - Ctrl+Q — exit Vesicle (the session is already persisted; `/resume` finds it next time).
-- Esc — abort a running request (already-written files are not lost).
+- Esc — abort a running request (already-written files are not lost); it also interrupts busy windows such as the approval step after a permission prompt, leaving an unfinished approval pending again.
 - Double Esc with text in the input box — save the draft and clear it (without sending).
 
 ## Checklist

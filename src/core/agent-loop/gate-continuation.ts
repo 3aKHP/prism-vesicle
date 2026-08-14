@@ -9,6 +9,7 @@ import type { ToolPermissionBroker } from "../permissions";
 import { FileCheckpointManager } from "../checkpoints/file-history";
 import { withExecutionRound } from "../session/store";
 import type { AgentManager } from "../agents/manager";
+import { throwIfAborted } from "../../shared/cancellation";
 
 type ResolveGateOptions = ContinuationContextOptions & {
   messages: VesicleMessage[];
@@ -23,6 +24,7 @@ type ResolveGateOptions = ContinuationContextOptions & {
 
 export async function resolveGate(options: ResolveGateOptions): Promise<RunPromptResult> {
   const context = await loadContinuationContext(options);
+  throwIfAborted(options.signal);
   const toolResultContent = JSON.stringify({ ok: true, result: gateResultMessage(options.resolution) });
   const messages: VesicleMessage[] = [...options.messages, {
     role: "tool",
@@ -64,6 +66,7 @@ export async function resolveGate(options: ResolveGateOptions): Promise<RunPromp
     provider: context.provider,
     systemPrompt: context.systemPrompt,
     enginePrompt: context.enginePrompt,
+    projectStateBlock: context.projectStateBlock,
     tools: context.toolSurface.definitions,
     mcpRegistry: context.toolSurface.mcp,
     mcpOutputPersistence: context.mcpOutputPersistence,

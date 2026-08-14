@@ -12,6 +12,8 @@ import type { AgentProfile } from "./profile";
 import { loadAgentProfile, loadAgentSystemPrompt } from "./profile";
 import { assertChildToolDeclaration, unsupportedChildToolNames } from "./tool-scope";
 import type { AgentInvocationContext, AgentRunContext } from "./types";
+import { createAssetResolver } from "../runtime/assets";
+import { composeProjectStateBlock } from "../prompt/project-state";
 
 export type ChildAgentBootstrap = {
   config: Awaited<ReturnType<typeof loadConfigForSelection>>;
@@ -39,14 +41,21 @@ export async function bootstrapChildAgent({
   const config = await loadConfigForSelection(invocation.providerSelection);
   const profile = await loadAgentProfile(spec.profileId, invocation.rootDir, invocation.assets);
   const agentSystemPrompt = await loadAgentSystemPrompt(profile, invocation.rootDir, invocation.assets);
-  const systemPrompts = composeChildSystemPrompts(profile.contextMode, invocation.parentSystemPrompt, agentSystemPrompt);
-  const mcp = await createMcpRegistryForEngine(invocation.parentEngine);
+  const baseSystemPrompts = composeChildSystemPrompts(profile.contextMode, invocation.parentSystemPrompt, agentSystemPrompt);
+  const mcp = await createMcpRegistryForEngine(invocation.parentEngine, invocation.parentSignal ? { signal: invocation.parentSignal } : {});
   const tools = resolveChildTools(
     profile.tools,
     invocation.parentToolDefinitions,
     mcp,
     config.capabilities?.vision === true,
   );
+  // Fork children already inherit the parent's frozen turn snapshot as part of
+  // its exact system prefix. Fresh/summary children need their own orientation.
+  const projectStateBlock = profile.contextMode !== "fork"
+    && tools.some((tool) => tool.function.name === "list_directory")
+    ? await composeProjectStateBlock(invocation.rootDir, invocation.assets ?? createAssetResolver(invocation.rootDir))
+    : "";
+  const systemPrompts = projectStateBlock ? [...baseSystemPrompts, projectStateBlock] : baseSystemPrompts;
   const session = await createSessionStore(invocation.rootDir);
   await registerChildSession(session.sessionId);
   const proxyPolicy = await resolveProviderProxyPolicy();
@@ -130,7 +139,7 @@ export function resolveChildTools(
   // explicit declaration remains an error below.
   const names = declared[0] === "*"
     ? [...parentNames].filter((name) => !unsupportedChildToolNames.has(name))
-    : declared;
+    : [...new Set(declared)];
   const resolved: ToolDefinition[] = [];
   for (const name of names) {
     if (name === "view_image" && !visionEnabled) continue;

@@ -15,6 +15,7 @@ import {
 } from "../config/providers";
 import { parseMcpConfig, mcpConfigPathFromEnv } from "../mcp/config";
 import { loadPermissionSettings } from "../config/permissions";
+import { atomicWrite } from "../config/atomic-write";
 
 export type SetupMcpServer = {
   name: string;
@@ -134,6 +135,21 @@ export function setEnvValues(source: string, updates: Record<string, string>): s
   return `${output.join("\n")}\n`;
 }
 
+/**
+ * Shared provider-registry write pipeline for config CLI commands:
+ * serialize → validate by re-parsing (before touching disk) → atomic write →
+ * reload to confirm the round-trip. A failed cross-field constraint throws
+ * before any bytes land on disk, leaving the existing providers.yaml intact.
+ */
+export async function writeProviderRegistry(registry: ProviderRegistry): Promise<string> {
+  const path = providerConfigPathFromEnv();
+  const source = serializeProviderRegistry(registry);
+  parseProviderConfig(source, path, process.env);
+  await atomicWrite(path, source);
+  await loadProviderRegistry();
+  return path;
+}
+
 export function serializeProviderRegistry(registry: ProviderRegistry): string {
   const lines = [
     "default:",
@@ -184,8 +200,8 @@ function mergeProvider(
     : {};
   const models = [...new Set(input.modelIds.map((model) => model.trim()).filter(Boolean))]
     .map((id) => existingModels.get(id) ?? { id });
-  if (preset === "deepseek-responses" && models.some((model) => model.id !== "deepseek-v4-flash")) {
-    throw new Error("DeepSeek Responses currently supports only deepseek-v4-flash; deselect other models before saving.");
+  if (preset === "deepseek-responses" && models.some((model) => model.id !== "deepseek-v4-flash" && model.id !== "deepseek-v4-pro")) {
+    throw new Error("DeepSeek Responses currently supports only deepseek-v4-flash and deepseek-v4-pro; deselect other models before saving.");
   }
   const profile: ProviderProfile = {
     id: providerId,

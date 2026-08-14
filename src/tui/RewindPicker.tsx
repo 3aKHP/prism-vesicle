@@ -102,7 +102,7 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
                 {() => <ThemedText content={truncateLine("⚠ Rewinding does not affect files edited manually outside Vesicle tools.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
               </For>
               <For each={point().checkpointTainted ? [true] : []}>
-                {() => <ThemedText content={truncateLine("⚠ This turn ran shell_exec; its file changes may not be restored.", props.width - 4)} fg={palette.error} wrapMode="none" />}
+                {() => <ThemedText content={truncateLine("⚠ This turn ran a host process; its file changes may not be restored.", props.width - 4)} fg={palette.error} wrapMode="none" />}
               </For>
               <For each={point().failedTurn ? [true] : []}>
                 {() => <ThemedText content={truncateLine("⚠ This turn failed before a reply; its prompt was not delivered to the provider.", props.width - 4)} fg={palette.warn} wrapMode="none" />}

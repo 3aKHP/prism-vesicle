@@ -123,6 +123,7 @@ export function makeContinuationBundle(overrides: ContinuationBundleOverrides = 
     handleInterruptedTurn: noop,
     reportError: noop,
     permissionContext: (): PermissionContext => ({ mode: "MANUAL", shellExecEnabled: false, shellInterpreter: "auto" }),
+    refreshCandidateSwitcher: async () => undefined,
   };
   return {
     runtime: { ...base.runtime, ...overrides.runtime },
@@ -138,6 +139,7 @@ export function makeContinuationBundle(overrides: ContinuationBundleOverrides = 
     handleInterruptedTurn: overrides.handleInterruptedTurn ?? base.handleInterruptedTurn,
     reportError: overrides.reportError ?? base.reportError,
     permissionContext: overrides.permissionContext ?? base.permissionContext,
+    refreshCandidateSwitcher: overrides.refreshCandidateSwitcher ?? base.refreshCandidateSwitcher,
     resolveQualityDecision: overrides.resolveQualityDecision ?? base.resolveQualityDecision,
   };
 }

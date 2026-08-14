@@ -4,7 +4,7 @@ bun.lockb
 
 # Build output (compiled binaries)
 dist/
-build/
+/build/
 coverage/
 /prism-vesicle
 /prism-vesicle.exe
@@ -49,3 +49,6 @@ test-workspaces/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local CLI state
+.qoder/

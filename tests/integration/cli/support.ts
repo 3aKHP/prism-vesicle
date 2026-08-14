@@ -39,21 +39,25 @@ const PASSTHROUGH_ENV = [
   "TMP",
 ];
 
-function buildChildEnv(configDir: string): Record<string, string> {
+function buildChildEnv(configDir: string | undefined, extra?: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {};
   for (const key of PASSTHROUGH_ENV) {
     const value = process.env[key];
     if (value !== undefined) env[key] = value;
   }
-  env.VESICLE_CONFIG_DIR = configDir;
+  if (configDir !== undefined) env.VESICLE_CONFIG_DIR = configDir;
+  if (extra) Object.assign(env, extra);
   return env;
 }
 
 export type CliRunOptions = {
   cwd: string;
-  configDir: string;
+  /** Isolated config directory. Omit to skip setting VESICLE_CONFIG_DIR. */
+  configDir?: string;
   /** Extra argv after the command path (e.g. ["--dangerously-skip-permissions"]). */
   extra?: string[];
+  /** Extra environment variables merged into the child env (overrides defaults). */
+  env?: Record<string, string>;
 };
 
 export type CliRunResult = {
@@ -73,7 +77,7 @@ export async function runCli(args: string[], options: CliRunOptions): Promise<Cl
     cwd: options.cwd,
     stdout: "pipe",
     stderr: "pipe",
-    env: buildChildEnv(options.configDir),
+    env: buildChildEnv(options.configDir, options.env),
     signal: AbortSignal.timeout(30_000),
   });
   const [stdout, stderr, exitCode] = await Promise.all([

@@ -25,6 +25,7 @@ import { finalizeTurn } from "./turn-finalizer";
 import { createCompactionObservation, runMidTurnCompaction, updateProviderObservation } from "./mid-turn-compaction";
 import type { CompactionObservation, MidTurnCompactionParams } from "./mid-turn-compaction";
 import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
+import { clearFrozenProjectStateBlock } from "../prompt/project-state";
 import { composeSkillCatalogBlock, readFrozenSessionSkillCatalog, resolveEngineEligibleCatalog } from "../skills";
 import type { ResolvedSkillCatalog } from "../skills";
 import type { AgentLoopEvent, PendingUserInput, RunPromptResult } from "./types";
@@ -70,6 +71,8 @@ export type RunLoopArgs = {
   systemPrompt: string;
   /** Engine prompt without instruction blocks — used to recompose systemPrompt after an in-turn instruction update. */
   enginePrompt: string;
+  /** Bounded snapshot fixed for this top-level turn or resumed continuation. */
+  projectStateBlock: string;
   tools: ToolDefinition[];
   mcpRegistry: McpRegistry;
   /** Whether MCP tool-result persistence (#137B) is enabled for this turn. */
@@ -128,6 +131,7 @@ export async function runLoop(args: RunLoopArgs): Promise<RunPromptResult> {
     return await runLoopInternal(args);
   } catch (error) {
     clearFrozenInstructionBlocks(args.session.sessionId);
+    clearFrozenProjectStateBlock(args.session.sessionId);
     throw error;
   } finally {
     // The active provider round is process-local. Clear it on every exit
@@ -157,6 +161,7 @@ function refreshLiveSystemPrompt(args: RunLoopArgs): void {
     ? composeSkillCatalogBlock(resolveEngineEligibleCatalog(frozenCatalog, args.profile).catalog)
     : "";
   if (catalogBlock) prompt = `${prompt}\n\n${catalogBlock}`;
+  if (args.projectStateBlock) prompt = `${prompt}\n\n${args.projectStateBlock}`;
   // Re-append the MCP output-persistence hint so it survives the per-round
   // recompose, mirroring the Skill catalog block. Gated on the toggle and on
   // the engine actually having MCP tools.
@@ -232,6 +237,7 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
   // keeps its snapshot so an in-process continuation can resume under the same
   // instruction set.
   clearFrozenInstructionBlocks(args.session.sessionId);
+  clearFrozenProjectStateBlock(args.session.sessionId);
   return finalizeTurn({
     response,
     messages: args.messages,

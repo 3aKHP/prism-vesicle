@@ -57,15 +57,21 @@ When the user asks about Vesicle installation, configuration, commands, troubles
 
 Every Vesicle installation ships with `skillify` (scope `host`). Ask Vesicle to capture, save, or turn a repeatable workflow from the current conversation into a reusable Skill, and the model activates `skillify`. It writes a draft under `tmp/skillify/<name>/` using ordinary guarded file tools, validates the complete bundle, and publishes it create-only to the project (`.agents/skills/<name>/`) or the installed Skill Store after you choose a target.
 
-Publication is create-only: no overwrite or upgrade. The draft is always retained under `tmp/skillify/`. The published Skill is discoverable from a new session — the current session catalog does not change. Validation and publication require Process Runtime (a resolved shell profile); `.ps1` scripts are supported through PowerShell 7 (or Windows PowerShell 5.1 fallback on Windows, `pwsh` elsewhere).
+Publication is create-only: no overwrite or upgrade. The draft is always retained under `tmp/skillify/`. The published Skill is discoverable from a new session — the current session catalog does not change. Validation and publication use structured `run_skill_script` execution and do not require `shellExec` to be enabled; POSIX uses `sh`, while `.ps1` prefers PowerShell 7 (with Windows PowerShell 5.1 fallback on Windows, `pwsh` elsewhere). A missing interpreter fails clearly and retains the draft.
 
 ## First-party `novel-outline-v3` Skill
 
 Every Vesicle installation ships with `novel-outline-v3` (scope `host`), a hierarchical novel-outline workflow (volume outline → chapter outline → scene). It teaches a text-first methodology: read all source material, maintain two living-document ledgers (character growth and world state), draft volume/chapter/scene outlines, allocate a per-chapter tension budget with closed-form checks (Σ scenes = chapter total), track foreshadow plant/resolve, write back ledgers, and mark uncertain items.
 
-It has no scripts, no process capability, and provides read-only text references through `read_skill_resource` (outline templates, ledger formats, tension model). It complements the Harness 10.2.0 tension-budget system.
+It has no scripts, no process capability, and provides read-only text references through `read_skill_resource` (outline templates, ledger formats, tension model). It complements the Harness tension-budget system.
 
 When the user asks to "outline the first three chapters", "write a volume outline", "break the outline down to scene level", "allocate tension", or "track foreshadow", the model may automatically activate this Skill.
+
+## First-party `update-config` Skill
+
+Every Vesicle installation ships with `update-config` (scope `host`). When you ask Vesicle to inspect or modify provider, permission, preference, quality, or settings configuration, the model activates this Skill and guides the change through the validated, atomic `vesicle config` CLI commands instead of hand-editing YAML. The full command surface is in the [`vesicle config` command reference](../reference/configuration.md#vesicle-config-command-reference).
+
+Secret values are structurally excluded: `show` sanitizes `.env` into `<set>`/`<empty>` markers and no operation accepts a secret value as an argument; API keys are still edited manually in the user-level `.env`. The scripts run through two thin `.sh`/`.ps1` wrappers via structured `run_skill_script` (an independent `skill_exec` approval class), with no need to enable `shellExec`.
 
 ## Stage exclusion
 

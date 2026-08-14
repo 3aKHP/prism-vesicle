@@ -78,6 +78,78 @@ The exception does not relax these rules:
 
 For public-release paths, this exception is retired: release-readiness changes use a release branch and PR, require independent CR, and must not be tagged from an unreviewed dogfood worktree. Keep `develop` as the integration trunk for subsequent internal iteration.
 
+## Change Grading Workflow
+
+Every change is routed through one of six graded workflows. The grade decides the branch shape, the review bar, and the merge path. Use the Rapid Development Exception above and the verification matrix below as the risk inputs; when in doubt, grade up. This grading is the current team convention: the graded flows below organize the exception, the PR path, and the two review tiers into one decision tree, and they are what a contributor (or an AI collaborator in any agent environment) follows before asking for a merge.
+
+| Grade | Scope | Branch | Review | Merge |
+|---|---|---|---|---|
+| **Develop direct** | chore/docs, small, low-risk | direct to `develop` | none | push after an explicit user request |
+| **Quick PR** | small/medium, low-risk | short-lived from `develop` | Bot Review, one round | human merge request once Bot passes |
+| **Standard PR** | medium | short-lived from `develop` | independent CR SubAgent + Bot Review (dual-track) | human merge request once no Should-fix remains |
+| **Huge PR** | large, cross-module, high-risk | short-lived; split into multiple PRs when needed | Deep-CR (Tier 2) on the whole; each split PR keeps Standard grade | human merge request after Deep-CR findings are resolved |
+| **Hot-Fix** | blocking regression on `main` or a tagged milestone | from `main` | per risk (Tier 1 for non-trivial) | PR to `main`, then forward-merge to `develop` |
+| **Release** | publication | `release/v<version>-<topic>` | independent CR + small Windows acceptance | PR to `main`, then the tag flow (§ Release Lifecycle) |
+
+### Develop direct
+
+Trigger: chore/docs-only, small-scope, low-risk changes, and an explicit user request to commit and push. This is the current tightening of the Rapid Development Exception: the direct-push lane is limited to chore/docs, while the other low-risk types the exception lists (prompt/asset copy edits, focused TUI interaction fixes, test and verification improvements, small bug fixes, narrow refactors) route through Quick PR instead, where one Bot Review round provides the guardrail.
+
+Steps: commit in small reviewable commits (Conventional Commits) → run the minimal verification for the change class → push to `develop` only when the user explicitly asked. Never push directly to `main`.
+
+Exit: the commits are pushed, the worktree is clean, and any affected docs are updated in the same change.
+
+### Quick PR
+
+Trigger: small/medium, low-risk changes that are not chore/docs (or that the author prefers to review through PR). No independent CR is enabled.
+
+Steps: short-lived branch from `develop` (`<type>/v<target>-<topic>`) → implement and verify → open the PR against `develop` using the PR Body Shape below → let Bot Review run one round and address its findings → ask a human to merge once no blocking finding remains.
+
+Exit: Bot Review passed one round and a human approved the merge.
+
+### Standard PR
+
+Trigger: medium-size changes, or a change that touches a high-risk domain (provider protocol/streaming/adapters, model-visible tool contracts/path guards/write semantics, session schema/replay/resume/migration, prompt contracts/stop gates/validators/engine profiles, large refactors, cross-module changes, release-bound work) without reaching the Huge bar below.
+
+Steps: short-lived branch from `develop` → implement and verify → open the PR → run the dual-track CR in parallel:
+
+- independent CR SubAgent (Tier 1, see Two-Tier Code Review below) — the reviewer must be a session that did not participate in the implementation conversation;
+- Bot Review, one round.
+
+Consolidate both tracks into the Blocking / Should-fix / Nits / Verified vocabulary and handle them per Handling CR Results: Blocking must be fixed before merge; Should-fix is fixed unless there is a documented reason to defer.
+
+Exit: no Blocking and no unresolved Should-fix remains on either track, and a human approved the merge.
+
+### Huge PR
+
+Trigger: large, cross-module, high-risk changes — touching two or more distinct high-risk domains, or 8+ changed files, or 300+ net diff lines, or release-bound work aimed at `main`/a tag.
+
+Steps:
+
+1. Write a topic document before starting implementation: the goal and success criteria, the subsystems involved, risks and failure modes, and the split plan when the change must be divided. Default location is `dev/docs/working/` (machine-local, `UPPER_SNAKE_CASE.md`); use a tracked location and the normal documentation flow when the document needs public review.
+2. Split the change into multiple PRs when needed — one PR, one main intent — and keep each split PR at Standard grade (dual-track CR).
+3. Run Deep-CR (Tier 2) over the whole change (or the representative merged set): run `scripts/check/deep-cr-trigger.sh <base>` first; when it reports `trigger: true`, run the five-lens finder/scorer/synthesis workflow described in Two-Tier Code Review below.
+4. Resolve Deep-CR findings per Handling CR Results, then ask a human to merge.
+
+Exit: topic document in place, split PRs each passed the dual-track CR, the overall Deep-CR has no unresolved Blocking/Should-fix, and a human approved the merge.
+
+### Hot-Fix
+
+Trigger: a blocking regression on `main` or a tagged milestone — provider requests fail, sessions lose history, tools claim writes without writing, path guards are unsafe, or the TUI cannot exit or accept input. During rapid internal development most urgent fixes can go through `develop` instead; reserve this grade for when `main` or a milestone must be repaired.
+
+The full flow is § Hotfix below: branch from `main`, patch the smallest concrete failing path, add a regression test when practical, update `CHANGELOG.md` and relevant docs, verify locally, PR to `main`, then forward-merge or cherry-pick to `develop`.
+
+### Release
+
+The full flow is § Release Lifecycle below. The Release grade adds to it the review bar of the graded system: independent CR (Standard or Huge treatment depending on the release content and the Deep-CR trigger) plus a small Windows acceptance pass before the tag push. No release tag may be created while any audit gate is red or any waiver is past its revisit date (the release rule in `AUDIT_DRIFT.md`).
+
+### Grading notes
+
+- The grades are a decision skeleton, not a rigid gate: the author and the reviewer confirm the grade; the graded flow then runs its steps exactly.
+- Bot Review means the GitHub PR-side automatic review (one round). The repository documents no specific bot configuration; follow whatever review mechanism the repository actually has enabled.
+- High-risk domain list (used for Standard vs Huge grading): `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/core/gate`, `src/core/validators`, `src/core/engine`.
+- A DSH implementation of this grading exists as the `prism-vesicle-workflow` and `prism-vesicle-cr` agent presets under `.dsh/agent-presets/` (install with `.dsh/install.sh`); the sections above are written to be executable in any agent environment without it.
+
 ## Iteration Loop
 
 ### Normal Change
@@ -271,6 +343,52 @@ Return:
 - Should-fix: fix unless there is a documented reason to defer.
 - Nits: apply when cheap and consistent with local style.
 - Verified claims: keep them in the PR body or merge notes when useful.
+
+## Two-Tier Code Review
+
+Vesicle uses two independent-CR tiers. They compose; Tier 2 never replaces Tier 1. In the Change Grading Workflow above, Standard PR runs Tier 1 and Huge PR runs Tier 2.
+
+- **Tier 1 (default)** — the `vesicle-cr-reviewer` subagent (`.claude/agents/vesicle-cr-reviewer.md`): one independent single-pass review for any non-trivial PR, the step described above in "Independent CR".
+- **Tier 2 (deep-cr)** — the `deep-cr` Workflow (`.claude/workflows/deep-cr.js`) plus the `/deep-cr` command (`.claude/commands/deep-cr.md`): a heavy multi-agent review reserved for high-risk diffs.
+
+### When to use which tier
+
+Run Tier 2 only when the high-risk trigger fires. The trigger mirrors the "Rapid Development Exception" list above and is implemented as a read-only check that prints `{"trigger":bool,"reasons":[...]}` and never changes state:
+
+```bash
+scripts/check/deep-cr-trigger.sh <base>     # base defaults to develop
+```
+
+`trigger = CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH)`:
+
+- **CATEGORY_MATCH** — at least one changed file is under a high-risk domain: `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/core/gate`, `src/core/validators`, `src/core/engine`. (TUI changes use Tier 1 — Tier 2 has no TUI lens.)
+- **CROSS_BOUNDARY** — the change touches 2 or more of those distinct domains.
+- **SIZE_FLOOR** — 8 or more changed files, or 300 or more net diff lines.
+- **RELEASE_BRANCH** — the branch is `release/*` or `main`, or the base is `main` (or a `v*` tag).
+
+Everything else stays on Tier 1. `/deep-cr` runs the gate itself; when it reports `trigger:false` it stops and recommends Tier 1 rather than spending the Tier 2 budget.
+
+### What Tier 2 does
+
+Five lens finders (sonnet) each run `git diff` on their own domain prefixes; then one independent scorer (haiku) per candidate finding re-opens the cited contract and the cited `file:line` before scoring 0–100 on the 0/25/50/75/100 rubric; survivors at confidence ≥ 80 with a verified citation pass to a synthesis pass (sonnet) that classifies them into Blocking / Should-fix / Nits / Verified claims, which the command renders via `ReportFindings`. The finder/scorer separation is what Tier 2 adds over Tier 1's single pass: a confident-sounding finding must survive an independent re-check against the contract it cites.
+
+The five lenses and the contracts they cite:
+
+- L1 tool safety & write semantics — `docs/dev/TOOLS.md`, `docs/dev/STYLE.md` ("Make partial success explicit").
+- L2 provider protocol — `docs/dev/PROVIDERS.md`, `docs/dev/OPENAI_RESPONSES_CONFORMANCE.md`.
+- L3 session & durability — `docs/dev/SESSIONS.md`, `docs/dev/STYLE.md` ("State And Side Effects").
+- L4 prompt honesty & gates — `docs/dev/TOOLS.md` ("Gates, Questions, And Engine Handoffs"), `docs/dev/ASSETS.md`, `docs/dev/QUALITY_GUARD.md`, `src/core/prompt/loader.ts`.
+- L5 structure & boundaries — `docs/dev/STYLE.md` ("Prohibited God Structures", "Module Boundaries"), `docs/dev/ARCHITECTURE.md` ("Dependency Direction").
+
+There is intentionally **no** `PROMPTS.md`, `GATES.md`, `VALIDATORS.md`, or `ENGINE.md` under `docs/dev/`. Gate behavior is owned by `TOOLS.md`, prompt composition by `ASSETS.md` plus `src/core/prompt/loader.ts` (the engine profile `systemPrompt` list is the single source of truth — no prompt text is hardcoded in source), engine profiles by `assets/engines/*.profile.yaml`, and validators by `QUALITY_GUARD.md`. Reviewers must not invent those filenames as citations.
+
+### Output handling
+
+Tier 2 uses the same vocabulary and the same "Handling CR Results" rules directly above: Blocking must fix before merge; Should-fix unless there is a documented deferral; Nits optional; Verified claims go in merge notes.
+
+### Scope (v1)
+
+The first version is deliberately minimal: five lenses, finder/scorer separation, the ≥ 80 confidence filter, and `ReportFindings` rendering. Out of scope for v1: a git-blame/history lens, a previous-PR-comments lens, a cross-lens dedup stage, and budget-aware lens skipping.
 
 ## PR Body Shape
 

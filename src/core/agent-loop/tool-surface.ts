@@ -78,7 +78,7 @@ export function resolveBuiltInTools(
   byName.set("activate_skill", createActivateSkillToolDefinition(skillNames));
   const resolved: ToolDefinition[] = [];
 
-  for (const name of profile.defaultTools) {
+  for (const name of [...new Set(profile.defaultTools)]) {
     if (hostContractNames.has(name)) continue;
     if (name === "view_image" && !visionEnabled) continue;
     if (name === "shell_exec" && (!shellExecEnabled || !shellProfile)) continue;
@@ -108,9 +108,10 @@ export function resolveBuiltInTools(
   if (skillNames.length > 0) {
     resolved.push(byName.get("activate_skill")!);
     resolved.push(byName.get("read_skill_resource")!);
-    if (shellExecEnabled && shellProfile) {
-      resolved.push(byName.get("run_skill_script")!);
-    }
+    // Skill scripts select one fixed catalog resource and use structured argv.
+    // Their interpreter is resolved per script at execution time, independent
+    // of the free-form shell_exec capability and its configured shell profile.
+    resolved.push(byName.get("run_skill_script")!);
   }
   return resolved;
 }

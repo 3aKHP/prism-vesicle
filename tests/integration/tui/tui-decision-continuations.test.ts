@@ -59,6 +59,42 @@ test("gate interruption delegates queued-session recovery before releasing the m
   }
 });
 
+test("completed gate continuation refreshes the durable candidate switcher", async () => {
+  const pending = {
+    kind: "needs_user",
+    sessionId: "parent",
+    sessionPath: "unused",
+    engine: "etl",
+    gate: { gate: "blueprint-confirmation", summary: "Review", options: [{ label: "Confirm", decision: "confirm" }] },
+    toolCallId: "gate-call-1",
+    assistantContent: "Blueprint",
+    messages: [],
+  } as const;
+  const refreshed: string[] = [];
+  const handled: string[] = [];
+  const result = { kind: "complete", sessionId: "parent" } as never;
+  const continuations = createDecisionContinuations(makeContinuationBundle({
+    decision: {
+      pendingGate: () => pending as unknown as PendingGateState,
+      setPendingGate: (() => undefined) as never,
+      setGateFeedbackMode: (() => undefined) as never,
+      clearGateFeedback: () => undefined,
+    },
+    transcript: {
+      setStatus: (() => undefined) as never,
+      setMessages: (() => undefined) as never,
+      recordActivity: () => undefined,
+    },
+    runCancellable: async () => ({ kind: "complete", value: result }),
+    handleResult: (value) => handled.push(value.kind),
+    refreshCandidateSwitcher: async (sessionId) => { refreshed.push(sessionId); },
+  }));
+
+  await continuations.submitGateResolution({ decision: "confirm" });
+  expect(handled).toEqual(["complete"]);
+  expect(refreshed).toEqual(["parent"]);
+});
+
 test("user-question interruption does not restore a resolved Harness retry decision", async () => {
   const root = await mkdtemp(join(tmpdir(), "vesicle-tui-delegation-recovery-"));
   try {

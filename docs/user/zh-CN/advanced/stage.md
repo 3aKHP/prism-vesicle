@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/stage.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.9`):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.0.0-alpha.10`):** 🟢 已实现。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 Stage 是 Prism 的**消费端**协作小说引擎:喂给它一张角色卡(Module A)和一张情景卡(Module B),它开一个第三人称连续叙事会话——你发消息即你角色的行动,它续写反应。
 
@@ -30,7 +30,7 @@ Stage 的引擎 profile 强制 `defaultTools: []`、`stopGates: []`——模型*
 
 每个 Stage 回合输出三段:
 
-1. **Hidden Neural Chain**(`<!-- [!Neural Chain] … -->`):感知/本能/状态/策略。消费端默认**折叠**,点该消息(或用 `Ctrl+Alt+S` 聚焦)可查看原始内容。
+1. **Hidden Neural Chain**(`<!-- [!Neural Chain] … -->`):感知/本能/状态/策略。消费端默认**折叠**,点该消息(或用 `Alt+↑/↓` 把回合焦点移到该回合后按 `Ctrl+Alt+S`)可查看原始内容。
 2. **Dynamic HUD**(`【Status】`/`[Space-Time]`/`[Physical]`/`[Psychology]`/`[Beat]`/`[Impression]`):以低调 indicator 显示。
 3. **Prose**:默认可见的主叙事散文(200–800 字中文,高密度,至少两种感官模态)。
 
