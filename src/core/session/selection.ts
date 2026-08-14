@@ -118,28 +118,36 @@ export function candidateSubtreeRoots(
 ): SessionRecord[] {
   const roots: SessionRecord[] = [];
   for (const child of index.get(forkPointUuid) ?? []) {
-    if (isCandidateSelectionRecord(child)) continue;
     if (isContentRecord(child)) {
       roots.push(child);
       continue;
     }
-    const chainHead = firstContentDescendant(child, index);
-    if (chainHead) roots.push(chainHead);
+    // System chains — bootstrap snapshots, bundles, and selection markers —
+    // are walked through: continuations after a selection chain OFF the
+    // marker (possibly several sibling prompts), so nested forks and reply
+    // leaves on a selected candidate stay reachable. (At an authored user
+    // fork point a marker never chains directly, so candidate-root
+    // enumeration there is unaffected.)
+    collectChainRoots(child, index, roots);
   }
   return roots.sort((a, b) => a.ts.localeCompare(b.ts));
 }
 
-function firstContentDescendant(
+/** Collect the first content layer below a system chain. */
+function collectChainRoots(
   start: SessionRecord,
   index: Map<string | null, SessionRecord[]>,
-): SessionRecord | undefined {
-  for (const child of continuationChildrenOf(index, start.uuid)) {
-    if (isContentRecord(child)) return child;
-    if (isCandidateSelectionRecord(child)) continue;
-    const found = firstContentDescendant(child, index);
-    if (found) return found;
+  out: SessionRecord[],
+): void {
+  const children = index.get(start.uuid) ?? [];
+  const content = children.filter((record) => isContentRecord(record));
+  if (content.length > 0) {
+    out.push(...content);
+    return;
   }
-  return undefined;
+  for (const child of children) {
+    collectChainRoots(child, index, out);
+  }
 }
 
 /**
@@ -167,6 +175,32 @@ export function subtreeEndpoint(
     }
   }
   return { leaf, hasAssistant };
+}
+
+/**
+ * Display-scope endpoint of a candidate subtree: the reply leaf reached by
+ * descending the newest content chain, STOPPING at nested fork boundaries.
+ * Unlike subtreeEndpoint (the endpoint-ledger query for markers and bundles),
+ * this never leaks into a nested branch: a candidate whose continuation forked
+ * again shows its own reply, with the nested fork exposed separately.
+ */
+export function candidateReplyLeaf(
+  start: SessionRecord,
+  index: Map<string | null, SessionRecord[]>,
+): SessionRecord | undefined {
+  let current: SessionRecord | undefined = isContentRecord(start) ? start : undefined;
+  let cursor: SessionRecord | undefined = start;
+  while (cursor) {
+    const roots = candidateSubtreeRoots(index, cursor.uuid);
+    if (roots.length !== 1) break;
+    const next = roots[0]!;
+    // The next authored turn opens a different scope: this candidate's
+    // display endpoint is its own reply, not the following prompt.
+    if (isAuthoredPrompt(next)) break;
+    cursor = next;
+    if (isContentRecord(next)) current = next;
+  }
+  return current;
 }
 
 /**
@@ -321,13 +355,15 @@ function buildBranchNode(
   index: Map<string | null, SessionRecord[]>,
   activeUuids: Set<string>,
 ): CandidateTreeBranch {
-  const endpoint = subtreeEndpoint(root, index);
+  // Scope-aware endpoint: stop at nested fork boundaries so a candidate's row
+  // shows its own reply, never a leaf belonging to a nested branch.
+  const replyLeaf = candidateReplyLeaf(root, index);
   const reply = candidateReplyRecord(root, index);
   const excerpt = root.role === "user" ? root.content : reply?.content ?? root.content;
   const nested = findForkBelow(root, index, activeUuids, false);
   return {
     rootUuid: root.uuid,
-    endpointUuid: endpoint.leaf?.uuid ?? root.uuid,
+    endpointUuid: replyLeaf?.uuid ?? root.uuid,
     ...(reply ? { replyUuid: reply.uuid } : {}),
     excerpt,
     ts: root.ts,

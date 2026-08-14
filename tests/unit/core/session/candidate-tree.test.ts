@@ -58,10 +58,12 @@ describe("candidate tree primitives", () => {
     expect(branchA!.activePath).toBe(false);
     expect(branchA!.excerpt).toBe("three-act structure");
     expect(branchA!.authoredTurnCount).toBe(1);
-    expect(branchA!.endpointUuid).toBe("a2");
+    // Display endpoints stay in scope: a top-level branch row ends at its own
+    // reply; the deeper candidates live in the nested fork, not in the row.
+    expect(branchA!.endpointUuid).toBe("a");
     expect(branchB!.activePath).toBe(true);
     expect(branchB!.authoredTurnCount).toBe(1);
-    expect(branchB!.endpointUuid).toBe("b2");
+    expect(branchB!.endpointUuid).toBe("b");
 
     const nestedA = branchA!.fork;
     expect(nestedA?.forkRecordUuid).toBe("u2a");
@@ -134,5 +136,33 @@ describe("candidate tree primitives", () => {
     // Single content-child chains with host-injected records produce no forks.
     expect(buildCandidateTree([s, u1, a, injected, tail])).toEqual([]);
     expect(ownerForkOfLeaf([s, u1, a, injected, tail], "tail")).toBe("u1");
+  });
+
+  test("continuations chain through selection markers and endpoints never leak across branches", () => {
+    sequence = 0;
+    const s = record({ uuid: "s", parentUuid: null, role: "system", content: "bootstrap" });
+    const u1 = record({ uuid: "u1", parentUuid: "s", role: "user", content: "turn one" });
+    const a1 = record({ uuid: "a1", parentUuid: "u1", role: "assistant", content: "reply one A" });
+    const a2 = record({ uuid: "a2", parentUuid: "u1", role: "assistant", content: "reply one B" });
+    // a2 is selected; its continuation chains OFF the selection marker.
+    const marker = record({ uuid: "marker", parentUuid: "a2", role: "system", content: "" });
+    marker.metadata = { kind: "candidate-selection", forkPointUuid: "u1", selectedLeafUuid: "a2" };
+    const u2 = record({ uuid: "u2", parentUuid: "marker", role: "user", content: "turn two" });
+    const b1 = record({ uuid: "b1", parentUuid: "u2", role: "assistant", content: "reply two A" });
+    const b2 = record({ uuid: "b2", parentUuid: "u2", role: "assistant", content: "reply two B" });
+
+    const tree = buildCandidateTree([s, u1, a1, a2, marker, u2, b1, b2]);
+    expect(tree).toHaveLength(1);
+    const top = tree[0]!;
+    expect(top.forkRecordUuid).toBe("u1");
+    expect(top.candidates.map((candidate) => candidate.rootUuid)).toEqual(["a1", "a2"]);
+    // Endpoints stay in scope: a2's row ends at its own reply, and a1 does
+    // not absorb anything from a2's continuation.
+    expect(top.candidates.map((candidate) => candidate.endpointUuid)).toEqual(["a1", "a2"]);
+    expect(top.candidates[0]!.fork).toBeUndefined();
+    // The marker-chained continuation surfaces as a2's nested fork.
+    const nested = top.candidates[1]!.fork;
+    expect(nested?.forkRecordUuid).toBe("u2");
+    expect(nested?.candidates.map((candidate) => candidate.endpointUuid)).toEqual(["b1", "b2"]);
   });
 });
