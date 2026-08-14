@@ -78,9 +78,9 @@ The inline `< n/m >` switcher only covers the last turn. To return to an earlier
 
 ## Message focus: Alt+↑ / Alt+↓
 
-**Alt+↑ / Alt+↓** moves a **turn-level focus cursor** across the whole transcript (every engine): each press stops on the previous/next turn's prompt and final reply, wrapping at the edges; the focused messages are highlighted in the theme color and scrolled into view. When the focus lands on a Stage message, **Ctrl+Alt+S** still expands/collapses it.
+**Alt+↑ / Alt+↓** moves a **turn-level focus cursor** across the whole transcript (every engine): each press stops on the previous/next turn's prompt and final reply, wrapping at the edges; the focused messages are highlighted in the theme color and scrolled into view. When the focus lands on a Stage message, **Ctrl+Alt+S** still expands/collapses it. With the cursor on a turn, **Ctrl+R regenerates that turn** (without a focus it still regenerates the last turn).
 
-**Alt+← / Alt+→** performs candidate switching first; when the current turn has no switchable candidates, Vesicle no longer stays silent — the status line guides you: Ctrl+B opens the candidate tree when the focused turn has candidates, otherwise Ctrl+R regenerates the last turn.
+**Alt+← / Alt+→** performs candidate switching first; when the current turn has no switchable candidates, Vesicle no longer stays silent — the status line guides you: Ctrl+B opens the candidate tree when the focused turn has candidates, otherwise Ctrl+R regenerates that turn.
 
 ## When context gets long: compact
 

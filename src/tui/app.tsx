@@ -457,6 +457,7 @@ export function App(props: AppProps = {}) {
     const fork = focusedTurn();
     const anchor = fork ? turnAnchors().find((entry) => entry.forkUuid === fork) : undefined;
     if (anchor?.hasCandidates) setStatus("this turn has candidates; Ctrl+B opens the candidate tree");
+    else if (anchor) setStatus("no candidates to switch here; Ctrl+R regenerates this turn");
     else setStatus("no candidates to switch here; Ctrl+R regenerates the last turn");
   }
   function submitCommand(raw: string): boolean {
@@ -990,7 +991,7 @@ export function App(props: AppProps = {}) {
     handleDecisionPaste,
     insertComposerPaste,
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
-    triggerRegenerate: () => void turnController.regenerateTurn(),
+    triggerRegenerate: () => void turnController.regenerateTurn(focusedTurn() ?? undefined),
     triggerBranch: () => void branchController.open(),
     onRejectedCandidateSwitch: rejectCandidateSwitch,
     sideQuestionOverlay: sideQuestionController.overlay,
