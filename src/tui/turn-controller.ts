@@ -1,12 +1,12 @@
 import { createSignal } from "solid-js";
 import { regenerateTurn as coreRegenerateTurn } from "../core/agent-loop/run";
 import { runPrompt } from "../core/agent-loop/run";
-import { switchCandidateFileState } from "../core/checkpoints/candidate-files";
+import { switchCandidateFileState, type CandidateFileStateOutcome } from "../core/checkpoints/candidate-files";
 import { AutoCompactBlockedError } from "../core/compact/auto-compact";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot, FAILED_TURN_KIND } from "../core/session/store";
-import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection } from "../core/session/selection";
+import { appendCandidateSelection, contentLeafAtOrAbove, enumerateCandidateLeaves, findLatestSelection, ownerForkOfLeaf } from "../core/session/selection";
 import { listRewindPoints, rewindConversation } from "../core/rewind/service";
 import type { VesicleImageAttachment, VesicleMessage } from "../providers/shared/types";
 import type { ComposerElement } from "./composer";
@@ -462,15 +462,17 @@ export function createTurnController(options: TurnControllerOptions) {
   }
 
   /**
-   * Re-run the last turn as a new candidate (#88). Forks a sibling subtree off
-   * the shared user record, updates the display via the normal turn-result path,
-   * and arms the inline `<n/m>` switcher. Refuses while busy, while a pending
-   * interaction is unresolved, or while a background SubAgent is still running
-   * (its eventual delivery could land on the wrong branch). The old candidate's
-   * post-state is bundled and the disk is restored to the fork baseline before
-   * the new candidate runs (per-candidate file coexistence).
+   * Re-run a turn as a new candidate (#88). Defaults to the last turn; the
+   * candidate-tree panel passes `targetUuid` to regenerate an arbitrary turn
+   * of the active branch. Forks a sibling subtree off the shared user record,
+   * updates the display via the normal turn-result path, and arms the inline
+   * `<n/m>` switcher. Refuses while busy, while a pending interaction is
+   * unresolved, or while a background SubAgent is still running (its eventual
+   * delivery could land on the wrong branch). The old candidate's post-state
+   * is bundled and the disk is restored to the fork baseline before the new
+   * candidate runs (per-candidate file coexistence).
    */
-  async function regenerateTurn(): Promise<void> {
+  async function regenerateTurn(targetUuid?: string): Promise<void> {
     const id = session.sessionId();
     if (!id) { transcript.setStatus("no session to regenerate"); return; }
     if (runtime.busy() || candidateActionInFlight) { transcript.setStatus("wait for the current turn"); return; }
@@ -486,14 +488,14 @@ export function createTurnController(options: TurnControllerOptions) {
     try {
       if (!await ensureRuntimeReady()) return;
       const points = await listRewindPoints(session.rootDir, id);
-      target = points.at(-1);
+      target = targetUuid ? points.find((point) => point.uuid === targetUuid) : points.at(-1);
     } finally {
       candidateActionInFlight = false;
     }
     if (!target) { transcript.setStatus("no turn to regenerate"); return; }
     runtime.setBusy(true);
     transcript.setStatus("regenerating turn");
-    transcript.recordActivity({ kind: "provider", text: "regenerating last turn" });
+    transcript.recordActivity({ kind: "provider", text: targetUuid ? "regenerating selected turn" : "regenerating last turn" });
     // Regenerate replaces the old candidate on screen: scope the display and
     // provider-facing conversation to the fork point (the same branch core
     // regenerate runs against) so the previous reply disappears and the new
@@ -622,35 +624,104 @@ export function createTurnController(options: TurnControllerOptions) {
     const nextLeaf = current.leaves[nextIndex];
     const fromLeaf = current.leaves[current.index];
     if (!nextLeaf || !fromLeaf) return;
-    runtime.setBusy(true);
-    transcript.setStatus(`switching to candidate ${nextIndex + 1}/${current.total}`);
+    await applyCandidateSwitchCore({
+      id,
+      fromLeaf,
+      toLeaf: nextLeaf,
+      forkPointForFiles: current.forkPointUuid,
+      statusLabel: `switching to candidate ${nextIndex + 1}/${current.total}`,
+      successStatus: (fileOutcome) => {
+        if (fileOutcome.tainted) return `candidate ${nextIndex + 1}/${current.total}: ran a host process; some file changes may not have switched`;
+        if (!fileOutcome.restored && fileOutcome.reason === "missing") return `candidate ${nextIndex + 1}/${current.total}: no saved file state, files not switched`;
+        return `candidate ${nextIndex + 1}/${current.total}`;
+      },
+    });
+  }
+
+  /**
+   * Switch the active branch to `toLeaf` at any depth of the session tree.
+   * Shares the inline-switch kernel: files move before the marker, and the
+   * marker keys its fork point on the target leaf's owning turn so the inline
+   * `<n/m>` switcher re-arms at the target depth. Refuses under the same
+   * guards as inline switching (busy, latch, running/queued SubAgents).
+   */
+  async function switchToCandidate(toLeaf: string): Promise<boolean> {
+    const id = session.sessionId();
+    if (!id || runtime.busy() || candidateActionInFlight) return false;
+    if (agent.agentCards().some((card) => card.status === "running" || card.status === "queued")) {
+      transcript.setStatus("wait for active SubAgents before switching candidates");
+      return false;
+    }
+    candidateActionInFlight = true;
     try {
-      const fileOutcome = await switchCandidateFileState(session.rootDir, id, {
-        forkPointUuid: current.forkPointUuid,
-        fromLeaf,
-        toLeaf: nextLeaf,
-      });
-      await appendCandidateSelection(session.rootDir, id, { forkPointUuid: current.forkPointUuid, selectedLeafUuid: nextLeaf });
+      const records = await loadSessionRecords(session.rootDir, id);
       const snapshot = await loadSessionSnapshot(session.rootDir, id, { synthesizeDanglingToolResults: false });
+      const tail = snapshot.records.at(-1);
+      const fromLeaf = contentLeafAtOrAbove(records, tail?.uuid) ?? tail?.uuid;
+      if (!fromLeaf || fromLeaf === toLeaf) return false;
+      const forkForFiles = ownerForkOfLeaf(records, fromLeaf) ?? "";
+      return await applyCandidateSwitchCore({
+        id,
+        fromLeaf,
+        toLeaf,
+        forkPointForFiles: forkForFiles,
+        statusLabel: "switching candidate branch",
+        successStatus: (fileOutcome) => {
+          if (fileOutcome.tainted) return "switched: ran a host process; some file changes may not have switched";
+          if (!fileOutcome.restored && fileOutcome.reason === "missing") return "switched conversation only: no saved file state for this candidate";
+          return "switched candidate branch";
+        },
+      });
+    } finally {
+      candidateActionInFlight = false;
+    }
+  }
+
+  /**
+   * The shared candidate-switch kernel. Files move before the marker because
+   * the restore is idempotent-convergent (retryable) while the marker is a
+   * one-shot pointer flip: on restore failure the switch aborts and
+   * conversation and disk still point at the same candidate. The selection
+   * marker keys its forkPointUuid on the target leaf's owning turn, so after
+   * any-depth switches the inline switcher re-arms at the new depth. Pending
+   * interactions are cleared so a switched-away gate does not linger;
+   * switching to a paused candidate is a known MVP limitation.
+   */
+  async function applyCandidateSwitchCore(params: {
+    id: string;
+    fromLeaf: string;
+    toLeaf: string;
+    forkPointForFiles: string;
+    statusLabel: string;
+    successStatus: (fileOutcome: CandidateFileStateOutcome) => string;
+  }): Promise<boolean> {
+    runtime.setBusy(true);
+    transcript.setStatus(params.statusLabel);
+    try {
+      const fileOutcome = await switchCandidateFileState(session.rootDir, params.id, {
+        forkPointUuid: params.forkPointForFiles,
+        fromLeaf: params.fromLeaf,
+        toLeaf: params.toLeaf,
+      });
+      const markerRecords = await loadSessionRecords(session.rootDir, params.id);
+      const markerFork = ownerForkOfLeaf(markerRecords, params.toLeaf) ?? params.forkPointForFiles;
+      await appendCandidateSelection(session.rootDir, params.id, { forkPointUuid: markerFork, selectedLeafUuid: params.toLeaf });
+      const snapshot = await loadSessionSnapshot(session.rootDir, params.id, { synthesizeDanglingToolResults: false });
       session.setConversation(vesicleMessagesFromResumed(snapshot.messages));
       transcript.setMessages(displayTranscriptFromSnapshot(snapshot.messages, agent.agentCards()));
       clearPendingInteractions();
       transcript.setOutput("");
-      setCandidateSwitcher({ ...current, index: nextIndex });
       await hostAction.refreshArtifacts();
-      if (fileOutcome.tainted) {
-        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: ran a host process; some file changes may not have switched`);
-      } else if (!fileOutcome.restored && fileOutcome.reason === "missing") {
-        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}: no saved file state, files not switched`);
-      } else {
-        transcript.setStatus(`candidate ${nextIndex + 1}/${current.total}`);
-      }
+      transcript.setStatus(params.successStatus(fileOutcome));
+      await refreshCandidateSwitcher(params.id);
+      return true;
     } catch (error) {
       // A failed restore aborts before the marker, so conversation and disk
       // still point at the same candidate; even when a later step fails,
       // retrying the same switch converges (restore is idempotent, bundles
       // are captured once).
       reportError(error);
+      return false;
     } finally {
       runtime.setBusy(false);
     }
@@ -684,6 +755,7 @@ export function createTurnController(options: TurnControllerOptions) {
     submitPrompt,
     regenerateTurn,
     switchCandidate,
+    switchToCandidate,
     candidateSwitcher,
     refreshCandidateSwitcher,
   };

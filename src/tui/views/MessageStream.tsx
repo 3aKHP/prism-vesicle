@@ -10,6 +10,7 @@ import type { AgentCardState, Message as StreamMessage } from "../types";
 import type { TuiKeyEvent } from "../decision-interaction";
 import { parseStageMessageContent, type StageMessageContent } from "../stage-message-content";
 import { isStageMessageToggleShortcut } from "../stage-message-interaction";
+import type { TurnAnchor } from "../turn-anchors";
 
 /**
  * The hero conversation surface: a sticky-bottom scrollbox of messages plus the
@@ -31,6 +32,12 @@ export function MessageStream(props: {
   /** Active horizontal-candidate switcher for the current turn (#88), or null. */
   candidateSwitcher?: Accessor<{ index: number; total: number } | null>;
   onCandidateSwitch?: (direction: -1 | 1) => void;
+  /** Called when Alt+←/→ cannot switch (no armed switcher); never silent. */
+  onCandidateSwitchRejected?: () => void;
+  /** Turn-level focus anchors for the unified Alt+↑/↓ cursor. */
+  turnAnchors?: Accessor<TurnAnchor[]>;
+  focusedTurn?: Accessor<string | null>;
+  onFocusTurn?: (forkUuid: string) => void;
 }) {
   const renderer = useRenderer();
   const [focusedStageMessageId, setFocusedStageMessageId] = createSignal<string | undefined>();
@@ -108,45 +115,90 @@ export function MessageStream(props: {
     });
   }
 
+  /**
+   * Alt+arrow dispatch. Precedence: candidate cycling beats turn-focus
+   * navigation beats Stage toggle; the legacy Stage-only navigation remains
+   * the fallback when no turn anchors are provided. Alt arrives as `option`
+   * under enhanced keyboard protocols and `meta` in legacy terminals.
+   */
   function handleStageMessageKey(key: TuiKeyEvent): boolean {
-    // Alt is reported as `meta` by legacy terminals and `option` by enhanced
-    // protocols (see stage-message-interaction.ts); accept both.
     const altLike = key.meta === true || key.option === true;
-    const navigation = altLike && !key.ctrl && (key.name === "up" || key.name === "down");
-    const toggle = isStageMessageToggleShortcut(key);
-    // Horizontal candidate switching (#88): Alt+Left/Alt+Right cycle the
-    // current turn's candidates. No composer collision — plain letters and bare
-    // arrows carry no Alt modifier and fall through to the composer.
-    const candidateCycle = altLike && !key.ctrl && (key.name === "left" || key.name === "right");
-    if (!navigation && !toggle && !candidateCycle) return false;
-    if (candidateCycle) {
-      const switcher = props.candidateSwitcher?.();
-      if (switcher && switcher.total > 1) {
-        props.onCandidateSwitch?.(key.name === "left" ? -1 : 1);
-        return true;
-      }
-      return false;
+    if (!altLike || key.ctrl) return isStageMessageToggleShortcut(key) && handleStageToggle(key);
+    if (key.name === "left" || key.name === "right") return handleCandidateCycle(key);
+    if (key.name === "up" || key.name === "down") {
+      if (handleTurnFocusNavigation(key)) return true;
+      return handleLegacyStageNavigation(key);
     }
-    const ids = eligibleStageMessageIds();
-    if (ids.length === 0) return false;
-    if (navigation) {
-      const current = focusedStageMessageId();
-      const currentIndex = current ? ids.indexOf(current) : -1;
-      const direction = key.name === "up" ? -1 : 1;
-      const nextIndex = currentIndex < 0
-        ? (direction > 0 ? 0 : ids.length - 1)
-        : (currentIndex + direction + ids.length) % ids.length;
-      const id = ids[nextIndex]!;
-      setFocusedStageMessageId(id);
-      scrollbox?.scrollChildIntoView(id);
+    return false;
+  }
+
+  /** Alt+←/→: cycle the armed switcher, else report guidance (never silent). */
+  function handleCandidateCycle(key: TuiKeyEvent): boolean {
+    const switcher = props.candidateSwitcher?.();
+    if (switcher && switcher.total > 1) {
+      props.onCandidateSwitch?.(key.name === "left" ? -1 : 1);
       return true;
     }
-    const focused = focusedStageMessageId();
-    if (focused && isStageMessageToggleShortcut(key)) {
-      toggleStageMessage(focused);
+    if (props.onCandidateSwitchRejected) {
+      props.onCandidateSwitchRejected();
       return true;
     }
     return false;
+  }
+
+  /** Alt+↑/↓: move the transcript-wide turn-focus cursor (wrapping). */
+  function handleTurnFocusNavigation(key: TuiKeyEvent): boolean {
+    const anchors = props.turnAnchors?.() ?? [];
+    if (anchors.length === 0) return false;
+    const focused = props.focusedTurn?.() ?? null;
+    const currentIndex = focused ? anchors.findIndex((anchor) => anchor.forkUuid === focused) : -1;
+    const direction = key.name === "up" ? -1 : 1;
+    const nextIndex = currentIndex < 0
+      ? (direction > 0 ? 0 : anchors.length - 1)
+      : (currentIndex + direction + anchors.length) % anchors.length;
+    const anchor = anchors[nextIndex]!;
+    props.onFocusTurn?.(anchor.forkUuid);
+    scrollbox?.scrollChildIntoView(anchor.userMessageId);
+    // Keep the Stage mechanism's focus in sync so Ctrl+Alt+S and mouse
+    // toggling keep working on eligible focused turns.
+    if (anchor.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)) {
+      setFocusedStageMessageId(anchor.assistantMessageId);
+    }
+    return true;
+  }
+
+  /** Ctrl+Alt+S: toggle the focused turn's Stage message (or the legacy focus). */
+  function handleStageToggle(key: TuiKeyEvent): boolean {
+    if (!isStageMessageToggleShortcut(key)) return false;
+    const anchors = props.turnAnchors?.() ?? [];
+    const focusedFork = props.focusedTurn?.() ?? null;
+    const anchor = anchors.length > 0 && focusedFork
+      ? anchors.find((entry) => entry.forkUuid === focusedFork)
+      : undefined;
+    const target = anchor?.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)
+      ? anchor.assistantMessageId
+      : focusedStageMessageId();
+    if (target && eligibleStageMessageIds().includes(target)) {
+      toggleStageMessage(target);
+      return true;
+    }
+    return false;
+  }
+
+  /** Fallback (no turn anchors provided): Stage-only navigation. */
+  function handleLegacyStageNavigation(key: TuiKeyEvent): boolean {
+    const ids = eligibleStageMessageIds();
+    if (ids.length === 0) return false;
+    const current = focusedStageMessageId();
+    const currentIndex = current ? ids.indexOf(current) : -1;
+    const direction = key.name === "up" ? -1 : 1;
+    const nextIndex = currentIndex < 0
+      ? (direction > 0 ? 0 : ids.length - 1)
+      : (currentIndex + direction + ids.length) % ids.length;
+    const id = ids[nextIndex]!;
+    setFocusedStageMessageId(id);
+    scrollbox?.scrollChildIntoView(id);
+    return true;
   }
 
   props.registerStageKeyHandler?.(handleStageMessageKey);
@@ -156,6 +208,15 @@ export function MessageStream(props: {
     const switcher = props.candidateSwitcher?.();
     if (!switcher || switcher.total <= 1) return null;
     return `< ${switcher.index + 1}/${switcher.total} >  Option+←/→ switch · Ctrl+R regenerate`;
+  });
+
+  /** Display ids highlighted by the turn-focus cursor (prompt + final reply). */
+  const focusedMessageIds = createMemo(() => {
+    const focusedFork = props.focusedTurn?.() ?? null;
+    if (!focusedFork) return new Set<string>();
+    const anchor = (props.turnAnchors?.() ?? []).find((entry) => entry.forkUuid === focusedFork);
+    if (!anchor) return new Set<string>();
+    return new Set([anchor.userMessageId, ...(anchor.assistantMessageId ? [anchor.assistantMessageId] : [])]);
   });
 
   const stream = (
@@ -184,6 +245,7 @@ export function MessageStream(props: {
             expanded={() => message.stageSource === true}
             parsed={stageMessageMetadata().parsedById.get(id)}
             onToggle={() => toggleStageMessage(id)}
+            focused={focusedMessageIds().has(id)}
           />;
         }}</For>
         <Show when={props.streamingReasoning.trim().length > 0 && props.reasoningMode !== "hidden"} fallback={<box height={0} />}>
@@ -227,6 +289,7 @@ function StageStreamMessage(props: {
   expanded: Accessor<boolean>;
   parsed?: StageMessageContent;
   onToggle: () => void;
+  focused?: boolean;
 }) {
   const message = (stageSource: boolean) => <Message
     message={props.message}
@@ -236,6 +299,7 @@ function StageStreamMessage(props: {
     stageSource={stageSource}
     stageParsed={props.parsed}
     onStageToggle={props.onToggle}
+    focused={props.focused}
   />;
   return <Show when={props.expanded()} fallback={message(false)}>{message(true)}</Show>;
 }

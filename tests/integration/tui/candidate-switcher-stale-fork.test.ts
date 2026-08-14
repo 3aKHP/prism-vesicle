@@ -102,3 +102,39 @@ test("candidate switcher refresh replaces a paused leaf with its completed conti
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a deep selection marker re-arms the switcher at the selected depth", async () => {
+  // Any-depth switching keys the marker's forkPointUuid on the target leaf's
+  // owning turn (ownerForkOfLeaf). The inline switcher must then arm at THAT
+  // depth with the siblings of the selected leaf, not at the top fork.
+  const root = await mkdtemp(join(tmpdir(), "vesicle-cand-deep-"));
+  try {
+    const session = await createSessionStore(root, "s");
+    await session.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    const user1 = await session.append({ role: "user", content: "turn 1", metadata: { logicalTurnId: "t1", providerRoundId: "r1" } });
+    await session.append({ role: "assistant", content: "A1", metadata: { logicalTurnId: "t1", providerRoundId: "r1" } });
+
+    // Candidate B forks at turn 1 and continues to turn 2.
+    const storeB = await createSessionStore(root, "s", { parentUuid: user1.uuid });
+    const b1 = await storeB.append({ role: "assistant", content: "B1", metadata: { logicalTurnId: "t1b", providerRoundId: "r1b" } });
+    const turn2 = await createSessionStore(root, "s");
+    const user2 = await turn2.append({ role: "user", content: "turn 2", metadata: { logicalTurnId: "t2", providerRoundId: "r2" } });
+    const c1 = await turn2.append({ role: "assistant", content: "C1", metadata: { logicalTurnId: "t2", providerRoundId: "r2" } });
+    const storeC2 = await createSessionStore(root, "s", { parentUuid: user2.uuid });
+    const c2 = await storeC2.append({ role: "assistant", content: "C2", metadata: { logicalTurnId: "t2c", providerRoundId: "r2c" } });
+
+    // Marker keyed on the nested fork, as switchToCandidate writes it.
+    await appendCandidateSelection(root, "s", { forkPointUuid: user2.uuid, selectedLeafUuid: c1.uuid });
+
+    const controller = createTurnController(minimalControllerOptions(root, "s"));
+    await controller.refreshCandidateSwitcher("s");
+    const switcher = controller.candidateSwitcher();
+    expect(switcher?.forkPointUuid).toBe(user2.uuid);
+    expect(switcher?.leaves).toEqual([c1.uuid, c2.uuid]);
+    expect(switcher?.index).toBe(0);
+    expect(switcher?.total).toBe(2);
+    void b1;
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

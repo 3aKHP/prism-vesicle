@@ -40,7 +40,7 @@ describe("TUI reactivity static guard", () => {
   });
 
   test("bottom surface priority is explicit and modal-first", () => {
-    const empty: BottomSurfaceState = { yoloStage: null, permissionRequest: undefined, question: null, gate: null, rewind: null, session: null, skillPicker: null, model: null };
+    const empty: BottomSurfaceState = { yoloStage: null, permissionRequest: undefined, question: null, gate: null, rewind: null, branch: null, session: null, skillPicker: null, model: null };
     const rewind = { points: [], selected: 0, restoreSelected: 0, summaryFeedback: "", summaryCursor: 0, busy: false };
     const permission = { toolName: "read_file" } as PermissionRequest;
     expect(resolveBottomSurfaceMode(empty).kind).toBe("composer");

@@ -14,6 +14,7 @@ import { PromptComposer } from "../PromptComposer";
 import { QualityRewritePrompt } from "../QualityRewritePrompt";
 import { QuestionPrompt } from "../QuestionPrompt";
 import { RewindPicker } from "../RewindPicker";
+import { BranchPicker } from "../BranchPicker";
 import { SessionPicker } from "../SessionPicker";
 import { YoloPrompt } from "../YoloPrompt";
 import type { PendingUserQuestionState } from "../decision-interaction";
@@ -21,6 +22,7 @@ import type { PendingQualityDecisionState } from "../decision-interaction";
 import { QualityDecisionPrompt } from "../QualityDecisionPrompt";
 import { palette } from "../theme";
 import type { OptionItem, RewindPickerState, SessionPickerState } from "../types";
+import type { BranchPickerState } from "../branch/controller";
 import type { SkillPickerState } from "../skill-picker-controller";
 import { queuedInputText, type QueuedInput } from "../input-queue";
 import { truncateLine } from "../format";
@@ -66,6 +68,7 @@ export type BottomSurfaceMode =
   | { kind: "quality"; pending: PendingQualityDecisionState }
   | { kind: "gate"; gate: GateRequest }
   | { kind: "rewind"; picker: RewindPickerState }
+  | { kind: "branch"; picker: BranchPickerState }
   | { kind: "session"; picker: SessionPickerState }
   | { kind: "skill-picker"; picker: SkillPickerState }
   | { kind: "quality-rewrite-confirm"; state: QualityRewriteConfirmState }
@@ -80,6 +83,7 @@ export type BottomSurfaceState = {
   quality?: PendingQualityDecisionState | null;
   gate: GateRequest | null;
   rewind: RewindPickerState | null;
+  branch: BranchPickerState | null;
   session: SessionPickerState | null;
   skillPicker: SkillPickerState | null;
   qualityRewriteConfirm?: QualityRewriteConfirmState | null;
@@ -94,6 +98,7 @@ export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfa
   if (state.question) return { kind: "question", pending: state.question };
   if (state.gate) return { kind: "gate", gate: state.gate };
   if (state.rewind) return { kind: "rewind", picker: state.rewind };
+  if (state.branch) return { kind: "branch", picker: state.branch };
   if (state.session) return { kind: "session", picker: state.session };
   if (state.skillPicker) return { kind: "skill-picker", picker: state.skillPicker };
   if (state.qualityRewriteConfirm) return { kind: "quality-rewrite-confirm", state: state.qualityRewriteConfirm };
@@ -219,6 +224,13 @@ export function BottomSurface(props: BottomSurfaceProps) {
         {(current) => (
           <box height={props.layout.bottomHeight}>
             <RewindPicker state={current().picker} width={props.layout.width} />
+          </box>
+        )}
+      </Match>
+      <Match when={mode().kind === "branch" && mode() as Extract<BottomSurfaceMode, { kind: "branch" }> }>
+        {(current) => (
+          <box height={props.layout.bottomHeight}>
+            <BranchPicker state={current().picker} width={props.layout.width} />
           </box>
         )}
       </Match>

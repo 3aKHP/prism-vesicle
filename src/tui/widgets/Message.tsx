@@ -55,6 +55,8 @@ export function Message(props: {
   stageParsed?: ParsedStageMessageContent;
   onStageToggle?: () => void;
   streaming?: boolean;
+  /** Turn-focus cursor is on this message (Alt+↑/↓). */
+  focused?: boolean;
 }) {
   const renderer = useRenderer();
 
@@ -105,7 +107,7 @@ export function Message(props: {
         <box flexDirection="row">
           <box
             width={1}
-            backgroundColor={palette.laneAssistant}
+            backgroundColor={props.focused ? palette.brand : palette.laneAssistant}
             onMouseDown={beginPointer}
             onMouseDrag={trackDrag}
             onMouseUp={endPointer}
@@ -133,10 +135,10 @@ export function Message(props: {
 
   if (props.message.role === "user") {
     return (
-      <box flexDirection="column">
+      <box id={props.message.id} flexDirection="column">
         <box flexDirection="row">
           <box width={1} backgroundColor={palette.laneUser} />
-          <box flexDirection="column" border borderColor={palette.sectionBorder} paddingX={1} flexGrow={1}>
+          <box flexDirection="column" border borderColor={props.focused ? palette.brand : palette.sectionBorder} paddingX={1} flexGrow={1}>
             <ThemedText content={props.message.content} fg={palette.textPrimary} />
             {(props.message.images ?? []).map((image, index) => (
               <ThemedText

@@ -169,7 +169,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
       const usage = readResponseUsage(record.metadata?.usage);
       const images = parseImageAttachments(record.metadata?.images);
-      messages.push({ role: "user", content: record.content, ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
+      messages.push({ recordUuid: record.uuid, role: "user", content: record.content, ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
       continue;
     }
 
@@ -183,7 +183,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
     const images = parseImageAttachments(record.metadata?.images);
     const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
     const usage = readResponseUsage(record.metadata?.usage);
-    messages.push({ role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(toolSkillEvent ? { toolSkillEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
+    messages.push({ recordUuid: record.uuid, role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(toolSkillEvent ? { toolSkillEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
   }
   return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}), ...(skillCatalogSnapshot ? { skillCatalogSnapshot } : {}) };
 }

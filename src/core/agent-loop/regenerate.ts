@@ -12,15 +12,16 @@
 // while its shared logical turn prevents compaction from splitting the prompt
 // from the selected candidate.
 //
-// File policy (#88 Phase 2, per-candidate file coexistence): before the new
-// candidate runs, the old candidate's post-state is captured into a branch
-// candidate-file-state bundle (if not captured already) and the disk is
-// restored to the fork baseline — the first-wins merge of every candidate's
-// pre-turn state — so the new candidate runs against the files the fork turn
-// actually started from. On runPrompt failure or interruption the old candidate
-// regains both the selection marker and (best-effort) its post-state files.
-// MCP tool writes, host-process writes (taint), scratch tmp/, and manual edits
-// remain outside the ledger, as with /rewind.
+// File policy (#88 Phase 2, full-manifest per-candidate coexistence): before
+// the new candidate runs, the old candidate's post-state is captured as a FULL
+// disk manifest into a branch candidate-file-state bundle (if not captured
+// already) and the disk is restored to the fork baseline — the first-wins
+// ledger merge of every candidate's pre-turn state — so the new candidate runs
+// against the files the fork turn actually started from. On runPrompt failure
+// or interruption the old candidate regains both the selection marker and
+// (best-effort) its manifest. Scratch tmp/ stays outside manifests, and
+// symlinks/host-process writes carry the exemptions and taint warnings defined
+// by the candidate-files module, as with /rewind.
 
 import { compensateFailedRegenerateFileState, ensureCandidatePostState, restoreForkBaseline } from "../checkpoints/candidate-files";
 import { toVesicleMessage } from "../compact/summary-generator";
