@@ -42,7 +42,7 @@ export async function bootstrapChildAgent({
   const profile = await loadAgentProfile(spec.profileId, invocation.rootDir, invocation.assets);
   const agentSystemPrompt = await loadAgentSystemPrompt(profile, invocation.rootDir, invocation.assets);
   const baseSystemPrompts = composeChildSystemPrompts(profile.contextMode, invocation.parentSystemPrompt, agentSystemPrompt);
-  const mcp = await createMcpRegistryForEngine(invocation.parentEngine);
+  const mcp = await createMcpRegistryForEngine(invocation.parentEngine, invocation.parentSignal ? { signal: invocation.parentSignal } : {});
   const tools = resolveChildTools(
     profile.tools,
     invocation.parentToolDefinitions,

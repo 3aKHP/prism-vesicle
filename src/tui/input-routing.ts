@@ -41,6 +41,10 @@ export type InputRoutingOptions = {
   pasteClipboardImage: () => Promise<void>;
   handleComposerKey: (key: TuiKeyEvent) => boolean;
   handlePromptEscape: () => void;
+  /** When a turn is in flight, an Escape no modal handles falls back to the
+   * global prompt interrupt instead of being swallowed (busy continuation
+   * windows — e.g. "resolving permission" — must stay cancellable). */
+  busy?: () => boolean;
   handleDecisionPaste: (text: string) => boolean;
   insertComposerPaste: (text: string) => void;
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
@@ -146,40 +150,53 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     const mode = bottomSurfaceMode();
+    // While a turn is in flight, an Escape that no modal handles must not be
+    // dropped: it falls back to the global prompt interrupt so busy windows
+    // that decline keys (e.g. the permission panel while its continuation
+    // rebuilds a slow MCP surface) stay cancellable. Non-busy Escape
+    // semantics of every modal are unchanged.
+    const busyEscapeFallback = (handled: boolean | undefined): boolean => {
+      if (handled) return true;
+      if (key.name === "escape" && options.busy?.() === true) {
+        options.handlePromptEscape();
+        return true;
+      }
+      return false;
+    };
     switch (mode.kind) {
       case "yolo":
-        if (options.handleYoloKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleYoloKey(key))) consumeKey(key);
         return;
       case "permission":
       case "gate":
-        if (options.handleGateKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleGateKey(key))) consumeKey(key);
         return;
       case "question":
-        if (options.handleQuestionKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleQuestionKey(key))) consumeKey(key);
         return;
       case "quality":
-        if (options.handleQualityKey?.(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleQualityKey?.(key))) consumeKey(key);
         return;
       case "rewind":
-        if (options.handleRewindKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleRewindKey(key))) consumeKey(key);
         return;
       case "branch":
-        if (options.handleBranchKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleBranchKey(key))) consumeKey(key);
         return;
       case "session":
-        if (options.handleSessionPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleSessionPickerKey(key))) consumeKey(key);
         return;
       case "skill-picker":
-        if (options.handleSkillPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleSkillPickerKey(key))) consumeKey(key);
         return;
       case "model":
-        if (options.handleModelPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleModelPickerKey(key))) consumeKey(key);
         return;
       case "quality-picker":
-        if (options.handleQualityPickerKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleQualityPickerKey(key))) consumeKey(key);
         return;
       case "quality-rewrite-confirm":
-        if (options.handleRewriteConfirmKey(key)) consumeKey(key);
+        if (busyEscapeFallback(options.handleRewriteConfirmKey(key))) consumeKey(key);
         return;
       case "composer":
         break;

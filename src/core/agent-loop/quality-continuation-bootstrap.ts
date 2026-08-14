@@ -15,6 +15,7 @@ import type { ContinuationContextOptions } from "./continuation-context";
 import { loadContinuationContext } from "./continuation-context";
 import { runLoop } from "./turn-loop";
 import type { AgentLoopEvent, RunPromptResult } from "./types";
+import { throwIfAborted } from "../../shared/cancellation";
 
 export type QualityContinuationOptions = ContinuationContextOptions & {
   permissionBroker?: ToolPermissionBroker;
@@ -40,6 +41,7 @@ export async function resumePendingQualityRewrite(
     throw new Error("Pending quality rewrite Engine does not match the requested continuation.");
   }
   const context = await loadContinuationContext(options);
+  throwIfAborted(options.signal);
   if (!matchesQualityIdentity(context.harness?.quality, pending)) {
     throw new Error("Pending quality rewrite cannot resume without the same verified Harness and Rule Pack identity.");
   }

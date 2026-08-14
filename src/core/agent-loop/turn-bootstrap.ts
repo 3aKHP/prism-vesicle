@@ -136,7 +136,9 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     config.capabilities?.vision === true,
     permission.shellExecEnabled === true || permission.dangerouslySkipPermissions === true,
     permission.shellInterpreter,
-    mcpOutputPersistence ? { outputPersistence: { sessionId: session.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate } } : {},
+    mcpOutputPersistence
+      ? { outputPersistence: { sessionId: session.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate }, signal: options.signal }
+      : { signal: options.signal },
     { catalogNames: catalogNames(skillCatalog) },
   );
   if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {

@@ -533,6 +533,116 @@ describe("MCP registry", () => {
     });
   });
 
+  test("fails the surface rebuild when the caller signal aborts tools/list", async () => {
+    const configDir = await makeConfigDir("mcp-registry-abort");
+    await writeFile(join(configDir, "mcp.yaml"), [
+      "enabled: true",
+      "servers:",
+      "  slow:",
+      "    enabled: true",
+      "    transport: http",
+      "    url: https://mcp.example.test/slow/mcp",
+      "",
+    ].join("\n"), "utf8");
+
+    const controller = new AbortController();
+    const fetchImpl = (async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      if (body.method === "initialize") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "slow", version: "1.0" },
+        } });
+      }
+      if (body.method === "notifications/initialized") return new Response("", { status: 202 });
+      if (body.method === "tools/list") {
+        controller.abort("user-cancel");
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+      throw new Error(`unexpected method ${String(body.method)}`);
+    }) as typeof fetch;
+
+    const env = { VESICLE_PROVIDERS_FILE: join(configDir, "providers.yaml") };
+    await expect(createMcpRegistryForEngine("etl", { env, fetchImpl, signal: controller.signal }))
+      .rejects.toBe("user-cancel");
+
+    const preAborted = new AbortController();
+    preAborted.abort("user-cancel");
+    await expect(createMcpRegistryForEngine("etl", { env, fetchImpl, signal: preAborted.signal }))
+      .rejects.toBe("user-cancel");
+  });
+
+  test("closes already-established connections when a later server aborts the build", async () => {
+    const configDir = await makeConfigDir("mcp-registry-abort-multi");
+    await writeFile(join(configDir, "mcp.yaml"), [
+      "enabled: true",
+      "servers:",
+      "  first:",
+      "    enabled: true",
+      "    transport: http",
+      "    url: https://mcp.example.test/first/mcp",
+      "  second:",
+      "    enabled: true",
+      "    transport: http",
+      "    url: https://mcp.example.test/second/mcp",
+      "",
+    ].join("\n"), "utf8");
+
+    const controller = new AbortController();
+    const streamTeardowns: string[] = [];
+    const fetchImpl = (async (url, init) => {
+      if (init?.method === "GET") {
+        // The transport opens a GET stream after connecting and aborts it on
+        // close — observing its teardown proves the connection was closed.
+        init.signal?.addEventListener("abort", () => streamTeardowns.push(String(url)), { once: true });
+        return new Response(new ReadableStream(), { status: 200 });
+      }
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const target = String(url);
+      if (body.method === "initialize") {
+        if (target.includes("/second/")) {
+          controller.abort("user-cancel");
+          throw new DOMException("The operation was aborted.", "AbortError");
+        }
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "first", version: "1.0" },
+        } }, { headers: { "mcp-session-id": "sess-first" } });
+      }
+      if (body.method === "notifications/initialized") return new Response("", { status: 202 });
+      if (body.method === "tools/list") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "noop", inputSchema: { type: "object" } }] } });
+      }
+      throw new Error(`unexpected method ${String(body.method)}`);
+    }) as typeof fetch;
+
+    const env = { VESICLE_PROVIDERS_FILE: join(configDir, "providers.yaml") };
+    await expect(createMcpRegistryForEngine("etl", { env, fetchImpl, signal: controller.signal }))
+      .rejects.toBe("user-cancel");
+    expect(streamTeardowns).toContain("https://mcp.example.test/first/mcp");
+  });
+
+  test("keeps disconnected-status degradation when a non-aborted signal is present", async () => {
+    const configDir = await makeConfigDir("mcp-registry-signal-degrade");
+    await writeFile(join(configDir, "mcp.yaml"), [
+      "enabled: true",
+      "servers:",
+      "  broken:",
+      "    enabled: true",
+      "    transport: http",
+      "    url: https://mcp.example.test/broken/mcp",
+      "",
+    ].join("\n"), "utf8");
+
+    const fetchImpl = (async (_url: RequestInfo | URL, _init?: RequestInit) => new Response("boom", { status: 500 })) as typeof fetch;
+    const env = { VESICLE_PROVIDERS_FILE: join(configDir, "providers.yaml") };
+    const registry = await createMcpRegistryForEngine("etl", {
+      env,
+      fetchImpl,
+      signal: new AbortController().signal,
+    });
+    expect(registry.definitions).toEqual([]);
+    expect(registry.statuses[0]).toMatchObject({ id: "broken", connected: false });
+  });
+
   test("does not expose MCP tools when config has missing secret placeholders", async () => {
     const configDir = await makeConfigDir("mcp-missing-secret");
     await writeFile(join(configDir, "mcp.yaml"), [
