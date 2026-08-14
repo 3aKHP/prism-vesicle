@@ -49,6 +49,8 @@ Use the docs by responsibility:
 
 When one of these files becomes stale because of your change, update it in the same branch. Do not leave documentation drift for a later pass.
 
+`README.md` and pages under `docs/user/`, `docs/dev/`, and `docs/examples/` are also bundled into the first-party `vesicle-docs` Skill as `host-assets/skills/vesicle-docs/references/`. After changing any of those pages, run `bun run skills:docs:sync` and include the regenerated `references/` files in the same change. The pre-commit hook and CI enforce this through the bundled-skill-references contract test; a docs-only commit that skips the sync fails locally before push.
+
 Follow the Markdown conventions in `CONTRIBUTING.md`: prose uses natural line wrapping rather than fixed-column hard wraps.
 
 `README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
