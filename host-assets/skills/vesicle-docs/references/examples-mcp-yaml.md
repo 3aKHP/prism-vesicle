@@ -5,6 +5,10 @@
 #
 # Secrets belong in the sibling .env file, not in this YAML:
 #   MCP_CLUSTER_TOKEN=...
+#
+# You can also add or remove servers without editing this file:
+#   vesicle config add-mcp --json '{"name":"...","url":"...","auth":"bearer"}'
+#   vesicle config remove-mcp <server-id>
 
 # Keep false until the example URL/token are replaced. Real configs may omit
 # this field; a present mcp.yaml defaults to enabled.

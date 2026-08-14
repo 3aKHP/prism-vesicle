@@ -453,6 +453,95 @@ describe("vesicle config CLI", () => {
     });
   });
 
+
+  test("remove-mcp deletes a non-last server and preserves surrounding comments and header references", async () => {
+    await withTempProject("vesicle-config-removemcp-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "mcp.yaml"), [
+        "enabled: true",
+        "servers:",
+        "  # keep-a docs",
+        "  keep-a:",
+        "    transport: streamable-http",
+        "    url: https://keep.example/mcp",
+        "    headers:",
+        '      Authorization: "Bearer ${KEEP_TOKEN}"',
+        "  # remove-me docs",
+        "  remove-me:",
+        "    transport: streamable-http",
+        "    url: https://remove.example/mcp",
+        "    # inside-remove docs",
+        "    negotiation: auto",
+        "",
+      ].join("\n"), "utf8");
+      await writeFile(join(configDir, ".env"), "KEEP_TOKEN=keep-secret\n", "utf8");
+
+      const result = await runCli(["config", "remove-mcp", "remove-me"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; serverId: string; removedFile: boolean };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.serverId).toBe("remove-me");
+      expect(parsed.removedFile).toBe(false);
+
+      const mcpContent = await readFile(join(configDir, "mcp.yaml"), "utf8");
+      expect(mcpContent).toContain("keep-a:");
+      expect(mcpContent).toContain("# keep-a docs");
+      expect(mcpContent).toContain("# remove-me docs");
+      expect(mcpContent).toContain('Authorization: "Bearer ${KEEP_TOKEN}"');
+      expect(mcpContent).not.toContain("remove-me:");
+      expect(mcpContent).not.toContain("inside-remove docs");
+
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("KEEP_TOKEN=keep-secret");
+    });
+  });
+
+  test("remove-mcp deletes mcp.yaml when the target is the last server and leaves env slots", async () => {
+    await withTempProject("vesicle-config-removemcp-last-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "mcp.yaml"), [
+        "enabled: true",
+        "servers:",
+        "  only-srv:",
+        "    transport: streamable-http",
+        "    url: https://only.example/mcp",
+        "    headers:",
+        '      Authorization: "Bearer ${ONLY_TOKEN}"',
+        "",
+      ].join("\n"), "utf8");
+      await writeFile(join(configDir, ".env"), "ONLY_TOKEN=existing-secret\n", "utf8");
+
+      const result = await runCli(["config", "remove-mcp", "only-srv"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout) as { ok: boolean; removedFile: boolean };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.removedFile).toBe(true);
+      await expect(readFile(join(configDir, "mcp.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      const envContent = await readFile(join(configDir, ".env"), "utf8");
+      expect(envContent).toContain("ONLY_TOKEN=existing-secret");
+    });
+  });
+
+  test("remove-mcp refuses an unknown id without touching mcp.yaml", async () => {
+    await withTempProject("vesicle-config-removemcp-unknown-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const original = [
+        "enabled: true",
+        "servers:",
+        "  keep-a:",
+        "    transport: streamable-http",
+        "    url: https://keep.example/mcp",
+        "",
+      ].join("\n");
+      await writeFile(join(configDir, "mcp.yaml"), original, "utf8");
+
+      const result = await runCli(["config", "remove-mcp", "missing"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain('Unknown MCP server "missing"');
+      expect(await readFile(join(configDir, "mcp.yaml"), "utf8")).toBe(original);
+    });
+  });
+
   test("env-set-proxy rejects URLs with credentials", async () => {
     await withTempProject("vesicle-config-proxy-creds-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

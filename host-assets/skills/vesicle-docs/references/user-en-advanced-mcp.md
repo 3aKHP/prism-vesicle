@@ -37,6 +37,19 @@ servers:
 - `includeTools` / `excludeTools` keep or remove specific tools.
 - See [Configuration](../reference/configuration.md) for full field descriptions.
 
+
+## Add or remove from the CLI
+
+Besides editing the file, you can let the `update-config` Skill or the commands below manage servers:
+
+```bash
+vesicle config add-mcp --json '{"name":"My KB","url":"https://mcp.example.com/mcp","auth":"bearer"}'
+vesicle config remove-mcp my-kb
+```
+
+`add-mcp` creates the `MCP_MY_KB_TOKEN` empty `.env` slot and writes the `Authorization` header as `Bearer ${MCP_MY_KB_TOKEN}`; it never accepts a secret argument, so edit `.env` directly to fill in the token. `remove-mcp` removes one server while preserving other lines and comments; if it was the last server, the whole `mcp.yaml` is deleted and `.env` token slots are left alone. Both operations only change configuration and do not verify connectivity—restart and run `vesicle doctor` afterwards.
+
+
 ## Connection: legacy / auto / modern
 
 MCP servers may speak one of two protocol versions, old or new. Vesicle supports both, and a single process can mix them. Each server can choose which to use:

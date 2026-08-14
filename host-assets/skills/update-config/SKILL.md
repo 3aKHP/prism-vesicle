@@ -1,6 +1,6 @@
 ---
 name: update-config
-description: "Configure Prism Vesicle providers, permissions, preferences, MCP, quality, and proxy settings through guided, validated CLI operations. Use when the user wants to add, change, or remove a provider/model, add an MCP server, toggle shell_exec or permission mode, set a theme or MCP output persistence, configure a provider proxy, or inspect current configuration state. Never handles API keys or secret values directly."
+description: "Configure Prism Vesicle providers, permissions, preferences, MCP, quality, and proxy settings through guided, validated CLI operations. Use when the user wants to add, change, or remove a provider/model, add or remove an MCP server, toggle shell_exec or permission mode, set a theme or MCP output persistence, configure a provider proxy, or inspect current configuration state. Never handles API keys or secret values directly."
 ---
 
 # update-config
@@ -11,7 +11,7 @@ Configure Prism Vesicle through a set of validated, atomic CLI operations. You c
 
 Activate when the user asks to:
 - Add, remove, or change a provider or model
-- Add an MCP server to `mcp.yaml`
+- Add or remove an MCP server in `mcp.yaml`
 - Switch the default provider or model
 - Change permission mode or toggle shell_exec
 - Set a project theme preference
@@ -106,6 +106,7 @@ update_config.sh remove-provider <provider-id>
 
 # MCP servers
 update_config.sh add-mcp --json '<entry>'      # Append a server; secrets stay in .env
+update_config.sh remove-mcp <server-id>        # Remove one server
 
 # Permissions
 update_config.sh set permissions defaultMode <MANUAL|INERTIA|MOMENTUM>
@@ -187,6 +188,17 @@ For bearer or custom-header auth the CLI derives `MCP_<ID>_TOKEN`, writes the he
 
 Optional full fields include `id`, `enabled`, `timeoutSeconds`, `protocolVersion`, `negotiation`, `supportedProtocolVersions`, `toolPrefix`, `includeTools`, `excludeTools`, and `headers`. Explicit `headers` values must use exact environment references (`"Bearer ${MY_TOKEN}"`); fallback/default forms such as `${TOKEN:-literal}` are rejected rather than written to `mcp.yaml`. If the user pastes an MCP token into the conversation, follow the credential guidance in the security rules and do not pass it through the CLI.
 
+### Removing an MCP server
+
+Use `remove-mcp` with the server id shown by `show mcp`:
+
+```bash
+update_config.sh remove-mcp research-cluster
+```
+
+The CLI removes one server and preserves other servers, comments, and `${ENV}` header references. If the target was the last server, `remove-mcp` deletes `mcp.yaml` entirely and leaves the `.env` slots untouched. Report the JSON envelope and remind the user to restart Vesicle when `restartRequired` is true.
+
+
 ### Adding a model
 
 The `add-model` operation appends a model to an existing provider:
@@ -252,7 +264,7 @@ Removing the last preference field removes the project `.vesicle/preferences.yam
 ## Boundaries
 
 - You cannot read, write, or display secret values. The `.env` sanitization is enforced by the CLI, not by your discipline.
-- You can add MCP servers with `add-mcp`, but you cannot remove them or edit existing MCP server fields through this Skill yet.
+- You can add and remove MCP servers with `add-mcp` / `remove-mcp`, but you cannot edit existing MCP server fields through this Skill yet.
 - You cannot modify `VESICLE.md` persistent instructions (use the `update_instructions` tool or `/instructions` command).
 - You cannot change Engine profiles, Harness packs, or session state.
 - You cannot validate provider connectivity — configuration changes take effect after restart; suggest the user run `vesicle doctor` or send a test message.

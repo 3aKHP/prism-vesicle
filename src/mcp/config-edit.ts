@@ -2,6 +2,7 @@
 // Only new server blocks are generated here; existing source lines are kept
 // byte-for-byte so comments, ordering, and `${ENV}` references survive.
 
+import { readYamlLines } from "../config/yaml-line-reader";
 import { yamlKey, yamlScalar } from "../config/yaml-writer";
 import type { EngineId } from "../core/engine/profile";
 import type { McpNegotiationMode, McpTransport } from "./types";
@@ -88,4 +89,64 @@ export function appendMcpServerBlock(source: string | undefined, blockLines: str
 
   if (!/^servers:\s*(?:#.*)?$/m.test(result)) result += "\n\nservers:";
   return `${result}\n${blockLines.join("\n")}\n`;
+}
+
+/**
+ * Remove one server block while preserving every other source line that is
+ * not clearly inside that block. Semantic lines of the target block are
+ * dropped; comment lines indented inside the block are dropped too, while
+ * comment lines at the surrounding section indentation are kept (they may
+ * document the next server).
+ */
+export function removeMcpServerBlock(source: string, id: string): string {
+  const lineEnding = source.includes("\r\n") ? "\r\n" : "\n";
+  const rawLines = source.replace(/\r\n/g, "\n").split("\n");
+  const semanticLines = readYamlLines(source);
+  const blockSemanticRows = new Set<number>();
+  let inServers = false;
+  let startRow = -1;
+  let endRow = rawLines.length;
+  let found = false;
+
+  for (const line of semanticLines) {
+    const row = line.number - 1;
+    if (line.indent === 0) {
+      if (found) {
+        endRow = row;
+        break;
+      }
+      inServers = line.text === "servers:";
+      continue;
+    }
+    if (!inServers) continue;
+    if (line.indent === 2) {
+      if (line.text === `${id}:`) {
+        found = true;
+        startRow = row;
+        blockSemanticRows.add(row);
+        continue;
+      }
+      if (found) {
+        endRow = row;
+        break;
+      }
+      continue;
+    }
+    if (found) blockSemanticRows.add(row);
+  }
+  if (!found) {
+    throw new Error(`MCP server "${id}" was not found in the source.`);
+  }
+
+  const output: string[] = [];
+  for (let row = 0; row < rawLines.length; row++) {
+    if (row >= startRow && row < endRow) {
+      if (blockSemanticRows.has(row)) continue;
+      const indent = rawLines[row]!.match(/^ */)?.[0].length ?? 0;
+      if (indent >= 4) continue;
+    }
+    output.push(rawLines[row]!);
+  }
+  while (output.length > 0 && output[output.length - 1] === "") output.pop();
+  return `${output.join(lineEnding)}\n`;
 }
