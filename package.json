@@ -1,6 +1,6 @@
 {
   "name": "prism-vesicle",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "Open-source Agent Harness host and TUI for durable Prism Engine workflows.",
   "license": "MIT",
   "repository": {
