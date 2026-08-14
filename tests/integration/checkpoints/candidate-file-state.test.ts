@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -374,6 +374,7 @@ describe("candidate file coexistence", () => {
       content: "",
       metadata: {
         kind: "candidate-file-state",
+        version: 2,
         forkPointUuid: user.uuid,
         leafUuid: assistantA.uuid,
         timestamp: new Date().toISOString(),
@@ -395,5 +396,159 @@ describe("candidate file coexistence", () => {
     expect(outcome.reason).toBe("missing");
     expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("before\n");
     await expect(stat(join(rootDir, "..", "evil.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("version-1 partial bundles are rejected and degrade conversation-only", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-v1-"));
+    const sessionId = "candidate-files-v1";
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "existing.md"), "before\n", "utf8");
+
+    const store = await createSessionStore(rootDir, sessionId);
+    await store.append({ role: "system", content: "prompt" });
+    const user = await store.append({ role: "user", content: "write" });
+    const assistantA = await store.append({ role: "assistant", content: "candidate A" });
+    const storeB = await createSessionStore(rootDir, sessionId, { parentUuid: user.uuid });
+    const assistantB = await storeB.append({ role: "assistant", content: "candidate B" });
+
+    // A legacy (version-less) bundle with otherwise-valid entries: under
+    // full-manifest semantics its partial file map must not be applied as if
+    // complete, so the parser rejects it and the switch degrades.
+    const legacy = await createSessionStore(rootDir, sessionId, { parentUuid: assistantA.uuid });
+    await legacy.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "candidate-file-state",
+        forkPointUuid: user.uuid,
+        leafUuid: assistantA.uuid,
+        timestamp: new Date().toISOString(),
+        files: { "workspace/existing.md": { backup: "5".repeat(64), kind: "file" } },
+      },
+    });
+
+    const outcome = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(outcome.restored).toBe(false);
+    expect(outcome.reason).toBe("missing");
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("before\n");
+  });
+
+  test("files outside every ledger are captured by full manifests and round-trip through switches", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-manual-"));
+    const sessionId = "candidate-files-manual";
+    const { user, assistantA, assistantB } = await buildTwoCandidateSession(rootDir, sessionId);
+
+    // A manual/MCP-style write while B is active: no checkpoint tool saw it.
+    await writeFile(join(rootDir, "workspace", "manual.md"), "manual edit\n", "utf8");
+
+    // Leaving B freezes the full disk — including the untracked write — into
+    // B's bundle; switching to A deletes it along with B's artifacts.
+    const toA = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(toA.restored).toBe(true);
+    await expect(stat(join(rootDir, "workspace", "manual.md"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    // Switching back restores it: it is part of B's recorded post-state now.
+    const toB = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantA.uuid,
+      toLeaf: assistantB.uuid,
+    });
+    expect(toB.restored).toBe(true);
+    expect(await readFile(join(rootDir, "workspace", "manual.md"), "utf8")).toBe("manual edit\n");
+  });
+
+  test("a candidate without any checkpoint ledger still refuses capture and degrades", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-no-ledger-"));
+    const sessionId = "candidate-files-no-ledger";
+    const { user, assistantB } = await buildTwoCandidateSession(rootDir, sessionId);
+
+    // Candidate C forks and writes without a FileCheckpointManager: its branch
+    // carries no ledger at all. Full manifests widen the CAPTURE DOMAIN, but
+    // the ledger anchor still gates capture — without it the disk-equals-
+    // post-state precondition cannot be verified.
+    const storeC = await createSessionStore(rootDir, sessionId, { parentUuid: user.uuid });
+    await executeFileTool(rootDir, {
+      id: "c-create",
+      name: "create_file",
+      arguments: JSON.stringify({ path: "workspace/c.md", content: "c body\n" }),
+    }, {});
+    const assistantC = await storeC.append({ role: "assistant", content: "candidate C" });
+
+    expect(await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: user.uuid, leafUuid: assistantC.uuid })).toBeUndefined();
+
+    // Switching to C degrades conversation-only: B departs truthfully, C is
+    // marked, and C's file stays on disk untouched.
+    const toC = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantC.uuid,
+    });
+    expect(toC).toEqual({ restored: false, changed: [], reason: "missing" });
+    expect(await readFile(join(rootDir, "workspace", "c.md"), "utf8")).toBe("c body\n");
+
+    // Leaving the degraded C must not freeze B's disk state as C's bundle.
+    const toB = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantC.uuid,
+      toLeaf: assistantB.uuid,
+    });
+    expect(toB.restored).toBe(true);
+    expect(await readFile(join(rootDir, "workspace", "b.md"), "utf8")).toBe("b body\n");
+    const records = await loadSessionRecords(rootDir, sessionId);
+    expect(records.some((record) => record.metadata?.kind === "candidate-file-state" && record.metadata?.leafUuid === assistantC.uuid)).toBe(false);
+  });
+
+  test("scratch tmp/ stays outside manifests and survives candidate switches", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-scratch-"));
+    const sessionId = "candidate-files-scratch";
+    await mkdir(join(rootDir, "tmp"), { recursive: true });
+    await writeFile(join(rootDir, "tmp", "spill.txt"), "scratch\n", "utf8");
+    const { user, assistantA, assistantB } = await buildTwoCandidateSession(rootDir, sessionId);
+
+    const toA = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(toA.restored).toBe(true);
+    expect(await readFile(join(rootDir, "tmp", "spill.txt"), "utf8")).toBe("scratch\n");
+
+    const toB = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantA.uuid,
+      toLeaf: assistantB.uuid,
+    });
+    expect(toB.restored).toBe(true);
+    expect(await readFile(join(rootDir, "tmp", "spill.txt"), "utf8")).toBe("scratch\n");
+  });
+
+  test("symlinks are never captured or deleted; switches report them as untracked", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-symlink-"));
+    const sessionId = "candidate-files-symlink";
+    await mkdir(join(rootDir, "workspace"), { recursive: true });
+    await writeFile(join(rootDir, "workspace", "existing.md"), "before\n", "utf8");
+    await symlink(join(rootDir, "workspace", "existing.md"), join(rootDir, "workspace", "link.md"));
+
+    const { user, assistantA, assistantB } = await buildTwoCandidateSession(rootDir, sessionId);
+
+    const toA = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(toA.restored).toBe(true);
+    expect(toA.untracked).toContain("workspace/link.md");
+    // The symlink survives the manifest application untouched.
+    const linkInfo = await stat(join(rootDir, "workspace", "link.md"));
+    expect(linkInfo.isFile()).toBe(true);
+    expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("A version\n");
   });
 });

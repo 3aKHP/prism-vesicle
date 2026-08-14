@@ -1,52 +1,61 @@
-// Per-candidate file coexistence for #88 Phase 2.
+// Per-candidate file coexistence (#88 Phase 2, full-manifest model).
 //
-// Regenerate and candidate switching move the conversation between sibling
-// subtrees, but the filesystem is global: only one candidate's artifacts can
-// be on disk at once. This module maintains the invariant that, while the fork
-// point is still the session's last turn, the disk equals the active
-// candidate's post-state:
+// Regenerate and candidate switching move the conversation between candidate
+// leaves at any depth of the session tree, but the filesystem is global: only
+// one candidate's artifacts can be on disk at once. This module maintains the
+// invariant that the disk equals the active candidate's post-state:
 //
-// - Leaving a candidate (switch-away or regenerate-over) captures the current
-//   disk — which by invariant IS that candidate's post-state — into an
-//   append-only `candidate-file-state` bundle chained off the candidate's
-//   content leaf (branch-private). A candidate that already has a bundle is
-//   never re-captured, so a failed restore retried later cannot mistake a
+// - Leaving a candidate (switch-away or regenerate-over) captures a FULL
+//   MANIFEST of everything on disk under the project content roots — every
+//   directory and content-addressed file, with symlinks and special files
+//   listed as exempt `untracked` — into an append-only `candidate-file-state`
+//   bundle (envelope version 2) chained off the candidate's content leaf
+//   (branch-private). A candidate that already has a bundle is never
+//   re-captured, so a failed restore retried later cannot mistake a
 //   half-restored disk for the candidate's true post-state.
-// - Switching to a candidate applies pre(to) ∪ pre(from) ∪ bundle(to): the
-//   target bundle carries the real post-state, pre(from) contributes deletion
-//   entries for files the departing candidate created, and pre(to) covers
-//   tracked paths outside the bundle's capture domain.
+// - Switching to a candidate makes the disk strictly equal to its manifest:
+//   manifest entries are restored and on-disk paths outside the manifest are
+//   deleted, except symlinks/special files (never managed), paths exempted by
+//   the bundle's `untracked` list, and ancestors of manifest paths (apply
+//   recreates them). Manual edits and MCP writes are therefore snapshotted
+//   when a candidate is left and deleted or restored like any other file.
 // - Regenerate restores the fork baseline first — the first-wins merge of
-//   every candidate's pre-turn state in creation order — so a new candidate
-//   runs against the state the fork turn actually started from, even when
-//   MVP-era candidates ran against each other's files.
+//   every candidate's pre-turn ledger state in creation order — so a new
+//   candidate runs against the state the fork turn actually started from.
+//   The baseline deliberately stays ledger-scoped: deleting paths that were
+//   never tracked would destroy files that predate the checkpoint ledger.
 //
 // Degradation: a switch whose target has no bundle restores nothing, so the
 // invariant no longer holds for the now-active candidate. Such a switch (and
 // every conversation-only switch chained after it) appends a
 // `candidate-file-degraded` marker chained off the target leaf; captures for a
 // marked leaf are refused so a wrong disk state can never be frozen into an
-// authoritative bundle. The same applies to forks whose turn has no checkpoint
-// ledger (file checkpointing disabled while it ran): there is no truthful
-// post-state to capture and no baseline to restore, so regenerate skips the
-// file dance entirely and a failed regenerate never touches the disk.
+// authoritative bundle. Capture likewise refuses when the fork turn's branch
+// carries no checkpoint ledger: the ledger anchor is what makes "the disk
+// equals this candidate's post-state" trustworthy at capture time, and
+// manifests stay full regardless of which paths the ledger tracked.
+// Version-1 partial bundles (pre-full-manifest sessions) are rejected by the
+// parser and degrade the same way: alpha-stage breaking change, no migration
+// path.
 //
 // Bundles and markers use dedicated envelope kinds: they never enter
 // snapshotsFromRecords (immune to the 100-snapshot window), are ignored by
 // provider projection (unknown system records), and are transparent to
-// candidate enumeration (system records are never content leaves). Blind spots
-// shared with /rewind — MCP tool writes, host processes (surfaced via the
-// taint flag), scratch tmp/, and manual edits — are documented, not solved.
+// candidate enumeration (system records are never content leaves). Scratch
+// tmp/ stays outside the manifest (137B), and host-process turns carry the
+// taint flag as a warning; symlinks are exempt, never restored, and surfaced
+// in the switch outcome.
 
 import { enumerateCandidateLeaves } from "../session/selection";
 import { createSessionStore, loadSessionRecords, type SessionRecord } from "../session/store";
-import { modelWritableRoots } from "../project/roots";
+import { modelWritableRoots, projectContentRoots } from "../project/roots";
 import {
   applyFileCheckpointEntries,
-  capturePath,
+  captureProjectTree,
   fileCheckpointingEnabled,
   fileCheckpointIsTainted,
   forkTurnPreState,
+  listProjectTreePaths,
   type FileCheckpointEntry,
 } from "./file-history";
 
@@ -57,11 +66,15 @@ const BACKUP_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 export type CandidateFileStateEnvelope = {
   kind: typeof CANDIDATE_FILE_STATE_KIND;
+  /** Full-manifest bundles are version 2; version-1 partial bundles are rejected. */
+  version: 2;
   forkPointUuid: string;
   /** Content leaf of the candidate whose post-state this bundle carries. */
   leafUuid: string;
   files: Record<string, FileCheckpointEntry>;
   timestamp: string;
+  /** Symlinks/special files present at capture: exempt from capture and restore. */
+  untracked?: string[];
   /** The candidate's turn ran a host process; its post-state may be incomplete. */
   taintedByHostProcess?: true;
 };
@@ -70,6 +83,8 @@ export type CandidateFileStateOutcome = {
   restored: boolean;
   changed: string[];
   tainted?: true;
+  /** Symlinks/special files left untouched by the switch. */
+  untracked?: string[];
   /** "disabled": checkpointing off. "missing": target candidate has no bundle. */
   reason?: "disabled" | "missing";
 };
@@ -101,10 +116,15 @@ export function isCandidateFileDegraded(records: SessionRecord[], leafUuid: stri
 }
 
 /**
- * Capture the departing candidate's post-state if it has no bundle yet.
- * Returns undefined when checkpointing is disabled, the candidate's branch
- * carries no checkpoint history (nothing truthful to capture), or the
- * candidate is degradation-marked (the disk is not its post-state).
+ * Capture the departing candidate's post-state if it has no bundle yet: a full
+ * manifest of everything on disk under the project content roots. Returns
+ * undefined when checkpointing is disabled, the candidate is
+ * degradation-marked (the disk is not its post-state), or the fork turn's
+ * branch carries no checkpoint ledger — without that anchor there is no
+ * guarantee the disk equals this candidate's post-state (no-ledger candidates
+ * can be produced by failed regenerates whose compensation never touched the
+ * disk), so such switches degrade conversation-only. Capture is all-or-
+ * nothing: a mid-capture failure throws before any record is appended.
  */
 export async function ensureCandidatePostState(
   rootDir: string,
@@ -117,19 +137,18 @@ export async function ensureCandidatePostState(
   if (existing) return existing;
   if (isCandidateFileDegraded(records, selection.leafUuid)) return undefined;
 
-  const preState = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.leafUuid });
-  if (!preState) return undefined;
-  const files: Record<string, FileCheckpointEntry> = {};
-  for (const path of Object.keys(preState)) {
-    files[path] = await capturePath(rootDir, sessionId, path);
-  }
+  const ledgerAnchor = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.leafUuid });
+  if (!ledgerAnchor) return undefined;
+  const capture = await captureProjectTree(rootDir, sessionId, projectContentRoots);
   const tainted = await fileCheckpointIsTainted(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.leafUuid });
   const envelope: CandidateFileStateEnvelope = {
     kind: CANDIDATE_FILE_STATE_KIND,
+    version: 2,
     forkPointUuid: selection.forkPointUuid,
     leafUuid: selection.leafUuid,
-    files,
+    files: capture.files,
     timestamp: new Date().toISOString(),
+    ...(capture.untracked.length > 0 ? { untracked: capture.untracked } : {}),
     ...(tainted ? { taintedByHostProcess: true as const } : {}),
   };
   // Chain the bundle off the candidate's content leaf so it is branch-private:
@@ -140,12 +159,13 @@ export async function ensureCandidatePostState(
 }
 
 /**
- * Move the filesystem from candidate `fromLeaf` to candidate `toLeaf`.
- * Captures the departing candidate's post-state first — but only while the
- * invariant holds for it — then applies the target state. When the target has
- * no bundle the switch degrades to conversation-only: nothing is captured or
- * restored, and a degradation marker records that the invariant no longer
- * holds for the new active candidate.
+ * Move the filesystem from candidate `fromLeaf` to candidate `toLeaf`: capture
+ * the departing candidate's full manifest first, then make the disk strictly
+ * equal to the target's manifest. Works at any depth of the session tree — the
+ * capture keys on leaves, not fork points. When the target has no bundle the
+ * switch degrades to conversation-only: nothing is captured or restored, and a
+ * degradation marker records that the invariant no longer holds for the new
+ * active candidate.
  */
 export async function switchCandidateFileState(
   rootDir: string,
@@ -167,19 +187,48 @@ export async function switchCandidateFileState(
     return { restored: false, changed: [], reason: "missing" };
   }
 
-  const preTo = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.toLeaf });
-  const preFrom = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.fromLeaf });
-  const state: Record<string, FileCheckpointEntry> = {
-    ...(preTo ?? {}),
-    ...(preFrom ?? {}),
-    ...bundle.files,
-  };
-  const changed = await applyFileCheckpointEntries(rootDir, sessionId, state);
+  const applied = await applyCandidateManifest(rootDir, sessionId, bundle);
   return {
     restored: true,
-    changed,
+    changed: applied.changed,
     ...(bundle.taintedByHostProcess ? { tainted: true as const } : {}),
+    ...(applied.untracked.length > 0 ? { untracked: applied.untracked } : {}),
   };
+}
+
+/**
+ * Make the disk strictly equal to a bundle's full manifest: restore every
+ * manifest entry and delete on-disk paths outside it. Deletions exempt
+ * symlinks/special files (never managed), the bundle's `untracked` list, and
+ * ancestors of manifest paths (apply recreates them as needed).
+ */
+async function applyCandidateManifest(
+  rootDir: string,
+  sessionId: string,
+  bundle: CandidateFileStateEnvelope,
+): Promise<{ changed: string[]; untracked: string[] }> {
+  const listing = await listProjectTreePaths(rootDir, projectContentRoots);
+  const exempt = bundle.untracked ?? [];
+  const manifestPaths = Object.keys(bundle.files);
+  const absents: Record<string, FileCheckpointEntry> = {};
+  for (const path of listing.paths.keys()) {
+    if (Object.hasOwn(bundle.files, path)) continue;
+    if (isExemptByUntracked(path, exempt)) continue;
+    if (isAncestorOfManifestPath(path, manifestPaths)) continue;
+    absents[path] = { backup: null, kind: "absent" };
+  }
+  const changed = await applyFileCheckpointEntries(rootDir, sessionId, { ...absents, ...bundle.files });
+  const untracked = [...new Set([...exempt, ...listing.untracked])].sort();
+  return { changed, untracked };
+}
+
+function isExemptByUntracked(path: string, untracked: string[]): boolean {
+  return untracked.some((exempt) => path === exempt || path.startsWith(`${exempt}/`));
+}
+
+function isAncestorOfManifestPath(path: string, manifestPaths: string[]): boolean {
+  const prefix = `${path}/`;
+  return manifestPaths.some((candidate) => candidate.startsWith(prefix));
 }
 
 /**
@@ -231,7 +280,7 @@ export async function compensateFailedRegenerateFileState(
     return;
   }
   const bundle = await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid, leafUuid: previousLeaf });
-  if (bundle) await applyFileCheckpointEntries(rootDir, sessionId, bundle.files);
+  if (bundle) await applyCandidateManifest(rootDir, sessionId, bundle);
 }
 
 /**
@@ -261,6 +310,11 @@ async function appendDegradedMarker(
 
 function parseCandidateFileState(metadata: Record<string, unknown> | undefined): CandidateFileStateEnvelope | undefined {
   if (metadata?.kind !== CANDIDATE_FILE_STATE_KIND) return undefined;
+  // Version-1 bundles captured only the ledger-tracked capture domain of the
+  // fork turn; applying them under full-manifest semantics would restore a
+  // partial state as if it were complete. Reject them outright (alpha-stage
+  // breaking change): the switch degrades conversation-only instead.
+  if (metadata.version !== 2) return undefined;
   if (typeof metadata.forkPointUuid !== "string" || typeof metadata.leafUuid !== "string") return undefined;
   if (!metadata.files || typeof metadata.files !== "object") return undefined;
   const files: Record<string, FileCheckpointEntry> = {};
@@ -274,12 +328,23 @@ function parseCandidateFileState(metadata: Record<string, unknown> | undefined):
     if (backup !== null && (typeof backup !== "string" || !BACKUP_HASH_PATTERN.test(backup))) return undefined;
     files[path] = value as FileCheckpointEntry;
   }
+  let untracked: string[] | undefined;
+  if (metadata.untracked !== undefined) {
+    if (!Array.isArray(metadata.untracked)) return undefined;
+    untracked = [];
+    for (const path of metadata.untracked) {
+      if (typeof path !== "string" || !isValidBundlePath(path)) return undefined;
+      untracked.push(path);
+    }
+  }
   return {
     kind: CANDIDATE_FILE_STATE_KIND,
+    version: 2,
     forkPointUuid: metadata.forkPointUuid,
     leafUuid: metadata.leafUuid,
     files,
     timestamp: typeof metadata.timestamp === "string" ? metadata.timestamp : "",
+    ...(untracked && untracked.length > 0 ? { untracked } : {}),
     ...(metadata.taintedByHostProcess === true ? { taintedByHostProcess: true as const } : {}),
   };
 }
