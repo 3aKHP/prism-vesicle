@@ -309,6 +309,7 @@ async function diffCheckpointState(
   rootDir: string,
   sessionId: string,
   state: Record<string, FileCheckpointEntry>,
+  extraDeletionPaths: string[] = [],
 ): Promise<FileCheckpointDiffStats> {
   const result: FileCheckpointDiffStats = { filesChanged: [], insertions: 0, deletions: 0 };
   for (const [path, entry] of Object.entries(state)) {
@@ -318,6 +319,15 @@ async function diffCheckpointState(
     const current = await currentFileContent(filePath);
     const target = await entryFileContent(rootDir, sessionId, entry);
     const counts = lineChangeCounts(current?.toString("utf8") ?? "", target?.toString("utf8") ?? "");
+    result.insertions += counts.insertions;
+    result.deletions += counts.deletions;
+  }
+  for (const path of extraDeletionPaths) {
+    const filePath = resolve(rootDir, path);
+    const current = await currentFileContent(filePath);
+    if (current === null) continue;
+    result.filesChanged.push(path);
+    const counts = lineChangeCounts(current.toString("utf8"), "");
     result.insertions += counts.insertions;
     result.deletions += counts.deletions;
   }
@@ -374,33 +384,29 @@ async function capturePaths(
   return result;
 }
 
-export type ProjectTreeListing = {
-  /** Regular files and directories under the roots, project-relative paths. */
-  paths: Map<string, "file" | "directory">;
-  /** Symlinks and special files: listed, never descended into, never restored. */
-  untracked: string[];
-};
+export type ProjectTreeNodeKind = "file" | "directory" | "untracked";
 
 /**
- * Cheap lstat-only enumeration of the on-disk project tree under `roots`
- * (no content reads, no hashing). Symlinks and special files are recorded in
- * `untracked` and never descended into, so a link pointing outside the project
- * can never pull foreign content into a restore.
+ * Shared lstat-based walk of the on-disk project tree under `roots` — the
+ * single owner of the traversal and of what counts as `untracked` (symlinks
+ * and special files, reported and never descended into, so a link pointing
+ * outside the project can never pull foreign content into a restore).
+ * Descent continues through every regular directory regardless of the visit.
  */
-export async function listProjectTreePaths(rootDir: string, roots: readonly string[]): Promise<ProjectTreeListing> {
-  const paths = new Map<string, "file" | "directory">();
-  const untracked: string[] = [];
+async function walkProjectTree(
+  rootDir: string,
+  roots: readonly string[],
+  visit: (projectPath: string, kind: ProjectTreeNodeKind) => Promise<void> | void,
+): Promise<void> {
   for (const root of roots) {
-    await listTreeInto(rootDir, root, paths, untracked);
+    await walkProjectNode(rootDir, root, visit);
   }
-  return { paths, untracked };
 }
 
-async function listTreeInto(
+async function walkProjectNode(
   rootDir: string,
   projectPath: string,
-  paths: Map<string, "file" | "directory">,
-  untracked: string[],
+  visit: (projectPath: string, kind: ProjectTreeNodeKind) => Promise<void> | void,
 ): Promise<void> {
   const fullPath = resolve(rootDir, projectPath);
   const info = await lstat(fullPath).catch((error: unknown) => {
@@ -409,14 +415,35 @@ async function listTreeInto(
   });
   if (!info) return;
   if (info.isSymbolicLink() || (!info.isFile() && !info.isDirectory())) {
-    untracked.push(projectPath);
+    await visit(projectPath, "untracked");
     return;
   }
-  paths.set(projectPath, info.isDirectory() ? "directory" : "file");
+  await visit(projectPath, info.isDirectory() ? "directory" : "file");
   if (!info.isDirectory()) return;
   for (const child of await readdir(fullPath, { withFileTypes: true })) {
-    await listTreeInto(rootDir, `${projectPath}/${child.name}`, paths, untracked);
+    await walkProjectNode(rootDir, `${projectPath}/${child.name}`, visit);
   }
+}
+
+export type ProjectTreeListing = {
+  /** Regular files and directories under the roots, project-relative paths. */
+  paths: Map<string, "file" | "directory">;
+  /** Symlinks and special files: listed, never descended into, never restored. */
+  untracked: string[];
+};
+
+/**
+ * Cheap enumeration of the on-disk project tree (no content reads, no
+ * hashing); the listing side of the shared walk.
+ */
+export async function listProjectTreePaths(rootDir: string, roots: readonly string[]): Promise<ProjectTreeListing> {
+  const paths = new Map<string, "file" | "directory">();
+  const untracked: string[] = [];
+  await walkProjectTree(rootDir, roots, (projectPath, kind) => {
+    if (kind === "untracked") untracked.push(projectPath);
+    else paths.set(projectPath, kind);
+  });
+  return { paths, untracked };
 }
 
 export type ProjectTreeCapture = {
@@ -427,9 +454,9 @@ export type ProjectTreeCapture = {
 /**
  * Full-manifest capture of everything on disk under `roots`: directories and
  * content-addressed files as checkpoint entries, symlinks/special files listed
- * as `untracked` (exempt from capture and restore). Distinct from
- * `capturePaths`, which throws on symlinks to preserve the explicit-path
- * semantics of trackBeforeMutation.
+ * as `untracked` (exempt from capture and restore); the capturing side of the
+ * shared walk. Distinct from `capturePaths`, which throws on symlinks to
+ * preserve the explicit-path semantics of trackBeforeMutation.
  */
 export async function captureProjectTree(
   rootDir: string,
@@ -438,69 +465,29 @@ export async function captureProjectTree(
 ): Promise<ProjectTreeCapture> {
   const files: Record<string, FileCheckpointEntry> = {};
   const untracked: string[] = [];
-  for (const root of roots) {
-    await captureTreeInto(rootDir, sessionId, root, files, untracked);
-  }
-  return { files, untracked };
-}
-
-async function captureTreeInto(
-  rootDir: string,
-  sessionId: string,
-  projectPath: string,
-  files: Record<string, FileCheckpointEntry>,
-  untracked: string[],
-): Promise<void> {
-  const fullPath = resolve(rootDir, projectPath);
-  const info = await lstat(fullPath).catch((error: unknown) => {
-    if (isEnoent(error)) return undefined;
-    throw error;
+  await walkProjectTree(rootDir, roots, async (projectPath, kind) => {
+    if (kind === "untracked") {
+      untracked.push(projectPath);
+      return;
+    }
+    files[projectPath] = await capturePath(rootDir, sessionId, projectPath);
   });
-  if (!info) return;
-  if (info.isSymbolicLink() || (!info.isFile() && !info.isDirectory())) {
-    untracked.push(projectPath);
-    return;
-  }
-  files[projectPath] = await capturePath(rootDir, sessionId, projectPath);
-  if (!info.isDirectory()) return;
-  for (const child of await readdir(fullPath, { withFileTypes: true })) {
-    await captureTreeInto(rootDir, sessionId, `${projectPath}/${child.name}`, files, untracked);
-  }
+  return { files, untracked };
 }
 
 /**
  * Diff the current disk against an explicit entry map, plus paths slated for
  * deletion that carry no target entry (`extraDeletionPaths`, counted as
- * current-content -> absent). Mirrors diffCheckpointState for manifest-based
- * candidate switching.
+ * current-content -> absent). The deletion list serves manifest-based
+ * candidate switching, where out-of-manifest disk paths disappear.
  */
-export async function diffDiskAgainstEntries(
+export function diffDiskAgainstEntries(
   rootDir: string,
   sessionId: string,
   entries: Record<string, FileCheckpointEntry>,
   extraDeletionPaths: string[] = [],
 ): Promise<FileCheckpointDiffStats> {
-  const result: FileCheckpointDiffStats = { filesChanged: [], insertions: 0, deletions: 0 };
-  for (const [path, entry] of Object.entries(entries)) {
-    const filePath = resolve(rootDir, path);
-    if (await pathMatchesEntry(filePath, entry, rootDir, sessionId)) continue;
-    result.filesChanged.push(path);
-    const current = await currentFileContent(filePath);
-    const target = await entryFileContent(rootDir, sessionId, entry);
-    const counts = lineChangeCounts(current?.toString("utf8") ?? "", target?.toString("utf8") ?? "");
-    result.insertions += counts.insertions;
-    result.deletions += counts.deletions;
-  }
-  for (const path of extraDeletionPaths) {
-    const filePath = resolve(rootDir, path);
-    const current = await currentFileContent(filePath);
-    if (current === null) continue;
-    result.filesChanged.push(path);
-    const counts = lineChangeCounts(current.toString("utf8"), "");
-    result.insertions += counts.insertions;
-    result.deletions += counts.deletions;
-  }
-  return result;
+  return diffCheckpointState(rootDir, sessionId, entries, extraDeletionPaths);
 }
 
 async function readBackup(rootDir: string, sessionId: string, entry: FileCheckpointEntry): Promise<Buffer | null> {

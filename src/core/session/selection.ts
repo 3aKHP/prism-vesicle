@@ -374,19 +374,32 @@ function buildBranchNode(
 }
 
 /**
+ * The nearest record at or above `startUuid` in the parent chain satisfying
+ * `predicate`; shared by every upward lookup so the walk cannot drift between
+ * call sites.
+ */
+function walkUpTo(
+  records: SessionRecord[],
+  startUuid: string,
+  predicate: (record: SessionRecord) => boolean,
+): SessionRecord | undefined {
+  const byUuid = new Map(records.map((record) => [record.uuid, record] as const));
+  let current = byUuid.get(startUuid);
+  while (current) {
+    if (predicate(current)) return current;
+    current = current.parentUuid ? byUuid.get(current.parentUuid) : undefined;
+  }
+  return undefined;
+}
+
+/**
  * The authored user prompt owning a leaf: the nearest authored user record at
  * or above it in the parent chain. Selection markers for any-depth switches
  * key their forkPointUuid on this value, which re-arms the inline switcher at
  * the switched-to depth.
  */
 export function ownerForkOfLeaf(records: SessionRecord[], leafUuid: string): string | undefined {
-  const byUuid = new Map(records.map((record) => [record.uuid, record] as const));
-  let current = byUuid.get(leafUuid);
-  while (current) {
-    if (isAuthoredPrompt(current)) return current.uuid;
-    current = current.parentUuid ? byUuid.get(current.parentUuid) : undefined;
-  }
-  return undefined;
+  return walkUpTo(records, leafUuid, isAuthoredPrompt)?.uuid;
 }
 
 /**
@@ -414,11 +427,5 @@ export function findLatestSelection(records: SessionRecord[]): CandidateSelectio
  */
 export function contentLeafAtOrAbove(records: SessionRecord[], uuid: string | undefined): string | undefined {
   if (!uuid) return undefined;
-  const byUuid = new Map(records.map((record) => [record.uuid, record] as const));
-  let current = byUuid.get(uuid);
-  while (current) {
-    if (isContentRecord(current)) return current.uuid;
-    current = current.parentUuid ? byUuid.get(current.parentUuid) : undefined;
-  }
-  return undefined;
+  return walkUpTo(records, uuid, isContentRecord)?.uuid;
 }

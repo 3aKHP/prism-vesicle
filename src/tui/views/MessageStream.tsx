@@ -115,82 +115,90 @@ export function MessageStream(props: {
     });
   }
 
+  /**
+   * Alt+arrow dispatch. Precedence: candidate cycling beats turn-focus
+   * navigation beats Stage toggle; the legacy Stage-only navigation remains
+   * the fallback when no turn anchors are provided. Alt arrives as `option`
+   * under enhanced keyboard protocols and `meta` in legacy terminals.
+   */
   function handleStageMessageKey(key: TuiKeyEvent): boolean {
-    // Alt is reported as `meta` by legacy terminals and `option` by enhanced
-    // protocols (see stage-message-interaction.ts); accept both.
     const altLike = key.meta === true || key.option === true;
-    const navigation = altLike && !key.ctrl && (key.name === "up" || key.name === "down");
-    const toggle = isStageMessageToggleShortcut(key);
-    // Horizontal candidate switching (#88): Alt+Left/Alt+Right cycle the
-    // current turn's candidates. No composer collision — plain letters and bare
-    // arrows carry no Alt modifier and fall through to the composer.
-    const candidateCycle = altLike && !key.ctrl && (key.name === "left" || key.name === "right");
-    if (!navigation && !toggle && !candidateCycle) return false;
-    if (candidateCycle) {
-      const switcher = props.candidateSwitcher?.();
-      if (switcher && switcher.total > 1) {
-        props.onCandidateSwitch?.(key.name === "left" ? -1 : 1);
-        return true;
-      }
-      // Never swallow this silently: the app guides toward the candidate tree
-      // (Ctrl+B) or regenerate (Ctrl+R) depending on the focused turn.
-      if (props.onCandidateSwitchRejected) {
-        props.onCandidateSwitchRejected();
-        return true;
-      }
-      return false;
+    if (!altLike || key.ctrl) return isStageMessageToggleShortcut(key) && handleStageToggle(key);
+    if (key.name === "left" || key.name === "right") return handleCandidateCycle(key);
+    if (key.name === "up" || key.name === "down") {
+      if (handleTurnFocusNavigation(key)) return true;
+      return handleLegacyStageNavigation(key);
     }
-    const anchors = props.turnAnchors?.() ?? [];
-    if (navigation && anchors.length > 0) {
-      const focused = props.focusedTurn?.() ?? null;
-      const currentIndex = focused ? anchors.findIndex((anchor) => anchor.forkUuid === focused) : -1;
-      const direction = key.name === "up" ? -1 : 1;
-      const nextIndex = currentIndex < 0
-        ? (direction > 0 ? 0 : anchors.length - 1)
-        : (currentIndex + direction + anchors.length) % anchors.length;
-      const anchor = anchors[nextIndex]!;
-      props.onFocusTurn?.(anchor.forkUuid);
-      scrollbox?.scrollChildIntoView(anchor.userMessageId);
-      // Keep the Stage mechanism's focus in sync so Ctrl+Alt+S and mouse
-      // toggling keep working on eligible focused turns.
-      if (anchor.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)) {
-        setFocusedStageMessageId(anchor.assistantMessageId);
-      }
+    return false;
+  }
+
+  /** Alt+←/→: cycle the armed switcher, else report guidance (never silent). */
+  function handleCandidateCycle(key: TuiKeyEvent): boolean {
+    const switcher = props.candidateSwitcher?.();
+    if (switcher && switcher.total > 1) {
+      props.onCandidateSwitch?.(key.name === "left" ? -1 : 1);
       return true;
     }
-    if (toggle && anchors.length > 0) {
-      const focusedFork = props.focusedTurn?.() ?? null;
-      const anchor = focusedFork ? anchors.find((entry) => entry.forkUuid === focusedFork) : undefined;
-      const target = anchor?.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)
-        ? anchor.assistantMessageId
-        : focusedStageMessageId();
-      if (target && eligibleStageMessageIds().includes(target)) {
-        toggleStageMessage(target);
-        return true;
-      }
-      return false;
-    }
-    // Fallback (no turn anchors provided): Stage-only navigation.
-    const ids = eligibleStageMessageIds();
-    if (ids.length === 0) return false;
-    if (navigation) {
-      const current = focusedStageMessageId();
-      const currentIndex = current ? ids.indexOf(current) : -1;
-      const direction = key.name === "up" ? -1 : 1;
-      const nextIndex = currentIndex < 0
-        ? (direction > 0 ? 0 : ids.length - 1)
-        : (currentIndex + direction + ids.length) % ids.length;
-      const id = ids[nextIndex]!;
-      setFocusedStageMessageId(id);
-      scrollbox?.scrollChildIntoView(id);
-      return true;
-    }
-    const focused = focusedStageMessageId();
-    if (focused && isStageMessageToggleShortcut(key)) {
-      toggleStageMessage(focused);
+    if (props.onCandidateSwitchRejected) {
+      props.onCandidateSwitchRejected();
       return true;
     }
     return false;
+  }
+
+  /** Alt+↑/↓: move the transcript-wide turn-focus cursor (wrapping). */
+  function handleTurnFocusNavigation(key: TuiKeyEvent): boolean {
+    const anchors = props.turnAnchors?.() ?? [];
+    if (anchors.length === 0) return false;
+    const focused = props.focusedTurn?.() ?? null;
+    const currentIndex = focused ? anchors.findIndex((anchor) => anchor.forkUuid === focused) : -1;
+    const direction = key.name === "up" ? -1 : 1;
+    const nextIndex = currentIndex < 0
+      ? (direction > 0 ? 0 : anchors.length - 1)
+      : (currentIndex + direction + anchors.length) % anchors.length;
+    const anchor = anchors[nextIndex]!;
+    props.onFocusTurn?.(anchor.forkUuid);
+    scrollbox?.scrollChildIntoView(anchor.userMessageId);
+    // Keep the Stage mechanism's focus in sync so Ctrl+Alt+S and mouse
+    // toggling keep working on eligible focused turns.
+    if (anchor.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)) {
+      setFocusedStageMessageId(anchor.assistantMessageId);
+    }
+    return true;
+  }
+
+  /** Ctrl+Alt+S: toggle the focused turn's Stage message (or the legacy focus). */
+  function handleStageToggle(key: TuiKeyEvent): boolean {
+    if (!isStageMessageToggleShortcut(key)) return false;
+    const anchors = props.turnAnchors?.() ?? [];
+    const focusedFork = props.focusedTurn?.() ?? null;
+    const anchor = anchors.length > 0 && focusedFork
+      ? anchors.find((entry) => entry.forkUuid === focusedFork)
+      : undefined;
+    const target = anchor?.assistantMessageId && eligibleStageMessageIds().includes(anchor.assistantMessageId)
+      ? anchor.assistantMessageId
+      : focusedStageMessageId();
+    if (target && eligibleStageMessageIds().includes(target)) {
+      toggleStageMessage(target);
+      return true;
+    }
+    return false;
+  }
+
+  /** Fallback (no turn anchors provided): Stage-only navigation. */
+  function handleLegacyStageNavigation(key: TuiKeyEvent): boolean {
+    const ids = eligibleStageMessageIds();
+    if (ids.length === 0) return false;
+    const current = focusedStageMessageId();
+    const currentIndex = current ? ids.indexOf(current) : -1;
+    const direction = key.name === "up" ? -1 : 1;
+    const nextIndex = currentIndex < 0
+      ? (direction > 0 ? 0 : ids.length - 1)
+      : (currentIndex + direction + ids.length) % ids.length;
+    const id = ids[nextIndex]!;
+    setFocusedStageMessageId(id);
+    scrollbox?.scrollChildIntoView(id);
+    return true;
   }
 
   props.registerStageKeyHandler?.(handleStageMessageKey);
