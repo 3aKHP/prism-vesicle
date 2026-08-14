@@ -390,9 +390,20 @@ Tier 2 uses the same vocabulary and the same "Handling CR Results" rules directl
 
 The first version is deliberately minimal: five lenses, finder/scorer separation, the ≥ 80 confidence filter, and `ReportFindings` rendering. Out of scope for v1: a git-blame/history lens, a previous-PR-comments lens, a cross-lens dedup stage, and budget-aware lens skipping.
 
+## Issue Linking And Closure
+
+GitHub auto-closes an issue only when a supported closing keyword is immediately followed by the issue reference in the PR body or a commit message. Supported forms include `Closes #123`, `Fixes #123`, and `Resolves #123` (also `close`, `closed`, `fix`, `fixed`, `resolve`, `resolved`).
+
+- A PR that resolves an issue must include one explicit line in its body: `Closes #<issue>`.
+- Use `Refs #<issue>` or plain `#<issue>` for related work that does not complete the issue.
+- `Implements #<issue>`, `Closes the follow-up in #<issue>`, and issue references in the PR title do not close issues.
+- For staged work, only the final PR uses `Closes #<issue>`; earlier PRs use `Refs #<issue>`.
+
 ## PR Body Shape
 
 ```markdown
+Closes #<issue>
+
 ## Summary
 
 - ...
