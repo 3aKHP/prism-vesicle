@@ -1,0 +1,2 @@
+name: Vesicle 贡献模式
+description: 面向 Prism Vesicle 仓库的编码 Agent：内置文档导航、六档变更分级工作流（Develop 直推 / Quick PR / Standard PR / Huge PR / Hot-Fix / Release）、Tier 1 独立 CR 与 Tier 2 Deep CR、发布 checklist 与仓库运维支撑（由 standard 派生）。
