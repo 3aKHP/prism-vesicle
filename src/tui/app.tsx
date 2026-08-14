@@ -964,6 +964,7 @@ export function App(props: AppProps = {}) {
     pasteClipboardImage,
     handleComposerKey,
     handlePromptEscape: handleEscapeAtPrompt,
+    busy,
     handleDecisionPaste,
     insertComposerPaste,
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,

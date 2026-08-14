@@ -530,6 +530,33 @@ describe("TUI input routing: modal ownership of Esc", () => {
     expect(promptEscapeCount()).toBe(0);
     expect(recorder.keys).toEqual(["escape"]);
   });
+
+  const busyPermissionOverrides = (recorder: EscRecorder): Partial<InputRoutingOptions> => ({
+    activePermissionRequest: () => ({ id: "p", sessionId: "s", toolCallId: "t", toolName: "shell_exec", arguments: "ls", permissionClass: "arbitrary_exec", mode: "MOMENTUM", createdAt: "2026-07-31T00:00:00.000Z" }),
+    handleGateKey: (key) => { recorder.keys.push(key.name ?? ""); return false; },
+  });
+
+  test("a busy modal that declines Escape falls back to the prompt-level interrupt", () => {
+    const recorder: EscRecorder = { keys: [] };
+    const { router, promptEscapeCount } = modalRouter({
+      ...busyPermissionOverrides(recorder),
+      busy: () => true,
+    });
+    router.handleKey(keyEvent("escape"));
+    expect(recorder.keys).toEqual(["escape"]);
+    expect(promptEscapeCount()).toBe(1);
+  });
+
+  test("a non-busy modal that declines Escape keeps the key swallowed", () => {
+    const recorder: EscRecorder = { keys: [] };
+    const { router, promptEscapeCount } = modalRouter({
+      ...busyPermissionOverrides(recorder),
+      busy: () => false,
+    });
+    router.handleKey(keyEvent("escape"));
+    expect(recorder.keys).toEqual(["escape"]);
+    expect(promptEscapeCount()).toBe(0);
+  });
 });
 
 function keyEvent(name: string, modifiers: {
