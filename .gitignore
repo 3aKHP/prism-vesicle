@@ -49,3 +49,6 @@ test-workspaces/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local CLI state
+.qoder/
