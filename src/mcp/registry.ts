@@ -144,7 +144,19 @@ async function buildRegistry(
       continue;
     }
 
-    const result = await createMcpConnection(server, options);
+    let result: Awaited<ReturnType<typeof createMcpConnection>>;
+    try {
+      result = await createMcpConnection(server, options);
+    } catch (error) {
+      // createMcpConnection rethrows the caller abort: close the servers
+      // that already connected before propagating, so a mid-build
+      // cancellation leaks nothing.
+      if (options.signal?.aborted) {
+        await closeOpenedConnections();
+        throw abortReason(options.signal);
+      }
+      throw error;
+    }
     if (!result.ok) {
       statuses.push({
         id: server.id,
