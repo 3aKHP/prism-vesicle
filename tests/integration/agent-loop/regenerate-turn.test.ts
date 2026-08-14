@@ -414,4 +414,45 @@ describe("agent loop: regenerate turn", () => {
     expect(records.some((record) => record.metadata?.kind === "candidate-file-state")).toBe(false);
     expect(findLatestSelection(records)?.selectedLeafUuid).toBe(bareCandidate.uuid);
   });
+
+  test("regenerating an ancestor turn forks at that depth and truncates the active branch there", async () => {
+    const rootDir = await createPromptRoot();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return Response.json({ id: `c${calls}`, choices: [{ message: { content: `reply-${calls}` } }] });
+    }) as unknown as typeof fetch;
+
+    const first = await runPrompt({ input: "turn one", rootDir, messages: [{ role: "user", content: "turn one" }] });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const second = await runPrompt({
+      input: "turn two",
+      rootDir,
+      sessionId: first.sessionId,
+      messages: [...first.messages, { role: "user", content: "turn two" }],
+    });
+    if (second.kind !== "complete") throw new Error(`expected complete, got ${second.kind}`);
+
+    const recordsBefore = await loadSessionRecords(rootDir, first.sessionId);
+    const user1 = recordsBefore.find((record) => record.role === "user")!;
+
+    const result = await regenerateTurn({ rootDir, sessionId: first.sessionId, userRecordUuid: user1.uuid });
+    if (result.kind !== "complete") throw new Error(`expected complete regenerate, got ${result.kind}`);
+
+    const records = await loadSessionRecords(rootDir, first.sessionId);
+    // The selection marker keys on the ancestor fork, so the inline switcher
+    // re-arms at the regenerated depth.
+    const selection = findLatestSelection(records);
+    expect(selection?.forkPointUuid).toBe(user1.uuid);
+
+    // The active branch ends at the new candidate: the old continuation is no
+    // longer projected...
+    const snapshot = await loadSessionSnapshot(rootDir, first.sessionId);
+    const contents = snapshot.messages.map((message) => message.content).join("\n");
+    expect(contents).toContain("reply-3");
+    expect(contents).not.toContain("turn two");
+    // ...but stays in the append-only transcript, reachable by branch switching.
+    expect(records.some((record) => record.content === "turn two")).toBe(true);
+    expect(enumerateCandidateLeaves(records, user1.uuid)).toHaveLength(2);
+  });
 });
