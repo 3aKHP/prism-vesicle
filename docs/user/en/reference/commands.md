@@ -12,6 +12,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/new` | Start a fresh session |
 | `/resume` | List this project's sessions to resume; `/resume <n\|id>` resumes directly |
 | `/rewind` (alias `/checkpoint`) | Rewind to a step in this session, optionally restoring guarded artifact files; Persistent Instruction configuration is not restored |
+| `/branch` | Open the candidate-tree panel to browse and switch candidate branches at any depth (shortcut Ctrl+B) |
 | `/compact [instructions]` | Compact the current session into a summary and continue, saving context |
 | `/init [--force] [notes]` | Scan the project and draft a project-scope `VESICLE.md`; refuses an existing target unless `--force` backs it up and replaces it |
 | `/context` | Show current context usage and window occupancy |
@@ -61,6 +62,8 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 | Ctrl+V / Alt/Option+V | Paste a clipboard image (only vision-capable models receive it; terminal text paste still inserts text normally) |
 | `Ctrl+R` (Chat page) | Re-run the last turn as a new candidate (the old one is kept); in Workspace, `Ctrl+R` keeps its file-reload meaning |
 | `Option+←/→` | Switch between the current turn's candidates |
+| `Ctrl+B` | Open the candidate-tree panel to browse and switch candidate branches at any depth (both pages) |
+| `Alt/Option+↑/↓` | Move the turn-focus cursor across the whole transcript (wraps); the focused turn's prompt and final reply are highlighted |
 | Ctrl+Q | Exit Vesicle |
 
 After a complete tool round, queued messages are added to the active conversation before its next provider request. If the loop completes without another tool boundary, the next queued input is processed immediately. Slash commands declare their own busy-turn behavior: `/help`, `/context`, `/reasoning`, `/theme`, `/workspace`, read-only settings forms, and `/agents` inspection or stop run immediately; `/artifact` and `/validate` wait for the current tool round; configuration changes, pickers, session commands, `/compact`, `/init`, and `/agents retry` wait for the Agent Loop. A picker pauses the remaining queue, and switching or resetting the session clears it.

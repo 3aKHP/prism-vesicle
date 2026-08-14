@@ -30,7 +30,7 @@ The only validation is `runtime-packet` (the three-part turn packet).
 
 Each Stage turn outputs three parts:
 
-1. **Hidden Neural Chain** (`<!-- [!Neural Chain] … -->`): perception/instinct/state/strategy. Collapsed by default on the consumer side; click that message (or focus it with `Ctrl+Alt+S`) to inspect the raw content.
+1. **Hidden Neural Chain** (`<!-- [!Neural Chain] … -->`): perception/instinct/state/strategy. Collapsed by default on the consumer side; click that message (or move the turn-focus cursor onto that turn with `Alt+↑/↓`, then press `Ctrl+Alt+S`) to inspect the raw content.
 2. **Dynamic HUD** (`【Status】`/`[Space-Time]`/`[Physical]`/`[Psychology]`/`[Beat]`/`[Impression]`): shown as a low-key indicator.
 3. **Prose**: the default-visible main narrative (200–800 Chinese characters, high density, at least two sensory modalities).
 
