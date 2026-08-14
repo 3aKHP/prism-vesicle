@@ -14,8 +14,10 @@ import {
   type ProviderRegistry,
 } from "../config/providers";
 import { parseMcpConfig, mcpConfigPathFromEnv } from "../mcp/config";
+import { appendMcpServerBlock, mcpTokenEnvKey, serializeMcpServerBlock, type McpServerBlock } from "../mcp/config-edit";
 import { loadPermissionSettings } from "../config/permissions";
 import { atomicWrite } from "../config/atomic-write";
+import { sanitizeId, uniqueId, yamlKey, yamlScalar } from "../config/yaml-writer";
 
 export type SetupMcpServer = {
   name: string;
@@ -296,23 +298,24 @@ function mcpAddition(
   const parsed = existingSource === undefined ? undefined : parseMcpConfig(existingSource, "mcp.yaml", env);
   const id = uniqueId(sanitizeId(server.name), new Set(parsed?.servers.map((entry) => entry.id) ?? []));
   const envUpdates: Record<string, string> = {};
-  const lines = [`  ${yamlKey(id)}:`, "    enabled: true", "    transport: streamable-http", `    url: ${yamlScalar(server.url.trim())}`, "    negotiation: auto"];
+  const block: McpServerBlock = {
+    id,
+    enabled: true,
+    transport: "streamable-http",
+    url: server.url.trim(),
+    negotiation: "auto",
+  };
   if (server.auth !== "none") {
-    const envKey = `MCP_${id.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}_TOKEN`;
+    const envKey = mcpTokenEnvKey(id);
     envUpdates[envKey] = server.secret!.trim();
     const header = server.auth === "bearer" ? "Authorization" : server.headerName!.trim();
     const prefix = server.auth === "bearer" ? "Bearer " : "";
-    lines.push("    headers:", `      ${yamlKey(header)}: ${yamlScalar(`${prefix}\${${envKey}}`)}`);
+    block.headers = { [header]: `${prefix}\${${envKey}}` };
   }
-  lines.push("    enabledEngines:");
-  for (const engine of server.enabledEngines) lines.push(`      - ${engine}`);
+  block.enabledEngines = server.enabledEngines;
 
-  let source = existingSource?.replace(/\r\n/g, "\n").replace(/\s*$/, "") ?? "enabled: true\n\nservers:";
-  if (existingSource !== undefined && parsed && !parsed.enabled) {
-    source = source.replace(/^enabled:\s*false(?:\s+#.*)?$/m, "enabled: true");
-  }
-  if (!/^servers:\s*$/m.test(source)) source += "\n\nservers:";
-  source = `${source}\n${lines.join("\n")}\n`;
+  const lines = serializeMcpServerBlock(block);
+  const source = appendMcpServerBlock(existingSource, lines);
   parseMcpConfig(source, "mcp.yaml", { ...env, ...envUpdates });
   return { source, envUpdates };
 }
@@ -376,26 +379,6 @@ function validateMcpServer(server: SetupMcpServer): void {
   if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("MCP URL must use http:// or https://.");
   if (server.auth !== "none" && !server.secret?.trim()) throw new Error("MCP authentication secret is required.");
   if (server.auth === "custom-header" && !server.headerName?.trim()) throw new Error("MCP custom header name is required.");
-}
-
-function uniqueId(base: string, used: Set<string>): string {
-  if (!used.has(base)) return base;
-  let suffix = 2;
-  while (used.has(`${base}-${suffix}`)) suffix += 1;
-  return `${base}-${suffix}`;
-}
-
-function sanitizeId(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "service";
-}
-
-function yamlKey(value: string): string {
-  return /^[A-Za-z0-9_-]+$/.test(value) ? value : yamlScalar(value);
-}
-
-function yamlScalar(value: string): string {
-  if (/^[A-Za-z0-9_./:@+${}-]+$/.test(value)) return value;
-  return JSON.stringify(value);
 }
 
 function dotenvScalar(value: string): string {

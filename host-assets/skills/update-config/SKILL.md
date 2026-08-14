@@ -1,6 +1,6 @@
 ---
 name: update-config
-description: "Configure Prism Vesicle providers, permissions, preferences, MCP, quality, and proxy settings through guided, validated CLI operations. Use when the user wants to add, change, or remove a provider/model, toggle shell_exec or permission mode, set a theme or MCP output persistence, configure a provider proxy, or inspect current configuration state. Never handles API keys or secret values directly."
+description: "Configure Prism Vesicle providers, permissions, preferences, MCP, quality, and proxy settings through guided, validated CLI operations. Use when the user wants to add, change, or remove a provider/model, add an MCP server, toggle shell_exec or permission mode, set a theme or MCP output persistence, configure a provider proxy, or inspect current configuration state. Never handles API keys or secret values directly."
 ---
 
 # update-config
@@ -11,6 +11,7 @@ Configure Prism Vesicle through a set of validated, atomic CLI operations. You c
 
 Activate when the user asks to:
 - Add, remove, or change a provider or model
+- Add an MCP server to `mcp.yaml`
 - Switch the default provider or model
 - Change permission mode or toggle shell_exec
 - Set a project theme preference
@@ -103,6 +104,9 @@ update_config.sh add-model <provider-id> --json '<model entry>'
 update_config.sh remove-model <provider-id> <model-id>
 update_config.sh remove-provider <provider-id>
 
+# MCP servers
+update_config.sh add-mcp --json '<entry>'      # Append a server; secrets stay in .env
+
 # Permissions
 update_config.sh set permissions defaultMode <MANUAL|INERTIA|MOMENTUM>
 update_config.sh set permissions shellExec <true|false>
@@ -164,6 +168,24 @@ For OpenAI Responses providers, include `responsesProfile` and optionally `respo
 2. The `apiKeyEnv` variable exists in `.env` with an empty value.
 3. **The user must edit `.env` to paste their API key.** You cannot and must not do this for them.
 4. Tell the user: "Your provider is configured. Edit `.env` at the path shown, paste your API key after `=`, save, and restart Vesicle."
+
+
+### Adding an MCP server
+
+The `add-mcp` operation appends one server to `mcp.yaml` and never accepts a secret value:
+
+```bash
+update_config.sh add-mcp --json '{
+  "name": "Research Cluster",
+  "url": "https://mcp.example.com/mcp",
+  "auth": "bearer",
+  "enabledEngines": ["etl", "evaluate"]
+}'
+```
+
+For bearer or custom-header auth the CLI derives `MCP_<ID>_TOKEN`, writes the header as an `${ENV_VAR}` reference in `mcp.yaml`, and creates that variable as an empty `.env` slot. The user must edit `.env` and paste the token after `=`; you cannot and must not do it for them.
+
+Optional full fields include `id`, `enabled`, `timeoutSeconds`, `protocolVersion`, `negotiation`, `supportedProtocolVersions`, `toolPrefix`, `includeTools`, `excludeTools`, and `headers`. Explicit `headers` values must reference environment variables (`"Bearer ${MY_TOKEN}"`) rather than literal secrets. If the user pastes an MCP token into the conversation, follow the credential guidance in the security rules and do not pass it through the CLI.
 
 ### Adding a model
 
@@ -230,7 +252,7 @@ Removing the last preference field removes the project `.vesicle/preferences.yam
 ## Boundaries
 
 - You cannot read, write, or display secret values. The `.env` sanitization is enforced by the CLI, not by your discipline.
-- You cannot add MCP servers (edit `mcp.yaml` manually for now).
+- You can add MCP servers with `add-mcp`, but you cannot remove them or edit existing MCP server fields through this Skill yet.
 - You cannot modify `VESICLE.md` persistent instructions (use the `update_instructions` tool or `/instructions` command).
 - You cannot change Engine profiles, Harness packs, or session state.
 - You cannot validate provider connectivity — configuration changes take effect after restart; suggest the user run `vesicle doctor` or send a test message.
