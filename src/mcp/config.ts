@@ -2,14 +2,16 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { loadUserConfigEnvironment, providerConfigPathFromEnv } from "../config/providers";
 import { readYamlKeyValue, readYamlLines, unquoteYamlValue } from "../config/yaml-line-reader";
-import { engineIds, type EngineId } from "../core/engine/profile";
+import { isEngineId, type EngineId } from "../core/engine/profile";
 import type { McpConfig, McpServerConfig, McpNegotiationMode, McpTransport } from "./types";
-import { supportedModernProtocolVersions } from "./types";
+import {
+  protocolRevisionPattern,
+  supportedModernProtocolVersions,
+  validNegotiationModes,
+} from "./types";
 
 const defaultProtocolVersion = "2025-03-26";
 const defaultTimeoutSeconds = 30;
-const validNegotiationModes: readonly McpNegotiationMode[] = ["legacy", "modern", "auto"];
-const protocolRevisionPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 export type McpConfigLoadResult =
   | {
@@ -227,7 +229,7 @@ function readEngineList(values: string[], index: number, path: string): EngineId
   for (const value of values) {
     const engine = value.trim();
     if (!engine) continue;
-    if (!engineIds.includes(engine as EngineId)) {
+    if (!isEngineId(engine)) {
       throw new Error(`MCP config parse error on line ${index + 1} in ${path}: unknown engine "${engine}".`);
     }
     if (!engines.includes(engine as EngineId)) engines.push(engine as EngineId);

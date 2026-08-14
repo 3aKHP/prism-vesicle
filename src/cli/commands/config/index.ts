@@ -7,6 +7,7 @@ import { runSet } from "./set";
 import { runEnvSetEmpty, runEnvSetProxy, runEnvRemove } from "./env";
 import { runAddProvider } from "./add";
 import { runAddModel } from "./add-model";
+import { runAddMcp } from "./add-mcp";
 import { runRemoveModel, runRemoveProvider } from "./remove";
 import { runUnset } from "./unset";
 
@@ -30,6 +31,10 @@ export async function runConfigCommand(args: string[]): Promise<void> {
   }
   if (command === "add-model" && args.length >= 2) {
     await runAddModel(args.slice(1));
+    return;
+  }
+  if (command === "add-mcp" && args.length >= 2) {
+    await runAddMcp(args.slice(1));
     return;
   }
   if (command === "remove-model" && args.length === 3) {
@@ -71,6 +76,7 @@ function printUsage(): void {
   console.error("  vesicle config set <file> <key> <value>");
   console.error("  vesicle config add-provider --json '<entry>'");
   console.error("  vesicle config add-model <provider-id> --json '<entry>'");
+  console.error("  vesicle config add-mcp --json '<entry>'");
   console.error("  vesicle config remove-model <provider-id> <model-id>");
   console.error("  vesicle config remove-provider <provider-id>");
   console.error("  vesicle config unset <file> <key>");
