@@ -100,6 +100,7 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 
 - 说明行为发生了什么变化，以及它为何属于当前里程碑。
 - 在 PR 描述中列出验证命令。
+- 当 PR 完成某个 issue 时，在 PR 描述中单独写一行显式关闭句式，例如 `Closes #<issue>`。仅相关但不会关闭 issue 的引用使用 `Refs #<issue>`；`Implements #<issue>` 和标题中的引用都不是关闭语法。参见 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md)。
 - 用户可见行为、运行时行为或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md`、`docs/dev/ARCHITECTURE.md` 或对应的领域契约。仅在源代码规范变化时更新 `docs/dev/STYLE.md`。
 - 不要把生成的 `.vesicle/` 会话提交到 Git。
 - 新增或编辑的 Markdown 正文应使用自然换行。
