@@ -23,6 +23,7 @@ const HELP_TEXT = [
   "  /artifact [n|path] open artifacts in the Workspace page (no args = latest)",
   "  /validate <n|path> validate an artifact file",
   "  /rewind           restore code and/or conversation",
+  "  /branch           browse and switch candidate branches at any depth (Ctrl+B)",
   "  /btw <question>   ask a temporary side question without interrupting the turn",
   "  /skill            list available skills (no args = picker)",
   "  /skill <name> [task] activate a skill and optionally invoke it with a task",

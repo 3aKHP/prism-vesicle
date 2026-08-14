@@ -7,6 +7,7 @@ import { normalizeKeyName } from "./composer";
 import type { PendingQualityDecisionState, PendingUserQuestionState, TuiKeyEvent } from "./decision-interaction";
 import { resolveBottomSurfaceMode, type ModelPickerState, type QualityPickerState, type QualityRewriteConfirmState } from "./views/BottomSurface";
 import type { RewindPickerState, SessionPickerState } from "./types";
+import type { BranchPickerState } from "./branch/controller";
 import type { SkillPickerState } from "./skill-picker-controller";
 
 export type InputRoutingOptions = {
@@ -16,6 +17,8 @@ export type InputRoutingOptions = {
   setStatus: Setter<string>;
   rewindPicker: Accessor<RewindPickerState | null>;
   handleRewindKey: (key: TuiKeyEvent) => boolean;
+  branchPicker: Accessor<BranchPickerState | null>;
+  handleBranchKey: (key: TuiKeyEvent) => boolean;
   modelPicker: Accessor<ModelPickerState | null>;
   handleModelPickerKey: (key: TuiKeyEvent) => boolean;
   qualityPicker: Accessor<QualityPickerState | null>;
@@ -43,6 +46,8 @@ export type InputRoutingOptions = {
   handleStageMessageKey?: (key: TuiKeyEvent) => boolean;
   /** Ctrl+R on the Chat page: re-run the last turn as a new candidate (#88). */
   triggerRegenerate?: () => void;
+  /** Ctrl+B on both pages: open the candidate-tree panel (any-depth switching). */
+  triggerBranch?: () => void;
   sideQuestionOverlay?: Accessor<unknown>;
   handleSideQuestionKey?: (key: TuiKeyEvent) => boolean;
   splashActive?: Accessor<boolean>;
@@ -93,6 +98,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     quality: options.pendingQualityDecision?.() ?? null,
     gate: options.activeGateRequest(),
     rewind: options.rewindPicker(),
+    branch: options.branchPicker(),
     session: options.sessionPicker(),
     skillPicker: options.skillPicker(),
     qualityPicker: options.qualityPicker(),
@@ -154,6 +160,9 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       case "rewind":
         if (options.handleRewindKey(key)) consumeKey(key);
         return;
+      case "branch":
+        if (options.handleBranchKey(key)) consumeKey(key);
+        return;
       case "session":
         if (options.handleSessionPickerKey(key)) consumeKey(key);
         return;
@@ -177,6 +186,17 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     // own their keys while active.
     if (key.ctrl && !key.shift && key.name === "o" && options.togglePage) {
       options.togglePage();
+      consumeKey(key);
+      return;
+    }
+    // Candidate tree (Ctrl+B) sits at the same layer: above workspace routing
+    // so the Workspace tree's catch-all never swallows it, after the modal
+    // switch so an open panel keeps its keys. Plain Ctrl+B is 0x02 in
+    // traditional VT terminals on all three platforms. Taking it over
+    // supersedes the composer's Emacs backward-char (bare left arrow and
+    // Meta+b word movement remain).
+    if (key.ctrl && !key.shift && key.name === "b" && options.triggerBranch) {
+      options.triggerBranch();
       consumeKey(key);
       return;
     }

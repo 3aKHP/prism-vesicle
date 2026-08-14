@@ -52,10 +52,12 @@ import { modelWritableRoots, projectContentRoots } from "../project/roots";
 import {
   applyFileCheckpointEntries,
   captureProjectTree,
+  diffDiskAgainstEntries,
   fileCheckpointingEnabled,
   fileCheckpointIsTainted,
   forkTurnPreState,
   listProjectTreePaths,
+  type FileCheckpointDiffStats,
   type FileCheckpointEntry,
 } from "./file-history";
 
@@ -209,17 +211,53 @@ async function applyCandidateManifest(
 ): Promise<{ changed: string[]; untracked: string[] }> {
   const listing = await listProjectTreePaths(rootDir, projectContentRoots);
   const exempt = bundle.untracked ?? [];
-  const manifestPaths = Object.keys(bundle.files);
   const absents: Record<string, FileCheckpointEntry> = {};
-  for (const path of listing.paths.keys()) {
-    if (Object.hasOwn(bundle.files, path)) continue;
-    if (isExemptByUntracked(path, exempt)) continue;
-    if (isAncestorOfManifestPath(path, manifestPaths)) continue;
+  for (const path of manifestDeletionPaths(listing.paths, Object.keys(bundle.files), exempt)) {
     absents[path] = { backup: null, kind: "absent" };
   }
   const changed = await applyFileCheckpointEntries(rootDir, sessionId, { ...absents, ...bundle.files });
   const untracked = [...new Set([...exempt, ...listing.untracked])].sort();
   return { changed, untracked };
+}
+
+/**
+ * On-disk paths a manifest application would delete: everything listed under
+ * the content roots that is outside the manifest, not exempted by the
+ * bundle's untracked list, and not an ancestor of a manifest path.
+ */
+function manifestDeletionPaths(
+  diskPaths: Map<string, "file" | "directory">,
+  manifestPaths: string[],
+  exempt: string[],
+): string[] {
+  const deletions: string[] = [];
+  for (const path of diskPaths.keys()) {
+    if (manifestPaths.includes(path)) continue;
+    if (isExemptByUntracked(path, exempt)) continue;
+    if (isAncestorOfManifestPath(path, manifestPaths)) continue;
+    deletions.push(path);
+  }
+  return deletions;
+}
+
+/**
+ * Read-only preview of switching to `toLeaf`: the file diff the switch would
+ * apply (manifest entries plus out-of-manifest deletions), or undefined when
+ * checkpointing is disabled or the target has no bundle (a conversation-only
+ * switch touches no files).
+ */
+export async function candidateSwitchPreview(
+  rootDir: string,
+  sessionId: string,
+  toLeaf: string,
+): Promise<FileCheckpointDiffStats | undefined> {
+  if (!fileCheckpointingEnabled()) return undefined;
+  const records = await loadSessionRecords(rootDir, sessionId);
+  const bundle = findCandidatePostState(records, toLeaf);
+  if (!bundle) return undefined;
+  const listing = await listProjectTreePaths(rootDir, projectContentRoots);
+  const deletions = manifestDeletionPaths(listing.paths, Object.keys(bundle.files), bundle.untracked ?? []);
+  return diffDiskAgainstEntries(rootDir, sessionId, bundle.files, deletions);
 }
 
 function isExemptByUntracked(path: string, untracked: string[]): boolean {

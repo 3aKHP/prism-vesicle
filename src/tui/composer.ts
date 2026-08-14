@@ -121,8 +121,6 @@ function applyCtrlKey(state: ComposerState, name: string, options: ComposerKeyOp
   switch (name) {
     case "a":
       return handled({ ...state, cursor: lineStart(state.value, state.cursor) });
-    case "b":
-      return handled({ ...state, cursor: moveCursorAcrossElements(state.value, state.cursor, -1, state.elements) });
     case "e":
       return handled({ ...state, cursor: lineEnd(state.value, state.cursor) });
     case "f":

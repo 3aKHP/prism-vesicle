@@ -18,6 +18,8 @@ import { Splash } from "./widgets/Splash";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
 import { rewindPickerPanelHeight } from "./RewindPicker";
+import { branchPickerPanelHeight } from "./BranchPicker";
+import { createBranchController } from "./branch/controller";
 import { yoloPanelHeight } from "./YoloPrompt";
 import { qualityRewritePanelHeight } from "./QualityRewritePrompt";
 import { createBuiltinCommands } from "./commands/builtin";
@@ -416,6 +418,15 @@ export function App(props: AppProps = {}) {
     applyConversation: (result) => sessionActions.applyConversationRewind(result),
   });
   const rewindPicker = rewindController.state;
+  const branchController = createBranchController({
+    rootDir: process.cwd(),
+    sessionId,
+    busy,
+    setStatus,
+    applySwitch: (toLeaf) => turnController.switchToCandidate(toLeaf),
+    regenerateAt: (forkUuid) => turnController.regenerateTurn(forkUuid),
+  });
+  const branchPicker = branchController.state;
   function submitCommand(raw: string): boolean {
     return routeCommandSubmission(raw, busy(), builtinCommands(), {
       execute: (value) => {
@@ -588,6 +599,7 @@ export function App(props: AppProps = {}) {
       && !pendingQualityDecision()
       && !pendingChildPermission()
       && !rewindPicker()
+      && !branchPicker()
       && !sessionPicker()
       && !skillPicker()
       && !modelPicker()
@@ -875,7 +887,7 @@ export function App(props: AppProps = {}) {
     dimensions().width,
     dimensions().height,
     Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()),
-    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
+    Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(branchPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
       : qualityRewriteConfirm()
@@ -887,8 +899,8 @@ export function App(props: AppProps = {}) {
           dimensions().width,
         ))
         : decisionPanelMinHeight(),
-    rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 8,
-    rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : 12,
+    rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : branchPicker() ? branchPickerPanelHeight(branchPicker()!) : 8,
+    rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : branchPicker() ? branchPickerPanelHeight(branchPicker()!) : 12,
   ));
   createEffect(() => {
     if (focusedArtifactPath() && !layout().showSidebar) setFocusedArtifactPath(null);
@@ -919,6 +931,8 @@ export function App(props: AppProps = {}) {
     dismissSplash: () => setSplashForceDone(true),
     rewindPicker,
     handleRewindKey: rewindController.handleKey,
+    branchPicker,
+    handleBranchKey: branchController.handleKey,
     modelPicker,
     handleModelPickerKey,
     qualityPicker,
@@ -945,6 +959,7 @@ export function App(props: AppProps = {}) {
     insertComposerPaste,
     handleStageMessageKey: (key) => handleStageMessageKey?.(key) ?? false,
     triggerRegenerate: () => void turnController.regenerateTurn(),
+    triggerBranch: () => void branchController.open(),
     sideQuestionOverlay: sideQuestionController.overlay,
     handleSideQuestionKey: sideQuestionController.handleKey,
     artifactFocusActive: () => focusedArtifactPath() !== null,
@@ -1068,6 +1083,7 @@ export function App(props: AppProps = {}) {
       listSessions, resumeSession,
       compactSession, initProject,
       openRewindPicker: rewindController.open,
+      openBranchPicker: branchController.open,
       resetRewindState,
       theme: { clearOverride: () => themeController.clearOverride() },
     },
@@ -1277,6 +1293,7 @@ export function App(props: AppProps = {}) {
         quality={pendingQualityDecision()}
         gate={gateWithQualityWarning()}
         rewind={rewindPicker()}
+        branch={branchPicker()}
         session={sessionPicker()}
         skillPicker={skillPicker()}
         qualityPicker={qualityPicker()}

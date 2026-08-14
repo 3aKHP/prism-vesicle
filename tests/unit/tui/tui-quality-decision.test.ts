@@ -32,6 +32,7 @@ describe("TUI quality decision", () => {
       question: { question: { header: "Later" } } as any,
       gate: { gate: "runtime-turn", summary: "Later" },
       rewind: null,
+      branch: null,
       session: null,
       skillPicker: null,
       model: null,
