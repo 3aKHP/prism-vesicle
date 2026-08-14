@@ -86,6 +86,8 @@ export type AppProps = {
   bootstrapOnly?: boolean;
   /** Effective theme-preference owner (source precedence, session override, project persistence). */
   theme?: ThemePreferenceController;
+  /** Called after the renderer has been destroyed to finish a CLI TUI exit. */
+  onExit?: () => void;
 };
 
 export {
@@ -104,6 +106,7 @@ export type { TokenUsageSummary };
 export function App(props: AppProps = {}) {
   initDebugLogging();
   const renderer = useRenderer();
+  const exitTui = props.onExit ?? (() => {});
   // The controller is constructed in runTui/setup before the first frame. Tests
   // that mount App directly fall back to an env-only controller (no project
   // read) so the palette and `/theme` still work without async I/O on mount.
@@ -117,7 +120,12 @@ export function App(props: AppProps = {}) {
   // only the test fallback controller (props.theme absent) needs it here.
   if (!props.theme) themeController.applyStartup();
   onMount(() => {
-    if (props.bootstrapOnly) process.nextTick(() => renderer.destroy());
+    if (props.bootstrapOnly) {
+      process.nextTick(() => {
+        renderer.destroy();
+        exitTui();
+      });
+    }
   });
   const dimensions = useTerminalDimensions();
   const providerState = createProviderState(props.dangerouslySkipPermissions === true);
@@ -905,6 +913,7 @@ export function App(props: AppProps = {}) {
 
   useInputRouting({
     renderer,
+    onExit: exitTui,
     setStatus,
     splashActive: () => !splashGone(),
     dismissSplash: () => setSplashForceDone(true),

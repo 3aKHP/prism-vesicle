@@ -49,6 +49,75 @@ describe("TUI input routing", () => {
   });
 });
 
+describe("TUI input routing: quit contract", () => {
+  function buildQuitRouter() {
+    let destroyed = 0;
+    let exited = 0;
+    const statuses: string[] = [];
+    const router = createInputRouter({
+      renderer: {
+        destroy: () => { destroyed += 1; },
+        clearSelection: () => {},
+        getSelection: () => undefined,
+      } as unknown as InputRoutingOptions["renderer"],
+      onExit: () => { exited += 1; },
+      setStatus: (value) => { if (typeof value === "string") statuses.push(value); },
+      rewindPicker: () => null,
+      handleRewindKey: () => false,
+      modelPicker: () => null,
+      handleModelPickerKey: () => false,
+      qualityPicker: () => null,
+      handleQualityPickerKey: () => false,
+      qualityRewriteConfirm: () => null,
+      handleRewriteConfirmKey: () => false,
+      sessionPicker: () => null,
+      handleSessionPickerKey: () => false,
+      skillPicker: () => null,
+      handleSkillPickerKey: () => false,
+      yoloConfirmStage: () => null,
+      handleYoloKey: () => false,
+      activePermissionRequest: () => undefined,
+      pendingUserQuestion: () => null,
+      handleQuestionKey: () => false,
+      activeGateRequest: () => null,
+      handleGateKey: () => false,
+      pasteClipboardImage: async () => undefined,
+      handleComposerKey: () => false,
+      handlePromptEscape: () => {},
+      handleDecisionPaste: () => false,
+      insertComposerPaste: () => undefined,
+    });
+    return { router, destroyed: () => destroyed, exited: () => exited, statuses };
+  }
+
+  test("first Ctrl+C only arms exit", async () => {
+    const { router, destroyed, exited, statuses } = buildQuitRouter();
+    router.handleKey(keyEvent("c", { ctrl: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(destroyed()).toBe(0);
+    expect(exited()).toBe(0);
+    expect(statuses).toEqual(["press Ctrl+C again to exit"]);
+  });
+
+  test("second Ctrl+C within 3s destroys then invokes onExit", async () => {
+    const { router, destroyed, exited } = buildQuitRouter();
+    router.handleKey(keyEvent("c", { ctrl: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    router.handleKey(keyEvent("c", { ctrl: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(destroyed()).toBe(1);
+    expect(exited()).toBe(1);
+  });
+
+  test("Ctrl+Q destroys then invokes onExit immediately", async () => {
+    const { router, destroyed, exited } = buildQuitRouter();
+    router.handleKey(keyEvent("q", { ctrl: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(destroyed()).toBe(1);
+    expect(exited()).toBe(1);
+  });
+});
+
 describe("TUI input routing: workspace paste ownership", () => {
   let root: string;
 

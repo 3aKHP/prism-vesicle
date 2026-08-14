@@ -11,6 +11,8 @@ import type { SkillPickerState } from "./skill-picker-controller";
 
 export type InputRoutingOptions = {
   renderer: ReturnType<typeof useRenderer>;
+  /** Called after the renderer has been destroyed when the user quits the TUI. */
+  onExit?: () => void;
   setStatus: Setter<string>;
   rewindPicker: Accessor<RewindPickerState | null>;
   handleRewindKey: (key: TuiKeyEvent) => boolean;
@@ -80,6 +82,10 @@ function resolveWorkspacePasteOwnership(options: InputRoutingOptions): Workspace
  */
 export function createInputRouter(options: InputRoutingOptions): InputRouter {
   let lastCtrlCAt = 0;
+  const quit = () => process.nextTick(() => {
+    options.renderer.destroy();
+    options.onExit?.();
+  });
   const bottomSurfaceMode = () => resolveBottomSurfaceMode({
     yoloStage: options.yoloConfirmStage(),
     permissionRequest: options.activePermissionRequest(),
@@ -107,7 +113,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
         }
         const now = Date.now();
         if (now - lastCtrlCAt < 3000) {
-          process.nextTick(() => options.renderer.destroy());
+          quit();
           return;
         }
         lastCtrlCAt = now;
@@ -116,7 +122,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     if (key.ctrl && key.name === "q") {
-      process.nextTick(() => options.renderer.destroy());
+      quit();
       return;
     }
     // The startup splash swallows all other input: the first keypress ends it
