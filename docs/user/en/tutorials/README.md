@@ -13,7 +13,7 @@ The tutorials assume you can already start Vesicle and that `vesicle doctor` rep
 3. [Keep working during a turn](./work-while-running.md) — add to the main task through the queue and ask temporary side questions with `/btw`.
 4. [First character card](./first-character-card.md) — run ETL Workflow A end to end and produce a Module A character card that passes validation.
 5. [First scenario card](./first-scenario-card.md) — produce a Module B scenario card from a character card and validate it.
-6. [Sessions and rewind](./sessions-and-rewind.md) — resume past sessions and rewind to any step.
+6. [Sessions and rewind](./sessions-and-rewind.md) — resume past sessions, rewind to any step, and switch candidate branches at any depth.
 7. [Set up Persistent Instructions](./persistent-instructions.md) — maintain cross-session project rules with `/init`, `/instructions`, and model tools.
 8. [Permissions and the host shell](./permissions-and-shell.md) — the four tool-approval modes and when to enable shell.
 

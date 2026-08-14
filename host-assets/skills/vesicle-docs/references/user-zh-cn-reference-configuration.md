@@ -81,7 +81,7 @@ providers:
 
 `openai-responses` 必须再明确写出 `responsesProfile`;Vesicle 不会根据 URL、供应商 id 或模型名猜测能力。Guided Setup 可直接选择 OpenAI Responses、MiMo Responses 或 DeepSeek Responses 子集,并写入保守的 HTTP 配置。完整可复制示例在 [`docs/examples/providers.yaml`](../../../examples/providers.yaml)。
 
-独立 Responses 协议已随 1.0.0-alpha.10 从 opt-in experimental 转正为 released;完整 `openai-public` 真实供应商门槛已于 2026-08-11 通过(HTTP/typed SSE、非流式 JSON、standalone compact、public WebSocket 四项,`3` pass、`0` fail)。2026-07-31,充值后的 MiMo 端点与 DeepSeek v4 Flash 均分别通过了 reasoning 与函数调用闭环两个用例(`2` pass、`0` fail)。2026-08-13,DeepSeek 官方开放 v4 Pro 的 Responses 支持后,`deepseek-v4-pro` 通过了同样的 reasoning 与函数调用闭环用例(`2` pass、`0` fail),`deepseek-v4-flash` 回归验收保持通过。
+独立 Responses 协议已随 1.0.0-alpha.10 从 opt-in experimental 转正为 released;完整 `openai-public` 真实供应商门槛已于 2026-08-11 通过(HTTP/typed SSE、非流式 JSON、standalone compact、public WebSocket 四项,`3` pass、`0` fail)。2026-07-31,MiMo 端点与 DeepSeek v4 Flash 均分别通过了 reasoning 与函数调用闭环两个用例(`2` pass、`0` fail)。2026-08-13,DeepSeek 官方开放 v4 Pro 的 Responses 支持后,`deepseek-v4-pro` 通过了同样的 reasoning 与函数调用闭环用例(`2` pass、`0` fail),`deepseek-v4-flash` 回归验收保持通过。
 
 - `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
 - `mimo-subset-2026-07-30` 是固定日期的第三方兼容子集,只支持 HTTP。它会省略 MiMo 未声明或明确不支持的 `background`、`context_management`、`previous_response_id`、`parallel_tool_calls`、`store`、远程压缩和 WebSocket 字段,每轮回放完整上下文,并把 `response.reasoning_text.*` 显式映射为 Vesicle reasoning。它不是 OpenAI 或 Codex conformance。
@@ -107,6 +107,33 @@ MCP_CLUSTER_TOKEN=
 ```
 
 `TAVILY_API_KEY` 打开 ETL/Evaluate 引擎的 Web 研究工具;MCP 的鉴权 token 也放这里。进程环境变量只是兜底。
+
+## `vesicle config` 命令参考
+
+除了手改 YAML,1.0.0-alpha.10 起 Vesicle 提供一组经过校验的原子配置命令(随安装包自带的 `update-config` Skill 也通过同一组命令引导修改)。每次注册表写入都会先重新解析序列化结果再原子改名,跨字段约束失败不会留下损坏的文件。密钥值被结构性排除:任何命令都不接受密钥作为参数。
+
+```text
+vesicle config path
+vesicle config show <providers|env|permissions|mcp|quality|settings|preferences>
+vesicle config set <file> <key> <value>
+vesicle config add-provider --json '<entry>'
+vesicle config add-model <provider-id> --json '<entry>'
+vesicle config remove-model <provider-id> <model-id>
+vesicle config remove-provider <provider-id>
+vesicle config unset <file> <key>
+vesicle config env-set-empty <KEY>
+vesicle config env-set-proxy <URL>
+vesicle config env-remove <KEY>
+vesicle config validate
+```
+
+- `path` 打印用户级配置目录;`show` 输出**脱敏后**的配置状态:`.env` 一律显示为 `<set>`/`<empty>` 标记,代理凭据被掩码。
+- `set` 可修改 providers/permissions/preferences/quality/settings 中的键;对供应商条目支持按字段编辑(`protocol`、`baseUrl`、`apiKeyEnv`、`authMethod`、`responsesProfile`、`responsesTransport`、`userAgent`、`defaultModel`);结构性字段(`id`、`models`、`apiKey`)被拒绝。
+- `add-provider`/`add-model` 追加条目,`remove-model`/`remove-provider` 删除条目;`unset` 移除 preferences/settings 中的键。
+- `env-*` 只管理 `.env` 的非密钥结构:创建空占位、写入代理 URL、删除键(键不存在时会提醒);API 密钥仍需按上文手动编辑 `.env`。
+- `validate` 校验全部配置文件。
+
+把密钥粘贴进对话时,Vesicle 只会提醒,不会回显、存储或使用它。
 
 ## 供应商代理(可选)
 

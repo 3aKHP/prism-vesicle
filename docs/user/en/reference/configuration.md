@@ -79,7 +79,7 @@ Field notes:
 
 `openai-responses` also requires an explicit `responsesProfile`; Vesicle never guesses capabilities from a URL, provider id, or model name. Guided Setup can select OpenAI Responses, the MiMo Responses subset, or the DeepSeek Responses subset and writes a conservative HTTP configuration. Complete copyable examples live in [`docs/examples/providers.yaml`](../../../examples/providers.yaml).
 
-The independent Responses protocol graduated from opt-in experimental to released with 1.0.0-alpha.10; the full `openai-public` real-provider gate passed on 2026-08-11 across HTTP/typed SSE, non-stream JSON, standalone compact, and public WebSocket (`3` pass, `0` fail). On 2026-07-31, the funded MiMo endpoint and DeepSeek v4 Flash each passed their reasoning and function-loop cases (`2` pass, `0` fail per subset). On 2026-08-13, after DeepSeek enabled official v4 Pro Responses support, `deepseek-v4-pro` passed the same reasoning and function-loop cases (`2` pass, `0` fail) and `deepseek-v4-flash` retained its regression pass.
+The independent Responses protocol graduated from opt-in experimental to released with 1.0.0-alpha.10; the full `openai-public` real-provider gate passed on 2026-08-11 across HTTP/typed SSE, non-stream JSON, standalone compact, and public WebSocket (`3` pass, `0` fail). On 2026-07-31, the MiMo endpoint and DeepSeek v4 Flash each passed their reasoning and function-loop cases (`2` pass, `0` fail per subset). On 2026-08-13, after DeepSeek enabled official v4 Pro Responses support, `deepseek-v4-pro` passed the same reasoning and function-loop cases (`2` pass, `0` fail) and `deepseek-v4-flash` retained its regression pass.
 
 - `openai-public` is the public protocol profile for the official `api.openai.com` endpoint. It supports HTTP/typed SSE and an explicit `responsesTransport: websocket` selection. It preserves ordered Items, exact `call_id` values, stateless encrypted reasoning, session-scoped WebSocket continuation, and `/responses/compact` when the model entry declares `capabilities.remoteCompact: true`. This is an application-layer protocol claim, not a claim of Codex-identical TLS or HTTP/2 fingerprints.
 - `mimo-subset-2026-07-30` is a dated third-party compatibility subset and is HTTP-only. It omits MiMo-undeclared or explicitly unsupported `background`, `context_management`, `previous_response_id`, `parallel_tool_calls`, `store`, remote-compaction, and WebSocket fields, fully replays context on every round, and explicitly maps `response.reasoning_text.*` into Vesicle reasoning. It is not OpenAI or Codex conformance.
@@ -105,6 +105,33 @@ MCP_CLUSTER_TOKEN=
 ```
 
 `TAVILY_API_KEY` enables the web research tools for the ETL/Evaluate engines; MCP auth tokens also go here. Process environment variables are a fallback only.
+
+## `vesicle config` command reference
+
+In addition to hand-editing YAML, Vesicle ships a validated, atomic configuration command surface since 1.0.0-alpha.10 (the bundled `update-config` Skill guides changes through the same commands). Every registry write is re-parsed after serialization and applied by an atomic rename, so a failed cross-field constraint never leaves a corrupted file. Secret values are structurally excluded: no command accepts a secret as an argument.
+
+```text
+vesicle config path
+vesicle config show <providers|env|permissions|mcp|quality|settings|preferences>
+vesicle config set <file> <key> <value>
+vesicle config add-provider --json '<entry>'
+vesicle config add-model <provider-id> --json '<entry>'
+vesicle config remove-model <provider-id> <model-id>
+vesicle config remove-provider <provider-id>
+vesicle config unset <file> <key>
+vesicle config env-set-empty <KEY>
+vesicle config env-set-proxy <URL>
+vesicle config env-remove <KEY>
+vesicle config validate
+```
+
+- `path` prints the user-level config directory; `show` prints **sanitized** state: `.env` entries always render as `<set>`/`<empty>` markers and proxy credentials are masked.
+- `set` modifies keys in providers/permissions/preferences/quality/settings; provider entries support per-field edits (`protocol`, `baseUrl`, `apiKeyEnv`, `authMethod`, `responsesProfile`, `responsesTransport`, `userAgent`, `defaultModel`); structural fields (`id`, `models`, `apiKey`) are rejected.
+- `add-provider`/`add-model` append entries, `remove-model`/`remove-provider` delete them; `unset` removes a key from preferences/settings.
+- `env-*` manages only the non-secret `.env` structure: empty placeholders, the proxy URL, and key removal (removing a missing key warns); API keys are still edited manually in `.env` as above.
+- `validate` validates all configuration files.
+
+If you paste a credential into the conversation, Vesicle only warns — it never echoes, stores, or uses it.
 
 ## Provider proxy (optional)
 
