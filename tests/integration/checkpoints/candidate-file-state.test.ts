@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -529,6 +529,124 @@ describe("candidate file coexistence", () => {
     expect(toB.restored).toBe(true);
     expect(await readFile(join(rootDir, "tmp", "spill.txt"), "utf8")).toBe("scratch\n");
   });
+
+  test("manual edits after a genuine restore round-trip through a superseding bundle", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-supersede-"));
+    const sessionId = "candidate-files-supersede";
+    const { user, assistantA, assistantB } = await buildTwoCandidateSession(rootDir, sessionId);
+
+    // Switch B -> A: A's bundled manifest is applied (restored marker).
+    const toA = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(toA.restored).toBe(true);
+
+    // The user edits while A is active; the documented promise is that this
+    // snapshot is taken when A is left.
+    await writeFile(join(rootDir, "workspace", "manual.md"), "manual edit\n", "utf8");
+
+    const toB = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantA.uuid,
+      toLeaf: assistantB.uuid,
+    });
+    expect(toB.restored).toBe(true);
+    // B's manifest does not contain the edit, so it leaves the disk...
+    await expect(stat(join(rootDir, "workspace", "manual.md"))).rejects.toMatchObject({ code: "ENOENT" });
+
+    // ...but switching back restores it: A's departure captured a SUPERSEDING
+    // bundle (the old captured-once reuse would have dropped the edit).
+    const backToA = await switchCandidateFileState(rootDir, sessionId, {
+      forkPointUuid: user.uuid,
+      fromLeaf: assistantB.uuid,
+      toLeaf: assistantA.uuid,
+    });
+    expect(backToA.restored).toBe(true);
+    expect(await readFile(join(rootDir, "workspace", "manual.md"), "utf8")).toBe("manual edit\n");
+
+    const records = await loadSessionRecords(rootDir, sessionId);
+    const bundlesForA = records.filter(
+      (record) => record.metadata?.kind === "candidate-file-state" && record.metadata?.leafUuid === assistantA.uuid,
+    );
+    expect(bundlesForA.length).toBeGreaterThanOrEqual(2);
+    expect(Object.keys(bundlesForA.at(-1)?.metadata?.files as Record<string, unknown>)).toContain("workspace/manual.md");
+  });
+
+  test.skipIf(typeof process.getuid === "function" && process.getuid() === 0)(
+    "a failed switch poisons both leaves until a successful restore revives them",
+    async () => {
+      const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-poison-"));
+      const sessionId = "candidate-files-poison";
+      const { user, assistantA, assistantB } = await buildTwoCandidateSession(rootDir, sessionId);
+
+      // Degrade a bundle-less candidate C, then activate B through it: B
+      // inherits a degraded marker (conversation-only switch) while the disk
+      // still holds A's files. Degradation also means B's departure will skip
+      // the disk read, so the sabotage below reaches the APPLY phase.
+      const storeC = await createSessionStore(rootDir, sessionId, { parentUuid: user.uuid });
+      const assistantC = await storeC.append({ role: "assistant", content: "candidate C" });
+      const toC = await switchCandidateFileState(rootDir, sessionId, {
+        forkPointUuid: user.uuid,
+        fromLeaf: assistantA.uuid,
+        toLeaf: assistantC.uuid,
+      });
+      expect(toC.reason).toBe("missing");
+      const toB = await switchCandidateFileState(rootDir, sessionId, {
+        forkPointUuid: user.uuid,
+        fromLeaf: assistantC.uuid,
+        toLeaf: assistantB.uuid,
+      });
+      expect(toB.reason).toBe("missing");
+
+      // Sabotage: make a file unreadable so applying A's manifest throws
+      // inside the path guards.
+      await chmod(join(rootDir, "workspace", "existing.md"), 0);
+
+      await expect(switchCandidateFileState(rootDir, sessionId, {
+        forkPointUuid: user.uuid,
+        fromLeaf: assistantB.uuid,
+        toLeaf: assistantA.uuid,
+      })).rejects.toThrow();
+
+      // Both leaves lose on-disk authority: the half-restored disk belongs to
+      // neither, so captures are refused for both.
+      let records = await loadSessionRecords(rootDir, sessionId);
+      const latestKinds = new Map<string, string>();
+      for (const record of records) {
+        const leaf = record.metadata?.leafUuid;
+        const kind = record.metadata?.kind;
+        if (typeof leaf === "string" && (kind === "candidate-file-state" || kind === "candidate-file-degraded" || kind === "candidate-file-restored")) {
+          latestKinds.set(leaf, kind);
+        }
+      }
+      expect(latestKinds.get(assistantA.uuid)).toBe("candidate-file-degraded");
+      expect(latestKinds.get(assistantB.uuid)).toBe("candidate-file-degraded");
+      expect(await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: user.uuid, leafUuid: assistantB.uuid })).toBeUndefined();
+
+      // Repair and retry: A's bundle still restores (degradation blocks
+      // capture, not restoration), and the success revives re-capture.
+      await chmod(join(rootDir, "workspace", "existing.md"), 0o644);
+      const retry = await switchCandidateFileState(rootDir, sessionId, {
+        forkPointUuid: user.uuid,
+        fromLeaf: assistantB.uuid,
+        toLeaf: assistantA.uuid,
+      });
+      expect(retry.restored).toBe(true);
+      expect(await readFile(join(rootDir, "workspace", "existing.md"), "utf8")).toBe("A version\n");
+
+      records = await loadSessionRecords(rootDir, sessionId);
+      const eventsForA = records.filter((record) => {
+        const kind = record.metadata?.kind;
+        return record.metadata?.leafUuid === assistantA.uuid
+          && (kind === "candidate-file-state" || kind === "candidate-file-degraded" || kind === "candidate-file-restored");
+      });
+      expect(eventsForA.at(-1)?.metadata?.kind).toBe("candidate-file-restored");
+      expect(await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid: user.uuid, leafUuid: assistantA.uuid })).toBeDefined();
+      void assistantC;
+    },
+  );
 
   test("symlinks are never captured or deleted; switches report them as untracked", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-symlink-"));

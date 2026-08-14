@@ -456,9 +456,22 @@ export function App(props: AppProps = {}) {
   function rejectCandidateSwitch(): void {
     const fork = focusedTurn();
     const anchor = fork ? turnAnchors().find((entry) => entry.forkUuid === fork) : undefined;
-    if (anchor?.hasCandidates) setStatus("this turn has candidates; Ctrl+B opens the candidate tree");
-    else if (anchor) setStatus("no candidates to switch here; Ctrl+R regenerates this turn");
-    else setStatus("no candidates to switch here; Ctrl+R regenerates the last turn");
+    // Shortcut-first wording: the Host sidebar truncates the status line to
+    // one narrow row, so the actionable part must survive on its own.
+    const guidance = anchor?.hasCandidates
+      ? "Ctrl+B: open the candidate tree (no switchable candidates on this turn)"
+      : anchor
+        ? "Ctrl+R: regenerate this turn (no switchable candidates)"
+        : "Ctrl+R: regenerate the last turn (no switchable candidates)";
+    setStatus(guidance);
+    // The sidebar (and its status line) is hidden at 80 columns, so the
+    // guidance is also delivered as a transcript notice; consecutive
+    // repetitions of the same notice are deduped against keystroke spam.
+    setMessages((prev) => {
+      const last = prev.at(-1);
+      if (last?.role === "system" && last.kind === "candidate-guidance" && last.content === guidance) return prev;
+      return [...prev, { role: "system", content: guidance, kind: "candidate-guidance" }];
+    });
   }
   function submitCommand(raw: string): boolean {
     return routeCommandSubmission(raw, busy(), builtinCommands(), {

@@ -10,9 +10,14 @@
 //   directory and content-addressed file, with symlinks and special files
 //   listed as exempt `untracked` — into an append-only `candidate-file-state`
 //   bundle (envelope version 2) chained off the candidate's content leaf
-//   (branch-private). A candidate that already has a bundle is never
-//   re-captured, so a failed restore retried later cannot mistake a
-//   half-restored disk for the candidate's true post-state.
+//   (branch-private). Capture eligibility follows the leaf's latest file
+//   event: a bundle is reused while it stays the latest event (a failed
+//   restore can then never be mistaken for the candidate's true post-state);
+//   a successful restore appends a `candidate-file-restored` marker, which
+//   re-establishes on-disk authority and lets the next departure capture a
+//   superseding bundle (user edits made while the candidate is active are
+//   therefore never lost); a `candidate-file-degraded` marker refuses capture
+//   until a future successful restore revives the candidate.
 // - Switching to a candidate makes the disk strictly equal to its manifest:
 //   manifest entries are restored and on-disk paths outside the manifest are
 //   deleted, except symlinks/special files (never managed), paths exempted by
@@ -63,6 +68,7 @@ import {
 
 export const CANDIDATE_FILE_STATE_KIND = "candidate-file-state";
 export const CANDIDATE_FILE_DEGRADED_KIND = "candidate-file-degraded";
+export const CANDIDATE_FILE_RESTORED_KIND = "candidate-file-restored";
 
 const BACKUP_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
@@ -104,29 +110,55 @@ export function findCandidatePostState(records: SessionRecord[], leafUuid: strin
   return undefined;
 }
 
+export type CandidateFileEventKind = "bundle" | "degraded" | "restored";
+
 /**
- * Whether `leafUuid` carries a degradation marker: the disk was not this
- * candidate's post-state when it became active (a conversation-only switch),
- * so capturing it would freeze a wrong state. Markers chain OFF the leaf they
- * name, so the leaf's own branch walk never contains them — scan all records;
- * a marker is only ever created for the leaf it names.
+ * The latest file-state event recorded for `leafUuid` in physical order:
+ * a bundle capture, a degradation marker, or a restored marker. Capture
+ * eligibility is decided by this event, not by any-marker-exists checks:
+ * a candidate whose manifest was genuinely restored since its last bundle
+ * may legitimately have diverged on disk (user edits) and must be allowed to
+ * produce a superseding bundle, while retry-safety (no restore since the last
+ * bundle) and degradation (disk known wrong) keep refusing.
  */
-export function isCandidateFileDegraded(records: SessionRecord[], leafUuid: string): boolean {
-  return records.some(
-    (record) => record.metadata?.kind === CANDIDATE_FILE_DEGRADED_KIND && record.metadata.leafUuid === leafUuid,
-  );
+export function latestCandidateFileEvent(
+  records: SessionRecord[],
+  leafUuid: string,
+): { kind: CandidateFileEventKind; record: SessionRecord } | undefined {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index]!;
+    const metadata = record.metadata;
+    if (metadata?.leafUuid !== leafUuid) continue;
+    if (parseCandidateFileState(metadata)) return { kind: "bundle", record };
+    if (metadata.kind === CANDIDATE_FILE_DEGRADED_KIND) return { kind: "degraded", record };
+    if (metadata.kind === CANDIDATE_FILE_RESTORED_KIND) return { kind: "restored", record };
+  }
+  return undefined;
 }
 
 /**
- * Capture the departing candidate's post-state if it has no bundle yet: a full
- * manifest of everything on disk under the project content roots. Returns
- * undefined when checkpointing is disabled, the candidate is
- * degradation-marked (the disk is not its post-state), or the fork turn's
+ * Whether the disk is known NOT to equal this candidate's post-state: the
+ * leaf's latest file event is a degradation marker (a conversation-only
+ * switch made it active, or a failed switch poisoned the disk), so capturing
+ * it would freeze a wrong state.
+ */
+export function isCandidateFileDegraded(records: SessionRecord[], leafUuid: string): boolean {
+  return latestCandidateFileEvent(records, leafUuid)?.kind === "degraded";
+}
+
+/**
+ * Capture the departing candidate's post-state as a full manifest of
+ * everything on disk under the project content roots. Eligibility follows the
+ * leaf's latest file event: an existing bundle is reused while it stays the
+ * latest event (a failed restore can then never be mistaken for the
+ * candidate's true post-state); a RESTORED marker superseded the last bundle,
+ * meaning the disk was genuinely re-established for this candidate and any
+ * later divergence (user edits, tool writes) is real post-state evolution, so
+ * a new superseding bundle is captured; a degradation marker refuses capture.
+ * Also returns undefined when checkpointing is disabled or the fork turn's
  * branch carries no checkpoint ledger — without that anchor there is no
- * guarantee the disk equals this candidate's post-state (no-ledger candidates
- * can be produced by failed regenerates whose compensation never touched the
- * disk), so such switches degrade conversation-only. Capture is all-or-
- * nothing: a mid-capture failure throws before any record is appended.
+ * guarantee the disk equals this candidate's post-state. Capture is
+ * all-or-nothing: a mid-capture failure throws before any record is appended.
  */
 export async function ensureCandidatePostState(
   rootDir: string,
@@ -135,9 +167,9 @@ export async function ensureCandidatePostState(
 ): Promise<CandidateFileStateEnvelope | undefined> {
   if (!fileCheckpointingEnabled()) return undefined;
   const records = await loadSessionRecords(rootDir, sessionId);
-  const existing = findCandidatePostState(records, selection.leafUuid);
-  if (existing) return existing;
-  if (isCandidateFileDegraded(records, selection.leafUuid)) return undefined;
+  const event = latestCandidateFileEvent(records, selection.leafUuid);
+  if (event?.kind === "bundle") return parseCandidateFileState(event.record.metadata);
+  if (event?.kind === "degraded") return undefined;
 
   const ledgerAnchor = await forkTurnPreState(rootDir, sessionId, selection.forkPointUuid, { headUuid: selection.leafUuid });
   if (!ledgerAnchor) return undefined;
@@ -158,6 +190,29 @@ export async function ensureCandidatePostState(
   const store = await createSessionStore(rootDir, sessionId, { parentUuid: selection.leafUuid });
   await store.append({ role: "system", content: "", metadata: envelope });
   return envelope;
+}
+
+/**
+ * Record that `leafUuid`'s manifest was just applied to the disk: the
+ * candidate's on-disk authority is re-established, so a later departure may
+ * capture a superseding bundle. Branch-private like bundles.
+ */
+async function appendRestoredMarker(
+  rootDir: string,
+  sessionId: string,
+  selection: { forkPointUuid: string; leafUuid: string },
+): Promise<void> {
+  const store = await createSessionStore(rootDir, sessionId, { parentUuid: selection.leafUuid });
+  await store.append({
+    role: "system",
+    content: "",
+    metadata: {
+      kind: CANDIDATE_FILE_RESTORED_KIND,
+      forkPointUuid: selection.forkPointUuid,
+      leafUuid: selection.leafUuid,
+      timestamp: new Date().toISOString(),
+    },
+  });
 }
 
 /**
@@ -189,7 +244,15 @@ export async function switchCandidateFileState(
     return { restored: false, changed: [], reason: "missing" };
   }
 
-  const applied = await applyCandidateManifest(rootDir, sessionId, bundle);
+  const applied = await applyCandidateManifest(rootDir, sessionId, bundle).catch(async (error) => {
+    // A failed application leaves the disk half-restored: it belongs to
+    // neither candidate, so both lose on-disk authority until a future
+    // successful restore re-establishes it.
+    await appendDegradedMarker(rootDir, sessionId, { forkPointUuid: selection.forkPointUuid, toLeaf: selection.fromLeaf });
+    await appendDegradedMarker(rootDir, sessionId, selection);
+    throw error;
+  });
+  await appendRestoredMarker(rootDir, sessionId, { forkPointUuid: selection.forkPointUuid, leafUuid: selection.toLeaf });
   return {
     restored: true,
     changed: applied.changed,
@@ -318,7 +381,10 @@ export async function compensateFailedRegenerateFileState(
     return;
   }
   const bundle = await ensureCandidatePostState(rootDir, sessionId, { forkPointUuid, leafUuid: previousLeaf });
-  if (bundle) await applyCandidateManifest(rootDir, sessionId, bundle);
+  if (bundle) {
+    await applyCandidateManifest(rootDir, sessionId, bundle);
+    await appendRestoredMarker(rootDir, sessionId, { forkPointUuid, leafUuid: previousLeaf });
+  }
 }
 
 /**
