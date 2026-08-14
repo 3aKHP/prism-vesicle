@@ -14,6 +14,7 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
 import { describe, expect, test } from "bun:test";
 import { createMcpConnection } from "../../../src/mcp/connection";
 
@@ -22,15 +23,33 @@ const ACCEPTANCE_ENV = process.env.VESICLE_MCP_ACCEPTANCE === "1";
 /** When prerequisites are missing, every test in the describe must skip. */
 const testOrSkip = ACCEPTANCE_ENV ? test : test.skip;
 
+function allocateFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      probe.close(() => (port ? resolve(port) : reject(new Error("no free port"))));
+    });
+    probe.on("error", reject);
+  });
+}
+
 async function startServer(
   command: string,
   args: string[],
   env: Record<string, string> = {},
 ): Promise<{ url: string; process: ChildProcess } | { error: string }> {
+  const port = await allocateFreePort();
+  const substitute = (value: string) => (value === "__PORT__" ? String(port) : value);
+  const expandedArgs = args.map(substitute);
+  const expandedEnv = Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [key, substitute(value)]),
+  );
   return new Promise((resolve) => {
     let resolved = false;
-    const child = spawn(command, args, {
-      env: { ...process.env, ...env },
+    const child = spawn(command, expandedArgs, {
+      env: { ...process.env, ...expandedEnv },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const timeout = setTimeout(() => {
@@ -42,11 +61,14 @@ async function startServer(
     }, 15000);
     const checkOutput = (data: Buffer) => {
       if (resolved) return;
-      const match = /(?:port[:\s]+|listening.*?)(\d+)/i.exec(data.toString());
+      // Anchor on the loopback host:port announcement. autotel also prints an
+      // OTLP receiver line ("OTLP receiver on 127.0.0.1:4318"), so only accept
+      // the port we actually allocated for the MCP endpoint.
+      const match = new RegExp(`127\\.0\\.0\\.1:${port}\\b`).exec(data.toString());
       if (match) {
         resolved = true;
         clearTimeout(timeout);
-        resolve({ url: `http://127.0.0.1:${match[1]}/mcp`, process: child });
+        resolve({ url: `http://127.0.0.1:${port}/mcp`, process: child });
       }
     };
     child.stderr?.on("data", checkOutput);
@@ -89,7 +111,7 @@ function serverConfig(url: string, negotiation: "legacy" | "modern" | "auto", id
 
 describe("MCP acceptance: autotel-mcp (modern)", () => {
   testOrSkip("strict modern pin connects, lists, calls, and closes", async () => {
-    const started = await startServer("npx", ["-y", "autotel-mcp@0.4.1", "--transport", "http", "--host", "127.0.0.1", "--port", "0"]);
+    const started = await startServer("npx", ["-y", "autotel-mcp@0.4.1", "--transport", "http", "--host", "127.0.0.1", "--port", "__PORT__"]);
     if ("error" in started) { console.log(`autotel unavailable: ${started.error}`); expect(true).toBe(true); return; }
     try {
       const result = await createMcpConnection(serverConfig(started.url, "modern", "autotel"));
@@ -107,7 +129,7 @@ describe("MCP acceptance: autotel-mcp (modern)", () => {
   }, 30000);
 
   testOrSkip("auto selects modern without initialize", async () => {
-    const started = await startServer("npx", ["-y", "autotel-mcp@0.4.1", "--transport", "http", "--host", "127.0.0.1", "--port", "0"]);
+    const started = await startServer("npx", ["-y", "autotel-mcp@0.4.1", "--transport", "http", "--host", "127.0.0.1", "--port", "__PORT__"]);
     if ("error" in started) { console.log(`autotel unavailable: ${started.error}`); return; }
     try {
       const result = await createMcpConnection(serverConfig(started.url, "auto", "autotel-auto"));
@@ -125,7 +147,7 @@ describe("MCP acceptance: autotel-mcp (modern)", () => {
 
 describe("MCP acceptance: PRTS-MCP (legacy)", () => {
   testOrSkip("legacy connection uses initialize and session", async () => {
-    const started = await startServer("npx", ["-y", "prts-mcp-ts@2.5.0"], { HOST: "127.0.0.1", PORT: "0" });
+    const started = await startServer("npx", ["-y", "prts-mcp-ts@2.5.0"], { HOST: "127.0.0.1", PORT: "__PORT__" });
     if ("error" in started) { console.log(`prts unavailable: ${started.error}`); return; }
     try {
       const result = await createMcpConnection(serverConfig(started.url, "legacy", "prts"));
