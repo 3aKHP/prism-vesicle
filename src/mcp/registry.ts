@@ -2,7 +2,7 @@ import { dirname, join } from "node:path";
 import { providerConfigPathFromEnv } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import type { ToolCall, ToolDefinition, ToolResult } from "../core/tools/types";
-import { createMcpConnection, type McpConnection, type McpConnectionOptions } from "./connection";
+import { abortReason, createMcpConnection, type McpConnection, type McpConnectionOptions } from "./connection";
 import { loadMcpConfig, mcpConfigPathFromEnv } from "./config";
 import { deliverMcpToolResult, type McpResultDeliveryContext } from "./result-delivery";
 import type { McpConfig, McpRawTool, McpServerConfig, McpServerStatus, McpToolBinding, McpToolEvent } from "./types";
@@ -120,8 +120,21 @@ async function buildRegistry(
   const connections = new Map<string, McpConnection>();
   const bindings = new Map<string, McpToolBinding>();
   const statuses: McpServerStatus[] = [];
+  const closeOpenedConnections = async (): Promise<void> => {
+    for (const connection of connections.values()) await connection.close();
+  };
+  // A caller abort (e.g. the user pressed Esc while a continuation rebuilds
+  // the tool surface) must fail the whole build; recording a disconnected
+  // status and continuing with a partial surface would hide the cancellation.
+  const throwIfAborted = async (): Promise<void> => {
+    if (options.signal?.aborted) {
+      await closeOpenedConnections();
+      throw abortReason(options.signal);
+    }
+  };
 
   for (const server of config.servers) {
+    await throwIfAborted();
     if (!server.enabled) {
       statuses.push(disconnectedStatus(server, "server disabled"));
       continue;
@@ -148,7 +161,7 @@ async function buildRegistry(
     }
     const connection = result.connection;
     try {
-      const tools = await connection.listTools();
+      const tools = await connection.listTools(options.signal);
       const serverBindings = buildBindings(server, tools);
       const duplicate = serverBindings.find((binding) => bindings.has(binding.alias));
       if (duplicate) {
@@ -170,6 +183,10 @@ async function buildRegistry(
       });
     } catch (error) {
       await connection.close();
+      if (options.signal?.aborted) {
+        await closeOpenedConnections();
+        throw abortReason(options.signal);
+      }
       statuses.push({
         id: server.id,
         transport: server.transport,

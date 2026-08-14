@@ -533,6 +533,44 @@ describe("MCP registry", () => {
     });
   });
 
+  test("fails the surface rebuild when the caller signal aborts tools/list", async () => {
+    const configDir = await makeConfigDir("mcp-registry-abort");
+    await writeFile(join(configDir, "mcp.yaml"), [
+      "enabled: true",
+      "servers:",
+      "  slow:",
+      "    enabled: true",
+      "    transport: http",
+      "    url: https://mcp.example.test/slow/mcp",
+      "",
+    ].join("\n"), "utf8");
+
+    const controller = new AbortController();
+    const fetchImpl = (async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      if (body.method === "initialize") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          protocolVersion: "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "slow", version: "1.0" },
+        } });
+      }
+      if (body.method === "notifications/initialized") return new Response("", { status: 202 });
+      if (body.method === "tools/list") {
+        controller.abort("user-cancel");
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+      throw new Error(`unexpected method ${String(body.method)}`);
+    }) as typeof fetch;
+
+    const env = { VESICLE_PROVIDERS_FILE: join(configDir, "providers.yaml") };
+    await expect(createMcpRegistryForEngine("etl", { env, fetchImpl, signal: controller.signal }))
+      .rejects.toBe("user-cancel");
+
+    const preAborted = new AbortController();
+    preAborted.abort("user-cancel");
+    await expect(createMcpRegistryForEngine("etl", { env, fetchImpl, signal: preAborted.signal }))
+      .rejects.toBe("user-cancel");
+  });
+
   test("does not expose MCP tools when config has missing secret placeholders", async () => {
     const configDir = await makeConfigDir("mcp-missing-secret");
     await writeFile(join(configDir, "mcp.yaml"), [

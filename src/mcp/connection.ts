@@ -21,6 +21,8 @@ import { isRecord, McpError, normalizeMcpToolResult } from "./types";
 
 export type McpConnectionOptions = {
   fetchImpl?: typeof fetch;
+  /** Cancels the connect handshake and any in-flight request when aborted. */
+  signal?: AbortSignal;
 };
 
 /**
@@ -65,11 +67,16 @@ export async function createMcpConnection(
   config: McpServerConfig,
   options: McpConnectionOptions = {},
 ): Promise<McpConnectionResult> {
+  if (options.signal?.aborted) throw abortReason(options.signal);
   const rawHolder: RawResultHolder = {};
   try {
     const { client, info } = await connectClient(config, options, rawHolder, 1);
     return { ok: true, connection: makeConnection(config, options, rawHolder, client, info) };
   } catch (error) {
+    // A caller abort must propagate as an abort, never be classified into a
+    // disconnected-status failure kind (classifyError maps AbortError to
+    // "timeout", which would silently degrade a cancellation).
+    if (options.signal?.aborted) throw abortReason(options.signal);
     if (error instanceof McpConnectError) {
       return { ok: false, failureKind: error.failureKind, error: error.message };
     }
@@ -92,9 +99,10 @@ async function connectClient(
   const client = new Client(clientIdentity, clientOptions);
   const transport = createTransport(config, options, rawHolder);
   try {
-    await client.connect(transport);
+    await client.connect(transport, options.signal ? { signal: options.signal } : undefined);
   } catch (error) {
     await safeClose(client);
+    if (options.signal?.aborted) throw abortReason(options.signal);
     throw toConnectError(error);
   }
   const era = client.getProtocolEra() ?? "unknown";
@@ -403,7 +411,7 @@ async function safeClose(client: Client): Promise<void> {
  * reason so callers see their own DOMException (name: "AbortError") rather
  * than an SDK-internal error type.
  */
-function abortReason(signal: AbortSignal): unknown {
+export function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
 }
 
