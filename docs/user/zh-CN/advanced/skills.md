@@ -67,6 +67,12 @@ vesicle skills copy-template <skill> <资源路径> <目标路径>
 
 当用户要求「明确前三章」「写某卷纲要」「把大纲细化到场景级」「分配张力」或「列举伏笔收放」时，模型可自动激活此 Skill。
 
+## 第一方 `update-config` Skill
+
+每个 Vesicle 安装包自带 `update-config`（范围 `host`）。当你要求查看或修改供应商、权限、偏好、质量或设置配置时，模型激活该 Skill，通过经过校验的原子 `vesicle config` CLI 命令引导修改，而不是手改 YAML。完整命令面见 [`vesicle config` 命令参考](../reference/configuration.md#vesicle-config-命令参考)。
+
+密钥值被结构性排除：`show` 把 `.env` 脱敏为 `<set>`/`<empty>` 标记，任何操作都不接受密钥作为参数；API 密钥仍需手动编辑用户级 `.env`。脚本通过两个薄 `.sh`/`.ps1` 包装经结构化 `run_skill_script` 执行（独立 `skill_exec` 审批类），无需开启 `shellExec`。
+
 ## Stage 排除
 
 Stage Engine 不解析 Skill 目录，不支持 `activate_skill`、`read_skill_resource` 或 `run_skill_script`。

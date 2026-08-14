@@ -25,7 +25,7 @@
 
 Vesicle 使用 Bun 与 TypeScript 开发，将版本化 Harness Pack 连接到 DeepSeek V4 等直连模型供应商、MCP 工具、受权限门禁约束的宿主工具、前后台 SubAgent 与持久化会话。
 
-> **Alpha 状态：**`1.0.0-alpha.9` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
+> **Alpha 状态：**`1.0.0-alpha.10` 是公开试用候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
 
 如果你不熟悉终端、API 密钥或模型供应商，请先阅读[循序渐进的用户手册](./docs/user/zh-CN/README.md)，再使用下方的精简配置说明。
 
@@ -35,7 +35,7 @@ Vesicle 使用 Bun 与 TypeScript 开发，将版本化 Harness Pack 连接到 D
 
 从对应的 GitHub 预发布下载 `PrismVesicleSetup-<version>-windows-x64.exe` 并双击运行。该安装器按用户安装，不需要管理员权限。安装完成后会启动 Prism Vesicle Setup：用户只需填写 OpenAI 兼容服务的 Base URL 与 API Key，即可自动获取并勾选模型；也可选配 Tavily、MCP 和权限偏好，全程无需手写配置文件。项目选择可以跳过；即使选择，也只用于 Setup 完成后的那一次启动，Vesicle 不会保存全局唯一项目目录。
 
-`1.0.0-alpha.9` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
+`1.0.0-alpha.10` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
 
 安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。安装器会注册原生 `vesicle.exe` 命令，并添加当前用户的资源管理器目录操作 **Open in Prism Vesicle**。再次运行安装器时会显示 **重新安装 / 修复 / 卸载** 维护选项。在终端中启动项目时，先进入目标目录：
 
@@ -124,7 +124,7 @@ Vesicle 从用户级配置中读取供应商和模型配置档，而不是从项
 
 不要把密钥写入 `providers.yaml`，也不要依赖项目根目录的 `.env`。如果早期 Vesicle 配置仍留下了根目录 `.env`，请将其中的值迁移到用户级密钥文件，然后删除或重命名旧文件。
 
-当前供应商协议包括 OpenAI-compatible Chat Completions、Anthropic Messages、Gemini `generateContent`,以及 opt-in experimental 的独立 Responses 适配器。Responses 配置必须显式声明:`openai-public` 是 OpenAI 官方应用层档案,`codex-beta-2026-02-06` 是指纹级 Codex V2 模拟档案,`codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案,固定日期的 MiMo 与 DeepSeek 档案则是请求/事件族更窄的第三方子集;Vesicle 不会根据 URL 或模型名猜测层级。模型条目可以声明生成默认值、视觉或远程压缩等能力元数据以及上下文限制。规范格式与限制请参阅带注释的示例注册表和[供应商配置参考](./docs/user/zh-CN/reference/configuration.md#openai-responses-档案)。
+当前供应商协议包括 OpenAI-compatible Chat Completions、Anthropic Messages、Gemini `generateContent`,以及 opt-in 的独立 Responses 适配器(已随 1.0.0-alpha.10 从 experimental 转正)。Responses 配置必须显式声明:`openai-public` 是 OpenAI 官方应用层档案,`codex-beta-2026-02-06` 是指纹级 Codex V2 模拟档案,`codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案,固定日期的 MiMo 与 DeepSeek 档案则是请求/事件族更窄的第三方子集;Vesicle 不会根据 URL 或模型名猜测层级。模型条目可以声明生成默认值、视觉或远程压缩等能力元数据以及上下文限制。规范格式与限制请参阅带注释的示例注册表和[供应商配置参考](./docs/user/zh-CN/reference/configuration.md#openai-responses-档案)。
 
 可选的 Streamable HTTP MCP 服务器通过同目录的 `mcp.yaml` 配置；[`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) 说明了请求头变量展开、工具前缀、过滤器、引擎作用域和超时设置。在用户级 `.env` 中设置 `TAVILY_API_KEY`，即可为 ETL 和 Evaluate 引擎启用 Vesicle 的 Web 研究工具。
 

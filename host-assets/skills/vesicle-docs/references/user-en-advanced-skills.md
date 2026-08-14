@@ -69,6 +69,12 @@ It has no scripts, no process capability, and provides read-only text references
 
 When the user asks to "outline the first three chapters", "write a volume outline", "break the outline down to scene level", "allocate tension", or "track foreshadow", the model may automatically activate this Skill.
 
+## First-party `update-config` Skill
+
+Every Vesicle installation ships with `update-config` (scope `host`). When you ask Vesicle to inspect or modify provider, permission, preference, quality, or settings configuration, the model activates this Skill and guides the change through the validated, atomic `vesicle config` CLI commands instead of hand-editing YAML. The full command surface is in the [`vesicle config` command reference](../reference/configuration.md#vesicle-config-command-reference).
+
+Secret values are structurally excluded: `show` sanitizes `.env` into `<set>`/`<empty>` markers and no operation accepts a secret value as an argument; API keys are still edited manually in the user-level `.env`. The scripts run through two thin `.sh`/`.ps1` wrappers via structured `run_skill_script` (an independent `skill_exec` approval class), with no need to enable `shellExec`.
+
 ## Stage exclusion
 
 The Stage Engine does not resolve a Skill catalog and does not support `activate_skill`, `read_skill_resource`, or `run_skill_script`.

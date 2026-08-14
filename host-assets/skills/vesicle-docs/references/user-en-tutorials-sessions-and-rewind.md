@@ -60,7 +60,7 @@ Ctrl+R re-runs the **entire last turn** with the same prompt and produces a new 
 - Switching changes which version is shown, which one later messages build on, and which files are on disk; it does not call the model again.
 - On the chat-only Stage engine a regenerate is cheap (a single model call); on file-writing authoring engines the whole workflow re-runs, which costs more.
 
-> **About files**: the files Vesicle wrote switch with the candidate. When a candidate is left, **every file** under the content roots (`source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`) is snapshotted into that candidate's full file manifest; switching candidates makes the disk strictly equal to the selected candidate's manifest — entries in it restore, paths outside it are deleted. Manual edits and MCP-tool writes made while a candidate is active are therefore snapshotted too, and deleted or restored along with everything else on switch. Regenerate re-runs the turn against the files as they were when the turn first started. The Stage engine writes no files, so it is unaffected. Some content stays outside authoritative restoration, as with `/rewind`: host processes (`shell_exec` / skill scripts — Vesicle warns you when a candidate is affected) only produce a warning, the scratch `tmp/` root stays outside manifests, and symbolic links are kept as-is — never restored, never deleted. Candidates created before this upgrade and never left since carry old-format file snapshots that are no longer read; switching to them changes the conversation only, and Vesicle says so in the status line.
+> **About files**: the files Vesicle wrote switch with the candidate. When a candidate is left, **every file** under the content roots (`source_materials/`, `workspace/`, `novels/`, `reports/`, `test_runs/`) is snapshotted into that candidate's full file manifest; switching candidates makes the disk strictly equal to the selected candidate's manifest — entries in it restore, paths outside it are deleted. Manual edits and MCP-tool writes made while a candidate is active are therefore snapshotted too, and deleted or restored along with everything else on switch. Regenerate re-runs the turn against the files as they were when the turn first started. The Stage engine writes no files, so it is unaffected. Some content stays outside authoritative restoration, as with `/rewind`: host processes (`shell_exec` / skill scripts — Vesicle warns you when a candidate is affected) only produce a warning, the scratch `tmp/` root stays outside manifests, and symbolic links and special files are kept as-is — never restored, never deleted (recorded as `untracked` in the switch outcome). Candidates created before this upgrade and never left since carry old-format file snapshots that are no longer read; switching to them changes the conversation only, and Vesicle says so in the status line.
 
 > Each regenerate and each switch appends to the session record, and old candidates are kept forever. The session file grows and loads more slowly as candidates accumulate; Vesicle does not clean this up automatically — start a fresh session with `/new`, or delete unneeded files under `.vesicle/sessions/` by hand when you want to.
 
@@ -80,7 +80,7 @@ The inline `< n/m >` switcher only covers the last turn. To return to an earlier
 
 ## Message focus: Alt+↑ / Alt+↓
 
-**Alt+↑ / Alt+↓** moves a **turn-level focus cursor** across the whole transcript (every engine): each press stops on the previous/next turn's prompt and final reply, wrapping at the edges; the focused messages are highlighted in the theme color and scrolled into view. When the focus lands on a Stage message, **Ctrl+Alt+S** still expands/collapses it. With the cursor on a turn, **Ctrl+R regenerates that turn** (without a focus it still regenerates the last turn).
+**Alt+↑ / Alt+↓** moves a **turn-level focus cursor** across the whole transcript (every engine): each press stops on the previous/next turn's prompt and final reply, wrapping at the edges; the focused messages are highlighted in the brand color and scrolled into view. When the focus lands on a Stage message, **Ctrl+Alt+S** still expands/collapses it. With the cursor on a turn, **Ctrl+R regenerates that turn** (without a focus it still regenerates the last turn).
 
 **Alt+← / Alt+→** performs candidate switching first; when the current turn has no switchable candidates, Vesicle no longer stays silent — the status line guides you: Ctrl+B opens the candidate tree when the focused turn has candidates, otherwise Ctrl+R regenerates that turn.
 
@@ -99,7 +99,7 @@ Switching engines can also compact on the way: `/engine <id> --summary`.
 ## Exit and interrupt
 
 - Ctrl+Q — exit Vesicle (the session is already persisted; `/resume` finds it next time).
-- Esc — abort a running request (already-written files are not lost).
+- Esc — abort a running request (already-written files are not lost); it also interrupts busy windows such as the approval step after a permission prompt, leaving an unfinished approval pending again.
 - Double Esc with text in the input box — save the draft and clear it (without sending).
 
 ## Checklist
