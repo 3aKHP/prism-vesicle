@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
-- **Markdown 反斜杠转义不再字面渲染。** Chat 与 Workspace 预览中的 `\~`、`\*` 等转义序列此前会带着反斜杠原样显示(并带转义高亮色)。根因在上游 OpenTUI 的 tree-sitter worker(已上报 anomalyco/opentui#1369 并提交 PR #1370):现通过 0.4.3 依赖补丁让 worker 隐去转义序列的反斜杠字节,被转义字符按普通文本渲染。配套的组件级回归测试走真实渲染管线断言最终帧文本。此补丁片段为过渡措施,Vesicle 采纳自维护 OpenTUI fork 基线时随整个 0.4.3 补丁一并退役。
+- **Markdown backslash escapes no longer render literally.** `\~`, `\*`, and other CommonMark escapes used to display with a visible backslash and escape styling in Chat and Workspace previews. The defect is upstream (OpenTUI highlight query; reported as anomalyco/opentui#1369 with PR #1370). Vesicle now conceals the backslash byte through a host-side highlight transform that ships inside its own JavaScript, so source, npm, and standalone-binary channels all render `\X` as `X`. A rendered-frame component test and a new `escape` probe in `vesicle debug markdown-runtime` guard the behavior at every distribution boundary. The transform retires with the 0.4.3 dependency patch once the self-maintained OpenTUI fork baseline is adopted.
 
 ### Added
 

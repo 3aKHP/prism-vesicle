@@ -1,6 +1,3 @@
-diff --git a/node_modules/@opentui/core/.bun-tag-5469538db1d369e5 b/.bun-tag-5469538db1d369e5
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/index.js b/index.js
 index c7badbef2f345f9d228d40c64a69d6570512fd8d..262a7c84c1b856c12fabe89e3f9a31d6e2c99a95 100644
 --- a/index.js
@@ -159,39 +156,6 @@ index c7badbef2f345f9d228d40c64a69d6570512fd8d..262a7c84c1b856c12fabe89e3f9a31d6
      });
    }
    createTableBlock(table, id, marginBottom = 0, previousCache, forceRegenerate = false) {
-diff --git a/parser.worker.js b/parser.worker.js
-index d8cd00d54da61cdc45beee8b50f894f6c120a425..200574083e247af96098813c140f7db10bcaf7ac 100644
---- a/parser.worker.js
-+++ b/parser.worker.js
-@@ -926,6 +926,10 @@ class ParserWorker {
-                 _injectedQuery: injectedParser.queries.highlights,
-                 node: {
-                   ...match.node,
-+                  // Vesicle patch: web-tree-sitter node type is a prototype
-+                  // getter, so the spread above drops it; carry it explicitly
-+                  // so consumers can dispatch on node.type.
-+                  type: match.node.type,
-                   startPosition: {
-                     row: match.node.startPosition.row + injectionNode.startPosition.row,
-                     column: match.node.startPosition.row === 0 ? match.node.startPosition.column + injectionNode.startPosition.column : match.node.startPosition.column
-@@ -1117,6 +1121,17 @@ class ParserWorker {
-       if (concealLines !== undefined) {
-         meta.concealLines = concealLines;
-       }
-+      // Vesicle patch (upstream issue anomalyco/opentui#1369, PR #1370):
-+      // CommonMark renders a backslash escape as the escaped character. The
-+      // markdown_inline grammar emits backslash_escape as one atomic token
-+      // spanning both characters and conceal replaces whole ranges, so the
-+      // split cannot be expressed in the query language. Conceal the
-+      // backslash byte here and drop the escape styling from the remainder;
-+      // an explicit query-configured conceal still wins.
-+      if (concealValue === undefined && node.type === "backslash_escape" && isInjection && injectionLang === "markdown_inline") {
-+        highlights.push([node.startIndex, node.startIndex + 1, match.name, { ...meta, conceal: "" }]);
-+        continue;
-+      }
-       if (Object.keys(meta).length > 0) {
-         highlights.push([node.startIndex, node.endIndex, match.name, meta]);
-       } else {
 diff --git a/renderables/Markdown.d.ts b/renderables/Markdown.d.ts
 index 9300bf024dae00f9c27230b396391afef15de704..fe29ccd60305c4154f33a0b77d9a3d802ca24d8f 100644
 --- a/renderables/Markdown.d.ts
