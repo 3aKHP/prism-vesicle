@@ -100,4 +100,70 @@ describe("tui: markdown display", () => {
       .toBe("```md\n==高亮== H~2~O :rocket:\n```\nOutside ▰ 高亮 ▰ H₂O 🚀");
   });
 
+  test("passes backslash-escaped markdown delimiters through untouched", () => {
+    expect(prepareMarkdownForDisplay("\\~5~ 是约数,\\^2^ 是上标,\\==m== 是高亮"))
+      .toBe("\\~5~ 是约数,\\^2^ 是上标,\\==m== 是高亮");
+    expect(prepareMarkdownForDisplay("引用 \\[1\\] 与 \\(1\\) 不再变成数学"))
+      .toBe("引用 \\[1\\] 与 \\(1\\) 不再变成数学");
+    expect(prepareMarkdownForDisplay("\\![图](https://e.test/a.png) 和 \\[^1] 与 \\:rocket: 原样"))
+      .toBe("\\![图](https://e.test/a.png) 和 \\[^1] 与 \\:rocket: 原样");
+    expect(prepareMarkdownForDisplay("\\<kbd>Ctrl\\</kbd> 保持字面"))
+      .toBe("\\<kbd>Ctrl\\</kbd> 保持字面");
+  });
+
+  test("still renders math and scripts when delimiters are not escaped", () => {
+    expect(prepareMarkdownForDisplay("a $x^2$ b")).toBe("a x² b");
+    expect(prepareMarkdownForDisplay("\\[x^2\\]")).toBe("⟦ x² ⟧");
+    expect(prepareMarkdownForDisplay("\\(x^2\\)")).toBe("x²");
+    expect(prepareMarkdownForDisplay("a \\\\~5~ tail")).toBe("a \\\\₅ tail");
+  });
+
+  test("plain-text rendering decodes escapes instead of stripping escaped markers", () => {
+    expect(renderMarkdownPlainText("a \\~ b")).toBe("a ~ b");
+    expect(renderMarkdownPlainText("\\*x\\* 与 \\*\\*x\\*\\* 保留标记"))
+      .toBe("*x* 与 **x** 保留标记");
+    expect(renderMarkdownPlainText("\\~~x~~ s")).toBe("~~x~~ s");
+    expect(renderMarkdownPlainText("\\# h、\\> q、\\- [ ] t、a \\\\ b"))
+      .toBe("# h、> q、- [ ] t、a \\ b");
+    expect(renderMarkdownPlainText("see \\[1\\] here")).toBe("see [1] here");
+    expect(renderMarkdownPlainText("\\~5~ sub")).toBe("~5~ sub");
+    expect(renderMarkdownPlainText("\\![alt](http://x)")).toBe("![alt](http://x)");
+
+    expect(renderArtifactMarkdownPreview("\\*x\\* 与 a \\~ b")).toBe("*x* 与 a ~ b");
+  });
+
+  test("plain-text escape decoding stays out of inline code spans and fenced blocks", () => {
+    expect(renderMarkdownPlainText("`\\.txt$` regex")).toBe("\\.txt$ regex");
+    expect(renderMarkdownPlainText("use `foo\\\\bar` here")).toBe("use foo\\\\bar here");
+    expect(renderMarkdownPlainText("path `C:\\Users\\x\\` trailing")).toBe("path C:\\Users\\x\\ trailing");
+    expect(renderMarkdownPlainText("`a\\` tail")).toBe("a\\ tail");
+    expect(renderMarkdownPlainText("`**b**` is literal span content")).toBe("**b** is literal span content");
+
+    expect(renderArtifactMarkdownPreview("```js\n1 \\~ 2;\nconst s = \"C:\\\\dir\";\n```"))
+      .toBe("1 \\~ 2;\nconst s = \"C:\\\\dir\";");
+    expect(renderArtifactMarkdownPreview("```md\n**not bold** in fence\n```")).toBe("**not bold** in fence");
+  });
+
+  test("an escaped $$ literal does not swallow a following display-math block", () => {
+    expect(prepareMarkdownForDisplay("\\$$x$$ and $$y^2$$")).toBe("\\$$x$$ and ⟦ y² ⟧");
+  });
+
+  test("escaped structural html fallbacks pass through without forced breaks", () => {
+    expect(prepareMarkdownForDisplay("a \\<br> b")).toBe("a \\<br> b");
+    expect(prepareMarkdownForDisplay("\\<p>para\\</p>")).toBe("\\<p>para\\</p>");
+    expect(prepareMarkdownForDisplay("one\\</p>\n\\<p>two")).toBe("one\\</p>\n\\<p>two");
+    expect(prepareMarkdownForDisplay("line<br>next")).toBe("line\nnext");
+  });
+
+  test("longer backslash runs before bracket math delimiters stay literal", () => {
+    expect(prepareMarkdownForDisplay("a \\\\[x^2\\\\] b")).toBe("a \\\\[x^2\\\\] b");
+    expect(prepareMarkdownForDisplay("a \\\\\\[x^2\\\\\\] b")).toBe("a \\\\\\[x^2\\\\\\] b");
+    expect(prepareMarkdownForDisplay("\\[x^2\\]")).toBe("⟦ x² ⟧");
+  });
+
+  test("escaped closing delimiters also pass through in the markdown path", () => {
+    expect(prepareMarkdownForDisplay("a ==m\\== b")).toBe("a ==m\\== b");
+    expect(prepareMarkdownForDisplay("![alt\\](u.png)")).toBe("![alt\\](u.png)");
+  });
+
 });
