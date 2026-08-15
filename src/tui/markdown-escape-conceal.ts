@@ -47,7 +47,9 @@ function concealMarkdownEscapeBackslashes(content: string, highlights: SimpleHig
     // The worker exposes no node types on the main thread, so a
     // backslash_escape capture is identified by shape: a two-character
     // markdown_inline injection styled as an escape whose first byte is a
-    // backslash. `~\n` (hard_line_break) is excluded by the newline check.
+    // backslash. Line-break sequences (hard_line_break covers `\`+LF, `\`+CR,
+    // and two trailing spaces) are excluded: a bare `\`+CR pair is also a
+    // 2-character range, so both newline characters are checked.
     if (
       group !== ESCAPE_HIGHLIGHT_GROUP
       || meta?.conceal !== undefined
@@ -56,6 +58,7 @@ function concealMarkdownEscapeBackslashes(content: string, highlights: SimpleHig
       || end - start !== 2
       || content[start] !== "\\"
       || content[start + 1] === "\n"
+      || content[start + 1] === "\r"
     ) {
       return highlight;
     }
