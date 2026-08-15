@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Markdown preprocessing honors backslash escapes.** Escaped delimiters no longer trigger the formatting extensions: the CommonMark citation idioms `\[1\]` and `\(1\)` no longer render as fake LaTeX display math (`⟦ 1 ⟧`), and `\~5~`, `\^2^`, `\==m==`, `\![img](…)`, `\[^1]`, `\:rocket:`, and `\<kbd>…\</kbd>` all pass through untouched to the renderer. Unescaped math (`$x^2$`, `\[x^2\]`) and native scripts (`H~2~O`, `x\\~5~`) are unchanged. The plain-text rendering paths (`VESICLE_MARKDOWN_RENDERER=plain` and artifact previews) guard their marker strips and decode remaining escapes as the final step: `\~` shows as `~`, `\*x\*` keeps its asterisks instead of losing them, `\#`/`\>`/`\-` line markers display normally, and `\\` decodes to a single backslash. Two adjacent corrections landed with it: inline code-span content is now literal in the plain paths (`` `**b**` `` keeps its asterisks; code spans never had escape semantics), and artifact previews no longer marker-strip inside fenced blocks — fenced code now reads verbatim there, matching the plain renderer.
+
 ### Added
 
 - **`vesicle config add-mcp`.** Adds an MCP server to `mcp.yaml` from a JSON entry without hand-editing YAML. The command never accepts secret values: `auth: bearer` or `auth: custom-header` writes a `${ENV_VAR}` reference in `mcp.yaml` and creates the corresponding empty `.env` slot for the user to fill in; explicit `headers` entries must use exact `${NAME}` references (fallback/default forms are rejected). Entries may declare the full current server shape (`enabled`, `timeoutSeconds`, `protocolVersion`, `toolPrefix`, `negotiation`, `supportedProtocolVersions`, `includeTools`, `excludeTools`, `enabledEngines`), names are sanitized into unique ids, and explicit duplicate ids are rejected. The existing file is edited line-preservingly (comments, ordering, and untouched server lines survive), adding a server flips a top-level `enabled: false` to `true`, and the exact output is re-parsed before the atomic write.
