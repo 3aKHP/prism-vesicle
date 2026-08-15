@@ -7,7 +7,12 @@ import {
   parseColor,
 } from "@opentui/core";
 import type { SimpleHighlight } from "@opentui/core";
+import { installMarkdownEscapeConceal } from "./markdown-escape-conceal";
 import { paletteFor, syntaxStyle } from "./theme";
+
+// The escape-conceal transform must be active in every channel this
+// diagnostic runs at (source, npm, binaries, installer smoke).
+installMarkdownEscapeConceal();
 
 declare const VESICLE_TREE_SITTER_WORKER_PATH: string;
 
@@ -22,6 +27,11 @@ export type MarkdownRuntimeDiagnostic = {
   ok: boolean;
   workerPath?: string;
   probes: RuntimeProbe[];
+  escape: {
+    ok: boolean;
+    concealedCount: number;
+    error?: string;
+  };
   selection: {
     ok: boolean;
     cases: SelectionRuntimeProbe[];
@@ -57,11 +67,12 @@ const SELECTION_PROBES: Array<{
  */
 export async function runMarkdownRuntimeDiagnostic(): Promise<MarkdownRuntimeDiagnostic> {
   try {
-    const [probes, selectionCases] = await Promise.all([
+    const [probes, escapeProbe, selectionCases] = await Promise.all([
       Promise.all([
         probe("markdown", "**bold** and `code`\n\n| a | b |\n|---|---|\n| 1 | 2 |"),
         probe("typescript", "const value: number = 1;"),
       ]),
+      probeEscapeConceal(),
       Promise.all(SELECTION_PROBES.map(probeNativeMarkdownSelection)),
     ]);
     const selection = {
@@ -69,17 +80,48 @@ export async function runMarkdownRuntimeDiagnostic(): Promise<MarkdownRuntimeDia
       cases: selectionCases,
     };
     return {
-      ok: probes.every((entry) => !entry.error && entry.highlights.count > 0) && selection.ok,
+      ok: probes.every((entry) => !entry.error && entry.highlights.count > 0) && escapeProbe.ok && selection.ok,
       workerPath: typeof VESICLE_TREE_SITTER_WORKER_PATH !== "undefined"
         ? VESICLE_TREE_SITTER_WORKER_PATH
         : process.env.OTUI_TREE_SITTER_WORKER_PATH,
       probes,
+      escape: escapeProbe,
       selection,
     };
   } finally {
     // The diagnostic is a short-lived CLI operation. Leaving OpenTUI's worker
     // alive keeps Bun's event loop open and makes CI smoke commands hang.
     await destroyTreeSitterClient().catch(() => undefined);
+  }
+}
+
+/**
+ * Distribution-boundary oracle for the interim backslash-escape fix: the
+ * highlight tuples of `Escaped \~ and \* here` must conceal exactly the two
+ * backslash bytes, so a channel that lost the transform (or a future
+ * dependency bump that changes the shape) fails the smoke instead of
+ * silently regressing to literal escape rendering.
+ */
+async function probeEscapeConceal(): Promise<MarkdownRuntimeDiagnostic["escape"]> {
+  const content = "Escaped \\~ and \\* here";
+  try {
+    const result = await getTreeSitterClient().highlightOnce(content, "markdown");
+    const highlights: SimpleHighlight[] | undefined = result.highlights;
+    if (!highlights?.length) throw new Error("markdown highlighting produced no highlights");
+    const concealed = highlights.filter(
+      (highlight) => highlight[2] === "string.escape" && highlight[3]?.conceal === "",
+    );
+    const backslashBytes = [8, 15];
+    const coversOnlyBackslashes = concealed.length === backslashBytes.length
+      && backslashBytes.every((offset) => concealed.some((highlight) => highlight[0] === offset && highlight[1] === offset + 1));
+    if (!coversOnlyBackslashes) {
+      throw new Error(
+        `expected backslash-byte conceals at ${backslashBytes.join(", ")}; got ${JSON.stringify(concealed)}`,
+      );
+    }
+    return { ok: true, concealedCount: concealed.length };
+  } catch (error) {
+    return { ok: false, concealedCount: 0, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

@@ -37,6 +37,7 @@ describe("Markdown runtime diagnostic", () => {
       expect.objectContaining({ filetype: "typescript", error: undefined, highlights: expect.objectContaining({ count: expect.any(Number) }) }),
     ]);
     expect(diagnostic.probes.every((probe) => probe.highlights.count > 0)).toBe(true);
+    expect(diagnostic.escape).toEqual({ ok: true, concealedCount: 2 });
     expect(diagnostic.selection.ok).toBe(true);
     expect(diagnostic.selection.cases).toEqual([
       expect.objectContaining({ name: "prose", ok: true, selectedText: expect.stringContaining("alpha") }),

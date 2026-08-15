@@ -1,6 +1,9 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { installMarkdownEscapeConceal } from "./markdown-escape-conceal";
+
+installMarkdownEscapeConceal();
 
 export function configureTreeSitterWorkerPath(
   runtimeRoot: string = process.cwd(),
