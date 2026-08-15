@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Markdown 反斜杠转义不再字面渲染。** Chat 与 Workspace 预览中的 `\~`、`\*` 等转义序列此前会带着反斜杠原样显示(并带转义高亮色)。根因在上游 OpenTUI 的 tree-sitter worker(已上报 anomalyco/opentui#1369 并提交 PR #1370):现通过 0.4.3 依赖补丁让 worker 隐去转义序列的反斜杠字节,被转义字符按普通文本渲染。配套的组件级回归测试走真实渲染管线断言最终帧文本。此补丁片段为过渡措施,Vesicle 采纳自维护 OpenTUI fork 基线时随整个 0.4.3 补丁一并退役。
+
 ### Added
 
 - **`vesicle config add-mcp`.** Adds an MCP server to `mcp.yaml` from a JSON entry without hand-editing YAML. The command never accepts secret values: `auth: bearer` or `auth: custom-header` writes a `${ENV_VAR}` reference in `mcp.yaml` and creates the corresponding empty `.env` slot for the user to fill in; explicit `headers` entries must use exact `${NAME}` references (fallback/default forms are rejected). Entries may declare the full current server shape (`enabled`, `timeoutSeconds`, `protocolVersion`, `toolPrefix`, `negotiation`, `supportedProtocolVersions`, `includeTools`, `excludeTools`, `enabledEngines`), names are sanitized into unique ids, and explicit duplicate ids are rejected. The existing file is edited line-preservingly (comments, ordering, and untouched server lines survive), adding a server flips a top-level `enabled: false` to `true`, and the exact output is re-parsed before the atomic write.

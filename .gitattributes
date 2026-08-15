@@ -9,6 +9,9 @@ harness-manifest.json text eol=lf
 brand/**/*.svg text eol=lf
 brand/**/*.md text eol=lf
 brand/**/*.txt text eol=lf
+# Dependency patches must stay byte-exact against LF package files (Windows
+# autocrlf would corrupt the hunks otherwise)
+patches/*.patch text eol=lf
 
 # Binary multimedia — Git LFS (uniform repo-wide policy; see brand/README.md)
 # Images
