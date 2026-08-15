@@ -100,6 +100,7 @@ function renderHighlightMarks(input: string): string {
     /(^|[^=])==([^=\n][^=\n]*?)==(?!=)/g,
     (match, prefix: string, value: string, offset: number, source: string) => {
       if (isUnescapedBackslashBefore(source, offset + prefix.length)) return match;
+      if (isUnescapedBackslashBefore(source, offset + match.length - 2)) return match;
       return `${prefix}▰ ${value.trim()} ▰`;
     },
   );
@@ -110,6 +111,8 @@ function renderImages(input: string): string {
     /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
     (match, label: string, url: string, offset: number, source: string) => {
       if (isUnescapedBackslashBefore(source, offset)) return match;
+      const closingBracket = offset + 2 + label.length;
+      if (isUnescapedBackslashBefore(source, closingBracket)) return match;
       const alt = label.trim() || "image";
       return `🖼 ${alt} (${url})`;
     },
@@ -146,9 +149,18 @@ function renderHtmlMarkdownFallbacks(input: string): string {
       if (isUnescapedBackslashBefore(source, offset)) return match;
       return `＿${stripKnownHtml(value).trim()}＿`;
     })
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*<p(?:\s+[^>]*)?>/gi, "\n")
-    .replace(/<\/?(?:div|p)(?:\s+[^>]*)?>/gi, "");
+    .replace(/<br\s*\/?>/gi, (match, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return "\n";
+    })
+    .replace(/<\/p>\s*<p(?:\s+[^>]*)?>/gi, (match, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return "\n";
+    })
+    .replace(/<\/?(?:div|p)(?:\s+[^>]*)?>/gi, (match, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return "";
+    });
 }
 
 function stripKnownHtml(input: string): string {

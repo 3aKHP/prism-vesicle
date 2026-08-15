@@ -122,14 +122,46 @@ describe("tui: markdown display", () => {
     expect(renderMarkdownPlainText("a \\~ b")).toBe("a ~ b");
     expect(renderMarkdownPlainText("\\*x\\* 与 \\*\\*x\\*\\* 保留标记"))
       .toBe("*x* 与 **x** 保留标记");
-    expect(renderMarkdownPlainText("\\~~x~~ 与 `a\\` 不成对"))
-      .toBe("~~x~~ 与 `a` 不成对");
+    expect(renderMarkdownPlainText("\\~~x~~ s")).toBe("~~x~~ s");
     expect(renderMarkdownPlainText("\\# h、\\> q、\\- [ ] t、a \\\\ b"))
       .toBe("# h、> q、- [ ] t、a \\ b");
     expect(renderMarkdownPlainText("see \\[1\\] here")).toBe("see [1] here");
     expect(renderMarkdownPlainText("\\~5~ sub")).toBe("~5~ sub");
+    expect(renderMarkdownPlainText("\\![alt](http://x)")).toBe("![alt](http://x)");
 
     expect(renderArtifactMarkdownPreview("\\*x\\* 与 a \\~ b")).toBe("*x* 与 a ~ b");
+  });
+
+  test("plain-text escape decoding stays out of inline code spans and fenced blocks", () => {
+    expect(renderMarkdownPlainText("`\\.txt$` regex")).toBe("\\.txt$ regex");
+    expect(renderMarkdownPlainText("use `foo\\\\bar` here")).toBe("use foo\\\\bar here");
+    expect(renderMarkdownPlainText("path `C:\\Users\\x\\` trailing")).toBe("path C:\\Users\\x\\ trailing");
+    expect(renderMarkdownPlainText("`a\\` tail")).toBe("a\\ tail");
+
+    expect(renderArtifactMarkdownPreview("```js\n1 \\~ 2;\nconst s = \"C:\\\\dir\";\n```"))
+      .toBe("1 \\~ 2;\nconst s = \"C:\\\\dir\";");
+  });
+
+  test("an escaped $$ literal does not swallow a following display-math block", () => {
+    expect(prepareMarkdownForDisplay("\\$$x$$ and $$y^2$$")).toBe("\\$$x$$ and ⟦ y² ⟧");
+  });
+
+  test("escaped structural html fallbacks pass through without forced breaks", () => {
+    expect(prepareMarkdownForDisplay("a \\<br> b")).toBe("a \\<br> b");
+    expect(prepareMarkdownForDisplay("\\<p>para\\</p>")).toBe("\\<p>para\\</p>");
+    expect(prepareMarkdownForDisplay("one\\</p>\n\\<p>two")).toBe("one\\</p>\n\\<p>two");
+    expect(prepareMarkdownForDisplay("line<br>next")).toBe("line\nnext");
+  });
+
+  test("longer backslash runs before bracket math delimiters stay literal", () => {
+    expect(prepareMarkdownForDisplay("a \\\\[x^2\\\\] b")).toBe("a \\\\[x^2\\\\] b");
+    expect(prepareMarkdownForDisplay("a \\\\\\[x^2\\\\\\] b")).toBe("a \\\\\\[x^2\\\\\\] b");
+    expect(prepareMarkdownForDisplay("\\[x^2\\]")).toBe("⟦ x² ⟧");
+  });
+
+  test("escaped closing delimiters also pass through in the markdown path", () => {
+    expect(prepareMarkdownForDisplay("a ==m\\== b")).toBe("a ==m\\== b");
+    expect(prepareMarkdownForDisplay("![alt\\](u.png)")).toBe("![alt\\](u.png)");
   });
 
 });

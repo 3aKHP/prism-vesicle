@@ -162,42 +162,60 @@ export function prepareMarkdownForDisplay(content: string): string {
 }
 
 export function renderArtifactMarkdownPreview(content: string): string {
+  let fenced = false;
   return prepareMarkdownForDisplay(content)
     .split(/\r?\n/)
-    .map((line) => unescapeMarkdownPunctuation(line
-      .replace(/^\s{0,3}#{1,6}\s+/, "")
-      .replace(/^\s{0,3}>\s?/, "› ")
-      .replace(/^\s*[-*+]\s+\[ \]\s+/, "☐ ")
-      .replace(/^\s*[-*+]\s+\[x\]\s+/i, "☑ ")
-      .replace(
-        /\[([^\]]+)\]\(([^)]+)\)/g,
-        (match, label: string, url: string, offset: number, source: string) => {
-          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
-          return `${label} (${url})`;
-        },
-      )
-      .replace(/`([^`]+)`/g, (match, code: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
-        return code;
-      })
-      .replace(/\*\*([^*]+)\*\*/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
-        return value;
-      })
-      .replace(/__([^_]+)__/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
-        return value;
-      })
-      .replace(/\*([^*]+)\*/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
-        return value;
-      })
-      .replace(/_([^_]+)_/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
-        return value;
-      })))
+    .map((line) => {
+      if (/^\s*```/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      return fenced ? line : cleanArtifactPreviewLine(line);
+    })
     .filter((line) => !/^```/.test(line.trim()))
     .join("\n");
+}
+
+function cleanArtifactPreviewLine(line: string): string {
+  const { line: withoutSpans, spans } = protectCodeSpanContents(line);
+  return restoreCodeSpanContents(
+    unescapeMarkdownPunctuation(
+      withoutSpans
+        .replace(/^\s{0,3}#{1,6}\s+/, "")
+        .replace(/^\s{0,3}>\s?/, "› ")
+        .replace(/^\s*[-*+]\s+\[ \]\s+/, "☐ ")
+        .replace(/^\s*[-*+]\s+\[x\]\s+/i, "☑ ")
+        .replace(
+          /\[([^\]]+)\]\(([^)]+)\)/g,
+          (match, label: string, url: string, offset: number, source: string) => {
+            if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+            if (source[offset - 1] === "!" && isUnescapedBackslashBefore(source, offset - 1)) return match;
+            return `${label} (${url})`;
+          },
+        )
+        .replace(/`([^`]+)`/g, (match, code: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+          return code;
+        })
+        .replace(/\*\*([^*]+)\*\*/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+          return value;
+        })
+        .replace(/__([^_]+)__/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+          return value;
+        })
+        .replace(/\*([^*]+)\*/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+          return value;
+        })
+        .replace(/_([^_]+)_/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+          return value;
+        }),
+    ),
+    spans,
+  );
 }
 
 export function renderMarkdownPlainText(content: string): string {
@@ -227,58 +245,63 @@ export function renderMarkdownPlainText(content: string): string {
 }
 
 function cleanMarkdownLine(line: string): string {
-  return unescapeMarkdownPunctuation(
-    line
-      .replace(/^\s{0,3}#{1,6}\s+/, "")
-      .replace(/^\s{0,3}>\s?/, "> ")
-      .replace(/^\s*[-*+]\s+\[ \]\s+/, "- [ ] ")
-      .replace(/^\s*[-*+]\s+\[x\]\s+/i, "- [x] ")
-      .replace(
-        /!\[([^\]]*)\]\(([^)]+)\)/g,
-        (match, alt: string, url: string, offset: number, source: string) => {
-          if (isUnescapedBackslashBefore(source, offset)) return match;
-          return `[image${alt ? `: ${alt}` : ""}] (${url})`;
-        },
-      )
-      .replace(
-        /\[([^\]]+)\]\(([^)]+)\)/g,
-        (match, label: string, url: string, offset: number, source: string) => {
-          if (isUnescapedBackslashBefore(source, offset)) return match;
-          return `${label} (${url})`;
-        },
-      )
-      .replace(/`([^`]+)`/g, (match, code: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
-        return code;
-      })
-      .replace(/\*\*\*([^*]+)\*\*\*/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 3)) return match;
-        return value;
-      })
-      .replace(/___([^_]+)___/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 3)) return match;
-        return value;
-      })
-      .replace(/\*\*([^*]+)\*\*/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
-        return value;
-      })
-      .replace(/__([^_]+)__/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
-        return value;
-      })
-      .replace(/\*([^*]+)\*/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
-        return value;
-      })
-      .replace(/_([^_]+)_/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
-        return value;
-      })
-      .replace(/~~([^~]+)~~/g, (match, value: string, offset: number, source: string) => {
-        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
-        return value;
-      }),
+  const { line: withoutSpans, spans } = protectCodeSpanContents(line);
+  return restoreCodeSpanContents(
+    unescapeMarkdownPunctuation(
+      withoutSpans
+        .replace(/^\s{0,3}#{1,6}\s+/, "")
+        .replace(/^\s{0,3}>\s?/, "> ")
+        .replace(/^\s*[-*+]\s+\[ \]\s+/, "- [ ] ")
+        .replace(/^\s*[-*+]\s+\[x\]\s+/i, "- [x] ")
+        .replace(
+          /!\[([^\]]*)\]\(([^)]+)\)/g,
+          (match, alt: string, url: string, offset: number, source: string) => {
+            if (isUnescapedBackslashBefore(source, offset)) return match;
+            return `[image${alt ? `: ${alt}` : ""}] (${url})`;
+          },
+        )
+        .replace(
+          /\[([^\]]+)\]\(([^)]+)\)/g,
+          (match, label: string, url: string, offset: number, source: string) => {
+            if (isUnescapedBackslashBefore(source, offset)) return match;
+            if (source[offset - 1] === "!" && isUnescapedBackslashBefore(source, offset - 1)) return match;
+            return `${label} (${url})`;
+          },
+        )
+        .replace(/`([^`]+)`/g, (match, code: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+          return code;
+        })
+        .replace(/\*\*\*([^*]+)\*\*\*/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 3)) return match;
+          return value;
+        })
+        .replace(/___([^_]+)___/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 3)) return match;
+          return value;
+        })
+        .replace(/\*\*([^*]+)\*\*/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+          return value;
+        })
+        .replace(/__([^_]+)__/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+          return value;
+        })
+        .replace(/\*([^*]+)\*/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+          return value;
+        })
+        .replace(/_([^_]+)_/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+          return value;
+        })
+        .replace(/~~([^~]+)~~/g, (match, value: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+          return value;
+        }),
+    ),
+    spans,
   );
 }
 
@@ -303,21 +326,73 @@ function unescapeMarkdownPunctuation(line: string): string {
   return line.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, "$1");
 }
 
+/**
+ * Length of the backslash run that ends at `index` (inclusive). Used for
+ * backslash-led delimiters (`\[`, `\(`): only a run of exactly 1 is the
+ * LaTeX opener this renderer honors — a longer run means literal
+ * backslashes followed by a plain (run length 2, 4, …) or escaped
+ * (run length 3, 5, …) bracket, neither of which opens math.
+ */
+function backslashRunEndingAt(input: string, index: number): number {
+  let run = 0;
+  for (let cursor = index; cursor >= 0 && input[cursor] === "\\"; cursor -= 1) {
+    run += 1;
+  }
+  return run;
+}
+
+/**
+ * Replace the content of unescaped inline code spans with inert sentinels so
+ * the marker strips and the final escape decode cannot touch it (CommonMark
+ * escapes do not apply inside code). Backticks stay in place for the strip
+ * pass; `restoreCodeSpanContents` puts the original content back afterwards.
+ */
+const CODE_SPAN_SENTINEL_OPEN = "";
+const CODE_SPAN_SENTINEL_CLOSE = "";
+
+function protectCodeSpanContents(line: string): { line: string; spans: string[] } {
+  const spans: string[] = [];
+  const protectedLine = line.replace(/`([^`]+)`/g, (match, code: string, offset: number, source: string) => {
+    // Only the opening backtick can be escaped away. A content-final
+    // backslash does not escape the closing backtick: code-span content is
+    // literal, so `a\` is a span containing "a\".
+    if (isUnescapedBackslashBefore(source, offset)) return match;
+    spans.push(code);
+    return `\`${CODE_SPAN_SENTINEL_OPEN}${spans.length - 1}${CODE_SPAN_SENTINEL_CLOSE}\``;
+  });
+  return { line: protectedLine, spans };
+}
+
+function restoreCodeSpanContents(line: string, spans: string[]): string {
+  return line.replace(
+    new RegExp(`${CODE_SPAN_SENTINEL_OPEN}(\\d+)${CODE_SPAN_SENTINEL_CLOSE}`, "g"),
+    (_match, index: string) => spans[Number(index)] ?? "",
+  );
+}
+
 export function renderLatexMath(input: string): string {
   let output = "";
   let index = 0;
 
   while (index < input.length) {
-    if (input.startsWith("$$", index) && !isUnescapedBackslashBefore(input, index)) {
+    if (input.startsWith("$$", index)) {
       const end = findUnescaped(input, "$$", index + 2);
       if (end >= 0) {
-        output += renderDisplayMath(input.slice(index + 2, end));
+        if (isUnescapedBackslashBefore(input, index)) {
+          // Parity-blocked opener: this `$$` and its closer are an escaped
+          // literal. Emit both verbatim and jump past the closer, or the
+          // literal's own closing `$$` would re-open math and swallow a
+          // following real block.
+          output += input.slice(index, end + 2);
+        } else {
+          output += renderDisplayMath(input.slice(index + 2, end));
+        }
         index = end + 2;
         continue;
       }
     }
 
-    if (input.startsWith("\\[", index) && !isUnescapedBackslashBefore(input, index)) {
+    if (input.startsWith("\\[", index) && backslashRunEndingAt(input, index) === 1) {
       const end = findUnescaped(input, "\\]", index + 2);
       if (end >= 0 && renderFormulaSignal(input.slice(index + 2, end))) {
         output += renderDisplayMath(input.slice(index + 2, end));
@@ -326,7 +401,7 @@ export function renderLatexMath(input: string): string {
       }
     }
 
-    if (input.startsWith("\\(", index) && !isUnescapedBackslashBefore(input, index)) {
+    if (input.startsWith("\\(", index) && backslashRunEndingAt(input, index) === 1) {
       const end = findUnescaped(input, "\\)", index + 2);
       if (end >= 0 && renderFormulaSignal(input.slice(index + 2, end))) {
         output += renderFormula(input.slice(index + 2, end));
