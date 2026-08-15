@@ -364,6 +364,7 @@ function protectCodeSpanContents(line: string): { line: string; spans: string[] 
 }
 
 function restoreCodeSpanContents(line: string, spans: string[]): string {
+  if (spans.length === 0) return line;
   return line.replace(
     new RegExp(`${CODE_SPAN_SENTINEL_OPEN}(\\d+)${CODE_SPAN_SENTINEL_CLOSE}`, "g"),
     (_match, index: string) => spans[Number(index)] ?? "",

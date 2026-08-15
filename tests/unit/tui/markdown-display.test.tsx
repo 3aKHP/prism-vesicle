@@ -137,9 +137,11 @@ describe("tui: markdown display", () => {
     expect(renderMarkdownPlainText("use `foo\\\\bar` here")).toBe("use foo\\\\bar here");
     expect(renderMarkdownPlainText("path `C:\\Users\\x\\` trailing")).toBe("path C:\\Users\\x\\ trailing");
     expect(renderMarkdownPlainText("`a\\` tail")).toBe("a\\ tail");
+    expect(renderMarkdownPlainText("`**b**` is literal span content")).toBe("**b** is literal span content");
 
     expect(renderArtifactMarkdownPreview("```js\n1 \\~ 2;\nconst s = \"C:\\\\dir\";\n```"))
       .toBe("1 \\~ 2;\nconst s = \"C:\\\\dir\";");
+    expect(renderArtifactMarkdownPreview("```md\n**not bold** in fence\n```")).toBe("**not bold** in fence");
   });
 
   test("an escaped $$ literal does not swallow a following display-math block", () => {
