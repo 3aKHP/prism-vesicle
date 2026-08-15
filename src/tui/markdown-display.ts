@@ -164,17 +164,38 @@ export function prepareMarkdownForDisplay(content: string): string {
 export function renderArtifactMarkdownPreview(content: string): string {
   return prepareMarkdownForDisplay(content)
     .split(/\r?\n/)
-    .map((line) => line
+    .map((line) => unescapeMarkdownPunctuation(line
       .replace(/^\s{0,3}#{1,6}\s+/, "")
       .replace(/^\s{0,3}>\s?/, "› ")
       .replace(/^\s*[-*+]\s+\[ \]\s+/, "☐ ")
       .replace(/^\s*[-*+]\s+\[x\]\s+/i, "☑ ")
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/\*\*([^*]+)\*\*/g, "$1")
-      .replace(/__([^_]+)__/g, "$1")
-      .replace(/\*([^*]+)\*/g, "$1")
-      .replace(/_([^_]+)_/g, "$1"))
+      .replace(
+        /\[([^\]]+)\]\(([^)]+)\)/g,
+        (match, label: string, url: string, offset: number, source: string) => {
+          if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+          return `${label} (${url})`;
+        },
+      )
+      .replace(/`([^`]+)`/g, (match, code: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+        return code;
+      })
+      .replace(/\*\*([^*]+)\*\*/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+        return value;
+      })
+      .replace(/__([^_]+)__/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+        return value;
+      })
+      .replace(/\*([^*]+)\*/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+        return value;
+      })
+      .replace(/_([^_]+)_/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+        return value;
+      })))
     .filter((line) => !/^```/.test(line.trim()))
     .join("\n");
 }
@@ -206,21 +227,80 @@ export function renderMarkdownPlainText(content: string): string {
 }
 
 function cleanMarkdownLine(line: string): string {
-  return line
-    .replace(/^\s{0,3}#{1,6}\s+/, "")
-    .replace(/^\s{0,3}>\s?/, "> ")
-    .replace(/^\s*[-*+]\s+\[ \]\s+/, "- [ ] ")
-    .replace(/^\s*[-*+]\s+\[x\]\s+/i, "- [x] ")
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt: string, url: string) => `[image${alt ? `: ${alt}` : ""}] (${url})`)
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\*\*\*([^*]+)\*\*\*/g, "$1")
-    .replace(/___([^_]+)___/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/__([^_]+)__/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/~~([^~]+)~~/g, "$1");
+  return unescapeMarkdownPunctuation(
+    line
+      .replace(/^\s{0,3}#{1,6}\s+/, "")
+      .replace(/^\s{0,3}>\s?/, "> ")
+      .replace(/^\s*[-*+]\s+\[ \]\s+/, "- [ ] ")
+      .replace(/^\s*[-*+]\s+\[x\]\s+/i, "- [x] ")
+      .replace(
+        /!\[([^\]]*)\]\(([^)]+)\)/g,
+        (match, alt: string, url: string, offset: number, source: string) => {
+          if (isUnescapedBackslashBefore(source, offset)) return match;
+          return `[image${alt ? `: ${alt}` : ""}] (${url})`;
+        },
+      )
+      .replace(
+        /\[([^\]]+)\]\(([^)]+)\)/g,
+        (match, label: string, url: string, offset: number, source: string) => {
+          if (isUnescapedBackslashBefore(source, offset)) return match;
+          return `${label} (${url})`;
+        },
+      )
+      .replace(/`([^`]+)`/g, (match, code: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+        return code;
+      })
+      .replace(/\*\*\*([^*]+)\*\*\*/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 3)) return match;
+        return value;
+      })
+      .replace(/___([^_]+)___/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 3)) return match;
+        return value;
+      })
+      .replace(/\*\*([^*]+)\*\*/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+        return value;
+      })
+      .replace(/__([^_]+)__/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+        return value;
+      })
+      .replace(/\*([^*]+)\*/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+        return value;
+      })
+      .replace(/_([^_]+)_/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 1)) return match;
+        return value;
+      })
+      .replace(/~~([^~]+)~~/g, (match, value: string, offset: number, source: string) => {
+        if (hasEscapedDelimiter(source, match, offset, 2)) return match;
+        return value;
+      }),
+  );
+}
+
+/**
+ * True when either delimiter of a matched marker pair is backslash-escaped,
+ * in which case the marker is literal content and must survive the strip.
+ * `markerLength` is the delimiter width in characters (1 for `*`/`` ` ``,
+ * 2 for `**`/`~~`, 3 for `***`).
+ */
+function hasEscapedDelimiter(source: string, match: string, offset: number, markerLength: number): boolean {
+  return isUnescapedBackslashBefore(source, offset)
+    || isUnescapedBackslashBefore(source, offset + match.length - markerLength);
+}
+
+/**
+ * Decode CommonMark backslash escapes as the final plain-text step: `\X`
+ * (X ASCII punctuation) becomes `X`, `\\` becomes `\`. The regex consumes
+ * pairs left to right, so `\\~` decodes to a literal backslash followed by
+ * a plain tilde.
+ */
+function unescapeMarkdownPunctuation(line: string): string {
+  return line.replace(/\\([!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/g, "$1");
 }
 
 export function renderLatexMath(input: string): string {
@@ -228,7 +308,7 @@ export function renderLatexMath(input: string): string {
   let index = 0;
 
   while (index < input.length) {
-    if (input.startsWith("$$", index)) {
+    if (input.startsWith("$$", index) && !isUnescapedBackslashBefore(input, index)) {
       const end = findUnescaped(input, "$$", index + 2);
       if (end >= 0) {
         output += renderDisplayMath(input.slice(index + 2, end));
@@ -237,18 +317,18 @@ export function renderLatexMath(input: string): string {
       }
     }
 
-    if (input.startsWith("\\[", index)) {
+    if (input.startsWith("\\[", index) && !isUnescapedBackslashBefore(input, index)) {
       const end = findUnescaped(input, "\\]", index + 2);
-      if (end >= 0) {
+      if (end >= 0 && renderFormulaSignal(input.slice(index + 2, end))) {
         output += renderDisplayMath(input.slice(index + 2, end));
         index = end + 2;
         continue;
       }
     }
 
-    if (input.startsWith("\\(", index)) {
+    if (input.startsWith("\\(", index) && !isUnescapedBackslashBefore(input, index)) {
       const end = findUnescaped(input, "\\)", index + 2);
-      if (end >= 0) {
+      if (end >= 0 && renderFormulaSignal(input.slice(index + 2, end))) {
         output += renderFormula(input.slice(index + 2, end));
         index = end + 2;
         continue;
@@ -466,4 +546,4 @@ function isEscaped(input: string, index: number): boolean {
   }
   return slashCount % 2 === 1;
 }
-import { renderMarkdownFormattingExtensions } from "./markdown-formatting";
+import { isUnescapedBackslashBefore, renderMarkdownFormattingExtensions } from "./markdown-formatting";

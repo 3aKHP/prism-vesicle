@@ -100,4 +100,36 @@ describe("tui: markdown display", () => {
       .toBe("```md\n==高亮== H~2~O :rocket:\n```\nOutside ▰ 高亮 ▰ H₂O 🚀");
   });
 
+  test("passes backslash-escaped markdown delimiters through untouched", () => {
+    expect(prepareMarkdownForDisplay("\\~5~ 是约数,\\^2^ 是上标,\\==m== 是高亮"))
+      .toBe("\\~5~ 是约数,\\^2^ 是上标,\\==m== 是高亮");
+    expect(prepareMarkdownForDisplay("引用 \\[1\\] 与 \\(1\\) 不再变成数学"))
+      .toBe("引用 \\[1\\] 与 \\(1\\) 不再变成数学");
+    expect(prepareMarkdownForDisplay("\\![图](https://e.test/a.png) 和 \\[^1] 与 \\:rocket: 原样"))
+      .toBe("\\![图](https://e.test/a.png) 和 \\[^1] 与 \\:rocket: 原样");
+    expect(prepareMarkdownForDisplay("\\<kbd>Ctrl\\</kbd> 保持字面"))
+      .toBe("\\<kbd>Ctrl\\</kbd> 保持字面");
+  });
+
+  test("still renders math and scripts when delimiters are not escaped", () => {
+    expect(prepareMarkdownForDisplay("a $x^2$ b")).toBe("a x² b");
+    expect(prepareMarkdownForDisplay("\\[x^2\\]")).toBe("⟦ x² ⟧");
+    expect(prepareMarkdownForDisplay("\\(x^2\\)")).toBe("x²");
+    expect(prepareMarkdownForDisplay("a \\\\~5~ tail")).toBe("a \\\\₅ tail");
+  });
+
+  test("plain-text rendering decodes escapes instead of stripping escaped markers", () => {
+    expect(renderMarkdownPlainText("a \\~ b")).toBe("a ~ b");
+    expect(renderMarkdownPlainText("\\*x\\* 与 \\*\\*x\\*\\* 保留标记"))
+      .toBe("*x* 与 **x** 保留标记");
+    expect(renderMarkdownPlainText("\\~~x~~ 与 `a\\` 不成对"))
+      .toBe("~~x~~ 与 `a` 不成对");
+    expect(renderMarkdownPlainText("\\# h、\\> q、\\- [ ] t、a \\\\ b"))
+      .toBe("# h、> q、- [ ] t、a \\ b");
+    expect(renderMarkdownPlainText("see \\[1\\] here")).toBe("see [1] here");
+    expect(renderMarkdownPlainText("\\~5~ sub")).toBe("~5~ sub");
+
+    expect(renderArtifactMarkdownPreview("\\*x\\* 与 a \\~ b")).toBe("*x* 与 a ~ b");
+  });
+
 });

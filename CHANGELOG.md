@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Markdown 预处理层现在识别反斜杠转义。** 被转义的定界符不再错误触发格式扩展:CommonMark 引用写法 `\[1\]`、`\(1\)` 不再被当成 LaTeX 数学定界符渲染成 `⟦ 1 ⟧`,转义反斜杠后的普通括号(`a \\[x\\] b`)、`\~5~`、`\^2^`、`\==m==`、`\![图](…)`、`\[^1]`、`\:rocket:`、`\<kbd>…\</kbd>` 全部原样传给渲染层。未转义的数学(`$x^2$`、`\[x^2\]`)、上下标(`H~2~O`、`x\\~5~`)与围栏代码行为不变。纯文本渲染路径(`VESICLE_MARKDOWN_RENDERER=plain` 与 artifact 预览)末尾增加转义解码: `\~` 显示为 `~`、`\*x\*` 保留星号不再被吞、`\#`/`\>`/`\-` 行首标记照常显示、`\\` 显示为单个反斜杠。
+
 ### Added
 
 - **`vesicle config add-mcp`.** Adds an MCP server to `mcp.yaml` from a JSON entry without hand-editing YAML. The command never accepts secret values: `auth: bearer` or `auth: custom-header` writes a `${ENV_VAR}` reference in `mcp.yaml` and creates the corresponding empty `.env` slot for the user to fill in; explicit `headers` entries must use exact `${NAME}` references (fallback/default forms are rejected). Entries may declare the full current server shape (`enabled`, `timeoutSeconds`, `protocolVersion`, `toolPrefix`, `negotiation`, `supportedProtocolVersions`, `includeTools`, `excludeTools`, `enabledEngines`), names are sanitized into unique ids, and explicit duplicate ids are rejected. The existing file is edited line-preservingly (comments, ordering, and untouched server lines survive), adding a server flips a top-level `enabled: false` to `true`, and the exact output is re-parsed before the atomic write.
