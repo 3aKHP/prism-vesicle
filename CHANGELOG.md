@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
-- **Markdown 预处理层现在识别反斜杠转义。** 被转义的定界符不再错误触发格式扩展:CommonMark 引用写法 `\[1\]`、`\(1\)` 不再被当成 LaTeX 数学定界符渲染成 `⟦ 1 ⟧`,转义反斜杠后的普通括号(`a \\[x\\] b`)、`\~5~`、`\^2^`、`\==m==`、`\![图](…)`、`\[^1]`、`\:rocket:`、`\<kbd>…\</kbd>` 全部原样传给渲染层。未转义的数学(`$x^2$`、`\[x^2\]`)、上下标(`H~2~O`、`x\\~5~`)与围栏代码行为不变。纯文本渲染路径(`VESICLE_MARKDOWN_RENDERER=plain` 与 artifact 预览)末尾增加转义解码: `\~` 显示为 `~`、`\*x\*` 保留星号不再被吞、`\#`/`\>`/`\-` 行首标记照常显示、`\\` 显示为单个反斜杠。
+- **Markdown preprocessing honors backslash escapes.** Escaped delimiters no longer trigger the formatting extensions: the CommonMark citation idioms `\[1\]` and `\(1\)` no longer render as fake LaTeX display math (`⟦ 1 ⟧`), and `\~5~`, `\^2^`, `\==m==`, `\![img](…)`, `\[^1]`, `\:rocket:`, and `\<kbd>…\</kbd>` all pass through untouched to the renderer. Unescaped math (`$x^2$`, `\[x^2\]`), native scripts (`H~2~O`, `x\\~5~`), and fenced code are unchanged. The plain-text rendering paths (`VESICLE_MARKDOWN_RENDERER=plain` and artifact previews) guard their marker strips and decode remaining escapes as the final step: `\~` shows as `~`, `\*x\*` keeps its asterisks instead of losing them, `\#`/`\>`/`\-` line markers display normally, and `\\` decodes to a single backslash.
 
 ### Added
 
