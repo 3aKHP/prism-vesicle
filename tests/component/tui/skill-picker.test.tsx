@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { OptionPicker } from "../../../src/tui/widgets/OptionPicker";
 import { resolveBottomSurfaceMode, type BottomSurfaceState } from "../../../src/tui/views/BottomSurface";
 import type { SkillPickerState } from "../../../src/tui/skill-picker-controller";

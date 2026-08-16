@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { MessageStream } from "../../../src/tui/views/MessageStream";
 import { isEmptySessionTranscript } from "../../../src/tui/session-presenter";
 import type { Message } from "../../../src/tui/types";

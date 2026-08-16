@@ -40,7 +40,7 @@ async function loadOpenTuiPreload(): Promise<void> {
   // Keep this specifier indirect so package builds can compile the TUI without
   // bundling OpenTUI's runtime Babel transform. Source runs still load it
   // before importing any TSX module.
-  const preloadModule = ["@opentui/solid", "preload"].join("/");
+  const preloadModule = ["@3akhp/opentui-solid", "preload"].join("/");
   await import(preloadModule);
 }
 

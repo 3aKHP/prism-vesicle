@@ -5,14 +5,10 @@ import {
   getTreeSitterClient,
   MarkdownRenderable,
   parseColor,
-} from "@opentui/core";
-import type { SimpleHighlight } from "@opentui/core";
-import { installMarkdownEscapeConceal } from "./markdown-escape-conceal";
+} from "@3akhp/opentui-core";
+import type { SimpleHighlight } from "@3akhp/opentui-core";
+import { resolveForkNativeAsset } from "./native-runtime";
 import { paletteFor, syntaxStyle } from "./theme";
-
-// The escape-conceal transform must be active in every channel this
-// diagnostic runs at (source, npm, binaries, installer smoke).
-installMarkdownEscapeConceal();
 
 declare const VESICLE_TREE_SITTER_WORKER_PATH: string;
 
@@ -35,6 +31,12 @@ export type MarkdownRuntimeDiagnostic = {
   selection: {
     ok: boolean;
     cases: SelectionRuntimeProbe[];
+  };
+  native: {
+    ok: boolean;
+    key?: string;
+    path?: string;
+    error?: string;
   };
 };
 
@@ -67,26 +69,29 @@ const SELECTION_PROBES: Array<{
  */
 export async function runMarkdownRuntimeDiagnostic(): Promise<MarkdownRuntimeDiagnostic> {
   try {
-    const [probes, escapeProbe, selectionCases] = await Promise.all([
+    const [probes, escapeProbe, selectionCases, nativeProbe] = await Promise.all([
       Promise.all([
         probe("markdown", "**bold** and `code`\n\n| a | b |\n|---|---|\n| 1 | 2 |"),
         probe("typescript", "const value: number = 1;"),
       ]),
       probeEscapeConceal(),
       Promise.all(SELECTION_PROBES.map(probeNativeMarkdownSelection)),
+      probeNativeAsset(),
     ]);
     const selection = {
       ok: selectionCases.every((entry) => entry.ok),
       cases: selectionCases,
     };
     return {
-      ok: probes.every((entry) => !entry.error && entry.highlights.count > 0) && escapeProbe.ok && selection.ok,
+      ok: probes.every((entry) => !entry.error && entry.highlights.count > 0) && escapeProbe.ok && selection.ok
+        && nativeProbe.ok,
       workerPath: typeof VESICLE_TREE_SITTER_WORKER_PATH !== "undefined"
         ? VESICLE_TREE_SITTER_WORKER_PATH
         : process.env.OTUI_TREE_SITTER_WORKER_PATH,
       probes,
       escape: escapeProbe,
       selection,
+      native: nativeProbe,
     };
   } finally {
     // The diagnostic is a short-lived CLI operation. Leaving OpenTUI's worker
@@ -96,11 +101,11 @@ export async function runMarkdownRuntimeDiagnostic(): Promise<MarkdownRuntimeDia
 }
 
 /**
- * Distribution-boundary oracle for the interim backslash-escape fix: the
- * highlight tuples of `Escaped \~ and \* here` must conceal exactly the two
- * backslash bytes, so a channel that lost the transform (or a future
- * dependency bump that changes the shape) fails the smoke instead of
- * silently regressing to literal escape rendering.
+ * Distribution-boundary oracle for the backslash-escape fix that the fork
+ * runtime carries worker-side: the highlight tuples of `Escaped \~ and \*
+ * here` must conceal exactly the two backslash bytes, so a channel that lost
+ * the fork worker (or a future dependency bump that changes the shape) fails
+ * the smoke instead of silently regressing to literal escape rendering.
  */
 async function probeEscapeConceal(): Promise<MarkdownRuntimeDiagnostic["escape"]> {
   const content = "Escaped \\~ and \\* here";
@@ -122,6 +127,22 @@ async function probeEscapeConceal(): Promise<MarkdownRuntimeDiagnostic["escape"]
     return { ok: true, concealedCount: concealed.length };
   } catch (error) {
     return { ok: false, concealedCount: 0, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Report which native library the fork runtime resolves for this host,
+ * through the fork's own asset table (see native-runtime.ts).
+ */
+async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> {
+  try {
+    const native = resolveForkNativeAsset();
+    if (!native) {
+      throw new Error("fork runtime asset list has no native library for this platform");
+    }
+    return { ok: true, key: native.key, path: native.source };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

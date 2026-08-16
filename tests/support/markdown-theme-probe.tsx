@@ -1,5 +1,5 @@
-import { parseColor } from "@opentui/core";
-import { testRender } from "@opentui/solid";
+import { parseColor } from "@3akhp/opentui-core";
+import { testRender } from "@3akhp/opentui-solid";
 import { paletteFor, setThemePreference } from "../../src/tui/theme";
 import { MarkdownContent } from "../../src/tui/widgets/MarkdownContent";
 import { foregroundFor } from "./markdown-test-utils";

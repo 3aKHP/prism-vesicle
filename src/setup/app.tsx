@@ -1,4 +1,4 @@
-import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@opentui/solid";
+import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@3akhp/opentui-solid";
 import { createSignal } from "solid-js";
 import { applyComposerKey, insertComposerText, normalizeKeyName } from "../tui/composer";
 import { runSetupEffect, type SetupEffectDependencies } from "./setup-effects";

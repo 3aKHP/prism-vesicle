@@ -143,6 +143,7 @@ function assertCleanTree(label: string, result: CapturedRun): void {
     throw new Error(`${label} is not clean:\n${result.output.slice(-6000)}`);
   }
   const forbidden = [
+    "@3akhp/opentui-solid",
     "@opentui/solid",
     "@opentui/keymap",
     "solid-js",

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { AgentCard } from "../../../src/tui/widgets/AgentCard";
 import { agentActivitySummary, agentCardFromMetadata, applyAgentEvent, mergeRestoredAgentCards, renderAgentDetail, retryAgentDelivery, setAgentDeliveryState } from "../../../src/tui/agent-view";
 import { agentSidebarLines } from "../../../src/tui/views/Sidebar";

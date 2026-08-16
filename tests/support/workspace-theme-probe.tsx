@@ -1,5 +1,5 @@
-import { parseColor, type Renderable, TextareaRenderable } from "@opentui/core";
-import { testRender } from "@opentui/solid";
+import { parseColor, type Renderable, TextareaRenderable } from "@3akhp/opentui-core";
+import { testRender } from "@3akhp/opentui-solid";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

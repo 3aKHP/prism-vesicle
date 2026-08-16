@@ -1,4 +1,4 @@
-import { useKeyboard, usePaste, useRenderer } from "@opentui/solid";
+import { useKeyboard, usePaste, useRenderer } from "@3akhp/opentui-solid";
 import type { Accessor, Setter } from "solid-js";
 import type { GateRequest } from "../core/gate/types";
 import type { PermissionRequest } from "../core/permissions";

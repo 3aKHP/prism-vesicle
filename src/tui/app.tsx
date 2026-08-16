@@ -1,6 +1,6 @@
 import { ThemedText } from "./theme-text";
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
-import { useRenderer, useTerminalDimensions } from "@opentui/solid";
+import { useRenderer, useTerminalDimensions } from "@3akhp/opentui-solid";
 import type { EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";

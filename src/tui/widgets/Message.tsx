@@ -8,7 +8,7 @@ import { ArtifactCard } from "./ArtifactCard";
 import { AgentCard } from "./AgentCard";
 import { StageMessageContent } from "./StageMessageContent";
 import { createMemo } from "solid-js";
-import { useRenderer } from "@opentui/solid";
+import { useRenderer } from "@3akhp/opentui-solid";
 import type { AgentCardState } from "../types";
 import type { VesicleImageAttachment } from "../../providers/shared/types";
 import { parseStageMessageContent, type StageMessageContent as ParsedStageMessageContent } from "../stage-message-content";

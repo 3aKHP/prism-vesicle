@@ -1,5 +1,11 @@
 import { createSignal } from "solid-js";
-import { SyntaxStyle } from "@opentui/core";
+import { SyntaxStyle } from "@3akhp/opentui-core";
+import { configureForkNativeLibrary } from "./native-runtime";
+
+// The fork core's prebundled Bun entry mis-resolves its native library (see
+// native-runtime.ts). This module's sharedSyntaxStyle below is the first FFI
+// touch in every channel, so pin the real native path before it evaluates.
+configureForkNativeLibrary();
 
 /**
  * Theme mode: the TUI ships a dark (night) and a light (day) palette derived

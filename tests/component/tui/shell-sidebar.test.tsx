@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { App, backgroundProcessActivitySummary, headerLine, } from "../../../src/tui/app";
 import { Sidebar, artifactSidebarLine, mcpSidebarLines, processSidebarLines } from "../../../src/tui/views/Sidebar";
 import { backgroundProcess } from "./fixtures/tui";

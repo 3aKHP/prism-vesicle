@@ -1,7 +1,7 @@
 import { ThemedText } from "./theme-text";
 import { createEffect, createMemo, For, onCleanup } from "solid-js";
-import type { BoxRenderable, CliRenderer } from "@opentui/core";
-import { useRenderer } from "@opentui/solid";
+import type { BoxRenderable, CliRenderer } from "@3akhp/opentui-core";
+import { useRenderer } from "@3akhp/opentui-solid";
 import { composerCursorCoords, layoutComposerText } from "./composer-layout";
 import { displayWidth, segmentGraphemes } from "./format";
 import { palette } from "./theme";

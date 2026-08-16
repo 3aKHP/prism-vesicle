@@ -1,4 +1,4 @@
-import { render } from "@opentui/solid";
+import { render } from "@3akhp/opentui-solid";
 import { App, type AppProps } from "./app";
 import { runHostShutdownCleanups } from "../core/process/shutdown";
 import {

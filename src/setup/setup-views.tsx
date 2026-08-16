@@ -1,4 +1,4 @@
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from "@3akhp/opentui-core";
 import { For, Match, Show, Switch, createMemo } from "solid-js";
 import { engineIds, type EngineId } from "../core/engine/profile";
 import { PromptComposer } from "../tui/PromptComposer";

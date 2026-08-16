@@ -1,6 +1,6 @@
 import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from "@3akhp/opentui-core";
 import type { UserQuestionOption, UserQuestionRequest } from "../core/user-question/types";
 import { truncateLine } from "./format";
 import { palette } from "./theme";

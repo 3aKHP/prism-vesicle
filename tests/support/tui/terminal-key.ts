@@ -1,4 +1,4 @@
-import { KeyEvent, parseKeypress, type ParseKeypressOptions } from "@opentui/core";
+import { KeyEvent, parseKeypress, type ParseKeypressOptions } from "@3akhp/opentui-core";
 
 type KeyHandler = (key: KeyEvent) => void;
 

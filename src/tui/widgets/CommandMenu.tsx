@@ -1,6 +1,6 @@
 import { ThemedText } from "../theme-text";
 import { For } from "solid-js";
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from "@3akhp/opentui-core";
 import type { Command } from "../commands/types";
 import { clampCommandMenuSelection } from "../commands/selection";
 import { palette } from "../theme";

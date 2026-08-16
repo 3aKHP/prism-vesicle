@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { resolveTuiLayout } from "../../../src/tui/layout";
 import { RewindPicker, rewindPickerPanelHeight } from "../../../src/tui/RewindPicker";
 import { YoloPrompt, yoloPanelHeight } from "../../../src/tui/YoloPrompt";
