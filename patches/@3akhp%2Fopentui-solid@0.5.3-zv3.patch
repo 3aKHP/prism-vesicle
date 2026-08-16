@@ -1,0 +1,240 @@
+diff --git a/components.js b/components.js
+index c6288934e3f1f02c6a646983063a081b31d1afca..c99837eb606a08f451b53961fe3f4c8ecb6fc9cc 100644
+--- a/components.js
++++ b/components.js
+@@ -1 +1 @@
+-export { extend, getComponentCatalogue } from "@opentui/solid"
++export { extend, getComponentCatalogue } from "@3akhp/opentui-solid"
+diff --git a/index.d.ts b/index.d.ts
+index 11a066f269d5393da2e410215c2ee1e777966195..562385aa91c1dd5a8833fed82b249ca3c757c366 100644
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -1,8 +1,8 @@
+-import { CliRenderer, type CliRendererConfig } from "@opentui/core";
+-import { type TestRendererOptions } from "@opentui/core/testing";
++import { CliRenderer, type CliRendererConfig } from "@3akhp/opentui-core";
++import { type TestRendererOptions } from "@3akhp/opentui-core/testing";
+ import type { JSX } from "./jsx-runtime.js";
+ export declare const render: (node: () => JSX.Element, rendererOrConfig?: CliRenderer | CliRendererConfig) => Promise<void>;
+-export declare const testRender: (node: () => JSX.Element, renderConfig?: TestRendererOptions) => Promise<import("@opentui/core/testing").TestRendererSetup>;
++export declare const testRender: (node: () => JSX.Element, renderConfig?: TestRendererOptions) => Promise<import("@3akhp/opentui-core/testing").TestRendererSetup>;
+ export * from "./src/reconciler.js";
+ export * from "./src/elements/index.js";
+ export * from "./src/scrollback.js";
+diff --git a/jsx-runtime.js b/jsx-runtime.js
+index 547d1717448efac035545d411320dd58b66d6abb..9119e6f1640b6576c20d45df61c4c8045e4b2f12 100644
+--- a/jsx-runtime.js
++++ b/jsx-runtime.js
+@@ -1,4 +1,4 @@
+-import { createComponent, createElement, spread } from "@opentui/solid";
++import { createComponent, createElement, spread } from "@3akhp/opentui-solid";
+ function normalizeProps(props) {
+     if (!props) {
+         return {};
+diff --git a/scripts/preload.node.js b/scripts/preload.node.js
+index 9f3bba81d0ecc23fe8e7e901c1928a96a5f9e623..667139a03def732a19b739ca8d5ef21bdb4536bd 100644
+--- a/scripts/preload.node.js
++++ b/scripts/preload.node.js
+@@ -1,4 +1,4 @@
+-const errorMessage = "@opentui/solid/preload is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
++const errorMessage = "@3akhp/opentui-solid/preload is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
+ 
+ function unavailable() {
+   throw new Error(errorMessage)
+diff --git a/scripts/runtime-plugin-support-configure.d.ts b/scripts/runtime-plugin-support-configure.d.ts
+index 122c59d1b3cadbdcdf11d360a57092a384e2985d..f09347e6972416de77de100adbe11cb955c09d4d 100644
+--- a/scripts/runtime-plugin-support-configure.d.ts
++++ b/scripts/runtime-plugin-support-configure.d.ts
+@@ -1,4 +1,4 @@
+-import { type RuntimeModuleEntry, type RuntimePluginRewriteOptions } from "@opentui/core/runtime-plugin";
++import { type RuntimeModuleEntry, type RuntimePluginRewriteOptions } from "@3akhp/opentui-core/runtime-plugin";
+ export interface SolidRuntimePluginSupportOptions {
+     additional?: Record<string, RuntimeModuleEntry>;
+     core?: RuntimeModuleEntry;
+diff --git a/scripts/runtime-plugin-support-configure.js b/scripts/runtime-plugin-support-configure.js
+index 1300461b99d0c1b0f26f0d59f85ba9ae22151fbe..5043aca7d017fa224bed77885c6cd48bb68daef3 100644
+--- a/scripts/runtime-plugin-support-configure.js
++++ b/scripts/runtime-plugin-support-configure.js
+@@ -3,17 +3,17 @@ import * as coreRuntime from "@3akhp/opentui-core";
+ import { createRuntimePlugin, isCoreRuntimeModuleSpecifier, runtimeModuleIdForSpecifier, } from "@3akhp/opentui-core/runtime-plugin";
+ import * as solidJsRuntime from "solid-js";
+ import * as solidJsStoreRuntime from "solid-js/store";
+-import * as solidRuntime from "@opentui/solid";
+-import * as solidComponentsRuntime from "@opentui/solid/components";
+-import * as solidJsxRuntime from "@opentui/solid/jsx-runtime";
+-import * as solidJsxDevRuntime from "@opentui/solid/jsx-dev-runtime";
++import * as solidRuntime from "@3akhp/opentui-solid";
++import * as solidComponentsRuntime from "@3akhp/opentui-solid/components";
++import * as solidJsxRuntime from "@3akhp/opentui-solid/jsx-runtime";
++import * as solidJsxDevRuntime from "@3akhp/opentui-solid/jsx-dev-runtime";
+ import { ensureSolidTransformPlugin } from "./solid-plugin.js";
+ const runtimePluginSupportInstalledKey = Symbol.for("opentui.solid.runtime-plugin-support");
+ const defaultRuntimeModules = {
+-    "@opentui/solid": solidRuntime,
+-    "@opentui/solid/components": solidComponentsRuntime,
+-    "@opentui/solid/jsx-runtime": solidJsxRuntime,
+-    "@opentui/solid/jsx-dev-runtime": solidJsxDevRuntime,
++    "@3akhp/opentui-solid": solidRuntime,
++    "@3akhp/opentui-solid/components": solidComponentsRuntime,
++    "@3akhp/opentui-solid/jsx-runtime": solidJsxRuntime,
++    "@3akhp/opentui-solid/jsx-dev-runtime": solidJsxDevRuntime,
+     "solid-js": solidJsRuntime,
+     "solid-js/store": solidJsStoreRuntime,
+ };
+@@ -29,7 +29,7 @@ function createRuntimeModules(options) {
+ function assertCompatibleInstall(install, modules, options) {
+     for (const specifier of Object.keys(modules)) {
+         if (!install.specifiers.has(specifier)) {
+-            throw new Error(`OpenTUI Solid runtime plugin support is already installed without ${specifier}. Call ensureRuntimePluginSupport({ additional }) from @opentui/solid/runtime-plugin-support/configure before importing @opentui/solid/runtime-plugin-support.`);
++            throw new Error(`OpenTUI Solid runtime plugin support is already installed without ${specifier}. Call ensureRuntimePluginSupport({ additional }) from @3akhp/opentui-solid/runtime-plugin-support/configure before importing @3akhp/opentui-solid/runtime-plugin-support.`);
+         }
+     }
+     if (options?.core && options.core !== install.core) {
+@@ -50,7 +50,7 @@ export function ensureRuntimePluginSupport(options = {}) {
+         return false;
+     }
+     ensureSolidTransformPlugin({
+-        moduleName: runtimeModuleIdForSpecifier("@opentui/solid"),
++        moduleName: runtimeModuleIdForSpecifier("@3akhp/opentui-solid"),
+         resolvePath(specifier) {
+             if (!isCoreRuntimeModuleSpecifier(specifier) && !modules[specifier]) {
+                 return null;
+diff --git a/scripts/runtime-plugin-support-configure.node.js b/scripts/runtime-plugin-support-configure.node.js
+index df4ce39267424503b238deb0615694fb3cc7db9f..bc8c8381a4a544b534c09d00c3485c2c3512ec7e 100644
+--- a/scripts/runtime-plugin-support-configure.node.js
++++ b/scripts/runtime-plugin-support-configure.node.js
+@@ -1,4 +1,4 @@
+-const errorMessage = "@opentui/solid/runtime-plugin-support/configure is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
++const errorMessage = "@3akhp/opentui-solid/runtime-plugin-support/configure is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
+ 
+ function unavailable() {
+   throw new Error(errorMessage)
+diff --git a/scripts/runtime-plugin-support.node.js b/scripts/runtime-plugin-support.node.js
+index cc339b6a0123a9b9c83d5211f6434b8e35819492..4df6f3721968f65135789a89136c616419214e18 100644
+--- a/scripts/runtime-plugin-support.node.js
++++ b/scripts/runtime-plugin-support.node.js
+@@ -1,4 +1,4 @@
+-const errorMessage = "@opentui/solid/runtime-plugin-support is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
++const errorMessage = "@3akhp/opentui-solid/runtime-plugin-support is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
+ 
+ function unavailable() {
+   throw new Error(errorMessage)
+diff --git a/scripts/solid-plugin.js b/scripts/solid-plugin.js
+index 28c0b12271d07444f36b81cb36f1f332b76bbe4b..a156e014f0bd88c0bb75a4563dfddabac97c9ac1 100644
+--- a/scripts/solid-plugin.js
++++ b/scripts/solid-plugin.js
+@@ -56,7 +56,7 @@ export function createSolidTransformPlugin(input = {}) {
+                 const file = Bun.file(path);
+                 const code = await file.text();
+                 const runtime = getSolidTransformRuntime();
+-                const moduleName = input.moduleName ?? runtime.moduleName ?? "@opentui/solid";
++                const moduleName = input.moduleName ?? runtime.moduleName ?? "@3akhp/opentui-solid";
+                 const resolvePath = input.resolvePath ?? runtime.resolvePath;
+                 const contents = await transformSolidSource(code, {
+                     filename: path,
+diff --git a/scripts/solid-plugin.node.js b/scripts/solid-plugin.node.js
+index f8426311e59209688b21d20f6a301456582e9470..5a355eb56bc203456d3451b57c7a8042904336af 100644
+--- a/scripts/solid-plugin.node.js
++++ b/scripts/solid-plugin.node.js
+@@ -1,4 +1,4 @@
+-const errorMessage = "@opentui/solid/bun-plugin is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
++const errorMessage = "@3akhp/opentui-solid/bun-plugin is Bun-only and is not available in Node.js. Use Bun to import this entrypoint."
+ 
+ function unavailable() {
+   throw new Error(errorMessage)
+diff --git a/scripts/solid-transform.js b/scripts/solid-transform.js
+index 6987446ee22b4fc9e6544e913524b1f243dc36db..6919846bb140173dbced7ae83724c302f7dab379 100644
+--- a/scripts/solid-transform.js
++++ b/scripts/solid-transform.js
+@@ -46,7 +46,7 @@ export async function transformSolidSource(code, options) {
+         presets.push([
+             solid,
+             {
+-                moduleName: options.moduleName ?? "@opentui/solid",
++                moduleName: options.moduleName ?? "@3akhp/opentui-solid",
+                 generate: "universal",
+             },
+         ]);
+diff --git a/src/elements/catalogue.d.ts b/src/elements/catalogue.d.ts
+index b47d88488054078ffff7ffb80a307d3990a96f04..edcdca1b9d686ae4aa5a46012b63ab2a95a0dc88 100644
+--- a/src/elements/catalogue.d.ts
++++ b/src/elements/catalogue.d.ts
+@@ -1,4 +1,4 @@
+-import { ASCIIFontRenderable, BoxRenderable, CodeRenderable, DiffRenderable, ImageRenderable, InputRenderable, LineNumberRenderable, MarkdownRenderable, ScrollBoxRenderable, SelectRenderable, TabSelectRenderable, TextareaRenderable, TextNodeRenderable, TextRenderable, type RenderContext, type TextNodeOptions } from "@opentui/core";
++import { ASCIIFontRenderable, BoxRenderable, CodeRenderable, DiffRenderable, ImageRenderable, InputRenderable, LineNumberRenderable, MarkdownRenderable, ScrollBoxRenderable, SelectRenderable, TabSelectRenderable, TextareaRenderable, TextNodeRenderable, TextRenderable, type RenderContext, type TextNodeOptions } from "@3akhp/opentui-core";
+ import type { RenderableConstructor } from "../types/elements.js";
+ declare class SpanRenderable extends TextNodeRenderable {
+     private readonly _ctx;
+diff --git a/src/elements/hooks.d.ts b/src/elements/hooks.d.ts
+index 365067bf71e9c1b95f989f8baa37a2dd4ad84fe5..62093a7dc7c8344cccb8f2ea1645b35447647c02 100644
+--- a/src/elements/hooks.d.ts
++++ b/src/elements/hooks.d.ts
+@@ -1,4 +1,4 @@
+-import { PasteEvent, Selection, Timeline, type CliRenderer, type KeyEvent, type TimelineOptions } from "@opentui/core";
++import { PasteEvent, Selection, Timeline, type CliRenderer, type KeyEvent, type TimelineOptions } from "@3akhp/opentui-core";
+ export declare const RendererContext: import("solid-js").Context<CliRenderer | undefined>;
+ export declare const useRenderer: () => CliRenderer;
+ export declare const onResize: (callback: (width: number, height: number) => void) => void;
+diff --git a/src/elements/slot.d.ts b/src/elements/slot.d.ts
+index ca5dc99e2c8ea26032b984b45ce8f9f36afe639a..a13f1e68f90ca353003f2787f2a56cd447ba337f 100644
+--- a/src/elements/slot.d.ts
++++ b/src/elements/slot.d.ts
+@@ -1,4 +1,4 @@
+-import { BaseRenderable, TextNodeRenderable, Yoga } from "@opentui/core";
++import { BaseRenderable, TextNodeRenderable, Yoga } from "@3akhp/opentui-core";
+ declare class SlotBaseRenderable extends BaseRenderable {
+     constructor(id: string);
+     add(obj: BaseRenderable | unknown, index?: number): number;
+diff --git a/src/plugins/slot.d.ts b/src/plugins/slot.d.ts
+index 3505676fc7ea5732ce256fa1cd8a92946f846e5e..96514bc73e035702b0fbc70dfabb68a2f54eae07 100644
+--- a/src/plugins/slot.d.ts
++++ b/src/plugins/slot.d.ts
+@@ -1,4 +1,4 @@
+-import { SlotRegistry, type CliRenderer, type Plugin, type PluginContext, type PluginErrorEvent, type SlotMode, type SlotRegistryOptions } from "@opentui/core";
++import { SlotRegistry, type CliRenderer, type Plugin, type PluginContext, type PluginErrorEvent, type SlotMode, type SlotRegistryOptions } from "@3akhp/opentui-core";
+ import { type JSX } from "solid-js";
+ export type { SlotMode };
+ type SlotMap = Record<string, object>;
+diff --git a/src/reconciler.d.ts b/src/reconciler.d.ts
+index 100463aff76ad021e7fe5c916920f3e922d065b1..b5d8dd843dc0e12c3c72d596f4de0a071e4df91b 100644
+--- a/src/reconciler.d.ts
++++ b/src/reconciler.d.ts
+@@ -1,4 +1,4 @@
+-import { BaseRenderable } from "@opentui/core";
++import { BaseRenderable } from "@3akhp/opentui-core";
+ import { SlotRenderable } from "./elements/index.js";
+ export type DomNode = BaseRenderable;
+ export declare function createSlotNode(): SlotRenderable;
+diff --git a/src/scrollback.d.ts b/src/scrollback.d.ts
+index 01c47276eef2132ae32f55a6895de71c13405541..97606d1f9988585409f4d4e890a4d0ac2982b8bd 100644
+--- a/src/scrollback.d.ts
++++ b/src/scrollback.d.ts
+@@ -1,4 +1,4 @@
+-import { type CliRenderer, type ScrollbackRenderContext, type ScrollbackWriter } from "@opentui/core";
++import { type CliRenderer, type ScrollbackRenderContext, type ScrollbackWriter } from "@3akhp/opentui-core";
+ import { type JSX } from "solid-js";
+ export interface SolidScrollbackWriterOptions {
+     width?: number;
+diff --git a/src/time-to-first-draw.d.ts b/src/time-to-first-draw.d.ts
+index c148b3b1d5b17eb6b6c6d97c937b937b69ccef0c..d2af15a50dd844fb6ad0f3f86cb0ec953d913861 100644
+--- a/src/time-to-first-draw.d.ts
++++ b/src/time-to-first-draw.d.ts
+@@ -1,6 +1,6 @@
+-import { TimeToFirstDrawRenderable } from "@opentui/core";
++import { TimeToFirstDrawRenderable } from "@3akhp/opentui-core";
+ import type { ExtendedComponentProps } from "./types/elements.js";
+-declare module "@opentui/solid" {
++declare module "@3akhp/opentui-solid" {
+     interface OpenTUIComponents {
+         time_to_first_draw: typeof TimeToFirstDrawRenderable;
+     }
+diff --git a/src/types/elements.d.ts b/src/types/elements.d.ts
+index 0f4599575613b350dd7402bddad16343c29cf48c..e369df7c7a3df807c5ed428711542d47df4389c3 100644
+--- a/src/types/elements.d.ts
++++ b/src/types/elements.d.ts
+@@ -1,4 +1,4 @@
+-import type { ASCIIFontOptions, ASCIIFontRenderable, BaseRenderable, BoxOptions, BoxRenderable, CodeOptions, CodeRenderable, ImageRenderable, ImageRenderableOptions, InputRenderable, InputRenderableOptions, KeyEvent, MarkdownOptions, MarkdownRenderable, RenderableOptions, RenderContext, ScrollBoxOptions, ScrollBoxRenderable, SelectOption, SelectRenderable, SelectRenderableOptions, TabSelectOption, TabSelectRenderable, TabSelectRenderableOptions, TextareaOptions, TextareaRenderable, TextNodeRenderable, TextOptions, TextRenderable } from "@opentui/core";
++import type { ASCIIFontOptions, ASCIIFontRenderable, BaseRenderable, BoxOptions, BoxRenderable, CodeOptions, CodeRenderable, ImageRenderable, ImageRenderableOptions, InputRenderable, InputRenderableOptions, KeyEvent, MarkdownOptions, MarkdownRenderable, RenderableOptions, RenderContext, ScrollBoxOptions, ScrollBoxRenderable, SelectOption, SelectRenderable, SelectRenderableOptions, TabSelectOption, TabSelectRenderable, TabSelectRenderableOptions, TextareaOptions, TextareaRenderable, TextNodeRenderable, TextOptions, TextRenderable } from "@3akhp/opentui-core";
+ import type { Ref } from "solid-js";
+ import type { JSX } from "../../jsx-runtime.js";
+ /** Properties that should not be included in the style prop */
