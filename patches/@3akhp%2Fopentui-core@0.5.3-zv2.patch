@@ -1,11 +1,106 @@
+diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-20bb7d1eb51fb4e5 b/.bun-tag-20bb7d1eb51fb4e5
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-2d4f00f0e3c885f b/.bun-tag-2d4f00f0e3c885f
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-49e6fb951277a11d b/.bun-tag-49e6fb951277a11d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-5ade6fb5cd0272d b/.bun-tag-5ade6fb5cd0272d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-8f4802e64a0b1320 b/.bun-tag-8f4802e64a0b1320
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-b7256f483a442840 b/.bun-tag-b7256f483a442840
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/chunk-bun-j1p6ewy6.js b/chunk-bun-j1p6ewy6.js
+index 2c6dbbf6043f1b3a58d3ef3f8aa47a0c781dd4cb..e5169a6aa57299167d99fafae05a1341767f5b2d 100644
+--- a/chunk-bun-j1p6ewy6.js
++++ b/chunk-bun-j1p6ewy6.js
+@@ -17293,6 +17293,9 @@ function setRenderLibPath(libPath) {
+     opentuiLib = undefined;
+   }
+ }
++function getRenderLibPath() {
++  return opentuiLibPath ?? targetLibPath;
++}
+ function resolveRenderLib() {
+   if (!opentuiLib) {
+     try {
+@@ -18264,7 +18267,7 @@ var Yoga = {
+ };
+ var yoga_default = Yoga;
+ 
+-export { toArrayBuffer, singleton, envRegistry, registerEnvVar, clearEnvCache, generateEnvMarkdown, generateEnvColored, env, sleep, stringWidth2 as stringWidth, resolveBundledFilePath, DEFAULT_FOREGROUND_RGB, DEFAULT_BACKGROUND_RGB, normalizeIndexedColorIndex, ansi256IndexToRgb, RGBA, normalizeColorValue, hexToRgb, rgbToHex, hsvToRgb, parseColor, isValidBorderStyle, parseBorderStyle, BorderChars, getBorderFromSides, getBorderSides, borderCharsToArray, BorderCharArrays, KeyEvent, PasteEvent, KeyHandler, InternalKeyHandler, fonts, measureText, getCharacterPositions, coordinateToCharacterIndex, renderFontToFrameBuffer, TextAttributes, ATTRIBUTE_BASE_BITS, ATTRIBUTE_BASE_MASK, getBaseAttributes, DebugOverlayCorner, TargetChannel, createTextAttributes, attributesWithLink, getLinkId, visualizeRenderableTree, isStyledText, StyledText, stringToStyledText, black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite, bgBlack, bgRed, bgGreen, bgYellow, bgBlue, bgMagenta, bgCyan, bgWhite, bold, italic, underline, strikethrough, dim, reverse, blink, fg, bg, link, t, hastToStyledText, SystemClock, nonAlphanumericKeys, terminalNamedSingleStrokeKeys, parseKeypress, LinearScrollAccel, MacOSScrollAccel, parseAlign, parseAlignItems, parseBoxSizing, parseDimension, parseDirection, parseDisplay, parseEdge, parseFlexDirection, parseGutter, parseJustify, parseLogLevel, parseMeasureMode, parseOverflow, parsePositionType, parseUnit, parseWrap, MouseParser, Selection, convertGlobalToLocalSelection, ASCIIFontSelectionHelper, StdinParser, treeSitterToTextChunks, treeSitterToStyledText, addDefaultParsers, TreeSitterClient, DataPathsManager, getDataPaths, extensionToFiletype, basenameToFiletype, extToFiletype, pathToFiletype, infoStringToFiletype, getTreeSitterClient, destroyTreeSitterClient, ExtmarksController, createExtmarksController, TerminalPalette, createTerminalPalette, normalizeTerminalPalette, buildTerminalPaletteSignature, decodePasteBytes, stripAnsiSequences, createHostClipboard, createClipboard, ClipboardTarget, createRendererClipboardAdapter, Clipboard, detectLinks, OptimizedBuffer, TextBuffer, SpanInfoStruct, NativeAudioStreamFormat, NativeAudioStreamState, NativeAudioStreamStateNames, NativeAudioStreamCloseReason, NativeAudioStreamState2 as NativeAudioStreamState1, NativeAudioStreamCloseReason2 as NativeAudioStreamCloseReason1, NativeAudioStreamFormat2 as NativeAudioStreamFormat1, NativeClipboardOperationStatus, NativeClipboardStartStatus, NativeClipboardCancelStatus, NativeClipboardCopyStatus, NativeClipboardDestroyStatus, NativeClipboardShutdownStatus, LogLevel2 as LogLevel, NativeMeasureTargetKind, setRenderLibPath, resolveRenderLib, Align, BoxSizing, Dimension, Direction, Display, Edge, Errata, ExperimentalFeature, FlexDirection, Gutter, Justify, LogLevel as LogLevel1, MeasureMode, NodeType, Overflow, PositionType, Unit, Wrap, ALIGN_AUTO, ALIGN_FLEX_START, ALIGN_CENTER, ALIGN_FLEX_END, ALIGN_STRETCH, ALIGN_BASELINE, ALIGN_SPACE_BETWEEN, ALIGN_SPACE_AROUND, ALIGN_SPACE_EVENLY, BOX_SIZING_BORDER_BOX, BOX_SIZING_CONTENT_BOX, DIMENSION_WIDTH, DIMENSION_HEIGHT, DIRECTION_INHERIT, DIRECTION_LTR, DIRECTION_RTL, DISPLAY_FLEX, DISPLAY_NONE, DISPLAY_CONTENTS, EDGE_LEFT, EDGE_TOP, EDGE_RIGHT, EDGE_BOTTOM, EDGE_START, EDGE_END, EDGE_HORIZONTAL, EDGE_VERTICAL, EDGE_ALL, ERRATA_NONE, ERRATA_STRETCH_FLEX_BASIS, ERRATA_ABSOLUTE_POSITION_WITHOUT_INSETS_EXCLUDES_PADDING, ERRATA_ABSOLUTE_PERCENT_AGAINST_INNER_SIZE, ERRATA_ALL, ERRATA_CLASSIC, EXPERIMENTAL_FEATURE_WEB_FLEX_BASIS, FLEX_DIRECTION_COLUMN, FLEX_DIRECTION_COLUMN_REVERSE, FLEX_DIRECTION_ROW, FLEX_DIRECTION_ROW_REVERSE, GUTTER_COLUMN, GUTTER_ROW, GUTTER_ALL, JUSTIFY_FLEX_START, JUSTIFY_CENTER, JUSTIFY_FLEX_END, JUSTIFY_SPACE_BETWEEN, JUSTIFY_SPACE_AROUND, JUSTIFY_SPACE_EVENLY, LOG_LEVEL_ERROR, LOG_LEVEL_WARN, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_VERBOSE, LOG_LEVEL_FATAL, MEASURE_MODE_UNDEFINED, MEASURE_MODE_EXACTLY, MEASURE_MODE_AT_MOST, NODE_TYPE_DEFAULT, NODE_TYPE_TEXT, OVERFLOW_VISIBLE, OVERFLOW_HIDDEN, OVERFLOW_SCROLL, POSITION_TYPE_STATIC, POSITION_TYPE_RELATIVE, POSITION_TYPE_ABSOLUTE, UNIT_UNDEFINED, UNIT_POINT, UNIT_PERCENT, UNIT_AUTO, WRAP_NO_WRAP, WRAP_WRAP, WRAP_WRAP_REVERSE, Config, Node, exports_yoga, yoga_default };
++export { toArrayBuffer, singleton, envRegistry, registerEnvVar, clearEnvCache, generateEnvMarkdown, generateEnvColored, env, sleep, stringWidth2 as stringWidth, resolveBundledFilePath, DEFAULT_FOREGROUND_RGB, DEFAULT_BACKGROUND_RGB, normalizeIndexedColorIndex, ansi256IndexToRgb, RGBA, normalizeColorValue, hexToRgb, rgbToHex, hsvToRgb, parseColor, isValidBorderStyle, parseBorderStyle, BorderChars, getBorderFromSides, getBorderSides, borderCharsToArray, BorderCharArrays, KeyEvent, PasteEvent, KeyHandler, InternalKeyHandler, fonts, measureText, getCharacterPositions, coordinateToCharacterIndex, renderFontToFrameBuffer, TextAttributes, ATTRIBUTE_BASE_BITS, ATTRIBUTE_BASE_MASK, getBaseAttributes, DebugOverlayCorner, TargetChannel, createTextAttributes, attributesWithLink, getLinkId, visualizeRenderableTree, isStyledText, StyledText, stringToStyledText, black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite, bgBlack, bgRed, bgGreen, bgYellow, bgBlue, bgMagenta, bgCyan, bgWhite, bold, italic, underline, strikethrough, dim, reverse, blink, fg, bg, link, t, hastToStyledText, SystemClock, nonAlphanumericKeys, terminalNamedSingleStrokeKeys, parseKeypress, LinearScrollAccel, MacOSScrollAccel, parseAlign, parseAlignItems, parseBoxSizing, parseDimension, parseDirection, parseDisplay, parseEdge, parseFlexDirection, parseGutter, parseJustify, parseLogLevel, parseMeasureMode, parseOverflow, parsePositionType, parseUnit, parseWrap, MouseParser, Selection, convertGlobalToLocalSelection, ASCIIFontSelectionHelper, StdinParser, treeSitterToTextChunks, treeSitterToStyledText, addDefaultParsers, TreeSitterClient, DataPathsManager, getDataPaths, extensionToFiletype, basenameToFiletype, extToFiletype, pathToFiletype, infoStringToFiletype, getTreeSitterClient, destroyTreeSitterClient, ExtmarksController, createExtmarksController, TerminalPalette, createTerminalPalette, normalizeTerminalPalette, buildTerminalPaletteSignature, decodePasteBytes, stripAnsiSequences, createHostClipboard, createClipboard, ClipboardTarget, createRendererClipboardAdapter, Clipboard, detectLinks, OptimizedBuffer, TextBuffer, SpanInfoStruct, NativeAudioStreamFormat, NativeAudioStreamState, NativeAudioStreamStateNames, NativeAudioStreamCloseReason, NativeAudioStreamState2 as NativeAudioStreamState1, NativeAudioStreamCloseReason2 as NativeAudioStreamCloseReason1, NativeAudioStreamFormat2 as NativeAudioStreamFormat1, NativeClipboardOperationStatus, NativeClipboardStartStatus, NativeClipboardCancelStatus, NativeClipboardCopyStatus, NativeClipboardDestroyStatus, NativeClipboardShutdownStatus, LogLevel2 as LogLevel, NativeMeasureTargetKind, setRenderLibPath, getRenderLibPath, resolveRenderLib, Align, BoxSizing, Dimension, Direction, Display, Edge, Errata, ExperimentalFeature, FlexDirection, Gutter, Justify, LogLevel as LogLevel1, MeasureMode, NodeType, Overflow, PositionType, Unit, Wrap, ALIGN_AUTO, ALIGN_FLEX_START, ALIGN_CENTER, ALIGN_FLEX_END, ALIGN_STRETCH, ALIGN_BASELINE, ALIGN_SPACE_BETWEEN, ALIGN_SPACE_AROUND, ALIGN_SPACE_EVENLY, BOX_SIZING_BORDER_BOX, BOX_SIZING_CONTENT_BOX, DIMENSION_WIDTH, DIMENSION_HEIGHT, DIRECTION_INHERIT, DIRECTION_LTR, DIRECTION_RTL, DISPLAY_FLEX, DISPLAY_NONE, DISPLAY_CONTENTS, EDGE_LEFT, EDGE_TOP, EDGE_RIGHT, EDGE_BOTTOM, EDGE_START, EDGE_END, EDGE_HORIZONTAL, EDGE_VERTICAL, EDGE_ALL, ERRATA_NONE, ERRATA_STRETCH_FLEX_BASIS, ERRATA_ABSOLUTE_POSITION_WITHOUT_INSETS_EXCLUDES_PADDING, ERRATA_ABSOLUTE_PERCENT_AGAINST_INNER_SIZE, ERRATA_ALL, ERRATA_CLASSIC, EXPERIMENTAL_FEATURE_WEB_FLEX_BASIS, FLEX_DIRECTION_COLUMN, FLEX_DIRECTION_COLUMN_REVERSE, FLEX_DIRECTION_ROW, FLEX_DIRECTION_ROW_REVERSE, GUTTER_COLUMN, GUTTER_ROW, GUTTER_ALL, JUSTIFY_FLEX_START, JUSTIFY_CENTER, JUSTIFY_FLEX_END, JUSTIFY_SPACE_BETWEEN, JUSTIFY_SPACE_AROUND, JUSTIFY_SPACE_EVENLY, LOG_LEVEL_ERROR, LOG_LEVEL_WARN, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_VERBOSE, LOG_LEVEL_FATAL, MEASURE_MODE_UNDEFINED, MEASURE_MODE_EXACTLY, MEASURE_MODE_AT_MOST, NODE_TYPE_DEFAULT, NODE_TYPE_TEXT, OVERFLOW_VISIBLE, OVERFLOW_HIDDEN, OVERFLOW_SCROLL, POSITION_TYPE_STATIC, POSITION_TYPE_RELATIVE, POSITION_TYPE_ABSOLUTE, UNIT_UNDEFINED, UNIT_POINT, UNIT_PERCENT, UNIT_AUTO, WRAP_NO_WRAP, WRAP_WRAP, WRAP_WRAP_REVERSE, Config, Node, exports_yoga, yoga_default };
+ 
+ //# debugId=C5C7CDCE3A06E26D64756E2164756E21
+ //# sourceMappingURL=chunk-bun-j1p6ewy6.js.map
+diff --git a/chunk-bun-m90jn9cy.js b/chunk-bun-m90jn9cy.js
+index 9b0d4565890266cc5c6a48b26318dceb3a98053d..df8596cf7d6ab4b51bb1f2a4e832af2416ae43ad 100644
+--- a/chunk-bun-m90jn9cy.js
++++ b/chunk-bun-m90jn9cy.js
+@@ -4,7 +4,7 @@ import {
+ } from "./chunk-bun-w93az0yt.js";
+ 
+ // node_modules/@3akhp/opentui-core-linux-x64/index.bun.js
+-var module = await import("./chunk-bun-wfxff17g.js", { with: { type: "file" } });
++var module = await import("./libopentui-xpvgr7xt.so", { with: { type: "file" } });
+ var index_bun_default = module.default;
+ export {
+   index_bun_default as default
+diff --git a/chunk-bun-x5nf27xr.js b/chunk-bun-x5nf27xr.js
+index 76cc728f401d9cd166bf759f3a8c25b948beb214..699c2a29ae8fb075f78854ee2ad3dbe74c03bbc6 100644
+--- a/chunk-bun-x5nf27xr.js
++++ b/chunk-bun-x5nf27xr.js
+@@ -4,7 +4,7 @@ import {
+ } from "./chunk-bun-w93az0yt.js";
+ 
+ // node_modules/@3akhp/opentui-core-linux-x64-musl/index.bun.js
+-var module = await import("./chunk-bun-2kp4s3qq.js", { with: { type: "file" } });
++var module = await import("./libopentui-c5r1d7wt.so", { with: { type: "file" } });
+ var index_bun_default = module.default;
+ export {
+   index_bun_default as default
+diff --git a/chunk-node-dgg83evx.js b/chunk-node-dgg83evx.js
+index d0964615528cdcd9507503def82bb9adb8a89599..ebba0677fc93b152fbbc2a4c16b0541bf6bdc764 100644
+--- a/chunk-node-dgg83evx.js
++++ b/chunk-node-dgg83evx.js
+@@ -17283,6 +17283,9 @@ function setRenderLibPath(libPath) {
+     opentuiLib = undefined;
+   }
+ }
++function getRenderLibPath() {
++  return opentuiLibPath ?? targetLibPath;
++}
+ function resolveRenderLib() {
+   if (!opentuiLib) {
+     try {
+@@ -18254,7 +18257,7 @@ var Yoga = {
+ };
+ var yoga_default = Yoga;
+ 
+-export { toArrayBuffer, singleton, envRegistry, registerEnvVar, clearEnvCache, generateEnvMarkdown, generateEnvColored, env, sleep, stringWidth2 as stringWidth, resolveBundledFilePath, DEFAULT_FOREGROUND_RGB, DEFAULT_BACKGROUND_RGB, normalizeIndexedColorIndex, ansi256IndexToRgb, RGBA, normalizeColorValue, hexToRgb, rgbToHex, hsvToRgb, parseColor, isValidBorderStyle, parseBorderStyle, BorderChars, getBorderFromSides, getBorderSides, borderCharsToArray, BorderCharArrays, KeyEvent, PasteEvent, KeyHandler, InternalKeyHandler, fonts, measureText, getCharacterPositions, coordinateToCharacterIndex, renderFontToFrameBuffer, TextAttributes, ATTRIBUTE_BASE_BITS, ATTRIBUTE_BASE_MASK, getBaseAttributes, DebugOverlayCorner, TargetChannel, createTextAttributes, attributesWithLink, getLinkId, visualizeRenderableTree, isStyledText, StyledText, stringToStyledText, black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite, bgBlack, bgRed, bgGreen, bgYellow, bgBlue, bgMagenta, bgCyan, bgWhite, bold, italic, underline, strikethrough, dim, reverse, blink, fg, bg, link, t, hastToStyledText, SystemClock, nonAlphanumericKeys, terminalNamedSingleStrokeKeys, parseKeypress, LinearScrollAccel, MacOSScrollAccel, parseAlign, parseAlignItems, parseBoxSizing, parseDimension, parseDirection, parseDisplay, parseEdge, parseFlexDirection, parseGutter, parseJustify, parseLogLevel, parseMeasureMode, parseOverflow, parsePositionType, parseUnit, parseWrap, MouseParser, Selection, convertGlobalToLocalSelection, ASCIIFontSelectionHelper, StdinParser, treeSitterToTextChunks, treeSitterToStyledText, addDefaultParsers, TreeSitterClient, DataPathsManager, getDataPaths, extensionToFiletype, basenameToFiletype, extToFiletype, pathToFiletype, infoStringToFiletype, getTreeSitterClient, destroyTreeSitterClient, ExtmarksController, createExtmarksController, TerminalPalette, createTerminalPalette, normalizeTerminalPalette, buildTerminalPaletteSignature, decodePasteBytes, stripAnsiSequences, createHostClipboard, createClipboard, ClipboardTarget, createRendererClipboardAdapter, Clipboard, detectLinks, OptimizedBuffer, TextBuffer, SpanInfoStruct, NativeAudioStreamFormat, NativeAudioStreamState, NativeAudioStreamStateNames, NativeAudioStreamCloseReason, NativeAudioStreamState2 as NativeAudioStreamState1, NativeAudioStreamCloseReason2 as NativeAudioStreamCloseReason1, NativeAudioStreamFormat2 as NativeAudioStreamFormat1, NativeClipboardOperationStatus, NativeClipboardStartStatus, NativeClipboardCancelStatus, NativeClipboardCopyStatus, NativeClipboardDestroyStatus, NativeClipboardShutdownStatus, LogLevel2 as LogLevel, NativeMeasureTargetKind, setRenderLibPath, resolveRenderLib, Align, BoxSizing, Dimension, Direction, Display, Edge, Errata, ExperimentalFeature, FlexDirection, Gutter, Justify, LogLevel as LogLevel1, MeasureMode, NodeType, Overflow, PositionType, Unit, Wrap, ALIGN_AUTO, ALIGN_FLEX_START, ALIGN_CENTER, ALIGN_FLEX_END, ALIGN_STRETCH, ALIGN_BASELINE, ALIGN_SPACE_BETWEEN, ALIGN_SPACE_AROUND, ALIGN_SPACE_EVENLY, BOX_SIZING_BORDER_BOX, BOX_SIZING_CONTENT_BOX, DIMENSION_WIDTH, DIMENSION_HEIGHT, DIRECTION_INHERIT, DIRECTION_LTR, DIRECTION_RTL, DISPLAY_FLEX, DISPLAY_NONE, DISPLAY_CONTENTS, EDGE_LEFT, EDGE_TOP, EDGE_RIGHT, EDGE_BOTTOM, EDGE_START, EDGE_END, EDGE_HORIZONTAL, EDGE_VERTICAL, EDGE_ALL, ERRATA_NONE, ERRATA_STRETCH_FLEX_BASIS, ERRATA_ABSOLUTE_POSITION_WITHOUT_INSETS_EXCLUDES_PADDING, ERRATA_ABSOLUTE_PERCENT_AGAINST_INNER_SIZE, ERRATA_ALL, ERRATA_CLASSIC, EXPERIMENTAL_FEATURE_WEB_FLEX_BASIS, FLEX_DIRECTION_COLUMN, FLEX_DIRECTION_COLUMN_REVERSE, FLEX_DIRECTION_ROW, FLEX_DIRECTION_ROW_REVERSE, GUTTER_COLUMN, GUTTER_ROW, GUTTER_ALL, JUSTIFY_FLEX_START, JUSTIFY_CENTER, JUSTIFY_FLEX_END, JUSTIFY_SPACE_BETWEEN, JUSTIFY_SPACE_AROUND, JUSTIFY_SPACE_EVENLY, LOG_LEVEL_ERROR, LOG_LEVEL_WARN, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_VERBOSE, LOG_LEVEL_FATAL, MEASURE_MODE_UNDEFINED, MEASURE_MODE_EXACTLY, MEASURE_MODE_AT_MOST, NODE_TYPE_DEFAULT, NODE_TYPE_TEXT, OVERFLOW_VISIBLE, OVERFLOW_HIDDEN, OVERFLOW_SCROLL, POSITION_TYPE_STATIC, POSITION_TYPE_RELATIVE, POSITION_TYPE_ABSOLUTE, UNIT_UNDEFINED, UNIT_POINT, UNIT_PERCENT, UNIT_AUTO, WRAP_NO_WRAP, WRAP_WRAP, WRAP_WRAP_REVERSE, Config, Node, exports_yoga, yoga_default };
++export { toArrayBuffer, singleton, envRegistry, registerEnvVar, clearEnvCache, generateEnvMarkdown, generateEnvColored, env, sleep, stringWidth2 as stringWidth, resolveBundledFilePath, DEFAULT_FOREGROUND_RGB, DEFAULT_BACKGROUND_RGB, normalizeIndexedColorIndex, ansi256IndexToRgb, RGBA, normalizeColorValue, hexToRgb, rgbToHex, hsvToRgb, parseColor, isValidBorderStyle, parseBorderStyle, BorderChars, getBorderFromSides, getBorderSides, borderCharsToArray, BorderCharArrays, KeyEvent, PasteEvent, KeyHandler, InternalKeyHandler, fonts, measureText, getCharacterPositions, coordinateToCharacterIndex, renderFontToFrameBuffer, TextAttributes, ATTRIBUTE_BASE_BITS, ATTRIBUTE_BASE_MASK, getBaseAttributes, DebugOverlayCorner, TargetChannel, createTextAttributes, attributesWithLink, getLinkId, visualizeRenderableTree, isStyledText, StyledText, stringToStyledText, black, red, green, yellow, blue, magenta, cyan, white, brightBlack, brightRed, brightGreen, brightYellow, brightBlue, brightMagenta, brightCyan, brightWhite, bgBlack, bgRed, bgGreen, bgYellow, bgBlue, bgMagenta, bgCyan, bgWhite, bold, italic, underline, strikethrough, dim, reverse, blink, fg, bg, link, t, hastToStyledText, SystemClock, nonAlphanumericKeys, terminalNamedSingleStrokeKeys, parseKeypress, LinearScrollAccel, MacOSScrollAccel, parseAlign, parseAlignItems, parseBoxSizing, parseDimension, parseDirection, parseDisplay, parseEdge, parseFlexDirection, parseGutter, parseJustify, parseLogLevel, parseMeasureMode, parseOverflow, parsePositionType, parseUnit, parseWrap, MouseParser, Selection, convertGlobalToLocalSelection, ASCIIFontSelectionHelper, StdinParser, treeSitterToTextChunks, treeSitterToStyledText, addDefaultParsers, TreeSitterClient, DataPathsManager, getDataPaths, extensionToFiletype, basenameToFiletype, extToFiletype, pathToFiletype, infoStringToFiletype, getTreeSitterClient, destroyTreeSitterClient, ExtmarksController, createExtmarksController, TerminalPalette, createTerminalPalette, normalizeTerminalPalette, buildTerminalPaletteSignature, decodePasteBytes, stripAnsiSequences, createHostClipboard, createClipboard, ClipboardTarget, createRendererClipboardAdapter, Clipboard, detectLinks, OptimizedBuffer, TextBuffer, SpanInfoStruct, NativeAudioStreamFormat, NativeAudioStreamState, NativeAudioStreamStateNames, NativeAudioStreamCloseReason, NativeAudioStreamState2 as NativeAudioStreamState1, NativeAudioStreamCloseReason2 as NativeAudioStreamCloseReason1, NativeAudioStreamFormat2 as NativeAudioStreamFormat1, NativeClipboardOperationStatus, NativeClipboardStartStatus, NativeClipboardCancelStatus, NativeClipboardCopyStatus, NativeClipboardDestroyStatus, NativeClipboardShutdownStatus, LogLevel2 as LogLevel, NativeMeasureTargetKind, setRenderLibPath, getRenderLibPath, resolveRenderLib, Align, BoxSizing, Dimension, Direction, Display, Edge, Errata, ExperimentalFeature, FlexDirection, Gutter, Justify, LogLevel as LogLevel1, MeasureMode, NodeType, Overflow, PositionType, Unit, Wrap, ALIGN_AUTO, ALIGN_FLEX_START, ALIGN_CENTER, ALIGN_FLEX_END, ALIGN_STRETCH, ALIGN_BASELINE, ALIGN_SPACE_BETWEEN, ALIGN_SPACE_AROUND, ALIGN_SPACE_EVENLY, BOX_SIZING_BORDER_BOX, BOX_SIZING_CONTENT_BOX, DIMENSION_WIDTH, DIMENSION_HEIGHT, DIRECTION_INHERIT, DIRECTION_LTR, DIRECTION_RTL, DISPLAY_FLEX, DISPLAY_NONE, DISPLAY_CONTENTS, EDGE_LEFT, EDGE_TOP, EDGE_RIGHT, EDGE_BOTTOM, EDGE_START, EDGE_END, EDGE_HORIZONTAL, EDGE_VERTICAL, EDGE_ALL, ERRATA_NONE, ERRATA_STRETCH_FLEX_BASIS, ERRATA_ABSOLUTE_POSITION_WITHOUT_INSETS_EXCLUDES_PADDING, ERRATA_ABSOLUTE_PERCENT_AGAINST_INNER_SIZE, ERRATA_ALL, ERRATA_CLASSIC, EXPERIMENTAL_FEATURE_WEB_FLEX_BASIS, FLEX_DIRECTION_COLUMN, FLEX_DIRECTION_COLUMN_REVERSE, FLEX_DIRECTION_ROW, FLEX_DIRECTION_ROW_REVERSE, GUTTER_COLUMN, GUTTER_ROW, GUTTER_ALL, JUSTIFY_FLEX_START, JUSTIFY_CENTER, JUSTIFY_FLEX_END, JUSTIFY_SPACE_BETWEEN, JUSTIFY_SPACE_AROUND, JUSTIFY_SPACE_EVENLY, LOG_LEVEL_ERROR, LOG_LEVEL_WARN, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_VERBOSE, LOG_LEVEL_FATAL, MEASURE_MODE_UNDEFINED, MEASURE_MODE_EXACTLY, MEASURE_MODE_AT_MOST, NODE_TYPE_DEFAULT, NODE_TYPE_TEXT, OVERFLOW_VISIBLE, OVERFLOW_HIDDEN, OVERFLOW_SCROLL, POSITION_TYPE_STATIC, POSITION_TYPE_RELATIVE, POSITION_TYPE_ABSOLUTE, UNIT_UNDEFINED, UNIT_POINT, UNIT_PERCENT, UNIT_AUTO, WRAP_NO_WRAP, WRAP_WRAP, WRAP_WRAP_REVERSE, Config, Node, exports_yoga, yoga_default };
+ 
+ //# debugId=1A000E5C5DFF616564756E2164756E21
+ //# sourceMappingURL=chunk-node-dgg83evx.js.map
 diff --git a/index.bun.js b/index.bun.js
-index c3121180a104bc9d7a0b258af803bcabe8b6fb52..811b64955e8eab3b2213adfa1e24f1d55db76c12 100644
+index c3121180a104bc9d7a0b258af803bcabe8b6fb52..98739fe5e9146f97dac73c4cd6fac500363a585d 100644
 --- a/index.bun.js
 +++ b/index.bun.js
-@@ -11749,6 +11749,8 @@ class MarkdownRenderable extends Renderable {
+@@ -191,6 +191,7 @@ import {
+   reverse,
+   rgbToHex,
+   setRenderLibPath,
++  getRenderLibPath,
+   strikethrough,
+   stringToStyledText,
+   stringWidth,
+@@ -11749,6 +11750,8 @@ class MarkdownRenderable extends Renderable {
        syntaxStyle: this._syntaxStyle,
        fg: this._fg,
        bg: this._bg,
@@ -14,7 +109,7 @@ index c3121180a104bc9d7a0b258af803bcabe8b6fb52..811b64955e8eab3b2213adfa1e24f1d5
        conceal: this._conceal,
        drawUnstyledText: initialStyledText !== undefined,
        streaming: true,
-@@ -11835,6 +11837,8 @@ class MarkdownRenderable extends Renderable {
+@@ -11835,6 +11838,8 @@ class MarkdownRenderable extends Renderable {
      row.add(new TextRenderable(this.ctx, {
        id: `${input.id}-marker`,
        content: new StyledText([this.createChunk(input.marker.padStart(input.markerWidth) + " ", "markup.list")]),
@@ -23,7 +118,7 @@ index c3121180a104bc9d7a0b258af803bcabe8b6fb52..811b64955e8eab3b2213adfa1e24f1d5
        width: input.markerWidth + 1,
        flexShrink: 0
      }));
-@@ -11955,6 +11959,8 @@ class MarkdownRenderable extends Renderable {
+@@ -11955,6 +11960,8 @@ class MarkdownRenderable extends Renderable {
      if (marker.chunks[0]?.text !== markerText) {
        marker.content = new StyledText([this.createChunk(markerText, "markup.list")]);
      }
@@ -32,7 +127,7 @@ index c3121180a104bc9d7a0b258af803bcabe8b6fb52..811b64955e8eab3b2213adfa1e24f1d5
    }
    createListChildRenderable(token, id) {
      if (token.type === "text" || token.type === "paragraph") {
-@@ -11991,6 +11997,8 @@ class MarkdownRenderable extends Renderable {
+@@ -11991,6 +11998,8 @@ class MarkdownRenderable extends Renderable {
        syntaxStyle: this._syntaxStyle,
        fg: this._fg,
        bg: this._bg,
@@ -41,7 +136,7 @@ index c3121180a104bc9d7a0b258af803bcabe8b6fb52..811b64955e8eab3b2213adfa1e24f1d5
        conceal: this._concealCode,
        drawUnstyledText: !this._streaming,
        streaming: this._streaming,
-@@ -12005,6 +12013,8 @@ class MarkdownRenderable extends Renderable {
+@@ -12005,6 +12014,8 @@ class MarkdownRenderable extends Renderable {
      renderable.syntaxStyle = this._syntaxStyle;
      renderable.fg = this._fg;
      renderable.bg = this._bg;
@@ -50,7 +145,7 @@ index c3121180a104bc9d7a0b258af803bcabe8b6fb52..811b64955e8eab3b2213adfa1e24f1d5
      renderable.conceal = this._conceal;
      renderable.drawUnstyledText = initialStyledText !== undefined;
      renderable.streaming = true;
-@@ -12034,6 +12044,8 @@ class MarkdownRenderable extends Renderable {
+@@ -12034,6 +12045,8 @@ class MarkdownRenderable extends Renderable {
      renderable.syntaxStyle = this._syntaxStyle;
      renderable.fg = this._fg;
      renderable.bg = this._bg;
@@ -59,11 +154,27 @@ index c3121180a104bc9d7a0b258af803bcabe8b6fb52..811b64955e8eab3b2213adfa1e24f1d5
      renderable.conceal = this._concealCode;
      renderable.drawUnstyledText = !this._streaming;
      renderable.streaming = this._streaming;
+@@ -14967,6 +14980,7 @@ export {
+   strikethrough,
+   setupAudio,
+   setRenderLibPath,
++  getRenderLibPath,
+   rgbToHex,
+   reverse,
+   resolveRenderLib,
 diff --git a/index.node.js b/index.node.js
-index e5c1b13644e6287b76c78708786ff090d063bf0c..4a16daa15710d52c423c1878af780b36bcaaa28d 100644
+index e5c1b13644e6287b76c78708786ff090d063bf0c..bafd4171f55aef86cc3b497a9ae41e98efdbdb41 100644
 --- a/index.node.js
 +++ b/index.node.js
-@@ -11747,6 +11747,8 @@ class MarkdownRenderable extends Renderable {
+@@ -190,6 +190,7 @@ import {
+   reverse,
+   rgbToHex,
+   setRenderLibPath,
++  getRenderLibPath,
+   strikethrough,
+   stringToStyledText,
+   stringWidth,
+@@ -11747,6 +11748,8 @@ class MarkdownRenderable extends Renderable {
        syntaxStyle: this._syntaxStyle,
        fg: this._fg,
        bg: this._bg,
@@ -72,7 +183,7 @@ index e5c1b13644e6287b76c78708786ff090d063bf0c..4a16daa15710d52c423c1878af780b36
        conceal: this._conceal,
        drawUnstyledText: initialStyledText !== undefined,
        streaming: true,
-@@ -11833,6 +11835,8 @@ class MarkdownRenderable extends Renderable {
+@@ -11833,6 +11836,8 @@ class MarkdownRenderable extends Renderable {
      row.add(new TextRenderable(this.ctx, {
        id: `${input.id}-marker`,
        content: new StyledText([this.createChunk(input.marker.padStart(input.markerWidth) + " ", "markup.list")]),
@@ -81,7 +192,7 @@ index e5c1b13644e6287b76c78708786ff090d063bf0c..4a16daa15710d52c423c1878af780b36
        width: input.markerWidth + 1,
        flexShrink: 0
      }));
-@@ -11953,6 +11957,8 @@ class MarkdownRenderable extends Renderable {
+@@ -11953,6 +11958,8 @@ class MarkdownRenderable extends Renderable {
      if (marker.chunks[0]?.text !== markerText) {
        marker.content = new StyledText([this.createChunk(markerText, "markup.list")]);
      }
@@ -90,7 +201,7 @@ index e5c1b13644e6287b76c78708786ff090d063bf0c..4a16daa15710d52c423c1878af780b36
    }
    createListChildRenderable(token, id) {
      if (token.type === "text" || token.type === "paragraph") {
-@@ -11989,6 +11995,8 @@ class MarkdownRenderable extends Renderable {
+@@ -11989,6 +11996,8 @@ class MarkdownRenderable extends Renderable {
        syntaxStyle: this._syntaxStyle,
        fg: this._fg,
        bg: this._bg,
@@ -99,7 +210,7 @@ index e5c1b13644e6287b76c78708786ff090d063bf0c..4a16daa15710d52c423c1878af780b36
        conceal: this._concealCode,
        drawUnstyledText: !this._streaming,
        streaming: this._streaming,
-@@ -12003,6 +12011,8 @@ class MarkdownRenderable extends Renderable {
+@@ -12003,6 +12012,8 @@ class MarkdownRenderable extends Renderable {
      renderable.syntaxStyle = this._syntaxStyle;
      renderable.fg = this._fg;
      renderable.bg = this._bg;
@@ -108,7 +219,7 @@ index e5c1b13644e6287b76c78708786ff090d063bf0c..4a16daa15710d52c423c1878af780b36
      renderable.conceal = this._conceal;
      renderable.drawUnstyledText = initialStyledText !== undefined;
      renderable.streaming = true;
-@@ -12032,6 +12042,8 @@ class MarkdownRenderable extends Renderable {
+@@ -12032,6 +12043,8 @@ class MarkdownRenderable extends Renderable {
      renderable.syntaxStyle = this._syntaxStyle;
      renderable.fg = this._fg;
      renderable.bg = this._bg;
@@ -117,3 +228,65 @@ index e5c1b13644e6287b76c78708786ff090d063bf0c..4a16daa15710d52c423c1878af780b36
      renderable.conceal = this._concealCode;
      renderable.drawUnstyledText = !this._streaming;
      renderable.streaming = this._streaming;
+@@ -14965,6 +14978,7 @@ export {
+   strikethrough,
+   setupAudio,
+   setRenderLibPath,
++  getRenderLibPath,
+   rgbToHex,
+   reverse,
+   resolveRenderLib,
+diff --git a/node-assets.d.ts b/node-assets.d.ts
+index 62e97a202fd66c755342a462c252080394155267..38c39f049e68807da023aee06a7168dc1a0f5a44 100644
+--- a/node-assets.d.ts
++++ b/node-assets.d.ts
+@@ -5,3 +5,10 @@ export type NodeAsset = {
+     readonly source: string;
+ };
+ export declare function getNodeAssets(target: NodeAssetTarget): readonly NodeAsset[];
++export interface NativeAssetDescriptor {
++    readonly key: string;
++    readonly packageName: string;
++    readonly fileName: string;
++}
++export declare function getNativeAssetDescriptor(target: NodeAssetTarget): NativeAssetDescriptor;
++export declare function getCurrentNodeAssetTarget(): NodeAssetTarget;
+diff --git a/node-assets.js b/node-assets.js
+index 7a6c519a5b732d3dd1ddecc2f6f08d390aeb6b8c..131d265a4f366b6d946f1d8d0e8fa69d202bf514 100644
+--- a/node-assets.js
++++ b/node-assets.js
+@@ -265,8 +265,23 @@ function statIsFile(path) {
+     return false;
+   }
+ }
++
++function getCurrentNodeAssetTarget() {
++  const libc = process.env.OPENTUI_LIBC;
++  if (process.platform === "linux" && libc !== undefined && libc !== "" && libc !== "glibc" && libc !== "musl") {
++    throw new Error(`On Linux, OPENTUI_LIBC must be unset, empty, "glibc", or "musl", got ${JSON.stringify(libc)}`)
++  }
++  return {
++    platform: process.platform,
++    arch: process.arch,
++    ...(process.platform === "linux" && libc === "musl" ? { libc } : {}),
++  }
++}
++
+ export {
+-  getNodeAssets
++  getNodeAssets,
++  getNativeAssetDescriptor,
++  getCurrentNodeAssetTarget
+ };
+ 
+ //# debugId=8AC8BFEA72E33D8F64756E2164756E21
+diff --git a/zig.d.ts b/zig.d.ts
+index a638ef9fc5f37cfafcf38d7b788f095f0da4b1de..f90650bcb9007099c8a26a2dcd47c9b9e0015118 100644
+--- a/zig.d.ts
++++ b/zig.d.ts
+@@ -689,4 +689,5 @@ export interface RenderLib extends AudioEngineLib {
+     onAnyNativeEvent: (handler: (name: string, data: ArrayBuffer) => void) => void;
+ }
+ export declare function setRenderLibPath(libPath: string): void;
++export declare function getRenderLibPath(): string | undefined;
+ export declare function resolveRenderLib(): RenderLib;

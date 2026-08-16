@@ -12,6 +12,11 @@ const METAFILE = join(OUTPUT_DIRECTORY, "vesicle.meta.json");
 const EXTERNAL_RUNTIME_PACKAGES = [
   "@3akhp/opentui-core/parser.worker",
   "@3akhp/opentui-core-*",
+  // The fork's prebundled loader lists every platform variant, including the
+  // upstream-scoped darwin names and the arm64 variants its Bun loader still
+  // references by the upstream name. Leave all of them as runtime imports;
+  // the host native guard resolves the installed package before first FFI.
+  "@opentui/core-*",
   "web-tree-sitter",
 ];
 
@@ -80,11 +85,15 @@ if (/from\s*["'`]@3akhp\/opentui-core["'`]|(?:import|require)\s*\(\s*["'`]@3akhp
 if (/from\s*["'`]@3akhp\/opentui-core\/testing["'`]|(?:import|require)\s*\(\s*["'`]@3akhp\/opentui-core\/testing["'`]\s*\)/.test(output)) {
   throw new Error("npm runtime bundle still imports a second OpenTUI core through its testing subpath.");
 }
-if (
-  /from\s*["'`]@opentui\/[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9.-]*)?["'`]/.test(output) ||
-  /(?:import|require)\s*\(\s*["'`]@opentui\/[a-z][a-z0-9-]*(?:\/[a-z][a-z0-9.-]*)?["'`]\s*\)/.test(output)
-) {
-  throw new Error("npm runtime bundle still imports an upstream @opentui/* package.");
+// The fork loader's platform-variant imports stay external (see the externals
+// list); every other upstream-scoped specifier in import position is a leak.
+const upstreamImports = [...output.matchAll(/(?:from\s*|(?:import|require)\s*\(\s*)["'`](@opentui\/[^"'`]+)["'`]/g)]
+  .map((match) => match[1]);
+const leakedUpstream = [
+  ...new Set(upstreamImports.filter((specifier) => !/^@opentui\/core-(?:darwin|linux|win32)-[a-z0-9-]+$/.test(specifier))),
+];
+if (leakedUpstream.length > 0) {
+  throw new Error(`npm runtime bundle still imports upstream @opentui/* packages: ${leakedUpstream.join(", ")}`);
 }
 if (!output.includes("class MarkdownRenderable") || !output.includes("set selectionBg") || !output.includes("set selectionFg")) {
   throw new Error("npm runtime bundle is missing the fork-native Markdown selection implementation.");

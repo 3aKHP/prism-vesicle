@@ -2,6 +2,7 @@ import { Readable, Writable } from "node:stream";
 import {
   CliRenderer,
   destroyTreeSitterClient,
+  getRenderLibPath,
   getTreeSitterClient,
   MarkdownRenderable,
   parseColor,
@@ -132,15 +133,17 @@ async function probeEscapeConceal(): Promise<MarkdownRuntimeDiagnostic["escape"]
 
 /**
  * Report which native library the fork runtime resolves for this host,
- * through the fork's own asset table (see native-runtime.ts).
+ * through the fork's own asset table (see native-runtime.ts). Compiled
+ * binaries cannot resolve the installed platform package, so fall back to
+ * the path the runtime actually pinned (embedded extraction).
  */
 async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> {
   try {
-    const native = resolveForkNativeAsset();
-    if (!native) {
-      throw new Error("fork runtime asset list has no native library for this platform");
-    }
-    return { ok: true, key: native.key, path: native.source };
+    const resolved = resolveForkNativeAsset();
+    if (resolved) return { ok: true, key: resolved.key, path: resolved.source };
+    const loaded = getRenderLibPath();
+    if (loaded) return { ok: true, path: loaded };
+    throw new Error("no resolved or loaded native library path for this platform");
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
