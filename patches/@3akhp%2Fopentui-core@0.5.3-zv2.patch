@@ -1,21 +1,3 @@
-diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-20bb7d1eb51fb4e5 b/.bun-tag-20bb7d1eb51fb4e5
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-2d4f00f0e3c885f b/.bun-tag-2d4f00f0e3c885f
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-49e6fb951277a11d b/.bun-tag-49e6fb951277a11d
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-5ade6fb5cd0272d b/.bun-tag-5ade6fb5cd0272d
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-8f4802e64a0b1320 b/.bun-tag-8f4802e64a0b1320
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-diff --git a/node_modules/@3akhp/opentui-core/.bun-tag-b7256f483a442840 b/.bun-tag-b7256f483a442840
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/chunk-bun-j1p6ewy6.js b/chunk-bun-j1p6ewy6.js
 index 2c6dbbf6043f1b3a58d3ef3f8aa47a0c781dd4cb..e5169a6aa57299167d99fafae05a1341767f5b2d 100644
 --- a/chunk-bun-j1p6ewy6.js
