@@ -6,6 +6,7 @@ import {
   getTreeSitterClient,
   MarkdownRenderable,
   parseColor,
+  resolveRenderLib,
 } from "@3akhp/opentui-core";
 import type { SimpleHighlight } from "@3akhp/opentui-core";
 import { resolveForkNativeAsset } from "./native-runtime";
@@ -134,12 +135,15 @@ async function probeEscapeConceal(): Promise<MarkdownRuntimeDiagnostic["escape"]
 /**
  * Report which native library the fork runtime resolves for this host,
  * through the fork's own asset table (see native-runtime.ts). Compiled
- * binaries cannot resolve the installed platform package, so fall back to
- * the path the runtime actually pinned (embedded extraction).
+ * binaries cannot resolve the installed platform package, so they report
+ * the path the runtime actually pinned. The pinned path alone is not
+ * evidence: the loader records its target before a successful dlopen, so
+ * the probe also forces the load and reports ok only when it succeeds.
  */
 async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> {
   try {
     const resolved = resolveForkNativeAsset();
+    resolveRenderLib();
     if (resolved) return { ok: true, key: resolved.key, path: resolved.source };
     const loaded = getRenderLibPath();
     if (loaded) return { ok: true, path: loaded };
