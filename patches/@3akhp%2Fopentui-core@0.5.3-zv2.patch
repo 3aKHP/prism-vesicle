@@ -1,3 +1,16 @@
+diff --git a/chunk-bun-c10qnqvb.js b/chunk-bun-c10qnqvb.js
+index 823db8c9f218d4eee71edb9ddba5debfa1e80feb..fea772a9770bfc74029121dd731cf0ba69f29d2e 100644
+--- a/chunk-bun-c10qnqvb.js
++++ b/chunk-bun-c10qnqvb.js
+@@ -4,7 +4,7 @@ import {
+ } from "./chunk-bun-w93az0yt.js";
+ 
+ // node_modules/@3akhp/opentui-core-win32-x64/index.bun.js
+-var module = await import("./chunk-bun-0qgypm1g.js", { with: { type: "file" } });
++var module = await import("./opentui-2kkns70h.dll", { with: { type: "file" } });
+ var index_bun_default = module.default;
+ export {
+   index_bun_default as default
 diff --git a/chunk-bun-j1p6ewy6.js b/chunk-bun-j1p6ewy6.js
 index 2c6dbbf6043f1b3a58d3ef3f8aa47a0c781dd4cb..e5169a6aa57299167d99fafae05a1341767f5b2d 100644
 --- a/chunk-bun-j1p6ewy6.js
