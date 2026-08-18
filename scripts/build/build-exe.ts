@@ -1,5 +1,5 @@
 import solidPlugin from "@3akhp/opentui-solid/bun-plugin";
-import { mkdir, rename, unlink } from "node:fs/promises";
+import { mkdir, rm, rename, unlink } from "node:fs/promises";
 
 // Bun 1.3's JS build API ignores `outfile` for compiled executables and emits
 // the entry basename with a target-appropriate extension (`.exe` for Windows
@@ -52,8 +52,21 @@ async function readInstalledCoreVersion(): Promise<string> {
   return pkg.version as string;
 }
 
+async function readFetchedWin32Version(): Promise<string | undefined> {
+  try {
+    const pkg = await Bun.file(`${WIN32_NATIVE_DIR}/package.json`).json();
+    return typeof pkg.version === "string" ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function ensureWin32Native(version: string): Promise<void> {
-  if (await Bun.file(WIN32_NATIVE_MARKER).exists()) return;
+  // Bun's installer never manages this os-gated directory on a Linux host,
+  // so a previously fetched copy survives dependency version bumps; refetch
+  // whenever the marker or the fetched version disagrees with the core.
+  if ((await readFetchedWin32Version()) === version && (await Bun.file(WIN32_NATIVE_MARKER).exists())) return;
+  await rm(WIN32_NATIVE_DIR, { recursive: true, force: true });
 
   console.log(
     `Fetching @3akhp/opentui-core-win32-x64@${version} (Bun's installer skips os-gated natives on Linux)...`,

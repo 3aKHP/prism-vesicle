@@ -37,6 +37,7 @@ export type MarkdownRuntimeDiagnostic = {
   };
   native: {
     ok: boolean;
+    source?: "asset-table" | "forced-load";
     key?: string;
     path?: string;
     error?: string;
@@ -140,10 +141,12 @@ const NATIVE_ASSET_KEY = /\/(?:libopentui\.(?:so|dylib)|opentui\.dll)$/;
  * loader owns platform selection end to end — dynamic platform-package
  * import, OTUI_ASSET_ROOT relocation, bunfs-embedded libraries in compiled
  * binaries — so the probe forces the load through that loader: ok:true means
- * the library really dlopen'ed. The reported path comes from the fork's own
- * asset table for this host (the same mapping the loader selects through);
- * compiled binaries embed the library and cannot resolve the installed
- * package table there, so they report no path rather than inventing one.
+ * the library really dlopen'ed. Where the fork's installed-package asset
+ * table resolves (the source channel), the probe reports its native entry
+ * with source "asset-table". npm-bundle installs and compiled binaries carry
+ * an inlined or embedded copy of the runtime whose asset table cannot
+ * resolve the installed layout; they report source "forced-load" with no
+ * path rather than inventing one.
  */
 async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> {
   try {
@@ -155,13 +158,19 @@ async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> 
     const native = getNodeAssets(nodeAssetTargetForHost()).find((asset) => NATIVE_ASSET_KEY.test(asset.key));
     if (native) {
       const assetRoot = process.env.OTUI_ASSET_ROOT;
-      return { ok: true, key: native.key, path: assetRoot ? join(assetRoot, native.key) : native.source };
+      return {
+        ok: true,
+        source: "asset-table",
+        key: native.key,
+        path: assetRoot ? join(assetRoot, native.key) : native.source,
+      };
     }
   } catch {
-    // Compiled binaries embed the native library; the installed-package asset
-    // table does not resolve there. The forced load above is the evidence.
+    // The bundled or embedded asset table cannot resolve the installed
+    // layout in npm installs and compiled binaries. The forced load above is
+    // the evidence for those channels.
   }
-  return { ok: true };
+  return { ok: true, source: "forced-load" };
 }
 
 function nodeAssetTargetForHost(): NodeAssetTarget {

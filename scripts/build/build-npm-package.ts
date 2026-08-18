@@ -12,10 +12,10 @@ const METAFILE = join(OUTPUT_DIRECTORY, "vesicle.meta.json");
 const EXTERNAL_RUNTIME_PACKAGES = [
   "@3akhp/opentui-core/parser.worker",
   "@3akhp/opentui-core-*",
-  // The fork's prebundled loader lists every platform variant, including the
-  // upstream-scoped darwin names and the arm64 variants its Bun loader still
-  // references by the upstream name. Leave all of them as runtime imports;
-  // the host native guard resolves the installed package before first FFI.
+  // The fork loader dynamically imports every platform variant at runtime:
+  // the @3akhp/* fork packages for linux/win32 and the upstream darwin
+  // packages. Leave all of them as runtime imports; the fork loader resolves
+  // the installed platform package itself.
   "@opentui/core-*",
   "web-tree-sitter",
 ];

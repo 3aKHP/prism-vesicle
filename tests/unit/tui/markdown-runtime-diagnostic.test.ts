@@ -41,6 +41,7 @@ describe("Markdown runtime diagnostic", () => {
     expect(diagnostic.native).toEqual(
       expect.objectContaining({
         ok: true,
+        source: "asset-table",
         key: expect.stringMatching(
           process.platform === "darwin" ? /^@opentui\/core-darwin-/ : /^@3akhp\/opentui-core-/,
         ),
