@@ -1,15 +1,16 @@
+import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import {
   CliRenderer,
   destroyTreeSitterClient,
-  getRenderLibPath,
   getTreeSitterClient,
   MarkdownRenderable,
   parseColor,
   resolveRenderLib,
 } from "@3akhp/opentui-core";
 import type { SimpleHighlight } from "@3akhp/opentui-core";
-import { resolveForkNativeAsset } from "./native-runtime";
+import { getNodeAssets } from "@3akhp/opentui-core/node-assets";
+import type { NodeAssetTarget } from "@3akhp/opentui-core/node-assets";
 import { paletteFor, syntaxStyle } from "./theme";
 
 declare const VESICLE_TREE_SITTER_WORKER_PATH: string;
@@ -132,25 +133,50 @@ async function probeEscapeConceal(): Promise<MarkdownRuntimeDiagnostic["escape"]
   }
 }
 
+const NATIVE_ASSET_KEY = /\/(?:libopentui\.(?:so|dylib)|opentui\.dll)$/;
+
 /**
- * Report which native library the fork runtime resolves for this host,
- * through the fork's own asset table (see native-runtime.ts). Compiled
- * binaries cannot resolve the installed platform package, so they report
- * the path the runtime actually pinned. The pinned path alone is not
- * evidence: the loader records its target before a successful dlopen, so
- * the probe also forces the load and reports ok only when it succeeds.
+ * Report the native render library this channel actually loads. The fork
+ * loader owns platform selection end to end — dynamic platform-package
+ * import, OTUI_ASSET_ROOT relocation, bunfs-embedded libraries in compiled
+ * binaries — so the probe forces the load through that loader: ok:true means
+ * the library really dlopen'ed. The reported path comes from the fork's own
+ * asset table for this host (the same mapping the loader selects through);
+ * compiled binaries embed the library and cannot resolve the installed
+ * package table there, so they report no path rather than inventing one.
  */
 async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> {
   try {
-    const resolved = resolveForkNativeAsset();
     resolveRenderLib();
-    if (resolved) return { ok: true, key: resolved.key, path: resolved.source };
-    const loaded = getRenderLibPath();
-    if (loaded) return { ok: true, path: loaded };
-    throw new Error("no resolved or loaded native library path for this platform");
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+  try {
+    const native = getNodeAssets(nodeAssetTargetForHost()).find((asset) => NATIVE_ASSET_KEY.test(asset.key));
+    if (native) {
+      const assetRoot = process.env.OTUI_ASSET_ROOT;
+      return { ok: true, key: native.key, path: assetRoot ? join(assetRoot, native.key) : native.source };
+    }
+  } catch {
+    // Compiled binaries embed the native library; the installed-package asset
+    // table does not resolve there. The forced load above is the evidence.
+  }
+  return { ok: true };
+}
+
+function nodeAssetTargetForHost(): NodeAssetTarget {
+  const { platform, arch } = process;
+  if (platform !== "darwin" && platform !== "linux" && platform !== "win32") {
+    throw new Error(`unsupported platform for OpenTUI node assets: ${platform}`);
+  }
+  if (arch !== "arm64" && arch !== "x64") {
+    throw new Error(`unsupported arch for OpenTUI node assets: ${arch}`);
+  }
+  return {
+    platform,
+    arch,
+    ...(platform === "linux" && process.env.OPENTUI_LIBC === "musl" ? { libc: "musl" as const } : {}),
+  };
 }
 
 class DiagnosticWriteStream extends Writable {

@@ -1,9 +1,5 @@
 import { createSignal } from "solid-js";
 import { SyntaxStyle } from "@3akhp/opentui-core";
-// Import for initialization ordering only: native-runtime pins the fork
-// native library on module load, and sharedSyntaxStyle below is the first
-// FFI touch in every channel, so this import must stay above it.
-import "./native-runtime";
 
 /**
  * Theme mode: the TUI ships a dark (night) and a light (day) palette derived
