@@ -143,10 +143,11 @@ const NATIVE_ASSET_KEY = /\/(?:libopentui\.(?:so|dylib)|opentui\.dll)$/;
  * binaries — so the probe forces the load through that loader: ok:true means
  * the library really dlopen'ed. Where the fork's installed-package asset
  * table resolves (the source channel), the probe reports its native entry
- * with source "asset-table". npm-bundle installs and compiled binaries carry
- * an inlined or embedded copy of the runtime whose asset table cannot
- * resolve the installed layout; they report source "forced-load" with no
- * path rather than inventing one.
+ * with source "asset-table"; a table that resolves but carries no native
+ * entry is a fork shape change and fails the probe. npm-bundle installs and
+ * compiled binaries carry an inlined or embedded copy of the runtime whose
+ * asset table cannot resolve the installed layout; they report source
+ * "forced-load" with no path rather than inventing one.
  */
 async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> {
   try {
@@ -154,25 +155,34 @@ async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> 
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+  let assets: ReturnType<typeof getNodeAssets> | undefined;
   try {
-    const native = getNodeAssets(nodeAssetTargetForHost()).find((asset) => NATIVE_ASSET_KEY.test(asset.key));
-    if (native) {
-      const assetRoot = process.env.OTUI_ASSET_ROOT;
-      return {
-        ok: true,
-        source: "asset-table",
-        key: native.key,
-        path: assetRoot ? join(assetRoot, native.key) : native.source,
-      };
-    }
+    assets = getNodeAssets(nodeAssetTargetForHost());
   } catch {
     // The bundled or embedded asset table cannot resolve the installed
     // layout in npm installs and compiled binaries. The forced load above is
     // the evidence for those channels.
   }
-  return { ok: true, source: "forced-load" };
+  if (!assets) return { ok: true, source: "forced-load" };
+  const native = assets.find((asset) => NATIVE_ASSET_KEY.test(asset.key));
+  if (!native) {
+    return {
+      ok: false,
+      error: `fork asset table resolved but has no native library entry for ${process.platform}-${process.arch}`,
+    };
+  }
+  const assetRoot = process.env.OTUI_ASSET_ROOT;
+  return {
+    ok: true,
+    source: "asset-table",
+    key: native.key,
+    path: assetRoot ? join(assetRoot, native.key) : native.source,
+  };
 }
 
+// Mirrors the fork loader's internal getCurrentNodeAssetTarget (fork
+// src/node-asset-target.ts): libc applies to linux only, and musl is
+// selected solely through OPENTUI_LIBC.
 function nodeAssetTargetForHost(): NodeAssetTarget {
   const { platform, arch } = process;
   if (platform !== "darwin" && platform !== "linux" && platform !== "win32") {
