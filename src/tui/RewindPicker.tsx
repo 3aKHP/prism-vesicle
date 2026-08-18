@@ -1,6 +1,6 @@
 import { ThemedText } from "./theme-text";
 import { For, Show } from "solid-js";
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from "@3akhp/opentui-core";
 import type { RewindPoint } from "../core/rewind/service";
 import type { RewindPickerState, RewindRestoreOption } from "./types";
 import { truncateLine } from "./format";

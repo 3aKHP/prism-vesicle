@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { parseColor, type Renderable, TextareaRenderable } from "@opentui/core";
-import { testRender } from "@opentui/solid";
+import { parseColor, type Renderable, TextareaRenderable } from "@3akhp/opentui-core";
+import { testRender } from "@3akhp/opentui-solid";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -131,7 +131,7 @@ describe("tui: workspace page (B2)", () => {
     const probe = Bun.spawn([
       process.execPath,
       "--preload",
-      "@opentui/solid/preload",
+      "@3akhp/opentui-solid/preload",
       "tests/support/workspace-theme-probe.tsx",
     ], {
       cwd: process.cwd(),
@@ -268,7 +268,7 @@ describe("tui: workspace page (B2)", () => {
       gotoLine: () => {},
       insertText: () => {},
       replaceText: () => {},
-    } as unknown as import("@opentui/core").TextareaRenderable;
+    } as unknown as import("@3akhp/opentui-core").TextareaRenderable;
     controller.registerEditorInstance("notes.txt", inst);
     controller.markEditorContentChanged("notes.txt");
     controller.handleKey({ name: "escape" });
@@ -437,7 +437,7 @@ describe("tui: workspace page (B2)", () => {
     const inst = {
       get plainText() { return "line one\nline two\nEDIT\n"; },
       setSelection: () => {}, gotoLine: () => {}, insertText: () => {}, replaceText: () => {},
-    } as unknown as import("@opentui/core").TextareaRenderable;
+    } as unknown as import("@3akhp/opentui-core").TextareaRenderable;
     controller.registerEditorInstance("notes.txt", inst);
     controller.markEditorContentChanged("notes.txt");
     await controller.saveActive();
@@ -457,7 +457,7 @@ describe("tui: workspace page (B2)", () => {
     const inst = {
       get plainText() { return "---\narchetype: x\n---\nbody\nDIRTY\n"; },
       setSelection: () => {}, gotoLine: () => {}, insertText: () => {}, replaceText: () => {},
-    } as unknown as import("@opentui/core").TextareaRenderable;
+    } as unknown as import("@3akhp/opentui-core").TextareaRenderable;
     controller.registerEditorInstance("card.md", inst);
     controller.markEditorContentChanged("card.md");
     expect(controller.dirtyPaths().has("card.md")).toBe(true);

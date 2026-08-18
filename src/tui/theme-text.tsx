@@ -1,5 +1,5 @@
-import type { TextRenderable } from "@opentui/core";
-import type { TextProps } from "@opentui/solid";
+import type { TextRenderable } from "@3akhp/opentui-core";
+import type { TextProps } from "@3akhp/opentui-solid";
 import { createEffect, splitProps } from "solid-js";
 import { palette, paletteFor, themeMode } from "./theme";
 

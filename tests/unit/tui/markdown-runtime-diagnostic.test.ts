@@ -28,7 +28,7 @@ describe("Markdown runtime diagnostic", () => {
   test("resolves the installed worker independently of the active project and proves fixed Markdown and TypeScript highlighting", async () => {
     // path.join yields backslashes on Windows; normalize before the substring check.
     const workerPath = configureTreeSitterWorkerPath();
-    expect(workerPath?.replace(/\\/g, "/")).toContain("node_modules/@opentui/core/parser.worker.js");
+    expect(workerPath?.replace(/\\/g, "/")).toContain("node_modules/@3akhp/opentui-core/parser.worker.js");
 
     const diagnostic = await runMarkdownRuntimeDiagnostic();
     expect(diagnostic.ok).toBe(true);
@@ -38,6 +38,16 @@ describe("Markdown runtime diagnostic", () => {
     ]);
     expect(diagnostic.probes.every((probe) => probe.highlights.count > 0)).toBe(true);
     expect(diagnostic.escape).toEqual({ ok: true, concealedCount: 2 });
+    expect(diagnostic.native).toEqual(
+      expect.objectContaining({
+        ok: true,
+        source: "asset-table",
+        key: expect.stringMatching(
+          process.platform === "darwin" ? /^@opentui\/core-darwin-/ : /^@3akhp\/opentui-core-/,
+        ),
+        path: expect.any(String),
+      }),
+    );
     expect(diagnostic.selection.ok).toBe(true);
     expect(diagnostic.selection.cases).toEqual([
       expect.objectContaining({ name: "prose", ok: true, selectedText: expect.stringContaining("alpha") }),

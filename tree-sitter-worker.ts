@@ -5,4 +5,4 @@
 // web-tree-sitter from a developer's node_modules but fails in a clean release
 // directory.
 import "web-tree-sitter";
-import "./node_modules/@opentui/core/parser.worker.js";
+import "./node_modules/@3akhp/opentui-core/parser.worker.js";

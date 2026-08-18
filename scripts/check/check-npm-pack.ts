@@ -29,7 +29,6 @@ if (tempArtifacts.length > 0) {
 for (const required of [
   "bin/vesicle.mjs",
   "dist/npm/vesicle.mjs",
-  "patches/@opentui%2Fcore@0.4.3.patch",
   "harness-manifest.json",
   "assets/engines/etl.profile.yaml",
   "host-assets/prompts/shared/vesicle-base.md",

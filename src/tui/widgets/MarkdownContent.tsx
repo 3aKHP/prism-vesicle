@@ -1,14 +1,9 @@
 import { ThemedText } from "../theme-text";
 import { createEffect, createSignal } from "solid-js";
-import type { MarkdownRenderable } from "@opentui/core";
+import type { MarkdownRenderable } from "@3akhp/opentui-core";
 import { prepareMarkdownForDisplay, renderMarkdownPlainText } from "../markdown-display";
-import { installMarkdownEscapeConceal } from "../markdown-escape-conceal";
 import { debugLog } from "../debug-log";
 import { palette, syntaxStyle } from "../theme";
-
-// Covers every interactive rendering channel, including compiled binaries
-// where the tree-sitter runtime module is never imported (idempotent).
-installMarkdownEscapeConceal();
 
 type MarkdownRenderer = "markdown" | "plain";
 

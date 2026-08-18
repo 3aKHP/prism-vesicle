@@ -1,1 +1,1 @@
-declare module "@opentui/solid/preload";
+declare module "@3akhp/opentui-solid/preload";

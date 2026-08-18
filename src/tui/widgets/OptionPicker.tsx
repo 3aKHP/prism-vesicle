@@ -1,6 +1,6 @@
 import { ThemedText } from "../theme-text";
 import { For } from "solid-js";
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from "@3akhp/opentui-core";
 import { palette } from "../theme";
 import { displayWidth, padDisplayEnd, truncateLine } from "../format";
 import type { OptionItem } from "../types";

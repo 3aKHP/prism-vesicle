@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createWorkspaceController } from "../../../../src/tui/workspace";
 import type { TuiKeyEvent } from "../../../../src/tui/decision-interaction";
-import type { TextareaRenderable } from "@opentui/core";
+import type { TextareaRenderable } from "@3akhp/opentui-core";
 
 let root: string;
 

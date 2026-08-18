@@ -1,5 +1,5 @@
-import { fg, parseColor, StyledText, type TextRenderable } from "@opentui/core";
-import { testRender } from "@opentui/solid";
+import { fg, parseColor, StyledText, type TextRenderable } from "@3akhp/opentui-core";
+import { testRender } from "@3akhp/opentui-solid";
 import { paletteFor, setThemePreference, type ThemeMode } from "../../src/tui/theme";
 import { ThemedText } from "../../src/tui/theme-text";
 

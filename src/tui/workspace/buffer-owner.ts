@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import type { TextareaRenderable } from "@opentui/core";
+import type { TextareaRenderable } from "@3akhp/opentui-core";
 import {
   atomicWriteFile,
   computeFindOffsets,

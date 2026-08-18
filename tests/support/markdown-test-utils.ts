@@ -1,4 +1,4 @@
-import type { testRender } from "@opentui/solid";
+import type { testRender } from "@3akhp/opentui-solid";
 
 export function foregroundFor(
   setup: Awaited<ReturnType<typeof testRender>>,

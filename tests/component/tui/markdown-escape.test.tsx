@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { configureTreeSitterWorkerPath } from "../../../src/tui/tree-sitter-runtime";
 import { MarkdownContent } from "../../../src/tui/widgets/MarkdownContent";
 

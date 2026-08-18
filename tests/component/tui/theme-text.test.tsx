@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { parseColor } from "@opentui/core";
-import { testRender } from "@opentui/solid";
+import { parseColor } from "@3akhp/opentui-core";
+import { testRender } from "@3akhp/opentui-solid";
 import { paletteFor, reportTerminalThemeMode, setThemePreference, type ThemeMode } from "../../../src/tui/theme";
 import { ThemedText } from "../../../src/tui/theme-text";
 
@@ -48,7 +48,7 @@ describe("ThemedText native selection colors", () => {
     const probe = Bun.spawn([
       process.execPath,
       "--preload",
-      "@opentui/solid/preload",
+      "@3akhp/opentui-solid/preload",
       "tests/support/theme-text-selection-probe.tsx",
     ], {
       cwd: process.cwd(),

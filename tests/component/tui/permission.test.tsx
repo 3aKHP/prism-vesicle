@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { resolveTuiLayout } from "../../../src/tui/layout";
 import { PermissionPrompt, permissionPanelHeight } from "../../../src/tui/PermissionPrompt";
 import { ToolCard } from "../../../src/tui/widgets/ToolCard";

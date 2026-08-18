@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { CodeRenderable, MarkdownRenderable, parseColor, type Renderable, TextRenderable } from "@opentui/core";
-import { testRender } from "@opentui/solid";
+import { CodeRenderable, MarkdownRenderable, parseColor, type Renderable, TextRenderable } from "@3akhp/opentui-core";
+import { testRender } from "@3akhp/opentui-solid";
 import { paletteFor, reportTerminalThemeMode, setThemePreference, syntaxStyle } from "../../../src/tui/theme";
 import { MarkdownContent } from "../../../src/tui/widgets/MarkdownContent";
 import { foregroundFor } from "../../support/markdown-test-utils";
@@ -41,7 +41,7 @@ describe("MarkdownContent theme colors", () => {
     const probe = Bun.spawn([
       process.execPath,
       "--preload",
-      "@opentui/solid/preload",
+      "@3akhp/opentui-solid/preload",
       "tests/support/markdown-theme-probe.tsx",
     ], {
       cwd: process.cwd(),
@@ -103,7 +103,7 @@ describe("MarkdownContent theme colors", () => {
       const probe = Bun.spawn([
         process.execPath,
         "--preload",
-        "@opentui/solid/preload",
+        "@3akhp/opentui-solid/preload",
         "tests/support/markdown-selection-theme-probe.tsx",
       ], {
         cwd: process.cwd(),
