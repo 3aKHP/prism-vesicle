@@ -28,13 +28,20 @@ export function toGeminiGenerateContentBody(request: VesicleRequest): Record<str
 function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[] {
   const serialized: GeminiContent[] = [];
   let pendingToolResults: GeminiPart[] = [];
+  let pendingToolImages: GeminiPart[] = [];
 
-  const flushToolResults = (): GeminiContent | undefined => {
-    if (pendingToolResults.length === 0) return undefined;
-    const message: GeminiContent = { role: "user", parts: pendingToolResults };
-    serialized.push(message);
-    pendingToolResults = [];
-    return message;
+  // A user Content is either functionResponse-only or ordinary multimodal-only; mixing the
+  // two part kinds in one Content makes the Gemini/Vertex API reject the replay with a 400.
+  // Function-response parts always flush before their round's tool-result images.
+  const flushPendingToolParts = () => {
+    if (pendingToolResults.length > 0) {
+      serialized.push({ role: "user", parts: pendingToolResults });
+      pendingToolResults = [];
+    }
+    if (pendingToolImages.length > 0) {
+      serialized.push({ role: "user", parts: pendingToolImages });
+      pendingToolImages = [];
+    }
   };
 
   for (const message of messages) {
@@ -48,11 +55,11 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
           response: { content: message.content },
         },
       });
-      pendingToolResults.push(...geminiImageParts(message.images));
+      pendingToolImages.push(...geminiImageParts(message.images));
       continue;
     }
 
-    const flushedToolResults = flushToolResults();
+    flushPendingToolParts();
     if (message.role === "assistant") {
       const replayParts = geminiReplayParts(message.thinkingBlocks);
       const parts = replayParts.length > 0
@@ -71,11 +78,6 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
       continue;
     }
 
-    if (flushedToolResults) {
-      if (message.content) flushedToolResults.parts?.push({ text: message.content });
-      flushedToolResults.parts?.push(...geminiImageParts(message.images));
-      continue;
-    }
     const parts = [
       ...(message.content ? [{ text: message.content }] : []),
       ...geminiImageParts(message.images),
@@ -83,7 +85,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
     serialized.push({ role: "user", parts: parts.length > 0 ? parts : [{ text: "" }] });
   }
 
-  flushToolResults();
+  flushPendingToolParts();
   return serialized;
 }
 
