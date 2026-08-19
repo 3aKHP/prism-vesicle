@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { inspectProviderConfig, loadConfigForSelection, loadProviderRegistry, loadUserConfigEnvironment } from "../../../src/config/providers";
+import { inspectProviderConfig, loadConfigForSelection, loadProviderRegistry, loadUserConfigEnvironment, validateModelEntryShape } from "../../../src/config/providers";
 import { loadProviderProxyPolicy } from "../../../src/providers/shared/proxy";
 import { userConfigDirectory } from "../../../src/config/paths";
 import {
@@ -350,6 +350,31 @@ describe("config loading", () => {
     expect(registry.providers[0].models[0].webSearchDefault).toBe(true);
     expect(config.capabilities).toEqual({ builtinWebSearch: true });
     expect(config.webSearchDefault).toBe(true);
+  });
+
+  test("rejects a non-boolean webSearchDefault on a model entry", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: deepseek",
+      "  model: deepseek-v4-flash",
+      "providers:",
+      "  deepseek:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://api.deepseek.com/v1",
+      "    apiKeyEnv: DEEPSEEK_API_KEY",
+      "    models:",
+      "      - id: deepseek-v4-flash",
+      "        webSearchDefault: true",
+      "",
+    ], ["DEEPSEEK_API_KEY=secret"]);
+
+    const registry = await loadProviderRegistry(env);
+    expect(registry.providers[0].models[0].webSearchDefault).toBe(true);
+
+    expect(() => validateModelEntryShape({
+      id: "deepseek-v4-flash",
+      webSearchDefault: "yes",
+    })).toThrow("webSearchDefault must be true or false.");
   });
 
   test("rejects an explicit auto-compaction reserve at or above the context window", async () => {

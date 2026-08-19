@@ -32,6 +32,11 @@ export function readSessionWebSearchOverride(sessionId: string): boolean | undef
   return sessionWebSearchOverrides.get(sessionId);
 }
 
+/** True when the model entry declares the `builtinWebSearch` capability. */
+export function webSearchSupported(config: WebSearchConfigView): boolean {
+  return config.capabilities?.builtinWebSearch === true;
+}
+
 /**
  * Effective built-in web search state for a session: the session override if
  * set, otherwise the model entry's `webSearchDefault`, otherwise off. A model
@@ -39,7 +44,7 @@ export function readSessionWebSearchOverride(sessionId: string): boolean | undef
  * the preference alone never turns an unsupported model on.
  */
 export function effectiveWebSearchEnabled(config: WebSearchConfigView, sessionId: string): boolean {
-  if (config.capabilities?.builtinWebSearch !== true) return false;
+  if (!webSearchSupported(config)) return false;
   const override = sessionWebSearchOverrides.get(sessionId);
   if (override !== undefined) return override;
   return config.webSearchDefault === true;

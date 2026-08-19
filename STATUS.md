@@ -38,7 +38,7 @@ Release candidate: **1.0.0-alpha.10**. The `State` column tracks the candidate's
 | TUI | Unified turn-focus cursor: `Alt+↑/↓` navigates every transcript turn-by-turn with wrap-around and highlighting; `Alt+←/→` reports `Ctrl+B`/`Ctrl+R` guidance when no switcher is armed | experimental |
 | Tools | Guarded filesystem loop, `request_confirmation` gate, engine handoff, clarifying question | released |
 | Tools | Unified `list_directory` query, bounded Project State orientation, and structured missing-path observations | experimental |
-| Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`) | released |
+| Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`; hidden without `TAVILY_API_KEY`, and `web_search` yields to a session's enabled built-in search) | released |
 | Tools | Dual-era Streamable HTTP MCP tools: legacy `initialize` and modern `server/discover` with per-server `auto`/`legacy`/`modern` negotiation | released |
 | Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; optional `mcpOutputAutoTruncate` sub-toggle replaces oversized inline results with a bounded preview + reference; inline default unchanged | experimental |
 | Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
@@ -221,7 +221,7 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 ### Web & MCP
 
 - MCP supports dual-era Streamable HTTP tools: legacy `initialize` (revisions through `2025-11-25`) and modern `server/discover` (`2026-07-28`). Per-server `negotiation: legacy|modern|auto` controls the connection path; absent defaults to `legacy` with zero wire change. The official `@modelcontextprotocol/client@2` SDK owns wire negotiation behind a thin Vesicle adapter; SDK types do not enter `core/`, providers, or TUI. Both eras normalize into the same `ToolDefinition`/`ToolCall`/`ToolResult` boundary. The existing inline image path, secret hygiene, permission class, Engine scoping, and result normalization are preserved. Strictly validated inline PNG/JPEG/GIF/WebP tool-result images are supported. Resource, audio, URL/link, and unknown result kinds are omitted without auto-fetch or prompt injection (deferred). `input_required` (modern MRTR) is rejected with a stable unsupported-capability error — no retry or side effect. Automatic `subscriptions/listen` is not enabled. Local stdio servers, classic HTTP+SSE, prompts/resources APIs, non-image media delivery, OAuth, and background tool-list-change handling are deferred.
-- Web tools are limited to the five Tavily host tools on ETL and Evaluate profiles.
+- Web tools are limited to the five Tavily host tools on ETL and Evaluate profiles. Provider-native built-in web search groundwork (normalized `WebSearchReport`, `capabilities.builtinWebSearch` + `webSearchDefault` config, `/websearch` session toggle, Tavily surface rules) has landed; no adapter declares or normalizes the built-in search yet ([#225](https://github.com/3aKHP/prism-vesicle/issues/225) follow-up slices).
 
 ### Host Shell
 

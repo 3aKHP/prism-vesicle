@@ -1,7 +1,7 @@
 // /websearch — provider-native built-in web search status and session override (#225).
 
-import { immediate } from "./dispatch";
-import { webSearchCommandCompletion } from "./argument-completion";
+import { afterAgentLoop, immediate } from "./dispatch";
+import { fixedCommandCompletion } from "./argument-completion";
 import type { Command, WebSearchCommandContext } from "./types";
 
 const WEB_SEARCH_USAGE = "Usage: /websearch [on|off].\nToggles the model's provider-native web search for this session; default comes from the model entry.";
@@ -31,10 +31,12 @@ export function createWebSearchCommands(ctx: WebSearchCommandContext): Command[]
   return [
     {
       name: "websearch",
-      busyBehavior: immediate,
+      // Status is safe mid-turn; the mutating form changes provider request
+      // semantics and must not split a turn across two toggle states.
+      busyBehavior: (args) => (args.trim().length === 0 ? immediate : afterAgentLoop),
       description: "Show or toggle built-in web search",
       usage: "/websearch [on|off]",
-      completion: webSearchCommandCompletion,
+      completion: fixedCommandCompletion("websearch"),
       async run(args, raw) {
         const parsed = parseWebSearchArgs(args);
         if ("error" in parsed) {

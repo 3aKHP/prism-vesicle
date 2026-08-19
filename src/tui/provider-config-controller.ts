@@ -36,6 +36,8 @@ export type ProviderConfigControllerOptions = {
   recordActivity: (entry: ActivityEntry) => void;
   /** Release session-scoped provider resources before config identity changes. */
   closeActiveProviderSession?: () => void;
+  /** Drop the /websearch session override when the model selection changes. */
+  clearWebSearchOverride?: () => void;
   inspectProvider?: (selection?: Partial<ProviderSelection>) => Promise<ProviderConfigStatus>;
 };
 
@@ -94,6 +96,7 @@ export function createProviderConfigController(options: ProviderConfigController
   async function applyProviderSelection(selection: Partial<ProviderSelection>): Promise<ProviderSelection> {
     const inspected = await (options.inspectProvider ?? inspectProviderConfig)(selection);
     options.closeActiveProviderSession?.();
+    options.clearWebSearchOverride?.();
     applyInspectedProvider(inspected);
     options.recordActivity({ kind: "provider", text: `switched to ${inspected.providerId}/${inspected.model}` });
     return { provider: inspected.providerId, model: inspected.model };

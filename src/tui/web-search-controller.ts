@@ -1,13 +1,15 @@
 // /websearch — session override owner for the provider-native built-in web
 // search toggle (#225 frozen design D1/D-C). Process-scoped like the theme
-// preference controller: /new or a resume falls back to the model entry's
-// `webSearchDefault`, and the override never persists to session records.
+// preference controller: /new, a resume, or a provider/model switch falls
+// back to the model entry's `webSearchDefault`, and the override never
+// persists to session records.
 
 import {
   clearSessionWebSearchOverride,
   effectiveWebSearchEnabled,
   readSessionWebSearchOverride,
   setSessionWebSearchOverride,
+  webSearchSupported,
   type WebSearchConfigView,
 } from "../core/agent-loop/web-search-state";
 
@@ -27,10 +29,11 @@ export type WebSearchController = {
   statusText: () => string;
   /**
    * Apply a session override. Returns a system notice to echo: the disclosure
-   * when built-in search turns on, a warning when the model cannot use it.
+   * when built-in search turns on, a warning when the model cannot use it,
+   * or an explanation when there is no session to toggle yet.
    */
   applyOverride: (enabled: boolean) => string;
-  /** Drop the override (falls back to the model entry default). */
+  /** Drop the override for the active session, if any. */
   clearOverride: () => void;
 };
 
@@ -42,29 +45,43 @@ const DISCLOSURE = [
 ].join(" ");
 
 export function createWebSearchController(inputs: WebSearchControllerInputs): WebSearchController {
-  const sessionId = () => inputs.getSessionId() ?? "";
-
   return {
-    enabled: () => effectiveWebSearchEnabled(inputs.getModelView(), sessionId()),
-    supported: () => inputs.getModelView().capabilities?.builtinWebSearch === true,
+    enabled: () => {
+      const sessionId = inputs.getSessionId();
+      return sessionId !== undefined && effectiveWebSearchEnabled(inputs.getModelView(), sessionId);
+    },
+    supported: () => webSearchSupported(inputs.getModelView()),
     statusText: () => {
       const view = inputs.getModelView();
-      if (view.capabilities?.builtinWebSearch !== true) {
+      if (!webSearchSupported(view)) {
         return "Built-in web search: the selected model does not declare the builtinWebSearch capability.";
       }
-      const override = readSessionWebSearchOverride(sessionId());
+      const sessionId = inputs.getSessionId();
+      if (sessionId === undefined) {
+        return `Built-in web search: no active session yet (model default ${view.webSearchDefault === true ? "on" : "off"}); the toggle applies once a session starts.`;
+      }
+      const override = readSessionWebSearchOverride(sessionId);
       if (override !== undefined) {
         return `Built-in web search: ${override ? "on" : "off"} (session override; model default ${view.webSearchDefault === true ? "on" : "off"}).`;
       }
       return `Built-in web search: ${view.webSearchDefault === true ? "on" : "off"} (model default; /websearch on|off overrides for this session).`;
     },
     applyOverride: (enabled) => {
-      if (enabled && inputs.getModelView().capabilities?.builtinWebSearch !== true) {
-        return "Built-in web search is on, but the selected model does not declare the builtinWebSearch capability — the toggle stays inert for this model.";
+      if (!webSearchSupported(inputs.getModelView())) {
+        return enabled
+          ? "Built-in web search cannot be enabled: the selected model does not declare the builtinWebSearch capability, so no search would run."
+          : "Built-in web search is already off for this model (no builtinWebSearch capability declared).";
       }
-      setSessionWebSearchOverride(sessionId(), enabled);
+      const sessionId = inputs.getSessionId();
+      if (sessionId === undefined) {
+        return "No active session yet — start or resume a session before toggling built-in web search.";
+      }
+      setSessionWebSearchOverride(sessionId, enabled);
       return enabled ? DISCLOSURE : "Built-in web search is off for this session.";
     },
-    clearOverride: () => clearSessionWebSearchOverride(sessionId()),
+    clearOverride: () => {
+      const sessionId = inputs.getSessionId();
+      if (sessionId !== undefined) clearSessionWebSearchOverride(sessionId);
+    },
   };
 }

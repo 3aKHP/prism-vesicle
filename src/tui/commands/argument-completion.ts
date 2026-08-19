@@ -16,7 +16,7 @@ export type ModelArgumentDraft =
   | { stage: "provider"; query: string }
   | { stage: "model"; providerId: string; query: string };
 
-export type FixedArgumentCommand = "engine" | "effort" | "reasoning" | "permissions" | "theme";
+export type FixedArgumentCommand = "engine" | "effort" | "reasoning" | "permissions" | "theme" | "websearch";
 
 export type FixedArgumentDraft = {
   command: FixedArgumentCommand;
@@ -85,6 +85,12 @@ export function fixedArgumentOptions(command: FixedArgumentCommand): OptionItem[
       YOLO: "Auto-allow all effective tools · requires two confirmations",
     } as const;
     return permissionModes.map((mode) => ({ id: mode, label: mode, detail: details[mode] }));
+  }
+  if (command === "websearch") {
+    return [
+      { id: "on", label: "on", detail: "Enable for this session · provider-side, no per-call approval" },
+      { id: "off", label: "off", detail: "Disable for this session" },
+    ];
   }
   if (command === "theme") {
     return [
@@ -403,23 +409,6 @@ export const themeCommandCompletion: CommandCompletion = {
 function isThemePreference(value: string): boolean {
   return value === "dark" || value === "light" || value === "default" || value === "auto";
 }
-
-export const webSearchCommandCompletion: CommandCompletion = {
-  resolve(value) {
-    const args = commandArguments(value, "websearch");
-    if (args === null) return null;
-    const tokens = splitTokens(args);
-    const [first] = tokens.values;
-    const states: OptionItem[] = [
-      { id: "on", label: "on", detail: "Enable for this session (model capability; no per-call approval)" },
-      { id: "off", label: "off", detail: "Disable for this session" },
-    ];
-    if (!first || (tokens.values.length === 1 && !tokens.trailingSpace)) {
-      return completion("websearch:first", value, first ?? "", "websearch", states, (item) => `/websearch ${item.id} `);
-    }
-    return null;
-  },
-};
 
 /** Resolve the canonical command's completion contract, preserving aliases as input only. */
 export function resolveCommandArgumentCompletion(

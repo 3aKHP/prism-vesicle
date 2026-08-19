@@ -43,6 +43,7 @@ export function cloneSideQuestionMessages(messages: VesicleMessage[]): VesicleMe
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+    ...(message.webSearch ? { webSearch: message.webSearch } : {}),
     ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images.map(stripImageBytes) } : {}),
   }));

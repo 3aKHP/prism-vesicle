@@ -48,6 +48,19 @@ describe("web search tool surface policy", () => {
     expect(on.some((tool) => tool.function.name === "web_fetch")).toBe(true);
   });
 
+  test("built-in search on and a missing Tavily key compose without leaking web_search", async () => {
+    const profile = await loadEngineProfile("etl");
+    const surface = resolveBuiltInTools(profile, false, false, "auto", undefined, {
+      builtinSearchEnabled: true,
+      tavilyConfigured: false,
+    });
+    const names = surface.map((tool) => tool.function.name);
+    expect(names).not.toContain("web_search");
+    expect(names).not.toContain("web_fetch");
+    // Unrelated host tools keep their normal visibility.
+    expect(surface.length).toBeGreaterThan(0);
+  });
+
   test("a missing Tavily key hides the whole Tavily tool family", async () => {
     const profile = await loadEngineProfile("etl");
     const surface = resolveBuiltInTools(profile, false, false, "auto", undefined, { tavilyConfigured: false });
