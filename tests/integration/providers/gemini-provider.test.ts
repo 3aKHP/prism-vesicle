@@ -40,7 +40,7 @@ describe("Gemini generateContent request shaping", () => {
     }]);
   });
 
-  test("serializes MCP tool-result images after the function response", () => {
+  test("serializes MCP tool-result images as a separate user Content after the function response", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
       messages: [
@@ -52,20 +52,81 @@ describe("Gemini generateContent request shaping", () => {
         { role: "tool", toolCallId: "call_mcp", content: "artwork", images: [mcpImage()] },
       ],
     });
-    expect((body.contents as unknown[])[1]).toEqual({
-      role: "user",
-      parts: [
-        {
-          functionResponse: {
-            id: "call_mcp",
-            name: "mcp_prts_operator_artwork",
-            response: { content: "artwork" },
+    expect(body.contents).toEqual([
+      { role: "model", parts: [{ functionCall: { id: "call_mcp", name: "mcp_prts_operator_artwork", args: {} } }] },
+      {
+        role: "user",
+        parts: [
+          {
+            functionResponse: {
+              id: "call_mcp",
+              name: "mcp_prts_operator_artwork",
+              response: { content: "artwork" },
+            },
           },
+        ],
+      },
+      {
+        role: "user",
+        parts: [
+          { text: "[Image #1: prts-operator_artwork-image-1.png]" },
+          { inlineData: { mimeType: "image/png", data: "cG5n" } },
+        ],
+      },
+    ]);
+  });
+
+  test("never mixes functionResponse parts with ordinary multimodal parts in one user Content", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "inspect the artwork" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_text", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" },
+            { id: "call_mcp", name: "mcp_prts_operator_artwork", arguments: "{}" },
+          ],
         },
-        { text: "[Image #1: prts-operator_artwork-image-1.png]" },
-        { inlineData: { mimeType: "image/png", data: "cG5n" } },
+        { role: "tool", toolCallId: "call_text", content: "{\"ok\":true}" },
+        { role: "tool", toolCallId: "call_mcp", content: "artwork", images: [mcpImage()] },
+        { role: "user", content: "[gate:phase resolved as confirm]" },
       ],
     });
+    expect(body.contents).toEqual([
+      { role: "user", parts: [{ text: "inspect the artwork" }] },
+      {
+        role: "model",
+        parts: [
+          { functionCall: { id: "call_text", name: "read_file", args: { path: "workspace/a.md" } } },
+          { functionCall: { id: "call_mcp", name: "mcp_prts_operator_artwork", args: {} } },
+        ],
+      },
+      {
+        role: "user",
+        parts: [
+          { functionResponse: { id: "call_text", name: "read_file", response: { content: "{\"ok\":true}" } } },
+          { functionResponse: { id: "call_mcp", name: "mcp_prts_operator_artwork", response: { content: "artwork" } } },
+        ],
+      },
+      {
+        role: "user",
+        parts: [
+          { text: "[Image #1: prts-operator_artwork-image-1.png]" },
+          { inlineData: { mimeType: "image/png", data: "cG5n" } },
+        ],
+      },
+      { role: "user", parts: [{ text: "[gate:phase resolved as confirm]" }] },
+    ]);
+    const userContents = (body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>)
+      .filter((content) => content.role === "user");
+    for (const content of userContents) {
+      const functionResponses = content.parts.filter((part) => "functionResponse" in part);
+      const ordinary = content.parts.filter((part) => "text" in part || "inlineData" in part);
+      expect(functionResponses.length === 0 || ordinary.length === 0)
+        .toBe(true);
+    }
   });
   test("serializes system, messages, tools, tool results, and thinking config", () => {
     const body = toGeminiGenerateContentBody({
@@ -151,9 +212,9 @@ describe("Gemini generateContent request shaping", () => {
               response: { content: "{\"ok\":true}" },
             },
           },
-          { text: "[gate:phase resolved as confirm]" },
         ],
       },
+      { role: "user", parts: [{ text: "[gate:phase resolved as confirm]" }] },
     ]);
     expect(body.tools).toEqual([{
       functionDeclarations: [{
