@@ -296,6 +296,11 @@ v2 body
         `await installSnapshot({ sourceDirectory: ${JSON.stringify(source)}, env: { ...process.env, VESICLE_CONFIG_DIR: ${JSON.stringify(env.VESICLE_CONFIG_DIR)} } });`,
       ].join("\n");
       const holder = Bun.spawn({ cmd: [process.execPath, "-e", holderScript], stdout: "pipe", stderr: "pipe" });
+      let holderExited = false;
+      const holderExit = holder.exited.then((exitCode) => {
+        holderExited = true;
+        return exitCode;
+      });
       try {
         for (let attempt = 0; attempt < 200; attempt++) {
           if (await lstat(ready).catch(() => undefined)) break;
@@ -312,9 +317,22 @@ v2 body
           return exitCode;
         });
         await Bun.sleep(100);
+        if (holderExited) {
+          // The holder holds the SQLite write lock, so its death is the only way the
+          // worker can finish early. A dead holder is environmental (e.g. a runner
+          // OOM-kill), not a store defect, and must not be misread as a locking failure.
+          throw new Error(
+            `Lock holder died while it should have been sleeping: exit ${await holderExit}; `
+              + `worker ${workerExited ? `already exited with ${await workerExit}` : "still running"}`,
+          );
+        }
         if (workerExited) {
           throw new Error(`Index worker exited before the holder: ${await workerExit}\n${await workerStdout}\n${await workerStderr}`);
         }
+        // The index write happens inside the cross-process lock, so while the holder
+        // lives the install cannot have landed: this proves the worker was genuinely
+        // blocked on the lock, not merely slow to boot.
+        expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "after-crash")).toBe(false);
         holder.kill("SIGKILL");
         const [exitCode, stderr] = await Promise.all([workerExit, workerStderr]);
         expect(stderr).toBe("");
