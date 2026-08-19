@@ -128,6 +128,7 @@ describe("Gemini generateContent request shaping", () => {
         .toBe(true);
     }
   });
+
   test("serializes system, messages, tools, tool results, and thinking config", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),

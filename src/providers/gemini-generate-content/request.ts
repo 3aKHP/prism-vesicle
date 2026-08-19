@@ -32,7 +32,8 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
 
   // A user Content is either functionResponse-only or ordinary multimodal-only; mixing the
   // two part kinds in one Content makes the Gemini/Vertex API reject the replay with a 400.
-  const flushToolResults = () => {
+  // Function-response parts always flush before their round's tool-result images.
+  const flushPendingToolParts = () => {
     if (pendingToolResults.length > 0) {
       serialized.push({ role: "user", parts: pendingToolResults });
       pendingToolResults = [];
@@ -58,7 +59,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
       continue;
     }
 
-    flushToolResults();
+    flushPendingToolParts();
     if (message.role === "assistant") {
       const replayParts = geminiReplayParts(message.thinkingBlocks);
       const parts = replayParts.length > 0
@@ -84,7 +85,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
     serialized.push({ role: "user", parts: parts.length > 0 ? parts : [{ text: "" }] });
   }
 
-  flushToolResults();
+  flushPendingToolParts();
   return serialized;
 }
 

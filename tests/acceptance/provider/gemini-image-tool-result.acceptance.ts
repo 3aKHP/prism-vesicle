@@ -115,7 +115,7 @@ liveTest(`gemini image tool-result boundary [${label}]`, async () => {
 
   const complete = events.find((event) => event.type === "complete");
   if (complete?.type !== "complete") throw new Error("gemini stream ended without a complete event");
-  expect(typeof complete.response.content).toBe("string");
+  expect(complete.response.content.length).toBeGreaterThan(0);
   summarize("gemini-image-tool-result", {
     provider: config.providerId,
     model: config.model,
