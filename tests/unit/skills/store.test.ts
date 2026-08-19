@@ -317,22 +317,25 @@ v2 body
           return exitCode;
         });
         await Bun.sleep(100);
-        if (holderExited) {
-          // The holder holds the SQLite write lock, so its death is the only way the
-          // worker can finish early. A dead holder is environmental (e.g. a runner
-          // OOM-kill), not a store defect, and must not be misread as a locking failure.
-          throw new Error(
+        // The holder holds the SQLite write lock, so its death is the only way the
+        // worker can finish early. A dead holder is environmental (e.g. a runner
+        // OOM-kill), not a store defect, and must not be misread as a locking failure.
+        const holderDeathError = async () =>
+          new Error(
             `Lock holder died while it should have been sleeping: exit ${await holderExit}; `
               + `worker ${workerExited ? `already exited with ${await workerExit}` : "still running"}`,
           );
-        }
+        if (holderExited) throw await holderDeathError();
         if (workerExited) {
           throw new Error(`Index worker exited before the holder: ${await workerExit}\n${await workerStdout}\n${await workerStderr}`);
         }
         // The index write happens inside the cross-process lock, so while the holder
-        // lives the install cannot have landed: this proves the worker was genuinely
-        // blocked on the lock, not merely slow to boot.
-        expect((await readActiveIndex(env)).entries.some((entry) => entry.name === "after-crash")).toBe(false);
+        // lives the install cannot have landed during the observation window. Re-check
+        // holder liveness after the read so a death mid-read still classifies
+        // environmentally instead of failing as an unexplained index mismatch.
+        const landed = (await readActiveIndex(env)).entries.some((entry) => entry.name === "after-crash");
+        if (holderExited) throw await holderDeathError();
+        expect(landed).toBe(false);
         holder.kill("SIGKILL");
         const [exitCode, stderr] = await Promise.all([workerExit, workerStderr]);
         expect(stderr).toBe("");
