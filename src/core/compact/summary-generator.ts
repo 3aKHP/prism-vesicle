@@ -108,6 +108,7 @@ export function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.webSearch ? { webSearch: message.webSearch } : {}),
     ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images?.length ? { images: message.images } : {}),
   };

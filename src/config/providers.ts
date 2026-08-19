@@ -18,6 +18,7 @@ export type ProviderModelProfile = {
   generation?: GenerationDefaults;
   capabilities?: ModelCapabilities;
   limits?: ModelLimits;
+  webSearchDefault?: boolean;
 };
 
 export type ProviderProfile = {
@@ -46,7 +47,7 @@ export type ProviderRegistry = {
  * sync with readGenerationField/readCapabilityField/readLimitsField/
  * readAutoCompactField; both live in this module so drift is visible in one diff.
  */
-export const modelEntryFieldNames = ["id", "generation", "capabilities", "limits"] as const;
+export const modelEntryFieldNames = ["id", "generation", "capabilities", "limits", "webSearchDefault"] as const;
 export const generationFieldNames = ["temperature", "maxTokens"] as const;
 export const capabilityFieldNames = [
   "streaming",
@@ -57,6 +58,7 @@ export const capabilityFieldNames = [
   "maxTokens",
   "vision",
   "remoteCompact",
+  "builtinWebSearch",
 ] as const;
 export const limitsFieldNames = ["contextWindow", "maxOutputTokens"] as const;
 export const autoCompactFieldNames = ["enabled", "threshold", "reserveOutputTokens"] as const;
@@ -91,6 +93,10 @@ export function validateModelEntryShape(entry: unknown): ProviderModelProfile {
   if (source.generation !== undefined) model.generation = readGenerationObject(source.generation);
   if (source.capabilities !== undefined) model.capabilities = readCapabilitiesObject(source.capabilities);
   if (source.limits !== undefined) model.limits = readLimitsObject(source.limits);
+  if (source.webSearchDefault !== undefined) {
+    if (typeof source.webSearchDefault !== "boolean") throw new Error("webSearchDefault must be true or false.");
+    model.webSearchDefault = source.webSearchDefault;
+  }
   return model;
 }
 
@@ -292,6 +298,7 @@ export function resolveProviderConfig(
     ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
     ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
     ...(modelProfile.limits ? { limits: modelProfile.limits } : {}),
+    ...(modelProfile.webSearchDefault !== undefined ? { webSearchDefault: modelProfile.webSearchDefault } : {}),
   };
 }
 
@@ -362,6 +369,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       ...(currentModel.generation ? { generation: currentModel.generation } : {}),
       ...(currentModel.capabilities ? { capabilities: currentModel.capabilities } : {}),
       ...(currentModel.limits ? { limits: currentModel.limits } : {}),
+      ...(currentModel.webSearchDefault !== undefined ? { webSearchDefault: currentModel.webSearchDefault } : {}),
     };
     validateAutoCompactBudget(model, currentProvider?.id, path);
     currentProvider!.models = [
@@ -552,6 +560,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       currentModelBlock = null;
       const [key, value] = readKeyValue(line, index, path);
       if (key === "id") currentModel.id = value;
+      else if (key === "webSearchDefault") currentModel.webSearchDefault = readBoolean(value, key, index, path);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown model field "${key}".`);
       continue;
     }
@@ -715,7 +724,8 @@ function readCapabilityField(key: string, value: string, index: number, path: st
   if (key === "temperature") return { temperature: enabled };
   if (key === "maxTokens") return { maxTokens: enabled };
   if (key === "vision") return { vision: enabled };
-  return { remoteCompact: enabled };
+  if (key === "remoteCompact") return { remoteCompact: enabled };
+  return { builtinWebSearch: enabled };
 }
 
 function readLimitsField(key: string, value: string, index: number, path: string): ModelLimits {

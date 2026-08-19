@@ -162,6 +162,7 @@ export function toVesicleMessage(
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+    ...(message.webSearch ? { webSearch: message.webSearch } : {}),
     ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images } : {}),
   };

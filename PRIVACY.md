@@ -2,7 +2,7 @@
 
 [English](./PRIVACY.md) | [简体中文](./PRIVACY.zh-CN.md)
 
-Last updated: 2026-07-21
+Last updated: 2026-08-19
 
 ## Summary
 
@@ -34,7 +34,8 @@ When the user starts a model request, Prism Vesicle sends data to the provider a
 - the current conversation context and user prompt;
 - images deliberately attached to the conversation;
 - relevant tool results and generated context needed to continue the turn;
-- generation settings and ordinary protocol metadata.
+- generation settings and ordinary protocol metadata;
+- when built-in web search is enabled for the session, the search queries the model derives from the conversation (see "Built-in Web Search" below).
 
 Guided Setup may send the configured API key to the selected provider and call its `/models` endpoint to discover available model ids. The key is used to authenticate the selected service. Provider-specific privacy, logging, training, residency, and retention terms apply.
 
@@ -43,6 +44,10 @@ Guided Setup may send the configured API key to the selected provider and call i
 ### Tavily
 
 When Tavily is configured and the user or an approved model action invokes a web tool, Tavily receives the search query, URL, crawl/map request, or research request required for that operation, along with authentication and ordinary request metadata. Tavily is not contacted merely because its key is stored.
+
+### Built-in Web Search
+
+Some models expose a provider-native web search. When it is enabled (model entry default or the session `/websearch` toggle), the provider — not Prism Vesicle — executes the searches: conversation-derived queries are sent to the provider together with the ordinary model request, search execution and result handling follow the provider's own terms, and there is no per-call approval inside Prism Vesicle. Depending on the provider, search results may be returned as citations that Prism Vesicle records in the local session file, or injected into the model's context server-side without being returned to the client. Searches are typically billed by the provider on a usage basis and cannot be counted exactly from the client. Disabling the toggle stops future search declarations; queries already sent remain subject to the provider's retention terms.
 
 ### MCP Servers
 

@@ -36,6 +36,48 @@ export type VesicleImageAttachment = {
   data?: string;
 };
 
+/**
+ * Normalized citation from a provider-native web search. Field set is the
+ * union across supported protocols; every field beyond url/title is optional
+ * because providers differ (OpenAI/Interactions carry span indexes, MiMo's
+ * dialect would carry summary/site metadata, DeepSeek emits none).
+ */
+export type WebSearchCitation = {
+  url: string;
+  title: string;
+  startIndex?: number;
+  endIndex?: number;
+  summary?: string;
+  siteName?: string;
+  publishTime?: string;
+};
+
+/**
+ * Replay record for one provider-native `web_search_call` item. Only the
+ * openai-responses protocol produces and consumes these; status/action are
+ * kept verbatim (union-tolerant across OpenAI/DeepSeek enum drift) so the
+ * item can be replayed on later turns without host reinterpretation.
+ */
+export type WebSearchCallRecord = {
+  id: string;
+  status: string;
+  action: Record<string, unknown>;
+};
+
+/**
+ * Normalized report of server-side search executed inside a provider turn.
+ * `queries` is the audit floor and is always present; `citations` is absent
+ * when the provider injects results server-side without returning them
+ * (DeepSeek — audit-degraded by contract); `calls` carries the replay payload
+ * where the protocol requires echoing native items back.
+ */
+export type WebSearchReport = {
+  provider: string;
+  queries: string[];
+  citations?: WebSearchCitation[];
+  calls?: WebSearchCallRecord[];
+};
+
 export type VesicleMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
@@ -47,6 +89,12 @@ export type VesicleMessage = {
   /** Host-derived tool outcome used by adapters with a native error flag. */
   toolOk?: boolean;
   toolCalls?: ToolCall[];
+  /**
+   * Server-side search grounding for this assistant turn (provider-native
+   * built-in web search). Model capability, not a host tool call: permission
+   * modes do not govern it and it never enters `toolCalls`.
+   */
+  webSearch?: WebSearchReport;
   /** Owner-qualified durable state. Only the matching provider adapter interprets it. */
   providerState?: ProviderStateEnvelope;
   images?: VesicleImageAttachment[];
@@ -75,6 +123,12 @@ export type VesicleRequest = {
   system: string[];
   messages: VesicleMessage[];
   tools?: ToolDefinition[];
+  /**
+   * Declare the selected model's provider-native web search for this turn.
+   * Adapters that support it translate this into the protocol's built-in
+   * search tool declaration; adapters without support leave it inert.
+   */
+  webSearch?: boolean;
   /** Host cancellation for the in-flight provider request. Never serialized. */
   signal?: AbortSignal;
   /** Observes transport retries (`fetchProvider`); never serialized. */
@@ -93,6 +147,8 @@ export type VesicleResponse = {
   reasoningContent?: string;
   thinkingBlocks?: ProviderThinkingBlock[];
   toolCalls?: ToolCall[];
+  /** Server-side search grounding executed during this response, if any. */
+  webSearch?: WebSearchReport;
   /** Validated provider-owned state published only with this completed response. */
   providerState?: ProviderStateEnvelope;
   finishReason?: string;

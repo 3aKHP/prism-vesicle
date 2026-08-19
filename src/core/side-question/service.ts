@@ -23,6 +23,7 @@ import { projectSideQuestionReference } from "./reference";
 import { appendHostContext } from "../prompt/host-context";
 import { composeProjectStateBlock } from "../prompt/project-state";
 import { declaresDirectoryQuery } from "../tools/directory-query";
+import { effectiveWebSearchEnabled } from "../agent-loop/web-search-state";
 
 const SIDE_QUESTION_PROMPT_PATH = "assets/prompts/shared/side-question.md";
 
@@ -52,6 +53,10 @@ export async function askSideQuestion(options: {
     system: [sidePrompt],
     messages: [{ role: "user", content: projection.content, ...(images.length > 0 ? { images } : {}) }],
     ...(context.generation ? { generation: context.generation } : {}),
+    // Built-in search is model capability, not a host tool: the tool-free
+    // side-request contract is unaffected, and the parent session's toggle
+    // carries over per the frozen design.
+    ...(effectiveWebSearchEnabled(config, context.sessionId) ? { webSearch: true } : {}),
     signal: options.signal,
     onRetry: options.onRetry,
   };
@@ -171,6 +176,7 @@ function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+    ...(message.webSearch ? { webSearch: message.webSearch } : {}),
     ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images.map(({ data: _data, ...image }) => image) } : {}),
   };

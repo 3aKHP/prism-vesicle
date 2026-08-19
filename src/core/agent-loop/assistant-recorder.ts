@@ -23,6 +23,7 @@ export async function recordAssistantToolCalls(options: {
     ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
     ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
     ...(providerState ? { providerState: cloneProviderStateEnvelope(providerState) } : {}),
+    ...(response.webSearch ? { webSearch: response.webSearch } : {}),
     toolCalls,
   });
   await options.session.append({
@@ -37,6 +38,7 @@ export async function recordAssistantToolCalls(options: {
       ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
       ...(response.usage ? { usage: response.usage } : {}),
       ...(providerState ? { providerState } : {}),
+      ...(response.webSearch ? { webSearch: response.webSearch } : {}),
       ...(options.metadata ?? {}),
       toolCalls,
     }),

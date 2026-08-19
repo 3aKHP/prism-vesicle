@@ -325,6 +325,33 @@ describe("config loading", () => {
     });
   });
 
+  test("loads the builtinWebSearch capability and webSearchDefault model field", async () => {
+    const { env } = await writeProvidersFile([
+      "default:",
+      "  provider: deepseek",
+      "  model: deepseek-v4-flash",
+      "providers:",
+      "  deepseek:",
+      "    protocol: openai-chat-compatible",
+      "    baseUrl: https://api.deepseek.com/v1",
+      "    apiKeyEnv: DEEPSEEK_API_KEY",
+      "    models:",
+      "      - id: deepseek-v4-flash",
+      "        capabilities:",
+      "          builtinWebSearch: true",
+      "        webSearchDefault: true",
+      "",
+    ], ["DEEPSEEK_API_KEY=secret"]);
+
+    const registry = await loadProviderRegistry(env);
+    const config = await loadConfigForSelection(undefined, env);
+
+    expect(registry.providers[0].models[0].capabilities).toEqual({ builtinWebSearch: true });
+    expect(registry.providers[0].models[0].webSearchDefault).toBe(true);
+    expect(config.capabilities).toEqual({ builtinWebSearch: true });
+    expect(config.webSearchDefault).toBe(true);
+  });
+
   test("rejects an explicit auto-compaction reserve at or above the context window", async () => {
     const { env } = await writeProvidersFile([
       "default:", "  provider: test", "  model: m", "providers:",

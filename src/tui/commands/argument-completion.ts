@@ -404,6 +404,23 @@ function isThemePreference(value: string): boolean {
   return value === "dark" || value === "light" || value === "default" || value === "auto";
 }
 
+export const webSearchCommandCompletion: CommandCompletion = {
+  resolve(value) {
+    const args = commandArguments(value, "websearch");
+    if (args === null) return null;
+    const tokens = splitTokens(args);
+    const [first] = tokens.values;
+    const states: OptionItem[] = [
+      { id: "on", label: "on", detail: "Enable for this session (model capability; no per-call approval)" },
+      { id: "off", label: "off", detail: "Disable for this session" },
+    ];
+    if (!first || (tokens.values.length === 1 && !tokens.trailingSpace)) {
+      return completion("websearch:first", value, first ?? "", "websearch", states, (item) => `/websearch ${item.id} `);
+    }
+    return null;
+  },
+};
+
 /** Resolve the canonical command's completion contract, preserving aliases as input only. */
 export function resolveCommandArgumentCompletion(
   value: string,

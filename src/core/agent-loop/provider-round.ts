@@ -19,6 +19,8 @@ type ProviderRoundOptions = {
   engine: EngineId;
   providerSelection: ProviderSelection;
   visionEnabled: boolean;
+  /** Declare the provider-native built-in web search for this round's request. */
+  webSearch?: boolean;
   systemPrompt: string;
   tools: ToolDefinition[];
   generation?: VesicleRequest["generation"];
@@ -61,6 +63,7 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
     system: [options.systemPrompt],
     messages,
     tools: options.tools,
+    ...(options.webSearch ? { webSearch: true } : {}),
     generation: options.generation,
     signal: options.signal,
     onRetry: options.onEvent ? (info) => options.onEvent?.({
@@ -101,6 +104,7 @@ export function emitAssistantResponse(response: VesicleResponse, onEvent?: (even
     ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
     ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
     ...(response.usage ? { usage: response.usage } : {}),
+    ...(response.webSearch ? { webSearch: response.webSearch } : {}),
     toolCalls: toolCalls.map((call) => ({ id: call.id, name: call.name, arguments: call.arguments })),
   });
 }

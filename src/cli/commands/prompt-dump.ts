@@ -8,6 +8,7 @@ import type { EffectiveInstructionSelection } from "../../core/instructions";
 import type { McpRegistryOptions } from "../../mcp/registry";
 import { loadPermissionSettings } from "../../config/permissions";
 import { resolveToolSurface } from "../../core/agent-loop/tool-surface";
+import { loadTavilyApiKey } from "../../core/tools/web/tavily-client";
 import { resolveProjectHarnessRuntime } from "../../core/harness";
 import {
   catalogNames,
@@ -90,6 +91,9 @@ export async function getEffectivePromptToolNames(
     shellInterpreter,
     options,
     skillNames.length > 0 ? { catalogNames: skillNames } : undefined,
+    // Dump has no session/model selection, so the built-in toggle is off and
+    // only Tavily credential presence shapes the surface.
+    { tavilyConfigured: (await loadTavilyApiKey(process.env)) !== undefined },
   );
   return {
     modelVisible: surface.definitions.map((definition) => definition.function.name),

@@ -65,6 +65,70 @@ describe("session: message history", () => {
     expect(messages.some((m) => m.content.includes("composed prompt"))).toBe(false);
   });
 
+  test("restores an assistant webSearch report for provider replay", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-reload-"));
+    const store = await createSessionStore(rootDir, "2026-08-19T00-00-00-000Z-websearch1");
+
+    await store.append({ role: "user", content: "research this" });
+    await store.append({
+      role: "assistant",
+      content: "grounded answer",
+      metadata: {
+        engine: "etl",
+        model: "test-model",
+        webSearch: {
+          provider: "test-provider",
+          queries: ["first query", "second query"],
+          citations: [{ url: "https://example.com/a", title: "A", startIndex: 0, endIndex: 12 }],
+          calls: [{ id: "ws_1", status: "completed", action: { type: "search", queries: ["first query"] } }],
+        },
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, "2026-08-19T00-00-00-000Z-websearch1");
+    expect(messages[1].webSearch).toEqual({
+      provider: "test-provider",
+      queries: ["first query", "second query"],
+      citations: [{ url: "https://example.com/a", title: "A", startIndex: 0, endIndex: 12 }],
+      calls: [{ id: "ws_1", status: "completed", action: { type: "search", queries: ["first query"] } }],
+    });
+  });
+
+  test("drops malformed webSearch metadata instead of failing the session", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-reload-"));
+    const store = await createSessionStore(rootDir, "2026-08-19T00-00-00-000Z-websearch2");
+
+    await store.append({
+      role: "assistant",
+      content: "partial",
+      metadata: {
+        // No usable queries → the whole report is dropped.
+        webSearch: { provider: "test-provider", queries: "not-an-array" },
+      },
+    });
+    await store.append({
+      role: "assistant",
+      content: "partial citations",
+      metadata: {
+        webSearch: {
+          provider: "test-provider",
+          queries: ["q"],
+          citations: [{ url: "https://example.com" }, { url: "https://ok.example.com", title: "Ok" }, "junk"],
+          calls: [{ id: "ws_1", action: { type: "search" } }],
+        },
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, "2026-08-19T00-00-00-000Z-websearch2");
+    expect(messages[0].webSearch).toBeUndefined();
+    // Malformed citations/calls are filtered; the report itself survives.
+    expect(messages[1].webSearch).toEqual({
+      provider: "test-provider",
+      queries: ["q"],
+      citations: [{ url: "https://ok.example.com", title: "Ok" }],
+    });
+  });
+
   test("loadSessionMessages on a non-existent session throws", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-missing-"));
     await expect(loadSessionMessages(rootDir, "does-not-exist")).rejects.toThrow();
