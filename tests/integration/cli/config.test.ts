@@ -796,6 +796,22 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("set providers rejects a shadowing duplicate field without changing the file", async () => {
+    await withTempProject("vesicle-config-set-duplicate-field-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const path = join(configDir, "providers.yaml");
+      const source = (await readFile(path, "utf8")).replace(
+        "    baseUrl: http://127.0.0.1:11434/v1",
+        "    baseUrl: http://127.0.0.1:11434/v1\n    baseUrl: https://shadow.example/v1",
+      );
+      await writeFile(path, source, "utf8");
+      const result = await runCli(["config", "set", "providers", "providers.local.baseUrl", "https://requested.example/v1"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain('duplicate provider field "baseUrl"');
+      expect(await readFile(path, "utf8")).toBe(source);
+    });
+  });
+
   test("add-model rejects unknown JSON keys", async () => {
     await withTempProject("vesicle-config-addmodel-unknownkey-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
@@ -824,6 +840,24 @@ describe("vesicle config CLI", () => {
       expect(result.stderr).toContain("configured as the Semantic Judge");
       const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
       expect(providersContent).toContain("local:");
+    });
+  });
+
+  test("remove-provider reports the default-provider guard before the quality reference", async () => {
+    await withTempProject("vesicle-config-rmprovider-priority-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "quality.yaml"), [
+        "version: 1",
+        "mode: observe",
+        "providerAlias: deepseek",
+        "modelId: deepseek-v4-flash",
+        "judgeTimeoutMs: 15000",
+        "",
+      ].join("\n"), "utf8");
+      const result = await runCli(["config", "remove-provider", "deepseek"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("current default provider");
+      expect(result.stderr).not.toContain("Semantic Judge");
     });
   });
 
@@ -888,13 +922,42 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("set providers default.model changes only the selected default line", async () => {
+    await withTempProject("vesicle-config-set-global-model-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const path = join(configDir, "providers.yaml");
+      const before = await readFile(path, "utf8");
+      const result = await runCli(["config", "set", "providers", "default.model", "deepseek-reasoner"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(await readFile(path, "utf8")).toBe(before.replace("  model: deepseek-v4-flash", "  model: deepseek-reasoner"));
+    });
+  });
+
+  test("set providers default.provider changes only the global selection", async () => {
+    await withTempProject("vesicle-config-set-global-provider-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const path = join(configDir, "providers.yaml");
+      const before = await readFile(path, "utf8");
+      const result = await runCli(["config", "set", "providers", "default.provider", "local"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      const expected = before
+        .replace("  provider: deepseek", "  provider: local")
+        .replace("  model: deepseek-v4-flash", "  model: qwen3");
+      expect(await readFile(path, "utf8")).toBe(expected);
+    });
+  });
+
   test("set providers <id>.defaultModel syncs the global default model", async () => {
     await withTempProject("vesicle-config-set-sync-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
+      const path = join(configDir, "providers.yaml");
+      const before = await readFile(path, "utf8");
       const result = await runCli(["config", "set", "providers", "providers.deepseek.defaultModel", "deepseek-reasoner"], { cwd: projectDir, configDir });
       expect(result.exitCode).toBe(0);
-      const providersContent = await readFile(join(configDir, "providers.yaml"), "utf8");
-      expect(providersContent).toContain("  model: deepseek-reasoner");
+      const expected = before
+        .replace("  model: deepseek-v4-flash", "  model: deepseek-reasoner")
+        .replace("    defaultModel: deepseek-v4-flash", "    defaultModel: deepseek-reasoner");
+      expect(await readFile(path, "utf8")).toBe(expected);
     });
   });
 

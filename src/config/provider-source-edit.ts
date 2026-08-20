@@ -1,8 +1,8 @@
 // Line-preserving edits for the constrained providers.yaml shape.
 
-import { stripYamlComment } from "./yaml-line-reader";
-import { yamlKey, yamlScalar } from "./yaml-writer";
-import { serializeProviderModelLines, type ProviderModelProfile, type ProviderProfile } from "./providers";
+import { stripYamlComment, unquoteYamlValue } from "./yaml-line-reader";
+import { yamlKey } from "./yaml-writer";
+import { serializeProviderLines, serializeProviderModelLines, type ProviderModelProfile, type ProviderProfile } from "./providers";
 
 type RawLine = { raw: string; indent: number; text: string; semantic: boolean };
 
@@ -19,7 +19,7 @@ export function appendProviderToSource(source: string, provider: ProviderProfile
   const lines = readLines(source);
   const section = findProvidersSection(lines);
   const insertion = trimTrailingBlanks(lines, section.end);
-  lines.splice(insertion, 0, ...serializeProviderLines(provider));
+  lines.splice(insertion, 0, ...serializeProviderLines(provider).map(rawLine));
   return writeLines(lines);
 }
 
@@ -37,7 +37,8 @@ export function replaceProviderFieldInSource(
     return writeLines(lines);
   }
   const models = findModels(lines, provider.start, provider.end);
-  lines.splice(models.start, 0, rawLine(`    ${yamlKey(field)}: ${value}`));
+  const insertion = fieldInsertionBeforeModels(lines, models.start, field);
+  lines.splice(insertion, 0, rawLine(`    ${yamlKey(field)}: ${value}`));
   return writeLines(lines);
 }
 
@@ -116,7 +117,7 @@ function findModel(lines: RawLine[], modelsStart: number, modelsEnd: number, mod
     if (!line.semantic || line.indent !== 6 || !line.text.startsWith("- ")) continue;
     const entry = line.text.slice(2).trim();
     const id = entry.startsWith("id:") ? entry.slice(3).trim() : entry;
-    if (unquote(id) === modelId) return index;
+    if (unquoteYamlValue(id) === modelId) return index;
   }
   throw new Error(`Model "${modelId}" was not found in providers.yaml.`);
 }
@@ -144,21 +145,18 @@ function trimTrailingBlanks(lines: RawLine[], end: number): number {
   return insertion;
 }
 
-function serializeProviderLines(provider: ProviderProfile): RawLine[] {
-  const lines = [
-    `  ${yamlKey(provider.id)}:`,
-    `    protocol: ${provider.protocol}`,
-    `    baseUrl: ${yamlScalar(provider.baseUrl)}`,
-    `    apiKeyEnv: ${provider.apiKeyEnv}`,
-  ];
-  if (provider.authMethod) lines.push(`    authMethod: ${provider.authMethod}`);
-  if (provider.userAgent) lines.push(`    userAgent: ${yamlScalar(provider.userAgent)}`);
-  if (provider.responsesProfile) lines.push(`    responsesProfile: ${provider.responsesProfile}`);
-  if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
-  if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
-  lines.push("    models:");
-  for (const model of provider.models) lines.push(...serializeProviderModelLines(model));
-  return lines.map(rawLine);
+function fieldInsertionBeforeModels(lines: RawLine[], modelsStart: number, field: string): number {
+  let commentStart = modelsStart;
+  while (commentStart > 0) {
+    const previous = lines[commentStart - 1]!;
+    if (previous.semantic || previous.indent !== 4 || !previous.raw.trimStart().startsWith("#")) break;
+    commentStart--;
+  }
+  const documentsTargetField = lines.slice(commentStart, modelsStart).some((line) => {
+    const comment = line.raw.trimStart().slice(1).trimStart();
+    return comment.startsWith(`${field}:`);
+  });
+  return documentsTargetField ? modelsStart : commentStart;
 }
 
 function replaceValue(line: string, value: string): string {
@@ -189,12 +187,4 @@ function rawLine(raw: string): RawLine {
   const withoutComment = stripYamlComment(raw).replace(/\s+$/, "");
   const match = raw.match(/^ */);
   return { raw, indent: match?.[0].length ?? 0, text: withoutComment.trim(), semantic: Boolean(withoutComment.trim()) };
-}
-
-function unquote(value: string): string {
-  if (value.startsWith("\"") && value.endsWith("\"")) {
-    try { return JSON.parse(value) as string; } catch { return value.slice(1, -1); }
-  }
-  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/''/g, "'");
-  return value;
 }

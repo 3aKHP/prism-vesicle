@@ -238,8 +238,8 @@ async function setProviderField(providerId: string, field: string, value: string
     if (!provider) {
       throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
     }
-    applyProviderField(provider, field, value);
-    let candidate = replaceProviderFieldInSource(source, providerId, field, serializedProviderField(provider, field));
+    const normalizedValue = normalizeProviderField(provider, field, value);
+    let candidate = replaceProviderFieldInSource(source, providerId, field, yamlScalar(normalizedValue));
     if (field === "defaultModel" && registry.default.provider === providerId) {
       candidate = replaceDefaultSelectionInSource(candidate, "model", yamlScalar(value));
     }
@@ -257,18 +257,11 @@ async function setProviderField(providerId: string, field: string, value: string
   };
 }
 
-function serializedProviderField(provider: ProviderProfile, field: string): string {
-  const value = provider[field as keyof ProviderProfile];
-  if (typeof value !== "string") throw new Error(`Provider field "${field}" is not serializable.`);
-  return yamlScalar(value);
-}
-
-function applyProviderField(provider: ProviderProfile, field: string, value: string): void {
+function normalizeProviderField(provider: ProviderProfile, field: string, value: string): string {
   const fieldLabel = `provider "${provider.id}"`;
   switch (field) {
     case "protocol":
-      provider.protocol = readProtocol(value, fieldLabel);
-      return;
+      return readProtocol(value, fieldLabel);
     case "baseUrl": {
       let parsed: URL;
       try {
@@ -282,28 +275,22 @@ function applyProviderField(provider: ProviderProfile, field: string, value: str
       if (parsed.username || parsed.password) {
         throw new Error(`baseUrl must not contain credentials. providers.yaml is a non-secret file.`);
       }
-      provider.baseUrl = value.replace(/\/+$/, "");
-      return;
+      return value.replace(/\/+$/, "");
     }
     case "apiKeyEnv": {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
         throw new Error(`Invalid apiKeyEnv "${value}". Must be a valid environment variable name.`);
       }
-      provider.apiKeyEnv = value;
-      return;
+      return value;
     }
     case "authMethod":
-      provider.authMethod = readAuthMethod(value, fieldLabel);
-      return;
+      return readAuthMethod(value, fieldLabel);
     case "responsesProfile":
-      provider.responsesProfile = readResponsesProfile(value, fieldLabel);
-      return;
+      return readResponsesProfile(value, fieldLabel);
     case "responsesTransport":
-      provider.responsesTransport = readResponsesTransport(value, fieldLabel);
-      return;
+      return readResponsesTransport(value, fieldLabel);
     case "userAgent":
-      provider.userAgent = readUserAgent(value, fieldLabel);
-      return;
+      return readUserAgent(value, fieldLabel);
     case "defaultModel": {
       if (!provider.models.some((model) => model.id === value)) {
         throw new Error(
@@ -311,8 +298,7 @@ function applyProviderField(provider: ProviderProfile, field: string, value: str
           + `Available: ${provider.models.map((model) => model.id).join(", ")}.`,
         );
       }
-      provider.defaultModel = value;
-      return;
+      return value;
     }
     default:
       if (PROTECTED_PROVIDER_FIELDS.includes(field)) {

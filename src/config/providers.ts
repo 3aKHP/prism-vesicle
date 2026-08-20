@@ -5,7 +5,7 @@ import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
 import { readYamlKeyValue, readYamlLines, stripYamlComment, unquoteYamlValue } from "./yaml-line-reader";
-import { yamlScalar } from "./yaml-writer";
+import { yamlKey, yamlScalar } from "./yaml-writer";
 
 export type ProviderProtocol = VesicleProvider;
 
@@ -93,6 +93,23 @@ export function serializeProviderModelLines(model: ProviderModelProfile): string
     }
   }
   if (model.webSearchDefault !== undefined) lines.push(`        webSearchDefault: ${model.webSearchDefault}`);
+  return lines;
+}
+
+export function serializeProviderLines(provider: ProviderProfile): string[] {
+  const lines = [
+    `  ${yamlKey(provider.id)}:`,
+    `    protocol: ${provider.protocol}`,
+    `    baseUrl: ${yamlScalar(provider.baseUrl)}`,
+    `    apiKeyEnv: ${provider.apiKeyEnv}`,
+  ];
+  if (provider.authMethod) lines.push(`    authMethod: ${provider.authMethod}`);
+  if (provider.userAgent) lines.push(`    userAgent: ${yamlScalar(provider.userAgent)}`);
+  if (provider.responsesProfile) lines.push(`    responsesProfile: ${provider.responsesProfile}`);
+  if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
+  if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
+  lines.push("    models:");
+  for (const model of provider.models) lines.push(...serializeProviderModelLines(model));
   return lines;
 }
 
@@ -392,6 +409,9 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
   let currentList: "models" | null = null;
   let currentModel: Partial<ProviderModelProfile> | null = null;
   let currentModelBlock: "generation" | "capabilities" | "limits" | "autoCompact" | null = null;
+  const seenSections = new Set<string>();
+  const seenDefaultFields = new Set<string>();
+  let seenProviderFields = new Set<string>();
 
   const finishModel = () => {
     if (!currentModel) return;
@@ -487,6 +507,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     currentProvider = null;
     currentList = null;
     currentModelBlock = null;
+    seenProviderFields = new Set<string>();
   };
 
   for (const parsedLine of lines) {
@@ -499,10 +520,14 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       currentList = null;
       currentModelBlock = null;
       if (line === "default:") {
+        if (seenSections.has("default")) throw new Error(`Provider config parse error on line ${index + 1}: duplicate default: section.`);
+        seenSections.add("default");
         section = "default";
         continue;
       }
       if (line === "providers:") {
+        if (seenSections.has("providers")) throw new Error(`Provider config parse error on line ${index + 1}: duplicate providers: section.`);
+        seenSections.add("providers");
         section = "providers";
         continue;
       }
@@ -512,6 +537,8 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (section === "default") {
       if (indent !== 2) throw new Error(`Provider config parse error on line ${index + 1}: default fields use two spaces.`);
       const [key, value] = readKeyValue(line, index, path);
+      if (seenDefaultFields.has(key)) throw new Error(`Provider config parse error on line ${index + 1}: duplicate default field "${key}".`);
+      seenDefaultFields.add(key);
       if (key === "provider") registry.default.provider = value;
       else if (key === "model") registry.default.model = value;
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown default field "${key}".`);
@@ -538,11 +565,17 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (indent === 4) {
       finishModel();
       if (line === "models:") {
+        if (seenProviderFields.has("models")) {
+          throw new Error(`Provider config parse error on line ${index + 1}: duplicate provider field "models".`);
+        }
+        seenProviderFields.add("models");
         currentList = "models";
         continue;
       }
       currentList = null;
       const [key, value] = readKeyValue(line, index, path);
+      if (seenProviderFields.has(key)) throw new Error(`Provider config parse error on line ${index + 1}: duplicate provider field "${key}".`);
+      seenProviderFields.add(key);
       if (key === "protocol") currentProvider.protocol = readProtocol(value, `provider ${currentProvider.id}`);
       else if (key === "baseUrl") currentProvider.baseUrl = value;
       else if (key === "apiKeyEnv") currentProvider.apiKeyEnv = value;

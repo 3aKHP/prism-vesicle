@@ -94,6 +94,20 @@ describe("provider source editor", () => {
     expect(result).toContain("  model: changed  # global selection");
   });
 
+  test("keeps leading models comments attached unless they document the inserted field", () => {
+    const modelsComment = baseSource.replace("    models:", "    # Models are ordered by cost.\n    models:");
+    const beforeModelsComment = replaceProviderFieldInSource(modelsComment, "first", "userAgent", "client/1");
+    expect(beforeModelsComment.indexOf("    userAgent: client/1")).toBeLessThan(beforeModelsComment.indexOf("    # Models are ordered by cost."));
+    expect(beforeModelsComment.indexOf("    # Models are ordered by cost.")).toBeLessThan(beforeModelsComment.indexOf("    models:"));
+
+    const fieldComment = baseSource.replace(
+      "    # provider comment\n    models:",
+      "    # Optional provider User-Agent.\n    # userAgent: custom-client/1\n    models:",
+    );
+    const afterFieldComment = replaceProviderFieldInSource(fieldComment, "first", "userAgent", "client/1");
+    expect(afterFieldComment).toContain("    # userAgent: custom-client/1\n    userAgent: client/1\n    models:");
+  });
+
   test("removes only the requested model and provider", () => {
     const withoutModel = removeModelFromSource(baseSource, "first", "keep");
     expect(withoutModel).not.toContain("- id: keep");
@@ -121,6 +135,23 @@ describe("provider source editor", () => {
     expect(() => appendModelToProviderSource("default:\n  provider: x\n", "x", { id: "m" })).toThrow("providers:");
     expect(() => appendModelToProviderSource(baseSource.replace("    models:", "    # models removed"), "first", { id: "m" })).toThrow("models");
     expect(() => removeModelFromSource(baseSource, "first", "missing")).toThrow("missing");
+  });
+
+  test("rejects duplicate sections and editable fields before source mutation", () => {
+    const duplicateSection = `${baseSource}\ndefault:\n  provider: second\n  model: second-model\n`;
+    expect(() => parseProviderConfig(duplicateSection, "providers.yaml", {})).toThrow("duplicate default: section");
+
+    const duplicateDefault = baseSource.replace("  model: keep", "  model: keep\n  model: second-model");
+    expect(() => parseProviderConfig(duplicateDefault, "providers.yaml", {})).toThrow('duplicate default field "model"');
+
+    const duplicateProviderField = baseSource.replace(
+      "    baseUrl: https://first.example/v1",
+      "    baseUrl: https://first.example/v1\n    baseUrl: https://shadow.example/v1",
+    );
+    expect(() => parseProviderConfig(duplicateProviderField, "providers.yaml", {})).toThrow('duplicate provider field "baseUrl"');
+
+    const duplicateModels = baseSource.replace("    models:", "    models:\n    models:");
+    expect(() => parseProviderConfig(duplicateModels, "providers.yaml", {})).toThrow('duplicate provider field "models"');
   });
 
   test("round-trips every supported model-level field without semantic loss", () => {

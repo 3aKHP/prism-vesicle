@@ -4,10 +4,10 @@
 // Full re-parse validation happens before the write.
 
 import { dirname, join } from "node:path";
-import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig, parseEnvFile } from "../../../config/providers";
+import { loadProviderRegistry, providerConfigPathFromEnv, parseEnvFile } from "../../../config/providers";
 import type { ProviderProfile, ProviderModelProfile } from "../../../config/providers";
 import { appendProviderToSource } from "../../../config/provider-source-edit";
-import { setEnvValues } from "../../../setup/config-writer";
+import { commitProviderRegistrySource, setEnvValues } from "../../../setup/config-writer";
 import { atomicWrite } from "../../../config/atomic-write";
 import { readOptionalText } from "../../../config/file-read";
 
@@ -66,8 +66,6 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
   const envPath = join(dirname(providerPath), ".env");
   const existingEnv = await readEnvFile(envPath);
   const effectiveEnv = { ...process.env, ...parseEnvFile(existingEnv || "", envPath) };
-  parseProviderConfig(source, providerPath, effectiveEnv);
-
   // Write .env first: if providers.yaml fails after, the extra empty slot is
   // harmless (no provider references it). The reverse order would leave a
   // provider without its apiKeyEnv slot — a broken state.
@@ -75,12 +73,11 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
   // existing value (another provider may share this apiKeyEnv).
   const fileEnv = parseEnvFile(existingEnv || "", envPath);
   const keyAlreadyExists = fileEnv[profile.apiKeyEnv] !== undefined;
-  if (!keyAlreadyExists) {
+  await commitProviderRegistrySource(providerPath, source, effectiveEnv, async () => {
+    if (keyAlreadyExists) return;
     const updatedEnv = setEnvValues(existingEnv, { [profile.apiKeyEnv]: "" });
     await atomicWrite(envPath, updatedEnv, 0o600);
-  }
-  await atomicWrite(providerPath, source);
-  await loadProviderRegistry();
+  });
 
   return {
     ok: true,

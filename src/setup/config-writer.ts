@@ -9,7 +9,7 @@ import {
   parseEnvFile,
   parseProviderConfig,
   providerConfigPathFromEnv,
-  serializeProviderModelLines,
+  serializeProviderLines,
   type ProviderProfile,
   type ProviderRegistry,
 } from "../config/providers";
@@ -18,7 +18,7 @@ import { appendMcpServerBlock, mcpTokenEnvKey, serializeMcpServerBlock, type Mcp
 import { loadPermissionSettings } from "../config/permissions";
 import { atomicWrite } from "../config/atomic-write";
 import { readOptionalText as readOptional } from "../config/file-read";
-import { sanitizeId, uniqueId, yamlKey, yamlScalar } from "../config/yaml-writer";
+import { sanitizeId, uniqueId, yamlScalar } from "../config/yaml-writer";
 
 export type SetupMcpServer = {
   name: string;
@@ -138,21 +138,6 @@ export function setEnvValues(source: string, updates: Record<string, string>): s
   return `${output.join("\n")}\n`;
 }
 
-/**
- * Shared provider-registry write pipeline for config CLI commands:
- * serialize → validate by re-parsing (before touching disk) → atomic write →
- * reload to confirm the round-trip. A failed cross-field constraint throws
- * before any bytes land on disk, leaving the existing providers.yaml intact.
- */
-export async function writeProviderRegistry(registry: ProviderRegistry): Promise<string> {
-  const path = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
-  parseProviderConfig(source, path, process.env);
-  await atomicWrite(path, source);
-  await loadProviderRegistry();
-  return path;
-}
-
 export async function editProviderRegistrySource(
   edit: (source: string, registry: ProviderRegistry) => string,
 ): Promise<string> {
@@ -161,7 +146,22 @@ export async function editProviderRegistrySource(
   if (source === undefined) throw new Error(`Provider config does not exist at ${path}.`);
   const registry = await loadProviderRegistry();
   const candidate = edit(source, registry);
-  parseProviderConfig(candidate, path, process.env);
+  return commitProviderRegistrySource(path, candidate);
+}
+
+/**
+ * Shared provider-registry commit pipeline for config CLI commands: validate
+ * the complete candidate before side effects, run an optional prerequisite
+ * write, atomically replace providers.yaml, then reload the on-disk registry.
+ */
+export async function commitProviderRegistrySource(
+  path: string,
+  candidate: string,
+  validationEnv: NodeJS.ProcessEnv = process.env,
+  beforeWrite?: () => Promise<void>,
+): Promise<string> {
+  parseProviderConfig(candidate, path, validationEnv);
+  await beforeWrite?.();
   await atomicWrite(path, candidate);
   await loadProviderRegistry();
   return path;
@@ -176,17 +176,7 @@ export function serializeProviderRegistry(registry: ProviderRegistry): string {
     "providers:",
   ];
   for (const provider of registry.providers) {
-    lines.push(`  ${yamlKey(provider.id)}:`);
-    lines.push(`    protocol: ${provider.protocol}`);
-    lines.push(`    baseUrl: ${yamlScalar(provider.baseUrl)}`);
-    lines.push(`    apiKeyEnv: ${provider.apiKeyEnv}`);
-    if (provider.authMethod) lines.push(`    authMethod: ${provider.authMethod}`);
-    if (provider.userAgent) lines.push(`    userAgent: ${yamlScalar(provider.userAgent)}`);
-    if (provider.responsesProfile) lines.push(`    responsesProfile: ${provider.responsesProfile}`);
-    if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
-    if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
-    lines.push("    models:");
-    for (const model of provider.models) lines.push(...serializeProviderModelLines(model));
+    lines.push(...serializeProviderLines(provider));
   }
   return `${lines.join("\n")}\n`;
 }

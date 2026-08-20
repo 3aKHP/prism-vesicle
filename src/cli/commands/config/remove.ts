@@ -63,8 +63,7 @@ async function removeModel(providerId: string, modelId: string): Promise<RemoveM
     if (!provider) {
       throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
     }
-    const modelIndex = provider.models.findIndex((model) => model.id === modelId);
-    if (modelIndex === -1) {
+    if (!provider.models.some((model) => model.id === modelId)) {
       throw new Error(
         `Provider "${providerId}" does not declare model "${modelId}". `
         + `Available: ${provider.models.map((model) => model.id).join(", ")}.`,
@@ -93,6 +92,12 @@ async function removeProvider(providerId: string): Promise<RemoveProviderResult>
   if (!registry.providers.some((provider) => provider.id === providerId)) {
     throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
   }
+  if (registry.default.provider === providerId) {
+    throw new Error(
+      `Cannot remove provider "${providerId}" because it is the current default provider. `
+      + `Switch the default first with: vesicle config set providers default.provider <another-provider-id>`,
+    );
+  }
   const quality = await loadExperimentalQualitySettings();
   if (quality.providerAlias === providerId) {
     throw new Error(
@@ -102,8 +107,7 @@ async function removeProvider(providerId: string): Promise<RemoveProviderResult>
   }
 
   const path = await editProviderRegistrySource((source, registry) => {
-    const providerIndex = registry.providers.findIndex((entry) => entry.id === providerId);
-    if (providerIndex === -1) {
+    if (!registry.providers.some((entry) => entry.id === providerId)) {
       throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
     }
     if (registry.default.provider === providerId) {
