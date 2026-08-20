@@ -55,7 +55,7 @@ describe("release workflow contract", () => {
     expect(publish.jobs.npm?.permissions).toEqual({ contents: "read", "id-token": "write" });
   });
 
-  test("discloses the unsigned Windows alpha artifacts in generated release notes", async () => {
+  test("discloses the beta channel, known limits, and unsigned Windows artifacts", async () => {
     const publish = await loadWorkflow("release.yml");
     const releaseStep = publish.jobs["github-release"]?.steps?.find(
       (step) => step.uses === "softprops/action-gh-release@v3",
@@ -63,6 +63,10 @@ describe("release workflow contract", () => {
     const body = String(releaseStep?.with?.body ?? "");
 
     expect(releaseStep?.with?.generate_release_notes).toBe(true);
+    expect(body).toContain("npm install -g prism-vesicle");
+    expect(body).toContain("deepseek-subset-2026-08-19");
+    expect(body).toContain("MCP resource, audio, URL/link");
+    expect(body).toContain("Beta 频道与已知限制");
     expect(body).toContain("not Authenticode-signed");
     expect(body).toContain("没有 Authenticode 签名");
     expect(body).toContain("SHA256SUMS.txt");

@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-alpha.10 (2026-08-14)._
+_Snapshot: 1.0.0-beta.1 (2026-08-20)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-alpha.10**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-alpha.10 GitHub Release and npm package once the accepted candidate is tagged; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-beta.1**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-beta.1 GitHub Release and npm package once the accepted candidate is tagged; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
@@ -56,9 +56,9 @@ Release candidate: **1.0.0-alpha.10**. The `State` column tracks the candidate's
 
 ## Scope
 
-The 1.0 alpha makes Vesicle a credible direct API host for the Prism Engine, not just a chat wrapper: it loads Prism engine profiles, drives their system prompt, tool surface, validators, and stop gates at runtime, and runs a terminal UI for the resulting gated workflow.
+The 1.0 beta makes Vesicle a credible direct API host for the Prism Engine, not just a chat wrapper: it loads Prism engine profiles, drives their system prompt, tool surface, validators, and stop gates at runtime, and runs a terminal UI for the resulting gated workflow.
 
-Public user-facing documentation is intentionally limited during the alpha. Treat the [`docs/user/`](./docs/user/) manual, the [README](./README.md) installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and [`docs/examples/`](./docs/examples/) as the supported onboarding references; other behavior is subject to alpha-level change while feature and fix work remains the priority.
+Public user-facing documentation is intentionally scoped during the beta. Treat the [`docs/user/`](./docs/user/) manual, the [README](./README.md) installation and first-run guide, `vesicle doctor`, `vesicle prompt shape --engine <id>`, and [`docs/examples/`](./docs/examples/) as the supported onboarding references; experimental and deferred behavior may still change while stabilization and blocker fixes remain the priority.
 
 Architecture and runtime contracts are routed from [`docs/dev/ARCHITECTURE.md`](./docs/dev/ARCHITECTURE.md) to their authoritative domain documents. Source-code conventions live separately in [`docs/dev/STYLE.md`](./docs/dev/STYLE.md). This file intentionally records current implementation state and limits rather than duplicating those contracts.
 

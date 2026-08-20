@@ -1,13 +1,13 @@
 /**
- * Real-PTY smoke for the project-relative `tmp/` scratch root (Issue #137A).
+ * Real-PTY smoke for the project-relative `tmp/` scratch root (Issues #137A/#137B).
  *
  * Drives the real TUI (`bun src/cli/main.ts`) inside a `script`-allocated
  * pseudo-terminal against a local mock provider, through:
  *
  *   write tmp/137a-smoke/draft.md -> /artifact (must open the real artifact,
  *   not the scratch draft) -> read the draft -> restart (resume) -> the draft
- *   must survive restart -> /rewind to the writing turn -> the draft must be
- *   restored to absent on disk.
+ *   must survive restart -> /rewind to the writing turn -> the draft must stay
+ *   on disk because scratch is deliberately excluded from checkpoints.
  *
  * It polls the rendered PTY output for markers and verifies scratch file state
  * directly on disk, so the evidence is deterministic without provider
@@ -247,7 +247,9 @@ async function main(): Promise<void> {
     fail("post-restart read turn never completed");
   }
 
-  // Rewind to the writing turn and verify the draft is restored to absent.
+  // Rewind to the writing turn and verify scratch remains untouched. Since
+  // #137B, tmp/ is deliberately excluded from checkpoints and is not
+  // rewind-safe; deleting this draft would violate the current contract.
   await resumed.send("/rewind");
   const pickerOpen = await resumed.waitFor("Restore the code and/or conversation", 10000);
   if (!pickerOpen) fail("rewind picker did not open");
@@ -257,13 +259,9 @@ async function main(): Promise<void> {
   const confirmShown = await resumed.waitFor("Confirm you want to restore", 10000);
   if (!confirmShown) fail("rewind restore confirmation did not appear");
   await resumed.type("\r");
-  const deadline = Date.now() + 10000;
-  let diskAfterRewind = await diskState();
-  while (Date.now() < deadline && diskAfterRewind !== "<absent>") {
-    await Bun.sleep(150);
-    diskAfterRewind = await diskState();
-  }
-  if (diskAfterRewind !== "<absent>") fail(`scratch draft not restored to absent after rewind (got: ${diskAfterRewind.replace(/\n/g, "\\n")})`);
+  await Bun.sleep(1000);
+  const diskAfterRewind = await diskState();
+  if (diskAfterRewind !== DRAFT_CONTENT) fail(`scratch draft changed during rewind (got: ${diskAfterRewind.replace(/\n/g, "\\n")})`);
 
   await resumed.stop();
   server.stop(true);
@@ -271,7 +269,7 @@ async function main(): Promise<void> {
 
   console.log(`\nProvider calls: ${calls}`);
   if (failures === 0) {
-    console.log(`PTY tmp-scratch smoke passed at ${WIDTH}x${HEIGHT} (write -> /artifact exclusion -> read -> restart survival -> rewind restore).`);
+    console.log(`PTY tmp-scratch smoke passed at ${WIDTH}x${HEIGHT} (write -> /artifact exclusion -> read -> restart survival -> rewind exclusion).`);
   } else {
     process.exitCode = 1;
   }

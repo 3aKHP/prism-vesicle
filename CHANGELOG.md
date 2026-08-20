@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] - 2026-08-20
+
+### Prerelease channel and known limitations
+
+- **npm's `latest` dist-tag intentionally advances to this beta.** During the beta line, `npm install -g prism-vesicle` installs `1.0.0-beta.1`; pin an explicit older version to remain on an alpha build. The channel policy will be reconsidered before an RC or stable `1.0.0` release.
+- **Provider-native search remains explicit and provider-scoped.** `/websearch on` sends search queries to the selected provider without a per-call tool approval. It is supported only where the model declares `capabilities.builtinWebSearch` and the active protocol/profile admits it: Gemini `generateContent`, OpenAI Responses `openai-public`, and `deepseek-subset-2026-08-19`. Citations are optional provider behavior. Existing DeepSeek configurations on `deepseek-subset-2026-07-31` are not rewritten automatically and remain search-disabled until the profile is changed deliberately. The OpenAI, DeepSeek, Gemini image-continuation/search, and Tavily paths have dated 2026-08-20 dogfood evidence; opt-in real-endpoint suites still report missing credentials or endpoints as unavailable, never passed.
+- **Windows artifacts remain intentionally unsigned.** Verify downloads from the official GitHub Release against `SHA256SUMS.txt`, follow the public Code Signing Policy, and do not disable Windows security features globally.
+- **MCP non-image rich results remain deferred.** Resource, audio, URL/link, and unknown MCP result kinds are omitted without auto-fetch or prompt injection; Issue #177 tracks that separate work.
+
 ### Added
 
 - **Built-in web search on Gemini `generateContent`.** The final #225 slice declares Gemini's standalone `{googleSearch:{}}` entry whenever `/websearch` is active; it coexists with function declarations rather than replacing them. Buffered and streamed `groundingMetadata` now normalize the executed `webSearchQueries` / `webSupportQueries` union and optional web URI/title citations into `WebSearchReport`. Gemini grounding is never replayed into a later request because the protocol has no corresponding replay item. The opt-in real-provider lane pins the combined Google Search + function-declaration request and requires a non-empty query audit report.
@@ -476,7 +485,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed the input bar not clearing after submit.
 - Fixed per-turn session creation that caused model memory loss across turns.
 
-[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.10...HEAD
+[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-beta.1...HEAD
+[1.0.0-beta.1]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.10...v1.0.0-beta.1
 [1.0.0-alpha.10]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.9...v1.0.0-alpha.10
 [1.0.0-alpha.9]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.8...v1.0.0-alpha.9
 [1.0.0-alpha.8]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.7...v1.0.0-alpha.8

@@ -36,4 +36,4 @@ Prism Vesicle 是一个在终端里运行 Prism Engine 创作工作流的宿主�
 
 ## 手册状态
 
-Prism Vesicle 处于 alpha 阶段,界面与命令可能变化。手册与程序不一致时,以 `vesicle doctor` 的输出为准,并欢迎报告差异。
+Prism Vesicle 处于 Beta 阶段,界面与命令仍可能变化。手册与程序不一致时,以 `vesicle doctor` 的输出为准,并欢迎报告差异。

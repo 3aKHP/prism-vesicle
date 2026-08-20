@@ -4,7 +4,7 @@
 
 English | [简体中文](../../zh-CN/advanced/quality-guard.md)
 
-> **Status (as of `1.0.0-alpha.10`):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.0.0-beta.1`):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 The Output Quality Guard is a **target-aware** quality layer: at the quality boundary it re-reads the complete post-image of a guarded artifact and checks the prose against an anti-ai-flavor rule pack, optionally followed by an experimental Semantic Judge. Its goal is to make produced prose read more human — not to judge whether the author was AI.
 
@@ -43,7 +43,7 @@ The normal path is the guided `/quality` command (run with no arguments). It ope
 
 Selecting **Review and revise** (or running `/quality rewrite [provider model [timeout-ms]]`) stages the candidate and opens a red, two-stage confirmation panel modelled on the `/permissions YOLO` flow: Enter advances from `Continue` to `Enable Review and Rewrite`, a second Enter persists the setting, and Esc at either stage leaves the prior configuration unchanged. No `/quality confirm` second command exists anymore.
 
-For automation and alpha diagnostics the same settings live in `quality.yaml` beside `providers.yaml`:
+For automation and beta diagnostics the same settings live in `quality.yaml` beside `providers.yaml`:
 
 ```yaml
 version: 2
@@ -82,4 +82,4 @@ When a future Harness Pack requires it, Vesicle recognizes and fail-closed hash-
 
 ## Status will change
 
-The 🟢/🟡 markers on this page reflect maturity in `1.0.0-alpha.10`. The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.
+The 🟢/🟡 markers on this page reflect maturity in `1.0.0-beta.1`. The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.

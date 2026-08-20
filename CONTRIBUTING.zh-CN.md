@@ -2,7 +2,7 @@
 
 [English](./CONTRIBUTING.md) | [简体中文](./CONTRIBUTING.zh-CN.md)
 
-Prism Vesicle 的内部开发仍处于快速迭代阶段，但公开 alpha 版本的发布工作应遵循 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) 中的发布分支和 PR 流程。
+Prism Vesicle 的内部开发仍处于快速迭代阶段，但公开 Beta 版本的发布工作应遵循 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) 中的发布分支和 PR 流程。
 
 参与发布的贡献者必须遵循公开的[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)。外部贡献者保留作者身份；人类维护者 `3aKHP` 负责审查仓库变更。Windows 签名目前处于推迟状态，因此签名批准者角色和每次请求的人工批准仅在将来启用签名时适用。
 

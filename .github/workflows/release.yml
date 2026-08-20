@@ -72,6 +72,20 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Prism Vesicle v${{ needs.metadata.outputs.version }}
           body: |
+            ## Beta channel and known limits / Beta 频道与已知限制
+
+            npm's `latest` dist-tag intentionally tracks the newest beta during the beta line, so `npm install -g prism-vesicle` installs `${{ needs.metadata.outputs.version }}` once publication completes. Pin an explicit older version to remain on an alpha build. This policy will be reconsidered before an RC or stable `1.0.0` release.
+
+            Beta 阶段中,npm 的 `latest` dist-tag 会有意跟随最新 Beta,因此发布完成后 `npm install -g prism-vesicle` 会安装 `${{ needs.metadata.outputs.version }}`。如需继续停留在 Alpha 构建,请显式固定旧版本。进入 RC 或稳定 `1.0.0` 前会重新评估该策略。
+
+            Provider-native search is explicit and provider-scoped: `/websearch on` sends queries to the selected provider without a per-call tool approval, and is admitted only for configured Gemini `generateContent`, OpenAI Responses `openai-public`, and `deepseek-subset-2026-08-19` models with `capabilities.builtinWebSearch`. Citations are optional provider behavior. Existing `deepseek-subset-2026-07-31` configurations are not migrated automatically and remain search-disabled until changed deliberately. The applicable OpenAI, DeepSeek, Gemini, and Tavily dogfood evidence is dated 2026-08-20; opt-in real-endpoint suites report missing prerequisites as unavailable, never passed.
+
+            供应商原生搜索必须显式开启且受供应商范围限制:`/websearch on` 会将查询发送给当前供应商,不会逐次弹出工具批准;仅在模型声明 `capabilities.builtinWebSearch` 且使用已支持的 Gemini `generateContent`、OpenAI Responses `openai-public` 或 `deepseek-subset-2026-08-19` 时可用。引用由供应商选择是否返回。现有 `deepseek-subset-2026-07-31` 配置不会自动迁移,必须主动修改后才能使用搜索。适用的 OpenAI、DeepSeek、Gemini 与 Tavily dogfood 证据日期为 2026-08-20;可选真实端点测试在前置条件缺失时记为不可用,不计为通过。
+
+            MCP resource, audio, URL/link, and unknown result kinds remain deferred: Vesicle omits them without auto-fetch or prompt injection. See `STATUS.md` and Issue #177 for the current boundary.
+
+            MCP resource、audio、URL/link 与未知结果类型仍处于延后状态:Vesicle 会忽略它们,不自动抓取,也不注入提示。当前边界见 `STATUS.md` 与 Issue #177。
+
             ## Windows code-signing status / Windows 代码签名状态
 
             The Windows executable and installer in `${{ needs.metadata.outputs.version }}` are not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from this official GitHub Release and verify the file against `SHA256SUMS.txt`. Do not disable Windows security features globally.

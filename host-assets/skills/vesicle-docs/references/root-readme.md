@@ -13,7 +13,7 @@
 [![npm](https://img.shields.io/npm/v/prism-vesicle?logo=npm&label=npm)](https://www.npmjs.com/package/prism-vesicle)
 [![Release](https://img.shields.io/github/v/release/3aKHP/prism-vesicle?include_prereleases&label=release)](https://github.com/3aKHP/prism-vesicle/releases)
 [![CI](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-public_alpha-f59e0b)](#scope-and-lineage)
+[![Status](https://img.shields.io/badge/status-public_beta-f59e0b)](#scope-and-lineage)
 [![License](https://img.shields.io/github/license/3aKHP/prism-vesicle)](./LICENSE)
 
 [![Agent Harness](https://img.shields.io/badge/Agent_Harness-Prism_Engine-059669)](#what-vesicle-supports)
@@ -27,7 +27,7 @@
 
 Built with Bun and TypeScript, Vesicle connects versioned Harness Packs to DeepSeek V4 and other direct model providers, MCP tools, permission-gated host tools, foreground and background SubAgents, and durable sessions.
 
-> **Alpha status:** `1.0.0-alpha.10` is a public trial candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
+> **Beta status:** `1.0.0-beta.1` is a public beta candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 
 New to terminals, API keys, or model providers? Start with the [step-by-step user manual](./docs/user/en/README.md) before following the condensed setup below.
 
@@ -37,7 +37,7 @@ New to terminals, API keys, or model providers? Start with the [step-by-step use
 
 Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub prerelease and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, and choose a safe permission preset without manual configuration-file editing. Project selection is optional and applies only to the one-time launch immediately after Setup; Vesicle never stores one global project directory.
 
-The Windows executable and installer for `1.0.0-alpha.10` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
+The Windows executable and installer for `1.0.0-beta.1` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
 The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
@@ -56,6 +56,8 @@ Install the package and verify that its bundled ETL profile is available:
 npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
+
+During the beta line, npm's `latest` dist-tag intentionally follows the newest beta, so the unversioned install command above installs `1.0.0-beta.1` after publication. Pin an explicit older version if you need to remain on an alpha build.
 
 The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
 
@@ -240,7 +242,7 @@ Repository-local AI collaborator instructions live in [`AGENTS.md`](./AGENTS.md)
 
 ## Scope And Lineage
 
-The 1.0 alpha focuses on making Vesicle a practical direct API host for Prism workflows rather than a generic coding agent. Broader MCP transports and surfaces, dedicated long-form engine scaffolding, and prompt-cache engineering remain deferred; consult [`STATUS.md`](./STATUS.md) before relying on an unlisted capability.
+The 1.0 beta focuses on stabilizing Vesicle as a practical direct API host for Prism workflows rather than a generic coding agent. Broader MCP transports and surfaces, dedicated long-form engine scaffolding, and prompt-cache engineering remain deferred; consult [`STATUS.md`](./STATUS.md) before relying on an unlisted capability.
 
 Prism Vesicle is a sibling of [`3aKHP/Neural-Narratology`](https://github.com/3aKHP/Neural-Narratology), the public source for the V10 Harness Release bundled here.
 

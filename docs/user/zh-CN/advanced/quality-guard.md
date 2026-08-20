@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/quality-guard.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.10`):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.0.0-beta.1`):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 Output Quality Guard 是一层**面向 target** 的质量检查:在质量边界上重新读取受保护制品的完整 post-image,用 anti-ai-flavor 规则包检测"机器味",并可选用一个实验性 Semantic Judge 复核。它的目的是让产出散文更像人写的,而不是判定作者是不是 AI。
 
@@ -41,7 +41,7 @@ Output Quality Guard 是一层**面向 target** 的质量检查:在质量边界�
 
 选择 **Review and revise**(或运行 `/quality rewrite [provider model [timeout-ms]]`)会暂存候选并打开一个红色两阶段确认面板,交互仿照 `/permissions YOLO`:Enter 从 `Continue` 推进到 `Enable Review and Rewrite`,第二次 Enter 才写入设置,任意阶段按 Esc 都保持原配置不变。已不再有 `/quality confirm` 这第二条命令。
 
-用于自动化与 alpha 诊断时,同样的设置写在 `quality.yaml`(与 `providers.yaml` 同目录):
+用于自动化与 Beta 诊断时,同样的设置写在 `quality.yaml`(与 `providers.yaml` 同目录):
 
 ```yaml
 version: 2
@@ -80,4 +80,4 @@ judgeTimeoutMs: 15000
 
 ## 状态会变
 
-本页的 🟢/🟡 标注反映 `1.0.0-alpha.10` 的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。
+本页的 🟢/🟡 标注反映 `1.0.0-beta.1` 的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。

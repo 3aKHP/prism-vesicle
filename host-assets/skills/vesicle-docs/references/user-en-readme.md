@@ -38,4 +38,4 @@ Host shell, Output Quality Guard, SubAgents, Stage, MCP tools, and other advance
 
 ## Manual status
 
-Prism Vesicle is in alpha; the interface and commands may change. When the manual disagrees with the program, trust `vesicle doctor` and please report the discrepancy.
+Prism Vesicle is in beta; the interface and commands may still change. When the manual disagrees with the program, trust `vesicle doctor` and please report the discrepancy.
