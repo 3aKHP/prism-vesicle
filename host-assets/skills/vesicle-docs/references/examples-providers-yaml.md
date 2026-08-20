@@ -65,6 +65,14 @@ providers:
           reasoningTier: true
           reasoningContent: true
           remoteCompact: true
+          # Model supports the provider-native built-in web search; declaring
+          # it only records the capability. The session toggle's default is
+          # webSearchDefault below (/websearch overrides per session).
+          builtinWebSearch: true
+        # Start sessions with built-in web search on. Omit (or false) to keep
+        # it off until /websearch on. Searches run on the provider side: the
+        # queries leave with the request and no per-call approval applies.
+        webSearchDefault: false
 
   # codex-beta-2026-02-06: a fingerprint-level Codex simulation profile. With
   # websocket transport it sends Codex's V2 beta wire shape (openai-beta:

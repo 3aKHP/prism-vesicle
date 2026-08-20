@@ -150,6 +150,7 @@ function replacementMessageRecord(
       ...(message.reasoningContent ? { reasoningContent: message.reasoningContent } : {}),
       ...(message.thinkingBlocks ? { thinkingBlocks: message.thinkingBlocks } : {}),
       ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+      ...(message.webSearch ? { webSearch: message.webSearch } : {}),
       ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     });
   } else if (message.role === "tool") {

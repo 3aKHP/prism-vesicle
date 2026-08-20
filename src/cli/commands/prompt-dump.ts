@@ -7,7 +7,8 @@ import { INSTRUCTION_COMBINED_BUDGET_BYTES, composeSystemPromptWithInstructions 
 import type { EffectiveInstructionSelection } from "../../core/instructions";
 import type { McpRegistryOptions } from "../../mcp/registry";
 import { loadPermissionSettings } from "../../config/permissions";
-import { resolveToolSurface } from "../../core/agent-loop/tool-surface";
+import { resolveToolSurface, type WebSearchSurfaceOptions } from "../../core/agent-loop/tool-surface";
+import { loadTavilyApiKey } from "../../core/tools/web/tavily-client";
 import { resolveProjectHarnessRuntime } from "../../core/harness";
 import {
   catalogNames,
@@ -82,6 +83,7 @@ export async function getEffectivePromptToolNames(
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
   skillNames: string[] = [],
+  webSearch?: WebSearchSurfaceOptions,
 ): Promise<EffectivePromptToolNames> {
   const surface = await resolveToolSurface(
     profile,
@@ -90,6 +92,7 @@ export async function getEffectivePromptToolNames(
     shellInterpreter,
     options,
     skillNames.length > 0 ? { catalogNames: skillNames } : undefined,
+    webSearch,
   );
   return {
     modelVisible: surface.definitions.map((definition) => definition.function.name),
@@ -146,7 +149,17 @@ async function printShape(
   skills: ResolvedSkillCatalog,
   skillCatalogBlock: string,
 ): Promise<void> {
-  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter, catalogNames(skills));
+  // The dump command reports what this machine's session would really see, so
+  // it probes Tavily credentials at the CLI boundary; the library default
+  // stays environment-independent (matching resolveToolSurface's default).
+  const effectiveTools = await getEffectivePromptToolNames(
+    profile,
+    {},
+    shellExecEnabled,
+    shellInterpreter,
+    catalogNames(skills),
+    { tavilyConfigured: (await loadTavilyApiKey(process.env)) !== undefined } satisfies WebSearchSurfaceOptions,
+  );
 
   console.log(`Engine: ${profile.id} (${profile.displayName})`);
   console.log(`Protocol: ${profile.protocolVersion}`);
@@ -176,7 +189,17 @@ async function printFullDump(
   skills: ResolvedSkillCatalog,
   skillCatalogBlock: string,
 ): Promise<void> {
-  const effectiveTools = await getEffectivePromptToolNames(profile, {}, shellExecEnabled, shellInterpreter, catalogNames(skills));
+  // The dump command reports what this machine's session would really see, so
+  // it probes Tavily credentials at the CLI boundary; the library default
+  // stays environment-independent (matching resolveToolSurface's default).
+  const effectiveTools = await getEffectivePromptToolNames(
+    profile,
+    {},
+    shellExecEnabled,
+    shellInterpreter,
+    catalogNames(skills),
+    { tavilyConfigured: (await loadTavilyApiKey(process.env)) !== undefined } satisfies WebSearchSurfaceOptions,
+  );
 
   console.log("=== Prism Vesicle Prompt Dump ===");
   console.log(`Engine: ${profile.id} (${profile.displayName})`);

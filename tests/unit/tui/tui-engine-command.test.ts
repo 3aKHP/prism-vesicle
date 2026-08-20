@@ -43,6 +43,7 @@ describe("/engine command", () => {
       setLastTurnUsage() {}, setSessionUsage() {}, setPendingGate() {}, setPendingEngineSwitch() {}, setPendingUserQuestion() {}, setStatus() {},
       setMessages(updater: (previous: Message[]) => Message[]) { messages = updater(messages); },
       theme: { clearOverride() {} },
+      webSearch: { clearOverride() {} },
     } as unknown as SessionCommandContext;
     const command = createSessionCommands(ctx).find((entry) => entry.name === "new");
     if (!command) throw new Error("Missing /new command.");

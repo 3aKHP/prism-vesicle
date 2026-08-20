@@ -72,7 +72,8 @@ providers:
 - `apiKeyEnv`:**只填环境变量名**;真正的密钥放在 `.env`。`providers.yaml` 本身不含密钥。
 - `authMethod`:Anthropic 或 MiMo Responses 可用 `x-api-key`,Gemini 用 `x-goog-api-key`;不填时 OpenAI 系协议使用 Bearer token。
 - `userAgent`(可选):只替换该供应商的 User-Agent,其它指纹与鉴权头不变。
-- 模型条目可以是字符串简写,也可以是对象,带 `generation`(`temperature`/`maxTokens`)、`capabilities`(`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`)、`limits`(`contextWindow`/`maxOutputTokens`/`autoCompact`)。
+- 模型条目可以是字符串简写,也可以是对象,带 `generation`(`temperature`/`maxTokens`)、`capabilities`(`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`/`builtinWebSearch`)、`limits`(`contextWindow`/`maxOutputTokens`/`autoCompact`),以及可选的顶层 `webSearchDefault`。
+- `capabilities.builtinWebSearch: true` 声明该模型支持供应商原生内置联网搜索;`webSearchDefault: true` 让新会话默认开启(缺省关闭)。两者独立:偏好不会让未声明能力的模型生效。会话内用 `/websearch on|off` 临时覆盖,`/new` 或恢复会话后回到默认。开启后搜索在供应商侧执行、查询词随请求外发且无逐次审批,详见隐私政策;启用期间主机侧 `web_search`(Tavily)工具会从工具面移除以避免双路搜索。
 - `limits.contextWindow` 启用底部状态栏的上下文百分比。`autoCompact` 用于开启自动上下文压缩:仅当 `enabled` 不为 `false`、`threshold` 严格介于 0 与 1 之间、且 `contextWindow` 为正整数时才生效;生效后,Vesicle 会在下一次顶层输入之前、以及工具循环中的安全边界处,当预测的下一请求超过软阈值时(通过 portable `/compact` checkpoint)自动压缩。每次供应商请求都会在排队输入和已完成的后台进程通知加入后再检查。`reserveOutputTokens` 为下一轮输出预留空间(优先级:`reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0);供应商配置加载会拒绝使输入预算不再为正的静态预留组合。没有隐藏默认阈值。用 `/context` 查看实际生效的软阈值、硬上限、预留来源(包括当前模型的 generation 默认值)与激活状态。
 
 ### OpenAI Responses 档案

@@ -94,6 +94,13 @@ export type CommandThemePort = {
   unsetProject: () => Promise<void>;
 };
 
+/** Built-in web search surface owned by the web-search controller. */
+export type CommandWebSearchPort = {
+  statusText: () => string;
+  applyOverride: (enabled: boolean) => string;
+  clearOverride: () => void;
+};
+
 /** /model, /effort, /reasoning, /context — provider/model configuration. */
 export type ProviderCommandContext = CommandActivityPort & {
   activeProvider: () => string;
@@ -145,6 +152,7 @@ export type SessionCommandContext = CommandActivityPort & {
   openBranchPicker: () => Promise<void>;
   resetRewindState: () => void;
   theme: { clearOverride: () => void };
+  webSearch: { clearOverride: () => void };
 };
 
 /** /quality — experimental Semantic Judge configuration. */
@@ -175,6 +183,11 @@ export type ThemeCommandContext = CommandActivityPort & {
   theme: CommandThemePort;
 };
 
+/** /websearch — provider-native built-in web search status and session override. */
+export type WebSearchCommandContext = CommandActivityPort & {
+  webSearch: CommandWebSearchPort;
+};
+
 /** /agents, /stage, /btw — SubAgent control, Stage startup, side questions. */
 export type AgentsCommandContext = CommandEchoPort & {
   agentCommand: (args: string) => Promise<string>;
@@ -200,6 +213,7 @@ export type BuiltinCommandContexts = {
   skills: SkillCommandContext;
   workspace: WorkspaceCommandContext;
   theme: ThemeCommandContext;
+  webSearch: WebSearchCommandContext;
   agents: AgentsCommandContext;
   permissions: PermissionsCommandContext;
   help: HelpCommandContext;

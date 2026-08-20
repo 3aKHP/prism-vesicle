@@ -27,6 +27,7 @@ export async function finalizeTurn(options: {
       ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
       ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
       ...(providerState ? { providerState: cloneProviderStateEnvelope(providerState) } : {}),
+      ...(response.webSearch ? { webSearch: response.webSearch } : {}),
     });
     const record = await options.session.append({
       role: "assistant",
@@ -39,6 +40,7 @@ export async function finalizeTurn(options: {
         ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
         ...(response.usage ? { usage: response.usage } : {}),
         ...(providerState ? { providerState } : {}),
+        ...(response.webSearch ? { webSearch: response.webSearch } : {}),
         ...(options.requestEstimateTokens !== undefined ? { requestEstimateTokens: options.requestEstimateTokens } : {}),
       }),
     });

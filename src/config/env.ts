@@ -22,6 +22,8 @@ export type ModelCapabilities = {
   maxTokens?: boolean;
   vision?: boolean;
   remoteCompact?: boolean;
+  /** Model supports a provider-native built-in web search declaration. */
+  builtinWebSearch?: boolean;
 };
 
 export type AutoCompactLimits = {
@@ -50,4 +52,10 @@ export type VesicleConfig = {
   generation?: GenerationDefaults;
   capabilities?: ModelCapabilities;
   limits?: ModelLimits;
+  /**
+   * Session default for the built-in web search toggle. Independent of
+   * `capabilities.builtinWebSearch` (support): the effective toggle requires
+   * both this preference and the capability. Absent means off.
+   */
+  webSearchDefault?: boolean;
 };

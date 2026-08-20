@@ -29,6 +29,7 @@
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | 控制模型的思考强度;`auto` 恢复供应商默认 |
 | `/reasoning hidden\|collapsed\|expanded` | 控制推理过程的显示(别名 off/preview/on) |
 | `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | 切换界面主题;`default` 跟随终端明暗模式,`auto` 按本地时间切换;`--persist` 写入项目 `.vesicle/preferences.yaml`,`--unset-project` 移除项目偏好;不带参数显示当前 preference/来源/解析结果 |
+| `/websearch [on\|off]` | 查看或切换模型的内置联网搜索;默认值来自 providers.yaml 模型条目的 `webSearchDefault`,`/new` 或恢复会话后回到默认;开启后搜索在供应商侧执行、查询词随请求外发、无逐次审批,详见隐私政策的「内置联网搜索」一节 |
 | `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返 |
 
 ## 制品

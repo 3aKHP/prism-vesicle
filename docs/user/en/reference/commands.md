@@ -29,6 +29,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/effort off\|low\|medium\|high\|xhigh\|max\|auto` | Control the model's thinking effort; `auto` restores the provider default |
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display (aliases off/preview/on) |
 | `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | Switch the interface theme; `default` follows the terminal's own mode, `auto` follows the clock; `--persist` writes `.vesicle/preferences.yaml`, `--unset-project` removes the project preference; with no argument it reports preference/source/resolved mode |
+| `/websearch [on\|off]` | Show or toggle the model's built-in web search; the default comes from the model entry's `webSearchDefault` in providers.yaml, and `/new` or resuming a session reverts to it; while enabled, searches run on the provider side, queries leave with the request, and no per-call approval applies — see the Built-in Web Search section of the privacy policy |
 | `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages |
 
 ## Artifacts

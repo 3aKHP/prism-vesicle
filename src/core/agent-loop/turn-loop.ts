@@ -18,6 +18,7 @@ import { createTurnAgentManager } from "./agent-manager";
 import { recordAssistantToolCalls } from "./assistant-recorder";
 import { resolveInteractionPause } from "./interaction-pause";
 import { completeProviderRound, emitAssistantResponse, materializeBackgroundProcessNotifications } from "./provider-round";
+import { effectiveWebSearchEnabled } from "./web-search-state";
 import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { validateToolCallArguments } from "../tools/arguments";
@@ -269,6 +270,9 @@ async function advanceRound(
     engine: args.profile.id,
     providerSelection: { provider: args.config.providerId, model: args.config.model },
     visionEnabled: args.config.capabilities?.vision === true,
+    ...(effectiveWebSearchEnabled(args.config, args.session.sessionId)
+      ? { webSearch: true }
+      : {}),
     systemPrompt: args.systemPrompt,
     tools: args.tools,
     generation: args.generation,

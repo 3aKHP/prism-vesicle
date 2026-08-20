@@ -1,5 +1,5 @@
 import type { ProviderSelection } from "../../config/providers";
-import type { ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import type { ProviderThinkingBlock, ResponseUsage, VesicleImageAttachment, VesicleMessage, VesicleRequest, VesicleResponse, WebSearchReport } from "../../providers/shared/types";
 import type { SideQuestionContextSnapshot } from "../side-question/types";
 import type { AgentManager } from "../agents/manager";
 import type { AgentRuntimeEvent } from "../agents/types";
@@ -86,6 +86,7 @@ export type AgentLoopEvent =
       thinkingBlocks?: ProviderThinkingBlock[];
       usage?: ResponseUsage;
       toolCalls: Array<{ id: string; name: string; arguments: string }>;
+      webSearch?: WebSearchReport;
     }
   | { type: "tool_call"; name: string; callId: string; arguments: string }
   | { type: "tool_result"; name: string; callId: string; ok: boolean; content: string; fileEvent?: FileToolEvent; webEvent?: WebToolEvent; mcpEvent?: McpToolEvent; processEvent?: ProcessToolEvent; instructionEvent?: import("../instructions/types").InstructionToolEvent; skillEvent?: import("../skills/types").SkillToolEvent; images?: VesicleImageAttachment[] }

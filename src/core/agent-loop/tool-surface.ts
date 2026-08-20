@@ -1,21 +1,57 @@
 import { createEmptyMcpRegistry, createMcpRegistryForEngine, type McpRegistry, type McpRegistryOptions } from "../../mcp/registry";
 import { agentToolDefinitions } from "../agents/tools";
+import type { VesicleConfig } from "../../config/env";
 import type { EngineProfile } from "../engine/profile";
 import { engineSwitchToolDefinition } from "../engine/switch";
 import { gateToolDefinition } from "../gate/types";
 import { createShellExecToolDefinition, hostToolDefinitions } from "../tools";
 import type { ToolDefinition } from "../tools";
+import { loadTavilyApiKey } from "../tools/web/tavily-client";
 import { createActivateSkillToolDefinition } from "../skills/tools";
 import { resolveShellProfile, type ShellInterpreterPreference } from "../process/shell-profile";
 import { askUserQuestionToolDefinition } from "../user-question/types";
 import { instructionToolDefinitions } from "../instructions";
+import { effectiveWebSearchEnabled } from "./web-search-state";
 
 const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
+
+/** Host tools backed by the Tavily API; all fail at execution time without a key. */
+const tavilyToolNames = new Set(["web_search", "web_fetch", "web_map", "web_crawl", "web_research"]);
+
+/**
+ * Resolve the web-search surface policy for a session: the effective
+ * built-in toggle (session override > model default > off, gated on the
+ * capability) plus Tavily credential presence.
+ */
+export async function resolveWebSearchSurfaceOptions(
+  config: VesicleConfig,
+  sessionId: string,
+): Promise<WebSearchSurfaceOptions> {
+  return {
+    builtinSearchEnabled: effectiveWebSearchEnabled(config, sessionId),
+    tavilyConfigured: (await loadTavilyApiKey(process.env)) !== undefined,
+  };
+}
 
 /** Optional Skill catalog input for tool-surface gating (wired by the session layer). */
 export type SkillSurfaceOptions = {
   /** Names in the session's effective Skill catalog; empty means Skill tools stay off. */
   catalogNames: string[];
+};
+
+/** Built-in web search surface policy (frozen design D2). */
+export type WebSearchSurfaceOptions = {
+  /**
+   * The session's provider-native built-in search is enabled. The host
+   * `web_search` (Tavily) tool is removed from the surface so the model is
+   * not offered two competing search paths; the other Tavily URL tools stay.
+   */
+  builtinSearchEnabled?: boolean;
+  /**
+   * A Tavily API key is resolvable. Without it every Tavily tool call fails
+   * at execution time, so the whole Tavily tool family is hidden instead.
+   */
+  tavilyConfigured?: boolean;
 };
 
 export type ToolSurface = {
@@ -30,12 +66,13 @@ export async function resolveToolSurface(
   shellInterpreter: ShellInterpreterPreference = "auto",
   mcpOptions: McpRegistryOptions = {},
   skills?: SkillSurfaceOptions,
+  webSearch?: WebSearchSurfaceOptions,
 ): Promise<ToolSurface> {
   const mcp = profile.id === "stage"
     ? createEmptyMcpRegistry()
     : await createMcpRegistryForEngine(profile.id, mcpOptions);
   const shellProfile = shellExecEnabled ? resolveShellProfile(shellInterpreter) : undefined;
-  const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled, shellInterpreter, skills);
+  const builtIns = resolveBuiltInTools(profile, visionEnabled, shellExecEnabled, shellInterpreter, skills, webSearch);
   const shellTools = shellExecEnabled
     ? hostToolDefinitions
       .filter((tool) => tool.function.name === "shell_exec" || tool.function.name === "shell_output" || tool.function.name === "shell_stop")
@@ -61,6 +98,7 @@ export function resolveBuiltInTools(
   shellExecEnabled = false,
   shellInterpreter: ShellInterpreterPreference = "auto",
   skills?: SkillSurfaceOptions,
+  webSearch?: WebSearchSurfaceOptions,
 ): ToolDefinition[] {
   // Stage bootstrap supplies all context itself. Its published profile is
   // empty, and this explicit guard keeps that player-facing boundary intact
@@ -83,6 +121,8 @@ export function resolveBuiltInTools(
     if (name === "view_image" && !visionEnabled) continue;
     if (name === "shell_exec" && (!shellExecEnabled || !shellProfile)) continue;
     if ((name === "shell_output" || name === "shell_stop") && !shellExecEnabled) continue;
+    if (name === "web_search" && webSearch?.builtinSearchEnabled) continue;
+    if (tavilyToolNames.has(name) && webSearch?.tavilyConfigured === false) continue;
     // Skill tools are host-injected after the loop, independent of the
     // Harness profile's defaultTools.
     if (name === "activate_skill" || name === "read_skill_resource" || name === "run_skill_script") continue;

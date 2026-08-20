@@ -16,7 +16,7 @@ export type ModelArgumentDraft =
   | { stage: "provider"; query: string }
   | { stage: "model"; providerId: string; query: string };
 
-export type FixedArgumentCommand = "engine" | "effort" | "reasoning" | "permissions" | "theme";
+export type FixedArgumentCommand = "engine" | "effort" | "reasoning" | "permissions" | "theme" | "websearch";
 
 export type FixedArgumentDraft = {
   command: FixedArgumentCommand;
@@ -85,6 +85,12 @@ export function fixedArgumentOptions(command: FixedArgumentCommand): OptionItem[
       YOLO: "Auto-allow all effective tools · requires two confirmations",
     } as const;
     return permissionModes.map((mode) => ({ id: mode, label: mode, detail: details[mode] }));
+  }
+  if (command === "websearch") {
+    return [
+      { id: "on", label: "on", detail: "Enable for this session · provider-side, no per-call approval" },
+      { id: "off", label: "off", detail: "Disable for this session" },
+    ];
   }
   if (command === "theme") {
     return [

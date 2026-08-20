@@ -7,6 +7,8 @@ import type { ReasoningTier } from "../providers/shared/types";
 import { engineAccent, palette, reportTerminalThemeMode, themePreference } from "./theme";
 import { createThemeScheduler } from "./theme-runtime";
 import { createThemePreferenceController, parseEnvTheme, type ThemePreferenceController } from "./theme-preference-controller";
+import { createWebSearchController, type WebSearchController } from "./web-search-controller";
+import { clearSessionWebSearchOverride } from "../core/agent-loop/web-search-state";
 import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { createTurnFocusController } from "./turn-focus-controller";
@@ -392,6 +394,10 @@ export function App(props: AppProps = {}) {
     closeActiveProviderSession: () => {
       const id = sessionId();
       if (id) closeProviderSession(id);
+    },
+    clearWebSearchOverride: () => {
+      const id = sessionId();
+      if (id) clearSessionWebSearchOverride(id);
     },
   });
   const {
@@ -789,6 +795,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformKillBuffer,
     clearQueuedInputs,
     clearThemeOverride: () => themeController.clearOverride(),
+    clearWebSearchOverride: () => webSearchController.clearOverride(),
     onSessionActive: (id) => {
       void sideQuestionController.rebuildForResume(id).catch(reportError);
       // Re-arm the candidate switcher so `<n/m>` and Option+←/→ survive reload.
@@ -1056,6 +1063,12 @@ export function App(props: AppProps = {}) {
   // fields it reads, built from component signals/helpers. createBuiltinCommands
   // composes the per-family factories into the registry the dispatcher and the
   // completion controller consume. See src/tui/commands/.
+  const webSearchController: WebSearchController = createWebSearchController({
+    getSessionId: () => sessionId(),
+    getModelView: () => providerRegistry()
+      ?.providers.find((provider) => provider.id === activeProvider())
+      ?.models.find((model) => model.id === activeModel()) ?? {},
+  });
   const commandContexts: BuiltinCommandContexts = {
     provider: {
       setMessages, setStatus, recordActivity,
@@ -1097,6 +1110,7 @@ export function App(props: AppProps = {}) {
       openBranchPicker: branchController.open,
       resetRewindState,
       theme: { clearOverride: () => themeController.clearOverride() },
+      webSearch: { clearOverride: () => webSearchController.clearOverride() },
     },
     quality: {
       setMessages, setStatus, recordActivity,
@@ -1128,6 +1142,14 @@ export function App(props: AppProps = {}) {
         clearOverride: () => themeController.clearOverride(),
         persistProject: (pref) => themeController.persistProject(pref),
         unsetProject: () => themeController.unsetProject(),
+      },
+    },
+    webSearch: {
+      setMessages, setStatus, recordActivity,
+      webSearch: {
+        statusText: () => webSearchController.statusText(),
+        applyOverride: (enabled) => webSearchController.applyOverride(enabled),
+        clearOverride: () => webSearchController.clearOverride(),
       },
     },
     agents: {
