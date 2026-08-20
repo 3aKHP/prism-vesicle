@@ -92,11 +92,15 @@ function webSearchReport(
 ): WebSearchReport | undefined {
   if (!groundingMetadata || !providerId) return undefined;
   const queries = new Set<string>();
-  for (const query of [...(groundingMetadata.webSearchQueries ?? []), ...(groundingMetadata.webSupportQueries ?? [])]) {
-    if (typeof query === "string" && query) queries.add(query);
+  for (const field of [groundingMetadata.webSearchQueries, groundingMetadata.webSupportQueries]) {
+    if (!Array.isArray(field)) continue;
+    for (const query of field) {
+      if (typeof query === "string" && query) queries.add(query);
+    }
   }
   if (queries.size === 0) return undefined;
-  const citations = (groundingMetadata.groundingChunks ?? []).flatMap((chunk): WebSearchCitation[] => {
+  const chunks = groundingMetadata.groundingChunks;
+  const citations = (Array.isArray(chunks) ? chunks : []).flatMap((chunk): WebSearchCitation[] => {
     const web = chunk.web;
     if (typeof web?.uri !== "string" || !web.uri || typeof web.title !== "string" || !web.title) return [];
     return [{ url: web.uri, title: web.title }];

@@ -41,6 +41,30 @@ describe("Gemini generateContent request shaping", () => {
     expect(disabled.tools).toBeUndefined();
   });
 
+  test("does not replay grounding metadata from a prior assistant response", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "Grounded answer.",
+          webSearch: {
+            provider: "google",
+            queries: ["prior query"],
+            citations: [{ url: "https://example.com/prior", title: "Prior" }],
+          },
+        },
+        { role: "user", content: "Follow up." },
+      ],
+    });
+
+    expect(body.contents).toEqual([
+      { role: "model", parts: [{ text: "Grounded answer." }] },
+      { role: "user", parts: [{ text: "Follow up." }] },
+    ]);
+    expect(JSON.stringify(body.contents)).not.toContain("groundingMetadata");
+  });
+
   test("does not expose a provider-native checkpoint marker to Gemini", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
@@ -343,6 +367,30 @@ describe("Gemini generateContent adapter", () => {
           webSearchQueries: ["", 42],
           webSupportQueries: [],
           groundingChunks: [{ web: { uri: "https://example.com", title: "Example" } }],
+        },
+      }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const response = await adapter.complete(request());
+    expect(response.webSearch).toBeUndefined();
+  });
+
+  test("ignores malformed grounding metadata containers", async () => {
+    globalThis.fetch = (async () => Response.json({
+      candidates: [{
+        content: { parts: [{ text: "Answer without usable grounding." }] },
+        groundingMetadata: {
+          webSearchQueries: { query: "not an array" },
+          webSupportQueries: "also not an array",
+          groundingChunks: { web: { uri: "https://example.com", title: "Example" } },
         },
       }],
     })) as unknown as typeof fetch;
