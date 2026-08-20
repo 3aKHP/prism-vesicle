@@ -223,7 +223,7 @@ function mergeProvider(
             }
           : preset === "deepseek-responses"
             ? {
-                responsesProfile: "deepseek-subset-2026-07-31" as const,
+                responsesProfile: "deepseek-subset-2026-08-19" as const,
                 responsesTransport: "http" as const,
               }
           : {}),
@@ -251,7 +251,8 @@ function presetFromProvider(provider: ProviderProfile | undefined): SetupProvide
   if (provider.protocol === "openai-chat-compatible") return "chat-compatible";
   if (provider.responsesProfile === "openai-public") return "openai-responses";
   if (provider.responsesProfile === "mimo-subset-2026-07-30") return "mimo-responses";
-  if (provider.responsesProfile === "deepseek-subset-2026-07-31") return "deepseek-responses";
+  if (provider.responsesProfile === "deepseek-subset-2026-07-31"
+    || provider.responsesProfile === "deepseek-subset-2026-08-19") return "deepseek-responses";
   if (provider.responsesProfile === "codex-http-relay" || provider.responsesProfile === "codex-beta-2026-02-06") {
     return "openai-responses";
   }

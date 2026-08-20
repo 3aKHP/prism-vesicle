@@ -3,6 +3,7 @@ import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/
 import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
 import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody } from "../../../src/providers/openai-responses/request";
 import { readResponsesStream } from "../../../src/providers/openai-responses/stream";
+import { responseFromResponsesBody } from "../../../src/providers/openai-responses/response";
 import {
   providerStateEnvelopeVersion,
   type ProviderStateEnvelope,
@@ -1060,6 +1061,214 @@ describe("OpenAI Responses typed SSE", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("OpenAI Responses built-in web search", () => {
+  test("declares the bare web_search tool only on admitting profiles", () => {
+    const withTools = toResponsesBody({
+      ...request(),
+      messages: [{ role: "user", content: "hello" }],
+      webSearch: true,
+      tools: [{ type: "function", function: {
+        name: "echo", description: "Echo", parameters: { type: "object" },
+      } }],
+    }, context(), false, "openai-public");
+    expect(withTools.tools).toEqual([
+      { type: "function", name: "echo", description: "Echo", parameters: { type: "object" } },
+      { type: "web_search" },
+    ]);
+
+    const withoutFunctions = toResponsesBody({
+      ...request(),
+      messages: [{ role: "user", content: "hello" }],
+      webSearch: true,
+    }, context(), false, "deepseek-subset-2026-08-19");
+    expect(withoutFunctions.tools).toEqual([{ type: "web_search" }]);
+    expect(withoutFunctions.tool_choice).toBe("auto");
+
+    for (const profile of ["codex-http-relay", "mimo-subset-2026-07-30", "deepseek-subset-2026-07-31"] as const) {
+      const body = toResponsesBody({
+        ...request(),
+        messages: [{ role: "user", content: "hello" }],
+        webSearch: true,
+      }, context(), false, profile);
+      expect(JSON.stringify(body.tools ?? null)).not.toContain("web_search");
+    }
+
+    const offByDefault = toResponsesBody({
+      ...request(),
+      messages: [{ role: "user", content: "hello" }],
+    }, context(), false, "openai-public");
+    expect(offByDefault.tools).toBeUndefined();
+  });
+
+  test("normalizes web_search_call Items and url_citation annotations into the report", () => {
+    const response = responseFromResponsesBody({
+      id: "resp_ws",
+      status: "completed",
+      output: [
+        { type: "reasoning", summary: [] },
+        { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "prism vesicle release" } },
+        { id: "ws_2", type: "web_search_call", status: "completed", action: { type: "search", queries: ["second query"] } },
+        {
+          type: "message", role: "assistant",
+          content: [{
+            type: "output_text",
+            text: "Cited answer.",
+            annotations: [{
+              type: "url_citation", url: "https://example.com/page", title: "Example Page", start_index: 2, end_index: 9,
+            }],
+          }],
+        },
+      ],
+      usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+    }, { ...streamContext(), profile: "openai-public" });
+
+    expect(response.webSearch).toEqual({
+      provider: "openai",
+      queries: ["prism vesicle release", "second query"],
+      citations: [{ url: "https://example.com/page", title: "Example Page", startIndex: 2, endIndex: 9 }],
+      calls: [
+        { id: "ws_1", status: "completed", action: { type: "search", query: "prism vesicle release" } },
+        { id: "ws_2", status: "completed", action: { type: "search", queries: ["second query"] } },
+      ],
+    });
+  });
+
+  test("omits the report when no executed query is recoverable", () => {
+    const response = responseFromResponsesBody({
+      id: "resp_ws",
+      status: "completed",
+      output: [
+        { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "open_page", url: "https://example.com" } },
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "Opened the page." }] },
+      ],
+    }, { ...streamContext(), profile: "openai-public" });
+    expect(response.webSearch).toBeUndefined();
+  });
+
+  test("admits search Items without citations on the dated DeepSeek subset profile", () => {
+    const response = responseFromResponsesBody({
+      id: "resp_ws",
+      status: "completed",
+      output: [
+        { id: "ws_1", type: "web_search_call", status: "in_progress", action: { type: "search", queries: ["deepseek docs", "ws_call_id=call_00_x"] } },
+        { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }], summary: [], encrypted_content: "bf0e4002-926f-4ae2-a45f-11880b95bfe4-0" },
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "Answer without citations.", annotations: [] }] },
+      ],
+    }, { ...streamContext(), model: "deepseek-v4-pro", profile: "deepseek-subset-2026-08-19" });
+
+    expect(response.webSearch).toEqual({
+      provider: "openai",
+      queries: ["deepseek docs"],
+      calls: [{ id: "ws_1", status: "in_progress", action: { type: "search", queries: ["deepseek docs", "ws_call_id=call_00_x"] } }],
+    });
+  });
+
+  test("keeps encrypted reasoning tokens fail-closed on frozen reasoning-text profiles", () => {
+    const output = [
+      { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }], summary: [], encrypted_content: "token-1" },
+      { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+    ];
+    for (const profile of ["mimo-subset-2026-07-30", "deepseek-subset-2026-07-31"] as const) {
+      expect(() => responseFromResponsesBody({
+        id: "resp_ws", status: "completed", output,
+      }, { ...streamContext(), profile })).toThrow(/unsupported (MiMo|DeepSeek) reasoning content/);
+    }
+  });
+
+  test("keeps frozen profiles fail-closed against search Items and events", async () => {
+    const searchOutput = [
+      { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "q" } },
+      { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+    ];
+    for (const profile of ["mimo-subset-2026-07-30", "deepseek-subset-2026-07-31"] as const) {
+      expect(() => responseFromResponsesBody({
+        id: "resp_ws", status: "completed", output: searchOutput,
+      }, { ...streamContext(), profile })).toThrow("malformed web_search_call Item");
+    }
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.created", { response: { id: "resp_ws" } }),
+      event(1, "response.web_search_call.in_progress"),
+      event(2, "response.completed", {
+        response: { id: "resp_ws", status: "completed", output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] }] },
+      }),
+    ]), { ...streamContext(), profile: "codex-http-relay" }))).rejects.toThrow("Unsupported semantic Responses event");
+  });
+
+  test("commits the web search report only at response.completed", async () => {
+    const events = await collect(readResponsesStream(responseStream([
+      event(0, "response.created", { response: { id: "resp_ws" } }),
+      event(1, "response.web_search_call.in_progress"),
+      event(2, "response.web_search_call.searching"),
+      event(3, "response.output_item.added", { output_index: 0, item: { id: "ws_1", type: "web_search_call", status: "searching", action: { type: "search", query: "streamed query" } } }),
+      event(4, "response.web_search_call.completed"),
+      event(5, "response.completed", {
+        response: {
+          id: "resp_ws", status: "completed",
+          output: [
+            { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "streamed query" } },
+            { type: "message", role: "assistant", content: [{ type: "output_text", text: "grounded answer" }] },
+          ],
+          usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+        },
+      }),
+    ]), { ...streamContext(), profile: "openai-public" }));
+
+    const completed = events.find((item) => item.type === "complete");
+    expect(completed?.type).toBe("complete");
+    if (completed?.type !== "complete") throw new Error("unreachable");
+    expect(completed.response.webSearch).toMatchObject({ queries: ["streamed query"], calls: [{ id: "ws_1" }] });
+  });
+
+  test("replays portable web search calls ahead of the assistant content", () => {
+    const messages = [
+      { role: "user" as const, content: "search please" },
+      {
+        role: "assistant" as const,
+        content: "Grounded answer.",
+        webSearch: {
+          provider: "openai",
+          queries: ["replayed query"],
+          calls: [{ id: "ws_1", status: "completed", action: { type: "search", query: "replayed query" } }],
+        },
+      },
+      { role: "user" as const, content: "follow-up" },
+    ];
+    const input = toResponsesBody({ ...request(), messages }, context(), false, "openai-public").input as Array<Record<string, unknown>>;
+    const callIndex = input.findIndex((item) => item.type === "web_search_call");
+    const assistantIndex = input.findIndex((item) => item.role === "assistant");
+    expect(callIndex).toBeGreaterThanOrEqual(0);
+    expect(assistantIndex).toBeGreaterThan(callIndex);
+    expect(input[callIndex]).toEqual({ type: "web_search_call", id: "ws_1", status: "completed", action: { type: "search", query: "replayed query" } });
+
+    const dropped = toResponsesBody({ ...request(), messages }, context(), false, "deepseek-subset-2026-07-31").input as Array<Record<string, unknown>>;
+    expect(dropped.some((item) => item.type === "web_search_call")).toBe(false);
+  });
+
+  test("replays native state including web_search_call Items for the same owner", () => {
+    const native: ProviderStateEnvelope = {
+      version: providerStateEnvelopeVersion,
+      protocol: "openai-responses",
+      providerId: "openai",
+      model: "gpt-5.2-codex",
+      endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+      payload: {
+        version: 1,
+        profile: "openai-public",
+        responseId: "resp_ws",
+        outputItems: [
+          { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "native query" } },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "Native answer." }] },
+        ],
+      },
+    };
+    const input = toResponsesBody({
+      ...request(),
+      messages: [{ role: "assistant", content: "", providerState: native }, { role: "user", content: "next" }],
+    }, context(), false, "openai-public").input as Array<Record<string, unknown>>;
+    expect(input.some((item) => item.type === "web_search_call" && item.id === "ws_1")).toBe(true);
   });
 });
 

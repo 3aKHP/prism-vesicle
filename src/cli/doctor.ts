@@ -102,6 +102,7 @@ const responsesTierLabels: Record<ResponsesProfile, string> = {
   "codex-beta-2026-02-06": "Codex V2 fingerprint profile",
   "mimo-subset-2026-07-30": "third-party compatible subset",
   "deepseek-subset-2026-07-31": "DeepSeek Responses compatible subset",
+  "deepseek-subset-2026-08-19": "DeepSeek Responses compatible subset with built-in web search admission",
 };
 
 function responsesTier(profile: ResponsesProfile | undefined): string {

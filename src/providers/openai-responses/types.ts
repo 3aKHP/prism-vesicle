@@ -6,6 +6,14 @@ export type ResponsesUsage = {
   output_tokens_details?: { reasoning_tokens?: number; [key: string]: unknown };
 };
 
+export type ResponsesAnnotation = {
+  type?: string;
+  url?: string;
+  title?: string;
+  start_index?: number;
+  end_index?: number;
+};
+
 export type ResponsesOutputItem = {
   id?: string;
   type?: string;
@@ -15,7 +23,7 @@ export type ResponsesOutputItem = {
   name?: string;
   arguments?: string;
   encrypted_content?: string;
-  content?: Array<{ type?: string; text?: string; refusal?: string }>;
+  content?: Array<{ type?: string; text?: string; refusal?: string; annotations?: ResponsesAnnotation[] }>;
   summary?: Array<{ type?: string; text?: string }>;
   [key: string]: unknown;
 };

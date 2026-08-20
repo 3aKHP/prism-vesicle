@@ -1,5 +1,6 @@
 import { ProviderError } from "../shared/errors";
 import type { ResponsesProfile } from "../../config/env";
+import { admitsEncryptedReasoningToken, isReasoningTextProfile, supportsResponsesWebSearch } from "./profiles";
 import type { ResponsesOutputItem } from "./types";
 
 export function validateResponsesOutputItems(
@@ -21,8 +22,11 @@ export function validateResponsesOutputItems(
         break;
       case "reasoning":
         if (isReasoningTextProfile(profile)) {
+          const encryptedContentOk = admitsEncryptedReasoningToken(profile)
+            ? item.encrypted_content === undefined || typeof item.encrypted_content === "string"
+            : item.encrypted_content === undefined;
           if ((item.summary !== undefined && (!Array.isArray(item.summary) || item.summary.length > 0))
-            || item.encrypted_content !== undefined
+            || !encryptedContentOk
             || !Array.isArray(item.content)
             || item.content.some((part) => part.type !== "reasoning_text" || typeof part.text !== "string")) {
             fail(profile === "mimo-subset-2026-07-30"
@@ -49,16 +53,22 @@ export function validateResponsesOutputItems(
         if (callIds.has(item.call_id)) fail(`Provider response repeated function call_id ${item.call_id}.`, providerId);
         callIds.add(item.call_id);
         break;
+      case "web_search_call":
+        // Status and action stay union-tolerant across OpenAI and DeepSeek:
+        // their documented status enums differ, and action variants are
+        // replayed verbatim rather than narrowed to one dialect.
+        if (!supportsResponsesWebSearch(profile)
+          || typeof item.id !== "string" || !item.id
+          || typeof item.status !== "string" || !item.status
+          || !item.action || typeof item.action !== "object" || Array.isArray(item.action)) {
+          fail("Provider response included a malformed web_search_call Item.", providerId);
+        }
+        break;
       default:
         fail(`Provider response included unsupported semantic Item ${item.type ?? "unknown"}.`, providerId);
     }
   }
   return items;
-}
-
-function isReasoningTextProfile(profile: ResponsesProfile | undefined): boolean {
-  return profile === "mimo-subset-2026-07-30"
-    || profile === "deepseek-subset-2026-07-31";
 }
 
 /** Validate the canonical input window returned by `/responses/compact`. */
