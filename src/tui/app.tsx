@@ -16,7 +16,7 @@ import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench"
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { QualityWarning } from "../core/quality";
 import { resolveTuiLayout } from "./layout";
-import { resolveSplashMode } from "./brand-mark";
+import { resolveSplashMode, type SplashMode } from "./brand-mark";
 import { Splash } from "./widgets/Splash";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
@@ -89,6 +89,8 @@ export type AppProps = {
   dangerouslySkipPermissions?: boolean;
   initialResume?: boolean;
   bootstrapOnly?: boolean;
+  /** Explicit startup-splash mode for deterministic host and test rendering. */
+  splashMode?: SplashMode;
   /** Effective theme-preference owner (source precedence, session override, project persistence). */
   theme?: ThemePreferenceController;
   /** Called after the renderer has been destroyed to finish a CLI TUI exit. */
@@ -196,7 +198,7 @@ export function App(props: AppProps = {}) {
   const [restoringSession, setRestoringSession] = createSignal(false);
   // M1 startup splash: the mode is decided once from terminal capabilities and
   // environment; "skip" (non-interactive terminal) never mounts the overlay.
-  const splashMode = resolveSplashMode({
+  const splashMode = props.splashMode ?? resolveSplashMode({
     isTty: Boolean(process.stdout.isTTY),
     rgb: renderer.capabilities?.rgb ?? true,
     reducedMotion: process.env.VESICLE_REDUCED_MOTION === "1",
