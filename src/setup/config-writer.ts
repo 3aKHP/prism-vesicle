@@ -9,7 +9,7 @@ import {
   parseEnvFile,
   parseProviderConfig,
   providerConfigPathFromEnv,
-  type ProviderModelProfile,
+  serializeProviderModelLines,
   type ProviderProfile,
   type ProviderRegistry,
 } from "../config/providers";
@@ -153,6 +153,20 @@ export async function writeProviderRegistry(registry: ProviderRegistry): Promise
   return path;
 }
 
+export async function editProviderRegistrySource(
+  edit: (source: string, registry: ProviderRegistry) => string,
+): Promise<string> {
+  const path = providerConfigPathFromEnv();
+  const source = await readOptional(path);
+  if (source === undefined) throw new Error(`Provider config does not exist at ${path}.`);
+  const registry = await loadProviderRegistry();
+  const candidate = edit(source, registry);
+  parseProviderConfig(candidate, path, process.env);
+  await atomicWrite(path, candidate);
+  await loadProviderRegistry();
+  return path;
+}
+
 export function serializeProviderRegistry(registry: ProviderRegistry): string {
   const lines = [
     "default:",
@@ -172,7 +186,7 @@ export function serializeProviderRegistry(registry: ProviderRegistry): string {
     if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
     if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
     lines.push("    models:");
-    for (const model of provider.models) serializeModel(lines, model);
+    for (const model of provider.models) lines.push(...serializeProviderModelLines(model));
   }
   return `${lines.join("\n")}\n`;
 }
@@ -257,38 +271,6 @@ function presetFromProvider(provider: ProviderProfile | undefined): SetupProvide
     return "openai-responses";
   }
   return undefined;
-}
-
-function serializeModel(lines: string[], model: ProviderModelProfile): void {
-  const structured = model.generation || model.capabilities || model.limits;
-  if (!structured) {
-    lines.push(`      - ${yamlScalar(model.id)}`);
-    return;
-  }
-  lines.push(`      - id: ${yamlScalar(model.id)}`);
-  if (model.generation) {
-    lines.push("        generation:");
-    if (model.generation.temperature !== undefined) lines.push(`          temperature: ${model.generation.temperature}`);
-    if (model.generation.maxTokens !== undefined) lines.push(`          maxTokens: ${model.generation.maxTokens}`);
-  }
-  if (model.capabilities) {
-    lines.push("        capabilities:");
-    for (const [key, value] of Object.entries(model.capabilities)) {
-      if (value !== undefined) lines.push(`          ${key}: ${value}`);
-    }
-  }
-  if (model.limits) {
-    lines.push("        limits:");
-    if (model.limits.contextWindow !== undefined) lines.push(`          contextWindow: ${model.limits.contextWindow}`);
-    if (model.limits.maxOutputTokens !== undefined) lines.push(`          maxOutputTokens: ${model.limits.maxOutputTokens}`);
-    if (model.limits.autoCompact) {
-      lines.push("          autoCompact:");
-      const compact = model.limits.autoCompact;
-      if (compact.enabled !== undefined) lines.push(`            enabled: ${compact.enabled}`);
-      if (compact.threshold !== undefined) lines.push(`            threshold: ${compact.threshold}`);
-      if (compact.reserveOutputTokens !== undefined) lines.push(`            reserveOutputTokens: ${compact.reserveOutputTokens}`);
-    }
-  }
 }
 
 function mcpAddition(

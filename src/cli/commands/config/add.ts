@@ -1,12 +1,13 @@
 // vesicle config add-provider — structured provider addition via JSON entry.
-// Validates the entry, merges into the existing registry, serializes with the
-// canonical serializer, writes atomically, and creates the empty .env slot for
-// the provider's apiKeyEnv. Full re-parse validation after write.
+// Validates the entry, inserts it into the existing registry source, writes
+// atomically, and creates the empty .env slot for the provider's apiKeyEnv.
+// Full re-parse validation happens before the write.
 
 import { dirname, join } from "node:path";
 import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig, parseEnvFile } from "../../../config/providers";
 import type { ProviderProfile, ProviderModelProfile } from "../../../config/providers";
-import { serializeProviderRegistry, setEnvValues } from "../../../setup/config-writer";
+import { appendProviderToSource } from "../../../config/provider-source-edit";
+import { setEnvValues } from "../../../setup/config-writer";
 import { atomicWrite } from "../../../config/atomic-write";
 import { readOptionalText } from "../../../config/file-read";
 
@@ -55,9 +56,10 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
     throw new Error(`Provider "${profile.id}" already exists. Remove it manually or choose a different id.`);
   }
 
-  registry.providers.push(profile);
   const providerPath = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
+  const existingProviderSource = await readOptionalText(providerPath);
+  if (existingProviderSource === undefined) throw new Error(`Provider config does not exist at ${providerPath}.`);
+  const source = appendProviderToSource(existingProviderSource, profile);
 
   // Validate the serialized output by re-parsing. This catches any schema
   // violation that the entry validation missed.
@@ -78,6 +80,7 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
     await atomicWrite(envPath, updatedEnv, 0o600);
   }
   await atomicWrite(providerPath, source);
+  await loadProviderRegistry();
 
   return {
     ok: true,

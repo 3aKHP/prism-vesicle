@@ -129,7 +129,8 @@ vesicle config validate
 
 - `path` prints the user-level config directory; `show` prints **sanitized** state: `.env` entries always render as `<set>`/`<empty>` markers and proxy credentials are masked.
 - `set` modifies keys in providers/permissions/preferences/quality/settings; provider entries support per-field edits (`protocol`, `baseUrl`, `apiKeyEnv`, `authMethod`, `responsesProfile`, `responsesTransport`, `userAgent`, `defaultModel`); structural fields (`id`, `models`, `apiKey`) are rejected.
-- `add-provider`/`add-model` append entries, `remove-model`/`remove-provider` delete them; `unset` removes a key from preferences/settings.
+- Provider/model registry commands edit `providers.yaml` in place: `add-provider` and `add-model` insert only the requested entry, field-level `set` changes only the requested value, and `remove-model`/`remove-provider` remove only the requested block. Existing comments, blank lines, ordering, and unrelated provider/model fields are preserved; output is normalized to LF and validated before the atomic write. `unset` removes a key from preferences/settings.
+- Guided Setup intentionally keeps its existing merge-and-normalize write semantics; it may rewrite the complete provider registry when onboarding or reconfiguring an endpoint.
 - `env-*` manages only the non-secret `.env` structure: empty placeholders, the proxy URL, and key removal (removing a missing key warns); API keys are still edited manually in `.env` as above.
 - `validate` validates all configuration files.
 

@@ -5,6 +5,7 @@ import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
 import { readYamlKeyValue, readYamlLines, stripYamlComment, unquoteYamlValue } from "./yaml-line-reader";
+import { yamlScalar } from "./yaml-writer";
 
 export type ProviderProtocol = VesicleProvider;
 
@@ -62,6 +63,38 @@ export const capabilityFieldNames = [
 ] as const;
 export const limitsFieldNames = ["contextWindow", "maxOutputTokens"] as const;
 export const autoCompactFieldNames = ["enabled", "threshold", "reserveOutputTokens"] as const;
+
+export function serializeProviderModelLines(model: ProviderModelProfile): string[] {
+  const structured = model.generation || model.capabilities || model.limits || model.webSearchDefault !== undefined;
+  if (!structured) return [`      - ${yamlScalar(model.id)}`];
+  const lines = [`      - id: ${yamlScalar(model.id)}`];
+  if (model.generation) {
+    lines.push("        generation:");
+    if (model.generation.temperature !== undefined) lines.push(`          temperature: ${model.generation.temperature}`);
+    if (model.generation.maxTokens !== undefined) lines.push(`          maxTokens: ${model.generation.maxTokens}`);
+  }
+  if (model.capabilities) {
+    lines.push("        capabilities:");
+    for (const [key, value] of Object.entries(model.capabilities)) {
+      if (value !== undefined) lines.push(`          ${key}: ${value}`);
+    }
+  }
+  if (model.limits) {
+    lines.push("        limits:");
+    if (model.limits.contextWindow !== undefined) lines.push(`          contextWindow: ${model.limits.contextWindow}`);
+    if (model.limits.maxOutputTokens !== undefined) lines.push(`          maxOutputTokens: ${model.limits.maxOutputTokens}`);
+    if (model.limits.autoCompact) {
+      lines.push("          autoCompact:");
+      if (model.limits.autoCompact.enabled !== undefined) lines.push(`            enabled: ${model.limits.autoCompact.enabled}`);
+      if (model.limits.autoCompact.threshold !== undefined) lines.push(`            threshold: ${model.limits.autoCompact.threshold}`);
+      if (model.limits.autoCompact.reserveOutputTokens !== undefined) {
+        lines.push(`            reserveOutputTokens: ${model.limits.autoCompact.reserveOutputTokens}`);
+      }
+    }
+  }
+  if (model.webSearchDefault !== undefined) lines.push(`        webSearchDefault: ${model.webSearchDefault}`);
+  return lines;
+}
 
 /**
  * Validate a JSON-shaped model entry (as passed to `vesicle config add-model
