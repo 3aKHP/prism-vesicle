@@ -43,6 +43,8 @@ The same effective action should receive the same permission treatment regardles
 
 Permission modes remain authoritative. A subsystem must not claim to honor MOMENTUM or YOLO while quietly imposing mandatory per-call confirmation, and it must not bypass MANUAL or INERTIA because metadata declares an action allowed.
 
+Permission modes govern host-executed tools. A capability the provider itself executes — such as provider-native built-in web search — is not a host tool and is not widened or narrowed by a permission mode: it is disclosed, off by default, and governed by its own explicit user toggle (`capabilities.builtinWebSearch` plus `webSearchDefault` and the per-session `/websearch` override), with the executed queries recorded in the session as an audit trail. Presenting such a capability as tool-privileged or as permission-gated would misstate both boundaries.
+
 ### One decision, one gate
 
 An explicit, unambiguous command is already a user decision. Do not immediately ask the user to confirm the same fact again. Additional input is appropriate for unresolved selection, missing required information, an overwrite target, or a materially different side effect that was not visible when the command was issued.

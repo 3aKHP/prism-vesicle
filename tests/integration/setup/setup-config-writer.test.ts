@@ -126,11 +126,11 @@ describe("guided Setup configuration writer", () => {
     const registry = await loadProviderRegistry({ VESICLE_CONFIG_DIR: configDir });
     expect(registry.providers[0]).toMatchObject({
       protocol: "openai-responses",
-      responsesProfile: "deepseek-subset-2026-07-31",
+      responsesProfile: "deepseek-subset-2026-08-19",
       responsesTransport: "http",
     });
     const source = await readFile(join(configDir, "providers.yaml"), "utf8");
-    expect(source).toContain("responsesProfile: deepseek-subset-2026-07-31");
+    expect(source).toContain("responsesProfile: deepseek-subset-2026-08-19");
   });
 
   test("refuses an unsupported model in the DeepSeek Responses preset", async () => {

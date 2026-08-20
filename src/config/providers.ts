@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ResponsesProfile, ResponsesTransport, VesicleConfig, VesicleProvider } from "./env";
+import { isDeepSeekSubsetProfile, type ResponsesProfile, type ResponsesTransport, type VesicleConfig, type VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
@@ -417,8 +417,8 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (currentProvider.responsesProfile === "mimo-subset-2026-07-30" && currentProvider.responsesTransport === "websocket") {
       throw new Error(`Provider "${id}" cannot use mimo-subset-2026-07-30 with responsesTransport websocket.`);
     }
-    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31" && currentProvider.responsesTransport === "websocket") {
-      throw new Error(`Provider "${id}" cannot use deepseek-subset-2026-07-31 with responsesTransport websocket.`);
+    if (isDeepSeekSubsetProfile(currentProvider.responsesProfile) && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use ${currentProvider.responsesProfile} with responsesTransport websocket.`);
     }
     if (protocol === "openai-responses" && currentProvider.authMethod === "x-goog-api-key") {
       throw new Error(`Provider "${id}" using openai-responses cannot use authMethod x-goog-api-key.`);
@@ -431,13 +431,13 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       && models.some((model) => model.capabilities?.remoteCompact === true)) {
       throw new Error(`Provider "${id}" cannot enable remoteCompact with mimo-subset-2026-07-30.`);
     }
-    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+    if (isDeepSeekSubsetProfile(currentProvider.responsesProfile)
       && models.some((model) => model.capabilities?.remoteCompact === true)) {
-      throw new Error(`Provider "${id}" cannot enable remoteCompact with deepseek-subset-2026-07-31.`);
+      throw new Error(`Provider "${id}" cannot enable remoteCompact with ${currentProvider.responsesProfile}.`);
     }
-    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+    if (isDeepSeekSubsetProfile(currentProvider.responsesProfile)
       && models.some((model) => model.id !== "deepseek-v4-flash" && model.id !== "deepseek-v4-pro")) {
-      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash or deepseek-v4-pro with deepseek-subset-2026-07-31.`);
+      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash or deepseek-v4-pro with ${currentProvider.responsesProfile}.`);
     }
     registry.providers.push({
       id,
@@ -671,7 +671,7 @@ export function readProtocol(value: string, field: string): ProviderProtocol {
 
 export function readResponsesProfile(value: string, field: string): ResponsesProfile {
   if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06"
-    && value !== "mimo-subset-2026-07-30" && value !== "deepseek-subset-2026-07-31") {
+    && value !== "mimo-subset-2026-07-30" && !isDeepSeekSubsetProfile(value)) {
     throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
   }
   return value;

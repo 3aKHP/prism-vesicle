@@ -104,6 +104,7 @@ describe("OpenAI Responses conformance evidence", () => {
       "mimo-subset",
       "deepseek-subset",
       "network-fingerprint",
+      "builtin-web-search-admission",
     ]));
     expect(ledger.entries.every((entry) => entry.codex && entry.public && entry.selected && entry.test)).toBe(true);
   });
@@ -155,6 +156,25 @@ describe("OpenAI Responses conformance evidence", () => {
     for (const unsupported of deepseek.unsupportedRequestFields) {
       expect(deepseek.supportedRequestFields).not.toContain(unsupported);
     }
+    const deepseekSearch = profile.profiles.deepseekSubset20260819;
+    expect(deepseekSearch).toMatchObject({
+      tier: "responses-compatible-subset",
+      reasoningItems: "plaintext",
+      builtInWebSearch: "declared-tool-and-admitted-items",
+      previousResponseId: false,
+      remoteCompact: false,
+      websocket: false,
+      supportedModels: ["deepseek-v4-flash", "deepseek-v4-pro"],
+    });
+    expect(deepseekSearch.supportedEventFamilies).toContain("response.web_search_call.*");
+    expect(deepseekSearch.supportedRequestFields).toEqual(deepseek.supportedRequestFields);
+    expect(deepseekSearch.unsupportedRequestFields).toEqual(deepseek.unsupportedRequestFields);
+    expect(openai.builtInWebSearch).toBe("declared-tool-and-admitted-items");
+    expect(openai.supportedEventFamilies).toContain("response.web_search_call.*");
+    expect(mimo.supportedEventFamilies ?? []).not.toContain("response.web_search_call.*");
+    expect(relay.supportedEventFamilies ?? []).not.toContain("response.web_search_call.*");
+    expect(codex.supportedEventFamilies ?? []).not.toContain("response.web_search_call.*");
+    expect(deepseek.supportedEventFamilies ?? []).not.toContain("response.web_search_call.*");
   });
 
   test("records the Codex tool-dispatch hazard as a deliberate Vesicle safety divergence", () => {

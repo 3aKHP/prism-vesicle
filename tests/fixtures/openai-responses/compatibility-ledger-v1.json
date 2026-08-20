@@ -64,6 +64,13 @@
       "public": "Responses specifies application semantics, not a Codex network fingerprint.",
       "selected": "The TypeScript/Bun implementation claims application-layer conformance only; literal network identity requires a separately approved byte-owning component.",
       "test": "profile claim lists the excluded network layers"
+    },
+    {
+      "id": "builtin-web-search-admission",
+      "codex": "Codex declares only client-side function tools and never the provider-side web_search tool.",
+      "public": "OpenAI documents the built-in web_search tool, web_search_call Items, and response.web_search_call.* events; DeepSeek documents the same wire subset with server-side result restoration on replay.",
+      "selected": "Vesicle admits the bare web_search declaration plus its Items and events on openai-public and deepseek-subset-2026-08-19 only; frozen profiles without the capability stay fail-closed, and portable replay emits web_search_call Items only for admitting profiles.",
+      "test": "Declaration, Item admission, event admission, citation normalization, and replay gating are exercised per profile in the deterministic provider suite"
     }
   ]
 }

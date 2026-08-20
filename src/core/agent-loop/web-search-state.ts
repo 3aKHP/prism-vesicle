@@ -13,8 +13,11 @@ export type WebSearchConfigView = {
 // Session web-search toggle overrides are process-local by design (frozen
 // design D-C, mirroring the theme preference controller): a resume or /new
 // drops the override and the model-entry default takes over again. The toggle
-// only gates the per-turn built-in search declaration; replayed history is
-// unaffected, so losing the override carries no correctness risk.
+// gates the per-turn built-in search declaration, and adapters that admit
+// built-in search also drop recorded search-call replay Items on
+// declaration-off turns, so losing the override degrades to replaying the
+// grounded answer text without the search records — no out-of-contract wire
+// shape.
 const sessionWebSearchOverrides = new Map<string, boolean>();
 
 /** Record the session-level `/websearch` override. */
