@@ -5,6 +5,17 @@ const defaultMaxOutputTokens = 4096;
 
 export function toGeminiGenerateContentBody(request: VesicleRequest): Record<string, unknown> {
   const hasTools = Boolean(request.tools && request.tools.length > 0);
+  const tools: Record<string, unknown>[] = [];
+  if (hasTools) {
+    tools.push({
+      functionDeclarations: request.tools?.map((tool) => ({
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: sanitizeGeminiSchema(tool.function.parameters),
+      })),
+    });
+  }
+  if (request.webSearch === true) tools.push({ googleSearch: {} });
   return withoutUndefined({
     systemInstruction: request.system.length > 0 ? {
       parts: request.system.map((text) => ({ text })).filter((part) => part.text),
@@ -15,13 +26,7 @@ export function toGeminiGenerateContentBody(request: VesicleRequest): Record<str
       maxOutputTokens: request.generation?.maxTokens ?? defaultMaxOutputTokens,
       thinkingConfig: geminiThinkingControl(request.generation?.reasoningTier, request.model.model),
     }),
-    tools: hasTools ? [{
-      functionDeclarations: request.tools?.map((tool) => ({
-        name: tool.function.name,
-        description: tool.function.description,
-        parameters: sanitizeGeminiSchema(tool.function.parameters),
-      })),
-    }] : undefined,
+    tools: tools.length > 0 ? tools : undefined,
   });
 }
 

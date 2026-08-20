@@ -10,6 +10,37 @@ afterEach(() => {
 });
 
 describe("Gemini generateContent request shaping", () => {
+  test("declares googleSearch alongside function declarations and alone", () => {
+    const withFunctions = toGeminiGenerateContentBody({
+      ...request(),
+      webSearch: true,
+      tools: [{
+        type: "function",
+        function: {
+          name: "read_file",
+          description: "Read a file",
+          parameters: { type: "object", properties: {} },
+        },
+      }],
+    });
+    expect(withFunctions.tools).toEqual([
+      {
+        functionDeclarations: [{
+          name: "read_file",
+          description: "Read a file",
+          parameters: { type: "object", properties: {} },
+        }],
+      },
+      { googleSearch: {} },
+    ]);
+
+    const withoutFunctions = toGeminiGenerateContentBody({ ...request(), webSearch: true });
+    expect(withoutFunctions.tools).toEqual([{ googleSearch: {} }]);
+
+    const disabled = toGeminiGenerateContentBody(request());
+    expect(disabled.tools).toBeUndefined();
+  });
+
   test("does not expose a provider-native checkpoint marker to Gemini", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
@@ -272,6 +303,62 @@ describe("Gemini generateContent request shaping", () => {
 });
 
 describe("Gemini generateContent adapter", () => {
+  test("normalizes Gemini grounding metadata into a web-search report", async () => {
+    globalThis.fetch = (async () => Response.json({
+      candidates: [{
+        content: { parts: [{ text: "Grounded answer." }] },
+        groundingMetadata: {
+          webSearchQueries: ["Gemini built-in search", ""],
+          webSupportQueries: ["Gemini built-in search", "release notes"],
+          groundingChunks: [
+            { web: { uri: "https://example.com/search", title: "Search" } },
+            { web: { uri: "https://example.com/incomplete" } },
+          ],
+        },
+      }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    await expect(adapter.complete(request())).resolves.toMatchObject({
+      webSearch: {
+        provider: "google",
+        queries: ["Gemini built-in search", "release notes"],
+        citations: [{ url: "https://example.com/search", title: "Search" }],
+      },
+    });
+  });
+
+  test("omits a grounding report without a non-empty query", async () => {
+    globalThis.fetch = (async () => Response.json({
+      candidates: [{
+        content: { parts: [{ text: "Answer without auditable query." }] },
+        groundingMetadata: {
+          webSearchQueries: ["", 42],
+          webSupportQueries: [],
+          groundingChunks: [{ web: { uri: "https://example.com", title: "Example" } }],
+        },
+      }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const response = await adapter.complete(request());
+    expect(response.webSearch).toBeUndefined();
+  });
+
   test("parses text, thought parts, tool calls, signatures, and usage", async () => {
     globalThis.fetch = (async (input: unknown, init: RequestInit & { body?: unknown }) => {
       expect(String(input)).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent");
@@ -540,6 +627,36 @@ describe("Gemini generateContent adapter", () => {
     expect(events.at(-1)).toMatchObject({
       type: "complete",
       response: { content: "hello world" },
+    });
+  });
+
+  test("uses the last streamed grounding metadata", async () => {
+    globalThis.fetch = (async () => new Response(sseFromBlocks([
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Grounded"}]},"groundingMetadata":{"webSearchQueries":["stale query"]}}]}',
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":" answer"}]},"finishReason":"STOP","groundingMetadata":{"webSupportQueries":["fresh query"],"groundingChunks":[{"web":{"uri":"https://example.com/fresh","title":"Fresh"}}]}}]}',
+    ]), {
+      headers: { "content-type": "text/event-stream" },
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        content: "Grounded answer",
+        webSearch: {
+          provider: "google",
+          queries: ["fresh query"],
+          citations: [{ url: "https://example.com/fresh", title: "Fresh" }],
+        },
+      },
     });
   });
 
