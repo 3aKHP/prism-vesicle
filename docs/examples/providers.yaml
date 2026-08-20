@@ -150,8 +150,9 @@ providers:
           temperature: true
           maxTokens: true
           remoteCompact: false
+          # Same built-in web search support as the flash entry above.
           builtinWebSearch: true
-          remoteCompact: false
+        webSearchDefault: false
 
   anthropic:
     protocol: anthropic-messages

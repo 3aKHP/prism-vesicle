@@ -1,4 +1,6 @@
-import type { ResponsesProfile } from "../../config/env";
+import { isDeepSeekSubsetProfile, type ResponsesProfile } from "../../config/env";
+
+export { isDeepSeekSubsetProfile };
 
 /**
  * Incremental capability bits for Responses profiles (#225 slice 2).
@@ -38,10 +40,6 @@ export function isStatelessHttpSubset(profile: ResponsesProfile | undefined): bo
 /** Subset profiles exchange plaintext reasoning via response.reasoning_text.* instead of summaries. */
 export function isReasoningTextProfile(profile: ResponsesProfile | undefined): boolean {
   return profile === "mimo-subset-2026-07-30" || isDeepSeekSubsetProfile(profile);
-}
-
-export function isDeepSeekSubsetProfile(profile: ResponsesProfile | undefined): profile is "deepseek-subset-2026-07-31" | "deepseek-subset-2026-08-19" {
-  return profile === "deepseek-subset-2026-07-31" || profile === "deepseek-subset-2026-08-19";
 }
 
 /**

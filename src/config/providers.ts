@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ResponsesProfile, ResponsesTransport, VesicleConfig, VesicleProvider } from "./env";
+import { isDeepSeekSubsetProfile, type ResponsesProfile, type ResponsesTransport, type VesicleConfig, type VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
@@ -675,10 +675,6 @@ export function readResponsesProfile(value: string, field: string): ResponsesPro
     throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
   }
   return value;
-}
-
-function isDeepSeekSubsetProfile(value: string | undefined): value is "deepseek-subset-2026-07-31" | "deepseek-subset-2026-08-19" {
-  return value === "deepseek-subset-2026-07-31" || value === "deepseek-subset-2026-08-19";
 }
 
 export function readResponsesTransport(value: string, field: string): ResponsesTransport {

@@ -434,6 +434,23 @@ describe("OpenAI Responses request codec", () => {
       ...request(), generation: { reasoningTier: "xhigh" },
     }, context(), false, "deepseek-subset-2026-07-31").reasoning).toEqual({ effort: "high" });
   });
+
+  test("keeps the dated search DeepSeek subset on the documented reasoning efforts", () => {
+    for (const profile of ["deepseek-subset-2026-07-31", "deepseek-subset-2026-08-19"] as const) {
+      expect(toResponsesBody({
+        ...request(), messages: [{ role: "user", content: "hello" }], generation: { reasoningTier: "medium" },
+      }, context(), false, profile).reasoning).toEqual({ effort: "high" });
+      expect(toResponsesBody({
+        ...request(), generation: { reasoningTier: "xhigh" },
+      }, context(), false, profile).reasoning).toEqual({ effort: "high" });
+      expect(toResponsesBody({
+        ...request(), generation: { reasoningTier: "max" },
+      }, context(), false, profile).reasoning).toEqual({ effort: "max" });
+      expect(toResponsesBody({
+        ...request(), generation: { reasoningTier: "off" },
+      }, context(), false, profile).reasoning).toEqual({ effort: "none" });
+    }
+  });
 });
 
 describe("OpenAI Responses typed SSE", () => {
@@ -1236,7 +1253,7 @@ describe("OpenAI Responses built-in web search", () => {
       },
       { role: "user" as const, content: "follow-up" },
     ];
-    const input = toResponsesBody({ ...request(), messages }, context(), false, "openai-public").input as Array<Record<string, unknown>>;
+    const input = toResponsesBody({ ...request(), messages, webSearch: true }, context(), false, "openai-public").input as Array<Record<string, unknown>>;
     const callIndex = input.findIndex((item) => item.type === "web_search_call");
     const assistantIndex = input.findIndex((item) => item.role === "assistant");
     expect(callIndex).toBeGreaterThanOrEqual(0);
@@ -1247,26 +1264,74 @@ describe("OpenAI Responses built-in web search", () => {
     expect(dropped.some((item) => item.type === "web_search_call")).toBe(false);
   });
 
-  test("replays native state including web_search_call Items for the same owner", () => {
-    const native: ProviderStateEnvelope = {
-      version: providerStateEnvelopeVersion,
-      protocol: "openai-responses",
-      providerId: "openai",
-      model: "gpt-5.2-codex",
-      endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
-      payload: {
-        version: 1,
-        profile: "openai-public",
-        responseId: "resp_ws",
-        outputItems: [
-          { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "native query" } },
-          { type: "message", role: "assistant", content: [{ type: "output_text", text: "Native answer." }] },
-        ],
+  test("drops search call replay when the turn carries no search declaration", () => {
+    const messages = [
+      { role: "user" as const, content: "search please" },
+      {
+        role: "assistant" as const,
+        content: "Grounded answer.",
+        webSearch: {
+          provider: "openai",
+          queries: ["replayed query"],
+          calls: [{ id: "ws_1", status: "completed", action: { type: "search", query: "replayed query" } }],
+        },
       },
-    };
+      { role: "user" as const, content: "follow-up" },
+    ];
+    const off = toResponsesBody({ ...request(), messages }, context(), false, "openai-public");
+    const offInput = off.input as Array<Record<string, unknown>>;
+    expect(offInput.some((item) => item.type === "web_search_call")).toBe(false);
+    expect(JSON.stringify(off.tools ?? null)).not.toContain("web_search");
+
+    const on = toResponsesBody({ ...request(), messages, webSearch: true }, context(), false, "openai-public");
+    const onInput = on.input as Array<Record<string, unknown>>;
+    expect(onInput.some((item) => item.type === "web_search_call" && item.id === "ws_1")).toBe(true);
+
+    const nativeOff = toResponsesBody({
+      ...request(),
+      messages: [{ role: "assistant", content: "", providerState: nativeSearchState() }, { role: "user", content: "next" }],
+    }, context(), false, "openai-public").input as Array<Record<string, unknown>>;
+    expect(nativeOff.some((item) => item.type === "web_search_call")).toBe(false);
+    const nativeOn = toResponsesBody({
+      ...request(),
+      webSearch: true,
+      messages: [{ role: "assistant", content: "", providerState: nativeSearchState() }, { role: "user", content: "next" }],
+    }, context(), false, "openai-public").input as Array<Record<string, unknown>>;
+    expect(nativeOn.some((item) => item.type === "web_search_call" && item.id === "ws_1")).toBe(true);
+  });
+
+  test("admits the web search event family on the dated DeepSeek subset stream", async () => {
+    const events = await collect(readResponsesStream(responseStream([
+      event(0, "response.created", { response: { id: "resp_ws" } }),
+      event(1, "response.reasoning_text.delta", { delta: "thinking" }),
+      event(2, "response.web_search_call.in_progress"),
+      event(3, "response.web_search_call.searching"),
+      event(4, "response.web_search_call.completed"),
+      event(5, "response.completed", {
+        response: {
+          id: "resp_ws", status: "completed",
+          output: [
+            { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "subset query" } },
+            { type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }], summary: [] },
+            { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+          ],
+          usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+        },
+      }),
+    ]), { ...streamContext(), model: "deepseek-v4-flash", profile: "deepseek-subset-2026-08-19" }));
+
+    const completed = events.find((item) => item.type === "complete");
+    expect(completed?.type).toBe("complete");
+    if (completed?.type !== "complete") throw new Error("unreachable");
+    expect(completed.response.webSearch).toMatchObject({ queries: ["subset query"], calls: [{ id: "ws_1" }] });
+    expect(completed.response.reasoningContent).toBe("thinking");
+  });
+
+  test("replays native state including web_search_call Items for the same owner", () => {
     const input = toResponsesBody({
       ...request(),
-      messages: [{ role: "assistant", content: "", providerState: native }, { role: "user", content: "next" }],
+      webSearch: true,
+      messages: [{ role: "assistant", content: "", providerState: nativeSearchState() }, { role: "user", content: "next" }],
     }, context(), false, "openai-public").input as Array<Record<string, unknown>>;
     expect(input.some((item) => item.type === "web_search_call" && item.id === "ws_1")).toBe(true);
   });
@@ -1274,6 +1339,25 @@ describe("OpenAI Responses built-in web search", () => {
 
 function request(): VesicleRequest {
   return { id: "req_1", model: { provider: "openai", model: "gpt-5.2-codex" }, system: ["system"], messages: [] };
+}
+
+function nativeSearchState(): ProviderStateEnvelope {
+  return {
+    version: providerStateEnvelopeVersion,
+    protocol: "openai-responses",
+    providerId: "openai",
+    model: "gpt-5.2-codex",
+    endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+    payload: {
+      version: 1,
+      profile: "openai-public",
+      responseId: "resp_ws",
+      outputItems: [
+        { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "native query" } },
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "Native answer." }] },
+      ],
+    },
+  };
 }
 
 function context() {
