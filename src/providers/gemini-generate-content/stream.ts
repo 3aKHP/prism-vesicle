@@ -2,12 +2,13 @@ import { ProviderError } from "../shared/errors";
 import { readSseEvents } from "../shared/sse";
 import type { ProviderStreamEvent } from "../shared/types";
 import { responseFromGeminiParts } from "./response";
-import type { GeminiPart, GeminiResponse } from "./types";
+import type { GeminiGroundingMetadata, GeminiPart, GeminiResponse } from "./types";
 
 type GeminiStreamState = {
   parts: GeminiPart[];
   finishReason?: string;
   usage?: GeminiResponse["usageMetadata"];
+  groundingMetadata?: GeminiGroundingMetadata;
   chunks: GeminiResponse[];
 };
 
@@ -45,6 +46,7 @@ export async function* readGeminiGenerateContentStream(
       parts: state.parts,
       finishReason: state.finishReason,
       usage: state.usage,
+      groundingMetadata: state.groundingMetadata,
       fallbackId,
       raw: state.chunks,
       providerId,
@@ -97,6 +99,7 @@ function absorbGeminiStreamChunk(
   }
 
   if (candidate?.finishReason) state.finishReason = candidate.finishReason;
+  if (candidate?.groundingMetadata) state.groundingMetadata = candidate.groundingMetadata;
   if (chunk.usageMetadata) state.usage = chunk.usageMetadata;
   return events;
 }

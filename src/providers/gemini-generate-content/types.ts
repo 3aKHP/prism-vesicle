@@ -20,9 +20,23 @@ export type GeminiContent = {
   parts?: GeminiPart[];
 };
 
+export type GeminiGroundingMetadata = {
+  webSearchQueries?: string[];
+  webSupportQueries?: string[];
+  groundingChunks?: Array<{
+    web?: {
+      uri?: string;
+      title?: string;
+    };
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+};
+
 export type GeminiCandidate = {
   content?: GeminiContent;
   finishReason?: string;
+  groundingMetadata?: GeminiGroundingMetadata;
 };
 
 export type GeminiResponse = {
