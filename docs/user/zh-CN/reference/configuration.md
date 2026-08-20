@@ -129,7 +129,8 @@ vesicle config validate
 
 - `path` 打印用户级配置目录;`show` 输出**脱敏后**的配置状态:`.env` 一律显示为 `<set>`/`<empty>` 标记,代理凭据被掩码。
 - `set` 可修改 providers/permissions/preferences/quality/settings 中的键;对供应商条目支持按字段编辑(`protocol`、`baseUrl`、`apiKeyEnv`、`authMethod`、`responsesProfile`、`responsesTransport`、`userAgent`、`defaultModel`);结构性字段(`id`、`models`、`apiKey`)被拒绝。
-- `add-provider`/`add-model` 追加条目,`remove-model`/`remove-provider` 删除条目;`unset` 移除 preferences/settings 中的键。
+- 供应商/模型注册表命令会原地编辑 `providers.yaml`: `add-provider` 和 `add-model` 只插入请求的条目,按字段 `set` 只修改请求的值,`remove-model`/`remove-provider` 只删除请求的块。既有注释、空行、排序以及无关供应商/模型字段都会保留;写出统一使用 LF,并在原子写入前重新校验。`unset` 移除 preferences/settings 中的键。
+- Guided Setup 的整体合并与规范化写入语义本次保持不变;首次引导或重新配置端点时,它仍可能重写完整的供应商注册表。
 - `env-*` 只管理 `.env` 的非密钥结构:创建空占位、写入代理 URL、删除键(键不存在时会提醒);API 密钥仍需按上文手动编辑 `.env`。
 - `validate` 校验全部配置文件。
 

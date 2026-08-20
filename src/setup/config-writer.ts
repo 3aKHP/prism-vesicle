@@ -9,7 +9,7 @@ import {
   parseEnvFile,
   parseProviderConfig,
   providerConfigPathFromEnv,
-  type ProviderModelProfile,
+  serializeProviderLines,
   type ProviderProfile,
   type ProviderRegistry,
 } from "../config/providers";
@@ -18,7 +18,7 @@ import { appendMcpServerBlock, mcpTokenEnvKey, serializeMcpServerBlock, type Mcp
 import { loadPermissionSettings } from "../config/permissions";
 import { atomicWrite } from "../config/atomic-write";
 import { readOptionalText as readOptional } from "../config/file-read";
-import { sanitizeId, uniqueId, yamlKey, yamlScalar } from "../config/yaml-writer";
+import { sanitizeId, uniqueId, yamlScalar } from "../config/yaml-writer";
 
 export type SetupMcpServer = {
   name: string;
@@ -138,17 +138,31 @@ export function setEnvValues(source: string, updates: Record<string, string>): s
   return `${output.join("\n")}\n`;
 }
 
-/**
- * Shared provider-registry write pipeline for config CLI commands:
- * serialize → validate by re-parsing (before touching disk) → atomic write →
- * reload to confirm the round-trip. A failed cross-field constraint throws
- * before any bytes land on disk, leaving the existing providers.yaml intact.
- */
-export async function writeProviderRegistry(registry: ProviderRegistry): Promise<string> {
+export async function editProviderRegistrySource(
+  edit: (source: string, registry: ProviderRegistry) => string,
+): Promise<string> {
   const path = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
-  parseProviderConfig(source, path, process.env);
-  await atomicWrite(path, source);
+  const source = await readOptional(path);
+  if (source === undefined) throw new Error(`Provider config does not exist at ${path}.`);
+  const registry = await loadProviderRegistry();
+  const candidate = edit(source, registry);
+  return commitProviderRegistrySource(path, candidate);
+}
+
+/**
+ * Shared provider-registry commit pipeline for config CLI commands: validate
+ * the complete candidate before side effects, run an optional prerequisite
+ * write, atomically replace providers.yaml, then reload the on-disk registry.
+ */
+export async function commitProviderRegistrySource(
+  path: string,
+  candidate: string,
+  validationEnv: NodeJS.ProcessEnv = process.env,
+  beforeWrite?: () => Promise<void>,
+): Promise<string> {
+  parseProviderConfig(candidate, path, validationEnv);
+  await beforeWrite?.();
+  await atomicWrite(path, candidate);
   await loadProviderRegistry();
   return path;
 }
@@ -162,17 +176,7 @@ export function serializeProviderRegistry(registry: ProviderRegistry): string {
     "providers:",
   ];
   for (const provider of registry.providers) {
-    lines.push(`  ${yamlKey(provider.id)}:`);
-    lines.push(`    protocol: ${provider.protocol}`);
-    lines.push(`    baseUrl: ${yamlScalar(provider.baseUrl)}`);
-    lines.push(`    apiKeyEnv: ${provider.apiKeyEnv}`);
-    if (provider.authMethod) lines.push(`    authMethod: ${provider.authMethod}`);
-    if (provider.userAgent) lines.push(`    userAgent: ${yamlScalar(provider.userAgent)}`);
-    if (provider.responsesProfile) lines.push(`    responsesProfile: ${provider.responsesProfile}`);
-    if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
-    if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
-    lines.push("    models:");
-    for (const model of provider.models) serializeModel(lines, model);
+    lines.push(...serializeProviderLines(provider));
   }
   return `${lines.join("\n")}\n`;
 }
@@ -257,38 +261,6 @@ function presetFromProvider(provider: ProviderProfile | undefined): SetupProvide
     return "openai-responses";
   }
   return undefined;
-}
-
-function serializeModel(lines: string[], model: ProviderModelProfile): void {
-  const structured = model.generation || model.capabilities || model.limits;
-  if (!structured) {
-    lines.push(`      - ${yamlScalar(model.id)}`);
-    return;
-  }
-  lines.push(`      - id: ${yamlScalar(model.id)}`);
-  if (model.generation) {
-    lines.push("        generation:");
-    if (model.generation.temperature !== undefined) lines.push(`          temperature: ${model.generation.temperature}`);
-    if (model.generation.maxTokens !== undefined) lines.push(`          maxTokens: ${model.generation.maxTokens}`);
-  }
-  if (model.capabilities) {
-    lines.push("        capabilities:");
-    for (const [key, value] of Object.entries(model.capabilities)) {
-      if (value !== undefined) lines.push(`          ${key}: ${value}`);
-    }
-  }
-  if (model.limits) {
-    lines.push("        limits:");
-    if (model.limits.contextWindow !== undefined) lines.push(`          contextWindow: ${model.limits.contextWindow}`);
-    if (model.limits.maxOutputTokens !== undefined) lines.push(`          maxOutputTokens: ${model.limits.maxOutputTokens}`);
-    if (model.limits.autoCompact) {
-      lines.push("          autoCompact:");
-      const compact = model.limits.autoCompact;
-      if (compact.enabled !== undefined) lines.push(`            enabled: ${compact.enabled}`);
-      if (compact.threshold !== undefined) lines.push(`            threshold: ${compact.threshold}`);
-      if (compact.reserveOutputTokens !== undefined) lines.push(`            reserveOutputTokens: ${compact.reserveOutputTokens}`);
-    }
-  }
 }
 
 function mcpAddition(

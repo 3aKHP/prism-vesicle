@@ -5,7 +5,6 @@
 
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
 import { settingsPath, loadSettings, SETTINGS_KEYS } from "../../../config/settings";
-import { loadProviderRegistry } from "../../../config/providers";
 import type { ProviderProfile } from "../../../config/providers";
 import {
   readProtocol,
@@ -14,7 +13,9 @@ import {
   readResponsesTransport,
   readUserAgent,
 } from "../../../config/providers";
-import { writeProviderRegistry } from "../../../setup/config-writer";
+import { replaceDefaultSelectionInSource, replaceProviderFieldInSource } from "../../../config/provider-source-edit";
+import { yamlScalar } from "../../../config/yaml-writer";
+import { editProviderRegistrySource } from "../../../setup/config-writer";
 import { atomicWrite } from "../../../config/atomic-write";
 import { loadExperimentalQualitySettings, writeExperimentalQualitySettings } from "../../../config/quality";
 import type { ExperimentalQualityMode } from "../../../config/quality";
@@ -232,21 +233,18 @@ const SETTABLE_PROVIDER_FIELDS: readonly string[] = [
 const PROTECTED_PROVIDER_FIELDS: readonly string[] = ["id", "models", "apiKey"];
 
 async function setProviderField(providerId: string, field: string, value: string): Promise<SetResult> {
-  const registry = await loadProviderRegistry();
-  const provider = registry.providers.find((entry) => entry.id === providerId);
-  if (!provider) {
-    throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
-  }
-
-  applyProviderField(provider, field, value);
-
-  // Keep the global default selection consistent with a provider-level
-  // defaultModel change so the two default concepts cannot diverge.
-  if (field === "defaultModel" && registry.default.provider === providerId) {
-    registry.default.model = value;
-  }
-
-  const path = await writeProviderRegistry(registry);
+  const path = await editProviderRegistrySource((source, registry) => {
+    const provider = registry.providers.find((entry) => entry.id === providerId);
+    if (!provider) {
+      throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
+    }
+    const normalizedValue = normalizeProviderField(provider, field, value);
+    let candidate = replaceProviderFieldInSource(source, providerId, field, yamlScalar(normalizedValue));
+    if (field === "defaultModel" && registry.default.provider === providerId) {
+      candidate = replaceDefaultSelectionInSource(candidate, "model", yamlScalar(value));
+    }
+    return candidate;
+  });
 
   return {
     ok: true,
@@ -259,12 +257,11 @@ async function setProviderField(providerId: string, field: string, value: string
   };
 }
 
-function applyProviderField(provider: ProviderProfile, field: string, value: string): void {
+function normalizeProviderField(provider: ProviderProfile, field: string, value: string): string {
   const fieldLabel = `provider "${provider.id}"`;
   switch (field) {
     case "protocol":
-      provider.protocol = readProtocol(value, fieldLabel);
-      return;
+      return readProtocol(value, fieldLabel);
     case "baseUrl": {
       let parsed: URL;
       try {
@@ -278,28 +275,22 @@ function applyProviderField(provider: ProviderProfile, field: string, value: str
       if (parsed.username || parsed.password) {
         throw new Error(`baseUrl must not contain credentials. providers.yaml is a non-secret file.`);
       }
-      provider.baseUrl = value.replace(/\/+$/, "");
-      return;
+      return value.replace(/\/+$/, "");
     }
     case "apiKeyEnv": {
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
         throw new Error(`Invalid apiKeyEnv "${value}". Must be a valid environment variable name.`);
       }
-      provider.apiKeyEnv = value;
-      return;
+      return value;
     }
     case "authMethod":
-      provider.authMethod = readAuthMethod(value, fieldLabel);
-      return;
+      return readAuthMethod(value, fieldLabel);
     case "responsesProfile":
-      provider.responsesProfile = readResponsesProfile(value, fieldLabel);
-      return;
+      return readResponsesProfile(value, fieldLabel);
     case "responsesTransport":
-      provider.responsesTransport = readResponsesTransport(value, fieldLabel);
-      return;
+      return readResponsesTransport(value, fieldLabel);
     case "userAgent":
-      provider.userAgent = readUserAgent(value, fieldLabel);
-      return;
+      return readUserAgent(value, fieldLabel);
     case "defaultModel": {
       if (!provider.models.some((model) => model.id === value)) {
         throw new Error(
@@ -307,8 +298,7 @@ function applyProviderField(provider: ProviderProfile, field: string, value: str
           + `Available: ${provider.models.map((model) => model.id).join(", ")}.`,
         );
       }
-      provider.defaultModel = value;
-      return;
+      return value;
     }
     default:
       if (PROTECTED_PROVIDER_FIELDS.includes(field)) {
@@ -319,21 +309,21 @@ function applyProviderField(provider: ProviderProfile, field: string, value: str
 }
 
 async function setProvidersDefault(key: string, value: string): Promise<SetResult> {
-  const registry = await loadProviderRegistry();
-  if (key === "default.provider") {
-    if (!registry.providers.some((provider) => provider.id === value)) {
-      throw new Error(`Unknown provider "${value}". Available: ${registry.providers.map((provider) => provider.id).join(", ")}.`);
+  const path = await editProviderRegistrySource((source, registry) => {
+    if (key === "default.provider") {
+      if (!registry.providers.some((provider) => provider.id === value)) {
+        throw new Error(`Unknown provider "${value}". Available: ${registry.providers.map((provider) => provider.id).join(", ")}.`);
+      }
+      registry.default.provider = value;
+      const provider = registry.providers.find((entry) => entry.id === value)!;
+      if (provider.defaultModel && provider.models.some((model) => model.id === provider.defaultModel)) {
+        registry.default.model = provider.defaultModel;
+      } else if (!provider.models.some((model) => model.id === registry.default.model)) {
+        registry.default.model = provider.models[0]?.id ?? registry.default.model;
+      }
+      const withProvider = replaceDefaultSelectionInSource(source, "provider", yamlScalar(registry.default.provider));
+      return replaceDefaultSelectionInSource(withProvider, "model", yamlScalar(registry.default.model));
     }
-    registry.default.provider = value;
-    // If the new default provider has a defaultModel, use it; otherwise keep the
-    // current model only if it exists in the new provider.
-    const provider = registry.providers.find((entry) => entry.id === value)!;
-    if (provider.defaultModel && provider.models.some((model) => model.id === provider.defaultModel)) {
-      registry.default.model = provider.defaultModel;
-    } else if (!provider.models.some((model) => model.id === registry.default.model)) {
-      registry.default.model = provider.models[0]?.id ?? registry.default.model;
-    }
-  } else if (key === "default.model") {
     const provider = registry.providers.find((entry) => entry.id === registry.default.provider);
     if (!provider) throw new Error(`Default provider "${registry.default.provider}" not found.`);
     if (!provider.models.some((model) => model.id === value)) {
@@ -342,8 +332,7 @@ async function setProvidersDefault(key: string, value: string): Promise<SetResul
         + `Available: ${provider.models.map((model) => model.id).join(", ")}.`,
       );
     }
-    registry.default.model = value;
-  }
-  const path = await writeProviderRegistry(registry);
+    return replaceDefaultSelectionInSource(source, "model", yamlScalar(value));
+  });
   return { ok: true, operation: "set", file: "providers", key, value, path, restartRequired: true };
 }

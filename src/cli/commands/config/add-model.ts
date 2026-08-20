@@ -3,8 +3,9 @@
 // (single owner of model-entry shape), the model id must be unique within the
 // provider, and the write goes through the shared registry pipeline.
 
-import { loadProviderRegistry, validateModelEntryShape } from "../../../config/providers";
-import { writeProviderRegistry } from "../../../setup/config-writer";
+import { validateModelEntryShape } from "../../../config/providers";
+import { appendModelToProviderSource } from "../../../config/provider-source-edit";
+import { editProviderRegistrySource } from "../../../setup/config-writer";
 
 type AddModelResult = {
   ok: true;
@@ -43,18 +44,16 @@ export async function runAddModel(args: string[]): Promise<void> {
 
 async function addModel(providerId: string, entry: unknown): Promise<AddModelResult> {
   const model = validateModelEntryShape(entry);
-  const registry = await loadProviderRegistry();
-  const provider = registry.providers.find((entry) => entry.id === providerId);
-  if (!provider) {
-    throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
-  }
-  if (provider.models.some((existing) => existing.id === model.id)) {
-    throw new Error(`Provider "${providerId}" already declares model "${model.id}".`);
-  }
-
-  provider.models.push(model);
-
-  const path = await writeProviderRegistry(registry);
+  const path = await editProviderRegistrySource((source, registry) => {
+    const provider = registry.providers.find((entry) => entry.id === providerId);
+    if (!provider) {
+      throw new Error(`Unknown provider "${providerId}". Available: ${registry.providers.map((entry) => entry.id).join(", ")}.`);
+    }
+    if (provider.models.some((existing) => existing.id === model.id)) {
+      throw new Error(`Provider "${providerId}" already declares model "${model.id}".`);
+    }
+    return appendModelToProviderSource(source, providerId, model);
+  });
 
   return {
     ok: true,
