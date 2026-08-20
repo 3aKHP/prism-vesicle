@@ -6,7 +6,7 @@ import { backgroundProcess } from "./fixtures/tui";
 
 describe("tui: shell and sidebar", () => {
   test("renders a readable balanced shell at 100 columns", async () => {
-    const setup = await testRender(() => <App />, { width: 100, height: 28 });
+    const setup = await testRender(() => <App splashMode="skip" />, { width: 100, height: 28 });
     await setup.flush();
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
@@ -18,7 +18,7 @@ describe("tui: shell and sidebar", () => {
     expect(frame).toContain("┌─ Status");
     expect(frame).not.toContain("Output / Validation");
     // Empty sessions show the brand hero (M2) instead of the old bare "Ready"
-    // system notice; the splash skips non-interactive renders like this one.
+    // system notice; this layout test explicitly skips the startup overlay.
     expect(frame).toContain("one beam in, the spectrum out");
     expect(frame).not.toContain("system>");
     // Input bar present; provider registry loads asynchronously before the first send.
@@ -26,7 +26,7 @@ describe("tui: shell and sidebar", () => {
   });
 
   test("renders the sidebar and telemetry footer at wide width (no activity pane)", async () => {
-    const setup = await testRender(() => <App />, { width: 124, height: 28 });
+    const setup = await testRender(() => <App splashMode="skip" />, { width: 124, height: 28 });
     await setup.flush();
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
