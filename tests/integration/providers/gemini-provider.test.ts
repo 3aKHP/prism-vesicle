@@ -162,6 +162,11 @@ describe("Gemini generateContent request shaping", () => {
         role: "user",
         parts: [
           { functionResponse: { id: "call_text", name: "read_file", response: { content: "{\"ok\":true}" } } },
+        ],
+      },
+      {
+        role: "user",
+        parts: [
           { functionResponse: { id: "call_mcp", name: "mcp_prts_operator_artwork", response: { content: "artwork" } } },
         ],
       },
@@ -182,6 +187,28 @@ describe("Gemini generateContent request shaping", () => {
       expect(functionResponses.length === 0 || ordinary.length === 0)
         .toBe(true);
     }
+  });
+
+  test("keeps each tool-result image adjacent to its own function response", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_image", name: "view_image", arguments: "{}" },
+            { id: "call_text", name: "read_file", arguments: "{}" },
+          ],
+        },
+        { role: "tool", toolCallId: "call_image", content: "image result", images: [mcpImage()] },
+        { role: "tool", toolCallId: "call_text", content: "text result" },
+      ],
+    });
+    const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    expect(contents[1]?.parts[0]).toHaveProperty("functionResponse.id", "call_image");
+    expect(contents[2]?.parts.some((part) => "inlineData" in part)).toBe(true);
+    expect(contents[3]?.parts[0]).toHaveProperty("functionResponse.id", "call_text");
   });
 
   test("serializes system, messages, tools, tool results, and thinking config", () => {

@@ -14,6 +14,7 @@ import type { ReasoningDisplayMode, SessionSummary } from "../../core/session/st
 import type { PermissionMode } from "../../core/permissions";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
 import type { ThemePreference } from "../theme";
+import type { WebSearchOverrideResult } from "../web-search-controller";
 import type {
   ActivityEntry,
   Message,
@@ -96,8 +97,8 @@ export type CommandThemePort = {
 
 /** Built-in web search surface owned by the web-search controller. */
 export type CommandWebSearchPort = {
-  statusText: () => string;
-  applyOverride: (enabled: boolean) => string;
+  statusText: () => Promise<string>;
+  applyOverride: (enabled: boolean) => Promise<WebSearchOverrideResult>;
   clearOverride: () => void;
 };
 

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Release review follow-ups close search-boundary and durability gaps.** Provider-native built-in search now requires an admitting protocol/profile and an Engine whose declared tool surface includes `web_search`; Stage and the tool-free `/btw` side channel never receive it, and SubAgents inherit the parent's effective search policy without also exposing Tavily `web_search`. Rejected `/websearch` changes no longer report success. Normalized search audit data now survives child sessions, Quality decision/rewrite recovery, and portable compact checkpoints. Turning DeepSeek search off degrades a searched native batch to its portable assistant projection instead of replaying search-coupled reasoning state, and Gemini keeps each tool-result image adjacent to its own `functionResponse` Content.
+
+- **Release Issue closure is restricted to explicit release intent.** The `main` closure workflow now runs only for merged `release/*` PRs, reads only standalone closing-keyword lines from the PR body, ignores commit-history and review prose such as `Should-fix #N`, and uses the Node 24 `actions/github-script` runtime.
+
 ## [1.0.0-beta.1] - 2026-08-20
 
 ### Prerelease channel and known limitations

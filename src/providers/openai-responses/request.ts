@@ -167,19 +167,22 @@ function serializeResponsesInput(
     }
     if (message.role === "assistant" && message.providerState) {
       const native = nativeOutputItems(message.providerState, model, context);
-      if (native) {
+      const nativeCarriesSearch = native?.some((item) =>
+        item !== null && typeof item === "object" && !Array.isArray(item)
+        && item.type === "web_search_call"
+      ) === true;
+      if (native && (replayWebSearch || !nativeCarriesSearch)) {
         for (const item of native) {
           if (!item || typeof item !== "object" || Array.isArray(item) || item.type !== "function_call") continue;
           declareCallId(item.call_id, declaredCallIds);
         }
-        // Replaying search call Items without the web_search declaration is a
-        // documented request-rejection shape on the public endpoint, so a
-        // toggle-off turn drops them alongside the declaration.
-        input.push(...(replayWebSearch
-          ? native
-          : native.filter((item) => !(item && typeof item === "object" && !Array.isArray(item) && item.type === "web_search_call"))));
+        input.push(...native);
         continue;
       }
+      // A native output batch containing search Items is one provider-owned
+      // reasoning unit. When search is off, fall through to the portable
+      // assistant projection instead of replaying search-coupled reasoning or
+      // encrypted state without the declaration that produced it.
     }
     if (message.role === "tool") {
       if (!message.toolCallId) throw new Error("OpenAI Responses tool output is missing its call_id.");

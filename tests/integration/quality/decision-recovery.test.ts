@@ -9,6 +9,44 @@ import { harnessRuntime, restoreQualityTestState, runtimeRoot } from "./fixtures
 afterEach(restoreQualityTestState);
 
 describe("quality: decision recovery", () => {
+  test("preserves a searched candidate through recovery and acceptance", async () => {
+    const root = await runtimeRoot("runtime");
+    globalThis.fetch = (async () => Response.json({
+      id: "searched-candidate",
+      choices: [{ message: { content: "空气中弥漫着雨味。" } }],
+    })) as unknown as typeof fetch;
+    const first = await runPrompt({
+      input: "continue",
+      engine: "runtime",
+      rootDir: root,
+      messages: [{ role: "user", content: "continue" }],
+      harness: harnessRuntime(),
+    });
+    expect(first.kind).toBe("needs_quality_decision");
+    const path = join(root, ".vesicle", "sessions", `${first.sessionId}.jsonl`);
+    const records = (await readFile(path, "utf8")).trimEnd().split("\n").map((line) => JSON.parse(line));
+    const warning = records.find((record) => record.metadata?.kind === "quality-warning");
+    if (!warning?.metadata?.qualityDecision?.candidate) throw new Error("expected persisted quality candidate");
+    warning.metadata.qualityDecision.candidate.webSearch = {
+      provider: "fixture-provider",
+      queries: ["quality candidate query"],
+      citations: [{ url: "https://example.com/quality", title: "Quality source" }],
+    };
+    await writeFile(path, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+
+    const recovered = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(recovered.pendingQualityDecision?.candidate.webSearch?.queries).toEqual(["quality candidate query"]);
+    await resolveQualityDecision({
+      engine: "runtime",
+      rootDir: root,
+      sessionId: first.sessionId,
+      resolution: "accept",
+    });
+    const settled = await loadSessionSnapshot(root, first.sessionId, { synthesizeDanglingToolResults: false });
+    expect(settled.messages.find((message) => message.role === "assistant")?.webSearch?.queries)
+      .toEqual(["quality candidate query"]);
+  });
+
   test("keeps session listing available when a pending candidate has corrupt provider state", async () => {
     const root = await runtimeRoot("runtime");
     globalThis.fetch = (async () => Response.json({

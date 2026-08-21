@@ -181,7 +181,15 @@ async function main(): Promise<void> {
   const fail = (msg: string) => { console.log(`FAIL: ${msg}`); failures += 1; };
 
   const tui = await spawnTui();
-  await Bun.sleep(1500); // let the renderer activate
+  // Reduced motion freezes the splash instead of removing it. Wait for both
+  // the renderer and provider-ready composer so cold config/catalog loads
+  // cannot race the first prompt.
+  if (!(await tui.waitFor(/PRISM VESICLE|one beam in, the spectrum out/i, 10000))) {
+    fail(`TUI did not reach its startup frame:\n${tui.plain().slice(-800)}`);
+  }
+  if (!(await tui.waitFor("Type prompt, Enter send", 15000))) {
+    fail(`TUI did not reach its provider-ready composer:\n${tui.plain().slice(-800)}`);
+  }
   // The startup splash consumes the first keypress; dismiss it so the first
   // prompt is not mangled (same pattern as smoke-malformed-tool-pty).
   await tui.type("\x1b");

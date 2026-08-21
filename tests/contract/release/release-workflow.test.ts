@@ -9,6 +9,7 @@ type WorkflowStep = {
 };
 
 type WorkflowJob = {
+  if?: string;
   uses?: string;
   environment?: string;
   permissions?: Record<string, string>;
@@ -78,6 +79,7 @@ describe("release workflow contract", () => {
     const workflows = await Promise.all([
       loadWorkflow("release-build.yml"),
       loadWorkflow("release.yml"),
+      loadWorkflow("close-issues.yml"),
     ]);
     const uses = workflows.flatMap((workflow) =>
       Object.values(workflow.jobs).flatMap((job) =>
@@ -96,6 +98,7 @@ describe("release workflow contract", () => {
       "actions/setup-node@": "actions/setup-node@v7",
       "oven-sh/setup-bun@": "oven-sh/setup-bun@v2",
       "softprops/action-gh-release@": "softprops/action-gh-release@v3",
+      "actions/github-script@": "actions/github-script@v9",
     };
     for (const [prefix, required] of Object.entries(requiredActions)) {
       const matched = uses.filter((action) => action.startsWith(prefix));
@@ -113,6 +116,22 @@ describe("release workflow contract", () => {
       (step) => step.uses === "actions/setup-node@v7",
     );
     expect(setupNode?.with?.["node-version"]).toBe("24");
+  });
+
+  test("closes only issues explicitly declared by a merged release PR", async () => {
+    const workflow = await loadWorkflow("close-issues.yml");
+    const job = workflow.jobs["close-released-issues"];
+    const script = job?.steps?.find((step) => step.uses === "actions/github-script@v9")?.with?.script;
+
+    expect(job?.if).toContain("github.event.pull_request.merged == true");
+    expect(job?.if).toContain("startsWith(github.head_ref, 'release/')");
+    expect(script).toContain("collect(pr.body)");
+    expect(script).not.toContain("compareCommits");
+
+    const explicitClosingLine = /^\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\s*[.!]?\s*$/gim;
+    const candidates = (text: string) => [...text.matchAll(explicitClosingLine)].map((match) => Number(match[1]));
+    expect(candidates("Closes #225\nFixes #226.")).toEqual([225, 226]);
+    expect(candidates("Should-fix #123\nbugfix #124\nMention fixes #125 in prose.")).toEqual([]);
   });
 
   test("keeps every release gate in the reusable workflow", async () => {

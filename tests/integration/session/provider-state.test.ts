@@ -31,12 +31,15 @@ describe("session provider-state projection", () => {
     await recordChildResponse(child, {
       id: "child-response",
       content: "child reply",
+      webSearch: { provider: "fixture-provider", queries: ["child query"] },
       providerState: state("child-response"),
     }, store, "run-child", "child-1");
 
     expect(child.messages.at(-1)?.providerState).toEqual(state("child-response"));
+    expect(child.messages.at(-1)?.webSearch?.queries).toEqual(["child query"]);
     const snapshot = await loadSessionSnapshot(rootDir, store.sessionId);
     expect(snapshot.messages.at(-1)?.providerState).toEqual(state("child-response"));
+    expect(snapshot.messages.at(-1)?.webSearch?.queries).toEqual(["child query"]);
   });
 
   test("child-Agent failed tool results preserve the native error outcome", async () => {

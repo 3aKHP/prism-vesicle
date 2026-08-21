@@ -188,6 +188,7 @@ export async function recordRejectedQualityRound(
     const assistantMessage: VesicleMessage = {
       role: "assistant",
       content: "",
+      ...(response.webSearch ? { webSearch: response.webSearch } : {}),
       ...(response.providerState ? { providerState: cloneProviderStateEnvelope(response.providerState) } : {}),
       toolCalls: calls,
     };
@@ -206,6 +207,7 @@ export async function recordRejectedQualityRound(
           model: context.model,
           providerResponseId: response.id,
           candidateHash: result.evaluation.candidateHash,
+          ...(response.webSearch ? { webSearch: response.webSearch } : {}),
           ...(response.providerState ? { providerState: cloneProviderStateEnvelope(response.providerState) } : {}),
           toolCalls: calls,
         },

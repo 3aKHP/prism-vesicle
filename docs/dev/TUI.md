@@ -71,7 +71,7 @@ The brand aesthetic, palette of record, motion grammar, and anti-patterns are ow
 
 ## Side Questions
 
-- `/btw <question>` is a one-shot, tool-free side exchange over an immutable snapshot published before a main provider request.
+- `/btw <question>` is a one-shot, tool-free side exchange over an immutable snapshot published before a main provider request. It never inherits provider-native built-in search from the parent session.
 - The side request has one dedicated system authority and one host-rendered user reference packet containing quoted parent context as inert data.
 - Parent workflow instructions, tool protocol fields, reasoning, and thinking blocks do not become active side instructions. Images remain reference-only and materialize only for a vision-capable side request.
 - No tools are declared. Any structured tool call in the side response, including mixed text and tool output, fails the exchange.

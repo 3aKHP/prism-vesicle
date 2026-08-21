@@ -1,4 +1,5 @@
 import { isDeepSeekSubsetProfile, type ResponsesProfile } from "../../config/env";
+import { responsesProfileAdmitsBuiltInWebSearch } from "../shared/web-search-support";
 
 export { isDeepSeekSubsetProfile };
 
@@ -15,21 +16,12 @@ export type ResponsesProfileCapabilities = {
   webSearch: boolean;
 };
 
-const profileCapabilities: Record<ResponsesProfile, ResponsesProfileCapabilities> = {
-  "openai-public": { webSearch: true },
-  "codex-http-relay": { webSearch: false },
-  "codex-beta-2026-02-06": { webSearch: false },
-  "mimo-subset-2026-07-30": { webSearch: false },
-  "deepseek-subset-2026-07-31": { webSearch: false },
-  "deepseek-subset-2026-08-19": { webSearch: true },
-};
-
 export function responsesProfileCapabilities(profile: ResponsesProfile | undefined): ResponsesProfileCapabilities {
-  return profile ? profileCapabilities[profile] : { webSearch: false };
+  return { webSearch: responsesProfileAdmitsBuiltInWebSearch(profile) };
 }
 
 export function supportsResponsesWebSearch(profile: ResponsesProfile | undefined): boolean {
-  return responsesProfileCapabilities(profile).webSearch;
+  return responsesProfileAdmitsBuiltInWebSearch(profile);
 }
 
 /** Stateful request fields (store, service_tier, encrypted reasoning) are omitted on subset profiles. */

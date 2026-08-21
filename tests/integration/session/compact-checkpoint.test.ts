@@ -83,6 +83,55 @@ describe("session: compact-checkpoint-v1 projection", () => {
     expect(messages[1]?.providerState).not.toBe(providerState);
   });
 
+  test("retained assistant messages preserve built-in search audit data", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-web-search-"));
+    const store = await createSessionStore(rootDir, "ckpt-web-search");
+    const webSearch = {
+      provider: "fixture-provider",
+      queries: ["retained query"],
+      citations: [{ url: "https://example.com/source", title: "Source" }],
+      calls: [{ id: "search-1", status: "completed", action: { type: "search", query: "retained query" } }],
+    };
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          replacementMessages: [
+            { role: "user", content: "[conversation summary]\nEarlier work.", kind: "compact-summary" },
+            { role: "assistant", content: "retained", webSearch },
+          ],
+        }),
+      },
+    });
+
+    const messages = await loadSessionMessages(rootDir, store.sessionId);
+    expect(messages[1]?.webSearch).toEqual(webSearch);
+  });
+
+  test("rejects a retained assistant web-search report without its query audit floor", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-web-search-invalid-"));
+    const store = await createSessionStore(rootDir, "ckpt-web-search-invalid");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({
+      role: "system",
+      content: "compacted",
+      metadata: {
+        kind: COMPACT_CHECKPOINT_KIND,
+        checkpoint: validCheckpoint({
+          replacementMessages: [
+            { role: "user", content: "[conversation summary]\nEarlier work.", kind: "compact-summary" },
+            { role: "assistant", content: "retained", webSearch: { provider: "fixture", queries: [] } },
+          ],
+        }),
+      },
+    });
+
+    await expect(loadSessionMessages(rootDir, store.sessionId)).rejects.toThrow("webSearch is malformed");
+  });
+
   test("projects an owner-bound native marker after the portable replacement", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-ckpt-native-"));
     const store = await createSessionStore(rootDir, "ckpt-native");

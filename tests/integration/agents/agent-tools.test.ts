@@ -38,6 +38,12 @@ describe("SubAgent model tools", () => {
     expect(() => resolveChildTools(["spawn_agent"], definitions, mcp, true)).toThrow("cannot use interactive or recursive tool");
   });
 
+  test("child built-in search suppresses its competing Tavily web_search tool", () => {
+    const mcp = { definitions: [], statuses: [], hasTool: () => false, execute: async () => { throw new Error("unexpected MCP call"); } };
+    expect(resolveChildTools(["web_search"], [], mcp, true, false).map((tool) => tool.function.name)).toEqual(["web_search"]);
+    expect(resolveChildTools(["web_search"], [], mcp, true, true)).toEqual([]);
+  });
+
   test("returns immediately for background spawn and persists the eventual result", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-agent-tool-"));
     let release: () => void = () => undefined;
