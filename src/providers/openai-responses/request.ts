@@ -3,6 +3,7 @@ import type { ResponsesProfile } from "../../config/env";
 import { ProviderError } from "../shared/errors";
 import { parseProviderStateEnvelope, type ProviderStateEnvelope, type ProviderStateJson } from "../shared/state";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderCompactRequest, type ReasoningTier, type VesicleMessage, type VesicleRequest } from "../shared/types";
+import { isDeepSeekSubsetProfile, isStatelessHttpSubset, supportsResponsesWebSearch } from "./profiles";
 import { validateResponsesCompactItems, validateResponsesOutputItems } from "./items";
 import { openAIResponsesProtocol, type ResponsesOutputItem } from "./types";
 
@@ -15,14 +16,21 @@ export function toResponsesBody(
   stream: boolean,
   profile: ResponsesProfile,
 ): Record<string, unknown> {
-  const tools = request.tools?.map(toResponsesTool);
+  const toolEntries: Record<string, unknown>[] = [...(request.tools?.map(toResponsesTool) ?? [])];
+  // Intersection discipline: the bare `{type:"web_search"}` declaration is the
+  // wire subset shared by OpenAI and DeepSeek; preview variants stay unsent.
+  if (request.webSearch === true && supportsResponsesWebSearch(profile)) {
+    toolEntries.push({ type: "web_search" });
+  }
+  const tools = toolEntries.length ? toolEntries : undefined;
+  const replayWebSearch = request.webSearch === true;
   if (isStatelessHttpSubset(profile)) {
     return {
       model: request.model.model,
       instructions: request.system.join("\n\n") || undefined,
-      input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
-      tools: tools?.length ? tools : undefined,
-      tool_choice: tools?.length ? "auto" : undefined,
+      input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }, [], replayWebSearch),
+      tools,
+      tool_choice: tools ? "auto" : undefined,
       reasoning: reasoningControl(request.generation?.reasoningTier, false, context.providerId, profile),
       stream,
       max_output_tokens: request.generation?.maxTokens,
@@ -33,9 +41,9 @@ export function toResponsesBody(
   return {
     model: request.model.model,
     instructions: request.system.join("\n\n") || undefined,
-    input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }),
-    tools: tools?.length ? tools : undefined,
-    tool_choice: tools?.length ? "auto" : undefined,
+    input: serializeResponsesInput(request.messages, request.model.model, { ...context, profile }, [], replayWebSearch),
+    tools,
+    tool_choice: tools ? "auto" : undefined,
     parallel_tool_calls: true,
     reasoning: reasoningControl(request.generation?.reasoningTier, true, context.providerId),
     store: false,
@@ -72,6 +80,7 @@ export function toResponsesWebSocketMessage(
         request.model.model,
         context,
         continuation.pendingCallIds,
+        request.webSearch === true,
       )
     : base.input;
   return {
@@ -136,6 +145,7 @@ function serializeResponsesInput(
   model: string,
   context: RequestContext,
   initialCallIds: readonly string[] = [],
+  replayWebSearch = true,
 ): unknown[] {
   const input: unknown[] = [];
   const declaredCallIds = new Set(initialCallIds);
@@ -157,7 +167,11 @@ function serializeResponsesInput(
     }
     if (message.role === "assistant" && message.providerState) {
       const native = nativeOutputItems(message.providerState, model, context);
-      if (native) {
+      const nativeCarriesSearch = native?.some((item) =>
+        item !== null && typeof item === "object" && !Array.isArray(item)
+        && item.type === "web_search_call"
+      ) === true;
+      if (native && (replayWebSearch || !nativeCarriesSearch)) {
         for (const item of native) {
           if (!item || typeof item !== "object" || Array.isArray(item) || item.type !== "function_call") continue;
           declareCallId(item.call_id, declaredCallIds);
@@ -165,6 +179,10 @@ function serializeResponsesInput(
         input.push(...native);
         continue;
       }
+      // A native output batch containing search Items is one provider-owned
+      // reasoning unit. When search is off, fall through to the portable
+      // assistant projection instead of replaying search-coupled reasoning or
+      // encrypted state without the declaration that produced it.
     }
     if (message.role === "tool") {
       if (!message.toolCallId) throw new Error("OpenAI Responses tool output is missing its call_id.");
@@ -175,6 +193,7 @@ function serializeResponsesInput(
       continue;
     }
     if (message.role === "assistant" && message.toolCalls?.length) {
+      pushPortableWebSearchCalls(message, input, context.profile, replayWebSearch);
       if (message.content) input.push({ role: "assistant", content: message.content });
       input.push(...message.toolCalls.map((call) => {
         declareCallId(call.id, declaredCallIds);
@@ -182,6 +201,7 @@ function serializeResponsesInput(
       }));
       continue;
     }
+    if (message.role === "assistant") pushPortableWebSearchCalls(message, input, context.profile, replayWebSearch);
     input.push({
       role: message.role,
       content: message.images?.length && message.role === "user"
@@ -225,6 +245,23 @@ function declareCallId(value: ProviderStateJson | string, declared: Set<string>)
   declared.add(value);
 }
 
+/**
+ * Replay built-in web search calls for a portable assistant message (no
+ * provider-native state). Items are emitted before the assistant content,
+ * mirroring native output order. Profiles without search admission drop the
+ * calls instead of sending Items the endpoint would reject — the same degrade
+ * applied when provider-state ownership does not match. Turns without the
+ * search declaration (toggle off) drop them too: call Items without the
+ * declaration are a rejection shape on the public endpoint.
+ */
+function pushPortableWebSearchCalls(message: VesicleMessage, input: unknown[], profile: ResponsesProfile | undefined, replayWebSearch: boolean): void {
+  if (!replayWebSearch || !supportsResponsesWebSearch(profile)) return;
+  for (const call of message.webSearch?.calls ?? []) {
+    if (!call || typeof call !== "object") continue;
+    input.push({ type: "web_search_call", id: call.id, status: call.status, action: call.action });
+  }
+}
+
 function nativeOutputItems(state: VesicleMessage["providerState"], model: string, context: RequestContext): ProviderStateJson[] | undefined {
   try {
     const envelope = parseProviderStateEnvelope(state);
@@ -264,7 +301,7 @@ function reasoningControl(
 ): Record<string, unknown> | undefined {
   if (!tier) return undefined;
   if (tier === "off") return { effort: "none" };
-  if (profile === "deepseek-subset-2026-07-31") {
+  if (isDeepSeekSubsetProfile(profile)) {
     switch (tier) {
       case "low": return { effort: "low" };
       case "medium":
@@ -296,11 +333,6 @@ function reasoningControl(
       });
   }
   return { effort, ...(summary ? { summary: "auto" } : {}) };
-}
-
-function isStatelessHttpSubset(profile: ResponsesProfile): boolean {
-  return profile === "mimo-subset-2026-07-30"
-    || profile === "deepseek-subset-2026-07-31";
 }
 
 function userContent(message: VesicleMessage): Array<Record<string, unknown>> {

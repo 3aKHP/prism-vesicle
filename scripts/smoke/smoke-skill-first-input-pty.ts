@@ -33,9 +33,10 @@
  *     expected mode, and (for the deferred paths) the follow-up user + assistant
  *     records actually land.
  *
- * Commands are typed the way smoke-workspace-status-pty.ts does (slash alone,
- * name char-by-char, Tab-complete, then the argument): a raw burst or a raw
- * space to dismiss the completion menu mis-parses under a `script` PTY.
+ * Commands are typed through both completion layers (slash alone, command
+ * name char-by-char, Tab-complete, Skill name char-by-char, Tab-complete, then
+ * any flag): Enter while the argument menu is still open selects its row but
+ * does not submit the command, and raw bursts mis-parse under a `script` PTY.
  *
  * Usage:
  *   bun run scripts/smoke/smoke-skill-first-input-pty.ts [width] [height]
@@ -140,7 +141,10 @@ async function startSession(target: LaunchTarget): Promise<PtySession> {
     },
   });
 
-  await writeFile(join(configDir, "providers.yaml"), providersYaml(server.port ?? 0), "utf8");
+  // Keep the named vesicle-docs fixture inside the catalog budget. The shared
+  // 8k model intentionally admits only the first compact Skill, which turns
+  // this acceptance into an "unknown skill" test before activation begins.
+  await writeFile(join(configDir, "providers.yaml"), providersYaml(server.port ?? 0, 200_000), "utf8");
   await writeFile(join(configDir, ".env"), MOCK_ENV, "utf8");
 
   const sharedDir = join(project, "assets", "prompts", "shared");
@@ -219,7 +223,18 @@ async function startSession(target: LaunchTarget): Promise<PtySession> {
     await rm(root, { recursive: true, force: true });
   };
 
-  await sleep(2800); // let the renderer + composer fully activate
+  // Reduced motion freezes the startup splash instead of removing it. Wait
+  // for both a real startup frame and the provider-ready composer footer,
+  // then dismiss any remaining host-owned splash explicitly so the slash below
+  // is the first composer input. A fixed delay races cold catalog/config loads.
+  if (!(await waitFor(/PRISM VESICLE|one beam in, the spectrum out/i, 10000))) {
+    throw new Error(`TUI did not reach its startup frame:\n${plain().slice(-800)}`);
+  }
+  if (!(await waitFor("Type prompt, Enter send", 15000))) {
+    throw new Error(`TUI did not reach its provider-ready composer:\n${plain().slice(-800)}`);
+  }
+  type("\x1b");
+  await sleep(350);
   return { type, sleep, typeSlow, submit, waitFor, waitForRecord, calls: () => calls, readRecords, plain, teardown };
 }
 
@@ -242,12 +257,17 @@ async function main(): Promise<void> {
       await s.typeSlow("skill"); await s.sleep(200);
       s.type("\t"); await s.sleep(200);
       await s.typeSlow("vesicle-docs"); await s.sleep(200);
+      s.type("\t"); await s.sleep(1000);
+      s.type("\r"); await s.sleep(1000);
       s.type("\r");
       await s.waitFor("reply 1");
       const records = await s.readRecords();
       const header = records[0];
       const activationIndex = records.findIndex((r) => r.metadata?.kind === "skill-activation");
       console.log(`\n===== ${name} =====\ncalls=${s.calls()} identityError=${s.plain().includes(IDENTITY_ERROR)} header.role=${header?.role} harness=${header?.metadata?.harness ? "present" : "MISSING"} activationIndex=${activationIndex} mode=${String(records[activationIndex]?.metadata?.mode ?? "MISSING")}`);
+      if (!s.plain().includes("reply 1") || activationIndex < 0) {
+        console.log(`render tail:\n${s.plain().slice(-1600)}`);
+      }
       check(name, !s.plain().includes(IDENTITY_ERROR), "Harness identity guard fired");
       check(name, s.plain().includes("reply 1"), "provider reply never rendered");
       check(name, s.calls() === 1, `expected exactly 1 provider request, got ${s.calls()}`);
@@ -268,7 +288,10 @@ async function main(): Promise<void> {
         s.type("/"); await s.sleep(150);
         await s.typeSlow("skill"); await s.sleep(200);
         s.type("\t"); await s.sleep(200);
-        await s.typeSlow("vesicle-docs --context-only"); await s.sleep(200);
+        await s.typeSlow("vesicle-docs"); await s.sleep(200);
+        s.type("\t"); await s.sleep(1000);
+        await s.typeSlow("--context-only"); await s.sleep(200);
+        s.type("\r"); await s.sleep(1000);
         s.type("\r");
       },
     },
@@ -300,6 +323,9 @@ async function main(): Promise<void> {
       const followUpUser = records.find((r) => r.role === "user" && r.metadata?.kind !== "skill-activation" && (r.content ?? "").includes(FOLLOW_UP_PROMPT));
       const assistant = records.find((r) => r.role === "assistant" && (r.content ?? "").includes("reply 1"));
       console.log(`\n===== ${scenario.name} =====\nactivated=${activated} callsBefore=${callsBefore} callsAfter=${s.calls()} identityError=${s.plain().includes(IDENTITY_ERROR)} header.role=${header?.role} harness=${header?.metadata?.harness ? "present" : "MISSING"} activationIndex=${activationIndex} mode=${String(records[activationIndex]?.metadata?.mode ?? "MISSING")} followUpUser=${Boolean(followUpUser)} assistant=${Boolean(assistant)}`);
+      if (!activated || activationIndex < 0) {
+        console.log(`render tail:\n${s.plain().slice(-1600)}`);
+      }
       check(scenario.name, activated, "activation record never persisted");
       check(scenario.name, !s.plain().includes(IDENTITY_ERROR), "Harness identity guard fired");
       check(scenario.name, callsBefore === 0, `context-only made ${callsBefore} provider request(s) before any prompt`);

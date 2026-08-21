@@ -1,6 +1,6 @@
 {
   "name": "prism-vesicle",
-  "version": "1.0.0-alpha.10",
+  "version": "1.0.0-beta.1",
   "description": "Open-source Agent Harness host and TUI for durable Prism Engine workflows.",
   "license": "MIT",
   "repository": {
@@ -42,8 +42,7 @@
     "bin/vesicle.mjs",
     "dist/npm/vesicle.mjs",
     "dist/npm/*.scm",
-    "dist/npm/*.wasm",
-    "patches/"
+    "dist/npm/*.wasm"
   ],
   "bin": {
     "vesicle": "./bin/vesicle.mjs"
@@ -67,11 +66,14 @@
     "test:contract": "bun test tests/contract",
     "test:deterministic": "bun test tests/unit tests/component tests/integration tests/contract",
     "test:acceptance:provider": "bun test ./tests/acceptance/provider/provider-connectivity.acceptance.ts ./tests/acceptance/provider/e2e-gate.acceptance.ts",
-    "test:acceptance:responses": "bun test ./tests/acceptance/provider/responses-http.acceptance.ts ./tests/acceptance/provider/openai-responses.acceptance.ts ./tests/acceptance/provider/openai-responses-codex-beta.acceptance.ts ./tests/acceptance/provider/mimo-responses.acceptance.ts ./tests/acceptance/provider/deepseek-responses.acceptance.ts",
+    "test:acceptance:gemini": "bun test ./tests/acceptance/provider/gemini-image-tool-result.acceptance.ts",
+    "test:acceptance:gemini:websearch": "bun test ./tests/acceptance/provider/gemini-builtin-web-search.acceptance.ts",
+    "test:acceptance:responses": "bun test ./tests/acceptance/provider/responses-http.acceptance.ts ./tests/acceptance/provider/openai-responses.acceptance.ts ./tests/acceptance/provider/openai-responses-codex-beta.acceptance.ts ./tests/acceptance/provider/mimo-responses.acceptance.ts ./tests/acceptance/provider/deepseek-responses.acceptance.ts ./tests/acceptance/provider/builtin-web-search.acceptance.ts",
     "test:acceptance:responses:openai": "bun test ./tests/acceptance/provider/openai-responses.acceptance.ts",
     "test:acceptance:responses:codex-beta": "bun test ./tests/acceptance/provider/openai-responses-codex-beta.acceptance.ts",
     "test:acceptance:responses:mimo": "bun test ./tests/acceptance/provider/mimo-responses.acceptance.ts",
     "test:acceptance:responses:deepseek": "bun test ./tests/acceptance/provider/deepseek-responses.acceptance.ts",
+    "test:acceptance:responses:websearch": "bun test ./tests/acceptance/provider/builtin-web-search.acceptance.ts",
     "test:acceptance:mcp": "bun test ./tests/acceptance/mcp/real-servers.test.ts",
     "prepack": "bun run build:npm",
     "build:npm": "bun run scripts/build/build-npm-package.ts",
@@ -84,20 +86,17 @@
     "build:installer": "bun run scripts/build/build-installer.ts"
   },
   "dependencies": {
+    "@3akhp/opentui-core": "0.5.3-zv6",
     "@modelcontextprotocol/client": "2.0.0",
-    "@opentui/core": "0.4.3",
     "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.4",
     "@eslint-community/regexpp": "4.12.2",
-    "@opentui/solid": "0.4.3",
+    "@3akhp/opentui-solid": "0.5.3-zv6",
     "@types/bun": "1.3.14",
     "diff": "9.0.0",
     "solid-js": "1.9.12",
     "typescript": "6.0.3"
-  },
-  "patchedDependencies": {
-    "@opentui/core@0.4.3": "patches/@opentui%2Fcore@0.4.3.patch"
   }
 }

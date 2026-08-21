@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { SyntaxStyle } from "@opentui/core";
+import { SyntaxStyle } from "@3akhp/opentui-core";
 
 /**
  * Theme mode: the TUI ships a dark (night) and a light (day) palette derived

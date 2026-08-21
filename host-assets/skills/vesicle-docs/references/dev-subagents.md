@@ -70,7 +70,7 @@ If delivery exhausts provider-level retries, Vesicle leaves the durable entries 
 
 ## Capability And Write Semantics
 
-SubAgents are trusted to perform the work assigned to their profiles. Tool scope is nevertheless deterministic: `*` inherits the parent's exact effective surface, while an explicit profile allowlist may select guarded Vesicle host tools even when the parent Engine does not expose them. MCP tools remain subject to their configured server and Engine scope. The installed profile is the authority; a task prompt cannot widen it.
+SubAgents are trusted to perform the work assigned to their profiles. Tool scope is nevertheless deterministic: `*` inherits the parent's exact effective surface, while an explicit profile allowlist may select guarded Vesicle host tools even when the parent Engine does not expose them. Provider-native built-in search inherits only when the parent Engine, protocol/profile, model capability, and session toggle all admit it; in that state the child does not also receive Tavily `web_search`. Its normalized search report persists in the child session like a main assistant response. MCP tools remain subject to their configured server and Engine scope. The installed profile is the authority; a task prompt cannot widen it.
 
 Profiles may be write-capable. Parallel writers should receive distinct artifact paths or isolated workspaces from their Harness workflow. The host must detect conflicting concurrent mutations rather than globally forcing children to be read-only. Parent Engine file tools participate in the same path ownership table while background children are active.
 

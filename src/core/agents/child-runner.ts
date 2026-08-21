@@ -48,6 +48,10 @@ export const runChildAgent: AgentRunner = async ({
         messages: providerMessages,
         tools: runtime.tools,
         generation: invocation.generation,
+        // SubAgents inherit the parent Engine's effective search surface.
+        ...(runtime.builtInSearchEnabled
+          ? { webSearch: true }
+          : {}),
         signal,
         // Surface transport retries through the same progress channel that drives
         // the parent activity log, so a 429/5xx backoff no longer looks like the

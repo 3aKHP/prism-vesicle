@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { useRenderer } from "@opentui/solid";
-import type { BoxRenderable, KeyBinding, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core";
+import { useRenderer } from "@3akhp/opentui-solid";
+import type { BoxRenderable, KeyBinding, ScrollBoxRenderable, TextareaRenderable } from "@3akhp/opentui-core";
 import { palette, paletteFor, themeMode } from "../theme";
 import { ThemedText } from "../theme-text";
 import { MarkdownContent } from "../widgets/MarkdownContent";

@@ -10,6 +10,61 @@ afterEach(() => {
 });
 
 describe("Gemini generateContent request shaping", () => {
+  test("declares googleSearch alongside function declarations and alone", () => {
+    const withFunctions = toGeminiGenerateContentBody({
+      ...request(),
+      webSearch: true,
+      tools: [{
+        type: "function",
+        function: {
+          name: "read_file",
+          description: "Read a file",
+          parameters: { type: "object", properties: {} },
+        },
+      }],
+    });
+    expect(withFunctions.tools).toEqual([
+      {
+        functionDeclarations: [{
+          name: "read_file",
+          description: "Read a file",
+          parameters: { type: "object", properties: {} },
+        }],
+      },
+      { googleSearch: {} },
+    ]);
+
+    const withoutFunctions = toGeminiGenerateContentBody({ ...request(), webSearch: true });
+    expect(withoutFunctions.tools).toEqual([{ googleSearch: {} }]);
+
+    const disabled = toGeminiGenerateContentBody(request());
+    expect(disabled.tools).toBeUndefined();
+  });
+
+  test("does not replay grounding metadata from a prior assistant response", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "Grounded answer.",
+          webSearch: {
+            provider: "google",
+            queries: ["prior query"],
+            citations: [{ url: "https://example.com/prior", title: "Prior" }],
+          },
+        },
+        { role: "user", content: "Follow up." },
+      ],
+    });
+
+    expect(body.contents).toEqual([
+      { role: "model", parts: [{ text: "Grounded answer." }] },
+      { role: "user", parts: [{ text: "Follow up." }] },
+    ]);
+    expect(JSON.stringify(body.contents)).not.toContain("groundingMetadata");
+  });
+
   test("does not expose a provider-native checkpoint marker to Gemini", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
@@ -40,7 +95,7 @@ describe("Gemini generateContent request shaping", () => {
     }]);
   });
 
-  test("serializes MCP tool-result images after the function response", () => {
+  test("serializes MCP tool-result images as a separate user Content after the function response", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
       messages: [
@@ -52,21 +107,156 @@ describe("Gemini generateContent request shaping", () => {
         { role: "tool", toolCallId: "call_mcp", content: "artwork", images: [mcpImage()] },
       ],
     });
-    expect((body.contents as unknown[])[1]).toEqual({
-      role: "user",
-      parts: [
-        {
-          functionResponse: {
-            id: "call_mcp",
-            name: "mcp_prts_operator_artwork",
-            response: { content: "artwork" },
+    expect(body.contents).toEqual([
+      { role: "model", parts: [{ functionCall: { id: "call_mcp", name: "mcp_prts_operator_artwork", args: {} } }] },
+      {
+        role: "user",
+        parts: [
+          {
+            functionResponse: {
+              id: "call_mcp",
+              name: "mcp_prts_operator_artwork",
+              response: { content: "artwork" },
+            },
           },
+        ],
+      },
+      {
+        role: "user",
+        parts: [
+          { text: "[Image #1: prts-operator_artwork-image-1.png]" },
+          { inlineData: { mimeType: "image/png", data: "cG5n" } },
+        ],
+      },
+    ]);
+  });
+
+  test("never mixes functionResponse parts with ordinary multimodal parts in one user Content", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "inspect the artwork" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_text", name: "read_file", arguments: "{\"path\":\"workspace/a.md\"}" },
+            { id: "call_mcp", name: "mcp_prts_operator_artwork", arguments: "{}" },
+          ],
         },
-        { text: "[Image #1: prts-operator_artwork-image-1.png]" },
-        { inlineData: { mimeType: "image/png", data: "cG5n" } },
+        { role: "tool", toolCallId: "call_text", content: "{\"ok\":true}" },
+        { role: "tool", toolCallId: "call_mcp", content: "artwork", images: [mcpImage()] },
+        { role: "user", content: "[gate:phase resolved as confirm]" },
       ],
     });
+    expect(body.contents).toEqual([
+      { role: "user", parts: [{ text: "inspect the artwork" }] },
+      {
+        role: "model",
+        parts: [
+          { functionCall: { id: "call_text", name: "read_file", args: { path: "workspace/a.md" } } },
+          { functionCall: { id: "call_mcp", name: "mcp_prts_operator_artwork", args: {} } },
+        ],
+      },
+      {
+        role: "user",
+        parts: [
+          { functionResponse: { id: "call_text", name: "read_file", response: { content: "{\"ok\":true}" } } },
+          { functionResponse: { id: "call_mcp", name: "mcp_prts_operator_artwork", response: { content: "artwork" } } },
+        ],
+      },
+      {
+        role: "user",
+        parts: [
+          { text: "[Image #1: prts-operator_artwork-image-1.png]" },
+          { inlineData: { mimeType: "image/png", data: "cG5n" } },
+        ],
+      },
+      { role: "user", parts: [{ text: "[gate:phase resolved as confirm]" }] },
+    ]);
+    const userContents = (body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>)
+      .filter((content) => content.role === "user");
+    for (const content of userContents) {
+      const functionResponses = content.parts.filter((part) => "functionResponse" in part);
+      const ordinary = content.parts.filter((part) => "text" in part || "inlineData" in part);
+      expect(functionResponses.length === 0 || ordinary.length === 0)
+        .toBe(true);
+    }
   });
+
+  test("keeps the parallel response batch ahead of tool-result images", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_image", name: "view_image", arguments: "{}" },
+            { id: "call_text", name: "read_file", arguments: "{}" },
+          ],
+        },
+        { role: "tool", toolCallId: "call_image", content: "image result", images: [mcpImage()] },
+        { role: "tool", toolCallId: "call_text", content: "text result" },
+      ],
+    });
+    const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    expect(contents[1]?.parts.map((part) => (part.functionResponse as { id?: string })?.id))
+      .toEqual(["call_image", "call_text"]);
+    expect(contents[2]?.parts.some((part) => "inlineData" in part)).toBe(true);
+  });
+
+  test("preserves each parallel tool image Content order after the response batch", () => {
+    const first = { ...mcpImage(), id: "img_first", filename: "first.png", data: "Zmlyc3Q=" };
+    const second = { ...mcpImage(), id: "img_second", filename: "second.png", data: "c2Vjb25k" };
+    const third = { ...mcpImage(), id: "img_third", filename: "third.png", data: "dGhpcmQ=" };
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_first", name: "view_image", arguments: "{}" },
+            { id: "call_second", name: "view_image", arguments: "{}" },
+          ],
+        },
+        { role: "tool", toolCallId: "call_first", content: "first", images: [first, second] },
+        { role: "tool", toolCallId: "call_second", content: "second", images: [third] },
+      ],
+    });
+    const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    expect(contents[1]?.parts.map((part) => (part.functionResponse as { id?: string })?.id))
+      .toEqual(["call_first", "call_second"]);
+    expect(contents.slice(2).map((content) => content.parts[0]?.text))
+      .toEqual(["[Image #1: first.png]", "[Image #1: third.png]"]);
+    expect(contents[2]?.parts.map((part) => (part.inlineData as { data?: string })?.data))
+      .toEqual([undefined, "Zmlyc3Q=", undefined, "c2Vjb25k"]);
+    expect(contents[3]?.parts.map((part) => (part.inlineData as { data?: string })?.data))
+      .toEqual([undefined, "dGhpcmQ="]);
+  });
+
+  test("batches every parallel function response for one Gemini function-call turn", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_a", name: "list_directory", arguments: "{}" },
+            { id: "call_b", name: "read_file", arguments: "{}" },
+          ],
+        },
+        { role: "tool", toolCallId: "call_a", content: "a" },
+        { role: "tool", toolCallId: "call_b", content: "b" },
+      ],
+    });
+    const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    expect(contents[1]?.parts.map((part) => (part.functionResponse as { id?: string })?.id))
+      .toEqual(["call_a", "call_b"]);
+  });
+
   test("serializes system, messages, tools, tool results, and thinking config", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
@@ -151,9 +341,9 @@ describe("Gemini generateContent request shaping", () => {
               response: { content: "{\"ok\":true}" },
             },
           },
-          { text: "[gate:phase resolved as confirm]" },
         ],
       },
+      { role: "user", parts: [{ text: "[gate:phase resolved as confirm]" }] },
     ]);
     expect(body.tools).toEqual([{
       functionDeclarations: [{
@@ -210,6 +400,86 @@ describe("Gemini generateContent request shaping", () => {
 });
 
 describe("Gemini generateContent adapter", () => {
+  test("normalizes Gemini grounding metadata into a web-search report", async () => {
+    globalThis.fetch = (async () => Response.json({
+      candidates: [{
+        content: { parts: [{ text: "Grounded answer." }] },
+        groundingMetadata: {
+          webSearchQueries: ["Gemini built-in search", ""],
+          webSupportQueries: ["Gemini built-in search", "release notes"],
+          groundingChunks: [
+            { web: { uri: "https://example.com/search", title: "Search" } },
+            { web: { uri: "https://example.com/incomplete" } },
+          ],
+        },
+      }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    await expect(adapter.complete(request())).resolves.toMatchObject({
+      webSearch: {
+        provider: "google",
+        queries: ["Gemini built-in search", "release notes"],
+        citations: [{ url: "https://example.com/search", title: "Search" }],
+      },
+    });
+  });
+
+  test("omits a grounding report without a non-empty query", async () => {
+    globalThis.fetch = (async () => Response.json({
+      candidates: [{
+        content: { parts: [{ text: "Answer without auditable query." }] },
+        groundingMetadata: {
+          webSearchQueries: ["", 42],
+          webSupportQueries: [],
+          groundingChunks: [{ web: { uri: "https://example.com", title: "Example" } }],
+        },
+      }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const response = await adapter.complete(request());
+    expect(response.webSearch).toBeUndefined();
+  });
+
+  test("ignores malformed grounding metadata containers", async () => {
+    globalThis.fetch = (async () => Response.json({
+      candidates: [{
+        content: { parts: [{ text: "Answer without usable grounding." }] },
+        groundingMetadata: {
+          webSearchQueries: { query: "not an array" },
+          webSupportQueries: "also not an array",
+          groundingChunks: { web: { uri: "https://example.com", title: "Example" } },
+        },
+      }],
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const response = await adapter.complete(request());
+    expect(response.webSearch).toBeUndefined();
+  });
+
   test("parses text, thought parts, tool calls, signatures, and usage", async () => {
     globalThis.fetch = (async (input: unknown, init: RequestInit & { body?: unknown }) => {
       expect(String(input)).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent");
@@ -478,6 +748,36 @@ describe("Gemini generateContent adapter", () => {
     expect(events.at(-1)).toMatchObject({
       type: "complete",
       response: { content: "hello world" },
+    });
+  });
+
+  test("uses the last streamed grounding metadata", async () => {
+    globalThis.fetch = (async () => new Response(sseFromBlocks([
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Grounded"}]},"groundingMetadata":{"webSearchQueries":["stale query"]}}]}',
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":" answer"}]},"finishReason":"STOP","groundingMetadata":{"webSupportQueries":["fresh query"],"groundingChunks":[{"web":{"uri":"https://example.com/fresh","title":"Fresh"}}]}}]}',
+    ]), {
+      headers: { "content-type": "text/event-stream" },
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        content: "Grounded answer",
+        webSearch: {
+          provider: "google",
+          queries: ["fresh query"],
+          citations: [{ url: "https://example.com/fresh", title: "Fresh" }],
+        },
+      },
     });
   });
 

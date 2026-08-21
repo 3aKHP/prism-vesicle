@@ -1,6 +1,7 @@
 import type { ResumedMessage } from "./store";
 import type { ProviderStateEnvelope } from "../../providers/shared/state";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
+import { parseReplayableWebSearch } from "./web-search-report";
 
 /**
  * The durable, versioned replacement-history checkpoint installed by every
@@ -66,6 +67,7 @@ const MESSAGE_KEYS = new Set([
   "thinkingBlocks",
   "toolCallId",
   "toolCalls",
+  "webSearch",
   "providerState",
   "toolOk",
   "toolFileEvent",
@@ -88,6 +90,7 @@ const MESSAGE_KEYS_BY_ROLE: Record<ResumedMessage["role"], Set<string>> = {
     "reasoningContent",
     "thinkingBlocks",
     "toolCalls",
+    "webSearch",
     "providerState",
     "engine",
     "model",
@@ -267,6 +270,11 @@ function parseReplacementMessage(entry: unknown, index: number): ResumedMessage 
   copyOptionalBoolean(entry, message as unknown as Record<string, unknown>, "toolOk", label);
 
   if (Object.hasOwn(entry, "toolCalls")) message.toolCalls = parseToolCalls(entry.toolCalls, label);
+  if (Object.hasOwn(entry, "webSearch")) {
+    const webSearch = parseReplayableWebSearch(entry.webSearch);
+    if (!webSearch) throw new Error(`Session compact checkpoint ${label}.webSearch is malformed.`);
+    message.webSearch = webSearch;
+  }
   if (Object.hasOwn(entry, "providerState")) {
     message.providerState = parseProviderStateEnvelope(entry.providerState, `Session compact checkpoint ${label}.providerState`);
   }

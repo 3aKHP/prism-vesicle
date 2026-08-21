@@ -94,6 +94,26 @@ Ctrl+R 以同一句 prompt 把最近一回合**整个重跑一遍**,产出一条
 
 可选地附上说明,例如 `/compact 重点保留角色卡的拓扑决策`。压缩会通过当前模型生成摘要,然后从摘要接着聊;原文仍留在会话记录里。
 
+成功时转录显示 `Conversation compacted into a summary`,状态行显示压缩了多少条消息。`/context` 随后会显示较低的当前上下文占用和 checkpoint 信息。压缩是一条真实供应商请求;若供应商失败或你按 Esc 取消,旧上下文和输入草稿仍在,不会安装一半的 checkpoint。修复连接后重试,或先切换可用模型。
+
+### 可选的自动压缩
+
+自动压缩**默认关闭**,必须在当前模型的 `providers.yaml` 条目里同时声明有效的 `limits.contextWindow` 与 `limits.autoCompact`,例如:
+
+```yaml
+limits:
+  contextWindow: 128000
+  maxOutputTokens: 8192
+  autoCompact:
+    enabled: true
+    threshold: 0.85
+    reserveOutputTokens: 8192
+```
+
+启用后,Vesicle 在新顶层输入前和长工具循环的安全边界检查“下一次完整请求”是否越过软阈值;排队输入、后台完成通知和工具 schema 都计入。触发时状态会经过 compacting,完成后显示 `compacted <N> units`。`/context` 会列出 active/inactive、软阈值、硬上限和输出预留来源,它是确认配置真的生效的入口。
+
+自动压缩失败时,软阈值情形会给出可见警告并允许当前请求继续;只有预测输入**严格超过**硬上限时,本次发送才会被阻止并保留草稿(正好等于上限仍可发送)。此时先运行 `/context`,再手工 `/compact`、切换更大上下文模型或减少输入。未决的门、Engine 切换、问题、权限或质量决策会让压缩延后,先处理底部面板即可。完整字段见[配置文件](../reference/configuration.md)。
+
 切引擎时也能顺手压缩:`/engine <id> --summary`。
 
 ## 退出与中断
@@ -107,6 +127,7 @@ Ctrl+R 以同一句 prompt 把最近一回合**整个重跑一遍**,产出一条
 - [ ] 你用 `/resume` 恢复过一个旧会话。
 - [ ] 你知道 `vesicle --resume .` 可以在启动时直接打开会话选择器。
 - [ ] 你用 `/rewind` 回退到某一步并重新发了一条 prompt。
+- [ ] 你用 `/context` 看过压缩状态,并知道自动压缩默认关闭。
 - [ ] 你知道 `.vesicle/sessions/` 和 `.vesicle/file-history/` 各存什么。
 
 下一篇:[为项目建立持久化指令](./persistent-instructions.md)。

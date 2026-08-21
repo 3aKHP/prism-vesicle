@@ -14,6 +14,7 @@ import { createQualityCommands } from "./quality";
 import { createSkillCommands } from "./skills";
 import { createWorkspaceCommands } from "./workspace";
 import { createThemeCommands } from "./theme";
+import { createWebSearchCommands } from "./websearch";
 import { createAgentsCommands } from "./agents";
 import { createPermissionsCommands } from "./permissions";
 import { createHelpCommands } from "./help";
@@ -27,6 +28,7 @@ export function createBuiltinCommands(contexts: BuiltinCommandContexts): Command
     ...createSkillCommands(contexts.skills),
     ...createWorkspaceCommands(contexts.workspace),
     ...createThemeCommands(contexts.theme),
+    ...createWebSearchCommands(contexts.webSearch),
     ...createAgentsCommands(contexts.agents),
     ...createPermissionsCommands(contexts.permissions),
     ...createHelpCommands(contexts.help),

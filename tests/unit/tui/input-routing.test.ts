@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { InternalKeyHandler, KeyEvent } from "@opentui/core";
+import { InternalKeyHandler, KeyEvent } from "@3akhp/opentui-core";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

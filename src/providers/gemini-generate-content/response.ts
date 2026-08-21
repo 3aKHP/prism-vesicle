@@ -2,8 +2,8 @@ import type { ToolCall } from "../../core/tools";
 import { ProviderError } from "../shared/errors";
 import { displayTextFromThinkingBlocks } from "../shared/thinking";
 import { normalizeResponseUsage } from "../shared/usage";
-import type { ProviderThinkingBlock, VesicleResponse } from "../shared/types";
-import type { GeminiPart, GeminiResponse } from "./types";
+import type { ProviderThinkingBlock, VesicleResponse, WebSearchCitation, WebSearchReport } from "../shared/types";
+import type { GeminiGroundingMetadata, GeminiPart, GeminiResponse } from "./types";
 
 export function responseFromGeminiBody(
   body: GeminiResponse | undefined,
@@ -15,6 +15,7 @@ export function responseFromGeminiBody(
     parts: candidate?.content?.parts ?? [],
     finishReason: candidate?.finishReason,
     usage: body?.usageMetadata,
+    groundingMetadata: candidate?.groundingMetadata,
     fallbackId,
     raw: body,
     providerId,
@@ -25,6 +26,7 @@ export function responseFromGeminiParts(args: {
   parts: GeminiPart[];
   finishReason?: string;
   usage?: GeminiResponse["usageMetadata"];
+  groundingMetadata?: GeminiGroundingMetadata;
   fallbackId: string;
   raw?: unknown;
   providerId?: string;
@@ -57,6 +59,7 @@ export function responseFromGeminiParts(args: {
   }
 
   const content = textParts.join("");
+  const webSearch = webSearchReport(args.groundingMetadata, args.providerId);
   const reasoningContent = displayTextFromThinkingBlocks(thinkingBlocks);
   if (!content && toolCalls.length === 0) {
     throw new ProviderError("Provider response did not include assistant content or tool calls.", {
@@ -71,9 +74,41 @@ export function responseFromGeminiParts(args: {
     ...(reasoningContent ? { reasoningContent } : {}),
     ...(thinkingBlocks.length > 0 ? { thinkingBlocks } : {}),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    ...(webSearch ? { webSearch } : {}),
     finishReason: args.finishReason,
     raw: args.raw,
     usage: usageFromGeminiMetadata(args.usage),
+  };
+}
+
+/**
+ * Gemini returns grounding on the candidate rather than as a tool-call part.
+ * Queries are the durable audit floor, so malformed or empty query metadata
+ * produces no report even when citations are present.
+ */
+function webSearchReport(
+  groundingMetadata: GeminiGroundingMetadata | undefined,
+  providerId: string | undefined,
+): WebSearchReport | undefined {
+  if (!groundingMetadata || !providerId) return undefined;
+  const queries = new Set<string>();
+  for (const field of [groundingMetadata.webSearchQueries, groundingMetadata.webSupportQueries]) {
+    if (!Array.isArray(field)) continue;
+    for (const query of field) {
+      if (typeof query === "string" && query) queries.add(query);
+    }
+  }
+  if (queries.size === 0) return undefined;
+  const chunks = groundingMetadata.groundingChunks;
+  const citations = (Array.isArray(chunks) ? chunks : []).flatMap((chunk): WebSearchCitation[] => {
+    const web = chunk.web;
+    if (typeof web?.uri !== "string" || !web.uri || typeof web.title !== "string" || !web.title) return [];
+    return [{ url: web.uri, title: web.title }];
+  });
+  return {
+    provider: providerId,
+    queries: [...queries],
+    ...(citations.length > 0 ? { citations } : {}),
   };
 }
 

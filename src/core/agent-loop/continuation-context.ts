@@ -23,7 +23,7 @@ import { createAssetResolver } from "../runtime/assets";
 import { mergeGeneration } from "./generation";
 import type { AgentLoopEvent, PendingUserInput } from "./types";
 import type { SideQuestionContextSnapshot } from "../side-question/types";
-import { resolveToolSurface } from "./tool-surface";
+import { resolveToolSurface, resolveWebSearchSurfaceOptions } from "./tool-surface";
 import {
   catalogNames,
   composeSkillCatalogBlock,
@@ -129,6 +129,7 @@ export async function loadContinuationContext(
       ? { outputPersistence: { sessionId: options.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate }, signal: options.signal }
       : { signal: options.signal },
     { catalogNames: catalogNames(skillCatalog) },
+    await resolveWebSearchSurfaceOptions(config, options.sessionId, profile),
   );
   if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {
     systemPrompt = appendHostContext(systemPrompt, composeMcpOutputPersistenceHint(options.sessionId));

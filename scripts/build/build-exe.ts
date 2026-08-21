@@ -1,5 +1,5 @@
-import solidPlugin from "@opentui/solid/bun-plugin";
-import { mkdir, rename, unlink } from "node:fs/promises";
+import solidPlugin from "@3akhp/opentui-solid/bun-plugin";
+import { mkdir, rm, rename, unlink } from "node:fs/promises";
 
 // Bun 1.3's JS build API ignores `outfile` for compiled executables and emits
 // the entry basename with a target-appropriate extension (`.exe` for Windows
@@ -10,10 +10,10 @@ import { mkdir, rename, unlink } from "node:fs/promises";
 //   - windows: cross-compiled PE (the dogfood `.exe` shipped to Windows users)
 //   - linux:   host-native ELF (self-dogfood on the dev machine)
 //
-// Cross-compiling to Windows needs the `@opentui/core-win32-x64` native package
+// Cross-compiling to Windows needs the `@3akhp/opentui-core-win32-x64` native package
 // present so the bundler can resolve OpenTUI's platform-conditional import.
 // Bun's installer skips os-gated natives on a Linux host, so we fetch that one
-// package on demand, version-matched to the installed `@opentui/core`.
+// package on demand, version-matched to the installed `@3akhp/opentui-core`.
 //
 // Usage:
 //   bun run build:exe           # both PE and ELF
@@ -27,7 +27,7 @@ const TARGETS: Record<string, Target> = {
   linux: { id: "bun-linux-x64", artifact: "prism-vesicle", emitted: "main" },
 };
 
-const WIN32_NATIVE_DIR = "node_modules/@opentui/core-win32-x64";
+const WIN32_NATIVE_DIR = "node_modules/@3akhp/opentui-core-win32-x64";
 const WIN32_NATIVE_MARKER = `${WIN32_NATIVE_DIR}/opentui.dll`;
 
 // Bun standalone Workers must be explicit compile entrypoints. Keep this wrapper
@@ -45,21 +45,34 @@ export function treeSitterWorkerPathForTarget(targetId: string): string {
 }
 
 async function readInstalledCoreVersion(): Promise<string> {
-  const pkg = await Bun.file("node_modules/@opentui/core/package.json").json();
+  const pkg = await Bun.file("node_modules/@3akhp/opentui-core/package.json").json();
   if (!pkg.version) {
-    throw new Error("Could not read @opentui/core version from node_modules.");
+    throw new Error("Could not read @3akhp/opentui-core version from node_modules.");
   }
   return pkg.version as string;
 }
 
+async function readFetchedWin32Version(): Promise<string | undefined> {
+  try {
+    const pkg = await Bun.file(`${WIN32_NATIVE_DIR}/package.json`).json();
+    return typeof pkg.version === "string" ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function ensureWin32Native(version: string): Promise<void> {
-  if (await Bun.file(WIN32_NATIVE_MARKER).exists()) return;
+  // Bun's installer never manages this os-gated directory on a Linux host,
+  // so a previously fetched copy survives dependency version bumps; refetch
+  // whenever the marker or the fetched version disagrees with the core.
+  if ((await readFetchedWin32Version()) === version && (await Bun.file(WIN32_NATIVE_MARKER).exists())) return;
+  await rm(WIN32_NATIVE_DIR, { recursive: true, force: true });
 
   console.log(
-    `Fetching @opentui/core-win32-x64@${version} (Bun's installer skips os-gated natives on Linux)...`,
+    `Fetching @3akhp/opentui-core-win32-x64@${version} (Bun's installer skips os-gated natives on Linux)...`,
   );
   const pack = Bun.spawn(
-    ["npm", "pack", `@opentui/core-win32-x64@${version}`, "--pack-destination", "."],
+    ["npm", "pack", `@3akhp/opentui-core-win32-x64@${version}`, "--pack-destination", "."],
     { stdout: "pipe", stderr: "inherit" },
   );
   const out = (await new Response(pack.stdout).text()).trim();

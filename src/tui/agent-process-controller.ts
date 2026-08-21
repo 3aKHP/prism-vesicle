@@ -200,6 +200,22 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
     options.setStreamingAssistant("");
     options.setStreamingReasoning("");
     if (event.usage) options.recordResponseUsage(event.usage);
+    if (event.webSearch) {
+      const report = event.webSearch;
+      const queryCount = report.queries.length;
+      const citationCount = report.citations?.length ?? 0;
+      recordActivity({
+        kind: "system",
+        text: `built-in web search: ${queryCount} quer${queryCount === 1 ? "y" : "ies"}${citationCount > 0 ? `, ${citationCount} citation${citationCount === 1 ? "" : "s"}` : ""}`,
+      });
+      options.setMessages((previous) => [...previous, {
+        role: "system",
+        content: `Built-in web search (${report.provider}): ${report.queries.map((query) => `"${query}"`).join(", ")}`
+          + (citationCount > 0
+            ? ` — ${citationCount} cited source${citationCount === 1 ? "" : "s"}`
+            : " — results were injected server-side and not returned to the client"),
+      }]);
+    }
     if (event.toolCalls.length > 0) {
       const reasoningText = displayTextFromThinkingBlocks(event.thinkingBlocks) ?? event.reasoningContent;
       if (reasoningText) appendReasoningMessage(reasoningText);

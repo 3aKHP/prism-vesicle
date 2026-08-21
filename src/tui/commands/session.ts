@@ -64,6 +64,7 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
       async run(_args, raw) {
         ctx.resetRewindState();
         ctx.theme.clearOverride();
+        ctx.webSearch.clearOverride();
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
         const resetStage = ctx.activeEngine() === "stage";
         if (resetStage) ctx.setActiveEngine("etl");

@@ -14,6 +14,7 @@ import type { ResumedToolCall, SessionRecord } from "./record-model";
 import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
 import { replayableToolArguments } from "../tools/arguments";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
+import { parseReplayableWebSearch } from "./web-search-report";
 
 export type HistoryProjection = {
   messages: ResumedMessage[];
@@ -152,6 +153,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
 
     if (record.role === "assistant") {
       const toolCalls = readReplayableToolCalls(record.metadata?.toolCalls);
+      const webSearch = parseReplayableWebSearch(record.metadata?.webSearch);
       const reasoningContent = record.metadata?.reasoningContent as string | undefined;
       const thinkingBlocks = readThinkingBlocks(record.metadata?.thinkingBlocks);
       const messageEngine = readEngineId(record.metadata?.engine);
@@ -161,7 +163,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         ? parseProviderStateEnvelope(record.metadata.providerState, `Session assistant record ${record.uuid} provider state`)
         : undefined;
       const kind = typeof record.metadata?.kind === "string" ? record.metadata.kind : undefined;
-      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(providerState ? { providerState } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
+      messages.push({ recordUuid: record.uuid, role: "assistant", content: record.content, ...(messageEngine ? { engine: messageEngine } : {}), ...(messageModel ? { model: messageModel } : {}), ...(reasoningContent ? { reasoningContent } : {}), ...(thinkingBlocks ? { thinkingBlocks } : {}), ...(toolCalls ? { toolCalls } : {}), ...(webSearch ? { webSearch } : {}), ...(providerState ? { providerState } : {}), ...(usage ? { usage } : {}), ...(kind ? { kind } : {}) });
       continue;
     }
 

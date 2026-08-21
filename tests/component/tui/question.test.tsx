@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { QuestionPrompt, optionLine, questionComposerIsActive, questionPanelMinHeight } from "../../../src/tui/QuestionPrompt";
 import { resolveTuiLayout } from "../../../src/tui/layout";
 

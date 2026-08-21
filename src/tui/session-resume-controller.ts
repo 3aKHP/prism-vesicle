@@ -91,12 +91,15 @@ export type SessionResumeControllerOptions = InteractionState & {
   clearQueuedInputs: () => void;
   /** Clear a temporary `/theme` session override when activating another session. */
   clearThemeOverride?: () => void;
+  /** Clear a temporary `/websearch` session override when activating another session. */
+  clearWebSearchOverride?: () => void;
   onSessionActive?: (sessionId: string) => void;
 };
 
 export function createSessionResumeController(options: SessionResumeControllerOptions) {
   async function resumeSession(target: SessionSummary, commandEcho?: string): Promise<void> {
     options.clearThemeOverride?.();
+    options.clearWebSearchOverride?.();
     options.setRestoringSession(true);
     try {
       if (!options.permissionSettingsReady()) await options.loadPermissionSettings();

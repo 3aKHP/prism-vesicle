@@ -34,6 +34,35 @@ vesicle skills uninstall <name>
 vesicle skills copy-template <skill> <resource-path> <dest-path>
 ```
 
+Start with `list`, then `inspect <name>` to see the effective scope, resources, and source. Successful `list` output marks scope, disabled, and shadowed state. For an installed Skill, `inspect` also reports source, resolved commit, and bundle hash.
+
+### Create your own Skill
+
+```bash
+vesicle skills create my-workflow --scope project
+```
+
+`--scope project` writes under the current project's `.agents/skills/`. Omitting it defaults to the user Skill directory, visible across projects. Success prints the created path and the next `validate` command. An existing target is refused by default. `--force` first backs up the old directory and reports that backup path; do not use it before inspecting the old content.
+
+### Install from a directory or GitHub
+
+```text
+vesicle skills install <local-directory-or-GitHub-URL>
+vesicle skills install <GitHub-URL> --ref <tag-or-commit> --path <skill-root-in-repo>
+vesicle skills install <GitHub-URL> --ref <tag-or-commit> --all
+```
+
+- Install a single Skill root directly. For a repository containing several Skills, use `--path` to choose one or explicitly use `--all` for every discovered Skill.
+- `--ref` resolves a GitHub source to an immutable commit and records it. Give an explicit tag/commit when you depend on a stable version.
+- A local Git source rejects uncommitted changes by default. Use `--include-worktree` only after inspection when you deliberately want uncommitted changes to **Git-tracked files** in the snapshot. Untracked and ignored files are always excluded; review and commit them first if they are required.
+- Success reports `Installed <name> <version> [<source kind>] ...` for each item and a final count. Run `vesicle skills inspect <name>` to verify provenance, then start a new session.
+
+Lifecycle success reports `Updated old -> new`, `Rolled back ... to <version>`, or `Uninstalled ...`. If an update behaves incorrectly, use `rollback` first. Uninstall removes only an installed Store entry; it does not delete project, user, Harness, or host Skills with the same name. A missing prior snapshot, non-updatable source, or unknown target fails explicitly; do not treat stderr as success.
+
+`copy-template` copies one Skill resource only into an approved current-project content root: `source_materials/`, `workspace/`, `novels/`, `reports/`, or `test_runs/`. Absolute paths, `..`, and `tmp/` destinations are rejected. Success reports `Copied <skill>/<resource> -> <path>`.
+
+See [Terminal command reference](../reference/cli-commands.md) for complete syntax and failure handling. For a first documentation lookup or delegated task, follow [Skills and SubAgents](../tutorials/skills-and-subagents.md).
+
 ## `/skill` TUI command
 
 - `/skill` — opens a picker showing available Skills with their scope.

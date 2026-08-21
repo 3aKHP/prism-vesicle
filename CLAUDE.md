@@ -27,6 +27,8 @@ Also read:
 
 For architecture, provider, TUI, session, or command-UX changes, first check whether the documented reference projects already solved a similar problem. The tracked `docs/dev/` tree contains self-contained public developer contracts; ignored local notes under `dev/docs/` are subordinate working context and may describe private reference locations. When the local tree is present, use `dev/docs/README.md` for its document routes and start reference-project research from the directly indexed `dev/docs/REFERENCE_PROJECTS.md`. This collaborator-navigation exception does not make a public contract depend on local notes. Treat archived plans as historical context, and never copy local absolute paths or machine-private details into public docs.
 
+After changing `README.md` or any page under `docs/user/`, `docs/dev/`, or `docs/examples/`, run `bun run skills:docs:sync` and include the regenerated `host-assets/skills/vesicle-docs/references/` files in the same change. The pre-commit hook and CI enforce this with the bundled-skill-references contract test.
+
 ## High-Risk Boundaries
 
 - Prefer proven reference-project patterns over needless reinvention, while preserving Vesicle's Prism-host product boundary.

@@ -1,7 +1,7 @@
 import { ThemedText } from "./theme-text";
 import { For } from "solid-js";
-import { TextAttributes } from "@opentui/core";
-import { useRenderer } from "@opentui/solid";
+import { TextAttributes } from "@3akhp/opentui-core";
+import { useRenderer } from "@3akhp/opentui-solid";
 import type { GateRequest, GateResolution } from "../core/gate/types";
 import { displayWidth } from "./format";
 import { palette } from "./theme";

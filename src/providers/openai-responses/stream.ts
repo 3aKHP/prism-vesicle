@@ -4,6 +4,7 @@ import { readSseEvents } from "../shared/sse";
 import type { ProviderStreamEvent } from "../shared/types";
 import type { ResponsesProfile } from "../../config/env";
 import { responseFromResponsesBody } from "./response";
+import { isReasoningTextProfile, supportsResponsesWebSearch } from "./profiles";
 import type { ResponsesBody, ResponsesEvent, ResponsesOutputItem } from "./types";
 
 type StreamContext = {
@@ -191,12 +192,10 @@ function isKnownAdditiveEvent(type: string, profile: ResponsesProfile | undefine
     || (!isReasoningTextProfile(profile) && (type === "response.reasoning_summary_part.added"
       || type === "response.reasoning_summary_part.done" || type === "response.reasoning_summary_text.done"))
     || (isReasoningTextProfile(profile) && type === "response.reasoning_text.done")
-    || type === "response.function_call_arguments.done";
-}
-
-function isReasoningTextProfile(profile: ResponsesProfile | undefined): boolean {
-  return profile === "mimo-subset-2026-07-30"
-    || profile === "deepseek-subset-2026-07-31";
+    || type === "response.function_call_arguments.done"
+    || (supportsResponsesWebSearch(profile) && (type === "response.web_search_call.in_progress"
+      || type === "response.web_search_call.searching"
+      || type === "response.web_search_call.completed"));
 }
 
 function isFatalResponseFailure(code: string | undefined): boolean {

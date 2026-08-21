@@ -74,7 +74,8 @@ providers:
 - `apiKeyEnv`:**只填环境变量名**;真正的密钥放在 `.env`。`providers.yaml` 本身不含密钥。
 - `authMethod`:Anthropic 或 MiMo Responses 可用 `x-api-key`,Gemini 用 `x-goog-api-key`;不填时 OpenAI 系协议使用 Bearer token。
 - `userAgent`(可选):只替换该供应商的 User-Agent,其它指纹与鉴权头不变。
-- 模型条目可以是字符串简写,也可以是对象,带 `generation`(`temperature`/`maxTokens`)、`capabilities`(`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`)、`limits`(`contextWindow`/`maxOutputTokens`/`autoCompact`)。
+- 模型条目可以是字符串简写,也可以是对象,带 `generation`(`temperature`/`maxTokens`)、`capabilities`(`streaming`/`tools`/`vision`/`reasoningTier`/`reasoningContent`/`builtinWebSearch`)、`limits`(`contextWindow`/`maxOutputTokens`/`autoCompact`),以及可选的顶层 `webSearchDefault`。
+- `capabilities.builtinWebSearch: true` 声明该模型支持供应商原生内置联网搜索;`webSearchDefault: true` 让新会话默认开启(缺省关闭)。偏好不会让未声明能力的模型生效;当前协议/profile 和 Engine 的声明工具面也必须准许搜索(内置 profile 中为 ETL 与 Evaluate)。会话内用 `/websearch on|off` 临时覆盖,`/new` 或恢复会话后回到默认;不支持的组合会被拒绝而不会显示虚假的开启状态。开启后搜索在供应商侧执行、查询词随请求外发且无逐次审批,详见隐私政策;启用期间主机侧 `web_search`(Tavily)工具会从工具面移除以避免双路搜索。受支持的 Gemini `generateContent` 模型会将原生 Google Search 与任意函数工具一同声明，并把查询词及可选引用作为本地会话元数据返回。
 - `limits.contextWindow` 启用底部状态栏的上下文百分比。`autoCompact` 用于开启自动上下文压缩:仅当 `enabled` 不为 `false`、`threshold` 严格介于 0 与 1 之间、且 `contextWindow` 为正整数时才生效;生效后,Vesicle 会在下一次顶层输入之前、以及工具循环中的安全边界处,当预测的下一请求超过软阈值时(通过 portable `/compact` checkpoint)自动压缩。每次供应商请求都会在排队输入和已完成的后台进程通知加入后再检查。`reserveOutputTokens` 为下一轮输出预留空间(优先级:`reserveOutputTokens` → generation `maxTokens` → `limits.maxOutputTokens` → 0);供应商配置加载会拒绝使输入预算不再为正的静态预留组合。没有隐藏默认阈值。用 `/context` 查看实际生效的软阈值、硬上限、预留来源(包括当前模型的 generation 默认值)与激活状态。
 
 ### OpenAI Responses 档案
@@ -83,9 +84,10 @@ providers:
 
 独立 Responses 协议已随 1.0.0-alpha.10 从 opt-in experimental 转正为 released;完整 `openai-public` 真实供应商门槛已于 2026-08-11 通过(HTTP/typed SSE、非流式 JSON、standalone compact、public WebSocket 四项,`3` pass、`0` fail)。2026-07-31,MiMo 端点与 DeepSeek v4 Flash 均分别通过了 reasoning 与函数调用闭环两个用例(`2` pass、`0` fail)。2026-08-13,DeepSeek 官方开放 v4 Pro 的 Responses 支持后,`deepseek-v4-pro` 通过了同样的 reasoning 与函数调用闭环用例(`2` pass、`0` fail),`deepseek-v4-flash` 回归验收保持通过。
 
-- `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
+- `openai-public` 是官方 `api.openai.com` 的公开协议档案,支持 HTTP/typed SSE,也可显式选择 `responsesTransport: websocket`。它保留有序 Items、精确 `call_id`、无状态加密 reasoning、会话级 WebSocket continuation,以及在模型条目声明 `capabilities.remoteCompact: true` 后的 `/responses/compact`。它也准许供应商内置联网搜索的声明与 `web_search_call` Item/事件(配合模型条目的 `builtinWebSearch` 能力与 `/websearch` 开关)。这是应用层协议声明,不代表 TLS/HTTP2 网络指纹与 Codex 相同。
 - `mimo-subset-2026-07-30` 是固定日期的第三方兼容子集,只支持 HTTP。它会省略 MiMo 未声明或明确不支持的 `background`、`context_management`、`previous_response_id`、`parallel_tool_calls`、`store`、远程压缩和 WebSocket 字段,每轮回放完整上下文,并把 `response.reasoning_text.*` 显式映射为 Vesicle reasoning。它不是 OpenAI 或 Codex conformance。
 - `deepseek-subset-2026-07-31` 是 DeepSeek 为 `deepseek-v4-flash` 与 `deepseek-v4-pro` 提供的固定日期 HTTP 子集。它使用 Bearer 鉴权,省略不支持的 continuation、Conversations、存储、background、WebSocket 和远程压缩字段,每轮回放包含明文 reasoning Item 的完整上下文,并按 DeepSeek 文档映射 `none`/`low`/`high`/`max` effort。两个模型已于 2026-08-13 在官方端点完成独立验收;其余模型仍不属于此档案。
+- `deepseek-subset-2026-08-19` 复制 `2026-07-31` 的全部约束并额外准许供应商内置联网搜索:声明裸 `web_search` 工具、准入 `web_search_call` Item 与事件,并把执行的查询词与调用记录归一化进会话。引导式 Setup 的 DeepSeek Responses 预设现在写入这个新档案;既有配置保持原档案,需要内置搜索时手动改为本档案并为模型条目声明 `builtinWebSearch`。该档案于 2026-08-20 在官方端点完成搜索与回放验收。
 - `codex-http-relay` 是面向 Codex 服务网关的 HTTP-only 最大兼容档案:既接受公开协议式的终态有序 output,也接受 Codex 的事件/终态分离格式——由连续 completed Items 承载响应内容,随后合法的 `response.completed` 可省略 `output` 或返回空数组。Vesicle 仍会等成功终态后才提交工具,非空的双重表示必须一致,failed/incomplete/EOF 尝试一律拒绝。
 - `codex-beta-2026-02-06` 是指纹级 Codex 模拟档案:用 WebSocket 传输时发送 Codex V2 beta 线材形态(`openai-beta: responses_websockets=2026-02-06` 头 + `stream: true`),并在 WebSocket 耗尽时回退 HTTPS/SSE——与 Codex 完全一致;走 HTTPS/SSE 时与 `openai-public` 无法区分。需要 WebSocket 流量对齐 Codex V2 beta 形态时选用。这些 Codex 形态档案都不会复制私有身份、attestation 或 `x-codex-*` 头。
 
@@ -129,7 +131,8 @@ vesicle config validate
 
 - `path` 打印用户级配置目录;`show` 输出**脱敏后**的配置状态:`.env` 一律显示为 `<set>`/`<empty>` 标记,代理凭据被掩码。
 - `set` 可修改 providers/permissions/preferences/quality/settings 中的键;对供应商条目支持按字段编辑(`protocol`、`baseUrl`、`apiKeyEnv`、`authMethod`、`responsesProfile`、`responsesTransport`、`userAgent`、`defaultModel`);结构性字段(`id`、`models`、`apiKey`)被拒绝。
-- `add-provider`/`add-model` 追加条目,`remove-model`/`remove-provider` 删除条目;`unset` 移除 preferences/settings 中的键。
+- 供应商/模型注册表命令会原地编辑 `providers.yaml`: `add-provider` 和 `add-model` 只插入请求的条目,按字段 `set` 只修改请求的值,`remove-model`/`remove-provider` 只删除请求的块。既有注释、空行、排序以及无关供应商/模型字段都会保留;写出统一使用 LF,并在原子写入前重新校验。`unset` 移除 preferences/settings 中的键。
+- Guided Setup 的整体合并与规范化写入语义本次保持不变;首次引导或重新配置端点时,它仍可能重写完整的供应商注册表。
 - `env-*` 只管理 `.env` 的非密钥结构:创建空占位、写入代理 URL、删除键(键不存在时会提醒);API 密钥仍需按上文手动编辑 `.env`。
 - `validate` 校验全部配置文件。
 
@@ -188,6 +191,9 @@ Doctor 只检查路由选择,不会尝试证明代理或供应商实际可达;�
 ## mcp.yaml(可选)
 
 从 [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml) 起步。每个服务器可设 `transport`(streamable-http)、`url`、`timeoutSeconds`、`toolPrefix`、`headers`(支持 `${ENV_VAR}` 从 `.env` 展开)、`includeTools`/`excludeTools` 过滤、`enabledEngines`(限定哪些引擎能用)。文件存在即默认启用;密钥放 `.env`。
+
+也可以用 `vesicle config add-mcp --json '<entry>'` 添加服务器,或 `vesicle config remove-mcp <server-id>` 移除;最后一个服务器被移除时删除整个 `mcp.yaml`。这两个命令都不会接收密钥,而是创建/保留 `.env` 槽位供你手工填写。用法见 [MCP 工具](../advanced/mcp.md)。
+
 
 Vesicle 支持双纪元 Streamable HTTP MCP 工具兼容:同一个 Vesicle 进程可以同时连接 legacy(`initialize` 协商)和 modern(`server/discover` 协商)的 MCP 服务器。每个服务器可设 `negotiation`:
 

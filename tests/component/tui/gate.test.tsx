@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { GatePrompt, gateComposerIsActive, gateOptionLine, gateSummaryLineBudget, sanitizeGateLabel, wrapGateSummary } from "../../../src/tui/GatePrompt";
 
 describe("tui: gate surfaces", () => {

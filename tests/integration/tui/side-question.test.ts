@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createSignal } from "solid-js";
-import { KeyEvent } from "@opentui/core";
+import { KeyEvent } from "@3akhp/opentui-core";
 import { createSideQuestionController } from "../../../src/tui/side-question-controller";
 import type { SideQuestionContextSnapshot } from "../../../src/core/side-question/types";
 import type { VesicleMessage } from "../../../src/providers/shared/types";

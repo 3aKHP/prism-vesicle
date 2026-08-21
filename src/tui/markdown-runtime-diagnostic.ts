@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import {
   CliRenderer,
@@ -5,8 +6,11 @@ import {
   getTreeSitterClient,
   MarkdownRenderable,
   parseColor,
-} from "@opentui/core";
-import type { SimpleHighlight } from "@opentui/core";
+  resolveRenderLib,
+} from "@3akhp/opentui-core";
+import type { SimpleHighlight } from "@3akhp/opentui-core";
+import { getNodeAssets } from "@3akhp/opentui-core/node-assets";
+import type { NodeAssetTarget } from "@3akhp/opentui-core/node-assets";
 import { paletteFor, syntaxStyle } from "./theme";
 
 declare const VESICLE_TREE_SITTER_WORKER_PATH: string;
@@ -22,9 +26,21 @@ export type MarkdownRuntimeDiagnostic = {
   ok: boolean;
   workerPath?: string;
   probes: RuntimeProbe[];
+  escape: {
+    ok: boolean;
+    concealedCount: number;
+    error?: string;
+  };
   selection: {
     ok: boolean;
     cases: SelectionRuntimeProbe[];
+  };
+  native: {
+    ok: boolean;
+    source?: "asset-table" | "forced-load";
+    key?: string;
+    path?: string;
+    error?: string;
   };
 };
 
@@ -57,30 +73,129 @@ const SELECTION_PROBES: Array<{
  */
 export async function runMarkdownRuntimeDiagnostic(): Promise<MarkdownRuntimeDiagnostic> {
   try {
-    const [probes, selectionCases] = await Promise.all([
+    const [probes, escapeProbe, selectionCases, nativeProbe] = await Promise.all([
       Promise.all([
         probe("markdown", "**bold** and `code`\n\n| a | b |\n|---|---|\n| 1 | 2 |"),
         probe("typescript", "const value: number = 1;"),
       ]),
+      probeEscapeConceal(),
       Promise.all(SELECTION_PROBES.map(probeNativeMarkdownSelection)),
+      probeNativeAsset(),
     ]);
     const selection = {
       ok: selectionCases.every((entry) => entry.ok),
       cases: selectionCases,
     };
     return {
-      ok: probes.every((entry) => !entry.error && entry.highlights.count > 0) && selection.ok,
+      ok: probes.every((entry) => !entry.error && entry.highlights.count > 0) && escapeProbe.ok && selection.ok
+        && nativeProbe.ok,
       workerPath: typeof VESICLE_TREE_SITTER_WORKER_PATH !== "undefined"
         ? VESICLE_TREE_SITTER_WORKER_PATH
         : process.env.OTUI_TREE_SITTER_WORKER_PATH,
       probes,
+      escape: escapeProbe,
       selection,
+      native: nativeProbe,
     };
   } finally {
     // The diagnostic is a short-lived CLI operation. Leaving OpenTUI's worker
     // alive keeps Bun's event loop open and makes CI smoke commands hang.
     await destroyTreeSitterClient().catch(() => undefined);
   }
+}
+
+/**
+ * Distribution-boundary oracle for the backslash-escape fix that the fork
+ * runtime carries worker-side: the highlight tuples of `Escaped \~ and \*
+ * here` must conceal exactly the two backslash bytes, so a channel that lost
+ * the fork worker (or a future dependency bump that changes the shape) fails
+ * the smoke instead of silently regressing to literal escape rendering.
+ */
+async function probeEscapeConceal(): Promise<MarkdownRuntimeDiagnostic["escape"]> {
+  const content = "Escaped \\~ and \\* here";
+  try {
+    const result = await getTreeSitterClient().highlightOnce(content, "markdown");
+    const highlights: SimpleHighlight[] | undefined = result.highlights;
+    if (!highlights?.length) throw new Error("markdown highlighting produced no highlights");
+    const concealed = highlights.filter(
+      (highlight) => highlight[2] === "string.escape" && highlight[3]?.conceal === "",
+    );
+    const backslashBytes = [8, 15];
+    const coversOnlyBackslashes = concealed.length === backslashBytes.length
+      && backslashBytes.every((offset) => concealed.some((highlight) => highlight[0] === offset && highlight[1] === offset + 1));
+    if (!coversOnlyBackslashes) {
+      throw new Error(
+        `expected backslash-byte conceals at ${backslashBytes.join(", ")}; got ${JSON.stringify(concealed)}`,
+      );
+    }
+    return { ok: true, concealedCount: concealed.length };
+  } catch (error) {
+    return { ok: false, concealedCount: 0, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+const NATIVE_ASSET_KEY = /\/(?:libopentui\.(?:so|dylib)|opentui\.dll)$/;
+
+/**
+ * Report the native render library this channel actually loads. The fork
+ * loader owns platform selection end to end — dynamic platform-package
+ * import, OTUI_ASSET_ROOT relocation, bunfs-embedded libraries in compiled
+ * binaries — so the probe forces the load through that loader: ok:true means
+ * the library really dlopen'ed. Where the fork's installed-package asset
+ * table resolves (the source channel), the probe reports its native entry
+ * with source "asset-table"; a table that resolves but carries no native
+ * entry is a fork shape change and fails the probe. npm-bundle installs and
+ * compiled binaries carry an inlined or embedded copy of the runtime whose
+ * asset table cannot resolve the installed layout; they report source
+ * "forced-load" with no path rather than inventing one.
+ */
+async function probeNativeAsset(): Promise<MarkdownRuntimeDiagnostic["native"]> {
+  try {
+    resolveRenderLib();
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+  let assets: ReturnType<typeof getNodeAssets> | undefined;
+  try {
+    assets = getNodeAssets(nodeAssetTargetForHost());
+  } catch {
+    // The bundled or embedded asset table cannot resolve the installed
+    // layout in npm installs and compiled binaries. The forced load above is
+    // the evidence for those channels.
+  }
+  if (!assets) return { ok: true, source: "forced-load" };
+  const native = assets.find((asset) => NATIVE_ASSET_KEY.test(asset.key));
+  if (!native) {
+    return {
+      ok: false,
+      error: `fork asset table resolved but has no native library entry for ${process.platform}-${process.arch}`,
+    };
+  }
+  const assetRoot = process.env.OTUI_ASSET_ROOT;
+  return {
+    ok: true,
+    source: "asset-table",
+    key: native.key,
+    path: assetRoot ? join(assetRoot, native.key) : native.source,
+  };
+}
+
+// Mirrors the fork loader's internal getCurrentNodeAssetTarget (fork
+// src/node-asset-target.ts): libc applies to linux only, and musl is
+// selected solely through OPENTUI_LIBC.
+function nodeAssetTargetForHost(): NodeAssetTarget {
+  const { platform, arch } = process;
+  if (platform !== "darwin" && platform !== "linux" && platform !== "win32") {
+    throw new Error(`unsupported platform for OpenTUI node assets: ${platform}`);
+  }
+  if (arch !== "arm64" && arch !== "x64") {
+    throw new Error(`unsupported arch for OpenTUI node assets: ${arch}`);
+  }
+  return {
+    platform,
+    arch,
+    ...(platform === "linux" && process.env.OPENTUI_LIBC === "musl" ? { libc: "musl" as const } : {}),
+  };
 }
 
 class DiagnosticWriteStream extends Writable {

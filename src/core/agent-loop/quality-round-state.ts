@@ -60,6 +60,14 @@ export function qualityDecisionCandidate(response: VesicleResponse): QualityDeci
     toolCalls: (response.toolCalls ?? []).map((call) => ({ ...call })),
     ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
     ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks.map((block) => ({ ...block })) } : {}),
+    ...(response.webSearch ? {
+      webSearch: {
+        ...response.webSearch,
+        queries: [...response.webSearch.queries],
+        ...(response.webSearch.citations ? { citations: response.webSearch.citations.map((citation) => ({ ...citation })) } : {}),
+        ...(response.webSearch.calls ? { calls: response.webSearch.calls.map((call) => ({ ...call, action: { ...call.action } })) } : {}),
+      },
+    } : {}),
     ...(response.providerState ? { providerState: cloneProviderStateEnvelope(response.providerState) } : {}),
     ...(response.finishReason ? { finishReason: response.finishReason } : {}),
     ...(response.usage ? { usage: response.usage } : {}),

@@ -1,12 +1,14 @@
 import { ThemedText } from "./theme-text";
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
-import { useRenderer, useTerminalDimensions } from "@opentui/solid";
-import type { EngineId } from "../core/engine/profile";
+import { useRenderer, useTerminalDimensions } from "@3akhp/opentui-solid";
+import { loadEngineProfile, type EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
 import { engineAccent, palette, reportTerminalThemeMode, themePreference } from "./theme";
 import { createThemeScheduler } from "./theme-runtime";
 import { createThemePreferenceController, parseEnvTheme, type ThemePreferenceController } from "./theme-preference-controller";
+import { createWebSearchController, type WebSearchController } from "./web-search-controller";
+import { clearSessionWebSearchOverride } from "../core/agent-loop/web-search-state";
 import { listSessions, loadSessionSnapshot } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { createTurnFocusController } from "./turn-focus-controller";
@@ -14,7 +16,7 @@ import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench"
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { QualityWarning } from "../core/quality";
 import { resolveTuiLayout } from "./layout";
-import { resolveSplashMode } from "./brand-mark";
+import { resolveSplashMode, type SplashMode } from "./brand-mark";
 import { Splash } from "./widgets/Splash";
 import { Sidebar } from "./views/Sidebar";
 import { MessageStream } from "./views/MessageStream";
@@ -87,6 +89,8 @@ export type AppProps = {
   dangerouslySkipPermissions?: boolean;
   initialResume?: boolean;
   bootstrapOnly?: boolean;
+  /** Explicit startup-splash mode for deterministic host and test rendering. */
+  splashMode?: SplashMode;
   /** Effective theme-preference owner (source precedence, session override, project persistence). */
   theme?: ThemePreferenceController;
   /** Called after the renderer has been destroyed to finish a CLI TUI exit. */
@@ -194,7 +198,7 @@ export function App(props: AppProps = {}) {
   const [restoringSession, setRestoringSession] = createSignal(false);
   // M1 startup splash: the mode is decided once from terminal capabilities and
   // environment; "skip" (non-interactive terminal) never mounts the overlay.
-  const splashMode = resolveSplashMode({
+  const splashMode = props.splashMode ?? resolveSplashMode({
     isTty: Boolean(process.stdout.isTTY),
     rgb: renderer.capabilities?.rgb ?? true,
     reducedMotion: process.env.VESICLE_REDUCED_MOTION === "1",
@@ -392,6 +396,10 @@ export function App(props: AppProps = {}) {
     closeActiveProviderSession: () => {
       const id = sessionId();
       if (id) closeProviderSession(id);
+    },
+    clearWebSearchOverride: () => {
+      const id = sessionId();
+      if (id) clearSessionWebSearchOverride(id);
     },
   });
   const {
@@ -789,6 +797,7 @@ export function App(props: AppProps = {}) {
     setQuestionFreeformKillBuffer,
     clearQueuedInputs,
     clearThemeOverride: () => themeController.clearOverride(),
+    clearWebSearchOverride: () => webSearchController.clearOverride(),
     onSessionActive: (id) => {
       void sideQuestionController.rebuildForResume(id).catch(reportError);
       // Re-arm the candidate switcher so `<n/m>` and Option+←/→ survive reload.
@@ -1056,6 +1065,20 @@ export function App(props: AppProps = {}) {
   // fields it reads, built from component signals/helpers. createBuiltinCommands
   // composes the per-family factories into the registry the dispatcher and the
   // completion controller consume. See src/tui/commands/.
+  const webSearchController: WebSearchController = createWebSearchController({
+    getSessionId: () => sessionId(),
+    getEngineProfile: () => loadEngineProfile(activeEngine(), process.cwd()),
+    getModelView: () => {
+      const provider = providerRegistry()
+        ?.providers.find((candidate) => candidate.id === activeProvider());
+      const model = provider?.models.find((candidate) => candidate.id === activeModel());
+      return {
+        ...model,
+        provider: provider?.protocol,
+        responsesProfile: provider?.responsesProfile,
+      };
+    },
+  });
   const commandContexts: BuiltinCommandContexts = {
     provider: {
       setMessages, setStatus, recordActivity,
@@ -1097,6 +1120,7 @@ export function App(props: AppProps = {}) {
       openBranchPicker: branchController.open,
       resetRewindState,
       theme: { clearOverride: () => themeController.clearOverride() },
+      webSearch: { clearOverride: () => webSearchController.clearOverride() },
     },
     quality: {
       setMessages, setStatus, recordActivity,
@@ -1128,6 +1152,14 @@ export function App(props: AppProps = {}) {
         clearOverride: () => themeController.clearOverride(),
         persistProject: (pref) => themeController.persistProject(pref),
         unsetProject: () => themeController.unsetProject(),
+      },
+    },
+    webSearch: {
+      setMessages, setStatus, recordActivity,
+      webSearch: {
+        statusText: () => webSearchController.statusText(),
+        applyOverride: (enabled) => webSearchController.applyOverride(enabled),
+        clearOverride: () => webSearchController.clearOverride(),
       },
     },
     agents: {

@@ -52,6 +52,9 @@ export async function askSideQuestion(options: {
     system: [sidePrompt],
     messages: [{ role: "user", content: projection.content, ...(images.length > 0 ? { images } : {}) }],
     ...(context.generation ? { generation: context.generation } : {}),
+    // Built-in search is model capability, not a host tool: the tool-free
+    // side-request contract is unaffected, and the parent session's toggle
+    // carries over per the frozen design.
     signal: options.signal,
     onRetry: options.onRetry,
   };
@@ -171,6 +174,7 @@ function toVesicleMessage(message: ResumedMessage): VesicleMessage {
     ...(message.toolCallId ? { toolCallId: message.toolCallId } : {}),
     ...(typeof message.toolOk === "boolean" ? { toolOk: message.toolOk } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls.map((call) => ({ ...call })) } : {}),
+    ...(message.webSearch ? { webSearch: message.webSearch } : {}),
     ...(message.providerState ? { providerState: cloneProviderStateEnvelope(message.providerState) } : {}),
     ...(message.images ? { images: message.images.map(({ data: _data, ...image }) => image) } : {}),
   };

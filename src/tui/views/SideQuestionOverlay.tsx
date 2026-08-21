@@ -6,7 +6,7 @@ import { ThemedText } from "../theme-text";
 // MarkdownContent + syntax highlighting as the main message stream, inside a
 // scrollbox; the controller forwards ↑/↓ to the registered scroller.
 
-import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
+import { TextAttributes, type ScrollBoxRenderable } from "@3akhp/opentui-core";
 import { Match, Show, Switch, createEffect, onCleanup, onMount } from "solid-js";
 import { palette } from "../theme";
 import { truncateLine, wrapDisplayLines } from "../format";

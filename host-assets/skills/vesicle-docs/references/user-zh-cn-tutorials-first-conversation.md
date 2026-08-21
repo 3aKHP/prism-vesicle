@@ -8,7 +8,30 @@
 
 ## 准备一点素材
 
-Vesicle 默认用 ETL 引擎,它把你的素材加工成角色卡、情景卡。先在项目里放一条素材:
+Vesicle 默认用 ETL 引擎,它把你的素材加工成角色卡、情景卡。先在项目目录里建立 `source_materials/` 文件夹:可以在系统文件管理器中创建,也可以在 PowerShell 7 运行 `New-Item -ItemType Directory -Force source_materials`,或在 Linux / macOS / WSL 运行 `mkdir -p source_materials`。
+
+然后运行 `vesicle .`,按 `Ctrl+O` 打开 Workspace 页。在文件树选中 `source_materials/` 后按 `a`;创建栏已经预填 `source_materials/`,所以只输入 `note.md` 并按 Enter。新文件打开后填入下面内容,再按 `Ctrl+S`:
+
+```markdown
+# 角色速记:林越
+28 岁,前战地记者,现在开一间深夜咖啡馆。话少,观察力极强。
+左腕有一道旧疤。习惯把重要的事写在纸杯上。
+```
+
+状态行显示保存成功后,按 `Ctrl+O` 回到 Chat。若你更习惯终端,也可以一次完成文件夹和文件创建。
+
+PowerShell 7:
+
+```powershell
+New-Item -ItemType Directory -Force source_materials | Out-Null
+@'
+# 角色速记:林越
+28 岁,前战地记者,现在开一间深夜咖啡馆。话少,观察力极强。
+左腕有一道旧疤。习惯把重要的事写在纸杯上。
+'@ | Set-Content -Encoding utf8 source_materials/note.md
+```
+
+Linux / macOS / WSL:
 
 ```bash
 mkdir -p source_materials
@@ -19,9 +42,11 @@ cat > source_materials/note.md <<'EOF'
 EOF
 ```
 
+无论用哪条路径,最后都应得到项目内的 `source_materials/note.md`。如果 Workspace 拒绝路径,确认启动目录是你的项目根、输入的是项目相对路径且没有 `..`。
+
 ## 启动并发出第一条
 
-确保在项目目录里启动:
+如果刚才尚未启动,在项目目录里运行:
 
 ```bash
 vesicle .

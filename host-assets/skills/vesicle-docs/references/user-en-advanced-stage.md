@@ -4,7 +4,7 @@
 
 English | [简体中文](../../zh-CN/advanced/stage.md)
 
-> **Status (as of `1.0.0-alpha.10`):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.0.0-beta.1`):** 🟢 Implemented. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 Stage is Prism's **consumer-side** collaborative fiction engine: feed it a character card (Module A) and a scenario card (Module B) and it opens a third-person continuous narrative session — your messages are your character's actions, and it narrates the response.
 
@@ -21,6 +21,15 @@ Both cards must be files under a guarded, readable project root (usually `worksp
 3. Emit bounded compatibility warnings (at most 3) for **harmless card variation** — for example missing YAML frontmatter, a scenario with no logic comment, or an unclosed HTML comment. These only inform; they do not block.
 
 > Later drift in the source cards does not affect an in-flight session: on resume Stage detects whether the source file hash changed, but **keeps using the frozen context**, preserving continuity.
+
+Success enters a **new Stage session**: the conversation first shows the scenario's visible opening, the header Engine becomes Stage, and the composer waits for your first character action. Bootstrap itself makes no provider request; your first action starts model continuation.
+
+### If Stage cannot start
+
+- `Usage: /stage ...`: provide two project-relative paths. Wrap a path containing spaces in double quotes, for example `/stage "workspace/character card.md" "workspace/scenario card.md"`. Command completion also quotes paths with spaces automatically.
+- `Paths are project-relative...` or a missing file: use `/workspace <path>` to confirm each file under `workspace/` or another readable root. Absolute paths and `..` are rejected.
+- Compatibility warnings appear: read the bounded set of up to three warnings. The program reports only empty input, missing Module A/B YAML frontmatter, missing optional Module B logic comments, or an unclosed HTML comment; none blocks startup. Fix the reported card issue in ETL and start a **new** Stage session; an existing frozen session does not hot-reload it.
+- The provider fails after bootstrap: the Stage session and frozen opening are already persisted. Fix the connection, `/resume` that session, and resend your first action rather than running `/stage` again and creating another session.
 
 ## Empty tool surface, no gates
 

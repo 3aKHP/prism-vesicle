@@ -1,7 +1,7 @@
 import { ThemedText } from "../theme-text";
 import { createMemo, createSignal, For, onCleanup, Show, type Accessor } from "solid-js";
-import type { ScrollBoxRenderable } from "@opentui/core";
-import { useRenderer } from "@opentui/solid";
+import type { ScrollBoxRenderable } from "@3akhp/opentui-core";
+import { useRenderer } from "@3akhp/opentui-solid";
 import { palette } from "../theme";
 import { Message } from "../widgets/Message";
 import { ReasoningBlock } from "../widgets/ReasoningBlock";

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { testRender } from "@opentui/solid";
+import { testRender } from "@3akhp/opentui-solid";
 import { createInputRouter, type InputRoutingOptions } from "../../../src/tui/input-routing";
 import { BranchPicker } from "../../../src/tui/BranchPicker";
 import type { BranchPickerState } from "../../../src/tui/branch/controller";

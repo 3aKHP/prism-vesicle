@@ -10,7 +10,7 @@
 # unchanged. No path, schema, validation, or write logic lives here.
 
 if [ $# -lt 1 ]; then
-  printf '%s\n' "Usage: update_config.sh <path|show|set|add-provider|add-model|remove-model|remove-provider|unset|env-set-empty|env-set-proxy|env-remove|validate> [args...]" >&2
+  printf '%s\n' "Usage: update_config.sh <path|show|set|add-provider|add-model|add-mcp|remove-mcp|remove-model|remove-provider|unset|env-set-empty|env-set-proxy|env-remove|validate> [args...]" >&2
   exit 2
 fi
 

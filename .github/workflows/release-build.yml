@@ -134,23 +134,25 @@ jobs:
       - run: bun run build:assets
       - name: Smoke the release shape from an empty project
         shell: pwsh
+        env:
+          VERSION: ${{ needs.checks.outputs.version }}
         run: |
           New-Item -ItemType Directory -Force smoke/release, smoke/project | Out-Null
-          Copy-Item prism-vesicle.exe smoke/release/prism-vesicle.exe
+          Copy-Item prism-vesicle.exe "smoke/release/prism-vesicle-windows-x64-$env:VERSION.exe"
           Expand-Archive -LiteralPath dist/prism-vesicle-assets.zip -DestinationPath smoke/release
           Push-Location smoke/project
           try {
             $env:VESICLE_CONFIG_DIR = Join-Path (Get-Location) 'config'
-            & ..\release\prism-vesicle.exe debug markdown-runtime
+            & "..\release\prism-vesicle-windows-x64-$env:VERSION.exe" debug markdown-runtime
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & ..\release\prism-vesicle.exe assets status
+            & "..\release\prism-vesicle-windows-x64-$env:VERSION.exe" assets status
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & ..\release\prism-vesicle.exe assets materialize assets/prompts/shared/vesicle-base.md
+            & "..\release\prism-vesicle-windows-x64-$env:VERSION.exe" assets materialize assets/prompts/shared/vesicle-base.md
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             if (-not (Test-Path assets/prompts/shared/vesicle-base.md)) { throw 'Project override was not written beneath the invocation cwd.' }
-            & ..\release\prism-vesicle.exe assets materialize assets/prompts/engines/etl.md --global
+            & "..\release\prism-vesicle-windows-x64-$env:VERSION.exe" assets materialize assets/prompts/engines/etl.md --global
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            & ..\release\prism-vesicle.exe prompt shape --engine etl
+            & "..\release\prism-vesicle-windows-x64-$env:VERSION.exe" prompt shape --engine etl
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally {
             Pop-Location

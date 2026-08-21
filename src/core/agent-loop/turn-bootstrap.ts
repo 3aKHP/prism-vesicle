@@ -20,7 +20,7 @@ import { toVesicleMessage } from "../compact/summary-generator";
 import { createTurnAgentManager } from "./agent-manager";
 import { emitAssetDriftIfNeeded } from "./continuation-context";
 import { generationMetadata, mergeGeneration } from "./generation";
-import { resolveToolSurface } from "./tool-surface";
+import { resolveToolSurface, resolveWebSearchSurfaceOptions } from "./tool-surface";
 import { buildSessionHeaderRecord } from "./session-init";
 import type { RunLoopArgs } from "./turn-loop";
 import type { AgentLoopEvent, RunPromptOptions } from "./types";
@@ -140,6 +140,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
       ? { outputPersistence: { sessionId: session.sessionId, autoTruncate: mcpOutputPreferences.autoTruncate }, signal: options.signal }
       : { signal: options.signal },
     { catalogNames: catalogNames(skillCatalog) },
+    await resolveWebSearchSurfaceOptions(config, session.sessionId, profile),
   );
   if (mcpOutputPersistence && toolSurface.mcp.definitions.length > 0) {
     const hint = composeMcpOutputPersistenceHint(session.sessionId);

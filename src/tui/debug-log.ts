@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { getTreeSitterClient } from "@opentui/core";
-import type { SimpleHighlight } from "@opentui/core";
+import { getTreeSitterClient } from "@3akhp/opentui-core";
+import type { SimpleHighlight } from "@3akhp/opentui-core";
 
 let initialized = false;
 let markdownDiagnosticsStarted = false;

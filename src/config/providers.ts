@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ResponsesProfile, ResponsesTransport, VesicleConfig, VesicleProvider } from "./env";
+import { isDeepSeekSubsetProfile, type ResponsesProfile, type ResponsesTransport, type VesicleConfig, type VesicleProvider } from "./env";
 import type { ProviderAuthMethod } from "./env";
 import type { AutoCompactLimits, GenerationDefaults, ModelCapabilities, ModelLimits } from "./env";
 import { userConfigDirectory } from "./paths";
 import { readYamlKeyValue, readYamlLines, stripYamlComment, unquoteYamlValue } from "./yaml-line-reader";
+import { yamlKey, yamlScalar } from "./yaml-writer";
 
 export type ProviderProtocol = VesicleProvider;
 
@@ -18,6 +19,7 @@ export type ProviderModelProfile = {
   generation?: GenerationDefaults;
   capabilities?: ModelCapabilities;
   limits?: ModelLimits;
+  webSearchDefault?: boolean;
 };
 
 export type ProviderProfile = {
@@ -46,7 +48,7 @@ export type ProviderRegistry = {
  * sync with readGenerationField/readCapabilityField/readLimitsField/
  * readAutoCompactField; both live in this module so drift is visible in one diff.
  */
-export const modelEntryFieldNames = ["id", "generation", "capabilities", "limits"] as const;
+export const modelEntryFieldNames = ["id", "generation", "capabilities", "limits", "webSearchDefault"] as const;
 export const generationFieldNames = ["temperature", "maxTokens"] as const;
 export const capabilityFieldNames = [
   "streaming",
@@ -57,9 +59,59 @@ export const capabilityFieldNames = [
   "maxTokens",
   "vision",
   "remoteCompact",
+  "builtinWebSearch",
 ] as const;
 export const limitsFieldNames = ["contextWindow", "maxOutputTokens"] as const;
 export const autoCompactFieldNames = ["enabled", "threshold", "reserveOutputTokens"] as const;
+
+export function serializeProviderModelLines(model: ProviderModelProfile): string[] {
+  const structured = model.generation || model.capabilities || model.limits || model.webSearchDefault !== undefined;
+  if (!structured) return [`      - ${yamlScalar(model.id)}`];
+  const lines = [`      - id: ${yamlScalar(model.id)}`];
+  if (model.generation) {
+    lines.push("        generation:");
+    if (model.generation.temperature !== undefined) lines.push(`          temperature: ${model.generation.temperature}`);
+    if (model.generation.maxTokens !== undefined) lines.push(`          maxTokens: ${model.generation.maxTokens}`);
+  }
+  if (model.capabilities) {
+    lines.push("        capabilities:");
+    for (const [key, value] of Object.entries(model.capabilities)) {
+      if (value !== undefined) lines.push(`          ${key}: ${value}`);
+    }
+  }
+  if (model.limits) {
+    lines.push("        limits:");
+    if (model.limits.contextWindow !== undefined) lines.push(`          contextWindow: ${model.limits.contextWindow}`);
+    if (model.limits.maxOutputTokens !== undefined) lines.push(`          maxOutputTokens: ${model.limits.maxOutputTokens}`);
+    if (model.limits.autoCompact) {
+      lines.push("          autoCompact:");
+      if (model.limits.autoCompact.enabled !== undefined) lines.push(`            enabled: ${model.limits.autoCompact.enabled}`);
+      if (model.limits.autoCompact.threshold !== undefined) lines.push(`            threshold: ${model.limits.autoCompact.threshold}`);
+      if (model.limits.autoCompact.reserveOutputTokens !== undefined) {
+        lines.push(`            reserveOutputTokens: ${model.limits.autoCompact.reserveOutputTokens}`);
+      }
+    }
+  }
+  if (model.webSearchDefault !== undefined) lines.push(`        webSearchDefault: ${model.webSearchDefault}`);
+  return lines;
+}
+
+export function serializeProviderLines(provider: ProviderProfile): string[] {
+  const lines = [
+    `  ${yamlKey(provider.id)}:`,
+    `    protocol: ${provider.protocol}`,
+    `    baseUrl: ${yamlScalar(provider.baseUrl)}`,
+    `    apiKeyEnv: ${provider.apiKeyEnv}`,
+  ];
+  if (provider.authMethod) lines.push(`    authMethod: ${provider.authMethod}`);
+  if (provider.userAgent) lines.push(`    userAgent: ${yamlScalar(provider.userAgent)}`);
+  if (provider.responsesProfile) lines.push(`    responsesProfile: ${provider.responsesProfile}`);
+  if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
+  if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
+  lines.push("    models:");
+  for (const model of provider.models) lines.push(...serializeProviderModelLines(model));
+  return lines;
+}
 
 /**
  * Validate a JSON-shaped model entry (as passed to `vesicle config add-model
@@ -91,6 +143,10 @@ export function validateModelEntryShape(entry: unknown): ProviderModelProfile {
   if (source.generation !== undefined) model.generation = readGenerationObject(source.generation);
   if (source.capabilities !== undefined) model.capabilities = readCapabilitiesObject(source.capabilities);
   if (source.limits !== undefined) model.limits = readLimitsObject(source.limits);
+  if (source.webSearchDefault !== undefined) {
+    if (typeof source.webSearchDefault !== "boolean") throw new Error("webSearchDefault must be true or false.");
+    model.webSearchDefault = source.webSearchDefault;
+  }
   return model;
 }
 
@@ -292,6 +348,7 @@ export function resolveProviderConfig(
     ...(modelProfile.generation ? { generation: modelProfile.generation } : {}),
     ...(modelProfile.capabilities ? { capabilities: modelProfile.capabilities } : {}),
     ...(modelProfile.limits ? { limits: modelProfile.limits } : {}),
+    ...(modelProfile.webSearchDefault !== undefined ? { webSearchDefault: modelProfile.webSearchDefault } : {}),
   };
 }
 
@@ -352,6 +409,9 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
   let currentList: "models" | null = null;
   let currentModel: Partial<ProviderModelProfile> | null = null;
   let currentModelBlock: "generation" | "capabilities" | "limits" | "autoCompact" | null = null;
+  const seenSections = new Set<string>();
+  const seenDefaultFields = new Set<string>();
+  let seenProviderFields = new Set<string>();
 
   const finishModel = () => {
     if (!currentModel) return;
@@ -362,6 +422,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       ...(currentModel.generation ? { generation: currentModel.generation } : {}),
       ...(currentModel.capabilities ? { capabilities: currentModel.capabilities } : {}),
       ...(currentModel.limits ? { limits: currentModel.limits } : {}),
+      ...(currentModel.webSearchDefault !== undefined ? { webSearchDefault: currentModel.webSearchDefault } : {}),
     };
     validateAutoCompactBudget(model, currentProvider?.id, path);
     currentProvider!.models = [
@@ -409,8 +470,8 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (currentProvider.responsesProfile === "mimo-subset-2026-07-30" && currentProvider.responsesTransport === "websocket") {
       throw new Error(`Provider "${id}" cannot use mimo-subset-2026-07-30 with responsesTransport websocket.`);
     }
-    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31" && currentProvider.responsesTransport === "websocket") {
-      throw new Error(`Provider "${id}" cannot use deepseek-subset-2026-07-31 with responsesTransport websocket.`);
+    if (isDeepSeekSubsetProfile(currentProvider.responsesProfile) && currentProvider.responsesTransport === "websocket") {
+      throw new Error(`Provider "${id}" cannot use ${currentProvider.responsesProfile} with responsesTransport websocket.`);
     }
     if (protocol === "openai-responses" && currentProvider.authMethod === "x-goog-api-key") {
       throw new Error(`Provider "${id}" using openai-responses cannot use authMethod x-goog-api-key.`);
@@ -423,13 +484,13 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       && models.some((model) => model.capabilities?.remoteCompact === true)) {
       throw new Error(`Provider "${id}" cannot enable remoteCompact with mimo-subset-2026-07-30.`);
     }
-    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+    if (isDeepSeekSubsetProfile(currentProvider.responsesProfile)
       && models.some((model) => model.capabilities?.remoteCompact === true)) {
-      throw new Error(`Provider "${id}" cannot enable remoteCompact with deepseek-subset-2026-07-31.`);
+      throw new Error(`Provider "${id}" cannot enable remoteCompact with ${currentProvider.responsesProfile}.`);
     }
-    if (currentProvider.responsesProfile === "deepseek-subset-2026-07-31"
+    if (isDeepSeekSubsetProfile(currentProvider.responsesProfile)
       && models.some((model) => model.id !== "deepseek-v4-flash" && model.id !== "deepseek-v4-pro")) {
-      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash or deepseek-v4-pro with deepseek-subset-2026-07-31.`);
+      throw new Error(`Provider "${id}" can declare only deepseek-v4-flash or deepseek-v4-pro with ${currentProvider.responsesProfile}.`);
     }
     registry.providers.push({
       id,
@@ -446,6 +507,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     currentProvider = null;
     currentList = null;
     currentModelBlock = null;
+    seenProviderFields = new Set<string>();
   };
 
   for (const parsedLine of lines) {
@@ -458,10 +520,14 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       currentList = null;
       currentModelBlock = null;
       if (line === "default:") {
+        if (seenSections.has("default")) throw new Error(`Provider config parse error on line ${index + 1}: duplicate default: section.`);
+        seenSections.add("default");
         section = "default";
         continue;
       }
       if (line === "providers:") {
+        if (seenSections.has("providers")) throw new Error(`Provider config parse error on line ${index + 1}: duplicate providers: section.`);
+        seenSections.add("providers");
         section = "providers";
         continue;
       }
@@ -471,6 +537,8 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (section === "default") {
       if (indent !== 2) throw new Error(`Provider config parse error on line ${index + 1}: default fields use two spaces.`);
       const [key, value] = readKeyValue(line, index, path);
+      if (seenDefaultFields.has(key)) throw new Error(`Provider config parse error on line ${index + 1}: duplicate default field "${key}".`);
+      seenDefaultFields.add(key);
       if (key === "provider") registry.default.provider = value;
       else if (key === "model") registry.default.model = value;
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown default field "${key}".`);
@@ -497,11 +565,17 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
     if (indent === 4) {
       finishModel();
       if (line === "models:") {
+        if (seenProviderFields.has("models")) {
+          throw new Error(`Provider config parse error on line ${index + 1}: duplicate provider field "models".`);
+        }
+        seenProviderFields.add("models");
         currentList = "models";
         continue;
       }
       currentList = null;
       const [key, value] = readKeyValue(line, index, path);
+      if (seenProviderFields.has(key)) throw new Error(`Provider config parse error on line ${index + 1}: duplicate provider field "${key}".`);
+      seenProviderFields.add(key);
       if (key === "protocol") currentProvider.protocol = readProtocol(value, `provider ${currentProvider.id}`);
       else if (key === "baseUrl") currentProvider.baseUrl = value;
       else if (key === "apiKeyEnv") currentProvider.apiKeyEnv = value;
@@ -552,6 +626,7 @@ export function parseProviderConfig(source: string, path: string, env: NodeJS.Pr
       currentModelBlock = null;
       const [key, value] = readKeyValue(line, index, path);
       if (key === "id") currentModel.id = value;
+      else if (key === "webSearchDefault") currentModel.webSearchDefault = readBoolean(value, key, index, path);
       else throw new Error(`Provider config parse error on line ${index + 1}: unknown model field "${key}".`);
       continue;
     }
@@ -662,7 +737,7 @@ export function readProtocol(value: string, field: string): ProviderProtocol {
 
 export function readResponsesProfile(value: string, field: string): ResponsesProfile {
   if (value !== "openai-public" && value !== "codex-http-relay" && value !== "codex-beta-2026-02-06"
-    && value !== "mimo-subset-2026-07-30" && value !== "deepseek-subset-2026-07-31") {
+    && value !== "mimo-subset-2026-07-30" && !isDeepSeekSubsetProfile(value)) {
     throw new Error(`Unsupported Responses profile "${value}" in ${field}.`);
   }
   return value;
@@ -715,7 +790,8 @@ function readCapabilityField(key: string, value: string, index: number, path: st
   if (key === "temperature") return { temperature: enabled };
   if (key === "maxTokens") return { maxTokens: enabled };
   if (key === "vision") return { vision: enabled };
-  return { remoteCompact: enabled };
+  if (key === "remoteCompact") return { remoteCompact: enabled };
+  return { builtinWebSearch: enabled };
 }
 
 function readLimitsField(key: string, value: string, index: number, path: string): ModelLimits {

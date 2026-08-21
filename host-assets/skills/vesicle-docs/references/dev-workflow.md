@@ -252,7 +252,7 @@ Do not tag `develop` or a release branch. After publication, forward-sync the re
 
 The public [Code Signing Policy](../../CODE_SIGNING_POLICY.md) defines the intended Windows signing scope, maintainer roles, user verification, and incident handling. The [Privacy Policy](../../PRIVACY.md) documents the local and external-service data behavior required for public distribution. Windows signing is deferred until a viable signing provider is in place, with no version deadline.
 
-Until a signing provider is in place, every release is an explicitly disclosed unsigned release for the informed alpha test group. The generated GitHub Release notes prepend a bilingual warning that identifies both Windows artifacts as unsigned, links the code-signing policy, points to `SHA256SUMS.txt`, and tells users not to disable Windows security globally. Release metadata validation authorizes publication through an annotated `v<version>` tag whose commit is on the `main` history and whose version matches `package.json`; it does not pin individual versions, so each new release is a normal tag push rather than a workflow edit. There is no version deadline for adding signing; whenever it is taken up, a release candidate must reuse a signing path already exercised during earlier releases rather than introducing signing for the first time.
+Until a signing provider is in place, every release is an explicitly disclosed unsigned release for the informed beta test group. During the beta line, the generated GitHub Release notes prepend bilingual beta-channel and known-limit disclosures, followed by a bilingual warning that identifies both Windows artifacts as unsigned, links the code-signing policy, points to `SHA256SUMS.txt`, and tells users not to disable Windows security globally. Release metadata validation authorizes publication through an annotated `v<version>` tag whose commit is on the `main` history and whose version matches `package.json`; it does not pin individual versions, so each new release is a normal tag push rather than a workflow edit. There is no version deadline for adding signing; whenever it is taken up, a release candidate must reuse a signing path already exercised during earlier releases rather than introducing signing for the first time.
 
 If signing is taken up later, tag push remains the maintainer's command-line publication authorization, but every production signing request must also be manually inspected and approved through the signing provider. The signing implementation must sign and verify the portable PE before installer staging, enable and verify the generated signed uninstaller, then sign and verify the final installer. A failed or unapproved signing request must block publication of the affected Windows artifact; it must never silently fall back to an unsigned file.
 
@@ -390,9 +390,21 @@ Tier 2 uses the same vocabulary and the same "Handling CR Results" rules directl
 
 The first version is deliberately minimal: five lenses, finder/scorer separation, the ≥ 80 confidence filter, and `ReportFindings` rendering. Out of scope for v1: a git-blame/history lens, a previous-PR-comments lens, a cross-lens dedup stage, and budget-aware lens skipping.
 
+## Issue Linking And Closure
+
+GitHub auto-closes an issue only when a supported closing keyword is immediately followed by the issue reference in the PR body or a commit message. Supported forms include `Closes #123`, `Fixes #123`, and `Resolves #123` (also `close`, `closed`, `fix`, `fixed`, `resolve`, `resolved`).
+
+- A PR that resolves an issue must include one explicit line in its body: `Closes #<issue>`.
+- Use `Refs #<issue>` or plain `#<issue>` for related work that does not complete the issue.
+- `Implements #<issue>`, `Closes the follow-up in #<issue>`, and issue references in the PR title do not close issues.
+- For staged work, only the final PR uses `Closes #<issue>`; earlier PRs use `Refs #<issue>`.
+- When an issue is resolved and merged into `develop` but has not yet reached `main`, append a tracking comment at the end of the issue: `This issue has been solved in #<pr-number>.`
+
 ## PR Body Shape
 
 ```markdown
+Closes #<issue>
+
 ## Summary
 
 - ...

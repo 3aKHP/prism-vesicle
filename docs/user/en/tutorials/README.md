@@ -16,5 +16,7 @@ The tutorials assume you can already start Vesicle and that `vesicle doctor` rep
 6. [Sessions and rewind](./sessions-and-rewind.md) — resume past sessions, rewind to any step, and switch candidate branches at any depth.
 7. [Set up Persistent Instructions](./persistent-instructions.md) — maintain cross-session project rules with `/init`, `/instructions`, and model tools.
 8. [Permissions and the host shell](./permissions-and-shell.md) — the four tool-approval modes and when to enable shell.
+9. [Web search and images](./web-search-and-images.md) — distinguish provider-native search from Tavily and give clipboard images to a vision model safely.
+10. [Skills and SubAgents](./skills-and-subagents.md) — let the model consult version-matched documentation and delegate one bounded task to a child runtime.
 
-After these eight you have the daily creation loop. For a command cheatsheet, configuration, the security model, and more, see the [reference section](../reference/README.md).
+The first eight cover the daily creation loop; the last two cover common extensions. For command lookup, configuration, the security model, and more, see the [reference section](../reference/README.md).

@@ -2,7 +2,7 @@
 
 [English](./CONTRIBUTING.md) | [简体中文](./CONTRIBUTING.zh-CN.md)
 
-Prism Vesicle 的内部开发仍处于快速迭代阶段，但公开 alpha 版本的发布工作应遵循 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) 中的发布分支和 PR 流程。
+Prism Vesicle 的内部开发仍处于快速迭代阶段，但公开 Beta 版本的发布工作应遵循 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md) 中的发布分支和 PR 流程。
 
 参与发布的贡献者必须遵循公开的[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)。外部贡献者保留作者身份；人类维护者 `3aKHP` 负责审查仓库变更。Windows 签名目前处于推迟状态，因此签名批准者角色和每次请求的人工批准仅在将来启用签名时适用。
 
@@ -100,6 +100,7 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 
 - 说明行为发生了什么变化，以及它为何属于当前里程碑。
 - 在 PR 描述中列出验证命令。
+- 当 PR 完成某个 issue 时，在 PR 描述中单独写一行显式关闭句式，例如 `Closes #<issue>`。仅相关但不会关闭 issue 的引用使用 `Refs #<issue>`；`Implements #<issue>` 和标题中的引用都不是关闭语法。参见 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md)。
 - 用户可见行为、运行时行为或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md`、`docs/dev/ARCHITECTURE.md` 或对应的领域契约。仅在源代码规范变化时更新 `docs/dev/STYLE.md`。
 - 不要把生成的 `.vesicle/` 会话提交到 Git。
 - 新增或编辑的 Markdown 正文应使用自然换行。

@@ -37,6 +37,19 @@ servers:
 - `includeTools` / `excludeTools` 用来只保留或排除部分工具。
 - 各字段的完整说明见[配置参考](../reference/configuration.md)。
 
+
+## 用命令行添加或移除
+
+除了手工编辑,也可以让 `update-config` Skill 或下面的命令来管理服务器:
+
+```bash
+vesicle config add-mcp --json '{"name":"My KB","url":"https://mcp.example.com/mcp","auth":"bearer"}'
+vesicle config remove-mcp my-kb
+```
+
+`add-mcp` 会生成 `MCP_MY_KB_TOKEN` 的空 `.env` 槽位并把 `Authorization` 写成 `Bearer ${MCP_MY_KB_TOKEN}`;它从不接收密钥参数,你之后直接编辑 `.env` 填入 token。`remove-mcp` 移除一个服务器并保留其他行和注释;如果移除的是最后一个服务器,整个 `mcp.yaml` 会被删除,`.env` 里的 token 槽位保留。两种操作都只改配置,不会替你验证服务器是否连通,改完建议重启并跑 `vesicle doctor`。
+
+
 ## 连接方式:legacy / auto / modern
 
 MCP 服务器可能用新旧两种连接协议。Vesicle 两种都支持,一个进程里可以混用。每个服务器可以单独指定用哪种:

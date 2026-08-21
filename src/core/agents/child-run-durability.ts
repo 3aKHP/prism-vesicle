@@ -66,6 +66,7 @@ export async function recordChildResponse(
     content: response.content,
     ...(response.reasoningContent ? { reasoningContent: response.reasoningContent } : {}),
     ...(response.thinkingBlocks ? { thinkingBlocks: response.thinkingBlocks } : {}),
+    ...(response.webSearch ? { webSearch: response.webSearch } : {}),
     ...(providerState ? { providerState: cloneProviderStateEnvelope(providerState) } : {}),
     ...(calls.length > 0 ? { toolCalls: calls } : {}),
   });
@@ -78,6 +79,7 @@ export async function recordChildResponse(
       handle,
       providerResponseId: response.id,
       ...(response.usage ? { usage: response.usage } : {}),
+      ...(response.webSearch ? { webSearch: response.webSearch } : {}),
       ...(providerState ? { providerState } : {}),
       ...(calls.length > 0 ? { toolCalls: calls } : {}),
     },

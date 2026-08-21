@@ -145,6 +145,7 @@ async function appendRejectedCandidate(
     messages.push({
       role: "assistant",
       content: point.candidate.content,
+      ...(point.candidate.webSearch ? { webSearch: point.candidate.webSearch } : {}),
       ...(point.candidate.providerState ? { providerState: cloneProviderStateEnvelope(point.candidate.providerState) } : {}),
       toolCalls: calls,
     });
@@ -155,6 +156,7 @@ async function appendRejectedCandidate(
         kind: "quality-rejected-candidate",
         engine: point.request.producer,
         providerResponseId: point.candidate.responseId,
+        ...(point.candidate.webSearch ? { webSearch: point.candidate.webSearch } : {}),
         ...(point.candidate.providerState ? { providerState: cloneProviderStateEnvelope(point.candidate.providerState) } : {}),
         warningId: point.warning.id,
         toolCalls: calls,
@@ -313,6 +315,7 @@ function assistantCandidateRecord(candidate: QualityDecisionPoint["candidate"]) 
       providerResponseId: candidate.responseId,
       ...(candidate.reasoningContent ? { reasoningContent: candidate.reasoningContent } : {}),
       ...(candidate.thinkingBlocks ? { thinkingBlocks: candidate.thinkingBlocks } : {}),
+      ...(candidate.webSearch ? { webSearch: candidate.webSearch } : {}),
       ...(candidate.providerState ? { providerState: cloneProviderStateEnvelope(candidate.providerState) } : {}),
       ...(candidate.usage ? { usage: candidate.usage } : {}),
       ...(candidate.toolCalls.length > 0 ? { toolCalls: candidate.toolCalls } : {}),

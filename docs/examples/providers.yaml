@@ -63,6 +63,14 @@ providers:
           reasoningTier: true
           reasoningContent: true
           remoteCompact: true
+          # Model supports the provider-native built-in web search; declaring
+          # it only records the capability. The session toggle's default is
+          # webSearchDefault below (/websearch overrides per session).
+          builtinWebSearch: true
+        # Start sessions with built-in web search on. Omit (or false) to keep
+        # it off until /websearch on. Searches run on the provider side: the
+        # queries leave with the request and no per-call approval applies.
+        webSearchDefault: false
 
   # codex-beta-2026-02-06: a fingerprint-level Codex simulation profile. With
   # websocket transport it sends Codex's V2 beta wire shape (openai-beta:
@@ -112,7 +120,10 @@ providers:
     apiKeyEnv: DEEPSEEK_API_KEY
     # This dated profile follows DeepSeek's stateless HTTP Responses subset.
     # As of 2026-08-13, deepseek-v4-flash and deepseek-v4-pro support this endpoint.
-    responsesProfile: deepseek-subset-2026-07-31
+    # deepseek-subset-2026-08-19 copies the frozen 2026-07-31 constraints and
+    # additionally admits the provider-side built-in web search (guided Setup
+    # writes this newer id; the older id stays valid without search admission).
+    responsesProfile: deepseek-subset-2026-08-19
     responsesTransport: http
     defaultModel: deepseek-v4-flash
     models:
@@ -125,6 +136,11 @@ providers:
           temperature: true
           maxTokens: true
           remoteCompact: false
+          # Declares provider-native built-in web search support; pair with
+          # webSearchDefault below to start new sessions with it on.
+          builtinWebSearch: true
+        # Off by default; remove or set true to enable per model entry.
+        webSearchDefault: false
       - id: deepseek-v4-pro
         capabilities:
           streaming: true
@@ -134,6 +150,9 @@ providers:
           temperature: true
           maxTokens: true
           remoteCompact: false
+          # Same built-in web search support as the flash entry above.
+          builtinWebSearch: true
+        webSearchDefault: false
 
   anthropic:
     protocol: anthropic-messages

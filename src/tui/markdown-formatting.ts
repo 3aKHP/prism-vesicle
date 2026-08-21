@@ -64,6 +64,21 @@ const EMOJI_SHORTCODES: Record<string, string> = {
   shipit: "🚢",
 };
 
+/**
+ * True when the character immediately before `index` is a backslash that is
+ * itself not escaped, i.e. it forms a CommonMark escape together with the
+ * character at `index`. Backslash parity matters: `a\\~` has a literal
+ * backslash before `~` (no escape), while `a\~` escapes the tilde.
+ */
+export function isUnescapedBackslashBefore(input: string, index: number): boolean {
+  if (input[index - 1] !== "\\") return false;
+  let slashCount = 0;
+  for (let cursor = index - 2; cursor >= 0 && input[cursor] === "\\"; cursor -= 1) {
+    slashCount += 1;
+  }
+  return slashCount % 2 === 0;
+}
+
 export function renderMarkdownFormattingExtensions(input: string): string {
   return renderEmojiShortcodes(
     renderDefinitionLists(
@@ -81,32 +96,71 @@ export function renderMarkdownFormattingExtensions(input: string): string {
 }
 
 function renderHighlightMarks(input: string): string {
-  return input.replace(/(^|[^=])==([^=\n][^=\n]*?)==(?!=)/g, (_match, prefix: string, value: string) => `${prefix}▰ ${value.trim()} ▰`);
+  return input.replace(
+    /(^|[^=])==([^=\n][^=\n]*?)==(?!=)/g,
+    (match, prefix: string, value: string, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset + prefix.length)) return match;
+      if (isUnescapedBackslashBefore(source, offset + match.length - 2)) return match;
+      return `${prefix}▰ ${value.trim()} ▰`;
+    },
+  );
 }
 
 function renderImages(input: string): string {
-  return input.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_match, label: string, url: string) => {
-    const alt = label.trim() || "image";
-    return `🖼 ${alt} (${url})`;
-  });
+  return input.replace(
+    /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    (match, label: string, url: string, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      const closingBracket = offset + 2 + label.length;
+      if (isUnescapedBackslashBefore(source, closingBracket)) return match;
+      const alt = label.trim() || "image";
+      return `🖼 ${alt} (${url})`;
+    },
+  );
 }
 
 function renderHtmlMarkdownFallbacks(input: string): string {
   return input
-    .replace(/<details>\s*<summary>([\s\S]*?)<\/summary>\s*([\s\S]*?)<\/details>/gi, (_match, summary: string, body: string) => {
-      const title = stripKnownHtml(summary).trim();
-      const content = stripKnownHtml(body).trim();
-      return content ? `▸ ${title}\n${content}` : `▸ ${title}`;
+    .replace(
+      /<details>\s*<summary>([\s\S]*?)<\/summary>\s*([\s\S]*?)<\/details>/gi,
+      (match, summary: string, body: string, offset: number, source: string) => {
+        if (isUnescapedBackslashBefore(source, offset)) return match;
+        const title = stripKnownHtml(summary).trim();
+        const content = stripKnownHtml(body).trim();
+        return content ? `▸ ${title}\n${content}` : `▸ ${title}`;
+      },
+    )
+    .replace(
+      /<abbr\s+title=(["'])(.*?)\1>([\s\S]*?)<\/abbr>/gi,
+      (match, _quote: string, title: string, label: string, offset: number, source: string) => {
+        if (isUnescapedBackslashBefore(source, offset)) return match;
+        return `${stripKnownHtml(label).trim()} (${title.trim()})`;
+      },
+    )
+    .replace(/<kbd>([\s\S]*?)<\/kbd>/gi, (match, value: string, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return `‹${stripKnownHtml(value).trim()}›`;
     })
-    .replace(/<abbr\s+title=(["'])(.*?)\1>([\s\S]*?)<\/abbr>/gi, (_match, _quote: string, title: string, label: string) => {
-      return `${stripKnownHtml(label).trim()} (${title.trim()})`;
+    .replace(/<mark>([\s\S]*?)<\/mark>/gi, (match, value: string, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return `▰ ${stripKnownHtml(value).trim()} ▰`;
     })
-    .replace(/<kbd>([\s\S]*?)<\/kbd>/gi, (_match, value: string) => `‹${stripKnownHtml(value).trim()}›`)
-    .replace(/<mark>([\s\S]*?)<\/mark>/gi, (_match, value: string) => `▰ ${stripKnownHtml(value).trim()} ▰`)
-    .replace(/<u>([\s\S]*?)<\/u>/gi, (_match, value: string) => `＿${stripKnownHtml(value).trim()}＿`)
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*<p(?:\s+[^>]*)?>/gi, "\n")
-    .replace(/<\/?(?:div|p)(?:\s+[^>]*)?>/gi, "");
+    .replace(/<u>([\s\S]*?)<\/u>/gi, (match, value: string, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return `＿${stripKnownHtml(value).trim()}＿`;
+    })
+    .replace(/<br\s*\/?>/gi, (match, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return "\n";
+    })
+    .replace(/<\/p>\s*<p(?:\s+[^>]*)?>/gi, (match, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return "\n";
+    })
+    .replace(/<\/?(?:div|p)(?:\s+[^>]*)?>/gi, (match, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return "";
+    });
 }
 
 function stripKnownHtml(input: string): string {
@@ -118,14 +172,22 @@ function stripKnownHtml(input: string): string {
 
 function renderNativeScripts(input: string): string {
   return input
-    .replace(/(^|[^~])~([A-Za-z0-9+\-=()]{1,8})~(?!~)/g, (match, prefix: string, value: string) => {
-      if (!shouldRenderScript(value)) return match;
-      return `${prefix}${mapScript(value, SUBSCRIPT_CHARS)}`;
-    })
-    .replace(/(^|[^^])\^([A-Za-z0-9+\-=()]{1,8})\^(?!\^)/g, (match, prefix: string, value: string) => {
-      if (!shouldRenderScript(value)) return match;
-      return `${prefix}${mapScript(value, SUPERSCRIPT_CHARS)}`;
-    });
+    .replace(
+      /(^|[^~])~([A-Za-z0-9+\-=()]{1,8})~(?!~)/g,
+      (match, prefix: string, value: string, offset: number, source: string) => {
+        if (isUnescapedBackslashBefore(source, offset + prefix.length)) return match;
+        if (!shouldRenderScript(value)) return match;
+        return `${prefix}${mapScript(value, SUBSCRIPT_CHARS)}`;
+      },
+    )
+    .replace(
+      /(^|[^^])\^([A-Za-z0-9+\-=()]{1,8})\^(?!\^)/g,
+      (match, prefix: string, value: string, offset: number, source: string) => {
+        if (isUnescapedBackslashBefore(source, offset + prefix.length)) return match;
+        if (!shouldRenderScript(value)) return match;
+        return `${prefix}${mapScript(value, SUPERSCRIPT_CHARS)}`;
+      },
+    );
 }
 
 function shouldRenderScript(value: string): boolean {
@@ -139,7 +201,10 @@ function mapScript(value: string, map: Record<string, string>): string {
 function renderFootnotes(input: string): string {
   return input
     .replace(/^\[\^([^\]]+)\]:\s*(.+)$/gm, (_match, label: string, body: string) => `［${label}］ ${body}`)
-    .replace(/\[\^([^\]]+)\]/g, (_match, label: string) => `［${label}］`);
+    .replace(/\[\^([^\]]+)\]/g, (match, _label: string, offset: number, source: string) => {
+      if (isUnescapedBackslashBefore(source, offset)) return match;
+      return `［${_label}］`;
+    });
 }
 
 function renderDefinitionLists(input: string): string {
@@ -165,5 +230,8 @@ function renderDefinitionLists(input: string): string {
 }
 
 function renderEmojiShortcodes(input: string): string {
-  return input.replace(/:([+\-\w]+):/g, (match, name: string) => EMOJI_SHORTCODES[name] ?? match);
+  return input.replace(/:([+\-\w]+):/g, (match, name: string, offset: number, source: string) => {
+    if (isUnescapedBackslashBefore(source, offset)) return match;
+    return EMOJI_SHORTCODES[name] ?? match;
+  });
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { PermissionMode } from "../core/permissions";
 import type { EngineId } from "../core/engine/profile";
@@ -9,13 +9,16 @@ import {
   parseEnvFile,
   parseProviderConfig,
   providerConfigPathFromEnv,
-  type ProviderModelProfile,
+  serializeProviderLines,
   type ProviderProfile,
   type ProviderRegistry,
 } from "../config/providers";
 import { parseMcpConfig, mcpConfigPathFromEnv } from "../mcp/config";
+import { appendMcpServerBlock, mcpTokenEnvKey, serializeMcpServerBlock, type McpServerBlock } from "../mcp/config-edit";
 import { loadPermissionSettings } from "../config/permissions";
 import { atomicWrite } from "../config/atomic-write";
+import { readOptionalText as readOptional } from "../config/file-read";
+import { sanitizeId, uniqueId, yamlScalar } from "../config/yaml-writer";
 
 export type SetupMcpServer = {
   name: string;
@@ -135,17 +138,31 @@ export function setEnvValues(source: string, updates: Record<string, string>): s
   return `${output.join("\n")}\n`;
 }
 
-/**
- * Shared provider-registry write pipeline for config CLI commands:
- * serialize → validate by re-parsing (before touching disk) → atomic write →
- * reload to confirm the round-trip. A failed cross-field constraint throws
- * before any bytes land on disk, leaving the existing providers.yaml intact.
- */
-export async function writeProviderRegistry(registry: ProviderRegistry): Promise<string> {
+export async function editProviderRegistrySource(
+  edit: (source: string, registry: ProviderRegistry) => string,
+): Promise<string> {
   const path = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
-  parseProviderConfig(source, path, process.env);
-  await atomicWrite(path, source);
+  const source = await readOptional(path);
+  if (source === undefined) throw new Error(`Provider config does not exist at ${path}.`);
+  const registry = await loadProviderRegistry();
+  const candidate = edit(source, registry);
+  return commitProviderRegistrySource(path, candidate);
+}
+
+/**
+ * Shared provider-registry commit pipeline for config CLI commands: validate
+ * the complete candidate before side effects, run an optional prerequisite
+ * write, atomically replace providers.yaml, then reload the on-disk registry.
+ */
+export async function commitProviderRegistrySource(
+  path: string,
+  candidate: string,
+  validationEnv: NodeJS.ProcessEnv = process.env,
+  beforeWrite?: () => Promise<void>,
+): Promise<string> {
+  parseProviderConfig(candidate, path, validationEnv);
+  await beforeWrite?.();
+  await atomicWrite(path, candidate);
   await loadProviderRegistry();
   return path;
 }
@@ -159,17 +176,7 @@ export function serializeProviderRegistry(registry: ProviderRegistry): string {
     "providers:",
   ];
   for (const provider of registry.providers) {
-    lines.push(`  ${yamlKey(provider.id)}:`);
-    lines.push(`    protocol: ${provider.protocol}`);
-    lines.push(`    baseUrl: ${yamlScalar(provider.baseUrl)}`);
-    lines.push(`    apiKeyEnv: ${provider.apiKeyEnv}`);
-    if (provider.authMethod) lines.push(`    authMethod: ${provider.authMethod}`);
-    if (provider.userAgent) lines.push(`    userAgent: ${yamlScalar(provider.userAgent)}`);
-    if (provider.responsesProfile) lines.push(`    responsesProfile: ${provider.responsesProfile}`);
-    if (provider.responsesTransport) lines.push(`    responsesTransport: ${provider.responsesTransport}`);
-    if (provider.defaultModel) lines.push(`    defaultModel: ${yamlScalar(provider.defaultModel)}`);
-    lines.push("    models:");
-    for (const model of provider.models) serializeModel(lines, model);
+    lines.push(...serializeProviderLines(provider));
   }
   return `${lines.join("\n")}\n`;
 }
@@ -220,7 +227,7 @@ function mergeProvider(
             }
           : preset === "deepseek-responses"
             ? {
-                responsesProfile: "deepseek-subset-2026-07-31" as const,
+                responsesProfile: "deepseek-subset-2026-08-19" as const,
                 responsesTransport: "http" as const,
               }
           : {}),
@@ -248,43 +255,12 @@ function presetFromProvider(provider: ProviderProfile | undefined): SetupProvide
   if (provider.protocol === "openai-chat-compatible") return "chat-compatible";
   if (provider.responsesProfile === "openai-public") return "openai-responses";
   if (provider.responsesProfile === "mimo-subset-2026-07-30") return "mimo-responses";
-  if (provider.responsesProfile === "deepseek-subset-2026-07-31") return "deepseek-responses";
+  if (provider.responsesProfile === "deepseek-subset-2026-07-31"
+    || provider.responsesProfile === "deepseek-subset-2026-08-19") return "deepseek-responses";
   if (provider.responsesProfile === "codex-http-relay" || provider.responsesProfile === "codex-beta-2026-02-06") {
     return "openai-responses";
   }
   return undefined;
-}
-
-function serializeModel(lines: string[], model: ProviderModelProfile): void {
-  const structured = model.generation || model.capabilities || model.limits;
-  if (!structured) {
-    lines.push(`      - ${yamlScalar(model.id)}`);
-    return;
-  }
-  lines.push(`      - id: ${yamlScalar(model.id)}`);
-  if (model.generation) {
-    lines.push("        generation:");
-    if (model.generation.temperature !== undefined) lines.push(`          temperature: ${model.generation.temperature}`);
-    if (model.generation.maxTokens !== undefined) lines.push(`          maxTokens: ${model.generation.maxTokens}`);
-  }
-  if (model.capabilities) {
-    lines.push("        capabilities:");
-    for (const [key, value] of Object.entries(model.capabilities)) {
-      if (value !== undefined) lines.push(`          ${key}: ${value}`);
-    }
-  }
-  if (model.limits) {
-    lines.push("        limits:");
-    if (model.limits.contextWindow !== undefined) lines.push(`          contextWindow: ${model.limits.contextWindow}`);
-    if (model.limits.maxOutputTokens !== undefined) lines.push(`          maxOutputTokens: ${model.limits.maxOutputTokens}`);
-    if (model.limits.autoCompact) {
-      lines.push("          autoCompact:");
-      const compact = model.limits.autoCompact;
-      if (compact.enabled !== undefined) lines.push(`            enabled: ${compact.enabled}`);
-      if (compact.threshold !== undefined) lines.push(`            threshold: ${compact.threshold}`);
-      if (compact.reserveOutputTokens !== undefined) lines.push(`            reserveOutputTokens: ${compact.reserveOutputTokens}`);
-    }
-  }
 }
 
 function mcpAddition(
@@ -296,23 +272,24 @@ function mcpAddition(
   const parsed = existingSource === undefined ? undefined : parseMcpConfig(existingSource, "mcp.yaml", env);
   const id = uniqueId(sanitizeId(server.name), new Set(parsed?.servers.map((entry) => entry.id) ?? []));
   const envUpdates: Record<string, string> = {};
-  const lines = [`  ${yamlKey(id)}:`, "    enabled: true", "    transport: streamable-http", `    url: ${yamlScalar(server.url.trim())}`, "    negotiation: auto"];
+  const block: McpServerBlock = {
+    id,
+    enabled: true,
+    transport: "streamable-http",
+    url: server.url.trim(),
+    negotiation: "auto",
+  };
   if (server.auth !== "none") {
-    const envKey = `MCP_${id.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}_TOKEN`;
+    const envKey = mcpTokenEnvKey(id);
     envUpdates[envKey] = server.secret!.trim();
     const header = server.auth === "bearer" ? "Authorization" : server.headerName!.trim();
     const prefix = server.auth === "bearer" ? "Bearer " : "";
-    lines.push("    headers:", `      ${yamlKey(header)}: ${yamlScalar(`${prefix}\${${envKey}}`)}`);
+    block.headers = { [header]: `${prefix}\${${envKey}}` };
   }
-  lines.push("    enabledEngines:");
-  for (const engine of server.enabledEngines) lines.push(`      - ${engine}`);
+  block.enabledEngines = server.enabledEngines;
 
-  let source = existingSource?.replace(/\r\n/g, "\n").replace(/\s*$/, "") ?? "enabled: true\n\nservers:";
-  if (existingSource !== undefined && parsed && !parsed.enabled) {
-    source = source.replace(/^enabled:\s*false(?:\s+#.*)?$/m, "enabled: true");
-  }
-  if (!/^servers:\s*$/m.test(source)) source += "\n\nservers:";
-  source = `${source}\n${lines.join("\n")}\n`;
+  const lines = serializeMcpServerBlock(block);
+  const source = appendMcpServerBlock(existingSource, lines);
   parseMcpConfig(source, "mcp.yaml", { ...env, ...envUpdates });
   return { source, envUpdates };
 }
@@ -378,34 +355,7 @@ function validateMcpServer(server: SetupMcpServer): void {
   if (server.auth === "custom-header" && !server.headerName?.trim()) throw new Error("MCP custom header name is required.");
 }
 
-function uniqueId(base: string, used: Set<string>): string {
-  if (!used.has(base)) return base;
-  let suffix = 2;
-  while (used.has(`${base}-${suffix}`)) suffix += 1;
-  return `${base}-${suffix}`;
-}
-
-function sanitizeId(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "service";
-}
-
-function yamlKey(value: string): string {
-  return /^[A-Za-z0-9_-]+$/.test(value) ? value : yamlScalar(value);
-}
-
-function yamlScalar(value: string): string {
-  if (/^[A-Za-z0-9_./:@+${}-]+$/.test(value)) return value;
-  return JSON.stringify(value);
-}
-
 function dotenvScalar(value: string): string {
   if (/^[A-Za-z0-9_./:@+\-=]+$/.test(value)) return value;
   return JSON.stringify(value);
-}
-
-async function readOptional(path: string): Promise<string | undefined> {
-  return readFile(path, "utf8").catch((error: unknown) => {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined;
-    throw error;
-  });
 }

@@ -4,7 +4,7 @@
 
 English | [简体中文](../../zh-CN/advanced/quality-guard.md)
 
-> **Status (as of `1.0.0-alpha.10`):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.0.0-beta.1`):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 The Output Quality Guard is a **target-aware** quality layer: at the quality boundary it re-reads the complete post-image of a guarded artifact and checks the prose against an anti-ai-flavor rule pack, optionally followed by an experimental Semantic Judge. Its goal is to make produced prose read more human — not to judge whether the author was AI.
 
@@ -43,7 +43,7 @@ The normal path is the guided `/quality` command (run with no arguments). It ope
 
 Selecting **Review and revise** (or running `/quality rewrite [provider model [timeout-ms]]`) stages the candidate and opens a red, two-stage confirmation panel modelled on the `/permissions YOLO` flow: Enter advances from `Continue` to `Enable Review and Rewrite`, a second Enter persists the setting, and Esc at either stage leaves the prior configuration unchanged. No `/quality confirm` second command exists anymore.
 
-For automation and alpha diagnostics the same settings live in `quality.yaml` beside `providers.yaml`:
+For automation and beta diagnostics the same settings live in `quality.yaml` beside `providers.yaml`:
 
 ```yaml
 version: 2
@@ -76,10 +76,24 @@ When a future Harness Pack requires it, Vesicle recognizes and fail-closed hash-
 - Observe bindings cover Dyad / Weaver / Weaver-Orch / Scene Writer / Stage; **Evaluate and Chapter Reviewer reports are not enforced recursively**.
 - A quality decision takes priority over gates: an unresolved quality decision is handled before other gates.
 
+## When the quality decision panel appears
+
+If automatic revision is interrupted or exhausts its two attempts, the bottom panel says `Revision interrupted` or `Revision exhausted`. Use `↑` / `↓` and confirm with Enter:
+
+| Choice | What happens | Use it when |
+|---|---|---|
+| `Revise again` | Makes one explicitly user-authorized request to the original Engine to revise this target | You agree with the findings and accept one more provider request and rewrite |
+| `Use current version` | Makes no provider request; keeps a file target as-is, or delivers a response target as the final reply; records either as accepted together with its warning/findings | You inspected the content and accept it without pretending it is clean |
+| `Stop` | Makes no provider request; does not deliver a rejected response candidate or accept the current file; resolves this decision point while retaining the warning | You do not want to accept or spend more now and will handle it separately later |
+
+The status first says `starting user-authorized quality revision` or `recording quality decision: ...`. After the decision is recorded, the panel closes and session/Host artifact status refreshes. Neither `Use current version` nor `Stop` erases the warning. Both resolve the current decision point, so restart does not reopen the same panel: the former delivers/accepts the current version, while the latter withholds a rejected response candidate and marks the current target as stopped. To revise it later, start a new revision request from the warning's path or the session context.
+
+If the first item says `Revision unavailable`, do not select it. A common cause is a Harness / Rule Pack / experimental-profile identity mismatch after resume. Run `vesicle assets status` and `vesicle doctor`, restore the exact Harness identity recorded by the session, and resume again. If that identity cannot be restored, you can still choose `Use current version` or `Stop`, or copy the artifact and start the task again in a new session. Do not edit session JSONL to clear the decision.
+
 ## Developer-only
 
 `vesicle quality benchmark` is a **developer-only** Semantic Judge measurement command (requires a frozen plan and `--allow-live`, records measurement evidence only, and cannot enable semantic blocking). It is separate from Runtime policy and is not expanded here; see [`docs/dev/QUALITY_BENCHMARK.md`](../../../dev/QUALITY_BENCHMARK.md).
 
 ## Status will change
 
-The 🟢/🟡 markers on this page reflect maturity in `1.0.0-alpha.10`. The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.
+The 🟢/🟡 markers on this page reflect maturity in `1.0.0-beta.1`. The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.

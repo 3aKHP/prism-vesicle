@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "types": ["bun-types"],
     "jsx": "preserve",
-    "jsxImportSource": "@opentui/solid"
+    "jsxImportSource": "@3akhp/opentui-solid"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx"]
 }

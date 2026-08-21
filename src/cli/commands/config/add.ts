@@ -1,14 +1,15 @@
 // vesicle config add-provider — structured provider addition via JSON entry.
-// Validates the entry, merges into the existing registry, serializes with the
-// canonical serializer, writes atomically, and creates the empty .env slot for
-// the provider's apiKeyEnv. Full re-parse validation after write.
+// Validates the entry, inserts it into the existing registry source, writes
+// atomically, and creates the empty .env slot for the provider's apiKeyEnv.
+// Full re-parse validation happens before the write.
 
-import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { loadProviderRegistry, providerConfigPathFromEnv, parseProviderConfig, parseEnvFile } from "../../../config/providers";
+import { loadProviderRegistry, providerConfigPathFromEnv, parseEnvFile } from "../../../config/providers";
 import type { ProviderProfile, ProviderModelProfile } from "../../../config/providers";
-import { serializeProviderRegistry, setEnvValues } from "../../../setup/config-writer";
+import { appendProviderToSource } from "../../../config/provider-source-edit";
+import { commitProviderRegistrySource, setEnvValues } from "../../../setup/config-writer";
 import { atomicWrite } from "../../../config/atomic-write";
+import { readOptionalText } from "../../../config/file-read";
 
 type AddResult = {
   ok: true;
@@ -55,17 +56,16 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
     throw new Error(`Provider "${profile.id}" already exists. Remove it manually or choose a different id.`);
   }
 
-  registry.providers.push(profile);
   const providerPath = providerConfigPathFromEnv();
-  const source = serializeProviderRegistry(registry);
+  const existingProviderSource = await readOptionalText(providerPath);
+  if (existingProviderSource === undefined) throw new Error(`Provider config does not exist at ${providerPath}.`);
+  const source = appendProviderToSource(existingProviderSource, profile);
 
   // Validate the serialized output by re-parsing. This catches any schema
   // violation that the entry validation missed.
   const envPath = join(dirname(providerPath), ".env");
   const existingEnv = await readEnvFile(envPath);
   const effectiveEnv = { ...process.env, ...parseEnvFile(existingEnv || "", envPath) };
-  parseProviderConfig(source, providerPath, effectiveEnv);
-
   // Write .env first: if providers.yaml fails after, the extra empty slot is
   // harmless (no provider references it). The reverse order would leave a
   // provider without its apiKeyEnv slot — a broken state.
@@ -73,11 +73,11 @@ async function addProvider(entry: Record<string, unknown>): Promise<AddResult> {
   // existing value (another provider may share this apiKeyEnv).
   const fileEnv = parseEnvFile(existingEnv || "", envPath);
   const keyAlreadyExists = fileEnv[profile.apiKeyEnv] !== undefined;
-  if (!keyAlreadyExists) {
+  await commitProviderRegistrySource(providerPath, source, effectiveEnv, async () => {
+    if (keyAlreadyExists) return;
     const updatedEnv = setEnvValues(existingEnv, { [profile.apiKeyEnv]: "" });
     await atomicWrite(envPath, updatedEnv, 0o600);
-  }
-  await atomicWrite(providerPath, source);
+  });
 
   return {
     ok: true,
@@ -182,14 +182,5 @@ function optionalString(entry: Record<string, unknown>, field: string): string |
 }
 
 async function readEnvFile(path: string): Promise<string> {
-  try {
-    return await readFile(path, "utf8");
-  } catch (error) {
-    if (isEnoent(error)) return "";
-    throw error;
-  }
-}
-
-function isEnoent(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && (error as { code: string }).code === "ENOENT");
+  return (await readOptionalText(path)) ?? "";
 }

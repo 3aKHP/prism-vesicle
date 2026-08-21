@@ -5,7 +5,13 @@ export type ResponsesProfile =
   | "codex-http-relay"
   | "codex-beta-2026-02-06"
   | "mimo-subset-2026-07-30"
-  | "deepseek-subset-2026-07-31";
+  | "deepseek-subset-2026-07-31"
+  | "deepseek-subset-2026-08-19";
+
+/** Single owner of DeepSeek-subset membership; config and provider layers share it. */
+export function isDeepSeekSubsetProfile(profile: string | undefined): profile is "deepseek-subset-2026-07-31" | "deepseek-subset-2026-08-19" {
+  return profile === "deepseek-subset-2026-07-31" || profile === "deepseek-subset-2026-08-19";
+}
 export type ResponsesTransport = "http" | "websocket";
 
 export type GenerationDefaults = {
@@ -22,6 +28,8 @@ export type ModelCapabilities = {
   maxTokens?: boolean;
   vision?: boolean;
   remoteCompact?: boolean;
+  /** Model supports a provider-native built-in web search declaration. */
+  builtinWebSearch?: boolean;
 };
 
 export type AutoCompactLimits = {
@@ -50,4 +58,10 @@ export type VesicleConfig = {
   generation?: GenerationDefaults;
   capabilities?: ModelCapabilities;
   limits?: ModelLimits;
+  /**
+   * Session default for the built-in web search toggle. Independent of
+   * `capabilities.builtinWebSearch` (support): the effective toggle requires
+   * both this preference and the capability. Absent means off.
+   */
+  webSearchDefault?: boolean;
 };

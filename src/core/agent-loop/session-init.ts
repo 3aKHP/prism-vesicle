@@ -33,7 +33,7 @@ import {
   type SkillCatalogSnapshot,
 } from "../skills";
 import { generationMetadata, mergeGeneration } from "./generation";
-import { resolveToolSurface } from "./tool-surface";
+import { resolveToolSurface, resolveWebSearchSurfaceOptions } from "./tool-surface";
 import type { RunPromptOptions } from "./types";
 import { appendHostContext } from "../prompt/host-context";
 
@@ -155,6 +155,7 @@ export async function initializeSessionIdentity(
     permission.shellInterpreter,
     {},
     { catalogNames: catalogNames(skillCatalog) },
+    await resolveWebSearchSurfaceOptions(config, session.sessionId, profile),
   );
 
   await session.append(

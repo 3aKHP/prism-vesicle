@@ -30,16 +30,24 @@ You are answering a question about Prism Vesicle using its bundled public docume
 | Topic | Reference |
 |-------|-----------|
 | Installation, first run, overview | `references/root-readme.md` |
+| User-manual task routing | `references/user-zh-cn-readme.md` or `references/user-en-readme.md` |
+| First conversation, Workspace-created source note, gates | `references/user-zh-cn-tutorials-first-conversation.md` or `references/user-en-tutorials-first-conversation.md` |
 | Configuration (providers, models, env) | `references/user-zh-cn-reference-configuration.md` or `references/user-en-reference-configuration.md` |
 | Commands, keyboard shortcuts | `references/user-zh-cn-reference-commands.md` or `references/user-en-reference-commands.md` |
+| Terminal CLI commands | `references/user-zh-cn-reference-cli-commands.md` or `references/user-en-reference-cli-commands.md` |
+| Choosing ETL, Runtime, Evaluate, Weaver, Dyad, or Stage | `references/user-zh-cn-advanced-engines.md` or `references/user-en-advanced-engines.md` |
+| Web search and clipboard images | `references/user-zh-cn-tutorials-web-search-and-images.md` or `references/user-en-tutorials-web-search-and-images.md` |
+| Using vesicle-docs and delegating to SubAgents | `references/user-zh-cn-tutorials-skills-and-subagents.md` or `references/user-en-tutorials-skills-and-subagents.md` |
+| Resume, regenerate, candidate switching, rewind, and compaction | `references/user-zh-cn-tutorials-sessions-and-rewind.md` or `references/user-en-tutorials-sessions-and-rewind.md` |
 | Skills runtime, scopes, precedence | `references/dev-skills.md` |
 | Engines, Stage, profiles | `references/dev-architecture.md`, `references/dev-stage.md` |
 | Tools, path guards, shell_exec | `references/dev-tools.md` |
-| Sessions, compaction, rewind | `references/dev-sessions.md` |
+| Session persistence and recovery contracts | `references/dev-sessions.md` |
 | TUI, panels, interaction | `references/dev-tui.md` |
 | Providers, protocols, adapters | `references/dev-providers.md` |
 | Permissions, risk, user agency | `references/dev-user-agency-and-risk-disclosure.md` |
 | Assets, Harness, V10 pack | `references/dev-assets.md` |
+| Harness Pack user workflow | `references/user-zh-cn-advanced-harness-packs.md` or `references/user-en-advanced-harness-packs.md` |
 | SubAgents, delegation | `references/dev-subagents.md` |
 | Quality guard, validators | `references/dev-quality-guard.md` |
 | Workflow, branching, PRs | `references/dev-workflow.md` |

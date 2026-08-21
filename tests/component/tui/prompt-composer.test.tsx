@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { TextAttributes } from "@opentui/core";
-import { testRender } from "@opentui/solid";
+import { TextAttributes } from "@3akhp/opentui-core";
+import { testRender } from "@3akhp/opentui-solid";
 import { PromptComposer, updateComposerCursorOwnership } from "../../../src/tui/PromptComposer";
 
 describe("tui: prompt composer native cursor", () => {

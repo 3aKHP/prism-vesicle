@@ -2,7 +2,7 @@
 
 [English](./CONTRIBUTING.md) | [简体中文](./CONTRIBUTING.zh-CN.md)
 
-Prism Vesicle's internal development remains rapid, but public alpha release work follows the release branch and PR path in [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
+Prism Vesicle's internal development remains rapid, but public beta release work follows the release branch and PR path in [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
 
 Release contributors must follow the public [Code Signing Policy](./CODE_SIGNING_POLICY.md). External contributors retain authorship; the human maintainer `3aKHP` reviews repository changes. Windows signing is currently deferred, so the signing-approver role and per-request manual approval apply only when signing is taken up in the future.
 
@@ -100,6 +100,7 @@ Keep commands, paths, configuration keys, code, and product identifiers unchange
 
 - Explain the behavior change and why it belongs in the current milestone.
 - Include verification commands in the PR description.
+- When the PR completes an issue, put an explicit closing keyword such as `Closes #<issue>` on its own line in the PR body. Use `Refs #<issue>` for related work that does not close the issue; `Implements #<issue>` and title references are not closing syntax. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
 - Update `README.md`, `STATUS.md`, `CHANGELOG.md`, `docs/dev/ARCHITECTURE.md`, or the owning domain contract when user-visible behavior, runtime behavior, or an architecture boundary changes. Update `docs/dev/STYLE.md` only when source-code conventions change.
 - Keep generated `.vesicle/` sessions out of git.
 - Keep new or edited Markdown prose naturally wrapped.

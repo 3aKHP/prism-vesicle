@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CliRenderer } from "@opentui/core";
+import type { CliRenderer } from "@3akhp/opentui-core";
 
 export async function copySelectionToClipboard(renderer: CliRenderer): Promise<boolean> {
   const selectedText = renderer.getSelection()?.getSelectedText();

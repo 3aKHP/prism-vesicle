@@ -12,7 +12,7 @@ export function configureTreeSitterWorkerPath(
   }
 
   const externalWorkerPath = installedTreeSitterWorkerPath()
-    ?? join(runtimeRoot, "node_modules", "@opentui", "core", "parser.worker.js");
+    ?? join(runtimeRoot, "node_modules", "@3akhp", "opentui-core", "parser.worker.js");
   if (existsSync(externalWorkerPath)) {
     env.OTUI_TREE_SITTER_WORKER_PATH = externalWorkerPath;
     setGlobalTreeSitterWorkerPath(externalWorkerPath);
@@ -25,10 +25,12 @@ export function configureTreeSitterWorkerPath(
 /**
  * Resolve from this module rather than the active project directory. npm/Bun
  * bins run with the user's project as cwd, not the installed package root.
+ * The fork exports its worker through the ./parser.worker subpath; the
+ * resolved target is the package-root parser.worker.js file.
  */
 function installedTreeSitterWorkerPath(): string | undefined {
   try {
-    return fileURLToPath(import.meta.resolve("@opentui/core/parser.worker.js"));
+    return fileURLToPath(import.meta.resolve("@3akhp/opentui-core/parser.worker"));
   } catch {
     return undefined;
   }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createSignal } from "solid-js";
-import { KeyEvent } from "@opentui/core";
+import { KeyEvent } from "@3akhp/opentui-core";
 import { runPrompt } from "../../../src/core/agent-loop/run";
 import { createSideQuestionController } from "../../../src/tui/side-question-controller";
 import { resolveSideQuestionSnapshot } from "../../../src/core/side-question/service";

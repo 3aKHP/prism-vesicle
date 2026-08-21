@@ -4,7 +4,7 @@
 
 [English](../../en/advanced/quality-guard.md) | 简体中文
 
-> **状态(截至 `1.0.0-alpha.10`):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.0.0-beta.1`):** 🟢 守卫主体(确定性 finding + anti-ai-flavor 规则包)已实现并按当前 Harness 接线运行;🟡 Semantic Judge、rewrite 绑定下的文档指标、`semantic-rewrite@1` 策略为**实验性**。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 
 Output Quality Guard 是一层**面向 target** 的质量检查:在质量边界上重新读取受保护制品的完整 post-image,用 anti-ai-flavor 规则包检测"机器味",并可选用一个实验性 Semantic Judge 复核。它的目的是让产出散文更像人写的,而不是判定作者是不是 AI。
 
@@ -43,7 +43,7 @@ Output Quality Guard 是一层**面向 target** 的质量检查:在质量边界�
 
 选择 **Review and revise**(或运行 `/quality rewrite [provider model [timeout-ms]]`)会暂存候选并打开一个红色两阶段确认面板,交互仿照 `/permissions YOLO`:Enter 从 `Continue` 推进到 `Enable Review and Rewrite`,第二次 Enter 才写入设置,任意阶段按 Esc 都保持原配置不变。已不再有 `/quality confirm` 这第二条命令。
 
-用于自动化与 alpha 诊断时,同样的设置写在 `quality.yaml`(与 `providers.yaml` 同目录):
+用于自动化与 Beta 诊断时,同样的设置写在 `quality.yaml`(与 `providers.yaml` 同目录):
 
 ```yaml
 version: 2
@@ -76,10 +76,24 @@ judgeTimeoutMs: 15000
 - observe 绑定覆盖 Dyad / Weaver / Weaver-Orch / Scene Writer / Stage;**Evaluate 与 Chapter Reviewer 的报告不递归强制**。
 - 质量决策优先级高于门:有未决质量决策时,它会先于其它 gate 处理。
 
+## 看到质量决策面板时怎么选
+
+自动修订被中断或两次机会耗尽时,底部会出现 `Revision interrupted` / `Revision exhausted` 面板。用 `↑` / `↓` 选择,Enter 确认:
+
+| 选项 | 会发生什么 | 何时使用 |
+|---|---|---|
+| `Revise again` | 发起一次你明确授权的原 Engine 供应商请求,尝试修当前 target | 你认同 finding,且愿意付出一次请求与改写成本 |
+| `Use current version` | 不再请求供应商;文件 target 保留当前文件,回复 target 则把当前候选显示为正式回复;两者都连同 warning/findings 记录为已接受 | 你检查过内容,认为当前版本可用但不应伪装成 clean |
+| `Stop` | 不请求供应商;不把被拒绝的回复候选显示为正式回复,也不接受当前文件;结束这个待决点并保留 warning | 现在不想接受也不想继续花费,准备之后另行处理 |
+
+选择后状态行先显示 `starting user-authorized quality revision` 或 `recording quality decision: ...`;记录成功后待决面板消失,会话与 Host 制品状态刷新。`Use current version` 与 `Stop` 都不会消灭 warning。两者都会解决当前待决点,所以重启后不会再次弹出同一个面板;区别是前者明确交付/接受当前版本,后者不交付被拒绝的回复候选、把当前 target 标为停止处理。若要稍后再修,请从 warning 标出的路径或会话上下文发起一条新的修订请求。
+
+如果第一项显示 `Revision unavailable`,不要选它。常见原因是恢复会话时 Harness / Rule Pack / 实验性 profile 身份与记录不一致。运行 `vesicle assets status` 与 `vesicle doctor`,恢复记录使用的精确 Harness 身份后再 `/resume`;无法恢复时仍可选择 `Use current version` 或 `Stop`,也可以复制制品后在新会话中重新发起任务。不要编辑 session JSONL 强行清掉决策。
+
 ## 开发者专用
 
 `vesicle quality benchmark` 是一个**仅供开发者**的 Semantic Judge 评测命令(需冻结 plan 与 `--allow-live`,只记录测量证据,不能开启语义阻塞)。它独立于 Runtime 策略,不在本页展开;见 [`docs/dev/QUALITY_BENCHMARK.md`](../../../dev/QUALITY_BENCHMARK.md)。
 
 ## 状态会变
 
-本页的 🟢/🟡 标注反映 `1.0.0-alpha.10` 的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。
+本页的 🟢/🟡 标注反映 `1.0.0-beta.1` 的成熟度。Semantic Judge、文档指标、Semantic Rewrite Policy 都可能随版本转稳——以 [`STATUS.md`](../../../../STATUS.md) 为权威当前状态。

@@ -1,4 +1,4 @@
-import { render } from "@opentui/solid";
+import { render } from "@3akhp/opentui-solid";
 import { SetupApp, type SetupCompletion } from "./app";
 import { createThemePreferenceController, parseEnvTheme } from "../tui/theme-preference-controller";
 

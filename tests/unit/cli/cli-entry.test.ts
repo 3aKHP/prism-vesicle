@@ -15,7 +15,7 @@ describe("CLI entrypoint", () => {
     const tuiIndex = source.indexOf('await import("../tui")');
 
     expect(source).not.toMatch(/import\s+\{\s*runTui\s*\}\s+from\s+["']\.\.\/tui["']/);
-    expect(source).toContain('["@opentui/solid", "preload"].join("/")');
+    expect(source).toContain('["@3akhp/opentui-solid", "preload"].join("/")');
     expect(preloadIndex).toBeGreaterThanOrEqual(0);
     expect(tuiIndex).toBeGreaterThan(preloadIndex);
   });
