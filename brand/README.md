@@ -13,6 +13,7 @@ The mark follows a fixed visual design language. [`VISUAL_LANGUAGE.md`](./VISUAL
 
 - `prism-vesicle.svg` — primary luminous mark on the dark ground. Radial volume + Fresnel rim + blurred volumetric light; needs an SVG renderer with `feGaussianBlur` support (all browsers, librsvg, resvg, cairosvg).
 - `prism-vesicle-light.svg` — off-white variant. The Fresnel rim inverts to deep emerald and the beam deepens to `#047857`; the spectrum keeps the locked hues. Never place the dark variant on pure white.
+- `prism-vesicle-mark.svg` — compact transparent mark for repository and documentation mastheads. It preserves the vesicle, prism, incident beam, and restrained spectrum at small display sizes, and its fixed contrast works on neutral dark and light document surfaces without a container tile.
 - `prism-vesicle-mono.svg` — single-colour silhouette (`currentColor`): the membrane ring broken at the two pores, prism solid inside. For favicons, installer icons, engraving, and small sizes.
 - `prism-vesicle-animated.svg` — motion variant. A light spot travels the membrane (14 s), the lit rim breathes (12 s), the beam drifts (10 s); linear easing only, and `prefers-reduced-motion` holds the static frame. Animation is CSS inside the SVG, so it plays in browsers and stays still in rasterisers.
 - `exports/prism-vesicle-1024-dark.png`, `exports/prism-vesicle-1024-light.png` — 1024×1024 raster exports of the two grounds.
@@ -20,6 +21,6 @@ The mark follows a fixed visual design language. [`VISUAL_LANGUAGE.md`](./VISUAL
 
 ## Usage
 
-- Silhouette stays legible at small sizes; below 32 px prefer the mono silhouette. The luminous variants need roughly 128 px to keep the spectrum.
-- Do not recolour the beam, reorder the spectrum, add container shapes, or place the mark on pure white. Do not render the beam/spectrum as hard line segments — the light is volumetric; that is the identity.
+- Use the transparent compact mark at roughly 64–128 px for repository and documentation mastheads. Keep the full luminous variants for displays of roughly 128 px or larger, and below 32 px prefer the mono silhouette.
+- Do not recolour the beam, reorder the spectrum, add container shapes, or place the full dark-ground mark on pure white. Do not render the beam/spectrum as hard line segments — the light is volumetric; that is the identity.
 - The ASCII marks are derived, not hand-drawn: rasterise the SVG, map luminance through the ramp with a floor at the ground colour, and respect the ~1:2 terminal cell aspect. Re-derive after any SVG change.

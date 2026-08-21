@@ -99,4 +99,4 @@ The working area below the composer stays static; continuous animation lives onl
 
 ## Variants And Consistency
 
-The mark has dark-ground, off-white-ground, single-colour silhouette, and animated variants (see [`README.md`](./README.md)). The silhouette stays legible at small sizes; below ~32 px prefer the mono silhouette, and the luminous variants need roughly 128 px to keep the spectrum. Do not recolour the beam, reorder the spectrum, add container shapes, place the mark on pure white, or render the beam or spectrum as hard line segments — the light is volumetric; that is the identity.
+The mark has dark-ground, off-white-ground, transparent compact, single-colour silhouette, and animated variants (see [`README.md`](./README.md)). Use the transparent compact variant at roughly 64–128 px on neutral documentation surfaces, below ~32 px prefer the mono silhouette, and keep the full luminous variants for displays of roughly 128 px or larger. Do not recolour the beam, reorder the spectrum, add container shapes, place the full dark-ground mark on pure white, or render the beam or spectrum as hard line segments — the light is volumetric; that is the identity.

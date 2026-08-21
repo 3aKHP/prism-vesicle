@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">Prism Vesicle compact mark</title>
+  <desc id="desc">A compact transparent mark: an emerald beam enters a translucent vesicle, crosses a glass prism, and leaves as a restrained spectrum.</desc>
+  <defs>
+    <linearGradient id="membrane" gradientUnits="userSpaceOnUse" x1="21" y1="18" x2="72" y2="75">
+      <stop offset="0" stop-color="#6ee7b7"/>
+      <stop offset=".48" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <radialGradient id="volume" cx="42%" cy="34%" r="68%">
+      <stop offset="0" stop-color="#34d399" stop-opacity=".18"/>
+      <stop offset=".55" stop-color="#10b981" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#047857" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" gradientUnits="userSpaceOnUse" x1="0" y1="49" x2="58" y2="49">
+      <stop offset="0" stop-color="#10b981" stop-opacity="0"/>
+      <stop offset=".45" stop-color="#10b981" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#6ee7b7" stop-opacity=".9"/>
+    </linearGradient>
+    <linearGradient id="glass" gradientUnits="userSpaceOnUse" x1="34" y1="31" x2="58" y2="60">
+      <stop offset="0" stop-color="#ecfdf5" stop-opacity=".62"/>
+      <stop offset=".5" stop-color="#34d399" stop-opacity=".15"/>
+      <stop offset="1" stop-color="#064e3b" stop-opacity=".4"/>
+    </linearGradient>
+    <linearGradient id="prismEdge" gradientUnits="userSpaceOnUse" x1="34" y1="31" x2="59" y2="59">
+      <stop offset="0" stop-color="#d1fae5"/>
+      <stop offset=".5" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="spectrum" gradientUnits="userSpaceOnUse" x1="74" y1="49" x2="74" y2="64">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset=".28" stop-color="#facc15"/>
+      <stop offset=".5" stop-color="#fb923c"/>
+      <stop offset=".72" stop-color="#f43f5e"/>
+      <stop offset="1" stop-color="#e879f9"/>
+    </linearGradient>
+    <linearGradient id="spectrumFade" gradientUnits="userSpaceOnUse" x1="57" y1="54" x2="96" y2="56">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset=".72" stop-color="#fff" stop-opacity=".72"/>
+      <stop offset="1" stop-color="#fff" stop-opacity=".18"/>
+    </linearGradient>
+    <mask id="spectrumMask">
+      <path d="M57 49 L96 51 L96 64 Z" fill="url(#spectrumFade)"/>
+    </mask>
+    <mask id="pores">
+      <rect width="96" height="96" fill="#fff"/>
+      <circle cx="17" cy="50" r="4.2" fill="#000"/>
+      <circle cx="72" cy="53" r="4.2" fill="#000"/>
+    </mask>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.4"/>
+    </filter>
+    <filter id="shadow" x="-35%" y="-35%" width="170%" height="180%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="#021a14" flood-opacity=".34"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="45" cy="77" rx="22" ry="4" fill="#10b981" opacity=".12" filter="url(#glow)"/>
+  <circle cx="45" cy="46" r="28.5" fill="url(#volume)"/>
+
+  <circle cx="45" cy="46" r="28.5" fill="none" stroke="#10b981" stroke-width="8" opacity=".2" mask="url(#pores)" filter="url(#glow)"/>
+  <circle cx="45" cy="46" r="28.5" fill="none" stroke="#065f46" stroke-width="7" opacity=".42" mask="url(#pores)"/>
+  <circle cx="45" cy="46" r="28.5" fill="none" stroke="url(#membrane)" stroke-width="4.6" mask="url(#pores)"/>
+
+  <path d="M0 49.5 L36 47.8 L36 51.5 L0 53.5 Z" fill="url(#beam)" opacity=".55" filter="url(#glow)"/>
+  <path d="M0 51.2 L58 49.5" fill="none" stroke="url(#beam)" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="17" cy="50" r="5.5" fill="#34d399" opacity=".34" filter="url(#glow)"/>
+
+  <g mask="url(#spectrumMask)">
+    <path d="M57 49 L96 51 L96 64 Z" fill="url(#spectrum)" opacity=".65" filter="url(#glow)"/>
+    <path d="M57 49 L96 51 L96 64 Z" fill="url(#spectrum)" opacity=".8"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M45 31 L31 59 L59 59 Z" fill="url(#glass)" stroke="url(#prismEdge)" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M35 49 L57 49.7" fill="none" stroke="#6ee7b7" stroke-width="1.7" stroke-linecap="round" opacity=".82"/>
+  </g>
+  <circle cx="58" cy="49.7" r="4" fill="#a7f3d0" opacity=".42" filter="url(#glow)"/>
+  <circle cx="58" cy="49.7" r="1.6" fill="#d1fae5" opacity=".8"/>
+</svg>
