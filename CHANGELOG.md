@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **The repository landing masthead now uses a compact transparent brand mark.** The English and Chinese README pages replace the centered square hero with a small right-aligned mark beside the normal title and lead with the project positioning as a block quote. The full dark- and light-ground luminous marks remain the large-format brand assets; the new derivative preserves the vesicle, prism, incident beam, and restrained spectrum on both neutral document themes without a container tile.
+
 ### Fixed
 
 - **The public manual again covers the complete beta.1 user surface from a beginner's task.** Bilingual task routes and executable walkthroughs now cover provider-native versus Tavily search, vision attachments, every bundled Engine, `vesicle-docs`, SubAgents, Harness Packs, terminal commands, automatic compaction, and quality-decision recovery, with prerequisites, success feedback, and failure paths. The Windows-first tutorial no longer begins with a Bash-only heredoc, and the Chinese README no longer incorrectly claims that scratch `tmp/` changes are rewind-safe.

@@ -1,12 +1,8 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./brand/prism-vesicle.svg">
-    <source media="(prefers-color-scheme: light)" srcset="./brand/prism-vesicle-light.svg">
-    <img alt="Prism Vesicle mark" src="./brand/prism-vesicle-light.svg" width="176">
-  </picture>
-</p>
+<img align="right" src="./brand/prism-vesicle-mark.svg" width="96" alt="Prism Vesicle" />
 
 # Prism Vesicle
+
+> An open-source Agent Harness host and terminal workbench for durable Prism Engine workflows.
 
 [![npm](https://img.shields.io/npm/v/prism-vesicle?logo=npm&label=npm)](https://www.npmjs.com/package/prism-vesicle)
 [![Release](https://img.shields.io/github/v/release/3aKHP/prism-vesicle?include_prereleases&label=release)](https://github.com/3aKHP/prism-vesicle/releases)
@@ -20,8 +16,6 @@
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3.14-000000?logo=bun&logoColor=white)](https://bun.sh/)
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
-
-**An open-source Agent Harness host and terminal workbench for durable Prism Engine workflows.**
 
 Built with Bun and TypeScript, Vesicle connects versioned Harness Packs to DeepSeek V4 and other direct model providers, MCP tools, permission-gated host tools, foreground and background SubAgents, and durable sessions.
 
