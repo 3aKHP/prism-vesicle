@@ -10,12 +10,14 @@ This section covers capabilities that the tutorials and reference do not expand 
 
 | Feature | Current status | Summary |
 |---|---|---|
+| [Choose an Engine](./engines.md) | 🟢 Implemented | What each of the seven bundled Engines does and how to switch safely |
 | [Host shell / Process Runtime](./shell-exec.md) | 🟢 Implemented (not a sandbox) | Let the model run host commands: foreground/background, interpreter profiles, process-tree cleanup |
 | [Output Quality Guard](./quality-guard.md) | 🟢 Guard body · 🟡 Judge/Policy experimental | Deterministic checks of artifact post-images, document metrics, optional Semantic Judge |
 | [SubAgents](./subagents.md) | 🟢 Implemented | Foreground/background child tasks; generic and Driver-contract agents |
 | [Stage consumer engine](./stage.md) | 🟢 Implemented | Open a continuous narrative session from a character card + scenario card |
 | [Skills](./skills.md) | 🟢 Implemented | On-demand procedural context: discovery, activation, resource reads, `/skill` command |
 | [MCP tools](./mcp.md) | 🟢 MCP tools · 🟡 Output persistence experimental | Connect external tools: connection setup, tool permissions, optional result archiving |
+| [Harness Packs](./harness-packs.md) | 🟢 Offline management implemented | Verify, install, select, and roll back a complete creative baseline; materialize sparse overrides when needed |
 
 ## Prerequisites
 

@@ -224,6 +224,7 @@ Pull requests and `develop` pushes call one reusable Linux/Windows release build
 | Document | Responsibility |
 |---|---|
 | [`docs/user/en/`](./docs/user/en/README.md) | User manual (start pages, tutorials, reference); Simplified Chinese canonical, English mirror |
+| [`docs/user/en/README.md#what-do-i-want-to-do-now`](./docs/user/en/README.md#what-do-i-want-to-do-now) | Task-based routes for search/images, Engines, sessions, Skills/SubAgents, MCP, Harness Packs, and command lookup |
 | [`STATUS.md`](./STATUS.md) | Current implementation, tool surface, verification, and known limits |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Released and unreleased user-visible changes |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Contributor setup, repository boundaries, and documentation style |

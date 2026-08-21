@@ -152,7 +152,7 @@ bun run dev
 
 运行 `vesicle --version`(或 `-v`)可打印已安装的版本,`vesicle --help` 查看全局用法摘要。
 
-生成文件只能写入受保护的项目目录，目录分为三种角色：`source_materials/` 存放研究素材，`workspace/`、`novels/`、`reports/` 或 `test_runs/` 存放最终制品，`tmp/` 作为模型可见的暂存根目录用于草稿和中间工作。模型可以在这些根目录下组织嵌套目录、查看目录条目、移动或重命名目录树，并删除空目录；固定根目录与符号链接穿越仍受保护。通过 Vesicle 工具完成的文件和目录变更——包括暂存路径——会纳入 `.vesicle/file-history/` 下的回退检查点；暂存内容在未显式清理前会跨回合和重启保留，且不会出现在 `/artifact`、`/validate`、Stage 输入发现或自动发布中。
+生成文件只能写入受保护的项目目录，目录分为三种角色：`source_materials/` 存放研究素材，`workspace/`、`novels/`、`reports/` 或 `test_runs/` 存放最终制品，`tmp/` 作为模型可见的暂存根目录用于草稿和中间工作。模型可以在这些根目录下组织嵌套目录、查看目录条目、移动或重命名目录树，并删除空目录；固定根目录与符号链接穿越仍受保护。通过 Vesicle 工具在素材与制品根目录完成的文件和目录变更会纳入 `.vesicle/file-history/` 下的回退检查点；暂存根 `tmp/` 虽可写，但不进检查点，因此其中的变更不可安全回退。暂存内容在未显式清理前会跨回合和重启保留，且不会出现在 `/artifact`、`/validate`、Stage 输入发现或自动发布中。
 
 常用命令：
 
@@ -224,6 +224,7 @@ Pull request 和向 `develop` 的推送会调用同一套 Linux/Windows 可复�
 | 文档 | 职责 |
 |---|---|
 | [`docs/user/zh-CN/`](./docs/user/zh-CN/README.md) | 用户手册(入门页、教程、参考);简体中文为正本 |
+| [`docs/user/zh-CN/README.md#我现在想做什么`](./docs/user/zh-CN/README.md#我现在想做什么) | 面向任务的搜索/图片、Engine、会话、Skills/SubAgents、MCP、Harness Packs 与命令查询入口 |
 | [`STATUS.md`](./STATUS.md) | 当前实现、工具接口、验证方式和已知限制 |
 | [`CHANGELOG.md`](./CHANGELOG.md) | 已发布和未发布的用户可见变更 |
 | [`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md) | 贡献者配置、仓库边界和文档规范 |

@@ -34,6 +34,35 @@ vesicle skills uninstall <名称>
 vesicle skills copy-template <skill> <资源路径> <目标路径>
 ```
 
+推荐先 `list`,再 `inspect <名称>` 查看实际生效范围、资源与来源。成功的 `list` 会标出 scope、disabled 与 shadowed 状态;`inspect` 已安装 Skill 时还会显示来源、解析后的 commit 和 bundle hash。
+
+### 创建自己的 Skill
+
+```bash
+vesicle skills create my-workflow --scope project
+```
+
+`--scope project` 写到当前项目的 `.agents/skills/`;省略时默认写用户级 Skill 目录,对所有项目可见。成功输出创建路径和下一条 `validate` 命令。目标已存在时默认拒绝;`--force` 会先把旧目录备份后再创建,输出备份路径。不要在未检查旧内容时使用 `--force`。
+
+### 从目录或 GitHub 安装
+
+```text
+vesicle skills install <本地目录或GitHub-URL>
+vesicle skills install <GitHub-URL> --ref <tag或commit> --path <仓库内Skill目录>
+vesicle skills install <GitHub-URL> --ref <tag或commit> --all
+```
+
+- 单 Skill 根目录直接安装;仓库里有多个 Skill 时用 `--path` 选一个,或明确用 `--all` 安装全部发现项。
+- `--ref` 把 GitHub 来源解析并记录到不可变 commit;依赖稳定版本时应显式给 tag/commit。
+- 本地 Git 工作树默认拒绝未提交改动;只有你已经检查并明确要把 **Git 已跟踪文件**的未提交修改纳入快照时才用 `--include-worktree`。未跟踪文件与 ignored 文件始终不会进入快照;需要它们时应先审查并提交。
+- 成功时每项显示 `Installed <name> <version> [<source kind>] ...`,最后显示安装数量。安装后用 `vesicle skills inspect <name>` 核对来源,并开新会话。
+
+生命周期命令成功时分别显示 `Updated old -> new`、`Rolled back ... to <version>` 或 `Uninstalled ...`。更新后行为不对时先 `rollback`;卸载只移除 installed Store 项,不会删除项目/用户/Harness/host 的同名 Skill。没有上一快照、来源不可更新或目标不存在会明确失败,不要把 stderr 当成功。
+
+`copy-template` 只把 Skill 中一个资源复制到当前项目的受批准内容根:`source_materials/`、`workspace/`、`novels/`、`reports/` 或 `test_runs/`;绝对路径、`..` 与 `tmp/` 目标会拒绝。成功显示 `Copied <skill>/<resource> -> <path>`。
+
+完整终端语法与失败处理见[终端命令参考](../reference/cli-commands.md)。第一次让模型查文档或委派任务,按 [Skills 与 SubAgents 教程](../tutorials/skills-and-subagents.md)操作。
+
 ## `/skill` TUI 命令
 
 - `/skill` — 打开选择器，显示可用 Skill 及其范围。

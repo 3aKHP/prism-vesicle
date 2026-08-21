@@ -22,6 +22,15 @@ Both cards must be files under a guarded, readable project root (usually `worksp
 
 > Later drift in the source cards does not affect an in-flight session: on resume Stage detects whether the source file hash changed, but **keeps using the frozen context**, preserving continuity.
 
+Success enters a **new Stage session**: the conversation first shows the scenario's visible opening, the header Engine becomes Stage, and the composer waits for your first character action. Bootstrap itself makes no provider request; your first action starts model continuation.
+
+### If Stage cannot start
+
+- `Usage: /stage ...`: provide two project-relative paths. Wrap a path containing spaces in double quotes, for example `/stage "workspace/character card.md" "workspace/scenario card.md"`. Command completion also quotes paths with spaces automatically.
+- `Paths are project-relative...` or a missing file: use `/workspace <path>` to confirm each file under `workspace/` or another readable root. Absolute paths and `..` are rejected.
+- Compatibility warnings appear: read the bounded set of up to three warnings. The program reports only empty input, missing Module A/B YAML frontmatter, missing optional Module B logic comments, or an unclosed HTML comment; none blocks startup. Fix the reported card issue in ETL and start a **new** Stage session; an existing frozen session does not hot-reload it.
+- The provider fails after bootstrap: the Stage session and frozen opening are already persisted. Fix the connection, `/resume` that session, and resend your first action rather than running `/stage` again and creating another session.
+
 ## Empty tool surface, no gates
 
 The Stage engine profile forces `defaultTools: []` and `stopGates: []` — the model has **no** model-visible tools, no MCP, no Agents, no shell, and no confirmation gates. It is a **gate-free continuous flow**: each of your messages is your character's action input, and the model continues directly, unlike ETL which pauses at blueprint and phase gates.

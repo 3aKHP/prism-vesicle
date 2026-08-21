@@ -74,6 +74,20 @@ When a future Harness Pack requires it, Vesicle recognizes and fail-closed hash-
 - Observe bindings cover Dyad / Weaver / Weaver-Orch / Scene Writer / Stage; **Evaluate and Chapter Reviewer reports are not enforced recursively**.
 - A quality decision takes priority over gates: an unresolved quality decision is handled before other gates.
 
+## When the quality decision panel appears
+
+If automatic revision is interrupted or exhausts its two attempts, the bottom panel says `Revision interrupted` or `Revision exhausted`. Use `↑` / `↓` and confirm with Enter:
+
+| Choice | What happens | Use it when |
+|---|---|---|
+| `Revise again` | Makes one explicitly user-authorized request to the original Engine to revise this target | You agree with the findings and accept one more provider request and rewrite |
+| `Use current version` | Makes no provider request; keeps a file target as-is, or delivers a response target as the final reply; records either as accepted together with its warning/findings | You inspected the content and accept it without pretending it is clean |
+| `Stop` | Makes no provider request; does not deliver a rejected response candidate or accept the current file; resolves this decision point while retaining the warning | You do not want to accept or spend more now and will handle it separately later |
+
+The status first says `starting user-authorized quality revision` or `recording quality decision: ...`. After the decision is recorded, the panel closes and session/Host artifact status refreshes. Neither `Use current version` nor `Stop` erases the warning. Both resolve the current decision point, so restart does not reopen the same panel: the former delivers/accepts the current version, while the latter withholds a rejected response candidate and marks the current target as stopped. To revise it later, start a new revision request from the warning's path or the session context.
+
+If the first item says `Revision unavailable`, do not select it. A common cause is a Harness / Rule Pack / experimental-profile identity mismatch after resume. Run `vesicle assets status` and `vesicle doctor`, restore the exact Harness identity recorded by the session, and resume again. If that identity cannot be restored, you can still choose `Use current version` or `Stop`, or copy the artifact and start the task again in a new session. Do not edit session JSONL to clear the decision.
+
 ## Developer-only
 
 `vesicle quality benchmark` is a **developer-only** Semantic Judge measurement command (requires a frozen plan and `--allow-live`, records measurement evidence only, and cannot enable semantic blocking). It is separate from Runtime policy and is not expanded here; see [`docs/dev/QUALITY_BENCHMARK.md`](../../../dev/QUALITY_BENCHMARK.md).

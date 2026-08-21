@@ -8,6 +8,8 @@
 
 SubAgent 是一个**子运行时**:主引擎把一块自包含的任务委派给一个专门的 Agent Profile 去跑,前台等结果或后台异步进行。多个 `spawn_agent` 在同一回合里**并行**启动。
 
+第一次使用请先走 [Skills 与 SubAgents 教程](../tutorials/skills-and-subagents.md);本页用于查 Profile、工具与 Driver-contract 细节。
+
 ## 两类 Agent
 
 | 类别 | 成员 | 行为 |

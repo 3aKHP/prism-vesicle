@@ -76,6 +76,20 @@ judgeTimeoutMs: 15000
 - observe 绑定覆盖 Dyad / Weaver / Weaver-Orch / Scene Writer / Stage;**Evaluate 与 Chapter Reviewer 的报告不递归强制**。
 - 质量决策优先级高于门:有未决质量决策时,它会先于其它 gate 处理。
 
+## 看到质量决策面板时怎么选
+
+自动修订被中断或两次机会耗尽时,底部会出现 `Revision interrupted` / `Revision exhausted` 面板。用 `↑` / `↓` 选择,Enter 确认:
+
+| 选项 | 会发生什么 | 何时使用 |
+|---|---|---|
+| `Revise again` | 发起一次你明确授权的原 Engine 供应商请求,尝试修当前 target | 你认同 finding,且愿意付出一次请求与改写成本 |
+| `Use current version` | 不再请求供应商;文件 target 保留当前文件,回复 target 则把当前候选显示为正式回复;两者都连同 warning/findings 记录为已接受 | 你检查过内容,认为当前版本可用但不应伪装成 clean |
+| `Stop` | 不请求供应商;不把被拒绝的回复候选显示为正式回复,也不接受当前文件;结束这个待决点并保留 warning | 现在不想接受也不想继续花费,准备之后另行处理 |
+
+选择后状态行先显示 `starting user-authorized quality revision` 或 `recording quality decision: ...`;记录成功后待决面板消失,会话与 Host 制品状态刷新。`Use current version` 与 `Stop` 都不会消灭 warning。两者都会解决当前待决点,所以重启后不会再次弹出同一个面板;区别是前者明确交付/接受当前版本,后者不交付被拒绝的回复候选、把当前 target 标为停止处理。若要稍后再修,请从 warning 标出的路径或会话上下文发起一条新的修订请求。
+
+如果第一项显示 `Revision unavailable`,不要选它。常见原因是恢复会话时 Harness / Rule Pack / 实验性 profile 身份与记录不一致。运行 `vesicle assets status` 与 `vesicle doctor`,恢复记录使用的精确 Harness 身份后再 `/resume`;无法恢复时仍可选择 `Use current version` 或 `Stop`,也可以复制制品后在新会话中重新发起任务。不要编辑 session JSONL 强行清掉决策。
+
 ## 开发者专用
 
 `vesicle quality benchmark` 是一个**仅供开发者**的 Semantic Judge 评测命令(需冻结 plan 与 `--allow-live`,只记录测量证据,不能开启语义阻塞)。它独立于 Runtime 策略,不在本页展开;见 [`docs/dev/QUALITY_BENCHMARK.md`](../../../dev/QUALITY_BENCHMARK.md)。

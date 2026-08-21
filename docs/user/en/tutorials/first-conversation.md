@@ -6,7 +6,30 @@ This page introduces the Vesicle interface and its core interaction — the **ga
 
 ## Prepare some material
 
-Vesicle uses the ETL engine by default; it turns your source material into character cards and scenario cards. Put one note in the project first:
+Vesicle uses the ETL engine by default; it turns source material into character and scenario cards. First create a `source_materials/` folder inside the project. Use your system file manager, run `New-Item -ItemType Directory -Force source_materials` in PowerShell 7, or run `mkdir -p source_materials` on Linux / macOS / WSL.
+
+Then run `vesicle .` and press `Ctrl+O` for Workspace. Select `source_materials/` in the file tree and press `a`. The create bar already contains `source_materials/`, so enter only `note.md` and press Enter. Fill the new file with the text below, then press `Ctrl+S`:
+
+```markdown
+# Character sketch: Lin Yue
+Age 28, formerly a war correspondent, now running a late-night cafe. Quiet and highly observant.
+An old scar crosses the left wrist. Important things get written on paper cups.
+```
+
+After the status line reports a successful save, press `Ctrl+O` to return to Chat. If you prefer the terminal, you can create both the folder and file there instead.
+
+PowerShell 7:
+
+```powershell
+New-Item -ItemType Directory -Force source_materials | Out-Null
+@'
+# Character sketch: Lin Yue
+Age 28, formerly a war correspondent, now running a late-night cafe. Quiet and highly observant.
+An old scar crosses the left wrist. Important things get written on paper cups.
+'@ | Set-Content -Encoding utf8 source_materials/note.md
+```
+
+Linux / macOS / WSL:
 
 ```bash
 mkdir -p source_materials
@@ -17,9 +40,11 @@ An old scar on the left wrist. Writes important things on paper cups.
 EOF
 ```
 
+Whichever path you use, the final file should be `source_materials/note.md` inside the project. If Workspace rejects the path, confirm Vesicle started at the intended project root and that the input is project-relative with no `..`.
+
 ## Start and send your first message
 
-Make sure you are in the project directory:
+If Vesicle is not already open, start it from the project directory:
 
 ```bash
 vesicle .

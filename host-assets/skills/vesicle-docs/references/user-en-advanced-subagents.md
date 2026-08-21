@@ -8,6 +8,8 @@ English | [简体中文](../../zh-CN/advanced/subagents.md)
 
 A SubAgent is a **child runtime**: the main engine delegates a self-contained task to a specialized Agent Profile, either waiting for the result (foreground) or running it asynchronously (background). Multiple `spawn_agent` calls in one response run **in parallel**.
 
+For a first use, follow [Skills and SubAgents](../tutorials/skills-and-subagents.md). This page is the deeper reference for profiles, tools, and Driver-contract behavior.
+
 ## Two kinds of agents
 
 | Kind | Members | Behavior |
