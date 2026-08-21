@@ -3,13 +3,15 @@ import { loadEngineProfile } from "../../../src/core/engine/profile";
 import { resolveBuiltInTools } from "../../../src/core/agent-loop/tool-surface";
 import {
   clearSessionWebSearchOverride,
+  engineAllowsBuiltInWebSearch,
   effectiveWebSearchEnabled,
   setSessionWebSearchOverride,
+  webSearchSupported,
 } from "../../../src/core/agent-loop/web-search-state";
 
-const capable = { capabilities: { builtinWebSearch: true }, webSearchDefault: false };
-const capableDefaultOn = { capabilities: { builtinWebSearch: true }, webSearchDefault: true };
-const incapableDefaultOn = { capabilities: {}, webSearchDefault: true };
+const capable = { provider: "gemini-generate-content" as const, capabilities: { builtinWebSearch: true }, webSearchDefault: false };
+const capableDefaultOn = { provider: "gemini-generate-content" as const, capabilities: { builtinWebSearch: true }, webSearchDefault: true };
+const incapableDefaultOn = { provider: "gemini-generate-content" as const, capabilities: {}, webSearchDefault: true };
 
 describe("web search toggle state", () => {
   test("default is off and the model default applies only with the capability", () => {
@@ -34,6 +36,26 @@ describe("web search toggle state", () => {
     // An override cannot push an incapable model on either.
     setSessionWebSearchOverride("s3", true);
     expect(effectiveWebSearchEnabled(incapableDefaultOn, "s3")).toBe(false);
+  });
+
+  test("requires protocol/profile admission in addition to the model capability", () => {
+    expect(webSearchSupported({ provider: "openai-chat-compatible", capabilities: { builtinWebSearch: true } })).toBe(false);
+    expect(webSearchSupported({
+      provider: "openai-responses",
+      responsesProfile: "codex-http-relay",
+      capabilities: { builtinWebSearch: true },
+    })).toBe(false);
+    expect(webSearchSupported({
+      provider: "openai-responses",
+      responsesProfile: "deepseek-subset-2026-08-19",
+      capabilities: { builtinWebSearch: true },
+    })).toBe(true);
+  });
+
+  test("follows the Engine's declared model-visible search surface", async () => {
+    expect(engineAllowsBuiltInWebSearch(await loadEngineProfile("etl"))).toBe(true);
+    expect(engineAllowsBuiltInWebSearch(await loadEngineProfile("evaluate"))).toBe(true);
+    expect(engineAllowsBuiltInWebSearch(await loadEngineProfile("stage"))).toBe(false);
   });
 });
 

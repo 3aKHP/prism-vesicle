@@ -23,7 +23,6 @@ import { projectSideQuestionReference } from "./reference";
 import { appendHostContext } from "../prompt/host-context";
 import { composeProjectStateBlock } from "../prompt/project-state";
 import { declaresDirectoryQuery } from "../tools/directory-query";
-import { effectiveWebSearchEnabled } from "../agent-loop/web-search-state";
 
 const SIDE_QUESTION_PROMPT_PATH = "assets/prompts/shared/side-question.md";
 
@@ -56,7 +55,6 @@ export async function askSideQuestion(options: {
     // Built-in search is model capability, not a host tool: the tool-free
     // side-request contract is unaffected, and the parent session's toggle
     // carries over per the frozen design.
-    ...(effectiveWebSearchEnabled(config, context.sessionId) ? { webSearch: true } : {}),
     signal: options.signal,
     onRetry: options.onRetry,
   };

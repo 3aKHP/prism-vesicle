@@ -14,6 +14,8 @@ import { assertChildToolDeclaration, unsupportedChildToolNames } from "./tool-sc
 import type { AgentInvocationContext, AgentRunContext } from "./types";
 import { createAssetResolver } from "../runtime/assets";
 import { composeProjectStateBlock } from "../prompt/project-state";
+import { loadEngineProfile } from "../engine/profile";
+import { effectiveWebSearchEnabled, engineAllowsBuiltInWebSearch } from "../agent-loop/web-search-state";
 
 export type ChildAgentBootstrap = {
   config: Awaited<ReturnType<typeof loadConfigForSelection>>;
@@ -25,6 +27,7 @@ export type ChildAgentBootstrap = {
   session: SessionStore;
   checkpoint: FileCheckpointManager;
   messages: VesicleMessage[];
+  builtInSearchEnabled: boolean;
 };
 
 type BootstrapContext = Pick<AgentRunContext, "runId" | "handle" | "spec" | "registerChildSession"> & {
@@ -40,6 +43,13 @@ export async function bootstrapChildAgent({
 }: BootstrapContext): Promise<ChildAgentBootstrap> {
   const config = await loadConfigForSelection(invocation.providerSelection);
   const profile = await loadAgentProfile(spec.profileId, invocation.rootDir, invocation.assets);
+  const parentProfile = await loadEngineProfile(
+    invocation.parentEngine,
+    invocation.rootDir,
+    invocation.assets ?? createAssetResolver(invocation.rootDir),
+  );
+  const builtInSearchEnabled = engineAllowsBuiltInWebSearch(parentProfile)
+    && effectiveWebSearchEnabled(config, spec.parentSessionId);
   const agentSystemPrompt = await loadAgentSystemPrompt(profile, invocation.rootDir, invocation.assets);
   const baseSystemPrompts = composeChildSystemPrompts(profile.contextMode, invocation.parentSystemPrompt, agentSystemPrompt);
   const mcp = await createMcpRegistryForEngine(invocation.parentEngine, invocation.parentSignal ? { signal: invocation.parentSignal } : {});
@@ -48,6 +58,7 @@ export async function bootstrapChildAgent({
     invocation.parentToolDefinitions,
     mcp,
     config.capabilities?.vision === true,
+    builtInSearchEnabled,
   );
   // Fork children already inherit the parent's frozen turn snapshot as part of
   // its exact system prefix. Fresh/summary children need their own orientation.
@@ -104,6 +115,7 @@ export async function bootstrapChildAgent({
     session,
     checkpoint,
     messages: contextMessages(profile.contextMode, invocation.parentMessages, spec.prompt),
+    builtInSearchEnabled,
   };
 }
 
@@ -125,6 +137,7 @@ export function resolveChildTools(
   parentDefinitions: ToolDefinition[],
   mcp: McpRegistry,
   visionEnabled: boolean,
+  builtInSearchEnabled = false,
 ): ToolDefinition[] {
   const available = new Map(
     [...hostToolDefinitions, ...mcp.definitions, ...parentDefinitions]
@@ -143,6 +156,7 @@ export function resolveChildTools(
   const resolved: ToolDefinition[] = [];
   for (const name of names) {
     if (name === "view_image" && !visionEnabled) continue;
+    if (name === "web_search" && builtInSearchEnabled) continue;
     const tool = available.get(name);
     if (!tool) continue;
     resolved.push(tool);

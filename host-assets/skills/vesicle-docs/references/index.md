@@ -18,6 +18,8 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 
 ## User Manual
 
+- `docs/user/en/advanced/engines.md` → `references/user-en-advanced-engines.md` — Choose a Prism Engine [en]
+- `docs/user/en/advanced/harness-packs.md` → `references/user-en-advanced-harness-packs.md` — Harness Packs: manage the creative baseline [en]
 - `docs/user/en/advanced/mcp.md` → `references/user-en-advanced-mcp.md` — MCP tools [en]
 - `docs/user/en/advanced/quality-guard.md` → `references/user-en-advanced-quality-guard.md` — Output Quality Guard [en]
 - `docs/user/en/advanced/README.md` → `references/user-en-advanced-readme.md` — Advanced and experimental features [en]
@@ -27,6 +29,7 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 - `docs/user/en/advanced/subagents.md` → `references/user-en-advanced-subagents.md` — SubAgents [en]
 - `docs/user/en/README.md` → `references/user-en-readme.md` — Prism Vesicle User Manual [en]
 - `docs/user/en/reference/checksums-and-signing.md` → `references/user-en-reference-checksums-and-signing.md` — Checksums and signing [en]
+- `docs/user/en/reference/cli-commands.md` → `references/user-en-reference-cli-commands.md` — Terminal command reference [en]
 - `docs/user/en/reference/commands.md` → `references/user-en-reference-commands.md` — Command cheatsheet [en]
 - `docs/user/en/reference/configuration.md` → `references/user-en-reference-configuration.md` — Configuration files [en]
 - `docs/user/en/reference/permissions-and-security.md` → `references/user-en-reference-permissions-and-security.md` — Permissions and security model [en]
@@ -44,8 +47,12 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 - `docs/user/en/tutorials/persistent-instructions.md` → `references/user-en-tutorials-persistent-instructions.md` — Set up Persistent Instructions for a project [en]
 - `docs/user/en/tutorials/README.md` → `references/user-en-tutorials-readme.md` — Tutorials [en]
 - `docs/user/en/tutorials/sessions-and-rewind.md` → `references/user-en-tutorials-sessions-and-rewind.md` — Sessions and rewind [en]
+- `docs/user/en/tutorials/skills-and-subagents.md` → `references/user-en-tutorials-skills-and-subagents.md` — Use Skills for guidance and SubAgents for delegation [en]
+- `docs/user/en/tutorials/web-search-and-images.md` → `references/user-en-tutorials-web-search-and-images.md` — Let the model search the web and inspect images [en]
 - `docs/user/en/tutorials/work-while-running.md` → `references/user-en-tutorials-work-while-running.md` — Keep working during a turn: queue and side questions [en]
 - `docs/user/en/tutorials/workspace-page.md` → `references/user-en-tutorials-workspace-page.md` — View and edit artifacts in the Workspace page [en]
+- `docs/user/zh-CN/advanced/engines.md` → `references/user-zh-cn-advanced-engines.md` — 选择 Prism Engine [zh-CN]
+- `docs/user/zh-CN/advanced/harness-packs.md` → `references/user-zh-cn-advanced-harness-packs.md` — Harness Packs:管理创作基线 [zh-CN]
 - `docs/user/zh-CN/advanced/mcp.md` → `references/user-zh-cn-advanced-mcp.md` — MCP 工具 [zh-CN]
 - `docs/user/zh-CN/advanced/quality-guard.md` → `references/user-zh-cn-advanced-quality-guard.md` — Output Quality Guard [zh-CN]
 - `docs/user/zh-CN/advanced/README.md` → `references/user-zh-cn-advanced-readme.md` — 高级与实验特性 [zh-CN]
@@ -55,6 +62,7 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 - `docs/user/zh-CN/advanced/subagents.md` → `references/user-zh-cn-advanced-subagents.md` — SubAgents [zh-CN]
 - `docs/user/zh-CN/README.md` → `references/user-zh-cn-readme.md` — Prism Vesicle 用户手册 [zh-CN]
 - `docs/user/zh-CN/reference/checksums-and-signing.md` → `references/user-zh-cn-reference-checksums-and-signing.md` — 校验和与签名 [zh-CN]
+- `docs/user/zh-CN/reference/cli-commands.md` → `references/user-zh-cn-reference-cli-commands.md` — 终端命令参考 [zh-CN]
 - `docs/user/zh-CN/reference/commands.md` → `references/user-zh-cn-reference-commands.md` — 命令速查 [zh-CN]
 - `docs/user/zh-CN/reference/configuration.md` → `references/user-zh-cn-reference-configuration.md` — 配置文件 [zh-CN]
 - `docs/user/zh-CN/reference/permissions-and-security.md` → `references/user-zh-cn-reference-permissions-and-security.md` — 权限与安全模型 [zh-CN]
@@ -72,6 +80,8 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 - `docs/user/zh-CN/tutorials/persistent-instructions.md` → `references/user-zh-cn-tutorials-persistent-instructions.md` — 为项目建立持久化指令 [zh-CN]
 - `docs/user/zh-CN/tutorials/README.md` → `references/user-zh-cn-tutorials-readme.md` — 教程 [zh-CN]
 - `docs/user/zh-CN/tutorials/sessions-and-rewind.md` → `references/user-zh-cn-tutorials-sessions-and-rewind.md` — 会话恢复与回退 [zh-CN]
+- `docs/user/zh-CN/tutorials/skills-and-subagents.md` → `references/user-zh-cn-tutorials-skills-and-subagents.md` — 用 Skills 查资料,用 SubAgents 分工 [zh-CN]
+- `docs/user/zh-CN/tutorials/web-search-and-images.md` → `references/user-zh-cn-tutorials-web-search-and-images.md` — 让模型联网搜索与查看图片 [zh-CN]
 - `docs/user/zh-CN/tutorials/work-while-running.md` → `references/user-zh-cn-tutorials-work-while-running.md` — 运行中继续工作:队列与旁路提问 [zh-CN]
 - `docs/user/zh-CN/tutorials/workspace-page.md` → `references/user-zh-cn-tutorials-workspace-page.md` — 在 Workspace 页查看和修改产物 [zh-CN]
 

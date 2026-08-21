@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **The public manual again covers the complete beta.1 user surface from a beginner's task.** Bilingual task routes and executable walkthroughs now cover provider-native versus Tavily search, vision attachments, every bundled Engine, `vesicle-docs`, SubAgents, Harness Packs, terminal commands, automatic compaction, and quality-decision recovery, with prerequisites, success feedback, and failure paths. The Windows-first tutorial no longer begins with a Bash-only heredoc, and the Chinese README no longer incorrectly claims that scratch `tmp/` changes are rewind-safe.
+
+- **Release review follow-ups close search-boundary and durability gaps.** Provider-native built-in search now requires an admitting protocol/profile and an Engine whose declared tool surface includes `web_search`; Stage and the tool-free `/btw` side channel never receive it, and SubAgents inherit the parent's effective search policy without also exposing Tavily `web_search`. Rejected `/websearch` changes no longer report success. Normalized search audit data now survives child sessions, Quality decision/rewrite recovery, and portable compact checkpoints. Turning DeepSeek search off degrades a searched native batch to its portable assistant projection instead of replaying search-coupled reasoning state. Gemini keeps parallel function responses in one response batch and emits any tool-result images in separate following Contents.
+
+- **Release Issue closure is restricted to explicit release intent.** The `main` closure workflow now runs only for merged `release/*` PRs, reads only standalone closing-keyword lines from the PR body, ignores commit-history and review prose such as `Should-fix #N`, and uses the Node 24 `actions/github-script` runtime.
+
+## [1.0.0-beta.1] - 2026-08-20
+
+### Prerelease channel and known limitations
+
+- **npm's `latest` dist-tag intentionally advances to this beta.** During the beta line, `npm install -g prism-vesicle` installs `1.0.0-beta.1`; pin an explicit older version to remain on an alpha build. The channel policy will be reconsidered before an RC or stable `1.0.0` release.
+- **Provider-native search remains explicit and provider-scoped.** `/websearch on` sends search queries to the selected provider without a per-call tool approval. It is supported only where the model declares `capabilities.builtinWebSearch` and the active protocol/profile admits it: Gemini `generateContent`, OpenAI Responses `openai-public`, and `deepseek-subset-2026-08-19`. Citations are optional provider behavior. Existing DeepSeek configurations on `deepseek-subset-2026-07-31` are not rewritten automatically and remain search-disabled until the profile is changed deliberately. The OpenAI, DeepSeek, Gemini image-continuation/search, and Tavily paths have dated 2026-08-20 dogfood evidence; opt-in real-endpoint suites still report missing credentials or endpoints as unavailable, never passed.
+- **Windows artifacts remain intentionally unsigned.** Verify downloads from the official GitHub Release against `SHA256SUMS.txt`, follow the public Code Signing Policy, and do not disable Windows security features globally.
+- **MCP non-image rich results remain deferred.** Resource, audio, URL/link, and unknown MCP result kinds are omitted without auto-fetch or prompt injection; Issue #177 tracks that separate work.
+
 ### Added
 
 - **Built-in web search on Gemini `generateContent`.** The final #225 slice declares Gemini's standalone `{googleSearch:{}}` entry whenever `/websearch` is active; it coexists with function declarations rather than replacing them. Buffered and streamed `groundingMetadata` now normalize the executed `webSearchQueries` / `webSupportQueries` union and optional web URI/title citations into `WebSearchReport`. Gemini grounding is never replayed into a later request because the protocol has no corresponding replay item. The opt-in real-provider lane pins the combined Google Search + function-declaration request and requires a non-empty query audit report.
@@ -16,7 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
-- **Gemini native tool results with images no longer fail with HTTP 400.** The `generateContent` history serializer could place a `functionResponse`, the image notice, and the image `inlineData` in the same `user` Content, and also merged a following ordinary user message into that Content. Gemini/Vertex rejected the mixed replay shape, so a normal MCP workflow broke as soon as a tool returned an image and the model could not continue past the tool round. A `user` Content is now strictly either `functionResponse`-only or ordinary multimodal-only: tool-result images replay as a separate following `user` Content, and ordinary user messages after a tool round serialize as their own Content. Existing sessions replay through the new shape without migration. Covered by a serializer regression asserting the Content boundary, and verified with real-provider streaming acceptance against a Gemini `generateContent` endpoint.
+- **Gemini native tool results with images and parallel calls no longer fail with HTTP 400.** The `generateContent` history serializer could place a `functionResponse`, the image notice, and the image `inlineData` in the same `user` Content, and a release-review change could split parallel tool responses into separate Contents. Gemini/Vertex rejected both replay shapes: a normal MCP workflow broke when a tool returned an image, and a parallel function-call turn failed because its response batch no longer contained one `functionResponse` for every `functionCall`. A `user` Content is now strictly either `functionResponse`-only or ordinary multimodal-only; consecutive responses from one model turn remain in one batch, tool-result images replay as separate following `user` Contents, and ordinary user messages after a tool round serialize as their own Content. Existing sessions replay through the new shape without migration. Covered by serializer regressions and verified with real-provider streaming acceptance against a Gemini `generateContent` endpoint.
 
 - **Markdown backslash escapes no longer render literally.** `\~`, `\*`, and other CommonMark escapes used to display with a visible backslash and escape styling in Chat and Workspace markdown previews. The defect is upstream (OpenTUI highlight query; reported as anomalyco/opentui#1369 with PR #1370) and is fixed natively in the parser worker of the self-maintained OpenTUI fork runtime this release adopts, so every distribution channel renders `\X` as `X` on the tree-sitter markdown surfaces (Chat messages, Workspace markdown previews, side questions). Plain-text mode and artifact-card previews decode escapes through the companion preprocessing change in this release. A rendered-frame component test and the `escape` probe in `vesicle debug markdown-runtime` guard the behavior at every distribution boundary.
 
@@ -476,7 +493,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Fixed the input bar not clearing after submit.
 - Fixed per-turn session creation that caused model memory loss across turns.
 
-[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.10...HEAD
+[Unreleased]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-beta.1...HEAD
+[1.0.0-beta.1]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.10...v1.0.0-beta.1
 [1.0.0-alpha.10]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.9...v1.0.0-alpha.10
 [1.0.0-alpha.9]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.8...v1.0.0-alpha.9
 [1.0.0-alpha.8]: https://github.com/3aKHP/prism-vesicle/compare/v1.0.0-alpha.7...v1.0.0-alpha.8

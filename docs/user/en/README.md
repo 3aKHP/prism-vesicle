@@ -26,14 +26,33 @@ Whichever entry you use, the destination is the same: `vesicle doctor` passes, a
 3. [Keep working during a turn](./tutorials/work-while-running.md)
 4. … (full contents in the [tutorial index](./tutorials/README.md))
 
+## What do I want to do now?
+
+You do not need to read the whole manual in order. Jump to the task in front of you:
+
+| I want to… | Start here |
+|---|---|
+| Configure a model or API key, or fix startup checks | Your [installation start page](#start-here-how-did-you-get-vesicle), then [Configuration files](./reference/configuration.md) |
+| Start my first creative task and understand confirmation panels | [First conversation](./tutorials/first-conversation.md) |
+| Choose between ETL, Runtime, Evaluate, Weaver, Dyad, and other Engines | [Choose an Engine](./advanced/engines.md) |
+| View, edit, validate, or recover a file | [Workspace page](./tutorials/workspace-page.md) |
+| Let the model search the web or inspect an image | [Web search and images](./tutorials/web-search-and-images.md) |
+| Resume, regenerate, switch branches, or compact context | [Sessions and rewind](./tutorials/sessions-and-rewind.md) |
+| Keep repeated rules for future sessions | [Persistent Instructions](./tutorials/persistent-instructions.md) |
+| Let the model use a documentation Skill or delegate to a SubAgent | [Skills and SubAgents](./tutorials/skills-and-subagents.md) |
+| Start continuous narrative play from two cards | [Stage consumer engine](./advanced/stage.md) |
+| Connect an external MCP tool | [MCP tools](./advanced/mcp.md) |
+| Manage Harness Packs or switch the creative baseline | [Harness Packs](./advanced/harness-packs.md) |
+| Look up every terminal command or TUI key | [Terminal command reference](./reference/cli-commands.md) / [TUI command cheatsheet](./reference/commands.md) |
+
 ## Reference
 
 Command cheatsheet, configuration files, the permission and security model, checksums and signing, updates and uninstall, and troubleshooting live in the [reference section](./reference/README.md).
 
 ## Advanced and experimental
 
-Host shell, Output Quality Guard, SubAgents, Stage, MCP tools, and other advanced capabilities live in the [advanced section](./advanced/README.md).
+Host shell, Output Quality Guard, SubAgents, Stage, MCP tools, Harness Packs, and other advanced capabilities live in the [advanced section](./advanced/README.md).
 
 ## Manual status
 
-Prism Vesicle is in alpha; the interface and commands may change. When the manual disagrees with the program, trust `vesicle doctor` and please report the discrepancy.
+Prism Vesicle is in beta; the interface and commands may still change. `vesicle doctor` diagnoses the environment, but it is not a description of every feature. When the manual disagrees with the real interface or command, retain the exact error and use [Troubleshooting](./reference/troubleshooting.md) to report the discrepancy.

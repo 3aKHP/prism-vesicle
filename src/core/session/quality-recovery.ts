@@ -17,6 +17,7 @@ import {
 import type { PendingQualityRewrite } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
 import type { FileToolEvent } from "../tools";
+import { parseReplayableWebSearch } from "./web-search-report";
 
 export function findPendingQualityRewrite(records: SessionRecord[]): PendingQualityRewrite | undefined {
   let pending: PendingQualityRewrite | undefined;
@@ -559,6 +560,8 @@ function parseQualityDecisionCandidate(value: unknown): QualityDecisionCandidate
   });
   if (toolCalls.length !== source.toolCalls.length) return undefined;
   const thinkingBlocks = readThinkingBlocks(source.thinkingBlocks);
+  const webSearch = parseReplayableWebSearch(source.webSearch);
+  if (Object.hasOwn(source, "webSearch") && !webSearch) return undefined;
   let providerState: QualityDecisionCandidate["providerState"];
   if (Object.hasOwn(source, "providerState")) {
     try {
@@ -574,6 +577,7 @@ function parseQualityDecisionCandidate(value: unknown): QualityDecisionCandidate
     toolCalls,
     ...(typeof source.reasoningContent === "string" ? { reasoningContent: source.reasoningContent } : {}),
     ...(thinkingBlocks ? { thinkingBlocks } : {}),
+    ...(webSearch ? { webSearch } : {}),
     ...(providerState ? { providerState } : {}),
     ...(typeof source.finishReason === "string" ? { finishReason: source.finishReason } : {}),
     ...(usage ? { usage } : {}),

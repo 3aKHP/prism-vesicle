@@ -1300,6 +1300,33 @@ describe("OpenAI Responses built-in web search", () => {
     expect(nativeOn.some((item) => item.type === "web_search_call" && item.id === "ws_1")).toBe(true);
   });
 
+  test("degrades a searched DeepSeek native batch to portable history when search is off", () => {
+    const state = deepSeekNativeSearchState();
+    const messages = [{
+      role: "assistant" as const,
+      content: "Grounded DeepSeek answer.",
+      reasoningContent: "search-coupled reasoning",
+      providerState: state,
+    }, { role: "user" as const, content: "next" }];
+    const requestContext = {
+      providerId: "deepseek",
+      endpointFingerprint: responsesEndpointFingerprint("https://api.deepseek.com/v1"),
+    };
+    const base = {
+      ...request(),
+      model: { provider: "deepseek", model: "deepseek-v4-flash" },
+      messages,
+    };
+
+    const offInput = toResponsesBody(base, requestContext, false, "deepseek-subset-2026-08-19").input as Array<Record<string, unknown>>;
+    expect(offInput.some((item) => item.type === "web_search_call" || item.type === "reasoning")).toBe(false);
+    expect(offInput).toContainEqual({ role: "assistant", content: "Grounded DeepSeek answer." });
+
+    const onInput = toResponsesBody({ ...base, webSearch: true }, requestContext, false, "deepseek-subset-2026-08-19").input as Array<Record<string, unknown>>;
+    expect(onInput.some((item) => item.type === "web_search_call")).toBe(true);
+    expect(onInput.some((item) => item.type === "reasoning")).toBe(true);
+  });
+
   test("admits the web search event family on the dated DeepSeek subset stream", async () => {
     const events = await collect(readResponsesStream(responseStream([
       event(0, "response.created", { response: { id: "resp_ws" } }),
@@ -1355,6 +1382,31 @@ function nativeSearchState(): ProviderStateEnvelope {
       outputItems: [
         { id: "ws_1", type: "web_search_call", status: "completed", action: { type: "search", query: "native query" } },
         { type: "message", role: "assistant", content: [{ type: "output_text", text: "Native answer." }] },
+      ],
+    },
+  };
+}
+
+function deepSeekNativeSearchState(): ProviderStateEnvelope {
+  return {
+    version: providerStateEnvelopeVersion,
+    protocol: "openai-responses",
+    providerId: "deepseek",
+    model: "deepseek-v4-flash",
+    endpointFingerprint: responsesEndpointFingerprint("https://api.deepseek.com/v1"),
+    payload: {
+      version: 1,
+      profile: "deepseek-subset-2026-08-19",
+      responseId: "resp_deepseek_ws",
+      outputItems: [
+        {
+          type: "reasoning",
+          content: [{ type: "reasoning_text", text: "search-coupled reasoning" }],
+          summary: [],
+          encrypted_content: "search-token",
+        },
+        { id: "ws_ds_1", type: "web_search_call", status: "completed", action: { type: "search", query: "native query" } },
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "Grounded DeepSeek answer." }] },
       ],
     },
   };

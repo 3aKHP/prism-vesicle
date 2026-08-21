@@ -92,6 +92,26 @@ After a conversation grows, you can compact it into a summary and continue, savi
 
 Optionally add instructions, e.g. `/compact keep the character card topology decisions`. Compaction produces a summary through the current model, then continues from the summary; the original text stays in the session record.
 
+Success adds `Conversation compacted into a summary` to the transcript and reports how many messages were compacted in the status line. `/context` then shows lower current occupancy and checkpoint information. Compaction is a real provider request. If the provider fails or you cancel with Esc, the old context and input draft remain; Vesicle does not install half a checkpoint. Fix the connection and retry, or switch to an available model first.
+
+### Optional automatic compaction
+
+Automatic compaction is **off by default**. The current model entry in `providers.yaml` must declare both a valid `limits.contextWindow` and `limits.autoCompact`, for example:
+
+```yaml
+limits:
+  contextWindow: 128000
+  maxOutputTokens: 8192
+  autoCompact:
+    enabled: true
+    threshold: 0.85
+    reserveOutputTokens: 8192
+```
+
+Once enabled, Vesicle checks the projected complete next request before a top-level input and at safe boundaries in a long tool loop. Queued input, background completion notices, and tool schemas count. On trigger the status moves through compaction and finishes with `compacted <N> units`. `/context` reports active/inactive state, soft trigger, hard limit, and output-reserve source; use it to confirm configuration really took effect.
+
+If automatic compaction fails at the soft trigger, Vesicle shows a warning and may continue the current request. The send is blocked and your draft is preserved only when projected input **strictly exceeds** the hard ceiling; equality remains sendable. Run `/context`, then use manual `/compact`, switch to a larger-context model, or reduce the input. A pending gate, Engine switch, question, permission, or quality decision defers compaction; resolve the bottom panel first. See [Configuration files](../reference/configuration.md) for exact fields.
+
 Switching engines can also compact on the way: `/engine <id> --summary`.
 
 ## Exit and interrupt
@@ -105,6 +125,7 @@ Switching engines can also compact on the way: `/engine <id> --summary`.
 - [ ] You resumed an old session with `/resume`.
 - [ ] You know that `vesicle --resume .` opens the session picker at startup.
 - [ ] You rewound to a step with `/rewind` and resent a prompt.
+- [ ] You inspected compaction state with `/context` and know automatic compaction is off by default.
 - [ ] You know what `.vesicle/sessions/` and `.vesicle/file-history/` each store.
 
 Next: [Set up Persistent Instructions](./persistent-instructions.md).

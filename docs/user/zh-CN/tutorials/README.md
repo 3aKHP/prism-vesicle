@@ -16,5 +16,7 @@
 6. [会话恢复与回退](./sessions-and-rewind.md) —— 恢复历史会话,回退到任意一步,任意深度切换候选分支。
 7. [为项目建立持久化指令](./persistent-instructions.md) —— 用 `/init`、`/instructions` 和模型工具维护跨会话项目规范。
 8. [权限与宿主 Shell](./permissions-and-shell.md) —— 四档工具批准模式,以及何时启用 shell。
+9. [联网搜索与图片](./web-search-and-images.md) —— 区分供应商内置搜索与 Tavily,并把剪贴板图片安全地交给视觉模型。
+10. [Skills 与 SubAgents](./skills-and-subagents.md) —— 让模型查阅随版本附带的文档,以及把一个有边界的任务交给子运行时。
 
-做完这八篇,你就掌握了 Prism Vesicle 的日常创作循环。命令速查、配置、安全模型等参考内容见[参考区](../reference/README.md)。
+前八篇覆盖日常创作循环;后两篇覆盖常用的增强能力。命令速查、配置、安全模型等参考内容见[参考区](../reference/README.md)。

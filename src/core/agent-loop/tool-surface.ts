@@ -11,7 +11,7 @@ import { createActivateSkillToolDefinition } from "../skills/tools";
 import { resolveShellProfile, type ShellInterpreterPreference } from "../process/shell-profile";
 import { askUserQuestionToolDefinition } from "../user-question/types";
 import { instructionToolDefinitions } from "../instructions";
-import { effectiveWebSearchEnabled } from "./web-search-state";
+import { effectiveWebSearchEnabled, engineAllowsBuiltInWebSearch } from "./web-search-state";
 
 const hostContractNames = new Set(["config.load", "prompt.load", "session.write"]);
 
@@ -26,9 +26,11 @@ const tavilyToolNames = new Set(["web_search", "web_fetch", "web_map", "web_craw
 export async function resolveWebSearchSurfaceOptions(
   config: VesicleConfig,
   sessionId: string,
+  profile: EngineProfile,
 ): Promise<WebSearchSurfaceOptions> {
   return {
-    builtinSearchEnabled: effectiveWebSearchEnabled(config, sessionId),
+    builtinSearchEnabled: engineAllowsBuiltInWebSearch(profile)
+      && effectiveWebSearchEnabled(config, sessionId),
     tavilyConfigured: (await loadTavilyApiKey(process.env)) !== undefined,
   };
 }

@@ -1,4 +1,6 @@
-import type { ModelCapabilities } from "../../config/env";
+import type { ModelCapabilities, ResponsesProfile, VesicleProvider } from "../../config/env";
+import { providerAdmitsBuiltInWebSearch } from "../../providers/shared/web-search-support";
+import type { EngineProfile } from "../engine/profile";
 
 /**
  * Structural view of the model config the toggle depends on. `VesicleConfig`
@@ -6,6 +8,8 @@ import type { ModelCapabilities } from "../../config/env";
  * entry's view of the same two fields.
  */
 export type WebSearchConfigView = {
+  provider?: VesicleProvider;
+  responsesProfile?: ResponsesProfile;
   capabilities?: ModelCapabilities;
   webSearchDefault?: boolean;
 };
@@ -35,9 +39,15 @@ export function readSessionWebSearchOverride(sessionId: string): boolean | undef
   return sessionWebSearchOverrides.get(sessionId);
 }
 
-/** True when the model entry declares the `builtinWebSearch` capability. */
+/** True when both the protocol/profile and model entry admit built-in search. */
 export function webSearchSupported(config: WebSearchConfigView): boolean {
-  return config.capabilities?.builtinWebSearch === true;
+  return config.capabilities?.builtinWebSearch === true
+    && providerAdmitsBuiltInWebSearch(config);
+}
+
+/** Built-in search is a model-visible tool and follows the Engine's declared surface. */
+export function engineAllowsBuiltInWebSearch(profile: Pick<EngineProfile, "defaultTools">): boolean {
+  return profile.defaultTools.includes("web_search");
 }
 
 /**

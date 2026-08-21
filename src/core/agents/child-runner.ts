@@ -12,7 +12,6 @@ import { providerRetryLabel } from "../../providers/shared/retry-label";
 import type { AgentRunner } from "./manager";
 import { closeProviderSession } from "../../providers/lifecycle";
 import { prepareProviderMessages } from "../attachments/store";
-import { effectiveWebSearchEnabled } from "../agent-loop/web-search-state";
 
 export { composeChildSystemPrompts, resolveChildTools } from "./child-bootstrap";
 export { agentToolProgress } from "./child-tool-executor";
@@ -49,9 +48,8 @@ export const runChildAgent: AgentRunner = async ({
         messages: providerMessages,
         tools: runtime.tools,
         generation: invocation.generation,
-        // SubAgents inherit the parent session's effective built-in search
-        // toggle (frozen design), keyed by the parent session id.
-        ...(effectiveWebSearchEnabled(runtime.config, spec.parentSessionId)
+        // SubAgents inherit the parent Engine's effective search surface.
+        ...(runtime.builtInSearchEnabled
           ? { webSearch: true }
           : {}),
         signal,

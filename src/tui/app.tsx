@@ -1,7 +1,7 @@
 import { ThemedText } from "./theme-text";
 import { createEffect, createMemo, createSignal, Show, onCleanup, onMount } from "solid-js";
 import { useRenderer, useTerminalDimensions } from "@3akhp/opentui-solid";
-import type { EngineId } from "../core/engine/profile";
+import { loadEngineProfile, type EngineId } from "../core/engine/profile";
 import type { VesicleMessage } from "../providers/shared/types";
 import type { ReasoningTier } from "../providers/shared/types";
 import { engineAccent, palette, reportTerminalThemeMode, themePreference } from "./theme";
@@ -1067,9 +1067,17 @@ export function App(props: AppProps = {}) {
   // completion controller consume. See src/tui/commands/.
   const webSearchController: WebSearchController = createWebSearchController({
     getSessionId: () => sessionId(),
-    getModelView: () => providerRegistry()
-      ?.providers.find((provider) => provider.id === activeProvider())
-      ?.models.find((model) => model.id === activeModel()) ?? {},
+    getEngineProfile: () => loadEngineProfile(activeEngine(), process.cwd()),
+    getModelView: () => {
+      const provider = providerRegistry()
+        ?.providers.find((candidate) => candidate.id === activeProvider());
+      const model = provider?.models.find((candidate) => candidate.id === activeModel());
+      return {
+        ...model,
+        provider: provider?.protocol,
+        responsesProfile: provider?.responsesProfile,
+      };
+    },
   });
   const commandContexts: BuiltinCommandContexts = {
     provider: {

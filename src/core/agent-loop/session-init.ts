@@ -155,7 +155,7 @@ export async function initializeSessionIdentity(
     permission.shellInterpreter,
     {},
     { catalogNames: catalogNames(skillCatalog) },
-    await resolveWebSearchSurfaceOptions(config, session.sessionId),
+    await resolveWebSearchSurfaceOptions(config, session.sessionId, profile),
   );
 
   await session.append(

@@ -3,7 +3,7 @@ import { parseImageAttachments } from "../attachments/store";
 import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets";
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
-import { PROVIDER_NATIVE_CHECKPOINT_KIND, reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage, type WebSearchCallRecord, type WebSearchCitation, type WebSearchReport } from "../../providers/shared/types";
+import { PROVIDER_NATIVE_CHECKPOINT_KIND, reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { SkillToolEvent } from "../skills/types";
@@ -14,6 +14,7 @@ import type { ResumedToolCall, SessionRecord } from "./record-model";
 import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
 import { replayableToolArguments } from "../tools/arguments";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
+import { parseReplayableWebSearch } from "./web-search-report";
 
 export type HistoryProjection = {
   messages: ResumedMessage[];
@@ -152,7 +153,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
 
     if (record.role === "assistant") {
       const toolCalls = readReplayableToolCalls(record.metadata?.toolCalls);
-      const webSearch = readReplayableWebSearch(record.metadata?.webSearch);
+      const webSearch = parseReplayableWebSearch(record.metadata?.webSearch);
       const reasoningContent = record.metadata?.reasoningContent as string | undefined;
       const thinkingBlocks = readThinkingBlocks(record.metadata?.thinkingBlocks);
       const messageEngine = readEngineId(record.metadata?.engine);
@@ -198,51 +199,6 @@ function readReplayableToolCalls(value: unknown): ResumedToolCall[] | undefined 
     return [{ id: call.id, name: call.name, arguments: replayableToolArguments(call.arguments) }];
   });
   return calls.length > 0 ? calls : undefined;
-}
-
-/**
- * Tolerant web-search report restore: malformed fields are filtered out rather
- * than failing the session, mirroring `readReplayableToolCalls`. A report with
- * no usable queries is dropped entirely (the audit floor is gone).
- */
-function readReplayableWebSearch(value: unknown): WebSearchReport | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const source = value as Record<string, unknown>;
-  if (typeof source.provider !== "string") return undefined;
-  const queries = Array.isArray(source.queries)
-    ? source.queries.filter((query): query is string => typeof query === "string" && query.length > 0)
-    : [];
-  if (queries.length === 0) return undefined;
-  const citations = Array.isArray(source.citations)
-    ? source.citations.flatMap((entry): WebSearchCitation[] => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-      const citation = entry as Record<string, unknown>;
-      if (typeof citation.url !== "string" || typeof citation.title !== "string") return [];
-      return [{
-        url: citation.url,
-        title: citation.title,
-        ...(typeof citation.startIndex === "number" ? { startIndex: citation.startIndex } : {}),
-        ...(typeof citation.endIndex === "number" ? { endIndex: citation.endIndex } : {}),
-        ...(typeof citation.summary === "string" ? { summary: citation.summary } : {}),
-        ...(typeof citation.siteName === "string" ? { siteName: citation.siteName } : {}),
-        ...(typeof citation.publishTime === "string" ? { publishTime: citation.publishTime } : {}),
-      }];
-    })
-    : undefined;
-  const calls = Array.isArray(source.calls)
-    ? source.calls.flatMap((entry): WebSearchCallRecord[] => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-      const call = entry as Record<string, unknown>;
-      if (typeof call.id !== "string" || typeof call.status !== "string" || !call.action || typeof call.action !== "object" || Array.isArray(call.action)) return [];
-      return [{ id: call.id, status: call.status, action: call.action as Record<string, unknown> }];
-    })
-    : undefined;
-  return {
-    provider: source.provider,
-    queries,
-    ...(citations && citations.length > 0 ? { citations } : {}),
-    ...(calls && calls.length > 0 ? { calls } : {}),
-  };
 }
 
 function isPermissionMode(value: unknown): value is PermissionMode { return value === "MANUAL" || value === "INERTIA" || value === "MOMENTUM" || value === "YOLO"; }

@@ -2,7 +2,7 @@
 
 [English](./CONTRIBUTING.md) | [简体中文](./CONTRIBUTING.zh-CN.md)
 
-Prism Vesicle's internal development remains rapid, but public alpha release work follows the release branch and PR path in [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
+Prism Vesicle's internal development remains rapid, but public beta release work follows the release branch and PR path in [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
 
 Release contributors must follow the public [Code Signing Policy](./CODE_SIGNING_POLICY.md). External contributors retain authorship; the human maintainer `3aKHP` reviews repository changes. Windows signing is currently deferred, so the signing-approver role and per-request manual approval apply only when signing is taken up in the future.
 

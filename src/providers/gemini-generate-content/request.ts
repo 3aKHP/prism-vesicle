@@ -32,39 +32,45 @@ export function toGeminiGenerateContentBody(request: VesicleRequest): Record<str
 
 function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[] {
   const serialized: GeminiContent[] = [];
-  let pendingToolResults: GeminiPart[] = [];
-  let pendingToolImages: GeminiPart[] = [];
+  let pendingFunctionResponses: GeminiPart[] = [];
+  let pendingToolImages: GeminiPart[][] = [];
 
-  // A user Content is either functionResponse-only or ordinary multimodal-only; mixing the
-  // two part kinds in one Content makes the Gemini/Vertex API reject the replay with a 400.
-  // Function-response parts always flush before their round's tool-result images.
-  const flushPendingToolParts = () => {
-    if (pendingToolResults.length > 0) {
-      serialized.push({ role: "user", parts: pendingToolResults });
-      pendingToolResults = [];
+  const flushToolResults = () => {
+    if (pendingFunctionResponses.length > 0) {
+      // Gemini requires one functionResponse part for every functionCall part
+      // in the preceding model turn. Parallel tool results therefore share one
+      // user Content; splitting them into one Content per result makes Gemini
+      // reject the turn as an incomplete response batch.
+      serialized.push({ role: "user", parts: pendingFunctionResponses });
+      pendingFunctionResponses = [];
     }
-    if (pendingToolImages.length > 0) {
-      serialized.push({ role: "user", parts: pendingToolImages });
-      pendingToolImages = [];
+    for (const images of pendingToolImages) {
+      if (images.length > 0) serialized.push({ role: "user", parts: images });
     }
+    pendingToolImages = [];
   };
 
   for (const message of messages) {
     if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) continue;
     if (message.role === "system") continue;
     if (message.role === "tool") {
-      pendingToolResults.push({
+      pendingFunctionResponses.push({
         functionResponse: {
           ...(message.toolCallId ? { id: message.toolCallId } : {}),
           name: toolNameFromCallId(serialized, message.toolCallId),
           response: { content: message.content },
         },
       });
-      pendingToolImages.push(...geminiImageParts(message.images));
+      // Gemini rejects a Content that mixes functionResponse and ordinary
+      // multimodal parts. Hold images until the complete response batch is
+      // emitted, then preserve each tool result's image order in its own
+      // ordinary user Content.
+      pendingToolImages.push(geminiImageParts(message.images));
       continue;
     }
 
-    flushPendingToolParts();
+    flushToolResults();
+
     if (message.role === "assistant") {
       const replayParts = geminiReplayParts(message.thinkingBlocks);
       const parts = replayParts.length > 0
@@ -89,8 +95,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
     ];
     serialized.push({ role: "user", parts: parts.length > 0 ? parts : [{ text: "" }] });
   }
-
-  flushPendingToolParts();
+  flushToolResults();
   return serialized;
 }
 

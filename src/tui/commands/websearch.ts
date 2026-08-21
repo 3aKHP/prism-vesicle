@@ -44,17 +44,20 @@ export function createWebSearchCommands(ctx: WebSearchCommandContext): Command[]
           return;
         }
         if (parsed.kind === "status") {
+          const statusText = await ctx.webSearch.statusText();
           ctx.setMessages((prev) => [
             ...prev,
             { role: "user", content: raw },
-            { role: "system", content: ctx.webSearch.statusText() },
+            { role: "system", content: statusText },
           ]);
           return;
         }
-        const notice = ctx.webSearch.applyOverride(parsed.enabled);
-        ctx.setStatus(`web search ${parsed.enabled ? "on" : "off"}`);
-        ctx.recordActivity({ kind: "system", text: `websearch ${parsed.enabled ? "on" : "off"}` });
-        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: notice }]);
+        const result = await ctx.webSearch.applyOverride(parsed.enabled);
+        if (result.applied) {
+          ctx.setStatus(`web search ${parsed.enabled ? "on" : "off"}`);
+          ctx.recordActivity({ kind: "system", text: `websearch ${parsed.enabled ? "on" : "off"}` });
+        }
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }, { role: "system", content: result.notice }]);
       },
     },
   ];
