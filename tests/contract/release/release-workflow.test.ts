@@ -5,6 +5,7 @@ import { join } from "node:path";
 type WorkflowStep = {
   run?: string;
   uses?: string;
+  env?: Record<string, string>;
   with?: Record<string, string | boolean | number>;
 };
 
@@ -39,6 +40,17 @@ describe("release workflow contract", () => {
     expect(ci.jobs.verify?.uses).toBe(reusableWorkflow);
     expect(publish.jobs.build?.uses).toBe(reusableWorkflow);
     expect(Object.keys(build.on)).toEqual(["workflow_call"]);
+  });
+
+  test("Windows empty-project smoke executes the versioned staged binary", async () => {
+    const build = await loadWorkflow("release-build.yml");
+    const smoke = build.jobs.windows?.steps?.find((step) => step.run?.includes("Copy-Item prism-vesicle.exe"));
+    const script = smoke?.run ?? "";
+
+    expect(smoke?.env?.VERSION).toContain("needs.checks.outputs.version");
+    expect(script).toContain('Copy-Item prism-vesicle.exe "smoke/release/prism-vesicle-windows-x64-$env:VERSION.exe"');
+    expect(script).toContain('..\\release\\prism-vesicle-windows-x64-$env:VERSION.exe');
+    expect(script).not.toContain("smoke/release/prism-vesicle.exe");
   });
 
   test("treats an annotated main-history version tag push as publication authorization", async () => {
