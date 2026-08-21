@@ -44,11 +44,12 @@ const redPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAGElEQVR4nG
 
 /**
  * Real Gemini/Vertex native acceptance for the image tool-result Content boundary (#226).
- * The conversation replays an assistant tool call, a tool result carrying an MCP-sourced
- * image, and a follow-up user message. Before the fix this replay serialized
+ * The conversation replays an assistant turn with two parallel tool calls, both tool results
+ * carrying MCP-shaped images, and a follow-up user message. Before the fix this replay serialized
  * functionResponse, text, and inlineData parts into one user Content and the endpoint
- * rejected the request with HTTP 400; the fix must let native streaming continue so the
- * model can respond to the image.
+ * rejected the request with HTTP 400. Splitting the parallel responses into separate user
+ * Contents triggers Gemini's equal-call/equal-response check, so the fix must preserve one
+ * functionResponse batch while keeping the image Content separate.
  *
  * Skipped (not passed) when the opt-in env var, the provider selection env var,
  * credentials, or model vision capability is missing, so every gap shows up as "skip".
@@ -69,13 +70,23 @@ liveTest(`gemini image tool-result boundary [${label}]`, async () => {
         description: "Demo MCP tool that returns an artwork image.",
         parameters: { type: "object", properties: {} },
       },
+    }, {
+      type: "function",
+      function: {
+        name: "mcp_demo_fetch_alternate_artwork",
+        description: "Demo MCP tool that returns a second artwork image.",
+        parameters: { type: "object", properties: {} },
+      },
     }],
     messages: [
       { role: "user", content: "Fetch the artwork with the demo MCP tool, then describe it." },
       {
         role: "assistant",
         content: "",
-        toolCalls: [{ id: "call_mcp_img", name: "mcp_demo_fetch_artwork", arguments: "{}" }],
+        toolCalls: [
+          { id: "call_mcp_img", name: "mcp_demo_fetch_artwork", arguments: "{}" },
+          { id: "call_mcp_text", name: "mcp_demo_fetch_alternate_artwork", arguments: "{}" },
+        ],
       },
       {
         role: "tool",
@@ -93,6 +104,22 @@ liveTest(`gemini image tool-result boundary [${label}]`, async () => {
           data: redPngBase64,
         }],
       },
+      {
+        role: "tool",
+        toolCallId: "call_mcp_text",
+        content: "the second artwork result is also a solid red square",
+        images: [{
+          id: "img_mcp_acceptance_second",
+          path: ".vesicle/attachments/acceptance-artwork-second.png",
+          mediaType: "image/png",
+          bytes: 81,
+          sha256: "5e032d8615fac126693f8d4a12d5008a80ff1794f43cb4982954f7c1f3d458c1",
+          source: "mcp",
+          sourcePath: "artwork-second.png",
+          filename: "artwork-second.png",
+          data: redPngBase64,
+        }],
+      },
       { role: "user", content: "In one short sentence, what does the image returned by the tool look like?" },
     ],
   };
@@ -104,7 +131,8 @@ liveTest(`gemini image tool-result boundary [${label}]`, async () => {
   const functionResponseContents = userContents.filter((content) => content.parts.some((part) => "functionResponse" in part));
   const imageContents = userContents.filter((content) => content.parts.some((part) => "inlineData" in part));
   expect(functionResponseContents.length).toBe(1);
-  expect(imageContents.length).toBe(1);
+  expect(functionResponseContents[0]?.parts.filter((part) => "functionResponse" in part)).toHaveLength(2);
+  expect(imageContents.length).toBe(2);
   for (const content of functionResponseContents) {
     expect(content.parts.every((part) => "functionResponse" in part)).toBe(true);
   }
@@ -121,6 +149,7 @@ liveTest(`gemini image tool-result boundary [${label}]`, async () => {
     model: config.model,
     imageSource: "synthesized-mcp-boundary",
     functionResponseContents: functionResponseContents.length,
+    functionResponses: functionResponseContents[0]?.parts.length ?? 0,
     imageContents: imageContents.length,
     streamEvents: events.length,
     contentLen: complete.response.content.length,

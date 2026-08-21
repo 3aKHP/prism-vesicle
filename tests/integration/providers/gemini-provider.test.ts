@@ -162,11 +162,6 @@ describe("Gemini generateContent request shaping", () => {
         role: "user",
         parts: [
           { functionResponse: { id: "call_text", name: "read_file", response: { content: "{\"ok\":true}" } } },
-        ],
-      },
-      {
-        role: "user",
-        parts: [
           { functionResponse: { id: "call_mcp", name: "mcp_prts_operator_artwork", response: { content: "artwork" } } },
         ],
       },
@@ -189,7 +184,7 @@ describe("Gemini generateContent request shaping", () => {
     }
   });
 
-  test("keeps each tool-result image adjacent to its own function response", () => {
+  test("keeps the parallel response batch ahead of tool-result images", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
       messages: [
@@ -206,9 +201,60 @@ describe("Gemini generateContent request shaping", () => {
       ],
     });
     const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
-    expect(contents[1]?.parts[0]).toHaveProperty("functionResponse.id", "call_image");
+    expect(contents[1]?.parts.map((part) => (part.functionResponse as { id?: string })?.id))
+      .toEqual(["call_image", "call_text"]);
     expect(contents[2]?.parts.some((part) => "inlineData" in part)).toBe(true);
-    expect(contents[3]?.parts[0]).toHaveProperty("functionResponse.id", "call_text");
+  });
+
+  test("preserves each parallel tool image Content order after the response batch", () => {
+    const first = { ...mcpImage(), id: "img_first", filename: "first.png", data: "Zmlyc3Q=" };
+    const second = { ...mcpImage(), id: "img_second", filename: "second.png", data: "c2Vjb25k" };
+    const third = { ...mcpImage(), id: "img_third", filename: "third.png", data: "dGhpcmQ=" };
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_first", name: "view_image", arguments: "{}" },
+            { id: "call_second", name: "view_image", arguments: "{}" },
+          ],
+        },
+        { role: "tool", toolCallId: "call_first", content: "first", images: [first, second] },
+        { role: "tool", toolCallId: "call_second", content: "second", images: [third] },
+      ],
+    });
+    const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    expect(contents[1]?.parts.map((part) => (part.functionResponse as { id?: string })?.id))
+      .toEqual(["call_first", "call_second"]);
+    expect(contents.slice(2).map((content) => content.parts[0]?.text))
+      .toEqual(["[Image #1: first.png]", "[Image #1: third.png]"]);
+    expect(contents[2]?.parts.map((part) => (part.inlineData as { data?: string })?.data))
+      .toEqual([undefined, "Zmlyc3Q=", undefined, "c2Vjb25k"]);
+    expect(contents[3]?.parts.map((part) => (part.inlineData as { data?: string })?.data))
+      .toEqual([undefined, "dGhpcmQ="]);
+  });
+
+  test("batches every parallel function response for one Gemini function-call turn", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_a", name: "list_directory", arguments: "{}" },
+            { id: "call_b", name: "read_file", arguments: "{}" },
+          ],
+        },
+        { role: "tool", toolCallId: "call_a", content: "a" },
+        { role: "tool", toolCallId: "call_b", content: "b" },
+      ],
+    });
+    const contents = body.contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    expect(contents[1]?.parts.map((part) => (part.functionResponse as { id?: string })?.id))
+      .toEqual(["call_a", "call_b"]);
   });
 
   test("serializes system, messages, tools, tool results, and thinking config", () => {

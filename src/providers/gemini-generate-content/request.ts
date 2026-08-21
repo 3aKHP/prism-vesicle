@@ -32,25 +32,44 @@ export function toGeminiGenerateContentBody(request: VesicleRequest): Record<str
 
 function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[] {
   const serialized: GeminiContent[] = [];
+  let pendingFunctionResponses: GeminiPart[] = [];
+  let pendingToolImages: GeminiPart[][] = [];
+
+  const flushToolResults = () => {
+    if (pendingFunctionResponses.length > 0) {
+      // Gemini requires one functionResponse part for every functionCall part
+      // in the preceding model turn. Parallel tool results therefore share one
+      // user Content; splitting them into one Content per result makes Gemini
+      // reject the turn as an incomplete response batch.
+      serialized.push({ role: "user", parts: pendingFunctionResponses });
+      pendingFunctionResponses = [];
+    }
+    for (const images of pendingToolImages) {
+      if (images.length > 0) serialized.push({ role: "user", parts: images });
+    }
+    pendingToolImages = [];
+  };
 
   for (const message of messages) {
     if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) continue;
     if (message.role === "system") continue;
     if (message.role === "tool") {
-      serialized.push({ role: "user", parts: [{
+      pendingFunctionResponses.push({
         functionResponse: {
           ...(message.toolCallId ? { id: message.toolCallId } : {}),
           name: toolNameFromCallId(serialized, message.toolCallId),
           response: { content: message.content },
         },
-      }] });
-      const images = geminiImageParts(message.images);
+      });
       // Gemini rejects a Content that mixes functionResponse and ordinary
-      // multimodal parts. Keep each tool result's images in the immediately
-      // following Content so parallel results cannot exchange attribution.
-      if (images.length > 0) serialized.push({ role: "user", parts: images });
+      // multimodal parts. Hold images until the complete response batch is
+      // emitted, then preserve each tool result's image order in its own
+      // ordinary user Content.
+      pendingToolImages.push(geminiImageParts(message.images));
       continue;
     }
+
+    flushToolResults();
 
     if (message.role === "assistant") {
       const replayParts = geminiReplayParts(message.thinkingBlocks);
@@ -76,6 +95,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
     ];
     serialized.push({ role: "user", parts: parts.length > 0 ? parts : [{ text: "" }] });
   }
+  flushToolResults();
   return serialized;
 }
 
