@@ -10,7 +10,7 @@ Release candidate: **1.0.0-beta.1**. The `State` column tracks the candidate's p
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10@10.3.0-alpha.1`, verified 73-file inventory) | released |
+| Assets | Bundled V10 Harness (`prism-engine-v10@10.3.0-alpha.2`, verified 73-file inventory) | released |
 | Assets | Managed Harness Packs: offline `status` / `verify` / `install` / `use` / `rollback`, plus asset-overlay `init` / `materialize` | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
 | Providers | Explicit Responses profiles: official OpenAI HTTP/SSE/WebSocket + remote compact, and frozen MiMo/DeepSeek HTTP subsets | released |
