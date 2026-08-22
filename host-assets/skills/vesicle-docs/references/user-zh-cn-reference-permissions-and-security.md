@@ -28,7 +28,7 @@
   - `source_materials/` 存放导入、研究或模型生成的素材;最终产物落在其余四个根。
   - `tmp/` 是项目相对的暂存根(`<项目>/tmp/`,不是操作系统 `/tmp`),用于草稿和中间工作;它受同样的路径守卫与权限模式约束,其改动可写入但不纳入回合级文件检查点/回退,因此暂存区编辑不可回退。跨 `tmp/` 边界的移动在回退时不可完全逆转:从 `tmp/` 移入内容根的文件会被删除且无法恢复;从内容根移入 `tmp/` 的文件会还原到原位,而 `tmp/` 中的副本仍保留。若可能回退,请用 `copy_file` 提升暂存内容。它不会进入制品列表、`/validate`、`/init`、Stage 输入或自动发布。宿主不会自动创建或清空 `tmp/`;需要清理时请显式删除文件。
 - Host 侧栏的制品列表只索引 `workspace/`、`novels/`、`reports/`、`test_runs/`(不含 `source_materials/`,也不含 `tmp/`)。
-- 删除与移动走同一套守卫:`delete_file` 只删文件,`delete_directory` 只删空目录(固定的可写根本身永远删不掉),`move_file` / `move_directory` 永不覆盖已存在的目标。四者都属于变更类工具,INERTIA 与 MANUAL 模式下会先问你。
+- 删除与移动走同一套守卫:`delete_file` 只删文件,`delete_directory` 只删空目录(固定的可写根本身永远删不掉),`move_directory` 永不覆盖已存在的目标;`move_file` 只在 `overwrite` 参数为 `true` 时覆盖(默认 `false`)。四者都属于变更类工具,INERTIA 与 MANUAL 模式下会先问你。
 - 进程工具是显式例外:`shell_exec` 和 Skill 自带脚本可能拥有宿主用户权限,其进程内文件操作不走模型文件工具的路径守卫。二者的调用面不同:`shell_exec` 接受模型生成的自由命令并需单独开启;`run_skill_script` 只能选择已激活 Skill 中的固定脚本并传结构化参数。
 
 > 校验器(角色卡 / 情景卡等)是**建议性**信号:它指出结构问题,但不会强行中断你的回合。
