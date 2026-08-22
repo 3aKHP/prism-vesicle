@@ -78,6 +78,9 @@ describe("prompt audit tool surface", () => {
         expect(names).toContain("ask_user_question");
         expect(names).toContain("request_engine_switch");
         for (const tool of genericHostTools) expect(names).toContain(tool);
+        for (const tool of ["delete_file", "move_file", "move_directory", "delete_directory"]) {
+          expect(names).toContain(tool);
+        }
       }
     }
 
@@ -85,6 +88,9 @@ describe("prompt audit tool surface", () => {
       const profile = await loadAgentProfile(agent);
       const tools = resolveChildTools(profile.tools, [], createEmptyMcpRegistry(), true);
       expect(tools.map((definition) => definition.function.name)).toEqual([...new Set(profile.tools)]);
+      for (const tool of ["delete_file", "move_file", "move_directory", "delete_directory"]) {
+        expect(profile.tools).toContain(tool);
+      }
     }
   });
 

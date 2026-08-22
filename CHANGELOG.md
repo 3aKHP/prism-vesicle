@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **The bundled Harness completes the compose mutation surface the host prompt already declares.** The `prism-engine-v10` baseline moves to `10.3.0-alpha.2`: the six non-Stage Engines and the three workflow Agents (Scene Writer, Continuity Editor, Chapter Reviewer) now actually receive `delete_file`, `move_file`, `move_directory`, and `delete_directory` on their model-visible tool surface; previously the base prompt promised these tools while no Engine profile declared them (#238). The tools keep their existing `mutate` permission class, so INERTIA and MANUAL modes still ask before any deletion or move. The new baseline records a new Harness identity; resume compatibility for sessions recorded under `10.3.0-alpha.1` is tracked separately in #239.
+
 ### Changed
 
 - **The repository landing masthead now uses a compact transparent brand mark.** The English and Chinese README pages replace the centered square hero with a small right-aligned mark beside the normal title and lead with the project positioning as a block quote. The full dark- and light-ground luminous marks remain the large-format brand assets; the new derivative preserves the vesicle, prism, incident beam, and restrained spectrum on both neutral document themes without a container tile.
