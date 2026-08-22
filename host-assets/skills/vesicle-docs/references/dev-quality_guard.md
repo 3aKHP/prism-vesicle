@@ -30,7 +30,7 @@ Harness and quality bindings declare delivery policy and capability but do not c
 
 ## Semantic Judge
 
-The Semantic Judge is an **experimental** user-level override that defaults to `off` in `quality.yaml`. It is a single tool-free, file-free, MCP-free, subagent-free provider request over a stable rubric, with low temperature, bounded output, and a shared cancellation signal. Its findings are advisory even under Runtime `rewrite` and never enter blocking policy on their own. The Judge does not write files, generate replacement prose, mutate character state, or decide whether the user continues. The user-facing configuration surface is the `/quality` command (see the user-manual page); developer measurement is `vesicle quality benchmark` ([`QUALITY_BENCHMARK.md`](./QUALITY_BENCHMARK.md)).
+The Semantic Judge is an **experimental** user-level override that defaults to `off` in `quality.yaml`. It is a single tool-free, file-free, MCP-free, subagent-free provider request over a stable rubric, with low temperature, bounded output, and a shared cancellation signal. In `observe` mode its findings are advisory and never enter blocking policy. In the explicitly confirmed `rewrite` mode — staged behind a red two-stage confirmation panel in `/quality`, mirroring `/permissions YOLO` — Judge findings are promoted to blocking and enter the existing bounded Runtime rewrite lifecycle and post-image recheck. The Judge does not write files, generate replacement prose, mutate character state, or decide whether the user continues. The user-facing configuration surface is the `/quality` command (see the user-manual page); developer measurement is `vesicle quality benchmark` ([`QUALITY_BENCHMARK.md`](./QUALITY_BENCHMARK.md)).
 
 ## Host Policy
 
