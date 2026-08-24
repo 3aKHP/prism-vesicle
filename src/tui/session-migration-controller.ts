@@ -14,6 +14,7 @@ import type { Accessor, Setter } from "solid-js";
 import type { SessionSummary } from "../core/session/store";
 import { createSessionStore } from "../core/session/store";
 import {
+  appendSessionArchiveTag,
   appendSessionMigrationRecord,
   archiveSessionBeforeMigration,
   type SessionMigrationRecord,
@@ -112,12 +113,11 @@ export function createSessionMigrationController(options: SessionMigrationContro
       const to = state.report.to;
       if (!to) throw new Error("The active verified Harness baseline carries no runtime identity.");
       const now = new Date().toISOString();
-      const archivePath = await archiveSessionBeforeMigration(options.rootDir, state.target.sessionId, {
-        archivedAt: now,
-        from: state.report.from ?? null,
-        to,
-        reason: "harness-migration",
-      });
+      // Order matters for failure honesty: the byte-for-byte archive first
+      // (no migration claims), then the live rebind, and only after it lands
+      // the self-describing tag — a failed rebind can never leave an archive
+      // that names a target the live file never adopted.
+      const archivePath = await archiveSessionBeforeMigration(options.rootDir, state.target.sessionId);
       const record: SessionMigrationRecord = {
         migratedAt: now,
         from: state.report.from ?? null,
@@ -130,6 +130,12 @@ export function createSessionMigrationController(options: SessionMigrationContro
         },
       };
       await appendSessionMigrationRecord(await createSessionStore(options.rootDir, state.target.sessionId), record);
+      await appendSessionArchiveTag(options.rootDir, archivePath, state.target.sessionId, {
+        archivedAt: now,
+        from: state.report.from ?? null,
+        to,
+        reason: "harness-migration",
+      });
       options.setMigrationReview(null);
       options.setStatus(`session migrated to ${to.packId}@${to.packVersion}`);
       await options.resumeSession(state.target, state.commandEcho);

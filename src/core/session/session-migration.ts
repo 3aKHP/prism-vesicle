@@ -87,22 +87,39 @@ export function findLastSessionMigration(records: SessionRecord[]): SessionMigra
 }
 
 /**
- * Copy the live session file to `.vesicle/sessions/archive/` and append one
- * self-describing tag record to the copy. The archived file is written once
- * and never read or modified by the runtime again. The live file is not
- * touched; `appendSessionMigrationRecord` owns the live-side rebind.
+ * Copy the live session file to `.vesicle/sessions/archive/` byte-for-byte.
+ * The copy carries no migration claims yet: the self-describing tag is only
+ * appended by {@link appendSessionArchiveTag} after the live-side rebind
+ * succeeded, so a failed migration can never leave an archive that names a
+ * target baseline the live file never adopted. The archived bytes are written
+ * once and never read or modified by the runtime again; the live file is not
+ * touched (`appendSessionMigrationRecord` owns the live-side rebind).
  */
 export async function archiveSessionBeforeMigration(
   rootDir: string,
   sessionId: string,
-  tag: SessionArchiveTag,
 ): Promise<string> {
   const sessionsDir = join(rootDir, ".vesicle", "sessions");
   const archiveDir = join(sessionsDir, "archive");
   await mkdir(archiveDir, { recursive: true });
   const source = join(sessionsDir, `${sessionId}.jsonl`);
   const archiveName = await claimArchiveName(archiveDir, sessionId, source);
-  const destination = join(archiveDir, archiveName);
+  return `.vesicle/sessions/archive/${archiveName}`;
+}
+
+/**
+ * Append the self-describing tag to an archived copy after the migration it
+ * describes has landed on the live file. A tag-write failure after a
+ * successful migration degrades the archive's metadata only; the pre-
+ * migration bytes remain intact.
+ */
+export async function appendSessionArchiveTag(
+  rootDir: string,
+  archivePath: string,
+  sessionId: string,
+  tag: SessionArchiveTag,
+): Promise<void> {
+  const destination = join(rootDir, archivePath);
   const parentUuid = await readLatestArchiveUuid(destination);
   const record: SessionRecord = {
     uuid: crypto.randomUUID(),
@@ -114,7 +131,6 @@ export async function archiveSessionBeforeMigration(
     metadata: { kind: SESSION_ARCHIVE_KIND, archive: tag },
   };
   await appendFile(destination, `${JSON.stringify(record)}\n`, "utf8");
-  return `.vesicle/sessions/archive/${archiveName}`;
 }
 
 /** Append the durable migration record that rebinds the live session's effective Harness identity. */

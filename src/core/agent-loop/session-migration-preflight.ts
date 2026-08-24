@@ -265,7 +265,7 @@ export async function runSessionMigrationPreflight(options: {
   try {
     serializeFor(config, request);
   } catch (error) {
-    if (isConfigIntrinsicProviderError(error)) {
+    if (isConfigIntrinsicProviderError(config, error)) {
       findings.push({
         severity: "warning",
         layer: "serializer",
@@ -330,13 +330,17 @@ function serializeFor(config: VesicleConfig, request: VesicleRequest): void {
 }
 
 /**
- * Serialize-time failures caused by the user's provider configuration (for
- * example Anthropic thinking enabled with a low maxTokens budget) exist with
- * or without migration, so they degrade to warnings instead of refusing the
- * migration.
+ * Serialize-time failures caused by the user's provider configuration exist
+ * with or without migration, so they degrade to warnings instead of refusing
+ * the migration. Scoped to the one known throw site — Anthropic thinking
+ * enabled with a low maxTokens budget — rather than a message-substring
+ * match across all providers, so a future serializer regression elsewhere
+ * cannot be silently downgraded to a warning.
  */
-function isConfigIntrinsicProviderError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("maxTokens");
+function isConfigIntrinsicProviderError(config: VesicleConfig, error: unknown): boolean {
+  return config.provider === "anthropic-messages"
+    && error instanceof Error
+    && error.message.includes("maxTokens");
 }
 
 function conclude(

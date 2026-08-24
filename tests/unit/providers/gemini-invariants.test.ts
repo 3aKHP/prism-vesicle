@@ -54,7 +54,10 @@ describe("validateGeminiHistory", () => {
         toolResult(""),
       ];
       const violations = validateGeminiHistory(history);
-      expect(violations.some((violation) => violation.includes("empty id") && violation.includes("grep_files"))).toBe(true);
+      const emptyId = violations.find((violation) => violation.includes("empty id"));
+      expect(emptyId).toBeDefined();
+      expect(emptyId).toContain("index 1");
+      expect(emptyId).toContain("grep_files");
     });
 
     test("a user message after the batch completes is valid", () => {

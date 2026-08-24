@@ -8,6 +8,7 @@ import { createSessionStore } from "../../../../src/core/session/append-store";
 import { listSessions, loadSessionSnapshot } from "../../../../src/core/session/store";
 import { projectSessionHistory } from "../../../../src/core/session/history-projector";
 import {
+  appendSessionArchiveTag,
   appendSessionMigrationRecord,
   archiveSessionBeforeMigration,
   findLastSessionMigration,
@@ -106,16 +107,22 @@ describe("session migration projection", () => {
 });
 
 describe("session migration archive", () => {
-  test("archives original bytes plus one tag record and leaves the live file untouched", async () => {
+  test("archives original bytes without migration claims, then takes the tag only after the live rebind", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-migration-"));
     const store = await createSessionStore(rootDir, "sess-1");
     await store.append({ role: "system", content: "", metadata: { harness: identity("10.3.0-alpha.1") } });
     await store.append({ role: "user", content: "hello" });
     const liveBefore = await readFile(join(rootDir, ".vesicle", "sessions", "sess-1.jsonl"), "utf8");
 
-    const tag = { archivedAt: "2026-08-24T00:00:00.000Z", from: identity("10.3.0-alpha.1"), to: identity("10.3.0-alpha.2"), reason: "harness-migration" as const };
-    const archivePath = await archiveSessionBeforeMigration(rootDir, "sess-1", tag);
+    const archivePath = await archiveSessionBeforeMigration(rootDir, "sess-1");
     expect(archivePath).toBe(".vesicle/sessions/archive/sess-1.jsonl");
+    // Before the tag, the archive is a byte-for-byte copy with no claims.
+    expect(await readFile(join(rootDir, ".vesicle", "sessions", "archive", "sess-1.jsonl"), "utf8")).toBe(liveBefore);
+    expect(await readFile(join(rootDir, ".vesicle", "sessions", "sess-1.jsonl"), "utf8")).toBe(liveBefore);
+
+    const tag = { archivedAt: "2026-08-24T00:00:00.000Z", from: identity("10.3.0-alpha.1"), to: identity("10.3.0-alpha.2"), reason: "harness-migration" as const };
+    await appendSessionMigrationRecord(store, migration("10.3.0-alpha.2"));
+    await appendSessionArchiveTag(rootDir, archivePath, "sess-1", tag);
 
     const archived = await readFile(join(rootDir, ".vesicle", "sessions", "archive", "sess-1.jsonl"), "utf8");
     const lines = archived.split("\n").filter((line) => line.length > 0);
@@ -124,16 +131,15 @@ describe("session migration archive", () => {
     const tagRecord = JSON.parse(lines.at(-1)!) as SessionRecord;
     expect(tagRecord.metadata?.kind).toBe("session-archive");
     expect(tagRecord.metadata?.archive).toEqual(tag);
-    expect(await readFile(join(rootDir, ".vesicle", "sessions", "sess-1.jsonl"), "utf8")).toBe(liveBefore);
   });
 
   test("re-archiving the same session suffixes instead of overwriting", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-migration-"));
     const store = await createSessionStore(rootDir, "sess-1");
     await store.append({ role: "user", content: "first" });
-    const first = await archiveSessionBeforeMigration(rootDir, "sess-1", { archivedAt: "2026-08-24T00:00:00.000Z", from: identity("10.3.0-alpha.1"), to: identity("10.3.0-alpha.2"), reason: "harness-migration" });
+    const first = await archiveSessionBeforeMigration(rootDir, "sess-1");
     await store.append({ role: "user", content: "second" });
-    const second = await archiveSessionBeforeMigration(rootDir, "sess-1", { archivedAt: "2026-08-24T01:00:00.000Z", from: identity("10.3.0-alpha.2"), to: identity("10.3.0-beta.1"), reason: "harness-migration" });
+    const second = await archiveSessionBeforeMigration(rootDir, "sess-1");
     expect(first).toBe(".vesicle/sessions/archive/sess-1.jsonl");
     expect(second).toBe(".vesicle/sessions/archive/sess-1.migrated-2.jsonl");
     expect((await readdir(join(rootDir, ".vesicle", "sessions", "archive"))).sort()).toEqual(["sess-1.jsonl", "sess-1.migrated-2.jsonl"]);
@@ -144,7 +150,7 @@ describe("session migration archive", () => {
     const store = await createSessionStore(rootDir, "sess-1");
     await store.append({ role: "system", content: "", metadata: { harness: identity("10.3.0-alpha.1") } });
     await appendSessionMigrationRecord(store, migration("10.3.0-alpha.2"));
-    await archiveSessionBeforeMigration(rootDir, "sess-1", { archivedAt: "2026-08-24T00:00:00.000Z", from: identity("10.3.0-alpha.1"), to: identity("10.3.0-alpha.2"), reason: "harness-migration" });
+    await appendSessionArchiveTag(rootDir, await archiveSessionBeforeMigration(rootDir, "sess-1"), "sess-1", { archivedAt: "2026-08-24T00:00:00.000Z", from: identity("10.3.0-alpha.1"), to: identity("10.3.0-alpha.2"), reason: "harness-migration" });
     const sessions = await listSessions(rootDir);
     expect(sessions.map((summary) => summary.sessionId)).toEqual(["sess-1"]);
     const snapshot = await loadSessionSnapshot(rootDir, "sess-1", { synthesizeDanglingToolResults: false });
