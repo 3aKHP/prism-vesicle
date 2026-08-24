@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-beta.1 (2026-08-20)._
+_Snapshot: 1.0.0-beta.2 (2026-08-24)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-beta.1**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-beta.1 GitHub Release and npm package once the accepted candidate is tagged; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Release candidate: **1.0.0-beta.2**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-beta.2 GitHub Release and npm package once the accepted candidate is tagged; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|

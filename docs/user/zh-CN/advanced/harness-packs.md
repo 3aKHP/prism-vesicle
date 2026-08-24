@@ -2,7 +2,7 @@
 
 [English](../../en/advanced/harness-packs.md) | 简体中文
 
-> **状态(截至 `1.0.0-beta.1`):** 🟢 已实现离线 verify/install/use/status/rollback。在线发现、下载、解压和自动更新尚未实现。
+> **状态(截至 `1.0.0-beta.2`):** 🟢 已实现离线 verify/install/use/status/rollback。在线发现、下载、解压和自动更新尚未实现。
 
 Harness Pack 是一整套经过清单校验的 Prism 创作基线:Engine profiles、prompts、validators、Agent profiles、Skills 与 Adapter Binding 必须作为一个版本整体使用。普通首次安装已经自带 V10 基线,**不需要**再安装 Pack。只有当你收到一个可信来源提供的、已经解压的完整 Pack 目录时才走本页。
 
