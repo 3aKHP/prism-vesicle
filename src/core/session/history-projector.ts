@@ -4,6 +4,7 @@ import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets"
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
+import { isKnownThinkingBlock } from "../../providers/shared/thinking";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { SkillToolEvent } from "../skills/types";
@@ -228,14 +229,6 @@ function readThinkingBlocks(value: unknown): ProviderThinkingBlock[] | undefined
   if (!Array.isArray(value)) return undefined;
   const blocks = value.filter(isKnownThinkingBlock);
   return blocks.length > 0 ? blocks : undefined;
-}
-function isKnownThinkingBlock(value: unknown): value is ProviderThinkingBlock {
-  if (!value || typeof value !== "object") return false;
-  const block = value as ProviderThinkingBlock;
-  if (block.type === "reasoning") return typeof block.reasoningContent === "string";
-  if (block.type === "thinking") return typeof block.thinking === "string";
-  if (block.type === "redacted_thinking") return typeof block.data === "string";
-  return block.type === "thought_summary" && (typeof block.text === "string" || typeof block.summary === "string");
 }
 function readResponseUsage(value: unknown): ResponseUsage | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;

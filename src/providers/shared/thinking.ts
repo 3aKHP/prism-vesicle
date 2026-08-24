@@ -1,5 +1,25 @@
 import type { ProviderThinkingBlock } from "./types";
 
+/**
+ * Strict shape guard for thinking blocks reloaded from durable session state.
+ * Every persistence reader (history projection, quality recovery, compact
+ * checkpoints) filters through this single list so a new provider-native
+ * block type cannot drift across copies again (#243). Unknown or malformed
+ * entries are rejected: silently dropped by the projection readers, and
+ * rejected fail-closed by the compact-checkpoint parser.
+ */
+export function isKnownThinkingBlock(value: unknown): value is ProviderThinkingBlock {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const block = value as ProviderThinkingBlock;
+  if (block.type === "reasoning") return typeof block.reasoningContent === "string";
+  if (block.type === "thinking") return typeof block.thinking === "string";
+  if (block.type === "redacted_thinking") return typeof block.data === "string";
+  if (block.type === "thought_summary") return typeof block.text === "string" || typeof block.summary === "string";
+  // Gemini replays provider-native parts (thought text, functionCall) with
+  // their thoughtSignature verbatim; only a structured part can carry one.
+  return block.type === "gemini_part" && isRecord(block.part);
+}
+
 export function thinkingBlocksFromReasoningContent(reasoningContent: string | undefined): ProviderThinkingBlock[] | undefined {
   if (!reasoningContent) return undefined;
   return [{ type: "reasoning", reasoningContent }];
