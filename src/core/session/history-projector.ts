@@ -12,6 +12,7 @@ import type { PermissionMode } from "../permissions";
 import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
 import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
+import { parseSessionMigrationRecord, SESSION_MIGRATION_KIND } from "./session-migration";
 import { replayableToolArguments } from "../tools/arguments";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
 import { parseReplayableWebSearch } from "./web-search-report";
@@ -124,6 +125,15 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         assets = parseAssetFingerprint(record.metadata?.assets);
         harness = readHarnessRuntimeIdentity(record.metadata?.harness);
         skippedFirstSystem = true;
+      }
+      if (record.metadata?.kind === SESSION_MIGRATION_KIND) {
+        // A confirmed Harness migration rebinds the session's effective
+        // identity; every earlier record keeps the identity it was recorded
+        // under and the last migration wins. The full migration payload is
+        // parsed so a malformed record fails closed exactly like a malformed
+        // header identity instead of partially rebinding.
+        harness = parseSessionMigrationRecord(record.metadata.migration).to;
+        continue;
       }
       if (record.metadata?.kind === FAILED_TURN_KIND) {
         dropFailedTurnInput(messages);

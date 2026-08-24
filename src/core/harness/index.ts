@@ -15,6 +15,7 @@ export {
   resolveBundledHarnessRuntime,
   resolveProjectHarnessRuntime,
   rollbackProjectHarness,
+  sessionHarnessIdentityMatches,
 } from "./activation";
 export {
   bindHarnessDelegation,
