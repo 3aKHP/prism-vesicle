@@ -1,4 +1,5 @@
 import type { ResumedMessage } from "./store";
+import { isKnownThinkingBlock } from "../../providers/shared/thinking";
 import type { ProviderStateEnvelope } from "../../providers/shared/state";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
 import { parseReplayableWebSearch } from "./web-search-report";
@@ -309,14 +310,7 @@ function parseThinkingBlocks(value: unknown, label: string): NonNullable<Resumed
     if (!isPlainObject(entry) || typeof entry.type !== "string") {
       throw new Error(`Session compact checkpoint ${label}.thinkingBlocks[${index}] is malformed.`);
     }
-    const valid = entry.type === "reasoning"
-      ? typeof entry.reasoningContent === "string"
-      : entry.type === "thinking"
-        ? typeof entry.thinking === "string"
-        : entry.type === "redacted_thinking"
-          ? typeof entry.data === "string"
-          : entry.type === "thought_summary" && (typeof entry.text === "string" || typeof entry.summary === "string");
-    if (!valid || !isJsonValue(entry)) {
+    if (!isKnownThinkingBlock(entry) || !isJsonValue(entry)) {
       throw new Error(`Session compact checkpoint ${label}.thinkingBlocks[${index}] is malformed.`);
     }
     return { ...entry } as NonNullable<ResumedMessage["thinkingBlocks"]>[number];
