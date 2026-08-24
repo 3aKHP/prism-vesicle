@@ -23,7 +23,9 @@ export function migrationIdentityLine(state: MigrationReviewState): string {
 export function migrationPanelHeight(state: MigrationReviewState, width: number): number {
   const inner = Math.max(20, width - 4);
   const descriptions = wrapDisplayLines(stageDescriptions[state.stage], inner).length;
-  const report = Math.min(maxReportRows + 1, reportRows(state, inner).length + 1);
+  // Budget the actual wrapped report rows: the confirm options and hint must
+  // never be clipped below the panel, even with many multi-line findings.
+  const report = reportRows(state, inner).length + 1;
   return descriptions + report + 8;
 }
 
