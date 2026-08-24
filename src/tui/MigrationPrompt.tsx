@@ -8,8 +8,8 @@ import type { MigrationReviewState } from "./session-migration-controller";
 const maxReportRows = 8;
 
 const stageDescriptions = {
-  1: "The session was recorded under a different verified Harness baseline. The report below was checked offline: no provider request was sent.",
-  2: "The current session file will be copied to the session archive and rebound to the new baseline. History keeps its original records; this cannot be undone automatically.",
+  1: "The session was recorded under a different verified Harness baseline. Review the findings before migrating.",
+  2: "The session file will be archived and rebound to the new baseline. History keeps its original records.",
 } as const;
 
 export function migrationIdentityLine(state: MigrationReviewState): string {
