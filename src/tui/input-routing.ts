@@ -9,6 +9,7 @@ import { resolveBottomSurfaceMode, type ModelPickerState, type QualityPickerStat
 import type { RewindPickerState, SessionPickerState } from "./types";
 import type { BranchPickerState } from "./branch/controller";
 import type { SkillPickerState } from "./skill-picker-controller";
+import type { MigrationReviewState } from "./session-migration-controller";
 
 export type InputRoutingOptions = {
   renderer: ReturnType<typeof useRenderer>;
@@ -31,6 +32,8 @@ export type InputRoutingOptions = {
   handleSkillPickerKey: (key: TuiKeyEvent) => boolean;
   yoloConfirmStage: Accessor<1 | 2 | null>;
   handleYoloKey: (key: TuiKeyEvent) => boolean;
+  migrationReview?: Accessor<MigrationReviewState | null>;
+  handleMigrationKey?: (key: TuiKeyEvent) => boolean;
   activePermissionRequest: Accessor<PermissionRequest | undefined>;
   pendingUserQuestion: Accessor<PendingUserQuestionState | null>;
   pendingQualityDecision?: Accessor<PendingQualityDecisionState | null>;
@@ -100,6 +103,7 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
   });
   const bottomSurfaceMode = () => resolveBottomSurfaceMode({
     yoloStage: options.yoloConfirmStage(),
+    migrationReview: options.migrationReview?.() ?? null,
     permissionRequest: options.activePermissionRequest(),
     question: options.pendingUserQuestion(),
     quality: options.pendingQualityDecision?.() ?? null,
@@ -166,6 +170,9 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     switch (mode.kind) {
       case "yolo":
         if (busyEscapeFallback(options.handleYoloKey(key))) consumeKey(key);
+        return;
+      case "session-migration":
+        if (busyEscapeFallback(options.handleMigrationKey?.(key))) consumeKey(key);
         return;
       case "permission":
       case "gate":

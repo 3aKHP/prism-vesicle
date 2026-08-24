@@ -31,6 +31,14 @@ When Vesicle is already open, enter:
 
 Opens a list of this project's past sessions (by time); pick one to resume. You can also `/resume 2` or `/resume <session-id>`. Resume restores the conversation, any unresolved gates, the model selection, and more.
 
+### Resuming an old session after an upgrade: the migration confirm
+
+Upgrading Vesicle can also update the bundled engine pack. Resuming a session recorded before such an update no longer fails outright; instead a one-time **migration confirmation panel** appears, first showing an offline check report (whether the engine still exists, whether a paused gate can still resolve, whether the conversation can still be sent to your current provider as-is, and whether the context is near its limit). You confirm twice before anything changes. The check itself never sends a provider request.
+
+- After confirming: the session's full transcript is first **archived** under `.vesicle/sessions/archive/`, then the session continues under the new engine pack. Every later resume of this session shows a "recorded under an older engine pack" notice — the switch is never silent.
+- If the report lists a red `✗` item (for example, the engine the session used no longer exists): the migration is refused, the session stays untouched, and you can start a new session instead.
+- `⚠` items (context near the limit, changed Skills, and so on) allow the migration; the consequences are listed in the report.
+
 To start fresh instead of resuming:
 
 ```

@@ -37,6 +37,19 @@ import {
   resolveProjectHarnessRuntime,
 } from "../core/harness";
 import { pendingQualityDecisionFromSnapshot } from "./quality-decision-state";
+import { sessionHarnessIdentityMatches } from "../core/harness";
+import { findLastSessionMigration } from "../core/session/session-migration";
+import type { HarnessRuntimeIdentity } from "../core/harness/driver";
+
+/** Everything the migration review needs about a mismatched resume attempt. */
+export type SessionMigrationReviewContext = {
+  target: SessionSummary;
+  snapshot: SessionSnapshot;
+  recorded: HarnessRuntimeIdentity | undefined;
+  current: HarnessRuntimeIdentity | undefined;
+  projectHarness: ReturnType<typeof requireProjectHarnessRuntime>;
+  commandEcho?: string;
+};
 
 type InteractionState = {
   setPendingGate: Setter<PendingGateState | null>;
@@ -93,6 +106,12 @@ export type SessionResumeControllerOptions = InteractionState & {
   clearThemeOverride?: () => void;
   /** Clear a temporary `/websearch` session override when activating another session. */
   clearWebSearchOverride?: () => void;
+  /**
+   * Offer the one-time session-Harness migration review when the recorded
+   * identity differs from the active baseline (#239). Absent (tests, headless
+   * constructions), resume keeps today's fail-closed behavior byte-for-byte.
+   */
+  beginMigrationReview?: (context: SessionMigrationReviewContext) => Promise<void>;
   onSessionActive?: (sessionId: string) => void;
 };
 
@@ -117,6 +136,20 @@ export function createSessionResumeController(options: SessionResumeControllerOp
         qualityBlockedReason = qualityUnavailableMessage(snapshot, error);
       }
       if (projectHarness) {
+        // The migration review must intercept the mismatch before the
+        // pending-quality conversion below, or sessions holding a quality
+        // decision would never see the forfeiture warning the preflight adds.
+        if (!sessionHarnessIdentityMatches(snapshot.harness, projectHarness.harness.identity) && options.beginMigrationReview) {
+          await options.beginMigrationReview({
+            target,
+            snapshot,
+            recorded: snapshot.harness,
+            current: projectHarness.harness.identity,
+            projectHarness,
+            ...(commandEcho ? { commandEcho } : {}),
+          });
+          return;
+        }
         try {
           assertSessionHarnessIdentity(snapshot.harness, projectHarness.harness.identity);
         } catch (error) {
@@ -225,6 +258,19 @@ export function createSessionResumeController(options: SessionResumeControllerOp
       });
     }
     restorePermissionMode(snapshot, hostMessages);
+    // The durable migration notice derives from session records, so every
+    // future resume re-displays it — the session never silently runs under a
+    // baseline it was not recorded with.
+    const migration = findLastSessionMigration(snapshot.records);
+    if (migration) {
+      const from = migration.from
+        ? `${migration.from.packId}@${migration.from.packVersion}`
+        : "an unrecorded Harness baseline";
+      hostMessages.push({
+        role: "system",
+        content: `This session was recorded under ${from} and now runs under ${migration.to.packId}@${migration.to.packVersion}. The pre-migration transcript was archived at ${migration.archivePath}.`,
+      });
+    }
     if (!skipAssetDrift) await reportAssetDrift(target.sessionId, snapshot, restoredEngine, hostMessages);
     if (restoredEngine === "stage" && snapshot.stageBootstrap) {
       const changed = await stageSourceDrift(options.rootDir, snapshot.stageBootstrap);
