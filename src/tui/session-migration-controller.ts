@@ -136,9 +136,11 @@ export function createSessionMigrationController(options: SessionMigrationContro
         to,
         reason: "harness-migration",
       });
-      options.setMigrationReview(null);
       options.setStatus(`session migrated to ${to.packId}@${to.packVersion}`);
+      // Keep the busy migration surface mounted until resume has finished.
+      // Clearing it earlier lets picker/composer input race the restore path.
       await options.resumeSession(state.target, state.commandEcho);
+      options.setMigrationReview(null);
     } catch (error) {
       options.setMigrationReview(null);
       options.reportError(error);
