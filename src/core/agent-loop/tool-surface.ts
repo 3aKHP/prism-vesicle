@@ -27,11 +27,12 @@ export async function resolveWebSearchSurfaceOptions(
   config: VesicleConfig,
   sessionId: string,
   profile: EngineProfile,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<WebSearchSurfaceOptions> {
   return {
     builtinSearchEnabled: engineAllowsBuiltInWebSearch(profile)
       && effectiveWebSearchEnabled(config, sessionId),
-    tavilyConfigured: (await loadTavilyApiKey(process.env)) !== undefined,
+    tavilyConfigured: (await loadTavilyApiKey(env)) !== undefined,
   };
 }
 

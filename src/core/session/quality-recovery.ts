@@ -1,5 +1,6 @@
 import { engineIds, type EngineId } from "../engine/profile";
 import { type ProviderThinkingBlock, type ResponseUsage } from "../../providers/shared/types";
+import { isKnownThinkingBlock } from "../../providers/shared/thinking";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
 import {
   qualityCandidateParts,
@@ -590,14 +591,7 @@ function readEngineId(value: unknown): EngineId | undefined {
 
 function readThinkingBlocks(value: unknown): ProviderThinkingBlock[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const blocks = value.filter((block): block is ProviderThinkingBlock => {
-    if (!block || typeof block !== "object") return false;
-    const value = block as ProviderThinkingBlock;
-    if (value.type === "reasoning") return typeof value.reasoningContent === "string";
-    if (value.type === "thinking") return typeof value.thinking === "string";
-    if (value.type === "redacted_thinking") return typeof value.data === "string";
-    return value.type === "thought_summary" && (typeof value.text === "string" || typeof value.summary === "string");
-  });
+  const blocks = value.filter(isKnownThinkingBlock);
   return blocks.length > 0 ? blocks : undefined;
 }
 

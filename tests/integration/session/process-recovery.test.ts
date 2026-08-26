@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { createSessionStore, loadSessionSnapshot } from "../../../src/core/session/store";
+import { toVesicleMessage } from "../../../src/core/compact/summary-generator";
+import { validateAnthropicHistory } from "../../../src/providers/anthropic-messages/invariants";
+import { validateOpenAIChatHistory } from "../../../src/providers/openai-chat/invariants";
 
 describe("session: process recovery", () => {
   test("restores pending permissions and never replays an indeterminate started process", async () => {
@@ -170,6 +173,52 @@ describe("session: process recovery", () => {
       toolOk: false,
       kind: "tool-interrupted",
     });
+  });
+
+  test("splices an indeterminate process result next to its carrier after later turns", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-indeterminate-adjacency-"));
+    const store = await createSessionStore(rootDir, "indeterminate-adjacency-resume");
+    await store.append({ role: "system", content: "system" });
+    await store.append({ role: "user", content: "run" });
+    const call = { id: "call-shell", name: "shell_exec", arguments: JSON.stringify({ command: "printf hi" }) };
+    await store.append({ role: "assistant", content: "", metadata: { toolCalls: [call] } });
+    const request = {
+      id: "permission-shell",
+      sessionId: store.sessionId,
+      toolCallId: call.id,
+      toolName: call.name,
+      arguments: call.arguments,
+      permissionClass: "arbitrary_exec",
+      mode: "MOMENTUM",
+      createdAt: new Date().toISOString(),
+    };
+    await store.append({ role: "system", content: "permission", metadata: { kind: "permission-request", request } });
+    await store.append({ role: "system", content: "allowed", metadata: { kind: "permission-resolution", requestId: request.id } });
+    await store.append({ role: "system", content: "started", metadata: { kind: "process-started", requestId: request.id, toolCallId: call.id } });
+    // The session kept going after the crash: the synthetic result must still
+    // land directly after its declaring assistant turn, not at the array end.
+    await store.append({ role: "user", content: "what happened?" });
+    await store.append({ role: "assistant", content: "The process was interrupted." });
+
+    const recovered = await loadSessionSnapshot(rootDir, store.sessionId, { synthesizeDanglingToolResults: false });
+    const carrierIndex = recovered.messages.findIndex((message) => message.toolCalls?.some((candidate) => candidate.id === call.id));
+    expect(carrierIndex).toBeGreaterThanOrEqual(0);
+    expect(recovered.messages[carrierIndex + 1]).toMatchObject({
+      role: "tool",
+      toolCallId: call.id,
+      toolOk: false,
+      kind: "process-indeterminate",
+    });
+    expect(recovered.messages.at(-1)).toMatchObject({ role: "assistant", content: "The process was interrupted." });
+
+    // Protocol oracle: the re-projected history must be replayable as-is.
+    const wire = recovered.messages.map(toVesicleMessage);
+    expect(validateAnthropicHistory(wire)).toEqual([]);
+    expect(validateOpenAIChatHistory(wire)).toEqual([]);
+
+    // The synthetic is projection-derived; reloading must not accumulate it.
+    const reloaded = await loadSessionSnapshot(rootDir, store.sessionId, { synthesizeDanglingToolResults: false });
+    expect(reloaded.messages).toEqual(recovered.messages);
   });
 
 });

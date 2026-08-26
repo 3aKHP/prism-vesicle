@@ -4,6 +4,7 @@ import { parseAssetFingerprint, type AssetFingerprint } from "../runtime/assets"
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, reasoningTiers, type ProviderThinkingBlock, type ReasoningTier, type ResponseUsage } from "../../providers/shared/types";
+import { isKnownThinkingBlock } from "../../providers/shared/thinking";
 import type { ProviderSelection } from "../../config/providers";
 import type { FileToolEvent, McpToolEvent, ProcessToolEvent, WebToolEvent } from "../tools";
 import type { SkillToolEvent } from "../skills/types";
@@ -12,6 +13,7 @@ import type { PermissionMode } from "../permissions";
 import type { ReasoningDisplayMode, ResumedMessage } from "./store";
 import type { ResumedToolCall, SessionRecord } from "./record-model";
 import { COMPACT_CHECKPOINT_KIND, parseCompactCheckpoint } from "./compact-checkpoint";
+import { parseSessionMigrationRecord, SESSION_MIGRATION_KIND } from "./session-migration";
 import { replayableToolArguments } from "../tools/arguments";
 import { parseProviderStateEnvelope } from "../../providers/shared/state";
 import { parseReplayableWebSearch } from "./web-search-report";
@@ -125,6 +127,15 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         harness = readHarnessRuntimeIdentity(record.metadata?.harness);
         skippedFirstSystem = true;
       }
+      if (record.metadata?.kind === SESSION_MIGRATION_KIND) {
+        // A confirmed Harness migration rebinds the session's effective
+        // identity; every earlier record keeps the identity it was recorded
+        // under and the last migration wins. The full migration payload is
+        // parsed so a malformed record fails closed exactly like a malformed
+        // header identity instead of partially rebinding.
+        harness = parseSessionMigrationRecord(record.metadata.migration).to;
+        continue;
+      }
       if (record.metadata?.kind === FAILED_TURN_KIND) {
         dropFailedTurnInput(messages);
         continue;
@@ -218,14 +229,6 @@ function readThinkingBlocks(value: unknown): ProviderThinkingBlock[] | undefined
   if (!Array.isArray(value)) return undefined;
   const blocks = value.filter(isKnownThinkingBlock);
   return blocks.length > 0 ? blocks : undefined;
-}
-function isKnownThinkingBlock(value: unknown): value is ProviderThinkingBlock {
-  if (!value || typeof value !== "object") return false;
-  const block = value as ProviderThinkingBlock;
-  if (block.type === "reasoning") return typeof block.reasoningContent === "string";
-  if (block.type === "thinking") return typeof block.thinking === "string";
-  if (block.type === "redacted_thinking") return typeof block.data === "string";
-  return block.type === "thought_summary" && (typeof block.text === "string" || typeof block.summary === "string");
 }
 function readResponseUsage(value: unknown): ResponseUsage | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;

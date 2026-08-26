@@ -17,6 +17,8 @@ import { RewindPicker } from "../RewindPicker";
 import { BranchPicker } from "../BranchPicker";
 import { SessionPicker } from "../SessionPicker";
 import { YoloPrompt } from "../YoloPrompt";
+import { MigrationPrompt } from "../MigrationPrompt";
+import type { MigrationReviewState } from "../session-migration-controller";
 import type { PendingUserQuestionState } from "../decision-interaction";
 import type { PendingQualityDecisionState } from "../decision-interaction";
 import { QualityDecisionPrompt } from "../QualityDecisionPrompt";
@@ -63,6 +65,7 @@ export type QualityRewriteConfirmState = {
 
 export type BottomSurfaceMode =
   | { kind: "yolo"; stage: 1 | 2 }
+  | { kind: "session-migration"; state: MigrationReviewState }
   | { kind: "permission"; request: PermissionRequest }
   | { kind: "question"; pending: PendingUserQuestionState }
   | { kind: "quality"; pending: PendingQualityDecisionState }
@@ -78,6 +81,7 @@ export type BottomSurfaceMode =
 
 export type BottomSurfaceState = {
   yoloStage: 1 | 2 | null;
+  migrationReview?: MigrationReviewState | null;
   permissionRequest?: PermissionRequest;
   question: PendingUserQuestionState | null;
   quality?: PendingQualityDecisionState | null;
@@ -93,6 +97,9 @@ export type BottomSurfaceState = {
 
 export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfaceMode {
   if (state.yoloStage) return { kind: "yolo", stage: state.yoloStage };
+  // The migration review outranks the session picker it opens over (the
+  // picker stays open underneath when the review is cancelled).
+  if (state.migrationReview) return { kind: "session-migration", state: state.migrationReview };
   if (state.permissionRequest) return { kind: "permission", request: state.permissionRequest };
   if (state.quality) return { kind: "quality", pending: state.quality };
   if (state.question) return { kind: "question", pending: state.question };
@@ -158,6 +165,13 @@ export function BottomSurface(props: BottomSurfaceProps) {
         {(current) => (
           <box height={props.layout.bottomHeight}>
             <YoloPrompt stage={current().stage} focused={props.gateFocus} width={props.layout.width} />
+          </box>
+        )}
+      </Match>
+      <Match when={mode().kind === "session-migration" && mode() as Extract<BottomSurfaceMode, { kind: "session-migration" }> }>
+        {(current) => (
+          <box height={props.layout.bottomHeight}>
+            <MigrationPrompt state={current().state} width={props.layout.width} />
           </box>
         )}
       </Match>

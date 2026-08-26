@@ -16,6 +16,10 @@ defaultTools:
   - write_file
   - replace_in_file
   - append_file
+  - delete_file
+  - move_file
+  - move_directory
+  - delete_directory
 validators: []
 stopGates: []
 stateRoots:

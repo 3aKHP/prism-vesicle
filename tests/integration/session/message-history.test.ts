@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { createSessionStore, FAILED_TURN_KIND, loadSessionMessages, } from "../../../src/core/session/store";
+import { toVesicleMessage } from "../../../src/core/compact/summary-generator";
+import { toGeminiGenerateContentBody } from "../../../src/providers/gemini-generate-content/request";
+import type { VesicleMessage, VesicleRequest } from "../../../src/providers/shared/types";
 
 describe("session: message history", () => {
   test("loadSessionMessages reconstructs user/assistant/tool turns and skips system records", async () => {
@@ -190,6 +193,70 @@ describe("session: message history", () => {
     const messages = await loadSessionMessages(rootDir, "2026-03-02T00-00-00-000Z-blocks");
 
     expect(messages[0].thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "valid" }]);
+  });
+
+  const geminiSignatureBlocks = [
+    { type: "gemini_part", part: { thought: true, text: "planning the write", thoughtSignature: "sig-thought" } },
+    { type: "gemini_part", part: { functionCall: { id: "call-write", name: "write_file", args: { path: "workspace/a.md" } }, thoughtSignature: "sig-call" } },
+  ];
+
+  test("loadSessionMessages preserves gemini_part signature blocks and drops malformed ones", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-gemini-part-"));
+    const store = await createSessionStore(rootDir, "gemini-part-resume");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "write a file" });
+    await store.append({
+      role: "assistant",
+      content: "",
+      metadata: {
+        thinkingBlocks: [
+          ...geminiSignatureBlocks,
+          { type: "gemini_part" },
+          { type: "gemini_part", part: "sig" },
+        ],
+        toolCalls: [{ id: "call-write", name: "write_file", arguments: "{}" }],
+      },
+    });
+    await store.append({ role: "tool", content: '{"ok":true}', metadata: { toolCallId: "call-write", ok: true } });
+
+    const messages = await loadSessionMessages(rootDir, "gemini-part-resume");
+    expect(messages[1].thinkingBlocks).toEqual(geminiSignatureBlocks);
+  });
+
+  test("a resumed Gemini session replays thought-signature parts exactly like the live turn", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-gemini-parity-"));
+    const store = await createSessionStore(rootDir, "gemini-part-parity");
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "write a file" });
+    await store.append({
+      role: "assistant",
+      content: "",
+      metadata: {
+        thinkingBlocks: geminiSignatureBlocks,
+        toolCalls: [{ id: "call-write", name: "write_file", arguments: "{}" }],
+      },
+    });
+    await store.append({ role: "tool", content: '{"ok":true}', metadata: { toolCallId: "call-write", ok: true } });
+
+    const requestFor = (messages: VesicleMessage[]): VesicleRequest => ({
+      id: "parity",
+      model: { provider: "gemini", model: "gemini-3-pro" },
+      system: ["prompt"],
+      messages,
+    });
+    const resumed = (await loadSessionMessages(rootDir, "gemini-part-parity")).map(toVesicleMessage);
+    // The same turn as the live in-process loop would hold it: thinking
+    // blocks never left memory, so no persistence filter ever ran.
+    const live: VesicleMessage[] = [
+      { role: "user", content: "write a file" },
+      { role: "assistant", content: "", thinkingBlocks: geminiSignatureBlocks, toolCalls: [{ id: "call-write", name: "write_file", arguments: "{}" }] },
+      { role: "tool", content: '{"ok":true}', toolCallId: "call-write", toolOk: true },
+    ];
+
+    const body = toGeminiGenerateContentBody(requestFor(resumed));
+    expect(body).toEqual(toGeminiGenerateContentBody(requestFor(live)));
+    const modelTurn = (body.contents as Array<{ role: string; parts: unknown[] }>).find((content) => content.role === "model");
+    expect(modelTurn?.parts).toEqual(geminiSignatureBlocks.map((block) => block.part));
   });
 
   test("loadSessionMessages does not synthesise results when tool results already exist", async () => {

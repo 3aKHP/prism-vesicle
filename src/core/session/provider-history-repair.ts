@@ -31,14 +31,28 @@ function appendIndeterminateProcessResults(messages: ResumedMessage[], records: 
     const requestId = record.metadata?.permissionRequestId;
     if (typeof requestId === "string") finishedRequestIds.add(requestId);
   }
+  const indeterminateCallIds = new Set<string>();
   for (const record of records) {
     if (record.metadata?.kind !== "process-started") continue;
     const requestId = record.metadata.requestId;
     const toolCallId = record.metadata.toolCallId;
     if (typeof requestId !== "string" || typeof toolCallId !== "string") continue;
     if (finishedRequestIds.has(requestId) || answeredToolCallIds.has(toolCallId)) continue;
-    messages.push({ role: "tool", toolCallId, toolOk: false, kind: "process-indeterminate", content: JSON.stringify({ ok: false, result: "The approved host process started before Vesicle stopped, but no completion record exists. Its side effects are indeterminate and the call was not replayed." }) });
-    answeredToolCallIds.add(toolCallId);
+    indeterminateCallIds.add(toolCallId);
+  }
+  // Provider protocols require a tool result to sit directly after the
+  // assistant turn that issued the call; splice next to the declaring carrier
+  // (same adjacency contract as appendDanglingToolResults) instead of
+  // appending at the end, so further conversation turns cannot strand the
+  // synthetic behind later user/assistant messages on re-projection.
+  for (let index = 0; index < messages.length; index++) {
+    const message = messages[index];
+    if (message.role !== "assistant" || !message.toolCalls) continue;
+    const indeterminate = message.toolCalls.filter((call) => indeterminateCallIds.has(call.id));
+    if (indeterminate.length === 0) continue;
+    const synthetic: ResumedMessage[] = indeterminate.map((call) => ({ role: "tool", toolCallId: call.id, toolOk: false, kind: "process-indeterminate", content: JSON.stringify({ ok: false, result: "The approved host process started before Vesicle stopped, but no completion record exists. Its side effects are indeterminate and the call was not replayed." }) }));
+    messages.splice(index + 1, 0, ...synthetic);
+    index += synthetic.length;
   }
 }
 

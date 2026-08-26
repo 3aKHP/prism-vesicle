@@ -464,6 +464,40 @@ describe("conversation compact", () => {
     expect(assistant?.thinkingBlocks).toEqual([{ type: "reasoning", reasoningContent: "planning the call" }]);
   });
 
+  test("a retained Gemini turn round-trips its thought-signature parts through the checkpoint", async () => {
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-gemini-part");
+    const geminiBlocks = [
+      { type: "gemini_part", part: { thought: true, text: "planning the write", thoughtSignature: "sig-thought" } },
+      { type: "gemini_part", part: { functionCall: { id: "call-keep", name: "write_file", args: { path: "workspace/a.md" } }, thoughtSignature: "sig-call" } },
+    ];
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "old turn" });
+    await store.append({ role: "assistant", content: "old reply" });
+    await store.append({ role: "user", content: "do a thing" });
+    await store.append({
+      role: "assistant",
+      content: "",
+      metadata: {
+        thinkingBlocks: geminiBlocks,
+        toolCalls: [{ id: "call-keep", name: "write_file", arguments: "{}" }],
+      },
+    });
+    await store.append({ role: "tool", content: '{"ok":true,"result":"wrote"}', metadata: { toolCallId: "call-keep" } });
+
+    globalThis.fetch = (async () => Response.json({
+      id: "compact",
+      choices: [{ message: { content: "<summary>Kept tail summary.</summary>" } }],
+    })) as unknown as typeof fetch;
+
+    // The checkpoint write must carry the parts and the fail-closed checkpoint
+    // parser must accept them again — before #243 this shape could not survive
+    // a compact + reload cycle.
+    const result = await compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" });
+    const assistant = result.snapshot.messages.find((message) => message.role === "assistant");
+    expect(assistant?.thinkingBlocks).toEqual(geminiBlocks);
+  });
+
   test("resume from a checkpoint head reproduces the replacement and replays a later turn", async () => {
     const rootDir = await createPromptRoot();
     const store = await createSessionStore(rootDir, "compact-resume");

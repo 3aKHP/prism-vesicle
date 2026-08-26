@@ -55,11 +55,29 @@ export async function resolveSessionSkillCatalog(
 ): Promise<ResolvedSkillCatalog> {
   const frozen = frozenCatalogsBySession.get(sessionId);
   if (frozen) return frozen;
-  const resolved = persistedSnapshot
-    ? await reresolveFromSnapshot(rootDir, env, profile, persistedSnapshot, contextWindow, options)
-    : await resolveSkillCatalog(rootDir, env, profile, contextWindow, options);
+  const resolved = await previewSessionSkillCatalogResolution(rootDir, env, profile, persistedSnapshot, contextWindow, options);
   frozenCatalogsBySession.set(sessionId, resolved);
   return resolved;
+}
+
+/**
+ * Resolve the catalog a resumed session would use, without freezing anything:
+ * with a persisted snapshot, bodies re-resolve by name+hash exactly like the
+ * freeze path; without one, this is a plain fresh resolution. Read-only
+ * preview callers (the session-migration preflight) must not mutate the
+ * in-process freeze map for a session whose migration may still be declined.
+ */
+export async function previewSessionSkillCatalogResolution(
+  rootDir: string,
+  env: NodeJS.ProcessEnv,
+  profile: Pick<EngineProfile, "id">,
+  persistedSnapshot: SkillCatalogSnapshot | undefined,
+  contextWindow?: number,
+  options?: ResolveFilesystemSkillsOptions,
+): Promise<ResolvedSkillCatalog> {
+  return persistedSnapshot
+    ? await reresolveFromSnapshot(rootDir, env, profile, persistedSnapshot, contextWindow, options)
+    : await resolveSkillCatalog(rootDir, env, profile, contextWindow, options);
 }
 
 /**

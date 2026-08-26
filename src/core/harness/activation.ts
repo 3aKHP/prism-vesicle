@@ -175,6 +175,19 @@ export function assertSessionHarnessIdentity(
   }
 }
 
+/**
+ * Non-throwing form of {@link assertSessionHarnessIdentity} for callers that
+ * branch on identity equality (the session-migration review) instead of
+ * failing closed. Same equality rule as the assert.
+ */
+export function sessionHarnessIdentityMatches(
+  recorded: HarnessRuntimeIdentity | undefined,
+  current: HarnessRuntimeIdentity | undefined,
+): boolean {
+  if (!recorded && !current) return true;
+  return Boolean(recorded && current && lockIdentityKey(recorded) === lockIdentityKey(current));
+}
+
 function projectRuntime(
   projectRoot: string,
   lock: HarnessProjectLock,

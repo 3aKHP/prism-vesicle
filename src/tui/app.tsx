@@ -24,6 +24,8 @@ import { rewindPickerPanelHeight } from "./RewindPicker";
 import { branchPickerPanelHeight } from "./BranchPicker";
 import { createBranchController } from "./branch/controller";
 import { yoloPanelHeight } from "./YoloPrompt";
+import { migrationPanelHeight } from "./MigrationPrompt";
+import { createSessionMigrationController, type MigrationReviewState } from "./session-migration-controller";
 import { qualityRewritePanelHeight } from "./QualityRewritePrompt";
 import { createBuiltinCommands } from "./commands/builtin";
 import { executeCommand } from "./commands/dispatch";
@@ -236,6 +238,7 @@ export function App(props: AppProps = {}) {
   onCleanup(() => themeScheduler.dispose());
   const [, setResumableSessions] = createSignal<SessionSummary[]>([]);
   const [sessionPicker, setSessionPicker] = createSignal<SessionPickerState | null>(null);
+  const [migrationReview, setMigrationReview] = createSignal<MigrationReviewState | null>(null);
   const [nextSessionParent, setNextSessionParent] = createSignal<{ uuid: string | null } | null>(null);
   const [artifacts, setArtifacts] = createSignal<ArtifactEntry[]>([]);
   const [qualityWarnings, setQualityWarnings] = createSignal<QualityWarning[]>([]);
@@ -622,7 +625,8 @@ export function App(props: AppProps = {}) {
       && !modelPicker()
       && !qualityPicker()
       && !qualityRewriteConfirm()
-      && !yoloConfirmStage(),
+      && !yoloConfirmStage()
+      && !migrationReview(),
     agentCards,
     setConversation,
     setMessages,
@@ -749,6 +753,16 @@ export function App(props: AppProps = {}) {
     scheduler: continuationScheduler,
     reportError,
   });
+  const migrationController = createSessionMigrationController({
+    rootDir: process.cwd(),
+    migrationReview,
+    setMigrationReview,
+    setStatus,
+    reportError: turnController.reportError,
+    // Deferred through the `let resumeSession!` binding below: the handler only
+    // runs after both controllers are constructed.
+    resumeSession: (target, commandEcho) => resumeSession(target, commandEcho),
+  });
   ({ resumeSession } = createSessionResumeController({
     rootDir: process.cwd(),
     dangerouslySkipPermissions: props.dangerouslySkipPermissions === true,
@@ -798,6 +812,7 @@ export function App(props: AppProps = {}) {
     clearQueuedInputs,
     clearThemeOverride: () => themeController.clearOverride(),
     clearWebSearchOverride: () => webSearchController.clearOverride(),
+    beginMigrationReview: migrationController.beginMigrationReview,
     onSessionActive: (id) => {
       void sideQuestionController.rebuildForResume(id).catch(reportError);
       // Re-arm the candidate switcher so `<n/m>` and Option+←/→ survive reload.
@@ -904,19 +919,21 @@ export function App(props: AppProps = {}) {
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()),
+    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()) || Boolean(migrationReview()),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(branchPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
-      : qualityRewriteConfirm()
-        ? Math.max(decisionPanelMinHeight(), qualityRewritePanelHeight(
-          qualityRewriteConfirm()!.stage,
-          qualityRewriteConfirm()!.candidate.providerAlias,
-          qualityRewriteConfirm()!.candidate.modelId,
-          qualityRewriteConfirm()!.candidate.judgeTimeoutMs,
-          dimensions().width,
-        ))
-        : decisionPanelMinHeight(),
+      : migrationReview()
+        ? Math.max(decisionPanelMinHeight(), migrationPanelHeight(migrationReview()!, dimensions().width))
+        : qualityRewriteConfirm()
+          ? Math.max(decisionPanelMinHeight(), qualityRewritePanelHeight(
+            qualityRewriteConfirm()!.stage,
+            qualityRewriteConfirm()!.candidate.providerAlias,
+            qualityRewriteConfirm()!.candidate.modelId,
+            qualityRewriteConfirm()!.candidate.judgeTimeoutMs,
+            dimensions().width,
+          ))
+          : decisionPanelMinHeight(),
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : branchPicker() ? branchPickerPanelHeight(branchPicker()!) : 8,
     rewindPicker() ? rewindPickerPanelHeight(rewindPicker()!) : branchPicker() ? branchPickerPanelHeight(branchPicker()!) : 12,
   ));
@@ -963,6 +980,8 @@ export function App(props: AppProps = {}) {
     handleSkillPickerKey,
     yoloConfirmStage,
     handleYoloKey,
+    migrationReview,
+    handleMigrationKey: migrationController.handleMigrationKey,
     activePermissionRequest,
     pendingUserQuestion,
     handleQuestionKey,
@@ -1335,6 +1354,7 @@ export function App(props: AppProps = {}) {
         layout={layout()}
         composerFocused={!workspaceActive() || workspaceController.focusRegion() === "composer"}
         yoloStage={yoloConfirmStage()}
+        migrationReview={migrationReview()}
         permissionRequest={activePermissionRequest()}
         question={pendingUserQuestion()}
         quality={pendingQualityDecision()}
