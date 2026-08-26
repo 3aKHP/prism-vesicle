@@ -124,7 +124,11 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void
 }
 
 /** Wire the real resume + migration controllers together, as app.tsx does. */
-function wireControllers(root: string, harness: ProjectHarnessRuntime) {
+function wireControllers(
+  root: string,
+  harness: ProjectHarnessRuntime,
+  resumeAfterMigration?: (target: SessionSummary, commandEcho: string | undefined) => Promise<void>,
+) {
   let resume!: (target: SessionSummary, commandEcho?: string) => Promise<void>;
   const errors: unknown[] = [];
   const messages: Message[][] = [];
@@ -137,7 +141,9 @@ function wireControllers(root: string, harness: ProjectHarnessRuntime) {
     setMigrationReview,
     setStatus: recordStatus,
     reportError: (error: unknown) => errors.push(error),
-    resumeSession: (target, commandEcho) => resume(target, commandEcho),
+    resumeSession: (target, commandEcho) => resumeAfterMigration
+      ? resumeAfterMigration(target, commandEcho)
+      : resume(target, commandEcho),
   });
   const noop = () => undefined;
   ({ resumeSession: resume } = createSessionResumeController({
@@ -303,5 +309,33 @@ describe("session Harness migration (#239)", () => {
     });
 
     delete process.env.VESICLE_PROVIDERS_FILE;
+  });
+
+  test("keeps the migration surface busy until post-migration resume settles", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const sessionId = await recordSession(root, baselineA);
+    const harness = projectHarness(root, baselineB);
+    let resumeEntered = false;
+    let releaseResume!: () => void;
+    const resumeAfterMigration = async () => {
+      resumeEntered = true;
+      await new Promise<void>((resolve) => { releaseResume = resolve; });
+    };
+    const wired = wireControllers(root, harness, resumeAfterMigration);
+    const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 5, preview: "" };
+
+    await wired.resume(summary);
+    expect(wired.migration.handleMigrationKey(key("return"))).toBe(true);
+    expect(wired.migration.handleMigrationKey(key("return"))).toBe(true);
+    await waitFor(() => resumeEntered);
+    // The panel remains the modal owner while resume restores state.
+    expect(wired.migrationReview()?.busy).toBe(true);
+    expect(wired.migration.handleMigrationKey(key("return"))).toBe(true);
+    expect(wired.migrationReview()?.busy).toBe(true);
+
+    releaseResume();
+    await waitFor(() => wired.migrationReview() === null);
+    expect(wired.errors).toEqual([]);
   });
 });

@@ -26,9 +26,8 @@ import { loadSessionSnapshot, type SessionSnapshot } from "../session/store";
 import type { SessionMigrationPreflightLayer } from "../session/session-migration";
 import { composeSkillCatalogBlock, eligibleCatalogNames, previewSessionSkillCatalogResolution, resolveEngineEligibleCatalog } from "../skills/catalog-context";
 import { matchesQualityIdentity } from "./quality-continuation-bootstrap";
-import { resolveBuiltInTools } from "./tool-surface";
+import { resolveBuiltInTools, resolveWebSearchSurfaceOptions } from "./tool-surface";
 import { agentToolDefinitions } from "../agents/tools";
-import { loadTavilyApiKey } from "../tools/web/tavily-client";
 import { loadConfigForSelection } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import { prepareProviderMessages } from "../attachments/store";
@@ -224,7 +223,7 @@ export async function runSessionMigrationPreflight(options: {
     });
   }
 
-  const tavilyConfigured = (await loadTavilyApiKey(env)) !== undefined;
+  const webSearch = await resolveWebSearchSurfaceOptions(config, options.sessionId, engineAssets.profile, env);
   const tools = [
     ...resolveBuiltInTools(
       engineAssets.profile,
@@ -232,7 +231,7 @@ export async function runSessionMigrationPreflight(options: {
       false,
       "auto",
       eligibleCatalog.catalog.entries.length > 0 ? { catalogNames: eligibleCatalogNames(eligibleCatalog) } : undefined,
-      { builtinSearchEnabled: false, tavilyConfigured },
+      webSearch,
     ),
     ...agentToolDefinitions,
   ];

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.0.0-beta.2] - 2026-08-24
+
+### Prerelease channel and known limitations
+
+- **npm's `latest` dist-tag intentionally advances to this beta.** During the beta line, `npm install -g prism-vesicle` installs `1.0.0-beta.2`; pin an explicit older version to remain on an alpha build. The channel policy will be reconsidered before an RC or stable `1.0.0` release.
+- **Sessions recorded under `1.0.0-beta.1` are not lost; they migrate explicitly.** The first resume after upgrading presents the migration review described below; nothing is rebound silently. SubAgent child sessions are not cascade-migrated and keep their fail-closed identity check in this version.
+- **Windows artifacts remain intentionally unsigned.** Verify downloads from the official GitHub Release against `SHA256SUMS.txt`, follow the public Code Signing Policy, and do not disable Windows security features globally.
+
 ### Added
 
 - **Sessions migrate explicitly across bundled Harness upgrades.** Resuming a session recorded under a different verified Harness baseline (including identity-less pre-V10 sessions) no longer dead-ends on the fail-closed identity check. An offline preflight report runs first — a resume dry-run under the new baseline, a provider request-body round-trip through the session's own serializer, per-protocol tool-call pairing validators, and a context-budget heuristic; no provider request is ever sent. The migration itself is confirmed behind a two-stage red panel: confirming archives the pre-migration transcript to `.vesicle/sessions/archive/` and appends a durable `session-migration` record that rebinds the session's effective identity while every history record keeps the identity it was recorded with. Later resumes re-display a durable migration notice instead of silently switching runtime contracts. Blocking findings (unknown engine under the new baseline, an unresolvable paused gate, serializer or invariant failures) refuse the migration with the session untouched. Pending quality retries remain fail-closed across identity drift, and SubAgent child sessions are not migrated (#239).
@@ -18,17 +26,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Resumed Gemini sessions replay thought signatures again.** Gemini's provider-native parts — thought text and function calls carrying their `thoughtSignature` — were persisted with every turn but silently dropped on session reload, because the persistence filter's known-type list predated the Gemini block type. Thought-signature replay therefore only worked within a single run; a resumed session fell back to plain text plus reconstructed tool calls, which is exactly the shape Gemini's strict function-calling validation rejects. The reload paths (history projection, quality recovery, and the fail-closed compact-checkpoint parser) now share one strict block-shape guard that accepts the Gemini part type, so a resumed session serializes byte-identically to the live turn it continues (#243).
 
+- **Startup resume no longer loses the Chat render surface after Harness migration.** When `-r` resumed a session recorded under an older Harness, the migration review temporarily replaced the empty-session Hero and then re-entered resume. The transcript scrollbox could be destroyed during that transition and reused as a blank renderable, leaving restored metadata and later provider replies visible only in state. The Chat transcript now owns one continuously mounted scrollbox and changes the Hero layout without detaching it, so migrated history and subsequent messages remain renderable.
+
 ### Changed
 
 - **The repository landing masthead now uses a compact transparent brand mark.** The English and Chinese README pages replace the centered square hero with a small right-aligned mark beside the normal title and lead with the project positioning as a block quote. The full dark- and light-ground luminous marks remain the large-format brand assets; the new derivative preserves the vesicle, prism, incident beam, and restrained spectrum on both neutral document themes without a container tile.
-
-### Fixed
-
-- **The public manual again covers the complete beta.1 user surface from a beginner's task.** Bilingual task routes and executable walkthroughs now cover provider-native versus Tavily search, vision attachments, every bundled Engine, `vesicle-docs`, SubAgents, Harness Packs, terminal commands, automatic compaction, and quality-decision recovery, with prerequisites, success feedback, and failure paths. The Windows-first tutorial no longer begins with a Bash-only heredoc, and the Chinese README no longer incorrectly claims that scratch `tmp/` changes are rewind-safe.
-
-- **Release review follow-ups close search-boundary and durability gaps.** Provider-native built-in search now requires an admitting protocol/profile and an Engine whose declared tool surface includes `web_search`; Stage and the tool-free `/btw` side channel never receive it, and SubAgents inherit the parent's effective search policy without also exposing Tavily `web_search`. Rejected `/websearch` changes no longer report success. Normalized search audit data now survives child sessions, Quality decision/rewrite recovery, and portable compact checkpoints. Turning DeepSeek search off degrades a searched native batch to its portable assistant projection instead of replaying search-coupled reasoning state. Gemini keeps parallel function responses in one response batch and emits any tool-result images in separate following Contents.
-
-- **Release Issue closure is restricted to explicit release intent.** The `main` closure workflow now runs only for merged `release/*` PRs, reads only standalone closing-keyword lines from the PR body, ignores commit-history and review prose such as `Should-fix #N`, and uses the Node 24 `actions/github-script` runtime.
 
 ## [1.0.0-beta.1] - 2026-08-20
 
@@ -65,6 +67,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Provider/model registry CLI edits preserve source context (#232).** `vesicle config add-model`, `add-provider`, provider/default `set`, `remove-model`, and `remove-provider` now perform validated, atomic line-preserving edits to `providers.yaml`: comments, blank lines, ordering, and unrelated fields survive, while output is normalized to LF. Ambiguous duplicate top-level sections, default fields, provider fields, and `models:` blocks are rejected so a command cannot report success after editing a shadowed value. Guided Setup retains its existing whole-registry merge-and-normalize semantics.
 
 - **The TUI editor runtime moves to the self-maintained OpenTUI fork.** Vesicle now runs on `@3akhp/opentui-core@0.5.3-zv6` and `@3akhp/opentui-solid@0.5.3-zv6` (upstream v0.5.3 base plus the Vesicle patch queue; provenance in the fork's GitHub Release `v0.5.3-zv6`). The fork natively carries Markdown and table selection colors, fully retiring the 0.4.3 dependency patch, and repairs the two long-standing Workspace editor defects on the platforms that resolve fork-built natives (Linux and Windows): editing the middle of a soft-wrapped line no longer leaves stale wrap segmentation (#89), and vertical cursor movement across wide CJK graphemes always lands on a legal character boundary (#99). macOS terminals resolve the fork's JavaScript fixes over upstream darwin natives and keep those two native defects until upstream ships equivalent fixes (disclosed in the fork release notes, not a platform narrowing). `vesicle debug markdown-runtime` additionally forces the native library load through the fork's own loader and reports the resolved asset with a `source` field that distinguishes the installed-package asset-table report from channels that can only prove the forced load (npm-bundle installs, compiled binaries).
+
+### Fixed
+
+- **The public manual again covers the complete beta.1 user surface from a beginner's task.** Bilingual task routes and executable walkthroughs now cover provider-native versus Tavily search, vision attachments, every bundled Engine, `vesicle-docs`, SubAgents, Harness Packs, terminal commands, automatic compaction, and quality-decision recovery, with prerequisites, success feedback, and failure paths. The Windows-first tutorial no longer begins with a Bash-only heredoc, and the Chinese README no longer incorrectly claims that scratch `tmp/` changes are rewind-safe.
+
+- **Release review follow-ups close search-boundary and durability gaps.** Provider-native built-in search now requires an admitting protocol/profile and an Engine whose declared tool surface includes `web_search`; Stage and the tool-free `/btw` side channel never receive it, and SubAgents inherit the parent's effective search policy without also exposing Tavily `web_search`. Rejected `/websearch` changes no longer report success. Normalized search audit data now survives child sessions, Quality decision/rewrite recovery, and portable compact checkpoints. Turning DeepSeek search off degrades a searched native batch to its portable assistant projection instead of replaying search-coupled reasoning state. Gemini keeps parallel function responses in one response batch and emits any tool-result images in separate following Contents.
+
+- **Release Issue closure is restricted to explicit release intent.** The `main` closure workflow now runs only for merged `release/*` PRs, reads only standalone closing-keyword lines from the PR body, ignores commit-history and review prose such as `Should-fix #N`, and uses the Node 24 `actions/github-script` runtime.
 
 ## [1.0.0-alpha.10] - 2026-08-14
 

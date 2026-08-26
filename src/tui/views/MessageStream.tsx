@@ -219,11 +219,18 @@ export function MessageStream(props: {
     return new Set([anchor.userMessageId, ...(anchor.assistantMessageId ? [anchor.assistantMessageId] : [])]);
   });
 
+  // Keep the scrollbox mounted and laid out for the lifetime of MessageStream.
+  // OpenTUI destroys detached renderables on the next tick; constructing this
+  // JSX inside the Hero branch and re-inserting it after a Hero transition
+  // would reuse a destroyed scrollbox during startup migration. The Hero is a
+  // visual overlay, so the transcript keeps its viewport and scroll position
+  // coherent while it is hidden.
   const stream = (
     <scrollbox
       ref={scrollbox}
       width="100%"
       height="100%"
+      flexGrow={1}
       stickyScroll
       stickyStart="bottom"
       onMouseDown={(event) => { pointerStartMessageId = stageMessageAt(event.y); pointerDragged = false; }}
@@ -272,11 +279,13 @@ export function MessageStream(props: {
   );
 
   return (
-    <box title="Messages" border borderColor={palette.sectionBorder} flexGrow={1} padding={1}>
-      <Show
-        when={!props.showHero}
-        fallback={<EmptyHero notices={props.messages.filter((message) => message.role === "system" && !message.kind).map((message) => message.content)} />}
-      >{stream}</Show>
+    <box title="Messages" border borderColor={palette.sectionBorder} flexGrow={1} padding={1} position="relative">
+      <box width="100%" height="100%" flexGrow={1}>{stream}</box>
+      <Show when={props.showHero} fallback={<box width={0} height={0} />}>
+        <box position="absolute" left={0} top={0} width="100%" height="100%" backgroundColor={palette.bg}>
+          <EmptyHero notices={props.messages.filter((message) => message.role === "system" && !message.kind).map((message) => message.content)} />
+        </box>
+      </Show>
     </box>
   );
 }
