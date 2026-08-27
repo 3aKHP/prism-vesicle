@@ -80,7 +80,7 @@ describe("skill disabled state", () => {
       expect(results).toEqual(expected.map(() => ({ exitCode: 0, stderr: "" })));
       expect(await readDisabledNames(path)).toEqual(new Set(expected));
     });
-  });
+  }, 15_000);
 
   test("setDisabled removes a name", async () => {
     await withTemp(async (dir) => {

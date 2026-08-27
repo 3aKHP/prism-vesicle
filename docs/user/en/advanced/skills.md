@@ -57,8 +57,6 @@ vesicle skills install <GitHub-URL> --ref <tag-or-commit> --all
 
 Lifecycle success reports `Updated old -> new`, `Rolled back ... to <version>`, or `Uninstalled ...`. If an update behaves incorrectly, use `rollback` first. Uninstall removes only an installed Store entry; it does not delete project, user, Harness, or host Skills with the same name. A missing prior snapshot, non-updatable source, or unknown target fails explicitly; do not treat stderr as success.
 
-> Known limitation (Windows): the Store's cross-process mutual exclusion for writes relies on SQLite file locking, and Bun's SQLite on Windows does not enforce cross-process file locks. Avoid running `install`/`update`/`rollback`/`uninstall`/`enable`/`disable` concurrently from multiple terminals; the index file itself is always written atomically, and reinstalling the affected Skill repairs a missing entry ([tracked upstream](https://github.com/oven-sh/bun/issues/40659)).
-
 `copy-template` copies one Skill resource only into an approved current-project content root: `source_materials/`, `workspace/`, `novels/`, `reports/`, or `test_runs/`. Absolute paths, `..`, and `tmp/` destinations are rejected. Success reports `Copied <skill>/<resource> -> <path>`.
 
 See [Terminal command reference](../reference/cli-commands.md) for complete syntax and failure handling. For a first documentation lookup or delegated task, follow [Skills and SubAgents](../tutorials/skills-and-subagents.md).

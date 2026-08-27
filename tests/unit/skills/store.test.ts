@@ -176,6 +176,81 @@ mutated body
     });
   });
 
+  test("cross-process installs preserve every index entry under burst contention", async () => {
+    await withEnv(async (env, scratch) => {
+      const storeModule = join(import.meta.dir, "../../../src/skills/store.ts");
+      const readyRoot = join(scratch, "workers-ready");
+      const barrier = join(scratch, "workers-go");
+      await mkdir(readyRoot, { recursive: true });
+      const expected = Array.from({ length: 12 }, (_, index) => `process-${index}`);
+      const sources = await Promise.all(expected.map((name, index) => makeSource(join(scratch, `source-${index}`), name, `body-${index}`)));
+      const workerScript = [
+        'import { lstat, writeFile } from "node:fs/promises";',
+        `import { installSnapshot } from ${JSON.stringify(storeModule)};`,
+        'await writeFile(process.env.READY_PATH!, "ready");',
+        "while (!(await lstat(process.env.BARRIER_PATH!).catch(() => undefined))) await Bun.sleep(5);",
+        "await installSnapshot({ sourceDirectory: process.env.SOURCE_PATH!, env: { ...process.env, VESICLE_CONFIG_DIR: process.env.STORE_CONFIG_DIR! } });",
+      ].join("\n");
+      const workers = sources.map((source, index) => Bun.spawn({
+        cmd: [process.execPath, "-e", workerScript],
+        env: {
+          ...process.env,
+          BARRIER_PATH: barrier,
+          READY_PATH: join(readyRoot, `${index}.ready`),
+          SOURCE_PATH: source,
+          STORE_CONFIG_DIR: env.VESICLE_CONFIG_DIR!,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      }));
+      try {
+        let readyCount = 0;
+        for (let attempt = 0; attempt < 1_000; attempt++) {
+          const ready = await Promise.all(expected.map((_, index) => lstat(join(readyRoot, `${index}.ready`)).then(() => true, () => false)));
+          readyCount = ready.filter(Boolean).length;
+          if (readyCount === expected.length) break;
+          await Bun.sleep(10);
+        }
+        expect(readyCount).toBe(expected.length);
+        await writeFile(barrier, "go");
+        const results = await Promise.all(workers.map(async (worker) => ({
+          exitCode: await worker.exited,
+          stderr: await new Response(worker.stderr).text(),
+        })));
+        expect(results).toEqual(expected.map(() => ({ exitCode: 0, stderr: "" })));
+        expect((await readActiveIndex(env)).entries.map((entry) => entry.name).sort()).toEqual([...expected].sort());
+      } finally {
+        for (const worker of workers) worker.kill("SIGKILL");
+        await Promise.all(workers.map((worker) => worker.exited));
+      }
+    });
+  }, 20_000);
+
+  test("a durable index publication does not depend on committing the SQLite mutex", async () => {
+    await withEnv(async (env, scratch) => {
+      const source = await makeSource(scratch, "rollback-release", "body");
+      const storeModule = join(import.meta.dir, "../../../src/skills/store.ts");
+      const workerScript = [
+        'import { Database } from "bun:sqlite";',
+        "const originalExec = Database.prototype.exec;",
+        "Database.prototype.exec = function (statement) {",
+        '  if (String(statement).trim().toUpperCase() === "COMMIT") throw new Error("unexpected SQLite mutex commit");',
+        "  return originalExec.call(this, statement);",
+        "};",
+        `const { installSnapshot } = await import(${JSON.stringify(storeModule)});`,
+        `await installSnapshot({ sourceDirectory: ${JSON.stringify(source)}, env: { ...process.env, VESICLE_CONFIG_DIR: ${JSON.stringify(env.VESICLE_CONFIG_DIR)} } });`,
+      ].join("\n");
+      const worker = Bun.spawn({ cmd: [process.execPath, "-e", workerScript], stdout: "pipe", stderr: "pipe" });
+      const [exitCode, stdout, stderr] = await Promise.all([
+        worker.exited,
+        new Response(worker.stdout).text(),
+        new Response(worker.stderr).text(),
+      ]);
+      expect({ exitCode, stdout, stderr }).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+      expect((await readActiveIndex(env)).entries.map((entry) => entry.name)).toEqual(["rollback-release"]);
+    });
+  });
+
   test("a POSIX filename with a backslash is rejected before install", async () => {
     if (process.platform === "win32") return; // backslash is a separator on Windows
     await withEnv(async (env, scratch) => {
@@ -290,6 +365,8 @@ v2 body
         'database.exec("BEGIN IMMEDIATE");',
         `await writeFile(${JSON.stringify(ready)}, "ready");`,
         "await Bun.sleep(60_000);",
+        'database.exec("ROLLBACK");',
+        "database.close(false);",
       ].join("\n");
       const workerScript = [
         `import { installSnapshot } from ${JSON.stringify(storeModule)};`,
@@ -346,7 +423,7 @@ v2 body
         await holder.exited;
       }
     });
-  });
+  }, 15_000);
 
   test("listSkillVersions skips interrupted staging dirs and orphan version dirs", async () => {
     await withEnv(async (env, scratch) => {

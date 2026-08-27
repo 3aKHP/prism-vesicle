@@ -565,43 +565,53 @@ async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): 
   const database = new Database(join(storeRoot, INDEX_LOCK_DATABASE), { create: true });
   let transactionOpen = false;
   try {
-    await beginImmediateWithRetry(database);
+    await beginIndexLockWithRetry(database);
     transactionOpen = true;
-    const result = await critical();
-    database.exec("COMMIT");
-    transactionOpen = false;
-    return result;
+    return await critical();
   } catch (error) {
-    if (transactionOpen) {
-      try {
-        database.exec("ROLLBACK");
-      } catch {
-        // Preserve the original index update failure.
-      }
-    }
-    if (error instanceof Error && /database is locked|database is busy/i.test(error.message)) {
+    if (isSqliteBusy(error)) {
       throw new Error("Skill Store index is locked by another process; retry later.", { cause: error });
     }
     throw error;
   } finally {
+    if (transactionOpen) {
+      try {
+        // The transaction carries no Store data; it exists only as a mutex.
+        // Rolling it back avoids a fallible commit after the JSON publication
+        // has already become durable.
+        database.exec("ROLLBACK");
+      } catch {
+        // close(false) below still releases the transaction. Never replace the
+        // truthful result of the external index operation with a cleanup error.
+      }
+    }
     database.close(false);
   }
 }
 
-async function beginImmediateWithRetry(database: Database): Promise<void> {
+async function beginIndexLockWithRetry(database: Database): Promise<void> {
   const deadline = Date.now() + INDEX_LOCK_TIMEOUT_MS;
   while (true) {
     try {
       database.exec("BEGIN IMMEDIATE");
       return;
     } catch (error) {
-      if (!(error instanceof Error) || !/database is locked|database is busy/i.test(error.message)) throw error;
+      if (!isSqliteBusy(error)) throw error;
       if (Date.now() >= deadline) {
         throw new Error("Skill Store index is locked by another process; retry later.", { cause: error });
       }
       await Bun.sleep(50);
     }
   }
+}
+
+function isSqliteBusy(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const sqliteError = error as Error & { code?: unknown; errno?: unknown };
+  if (sqliteError.code === "SQLITE_BUSY") return true;
+  if (typeof sqliteError.code === "string" && sqliteError.code.startsWith("SQLITE_BUSY_")) return true;
+  if (typeof sqliteError.errno === "number" && (sqliteError.errno & 0xff) === 5) return true;
+  return /database is locked|database is busy/i.test(error.message);
 }
 
 async function updateActiveIndexCritical(
