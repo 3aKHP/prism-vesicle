@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Known limitations
+
+- **Concurrent Skill Store writes are not mutually exclusive on Windows.** The Store's cross-process index lock uses SQLite `BEGIN IMMEDIATE` file locking, and Bun's bundled SQLite on Windows does not enforce cross-process file locks. Two simultaneous `vesicle skills install`/`update`/`rollback`/`uninstall` or enable/disable invocations can race their index read-modify-write on Windows; the index file itself is still written atomically, and reinstalling the affected skill repairs a dropped entry. Linux is unaffected. Tracked upstream at [oven-sh/bun#40659](https://github.com/oven-sh/bun/issues/40659).
+
 ## [1.0.0-beta.2] - 2026-08-24
 
 ### Prerelease channel and known limitations
