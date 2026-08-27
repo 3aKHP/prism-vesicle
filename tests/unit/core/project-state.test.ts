@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { composeProjectStateBlock } from "../../../src/core/prompt/project-state";
 import { AssetResolver } from "../../../src/core/runtime/assets";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 describe("project-state orientation", () => {
-  test("reports only bounded logical root state", async () => {
+  test.skipIf(!symlinkCapable)("reports only bounded logical root state", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-project-state-"));
     const outside = await mkdtemp(join(tmpdir(), "vesicle-project-state-outside-"));
     try {

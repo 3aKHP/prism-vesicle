@@ -10,6 +10,7 @@ import {
 } from "../../../src/core/checkpoints/file-history";
 import { createSessionStore, loadSessionSnapshot } from "../../../src/core/session/store";
 import { executeFileTool } from "../../../src/core/tools";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 describe("file checkpoints", () => {
   test("restores overwritten and newly-created files to the state before a user turn", async () => {
@@ -301,7 +302,7 @@ describe("file checkpoints", () => {
     await expect(stat(join(rootDir, "workspace", "active.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  test("refuses to restore through an externally introduced symbolic-link ancestor", async () => {
+  test.skipIf(!symlinkCapable)("refuses to restore through an externally introduced symbolic-link ancestor", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-link-"));
     const outside = await mkdtemp(join(tmpdir(), "vesicle-checkpoint-link-outside-"));
     try {

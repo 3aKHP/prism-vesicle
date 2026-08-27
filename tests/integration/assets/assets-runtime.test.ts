@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { initializeEditableAssets, inspectAssets, materializeEditableAssets } from "../../../src/cli/assets";
 import { AssetResolver } from "../../../src/core/runtime/assets";
 import { inspectEngineAssetDrift, loadEngineAssetRuntime } from "../../../src/core/runtime/engine-assets";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 describe("runtime assets", () => {
   test("falls back to bundled V10 assets and can materialize a full project override", async () => {
@@ -59,7 +60,7 @@ describe("runtime assets", () => {
     }
   });
 
-  test("refuses to materialize through a project asset symlink", async () => {
+  test.skipIf(!symlinkCapable)("refuses to materialize through a project asset symlink", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-materialize-symlink-"));
     const project = join(rootDir, "project");
     const outside = join(rootDir, "outside");

@@ -13,6 +13,8 @@ import { FileCheckpointManager } from "../../../src/core/checkpoints/file-histor
 import { enumerateCandidateLeaves, findLatestSelection } from "../../../src/core/session/selection";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import { executeFileTool } from "../../../src/core/tools";
+import { symlinkCapable } from "../../support/symlink-capability";
+import { modeZeroDeniesRead } from "../../support/chmod-capability";
 
 /**
  * Builds the shared half of a two-candidate session: candidate A runs against
@@ -574,7 +576,7 @@ describe("candidate file coexistence", () => {
     expect(Object.keys(bundlesForA.at(-1)?.metadata?.files as Record<string, unknown>)).toContain("workspace/manual.md");
   });
 
-  test.skipIf(typeof process.getuid === "function" && process.getuid() === 0)(
+  test.skipIf(!modeZeroDeniesRead)(
     "a failed switch poisons both leaves until a successful restore revives them",
     async () => {
       const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-poison-"));
@@ -648,7 +650,7 @@ describe("candidate file coexistence", () => {
     },
   );
 
-  test("symlinks are never captured or deleted; switches report them as untracked", async () => {
+  test.skipIf(!symlinkCapable)("symlinks are never captured or deleted; switches report them as untracked", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-candidate-files-symlink-"));
     const sessionId = "candidate-files-symlink";
     await mkdir(join(rootDir, "workspace"), { recursive: true });

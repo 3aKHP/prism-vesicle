@@ -8,6 +8,7 @@ import { appendCandidateSelection, findLatestSelection } from "../../../src/core
 import { createSessionStore, loadSessionRecords } from "../../../src/core/session/store";
 import { executeFileTool } from "../../../src/core/tools";
 import { createTurnController } from "../../../src/tui/turn-controller";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 // Per-candidate file coexistence at the TUI boundary: switchCandidate restores
 // the target candidate's files BEFORE writing the selection marker, and refuses
@@ -127,7 +128,7 @@ test("switchCandidate refuses while a background SubAgent is running", async () 
   }
 });
 
-test("a hostile filesystem aborts the switch before the marker is written", async () => {
+test.skipIf(!symlinkCapable)("a hostile filesystem aborts the switch before the marker is written", async () => {
   const root = await mkdtemp(join(tmpdir(), "vesicle-tui-switch-fail-"));
   const outside = await mkdtemp(join(tmpdir(), "vesicle-tui-switch-fail-outside-"));
   try {
