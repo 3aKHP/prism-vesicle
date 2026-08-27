@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -237,7 +238,9 @@ describe("pre-turn auto-compaction", () => {
     expect(recordsAfter.some((record) => record.metadata?.kind === COMPACT_CHECKPOINT_KIND)).toBe(false);
   });
 
-  test("materializes background output before the exact provider-send hard guard", async () => {
+  // The fixture shells out through an explicit POSIX /bin/sh to emit filler
+  // output; skip only when that interpreter is genuinely absent on this host.
+  test.skipIf(!existsSync("/bin/sh"))("materializes background output before the exact provider-send hard guard", async () => {
     await configure(provider("      - id: m\n        limits:\n          contextWindow: 5000\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
     let normalCalls = 0;
     globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {

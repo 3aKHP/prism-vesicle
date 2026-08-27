@@ -8,6 +8,7 @@ import { WorkspacePage } from "../../../../src/tui/workspace/view";
 import { createWorkspaceController } from "../../../../src/tui/workspace";
 import { PromptComposer } from "../../../../src/tui/PromptComposer";
 import { paletteFor, reportTerminalThemeMode, setThemePreference } from "../../../../src/tui/theme";
+import { symlinkCapable } from "../../../support/symlink-capability";
 
 let root: string;
 
@@ -205,7 +206,7 @@ describe("tui: workspace page (B2)", () => {
     expect(frame).toContain("inline-renderable");
   });
 
-  test("symlink files show metadata without loading the target", async () => {
+  test.skipIf(!symlinkCapable)("symlink files show metadata without loading the target", async () => {
     await symlink(join(root, "notes.txt"), join(root, "notes-link.txt"));
     const controller = createWorkspaceController(root);
     await controller.openWorkspaceTarget("notes-link.txt");

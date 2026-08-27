@@ -9,6 +9,7 @@ import { resolveCommandArgumentCompletion } from "../../../src/tui/commands/argu
 import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
 import { argumentMenuLabelBudget } from "../../../src/tui/widgets/ArgumentMenu";
 import type { BuiltinCommandContexts, CommandArgumentCompletion, CommandCompletionContext } from "../../../src/tui/commands/types";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 // Completion contracts and busy metadata are resolved without invoking run,
 // so an inert context bundle suffices for this infrastructure-level suite.
@@ -141,7 +142,7 @@ describe("command-owned argument completion", () => {
 });
 
 describe("Stage completion paths", () => {
-  test("lists only guarded project-relative files under Stage-readable roots", async () => {
+  test.skipIf(!symlinkCapable)("lists only guarded project-relative files under Stage-readable roots", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-stage-completion-"));
     roots.push(root);
     await mkdir(join(root, "workspace", "cards"), { recursive: true });

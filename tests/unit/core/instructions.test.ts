@@ -11,26 +11,9 @@ import {
   selectionToRecord,
 } from "../../../src/core/instructions";
 import { instructionLogicalName } from "../../../src/core/instructions";
+import { symlinkCapable as symlinkSupported } from "../../support/symlink-capability";
 
 const ENV = (config: string): { VESICLE_CONFIG_DIR: string } => ({ VESICLE_CONFIG_DIR: config });
-
-// Probe once at module load whether the host can actually create a symbolic
-// link. The symlink-rejection contract is skipped only when creation genuinely
-// fails (e.g. unprivileged Windows), not blanket-skipped by platform, so a
-// Windows host with developer mode still runs the real assertion.
-const symlinkSupported = await (async (): Promise<boolean> => {
-  const dir = await mkdtemp(join(tmpdir(), "vesicle-symlink-probe-"));
-  try {
-    const target = join(dir, "target");
-    await writeFile(target, "x", "utf8");
-    await symlink(target, join(dir, "link"));
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-})();
 
 async function withRoot(work: (root: { project: string; config: string }) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-instructions-"));

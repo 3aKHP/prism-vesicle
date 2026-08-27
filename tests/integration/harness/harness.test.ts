@@ -18,6 +18,7 @@ import {
   verifyBundledHarnessPack,
   verifyHarnessPack,
 } from "../../../src/core/harness";
+import { symlinkCapable } from "../../support/symlink-capability";
 import type { HarnessManifest } from "../../../src/core/harness";
 import { runPrompt } from "../../../src/core/agent-loop/run";
 import { listAgentProfiles } from "../../../src/core/agents/profile";
@@ -235,7 +236,7 @@ describe("Harness Pack foundation", () => {
     }
   });
 
-  test("rejects tampered, unlisted, and unsafe pack files", async () => {
+  test.skipIf(!symlinkCapable)("rejects tampered, unlisted, and unsafe pack files", async () => {
     const tampered = await createHarnessFixture();
     const extra = await createHarnessFixture();
     const linked = await createHarnessFixture();

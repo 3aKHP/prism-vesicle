@@ -10,6 +10,7 @@ import {
   unsetProjectThemePreference,
   writeProjectThemePreference,
 } from "../../../src/config/project-preferences";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 /**
  * Project `.vesicle/preferences.yaml` v1 (plan §8.1, §8.3). The oracle is the
@@ -174,7 +175,7 @@ describe("project theme preferences symlink guard", () => {
   beforeAll(async () => { root = await mkdtemp(join(tmpdir(), "vesicle-prefsym-")); });
   afterAll(async () => { await rm(root, { recursive: true, force: true }); });
 
-  test("a symlink preference file is rejected on read", async () => {
+  test.skipIf(!symlinkCapable)("a symlink preference file is rejected on read", async () => {
     await mkdir(join(root, ".vesicle"), { recursive: true });
     await writeFile(join(root, "real.yaml"), "version: 1\ntheme: dark\n");
     await symlink(join(root, "real.yaml"), projectPreferencesPath(root));
@@ -183,7 +184,7 @@ describe("project theme preferences symlink guard", () => {
     expect(read.ok ? "" : read.diagnostic).toContain("symbolic link");
   });
 
-  test("persist rejects a symlink target", async () => {
+  test.skipIf(!symlinkCapable)("persist rejects a symlink target", async () => {
     await symlink(join(root, "real.yaml"), projectPreferencesPath(root)).catch(() => {});
     await expect(writeProjectThemePreference(root, "dark")).rejects.toThrow(/symbolic link|Refusing/);
   });

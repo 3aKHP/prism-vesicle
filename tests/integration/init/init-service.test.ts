@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { generateProjectInstructions } from "../../../src/core/init";
 import { loadInstructionTarget } from "../../../src/core/instructions";
 import { configureTestProviderEnv, restoreAgentLoopTestState } from "../agent-loop/fixtures/agent-loop";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 const originalFetch = globalThis.fetch;
 
@@ -78,7 +79,7 @@ describe("/init generateProjectInstructions", () => {
     }
   });
 
-  test("--force rejects a linked VESICLE.md before making a provider request", async () => {
+  test.skipIf(!symlinkCapable)("--force rejects a linked VESICLE.md before making a provider request", async () => {
     const project = await mkdtemp(join(tmpdir(), "vesicle-init-linked-"));
     const outside = join(project, "missing-outside.md");
     let providerCalled = false;
@@ -97,7 +98,7 @@ describe("/init generateProjectInstructions", () => {
     }
   });
 
-  test("--force replaces a linked backup path without writing through it", async () => {
+  test.skipIf(!symlinkCapable)("--force replaces a linked backup path without writing through it", async () => {
     const project = await mkdtemp(join(tmpdir(), "vesicle-init-linked-backup-"));
     const backupDir = join(project, ".vesicle", "init-backups");
     const backup = join(backupDir, "VESICLE.md.previous");

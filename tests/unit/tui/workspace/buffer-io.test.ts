@@ -11,6 +11,7 @@ import {
 } from "../../../../src/tui/workspace/buffer-io";
 import { assertProjectRelativePath } from "../../../../src/tui/workspace/paths";
 import { readFilePreview } from "../../../../src/tui/workspace/tree-data";
+import { symlinkCapable } from "../../../support/symlink-capability";
 
 let root: string;
 
@@ -97,13 +98,22 @@ describe("editor editable classification", () => {
     expect(isEditablePreview((await readFilePreview(root, "card.md"))!)).toBe(true);
   });
 
-  test("image/binary/oversized/symlink/readonly are not editable", async () => {
+  test("image/binary/oversized are not editable", async () => {
     await writeFile(join(root, "logo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     await writeFile(join(root, "data.bin"), Buffer.from([0x00, 0x01]));
     expect(isEditablePreview((await readFilePreview(root, "logo.png"))!)).toBe(false);
     expect(isEditablePreview((await readFilePreview(root, "data.bin"))!)).toBe(false);
 
-    // Symlink: never editable (escape risk), even if the target is text.
+    // Oversized text: read-only (would exceed the editor's in-bounds ceiling).
+    const big = join(root, "big.txt");
+    await writeFile(big, "x".repeat(600 * 1024));
+    const oversized = await readFilePreview(root, "big.txt");
+    expect(oversized?.oversized).toBe(true);
+    expect(isEditablePreview(oversized!)).toBe(false);
+  });
+
+  test.skipIf(!symlinkCapable)("a symlink is never editable, even when its target is text", async () => {
+    // Escape risk: the editor must never load or stamp through a link.
     await writeFile(join(root, "real.txt"), "real\n");
     await symlink(join(root, "real.txt"), join(root, "link.txt"));
     const linked = await readFilePreview(root, "link.txt");
@@ -112,12 +122,5 @@ describe("editor editable classification", () => {
     expect(isEditablePreview(linked!)).toBe(false);
     expect(await readEditableFile(root, "link.txt")).toBeNull();
     expect(await readFileStamp(root, "link.txt")).toBeNull();
-
-    // Oversized text: read-only (would exceed the editor's in-bounds ceiling).
-    const big = join(root, "big.txt");
-    await writeFile(big, "x".repeat(600 * 1024));
-    const oversized = await readFilePreview(root, "big.txt");
-    expect(oversized?.oversized).toBe(true);
-    expect(isEditablePreview(oversized!)).toBe(false);
   });
 });
