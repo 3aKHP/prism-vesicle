@@ -565,10 +565,10 @@ async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): 
   const database = new Database(join(storeRoot, INDEX_LOCK_DATABASE), { create: true });
   let transactionOpen = false;
   try {
-    await beginImmediateWithRetry(database);
+    await execIndexLockStatementWithRetry(database, "BEGIN IMMEDIATE");
     transactionOpen = true;
     const result = await critical();
-    database.exec("COMMIT");
+    await execIndexLockStatementWithRetry(database, "COMMIT");
     transactionOpen = false;
     return result;
   } catch (error) {
@@ -588,11 +588,14 @@ async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): 
   }
 }
 
-async function beginImmediateWithRetry(database: Database): Promise<void> {
+async function execIndexLockStatementWithRetry(
+  database: Database,
+  statement: "BEGIN IMMEDIATE" | "COMMIT",
+): Promise<void> {
   const deadline = Date.now() + INDEX_LOCK_TIMEOUT_MS;
   while (true) {
     try {
-      database.exec("BEGIN IMMEDIATE");
+      database.exec(statement);
       return;
     } catch (error) {
       if (!(error instanceof Error) || !/database is locked|database is busy/i.test(error.message)) throw error;

@@ -57,8 +57,6 @@ vesicle skills install <GitHub-URL> --ref <tag或commit> --all
 
 生命周期命令成功时分别显示 `Updated old -> new`、`Rolled back ... to <version>` 或 `Uninstalled ...`。更新后行为不对时先 `rollback`;卸载只移除 installed Store 项,不会删除项目/用户/Harness/host 的同名 Skill。没有上一快照、来源不可更新或目标不存在会明确失败,不要把 stderr 当成功。
 
-> 已知限制(Windows):Store 写入的跨进程互斥依赖 SQLite 文件锁,而 Bun 在 Windows 上的 SQLite 不强制跨进程文件锁。避免在多个终端并发执行 `install`/`update`/`rollback`/`uninstall`/`enable`/`disable`;索引文件本身始终原子写入,若并发后索引缺项,重新安装对应 Skill 即可修复([上游跟踪](https://github.com/oven-sh/bun/issues/40659))。
-
 `copy-template` 只把 Skill 中一个资源复制到当前项目的受批准内容根:`source_materials/`、`workspace/`、`novels/`、`reports/` 或 `test_runs/`;绝对路径、`..` 与 `tmp/` 目标会拒绝。成功显示 `Copied <skill>/<resource> -> <path>`。
 
 完整终端语法与失败处理见[终端命令参考](../reference/cli-commands.md)。第一次让模型查文档或委派任务,按 [Skills 与 SubAgents 教程](../tutorials/skills-and-subagents.md)操作。
