@@ -236,10 +236,9 @@ describe("Harness Pack foundation", () => {
     }
   });
 
-  test.skipIf(!symlinkCapable)("rejects tampered, unlisted, and unsafe pack files", async () => {
+  test("rejects tampered and unlisted pack files and unsafe manifest entries", async () => {
     const tampered = await createHarnessFixture();
     const extra = await createHarnessFixture();
-    const linked = await createHarnessFixture();
     try {
       await write(join(tampered.pack, "assets", "prompts", "engines", "etl.md"), "tampered");
       await expect(verifyHarnessPack(tampered.pack, tampered.options)).rejects.toThrow("hash mismatch");
@@ -250,15 +249,21 @@ describe("Harness Pack foundation", () => {
       const raw = JSON.parse(await readFile(join(extra.pack, "manifest.json"), "utf8")) as Record<string, unknown>;
       raw.assets = { ...(raw.assets as Record<string, string>), "assets/../escape.md": "a".repeat(64) };
       expect(() => parseHarnessManifest(raw)).toThrow("unsafe");
-
-      await symlink(linked.host, join(linked.pack, "assets", "linked-host"));
-      await expect(verifyHarnessPack(linked.pack, linked.options)).rejects.toThrow("symbolic link");
     } finally {
       await Promise.all([
         rm(tampered.root, { recursive: true, force: true }),
         rm(extra.root, { recursive: true, force: true }),
-        rm(linked.root, { recursive: true, force: true }),
       ]);
+    }
+  });
+
+  test.skipIf(!symlinkCapable)("rejects a pack file that is a symbolic link into host assets", async () => {
+    const linked = await createHarnessFixture();
+    try {
+      await symlink(linked.host, join(linked.pack, "assets", "linked-host"));
+      await expect(verifyHarnessPack(linked.pack, linked.options)).rejects.toThrow("symbolic link");
+    } finally {
+      await rm(linked.root, { recursive: true, force: true });
     }
   });
 
