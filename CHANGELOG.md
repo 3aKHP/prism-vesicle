@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
-- **Concurrent Skill Store writes keep cross-process exclusion and retry transient SQLite contention through commit.** The reported Windows lock failure was traced to a test holder becoming unreachable across an `await`; Bun then performed its documented garbage-collection close and released the SQLite transaction. The Store itself keeps its `Database` live through explicit `COMMIT`/`ROLLBACK`. A separate burst-contention case could still let the atomic index update land and then report `SQLITE_BUSY` from `COMMIT` because only `BEGIN IMMEDIATE` was retried; both phases now use the same bounded retry policy.
+- **Concurrent Skill Store writes keep cross-process exclusion without a post-publication SQLite commit.** The reported Windows lock failure was traced to a test holder becoming unreachable across an `await`; Bun then performed its documented garbage-collection close and released the SQLite transaction. The Store itself keeps its `Database` live through explicit rollback/close. A separate burst-contention case could still let the atomic index update land and then report `SQLITE_BUSY` from `COMMIT`; because SQLite carries no Store data and serves only as a mutex, successful and failed critical sections now release it with `ROLLBACK`, while lock acquisition retains the bounded retry policy.
 
 ## [1.0.0-beta.2] - 2026-08-24
 
