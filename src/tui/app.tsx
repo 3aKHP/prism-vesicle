@@ -200,7 +200,9 @@ export function App(props: AppProps = {}) {
     void loadSessionSnapshot(process.cwd(), id, { synthesizeDanglingToolResults: false })
       .then((snapshot) => {
         setSessionTitle(snapshot.title?.title);
-        terminalTitle?.setSession(snapshot.engine ?? engine, snapshot.title?.title);
+        // The reactive engine signal is the current host selection; the
+        // snapshot engine may lag while an /engine host record is being saved.
+        terminalTitle?.setSession(engine, snapshot.title?.title);
       })
       .catch(() => terminalTitle?.setSession(engine));
   });
@@ -719,7 +721,8 @@ export function App(props: AppProps = {}) {
     runCancellable: (operation) => turnCancellation.run(operation),
     handleAgentEvent,
     onProviderContextSnapshot: sideQuestionController.captureSnapshot,
-    onSessionTitleChanged: (title) => {
+    onSessionTitleChanged: (title, titleSessionId) => {
+      if (sessionId() !== titleSessionId) return;
       setSessionTitle(title);
       terminalTitle?.setSession(activeEngine(), title);
     },

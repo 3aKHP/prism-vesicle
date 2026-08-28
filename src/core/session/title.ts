@@ -174,7 +174,7 @@ export async function maybeGenerateSessionTitle(options: {
   provider: ProviderAdapter;
   config: VesicleConfig;
   signal?: AbortSignal;
-  onTitleChanged?: (title: string) => void;
+  onTitleChanged?: (title: string, sessionId: string) => void;
 }): Promise<void> {
   const settings = await loadSettings();
   // Existing provider fixtures intentionally omit host settings; keeping the
@@ -205,12 +205,16 @@ export async function maybeGenerateSessionTitle(options: {
   activeTitleControllers.delete(options.session.sessionId);
   const latest = await readRecords(options.rootDir, options.session.sessionId);
   if (projectSessionTitle(latest)?.source === "user") return;
+  const latestState = projectSessionTitleGeneration(latest);
+  // `/title regenerate` appends a reset state and aborts the old request. Do
+  // not let that cancelled request publish a stale attempt after the reset.
+  if (latestState.attempts !== state.attempts || latestState.claimUntil !== claimUntil || (!result.ok && result.failureClass === "cancelled")) return;
   const attempts = state.attempts + 1;
   if (result.ok) {
     const expected = latest.at(-1)?.uuid ?? null;
     try {
       await options.session.appendIfHead(expected, { role: "system", content: "", metadata: { kind: SESSION_TITLE_KIND, version: 1, title: result.title, source: "generated", firstUserUuid: turn.user.uuid, firstAssistantUuid: turn.assistant.uuid } });
-      options.onTitleChanged?.(result.title);
+      options.onTitleChanged?.(result.title, options.session.sessionId);
       const usage = result.usage ? normalizeTitleUsage(result.usage) : undefined;
       if (usage) await options.session.append({ role: "system", content: "", metadata: { kind: SESSION_TITLE_USAGE_KIND, version: 1, usage } });
     } catch {

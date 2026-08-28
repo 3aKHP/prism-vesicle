@@ -102,7 +102,7 @@ export type RunLoopArgs = {
   checkpoint?: FileCheckpointManager;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
-  onSessionTitleChanged?: (title: string) => void;
+  onSessionTitleChanged?: (title: string, sessionId: string) => void;
   onProviderContextSnapshot?: (snapshot: import("../side-question/types").SideQuestionContextSnapshot) => void;
   agentManager?: AgentManager;
   permission?: PermissionRuntimeOptions;

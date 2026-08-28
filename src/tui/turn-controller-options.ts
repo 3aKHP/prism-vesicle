@@ -206,7 +206,7 @@ export type TurnControllerOptions = {
   runCancellable: TurnRunCancellable;
   handleAgentEvent: (event: AgentLoopEvent) => void;
   onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
-  onSessionTitleChanged?: (title: string) => void;
+  onSessionTitleChanged?: (title: string, sessionId: string) => void;
   beginUsageTurn: () => void;
   publishTurnUsage: () => void;
   recordIndependentAgentUsage: (usage: NonNullable<AgentInboxEntry["usage"]>) => void;
