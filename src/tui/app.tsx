@@ -188,23 +188,25 @@ export function App(props: AppProps = {}) {
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
-  const [, setSessionTitle] = createSignal<string | undefined>();
+  let titleEffectGeneration = 0;
   createEffect(() => {
     const id = sessionId();
     const engine = activeEngine();
+    const generation = ++titleEffectGeneration;
     if (!id) {
-      setSessionTitle(undefined);
       terminalTitle?.setSession(engine);
       return;
     }
     void loadSessionSnapshot(process.cwd(), id, { synthesizeDanglingToolResults: false })
       .then((snapshot) => {
-        setSessionTitle(snapshot.title?.title);
+        if (generation !== titleEffectGeneration || sessionId() !== id || activeEngine() !== engine) return;
         // The reactive engine signal is the current host selection; the
         // snapshot engine may lag while an /engine host record is being saved.
         terminalTitle?.setSession(engine, snapshot.title?.title);
       })
-      .catch(() => terminalTitle?.setSession(engine));
+      .catch(() => {
+        if (generation === titleEffectGeneration && sessionId() === id && activeEngine() === engine) terminalTitle?.setSession(engine);
+      });
   });
   onCleanup(() => terminalTitle?.clear());
   let providerResourceSessionId: string | undefined;
@@ -723,7 +725,6 @@ export function App(props: AppProps = {}) {
     onProviderContextSnapshot: sideQuestionController.captureSnapshot,
     onSessionTitleChanged: (title, titleSessionId) => {
       if (sessionId() !== titleSessionId) return;
-      setSessionTitle(title);
       terminalTitle?.setSession(activeEngine(), title);
     },
     beginUsageTurn,
@@ -1180,7 +1181,6 @@ export function App(props: AppProps = {}) {
           if (!id) throw new Error("No active session.");
           await appendSessionTitle(process.cwd(), id, value, "user");
           const title = projectSessionTitle(await loadSessionRecords(process.cwd(), id));
-          setSessionTitle(title?.title);
           terminalTitle?.setSession(activeEngine(), title?.title);
         },
         regenerate: async () => {

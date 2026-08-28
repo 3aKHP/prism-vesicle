@@ -29,12 +29,17 @@ export type SessionTitleGenerationState = {
   claimUntil?: string;
 };
 
+function metadataRecords(records: SessionRecord[], kind: string): Record<string, unknown>[] {
+  return records.flatMap((record) => {
+    const value = record.metadata;
+    return value && value.kind === kind && value.version === SESSION_TITLE_VERSION ? [value] : [];
+  });
+}
+
 /** Latest valid title metadata wins; malformed/future records are ignored. */
 export function projectSessionTitle(records: SessionRecord[]): SessionTitle | undefined {
   let title: SessionTitle | undefined;
-  for (const record of records) {
-    const value = record.metadata;
-    if (!value || value.kind !== SESSION_TITLE_KIND || value.version !== SESSION_TITLE_VERSION) continue;
+  for (const value of metadataRecords(records, SESSION_TITLE_KIND)) {
     if (typeof value.title !== "string" || !value.title.trim()) continue;
     if (value.source !== "generated" && value.source !== "user") continue;
     title = {
@@ -49,9 +54,7 @@ export function projectSessionTitle(records: SessionRecord[]): SessionTitle | un
 
 export function projectSessionTitleGeneration(records: SessionRecord[]): SessionTitleGenerationState {
   let state: SessionTitleGenerationState = { attempts: 0 };
-  for (const record of records) {
-    const value = record.metadata;
-    if (!value || value.kind !== SESSION_TITLE_GENERATION_KIND || value.version !== SESSION_TITLE_VERSION) continue;
+  for (const value of metadataRecords(records, SESSION_TITLE_GENERATION_KIND)) {
     if (typeof value.attempts !== "number" || !Number.isFinite(value.attempts)) continue;
     state = {
       attempts: Math.max(0, Math.floor(value.attempts)),
@@ -66,9 +69,8 @@ export function projectSessionTitleGeneration(records: SessionRecord[]): Session
 }
 
 export function projectSessionTitleUsage(records: SessionRecord[]): ResponseUsage[] {
-  return records.flatMap((record) => {
-    const value = record.metadata;
-    if (!value || value.kind !== SESSION_TITLE_USAGE_KIND || value.version !== SESSION_TITLE_VERSION || !value.usage || typeof value.usage !== "object") return [];
+  return metadataRecords(records, SESSION_TITLE_USAGE_KIND).flatMap((value) => {
+    if (!value.usage || typeof value.usage !== "object") return [];
     const source = value.usage as Record<string, unknown>;
     const usage: ResponseUsage = {};
     for (const key of ["inputTokens", "outputTokens", "totalTokens", "reasoningTokens", "effectiveTokens"] as const) {
@@ -121,6 +123,14 @@ export type TitleGenerationResult =
   | { ok: true; title: string; usage?: ResponseUsage }
   | { ok: false; failureClass: "cancelled" | "auth" | "config" | "unsupported" | "network" | "empty" | "invalid" | "service"; retryable: boolean };
 
+function classifyTitleFailure(message: string): { failureClass: Exclude<TitleGenerationResult, { ok: true }>["failureClass"]; retryable: boolean } {
+  if (/401|403|auth|api key|credential/.test(message)) return { failureClass: "auth", retryable: false };
+  if (/config|unknown provider/.test(message)) return { failureClass: "config", retryable: false };
+  if (/400|unsupported model|unsupported/.test(message)) return { failureClass: "unsupported", retryable: false };
+  if (/429|5\d\d|service/.test(message)) return { failureClass: "service", retryable: true };
+  return { failureClass: "network", retryable: true };
+}
+
 export async function generateSessionTitle(options: {
   provider: ProviderAdapter;
   config: VesicleConfig;
@@ -142,9 +152,8 @@ export async function generateSessionTitle(options: {
   } catch (error) {
     if (options.signal?.aborted) return { ok: false, failureClass: "cancelled", retryable: false };
     const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-    const auth = /401|403|auth|api key|credential/.test(message);
-    const config = /config|unknown provider|unsupported model/.test(message);
-    return { ok: false, failureClass: auth ? "auth" : config ? "config" : /400|unsupported/.test(message) ? "unsupported" : /429|5\d\d|service/.test(message) ? "service" : "network", retryable: !(auth || config || /400|unsupported/.test(message)) };
+    const classified = classifyTitleFailure(message);
+    return { ok: false, ...classified };
   }
 }
 
@@ -222,6 +231,15 @@ export async function maybeGenerateSessionTitle(options: {
     }
   }
   await options.session.append({ role: "system", content: "", metadata: { kind: SESSION_TITLE_GENERATION_KIND, version: 1, attempts, lastAttemptAt: new Date().toISOString(), ...(result.ok ? { settled: true, retryable: false } : { failureClass: result.failureClass, retryable: result.retryable, ...(result.retryable && attempts < 3 ? {} : { settled: true }) }) } });
+}
+
+export function scheduleSessionTitleGeneration(options: Parameters<typeof maybeGenerateSessionTitle>[0]): void {
+  setTimeout(() => { void maybeGenerateSessionTitle(options).catch(() => undefined); }, 100);
+}
+
+export async function loadProjectedTitle(rootDir: string, sessionId: string): Promise<{ title?: SessionTitle; generation: SessionTitleGenerationState }> {
+  const records = await readRecords(rootDir, sessionId);
+  return { title: projectSessionTitle(records), generation: projectSessionTitleGeneration(records) };
 }
 
 export async function appendSessionTitle(rootDir: string, sessionId: string, title: string, source: SessionTitleSource): Promise<void> {

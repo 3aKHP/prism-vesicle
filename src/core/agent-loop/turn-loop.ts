@@ -23,7 +23,7 @@ import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { validateToolCallArguments } from "../tools/arguments";
 import { finalizeTurn } from "./turn-finalizer";
-import { maybeGenerateSessionTitle } from "../session/title";
+import { scheduleSessionTitleGeneration } from "../session/title";
 import { createCompactionObservation, runMidTurnCompaction, updateProviderObservation } from "./mid-turn-compaction";
 import type { CompactionObservation, MidTurnCompactionParams } from "./mid-turn-compaction";
 import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
@@ -254,19 +254,14 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
   // Title generation is host-only and deliberately fire-and-forget: a slow or
   // failed auxiliary request must never change the primary turn result.
   if (result.kind === "complete" && result.assistantRecordUuid) {
-    // Give the caller a chance to finish its turn boundary before the
-    // auxiliary request starts (important for cancellation and test harnesses
-    // that replace the process-wide transport between turns).
-    setTimeout(() => {
-      void maybeGenerateSessionTitle({
+    scheduleSessionTitleGeneration({
         rootDir: args.rootDir,
         session: args.session,
         provider: args.provider,
         config: args.config,
         signal: args.signal,
         onTitleChanged: args.onSessionTitleChanged,
-      }).catch(() => undefined);
-    }, 100);
+    });
   }
   return result;
 }
