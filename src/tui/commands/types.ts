@@ -154,6 +154,12 @@ export type SessionCommandContext = CommandActivityPort & {
   resetRewindState: () => void;
   theme: { clearOverride: () => void };
   webSearch: { clearOverride: () => void };
+  title?: {
+    sessionId: () => string | undefined;
+    current: () => Promise<{ title?: string; source?: string }>;
+    rename: (title: string) => Promise<void>;
+    regenerate: () => Promise<void>;
+  };
 };
 
 /** /quality — experimental Semantic Judge configuration. */

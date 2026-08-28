@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Terminal tab titles.** Interactive TUI sessions mirror the active engine/session title through OSC 0/2, covering WSL/ConPTY, npm, installed Windows, and standalone binaries. Durable titles are displayed directly to preserve tab width; untitled sessions retain a `Prism Vesicle · <engine>` fallback. `VESICLE_TERMINAL_TITLE=auto|on|off` controls the behavior, and shutdown clears the title.
+
+- **Durable session titles.** With user-level `settings.yaml` (`sessionTitle: auto|off`), the first complete ordinary turn can asynchronously generate a cleaned title through an isolated provider request. Host-only title, retry-state, claim, and auxiliary-usage records stay out of model history; `/title`, `/title rename <text>`, and `/title regenerate` manage the title lifecycle.
+
 - **Deterministic Windows brand resources (A Lane, #251).** Native Windows builds now carry the canonical multi-size Prism Vesicle icon and version metadata; Inno Setup and its wizard use the same SVG-derived icon family, including the generated uninstaller and Windows integration surfaces. WSL cross-builds remain available under an explicit non-release filename because Bun cannot write Windows PE resources while cross-compiling.
 
 ### Fixed

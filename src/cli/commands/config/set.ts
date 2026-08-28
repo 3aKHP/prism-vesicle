@@ -192,11 +192,16 @@ async function setQuality(key: string, value: string): Promise<SetResult> {
 }
 
 async function setSettings(key: string, value: string): Promise<SetResult> {
-  if (key !== "editor") throw new Error(`Unknown settings key "${key}".`);
+  if (key !== "editor" && key !== "sessionTitle") throw new Error(`Unknown settings key "${key}".`);
+  if (key === "sessionTitle" && value !== "auto" && value !== "off") {
+    throw new Error(`sessionTitle must be auto or off (found "${value}").`);
+  }
   const path = settingsPath();
+  const current = await loadSettings();
   const source = [
     "version: 1",
-    `editor: ${value}`,
+    ...(key === "editor" ? [`editor: ${value}`] : (current.editor ? [`editor: ${current.editor}`] : [])),
+    ...(key === "sessionTitle" ? [`sessionTitle: ${value}`] : (current.sessionTitle ? [`sessionTitle: ${current.sessionTitle}`] : [])),
     "",
   ].join("\n");
   await atomicWrite(path, source);

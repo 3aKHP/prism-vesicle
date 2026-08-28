@@ -9,7 +9,7 @@ import { createThemeScheduler } from "./theme-runtime";
 import { createThemePreferenceController, parseEnvTheme, type ThemePreferenceController } from "./theme-preference-controller";
 import { createWebSearchController, type WebSearchController } from "./web-search-controller";
 import { clearSessionWebSearchOverride } from "../core/agent-loop/web-search-state";
-import { listSessions, loadSessionSnapshot } from "../core/session/store";
+import { listSessions, loadSessionSnapshot, loadSessionRecords, projectSessionTitle, appendSessionTitle, resetSessionTitleGeneration } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { createTurnFocusController } from "./turn-focus-controller";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
@@ -86,6 +86,7 @@ import { WorkspacePage } from "./workspace/view";
 import { copyTextToClipboard } from "./clipboard";
 import { closeAllProviderSessions, closeProviderSession } from "../providers/lifecycle";
 import { registerHostShutdownCleanup } from "../core/process/shutdown";
+import type { TerminalTitleController } from "./terminal-title";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -97,6 +98,7 @@ export type AppProps = {
   theme?: ThemePreferenceController;
   /** Called after the renderer has been destroyed to finish a CLI TUI exit. */
   onExit?: () => void;
+  terminalTitle?: TerminalTitleController;
 };
 
 export {
@@ -116,6 +118,7 @@ export function App(props: AppProps = {}) {
   initDebugLogging();
   const renderer = useRenderer();
   const exitTui = props.onExit ?? (() => {});
+  const terminalTitle = props.terminalTitle;
   // The controller is constructed in runTui/setup before the first frame. Tests
   // that mount App directly fall back to an env-only controller (no project
   // read) so the palette and `/theme` still work without async I/O on mount.
@@ -185,6 +188,23 @@ export function App(props: AppProps = {}) {
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
+  const [, setSessionTitle] = createSignal<string | undefined>();
+  createEffect(() => {
+    const id = sessionId();
+    const engine = activeEngine();
+    if (!id) {
+      setSessionTitle(undefined);
+      terminalTitle?.setSession(engine);
+      return;
+    }
+    void loadSessionSnapshot(process.cwd(), id, { synthesizeDanglingToolResults: false })
+      .then((snapshot) => {
+        setSessionTitle(snapshot.title?.title);
+        terminalTitle?.setSession(snapshot.engine ?? engine, snapshot.title?.title);
+      })
+      .catch(() => terminalTitle?.setSession(engine));
+  });
+  onCleanup(() => terminalTitle?.clear());
   let providerResourceSessionId: string | undefined;
   createEffect(() => {
     const current = sessionId();
@@ -699,6 +719,10 @@ export function App(props: AppProps = {}) {
     runCancellable: (operation) => turnCancellation.run(operation),
     handleAgentEvent,
     onProviderContextSnapshot: sideQuestionController.captureSnapshot,
+    onSessionTitleChanged: (title) => {
+      setSessionTitle(title);
+      terminalTitle?.setSession(activeEngine(), title);
+    },
     beginUsageTurn,
     publishTurnUsage,
     recordIndependentAgentUsage,
@@ -1140,6 +1164,28 @@ export function App(props: AppProps = {}) {
       resetRewindState,
       theme: { clearOverride: () => themeController.clearOverride() },
       webSearch: { clearOverride: () => webSearchController.clearOverride() },
+      title: {
+        sessionId,
+        current: async () => {
+          const id = sessionId();
+          if (!id) return {};
+          const title = projectSessionTitle(await loadSessionRecords(process.cwd(), id));
+          return title ? { title: title.title, source: title.source } : {};
+        },
+        rename: async (value) => {
+          const id = sessionId();
+          if (!id) throw new Error("No active session.");
+          await appendSessionTitle(process.cwd(), id, value, "user");
+          const title = projectSessionTitle(await loadSessionRecords(process.cwd(), id));
+          setSessionTitle(title?.title);
+          terminalTitle?.setSession(activeEngine(), title?.title);
+        },
+        regenerate: async () => {
+          const id = sessionId();
+          if (!id) throw new Error("No active session.");
+          await resetSessionTitleGeneration(process.cwd(), id);
+        },
+      },
     },
     quality: {
       setMessages, setStatus, recordActivity,

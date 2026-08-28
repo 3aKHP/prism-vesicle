@@ -72,6 +72,10 @@ The brand aesthetic, palette of record, motion grammar, and anti-patterns are ow
 ## Side Questions
 
 - `/btw <question>` is a one-shot, tool-free side exchange over an immutable snapshot published before a main provider request. It never inherits provider-native built-in search from the parent session.
+
+- `/title` shows the durable session title and source; `/title rename <text>` sets a permanent user title; `/title regenerate` resets automatic generation. The Session Picker renders a title as its primary line and the first-user preview as supporting text.
+
+- The TUI also mirrors the active session title to the terminal tab through OSC 0/2. A durable title is displayed directly without a `Prism Vesicle` prefix to preserve tab width; only untitled sessions use the `Prism Vesicle · <engine>` fallback. This is enabled automatically only on a real TTY (`VESICLE_TERMINAL_TITLE=auto`), can be forced with `on` or disabled with `off`, and is cleared during renderer shutdown. WSL/ConPTY, npm, installed Windows, and standalone binaries share this host-only path; non-interactive output never contains title control sequences.
 - The side request has one dedicated system authority and one host-rendered user reference packet containing quoted parent context as inert data.
 - Parent workflow instructions, tool protocol fields, reasoning, and thinking blocks do not become active side instructions. Images remain reference-only and materialize only for a vision-capable side request.
 - No tools are declared. Any structured tool call in the side response, including mixed text and tool output, fails the exchange.

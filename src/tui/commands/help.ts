@@ -31,6 +31,7 @@ const HELP_TEXT = [
   "  /resume           list sessions",
   "  /resume <n|id>    resume a session",
   "  /new              start a fresh session",
+  "  /title            view title; /title rename <text>; /title regenerate",
   "  /help             show this help",
 ].join("\n");
 

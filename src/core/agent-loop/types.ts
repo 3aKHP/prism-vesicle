@@ -58,6 +58,7 @@ export type RunPromptOptions = {
   takePendingUserInputs?: () => PendingUserInput[];
   runToolBoundaryCommands?: () => Promise<void>;
   onSessionReady?: (sessionId: string, sessionPath: string) => void;
+  onSessionTitleChanged?: (title: string) => void;
 };
 
 export type PendingUserInput = {
