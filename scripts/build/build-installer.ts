@@ -30,7 +30,7 @@ async function findInnoCompiler(): Promise<string> {
 
 async function main(): Promise<void> {
   if (process.platform !== "win32") {
-    throw new Error("The Inno installer must be compiled on Windows. Use build:installer:stage on Linux/WSL.");
+    throw new Error("The branded Inno installer requires native Windows. On Linux/WSL, verify its stage contract with bun test tests/contract/release/windows-installer.test.ts.");
   }
   await run([process.execPath, "run", "scripts/build/build-exe.ts", "windows"]);
   await access(resolve(WINDOWS_EXECUTABLE));

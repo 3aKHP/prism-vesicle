@@ -204,7 +204,7 @@ bun run doctor
 | `bun run pack:smoke` | 对打包后的 npm 分发执行冒烟测试 |
 | `bun run build:exe` | 构建独立可执行文件(原生 Windows 输出带品牌资源的发布 PE;非 Windows 主机输出显式非发布的 Windows 交叉构建和 Linux ELF) |
 | `bun run build:assets` | 构建可编辑资产 ZIP |
-| `bun run build:installer:stage` | 暂存完整 Windows 安装器载荷 |
+| `bun run build:installer:stage` | 在生成 canonical 品牌 PE 后暂存原生 Windows 安装器载荷 |
 | `bun run build:installer` | 在 Windows 上构建 Inno Setup 安装器 |
 
 `vesicle debug markdown-runtime` 可以在不打开 TUI 的情况下验证独立 OpenTUI worker 和语法运行时。`vesicle prompt dump --engine <id>` 会输出模型可见的完整系统提示；`vesicle prompt shape --engine <id>` 只输出其组合结构。

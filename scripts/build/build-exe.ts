@@ -9,7 +9,7 @@ import { numericFileVersion } from "./windows-version";
 // name after each build instead of relying on `outfile`.
 //
 // From WSL we produce BOTH binaries:
-//   - windows: cross-compiled PE (the dogfood `.exe` shipped to Windows users)
+//   - windows: explicitly non-release cross-compiled PE for build diagnostics
 //   - linux:   host-native ELF (self-dogfood on the dev machine)
 //
 // Cross-compiling to Windows needs the `@3akhp/opentui-core-win32-x64` native package
