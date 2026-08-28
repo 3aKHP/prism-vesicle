@@ -55,6 +55,7 @@ Release candidate: **1.0.0-beta.2**. The `State` column tracks the candidate's p
 | Release | Standalone Windows PE and Linux ELF binaries | released |
 | Release | npm/Bun package with a precompiled Solid TUI entry, clean installed production tree, global/local consumer audit, and behavioral Linux PTY startup gate | released |
 | Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | released |
+| Release | Branded Windows PE, installer, uninstaller, and Explorer assets | experimental |
 | Release | Reusable Linux/Windows release build with tag-triggered publication | released |
 
 ## Scope
@@ -263,7 +264,7 @@ bun run lint
 bun run typecheck
 bun test
 bun run doctor
-bun run build:installer:stage
+bun test tests/contract/release/windows-installer.test.ts # Linux/WSL stage-shape contract
 ```
 
 The `bun run test:acceptance:provider` lane runs the general real-provider connectivity and strict ETL gate only when `BUN_E2E_REAL_PROVIDER=1` is set. `bun run test:acceptance:gemini` replays two parallel function responses with request-boundary synthesized MCP-shaped image results through a real `gemini-generate-content` endpoint; it needs `BUN_E2E_REAL_PROVIDER=1` plus `BUN_E2E_GEMINI_IMAGE_TOOL_PROVIDER` (optional `BUN_E2E_GEMINI_IMAGE_TOOL_MODEL`) selecting a provider whose model declares `capabilities.vision: true`. `bun run test:acceptance:responses` adds explicit Responses tiers for the existing narrow relay, official `api.openai.com`, MiMo, and DeepSeek. The official suite covers HTTP/SSE, non-stream, standalone compact, and public WebSocket; the third-party suites cover profile-owned reasoning and a function loop. The deterministic suite separately proves subset request-field omission and profile-scoped reasoning-event mapping. All acceptance files are excluded from `bun test` default discovery; missing opt-in selectors, profiles, capabilities, endpoints, or credentials produce real test skips with a documented unavailable reason, never a passing test. Run the applicable lane as a recorded internal acceptance before a public tag. Tavily-backed web tools are enabled by setting `TAVILY_API_KEY` in the same user-level `.env` file or process environment. MCP tools are enabled by copying [`docs/examples/mcp.yaml`](./docs/examples/mcp.yaml) beside `providers.yaml`, setting `enabled: true`, and adding the referenced header variables to the sibling `.env`.

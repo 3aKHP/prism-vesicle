@@ -31,7 +31,7 @@ Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub 
 
 The Windows executable and installer for `1.0.0-beta.2` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
-The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
+The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action, with the Prism Vesicle icon carried through the executable, installer, uninstaller, Start Menu, Apps & Features, and Explorer entries. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
 ```powershell
 Set-Location C:\path\to\my-project
@@ -202,9 +202,9 @@ bun run doctor
 | `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` | Run the opt-in real-provider acceptance lane (connectivity smoke + strict ETL gate); skips, not passes, when the env or credentials are missing |
 | `bun run pack:check` | Verify the npm publish allowlist |
 | `bun run pack:smoke` | Smoke-test the packed npm distribution |
-| `bun run build:exe` | Build standalone Windows and Linux executables |
+| `bun run build:exe` | Build standalone executables (native Windows emits the branded release PE; non-Windows hosts emit an explicit non-release Windows cross-build plus Linux ELF) |
 | `bun run build:assets` | Build the editable assets ZIP |
-| `bun run build:installer:stage` | Stage the complete Windows installer payload |
+| `bun run build:installer:stage` | Stage the native-Windows installer payload after building the canonical branded PE |
 | `bun run build:installer` | Build the Inno Setup installer on Windows |
 
 `vesicle debug markdown-runtime` verifies the standalone OpenTUI worker and syntax runtime without opening the TUI. `vesicle prompt dump --engine <id>` prints the complete model-visible system prompt; `vesicle prompt shape --engine <id>` prints only its composed structure.

@@ -8,6 +8,7 @@ This document defines the Windows installer scope, interactive onboarding, model
 
 - The Windows installer owns only the application lifecycle: complete runtime payload, per-user install location, PATH, shortcuts, upgrade identity, and uninstall. It must not parse provider/MCP schemas, accept secrets, or mutate `%APPDATA%\prism-vesicle`.
 - The installed terminal command is the native `vesicle.exe`, renamed from the staged release binary during installation rather than wrapped in a batch file. Upgrades remove superseded executable, wrapper, and Start Menu launch entries. A detected installation exposes Reinstall, Repair, and Uninstall maintenance choices; Repair restores installed files and Windows integration without reopening Guided Setup.
+- The Windows distribution uses the canonical deterministic `brand/windows/prism-vesicle.ico` for the standalone PE, Inno Setup, generated uninstaller, Start Menu, Apps & Features, and Explorer integration. The ICO is installed beside `vesicle.exe` so system surfaces can select its full-size frames; the compact `brand/windows/prism-vesicle-wizard.png` remains an installer compile input only. Native Windows builds carry PE resources; WSL cross-builds are explicitly non-release outputs.
 
 ## Onboarding
 

@@ -15,6 +15,8 @@
 
 资源包解压后含三件:`harness-manifest.json`、`assets\`、`host-assets\`,必须与二进制版本匹配,升级时两者一起换。
 
+官方便携版可执行程序由原生 Windows 构建,包含 Prism Vesicle 图标与版本元数据。本地 WSL 交叉构建使用显式的 `-cross-` 文件名,不属于发布制品。
+
 ## 校验下载
 
 本页是校验和验证的"正宅"(安装器页只给链接)。PowerShell 对照 `SHA256SUMS.txt`:

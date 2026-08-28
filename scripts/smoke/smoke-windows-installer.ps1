@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$InstallerPath,
-    [string]$SmokeRoot = (Join-Path $PWD "smoke\installer")
+    [string]$SmokeRoot = (Join-Path $PWD "smoke\installer"),
+    [string]$CanonicalIcon = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,12 +42,16 @@ function Assert-ExplorerIntegration {
     if (-not (Test-Path -LiteralPath $BackgroundMenuKey)) { throw "Directory background context menu was not registered." }
     $DirectoryCommand = (Get-Item -LiteralPath (Join-Path $DirectoryMenuKey "command")).GetValue("")
     $BackgroundCommand = (Get-Item -LiteralPath (Join-Path $BackgroundMenuKey "command")).GetValue("")
+    $DirectoryIcon = (Get-Item -LiteralPath $DirectoryMenuKey).GetValue("Icon")
+    $BackgroundIcon = (Get-Item -LiteralPath $BackgroundMenuKey).GetValue("Icon")
     if ($DirectoryCommand -ne ('"' + $Executable + '" "%1"')) {
         throw "Directory context menu command is incorrect: $DirectoryCommand"
     }
     if ($BackgroundCommand -ne ('"' + $Executable + '" "%V"')) {
         throw "Directory background context menu command is incorrect: $BackgroundCommand"
     }
+    if ($DirectoryIcon -ne $IconFile) { throw "Directory context menu icon is incorrect: $DirectoryIcon" }
+    if ($BackgroundIcon -ne $IconFile) { throw "Directory background context menu icon is incorrect: $BackgroundIcon" }
 }
 
 New-Item -ItemType Directory -Force $SmokeRoot, $ProjectDir, $ConfigDir, $UserConfigDir | Out-Null
@@ -63,13 +68,38 @@ try {
     )
 
     $Executable = Join-Path $InstallDir "vesicle.exe"
-    foreach ($required in @($Executable, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\SKILL.md"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\references\index.md"), (Join-Path $InstallDir "unins000.exe"))) {
+    $IconFile = Join-Path $InstallDir "prism-vesicle.ico"
+    foreach ($required in @($Executable, $IconFile, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\SKILL.md"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\references\index.md"), (Join-Path $InstallDir "unins000.exe"))) {
         if (-not (Test-Path -LiteralPath $required)) { throw "Installed payload is missing: $required" }
+    }
+    if ((Get-FileHash -LiteralPath $IconFile -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Resolve-Path $CanonicalIcon).Path -Algorithm SHA256).Hash) { throw "Installed icon does not match the canonical ICO." }
+    if ($CanonicalIcon -ne "") {
+        $Verifier = Join-Path $PSScriptRoot "..\check\check-windows-brand.ps1"
+        & $Verifier -CanonicalIcon (Resolve-Path $CanonicalIcon).Path -Executable $Executable -Uninstaller (Join-Path $InstallDir "unins000.exe")
     }
     if (-not (Test-UserPathEntry $InstallDir)) { throw "The per-user PATH does not contain the install directory." }
     $DirectoryMenuKey = "Registry::HKEY_CURRENT_USER\Software\Classes\Directory\shell\PrismVesicle"
     $BackgroundMenuKey = "Registry::HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\PrismVesicle"
     Assert-ExplorerIntegration $Executable
+    $UninstallKey = "Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\{C573D44C-8972-4F71-9027-BD0A1F6C9752}_is1"
+    if (-not (Test-Path -LiteralPath $UninstallKey)) { throw "Apps & Features uninstall entry was not registered." }
+    $UninstallEntry = Get-Item -LiteralPath $UninstallKey
+    $PackageVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "..\..\package.json") -Raw | ConvertFrom-Json).version
+    $ExpectedDisplayName = "Prism Vesicle $PackageVersion"
+    if ($UninstallEntry.GetValue("DisplayName") -ne $ExpectedDisplayName) {
+        throw "Apps & Features display name is incorrect: $($UninstallEntry.GetValue("DisplayName"))"
+    }
+    if ($UninstallEntry.GetValue("DisplayIcon") -ne $IconFile) { throw "Apps & Features icon is incorrect: $($UninstallEntry.GetValue("DisplayIcon"))" }
+    $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Prism Vesicle"
+    $Shell = New-Object -ComObject WScript.Shell
+    foreach ($shortcutName in @("Configure Prism Vesicle.lnk", "Prism Vesicle Doctor.lnk", "Uninstall Prism Vesicle.lnk")) {
+        $shortcutPath = Join-Path $StartMenu $shortcutName
+        if (-not (Test-Path -LiteralPath $shortcutPath)) { throw "Start Menu shortcut is missing: $shortcutPath" }
+        $shortcut = $Shell.CreateShortcut($shortcutPath)
+        if (-not $shortcut.IconLocation.StartsWith($IconFile, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Start Menu shortcut icon is incorrect for $shortcutName`: $($shortcut.IconLocation)"
+        }
+    }
 
     $LegacyShortcut = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Prism Vesicle\Prism Vesicle.lnk"
     New-Item -ItemType Directory -Force (Split-Path $LegacyShortcut) | Out-Null
@@ -134,6 +164,7 @@ try {
     )
 
     if (Test-Path -LiteralPath $Executable) { throw "Uninstall left the application executable behind." }
+    if (Test-Path -LiteralPath $IconFile) { throw "Uninstall left the installed brand icon behind." }
     if (Test-UserPathEntry $InstallDir) { throw "Uninstall left the install directory in the per-user PATH." }
     if (Test-Path -LiteralPath $DirectoryMenuKey) { throw "Uninstall left the directory context menu behind." }
     if (Test-Path -LiteralPath $BackgroundMenuKey) { throw "Uninstall left the directory background context menu behind." }

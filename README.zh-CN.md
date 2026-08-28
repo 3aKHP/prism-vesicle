@@ -31,7 +31,7 @@ Vesicle 使用 Bun 与 TypeScript 开发，将版本化 Harness Pack 连接到 D
 
 `1.0.0-beta.2` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
 
-安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。安装器会注册原生 `vesicle.exe` 命令，并添加当前用户的资源管理器目录操作 **Open in Prism Vesicle**。再次运行安装器时会显示 **重新安装 / 修复 / 卸载** 维护选项。在终端中启动项目时，先进入目标目录：
+安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。安装器会注册原生 `vesicle.exe` 命令，并将 Prism Vesicle 图标统一用于可执行文件、安装器、卸载程序、开始菜单、应用和功能以及资源管理器入口，同时添加当前用户的资源管理器目录操作 **Open in Prism Vesicle**。再次运行安装器时会显示 **重新安装 / 修复 / 卸载** 维护选项。在终端中启动项目时，先进入目标目录：
 
 ```powershell
 Set-Location C:\path\to\my-project
@@ -202,9 +202,9 @@ bun run doctor
 | `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` | 运行可选的真实供应商验收通道(连通性 smoke + 严格 ETL 确认门);缺少环境变量或凭据时记为 skip 而非 pass |
 | `bun run pack:check` | 验证 npm 发布白名单 |
 | `bun run pack:smoke` | 对打包后的 npm 分发执行冒烟测试 |
-| `bun run build:exe` | 构建 Windows 和 Linux 独立可执行文件 |
+| `bun run build:exe` | 构建独立可执行文件(原生 Windows 输出带品牌资源的发布 PE;非 Windows 主机输出显式非发布的 Windows 交叉构建和 Linux ELF) |
 | `bun run build:assets` | 构建可编辑资产 ZIP |
-| `bun run build:installer:stage` | 暂存完整 Windows 安装器载荷 |
+| `bun run build:installer:stage` | 在生成 canonical 品牌 PE 后暂存原生 Windows 安装器载荷 |
 | `bun run build:installer` | 在 Windows 上构建 Inno Setup 安装器 |
 
 `vesicle debug markdown-runtime` 可以在不打开 TUI 的情况下验证独立 OpenTUI worker 和语法运行时。`vesicle prompt dump --engine <id>` 会输出模型可见的完整系统提示；`vesicle prompt shape --engine <id>` 只输出其组合结构。
