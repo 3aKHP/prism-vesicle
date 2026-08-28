@@ -189,8 +189,8 @@ describe("run_skill_script: self-invocation", () => {
   test("works without configured self-invocation (no env injected, script still runs)", async () => {
     clearSelfInvocation();
     // The child simply does not see the env vars; execution is unaffected.
-    const catalog = await activeCatalog({ "scripts/echo-missing.sh": "#!/bin/sh\ntest -z \"$VESICLE_SELF_EXECUTABLE\" && echo absent || echo present\n" });
-    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/echo-missing.sh" }), { catalog, sessionId });
+    const catalog = await activeCatalog({ "scripts/echo-missing.ts": "console.log(process.env.VESICLE_SELF_EXECUTABLE ? 'present' : 'absent');\n" });
+    const result = await executeRunSkillScriptTool(scratch, call("run_skill_script", { skill: "alpha", path: "scripts/echo-missing.ts" }), { catalog, sessionId });
     expect(result.ok).toBe(true);
     expect(result.content).toContain("absent");
   });

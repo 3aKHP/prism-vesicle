@@ -1,5 +1,5 @@
 import { lstat, realpath } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { modelReadableRoots, modelWritableRoots } from "../../project/roots";
 
 export const readableFileRoots = modelReadableRoots;
@@ -8,7 +8,7 @@ export const writableFileRoots = [...modelWritableRoots] as const;
 /** The single project-relative path policy for model-visible file tools. */
 export async function resolveAllowedPath(rootDir: string, requestedPath: string, roots: readonly string[]): Promise<string> {
   if (!requestedPath || requestedPath.includes("\0")) throw new Error("Path is required.");
-  if (resolve(requestedPath) === requestedPath) throw new Error("Only project-relative paths are allowed.");
+  if (isAbsolute(requestedPath)) throw new Error("Only project-relative paths are allowed.");
 
   const root = resolve(rootDir);
   const resolved = resolve(root, requestedPath);
