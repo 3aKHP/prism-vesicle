@@ -1,16 +1,17 @@
 import { type Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
+import { projectPathRoot } from "./roots";
 
 export type ProjectPathEntry = {
   path: string;
   kind: "dir" | "file";
 };
 
-const HIDDEN_ENTRY_NAMES = new Set([".git", ".vesicle", "node_modules", "dist"]);
+export const HIDDEN_ENTRY_NAMES = new Set([".git", ".vesicle", "node_modules", "dist"]);
 const MAX_PROJECT_PATH_ENTRIES = 2000;
 
-function isHiddenName(name: string): boolean {
+export function isHiddenProjectName(name: string): boolean {
   return name.startsWith(".") || HIDDEN_ENTRY_NAMES.has(name);
 }
 
@@ -30,12 +31,11 @@ export async function buildProjectPathIndex(
     }
     for (const child of children) {
       if (entries.length >= MAX_PROJECT_PATH_ENTRIES) return;
-      if (!options.showHidden && isHiddenName(child.name)) continue;
+      if (!options.showHidden && isHiddenProjectName(child.name)) continue;
       if (child.isSymbolicLink()) continue;
       const abs = join(absDir, child.name);
       const path = relative(rootDir, abs).split(sep).join("/");
-      const safeSegments = path.replace(/\\/g, "/").split("/");
-      if (safeSegments.some((segment) => !segment || segment === "." || segment === "..")) continue;
+      if (!projectPathRoot(path)) continue;
       if (child.isDirectory()) {
         entries.push({ path, kind: "dir" });
         await walk(abs);

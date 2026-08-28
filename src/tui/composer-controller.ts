@@ -38,7 +38,7 @@ export type ComposerControllerOptions = {
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
-  listWorkspaceTargets?: () => Promise<ProjectPathEntry[]>;
+  listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   busy: Accessor<boolean>;
   activeModelCapabilities: Accessor<ModelCapabilities | undefined>;

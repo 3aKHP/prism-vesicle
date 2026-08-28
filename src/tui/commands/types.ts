@@ -43,7 +43,7 @@ export type CommandCompletionContext = {
   providerRegistry: () => ProviderRegistry | null;
   activeProvider: () => string;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
-  listWorkspaceTargets?: () => Promise<ProjectPathEntry[]>;
+  listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentOptions: () => OptionItem[];
 };

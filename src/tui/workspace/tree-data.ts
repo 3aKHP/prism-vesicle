@@ -2,6 +2,7 @@ import { constants, type Dirent, type Stats } from "node:fs";
 import { access, lstat, open, readFile, readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import { assertProjectRelativePath } from "./paths";
+import { isHiddenProjectName } from "../../core/project/path-index";
 
 /**
  * Filesystem model for the Workspace page (Scope B / #62, milestone B2).
@@ -38,7 +39,6 @@ export type WorkspaceVisibleRow = {
 };
 
 
-const HIDDEN_ENTRY_NAMES = new Set([".git", ".vesicle", "node_modules", "dist"]);
 
 const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown", ".mdx"]);
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp"]);
@@ -68,10 +68,6 @@ export function classifyFile(name: string): WorkspaceFileKind {
   // genuinely binary data is caught by the NUL sniff in readFilePreview.
   if (ext === "") return "text";
   return "binary";
-}
-
-function isHiddenName(name: string): boolean {
-  return name.startsWith(".") || HIDDEN_ENTRY_NAMES.has(name);
 }
 
 function sortNodes(nodes: WorkspaceTreeNode[]): WorkspaceTreeNode[] {
@@ -126,7 +122,7 @@ export async function scanDirectory(
   }
   const nodes: WorkspaceTreeNode[] = [];
   for (const name of names) {
-    if (!options.showHidden && isHiddenName(name)) continue;
+    if (!options.showHidden && isHiddenProjectName(name)) continue;
     const node = await nodeFor(rootDir, join(absDir, name), name);
     if (node) nodes.push(node);
   }
@@ -180,7 +176,7 @@ export async function buildFileIndex(
       return;
     }
     for (const entry of entries) {
-      if (!options.showHidden && isHiddenName(entry.name)) continue;
+      if (!options.showHidden && isHiddenProjectName(entry.name)) continue;
       const abs = join(absDir, entry.name);
       if (entry.isDirectory()) {
         await walk(abs);

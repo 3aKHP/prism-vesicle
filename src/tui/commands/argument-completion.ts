@@ -426,7 +426,7 @@ export const workspaceCommandCompletion: CommandCompletion = {
       value,
       tokens.values[0] ?? "",
       "workspace paths",
-      async () => (await context.listWorkspaceTargets?.() ?? []).map((entry) => ({
+      async () => (await context.listWorkspaceTargets()).map((entry) => ({
         id: entry.path,
         label: entry.path,
         detail: entry.kind,

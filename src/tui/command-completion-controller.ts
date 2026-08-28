@@ -26,7 +26,7 @@ export type CommandCompletionControllerOptions = {
   providerRegistry: Accessor<ProviderRegistry | null>;
   activeProvider: Accessor<string>;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
-  listWorkspaceTargets?: () => Promise<ProjectPathEntry[]>;
+  listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
