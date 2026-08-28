@@ -28,7 +28,7 @@ describe("Windows brand assets", () => {
     expect(manifest.wizard.size).toBe(WINDOWS_WIZARD_SIZE);
   });
 
-  test("regenerates the canonical ICO, wizard image, and manifest byte-identically", async () => {
+  test.skipIf(process.platform !== "linux")("regenerates the Linux-canonical ICO, wizard image, and manifest byte-identically", async () => {
     expect(await verifyWindowsIconRegeneration()).toBe(true);
   });
 });

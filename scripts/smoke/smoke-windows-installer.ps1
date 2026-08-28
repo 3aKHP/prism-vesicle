@@ -82,7 +82,11 @@ try {
     $UninstallKey = "Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\{C573D44C-8972-4F71-9027-BD0A1F6C9752}_is1"
     if (-not (Test-Path -LiteralPath $UninstallKey)) { throw "Apps & Features uninstall entry was not registered." }
     $UninstallEntry = Get-Item -LiteralPath $UninstallKey
-    if ($UninstallEntry.GetValue("DisplayName") -ne "Prism Vesicle") { throw "Apps & Features display name is incorrect." }
+    $PackageVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot "..\..\package.json") -Raw | ConvertFrom-Json).version
+    $ExpectedDisplayName = "Prism Vesicle $PackageVersion"
+    if ($UninstallEntry.GetValue("DisplayName") -ne $ExpectedDisplayName) {
+        throw "Apps & Features display name is incorrect: $($UninstallEntry.GetValue("DisplayName"))"
+    }
     if ($UninstallEntry.GetValue("DisplayIcon") -ne $Executable) { throw "Apps & Features icon is incorrect: $($UninstallEntry.GetValue("DisplayIcon"))" }
     $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Prism Vesicle"
     $Shell = New-Object -ComObject WScript.Shell
