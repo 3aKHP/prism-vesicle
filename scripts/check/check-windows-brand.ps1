@@ -95,6 +95,10 @@ function Get-ExpectedVersion {
     return "$Core.0"
 }
 
+function Normalize-VersionInfoString([object]$Value) {
+    return ([string]$Value).TrimEnd([char]0, [char]' ')
+}
+
 Assert-File $CanonicalIcon
 Assert-File $Executable
 foreach ($path in @($Executable, $Installer, $Uninstaller)) {
@@ -127,7 +131,7 @@ if (-not [string]::IsNullOrWhiteSpace($Installer)) {
         ProductVersion = $expectedVersion
         FileVersion = $expectedVersion
     }.GetEnumerator()) {
-        if ($installerInfo.($pair.Key) -ne $pair.Value) {
+        if ((Normalize-VersionInfoString $installerInfo.($pair.Key)) -ne $pair.Value) {
             throw "Installer VersionInfo $($pair.Key) mismatch: '$($installerInfo.($pair.Key))'."
         }
     }
