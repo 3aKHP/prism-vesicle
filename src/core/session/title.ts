@@ -225,7 +225,12 @@ export async function maybeGenerateSessionTitle(options: {
       await options.session.appendIfHead(expected, { role: "system", content: "", metadata: { kind: SESSION_TITLE_KIND, version: 1, title: result.title, source: "generated", firstUserUuid: turn.user.uuid, firstAssistantUuid: turn.assistant.uuid } });
       options.onTitleChanged?.(result.title, options.session.sessionId);
       const usage = result.usage ? normalizeTitleUsage(result.usage) : undefined;
-      if (usage) await options.session.append({ role: "system", content: "", metadata: { kind: SESSION_TITLE_USAGE_KIND, version: 1, usage } });
+      if (usage) {
+        // Usage is auxiliary telemetry. A storage failure here must not leave
+        // the successful title generation un-settled or trigger another title
+        // attempt on the next turn.
+        await options.session.append({ role: "system", content: "", metadata: { kind: SESSION_TITLE_USAGE_KIND, version: 1, usage } }).catch(() => undefined);
+      }
     } catch {
       return;
     }
@@ -237,10 +242,6 @@ export function scheduleSessionTitleGeneration(options: Parameters<typeof maybeG
   setTimeout(() => { void maybeGenerateSessionTitle(options).catch(() => undefined); }, 100);
 }
 
-export async function loadProjectedTitle(rootDir: string, sessionId: string): Promise<{ title?: SessionTitle; generation: SessionTitleGenerationState }> {
-  const records = await readRecords(rootDir, sessionId);
-  return { title: projectSessionTitle(records), generation: projectSessionTitleGeneration(records) };
-}
 
 export async function appendSessionTitle(rootDir: string, sessionId: string, title: string, source: SessionTitleSource): Promise<void> {
   const session = await createSessionStore(rootDir, sessionId);
