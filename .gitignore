@@ -8,6 +8,7 @@ dist/
 coverage/
 /prism-vesicle
 /prism-vesicle.exe
+/prism-vesicle-cross-windows-x64.exe
 /main
 /main.exe
 

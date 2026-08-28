@@ -82,6 +82,8 @@
     "pack:smoke": "bun run scripts/smoke/smoke-npm-package.ts",
     "smoke:binary": "bun run scripts/smoke/smoke-binary.ts",
     "build:exe": "bun run scripts/build/build-exe.ts",
+    "build:windows-icon": "bun run scripts/build/build-windows-icon.ts",
+    "check:windows-icon": "bun run scripts/build/build-windows-icon.ts --check",
     "build:assets": "bun run scripts/build/build-assets.ts",
     "build:installer:stage": "bun run scripts/build/stage-windows-installer.ts",
     "build:installer": "bun run scripts/build/build-installer.ts"
@@ -92,9 +94,10 @@
     "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
+    "@3akhp/opentui-solid": "0.5.3-zv6",
     "@biomejs/biome": "2.5.4",
     "@eslint-community/regexpp": "4.12.2",
-    "@3akhp/opentui-solid": "0.5.3-zv6",
+    "@resvg/resvg-js": "2.6.2",
     "@types/bun": "1.3.14",
     "diff": "9.0.0",
     "solid-js": "1.9.12",

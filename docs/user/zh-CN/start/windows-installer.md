@@ -19,6 +19,7 @@
 - 安装到你的用户目录(`%LOCALAPPDATA%\Programs\Prism Vesicle`),**不需要管理员权限**。
 - 升级或重装不会动你的配置和项目(配置在 `%APPDATA%\prism-vesicle\`,与程序目录分开)。
 - 再次运行同一个安装器会弹出维护选项:Reinstall / Repair / Uninstall。维护细节见[参考:更新·卸载·迁移](../reference/update-uninstall-migrate.md)。
+- Prism Vesicle 图标会统一用于安装程序、生成的卸载程序、开始菜单、应用和功能以及资源管理器入口;安装向导使用匹配的 compact mark。
 
 安装最后一页保持勾选 **Configure and launch Prism Vesicle**,它会自动打开配置向导。开始菜单的 **Prism Vesicle** 组里有三个入口:**Configure Prism Vesicle**(重开向导)、**Prism Vesicle Doctor**(检查环境)、**Uninstall Prism Vesicle**(卸载)。
 

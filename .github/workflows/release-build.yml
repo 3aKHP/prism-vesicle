@@ -131,6 +131,12 @@ jobs:
       - name: Smoke the npm-installed Windows runtime
         run: bun run pack:smoke --skip-tui
       - run: bun run build:exe windows
+      - name: Verify native PE brand resources
+        shell: pwsh
+        run: |
+          ./scripts/check/check-windows-brand.ps1 `
+            -CanonicalIcon "brand/windows/prism-vesicle.ico" `
+            -Executable "prism-vesicle.exe"
       - run: bun run build:assets
       - name: Smoke the release shape from an empty project
         shell: pwsh
@@ -166,7 +172,13 @@ jobs:
         shell: pwsh
         run: |
           bun run build:installer
-          ./scripts/smoke/smoke-windows-installer.ps1 -InstallerPath "dist/PrismVesicleSetup-*-windows-x64.exe"
+          ./scripts/check/check-windows-brand.ps1 `
+            -CanonicalIcon "brand/windows/prism-vesicle.ico" `
+            -Executable "prism-vesicle.exe" `
+            -Installer (Get-Item "dist/PrismVesicleSetup-*-windows-x64.exe").FullName
+          ./scripts/smoke/smoke-windows-installer.ps1 `
+            -InstallerPath "dist/PrismVesicleSetup-*-windows-x64.exe" `
+            -CanonicalIcon "brand/windows/prism-vesicle.ico"
       - name: Stage versioned Windows artifacts
         shell: pwsh
         env:

@@ -2,6 +2,7 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import packageJson from "../../package.json";
 import { stageWindowsInstaller, WINDOWS_EXECUTABLE } from "./stage-windows-installer";
+import { numericFileVersion } from "./windows-version";
 
 export const INSTALLER_FILENAME = `PrismVesicleSetup-${packageJson.version}-windows-x64.exe`;
 export const INSTALLER_FILE_VERSION = numericFileVersion(packageJson.version);
@@ -52,10 +53,4 @@ async function main(): Promise<void> {
 
 if (import.meta.main) await main();
 
-export function numericFileVersion(version: string): string {
-  const parts = version.split("-", 1)[0].split(".").map((part) => Number(part));
-  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 65535)) {
-    throw new Error(`Cannot derive a Windows file version from ${version}.`);
-  }
-  return `${parts[0]}.${parts[1]}.${parts[2]}.0`;
-}
+export { numericFileVersion } from "./windows-version";

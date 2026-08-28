@@ -1,5 +1,7 @@
 import solidPlugin from "@3akhp/opentui-solid/bun-plugin";
 import { mkdir, rm, rename, unlink } from "node:fs/promises";
+import packageJson from "../../package.json";
+import { numericFileVersion } from "./windows-version";
 
 // Bun 1.3's JS build API ignores `outfile` for compiled executables and emits
 // the entry basename with a target-appropriate extension (`.exe` for Windows
@@ -22,8 +24,13 @@ import { mkdir, rm, rename, unlink } from "node:fs/promises";
 
 type Target = { id: string; artifact: string; emitted: string };
 
+export const WINDOWS_RELEASE_ARTIFACT = "prism-vesicle.exe";
+export const WINDOWS_CROSS_ARTIFACT = "prism-vesicle-cross-windows-x64.exe";
+export function windowsArtifactForHost(platform: NodeJS.Platform): string {
+  return platform === "win32" ? WINDOWS_RELEASE_ARTIFACT : WINDOWS_CROSS_ARTIFACT;
+}
 const TARGETS: Record<string, Target> = {
-  windows: { id: "bun-windows-x64", artifact: "prism-vesicle.exe", emitted: "main.exe" },
+  windows: { id: "bun-windows-x64", artifact: windowsArtifactForHost(process.platform), emitted: "main.exe" },
   linux: { id: "bun-linux-x64", artifact: "prism-vesicle", emitted: "main" },
 };
 
@@ -106,6 +113,22 @@ async function buildTarget(target: Target): Promise<void> {
     Bun.file(target.emitted).delete().catch(() => undefined),
   ]);
 
+  const isNativeWindowsBuild = target.id.includes("windows") && process.platform === "win32";
+  const compile: Bun.BuildConfig["compile"] = {
+    autoloadBunfig: false,
+    ...(isNativeWindowsBuild
+      ? {
+        windows: {
+          icon: "brand/windows/prism-vesicle.ico",
+          title: "Prism Vesicle",
+          publisher: "3aKHP",
+          version: numericFileVersion(packageJson.version),
+          description: packageJson.description,
+          copyright: "Copyright (c) 2026 3aKHP",
+        },
+      }
+      : {}),
+  };
   const result = await Bun.build({
     entrypoints: ["src/cli/main.ts", TREE_SITTER_WORKER_ENTRYPOINT],
     target: target.id as Bun.BuildConfig["target"],
@@ -115,7 +138,7 @@ async function buildTarget(target: Target): Promise<void> {
       OTUI_TREE_SITTER_WORKER_PATH: JSON.stringify(treeSitterWorkerPathForTarget(target.id)),
       VESICLE_TREE_SITTER_WORKER_PATH: JSON.stringify(treeSitterWorkerPathForTarget(target.id)),
     },
-    compile: { autoloadBunfig: false },
+    compile,
   } as Bun.BuildConfig);
 
   if (!result.success) {
@@ -124,7 +147,7 @@ async function buildTarget(target: Target): Promise<void> {
   }
 
   await rename(target.emitted, target.artifact);
-  console.log(`Compiled ${target.artifact} (${target.id})`);
+  console.log(`Compiled ${target.artifact} (${target.id}${isNativeWindowsBuild ? ", branded native Windows" : target.id.includes("windows") ? ", cross-build without Windows resources" : ""})`);
 }
 
 async function main(): Promise<void> {
@@ -132,6 +155,12 @@ async function main(): Promise<void> {
   const selected = arg ? [arg] : ["windows", "linux"];
 
   if (selected.includes("windows")) {
+    // A stale artifact from the other host class must never be mistaken for the
+    // output of this build (especially by installer staging on WSL).
+    const incompatibleArtifact = process.platform === "win32" ? WINDOWS_CROSS_ARTIFACT : WINDOWS_RELEASE_ARTIFACT;
+    await Bun.file(incompatibleArtifact).delete().catch(() => undefined);
+    const { buildWindowsIcons } = await import("./build-windows-icon");
+    await buildWindowsIcons(true);
     await ensureWin32Native(await readInstalledCoreVersion());
   }
 

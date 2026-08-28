@@ -3,8 +3,12 @@ import {
   STANDALONE_BUILD_DEFINES,
   TREE_SITTER_WORKER_ENTRYPOINT,
   TREE_SITTER_WORKER_RUNTIME_NAME,
+  WINDOWS_CROSS_ARTIFACT,
+  WINDOWS_RELEASE_ARTIFACT,
   treeSitterWorkerPathForTarget,
+  windowsArtifactForHost,
 } from "../../../scripts/build/build-exe";
+import { numericFileVersion } from "../../../scripts/build/windows-version";
 
 describe("standalone build worker", () => {
   test("uses a flat emitted worker entrypoint for each Bun target", () => {
@@ -18,5 +22,13 @@ describe("standalone build worker", () => {
   test("pins web-tree-sitter into the standalone worker bundle", async () => {
     const source = await Bun.file(TREE_SITTER_WORKER_ENTRYPOINT).text();
     expect(source).toContain('import "web-tree-sitter";');
+  });
+
+  test("keeps native release and non-native cross-build artifacts distinct", () => {
+    expect(WINDOWS_RELEASE_ARTIFACT).toBe("prism-vesicle.exe");
+    expect(WINDOWS_CROSS_ARTIFACT).toBe("prism-vesicle-cross-windows-x64.exe");
+    expect(windowsArtifactForHost("win32")).toBe(WINDOWS_RELEASE_ARTIFACT);
+    expect(windowsArtifactForHost("linux")).toBe(WINDOWS_CROSS_ARTIFACT);
+    expect(numericFileVersion("1.0.0-rc.1")).toBe("1.0.0.0");
   });
 });

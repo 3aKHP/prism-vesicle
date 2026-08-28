@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$InstallerPath,
-    [string]$SmokeRoot = (Join-Path $PWD "smoke\installer")
+    [string]$SmokeRoot = (Join-Path $PWD "smoke\installer"),
+    [string]$CanonicalIcon = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,12 +42,16 @@ function Assert-ExplorerIntegration {
     if (-not (Test-Path -LiteralPath $BackgroundMenuKey)) { throw "Directory background context menu was not registered." }
     $DirectoryCommand = (Get-Item -LiteralPath (Join-Path $DirectoryMenuKey "command")).GetValue("")
     $BackgroundCommand = (Get-Item -LiteralPath (Join-Path $BackgroundMenuKey "command")).GetValue("")
+    $DirectoryIcon = (Get-Item -LiteralPath $DirectoryMenuKey).GetValue("Icon")
+    $BackgroundIcon = (Get-Item -LiteralPath $BackgroundMenuKey).GetValue("Icon")
     if ($DirectoryCommand -ne ('"' + $Executable + '" "%1"')) {
         throw "Directory context menu command is incorrect: $DirectoryCommand"
     }
     if ($BackgroundCommand -ne ('"' + $Executable + '" "%V"')) {
         throw "Directory background context menu command is incorrect: $BackgroundCommand"
     }
+    if ($DirectoryIcon -ne $Executable) { throw "Directory context menu icon is incorrect: $DirectoryIcon" }
+    if ($BackgroundIcon -ne $Executable) { throw "Directory background context menu icon is incorrect: $BackgroundIcon" }
 }
 
 New-Item -ItemType Directory -Force $SmokeRoot, $ProjectDir, $ConfigDir, $UserConfigDir | Out-Null
@@ -66,10 +71,30 @@ try {
     foreach ($required in @($Executable, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\SKILL.md"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\references\index.md"), (Join-Path $InstallDir "unins000.exe"))) {
         if (-not (Test-Path -LiteralPath $required)) { throw "Installed payload is missing: $required" }
     }
+    if ($CanonicalIcon -ne "") {
+        $Verifier = Join-Path $PSScriptRoot "..\check\check-windows-brand.ps1"
+        & $Verifier -CanonicalIcon (Resolve-Path $CanonicalIcon).Path -Executable $Executable -Uninstaller (Join-Path $InstallDir "unins000.exe")
+        if ($LASTEXITCODE -ne 0) { throw "Installed executable/uninstaller brand verification failed." }
+    }
     if (-not (Test-UserPathEntry $InstallDir)) { throw "The per-user PATH does not contain the install directory." }
     $DirectoryMenuKey = "Registry::HKEY_CURRENT_USER\Software\Classes\Directory\shell\PrismVesicle"
     $BackgroundMenuKey = "Registry::HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\PrismVesicle"
     Assert-ExplorerIntegration $Executable
+    $UninstallKey = "Registry::HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\{C573D44C-8972-4F71-9027-BD0A1F6C9752}_is1"
+    if (-not (Test-Path -LiteralPath $UninstallKey)) { throw "Apps & Features uninstall entry was not registered." }
+    $UninstallEntry = Get-Item -LiteralPath $UninstallKey
+    if ($UninstallEntry.GetValue("DisplayName") -ne "Prism Vesicle") { throw "Apps & Features display name is incorrect." }
+    if ($UninstallEntry.GetValue("DisplayIcon") -ne $Executable) { throw "Apps & Features icon is incorrect: $($UninstallEntry.GetValue("DisplayIcon"))" }
+    $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Prism Vesicle"
+    $Shell = New-Object -ComObject WScript.Shell
+    foreach ($shortcutName in @("Configure Prism Vesicle.lnk", "Prism Vesicle Doctor.lnk", "Uninstall Prism Vesicle.lnk")) {
+        $shortcutPath = Join-Path $StartMenu $shortcutName
+        if (-not (Test-Path -LiteralPath $shortcutPath)) { throw "Start Menu shortcut is missing: $shortcutPath" }
+        $shortcut = $Shell.CreateShortcut($shortcutPath)
+        if (-not $shortcut.IconLocation.StartsWith($Executable, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Start Menu shortcut icon is incorrect for $shortcutName`: $($shortcut.IconLocation)"
+        }
+    }
 
     $LegacyShortcut = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Prism Vesicle\Prism Vesicle.lnk"
     New-Item -ItemType Directory -Force (Split-Path $LegacyShortcut) | Out-Null

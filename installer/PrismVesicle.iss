@@ -39,6 +39,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
 OutputBaseFilename=PrismVesicleSetup-{#AppVersion}-windows-x64
+SetupIconFile={#SourceRoot}\brand\windows\prism-vesicle.ico
+WizardSmallImageFile={#SourceRoot}\brand\windows\prism-vesicle-wizard.png
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -77,9 +79,9 @@ Type: files; Name: "{app}\vesicle.cmd"
 Type: files; Name: "{group}\Prism Vesicle.lnk"
 
 [Icons]
-Name: "{group}\Configure Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"
-Name: "{group}\Prism Vesicle Doctor"; Filename: "{cmd}"; Parameters: "/k &quot;&quot;{app}\{#AppExeName}&quot; doctor&quot;"; WorkingDir: "{userdocs}"
-Name: "{group}\Uninstall Prism Vesicle"; Filename: "{uninstallexe}"
+Name: "{group}\Configure Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"; IconFilename: "{app}\{#AppExeName}"
+Name: "{group}\Prism Vesicle Doctor"; Filename: "{cmd}"; Parameters: "/k &quot;&quot;{app}\{#AppExeName}&quot; doctor&quot;"; WorkingDir: "{userdocs}"; IconFilename: "{app}\{#AppExeName}"
+Name: "{group}\Uninstall Prism Vesicle"; Filename: "{uninstallexe}"; IconFilename: "{app}\{#AppExeName}"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueData: "Open in Prism Vesicle"; Flags: uninsdeletekey

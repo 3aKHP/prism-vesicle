@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Deterministic Windows brand resources (A Lane, #251).** Native Windows builds now carry the canonical multi-size Prism Vesicle icon and version metadata; Inno Setup and its wizard use the same SVG-derived icon family, including the generated uninstaller and Windows integration surfaces. WSL cross-builds remain available under an explicit non-release filename because Bun cannot write Windows PE resources while cross-compiling.
+
 - **Sessions migrate explicitly across bundled Harness upgrades.** Resuming a session recorded under a different verified Harness baseline (including identity-less pre-V10 sessions) no longer dead-ends on the fail-closed identity check. An offline preflight report runs first — a resume dry-run under the new baseline, a provider request-body round-trip through the session's own serializer, per-protocol tool-call pairing validators, and a context-budget heuristic; no provider request is ever sent. The migration itself is confirmed behind a two-stage red panel: confirming archives the pre-migration transcript to `.vesicle/sessions/archive/` and appends a durable `session-migration` record that rebinds the session's effective identity while every history record keeps the identity it was recorded with. Later resumes re-display a durable migration notice instead of silently switching runtime contracts. Blocking findings (unknown engine under the new baseline, an unresolvable paused gate, serializer or invariant failures) refuse the migration with the session untouched. Pending quality retries remain fail-closed across identity drift, and SubAgent child sessions are not migrated (#239).
 
 ### Fixed

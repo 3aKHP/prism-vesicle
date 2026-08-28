@@ -55,6 +55,7 @@ Release candidate: **1.0.0-beta.2**. The `State` column tracks the candidate's p
 | Release | Standalone Windows PE and Linux ELF binaries | released |
 | Release | npm/Bun package with a precompiled Solid TUI entry, clean installed production tree, global/local consumer audit, and behavioral Linux PTY startup gate | released |
 | Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | released |
+| Release | Branded Windows PE, installer, uninstaller, and Explorer assets | experimental |
 | Release | Reusable Linux/Windows release build with tag-triggered publication | released |
 
 ## Scope

@@ -161,6 +161,7 @@ describe("release workflow contract", () => {
     expect(commands).toContain("bun run pack:smoke");
     expect(commands).toContain("bun run build:exe linux");
     expect(commands).toContain("bun run build:exe windows");
+    expect(commands).toContain("check-windows-brand.ps1");
     expect(commands).toContain("bun run build:installer");
     expect(commands).toContain("smoke-windows-installer.ps1");
   });

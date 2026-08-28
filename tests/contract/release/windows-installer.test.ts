@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { INSTALLER_FILENAME, INSTALLER_FILE_VERSION, innoCompilerCandidates, numericFileVersion } from "../../../scripts/build/build-installer";
-import { INSTALLER_PAYLOAD, stageWindowsInstaller } from "../../../scripts/build/stage-windows-installer";
+import { INSTALLER_BRAND_INPUTS, INSTALLER_PAYLOAD, installerStagingSupported, stageWindowsInstaller } from "../../../scripts/build/stage-windows-installer";
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
@@ -24,6 +24,8 @@ describe("Windows guided installer", () => {
     expect(source).not.toContain("PrivilegesRequiredOverridesAllowed");
     expect(source).toContain("DefaultDirName={localappdata}\\Programs\\Prism Vesicle");
     expect(source).toContain("VersionInfoProductVersion={#FileVersion}");
+    expect(source).toContain("SetupIconFile={#SourceRoot}\\brand\\windows\\prism-vesicle.ico");
+    expect(source).toContain("WizardSmallImageFile={#SourceRoot}\\brand\\windows\\prism-vesicle-wizard.png");
     expect(source).toContain('MessagesFile: "languages\\ChineseSimplified.isl"');
     expect(source).not.toContain('MessagesFile: "compiler:Languages\\ChineseSimplified.isl"');
     expect(source).toContain('Source: "{#SourceRoot}\\harness-manifest.json"');
@@ -32,6 +34,7 @@ describe("Windows guided installer", () => {
     expect(source).toContain('#define AppExeName "vesicle.exe"');
     expect(source).not.toContain('Source: "{#SourceRoot}\\vesicle.cmd"');
     expect(source).toContain('Parameters: "setup"');
+    expect(source).toContain('IconFilename: "{app}\\{#AppExeName}"');
     expect(source).not.toContain('Parameters: "launch"');
     expect(source).toContain('[InstallDelete]');
     expect(source).toContain('Name: "{app}\\prism-vesicle.exe"');
@@ -62,12 +65,15 @@ describe("Windows guided installer", () => {
     expect(source).toContain("LanguageName=简体中文");
   });
 
-  test("stages only the declared distributable payload", async () => {
+  test("stages the declared runtime payload and installer-only brand inputs", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-installer-"));
     roots.push(root);
     await writeFile(join(root, "prism-vesicle.exe"), "pe");
     await writeFile(join(root, "harness-manifest.json"), "{}");
     await writeFile(join(root, "LICENSE"), "license");
+    await mkdir(join(root, "brand", "windows"), { recursive: true });
+    await writeFile(join(root, "brand", "windows", "prism-vesicle.ico"), "ico");
+    await writeFile(join(root, "brand", "windows", "prism-vesicle-wizard.png"), "png");
     await mkdir(join(root, "assets"));
     await mkdir(join(root, "host-assets"));
     await writeFile(join(root, "assets", "engine.txt"), "engine");
@@ -79,11 +85,14 @@ describe("Windows guided installer", () => {
     expect(files).toEqual([
       "LICENSE",
       "assets/engine.txt",
+      "brand/windows/prism-vesicle-wizard.png",
+      "brand/windows/prism-vesicle.ico",
       "harness-manifest.json",
       "host-assets/host.txt",
       "prism-vesicle.exe",
     ]);
     expect(INSTALLER_PAYLOAD).toEqual(["prism-vesicle.exe", "harness-manifest.json", "assets", "host-assets", "LICENSE"]);
+    expect(INSTALLER_BRAND_INPUTS).toEqual(["brand/windows/prism-vesicle.ico", "brand/windows/prism-vesicle-wizard.png"]);
   });
 
   test("uses a versioned installer filename and supports an explicit compiler", () => {
@@ -91,5 +100,7 @@ describe("Windows guided installer", () => {
     expect(INSTALLER_FILE_VERSION).toMatch(/^\d+\.\d+\.\d+\.0$/);
     expect(numericFileVersion("1.2.3-alpha.4")).toBe("1.2.3.0");
     expect(innoCompilerCandidates({ INNO_SETUP_COMPILER: "D:\\Tools\\ISCC.exe" })[0]).toBe("D:\\Tools\\ISCC.exe");
+    expect(installerStagingSupported("win32")).toBe(true);
+    expect(installerStagingSupported("linux")).toBe(false);
   });
 });
