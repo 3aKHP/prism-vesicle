@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Windows system surfaces now use the full-size canonical ICO.** The installer places `prism-vesicle.ico` beside `vesicle.exe` and points Apps & Features, Start Menu, and Explorer integration at that multi-size file, preventing Windows Settings from enlarging a low-resolution executable frame into a blurred icon.
+
 - **Windows asset overlays and guarded-path diagnostics now match the cross-platform contracts.** A project or user asset file now shadows lower-layer descendants even when Windows reports the attempted child lookup as `ENOENT` instead of POSIX `ENOTDIR`, so direct reads and merged listings cannot disagree. Model-visible file tools also classify rooted Windows and root-relative paths through the platform path API before the existing project-boundary guard.
 - **Concurrent Skill state writes keep cross-process exclusion without a post-publication SQLite commit.** The reported Windows lock failure was traced to a test holder becoming unreachable across an `await`; Bun then performed its documented garbage-collection close and released the SQLite transaction. Skill Store index updates and filesystem-scope enable/disable updates now share one asynchronous 10-second SQLite mutex owner that keeps its `Database` live through the complete critical section and always releases with `ROLLBACK` plus explicit close; this replaces disabled-state's previous synchronous 5-second wait with the shared 10-second budget. SQLite carries no Skill data, so a successful atomic `index.json` or `.disabled` update can no longer be misreported as failed by a later `COMMIT`, and lock contention no longer blocks the TUI event loop with synchronous sleeps.
 

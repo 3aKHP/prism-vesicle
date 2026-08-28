@@ -50,8 +50,8 @@ function Assert-ExplorerIntegration {
     if ($BackgroundCommand -ne ('"' + $Executable + '" "%V"')) {
         throw "Directory background context menu command is incorrect: $BackgroundCommand"
     }
-    if ($DirectoryIcon -ne $Executable) { throw "Directory context menu icon is incorrect: $DirectoryIcon" }
-    if ($BackgroundIcon -ne $Executable) { throw "Directory background context menu icon is incorrect: $BackgroundIcon" }
+    if ($DirectoryIcon -ne $IconFile) { throw "Directory context menu icon is incorrect: $DirectoryIcon" }
+    if ($BackgroundIcon -ne $IconFile) { throw "Directory background context menu icon is incorrect: $BackgroundIcon" }
 }
 
 New-Item -ItemType Directory -Force $SmokeRoot, $ProjectDir, $ConfigDir, $UserConfigDir | Out-Null
@@ -68,9 +68,11 @@ try {
     )
 
     $Executable = Join-Path $InstallDir "vesicle.exe"
-    foreach ($required in @($Executable, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\SKILL.md"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\references\index.md"), (Join-Path $InstallDir "unins000.exe"))) {
+    $IconFile = Join-Path $InstallDir "prism-vesicle.ico"
+    foreach ($required in @($Executable, $IconFile, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\SKILL.md"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\references\index.md"), (Join-Path $InstallDir "unins000.exe"))) {
         if (-not (Test-Path -LiteralPath $required)) { throw "Installed payload is missing: $required" }
     }
+    if ((Get-FileHash -LiteralPath $IconFile -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Resolve-Path $CanonicalIcon).Path -Algorithm SHA256).Hash) { throw "Installed icon does not match the canonical ICO." }
     if ($CanonicalIcon -ne "") {
         $Verifier = Join-Path $PSScriptRoot "..\check\check-windows-brand.ps1"
         & $Verifier -CanonicalIcon (Resolve-Path $CanonicalIcon).Path -Executable $Executable -Uninstaller (Join-Path $InstallDir "unins000.exe")
@@ -87,14 +89,14 @@ try {
     if ($UninstallEntry.GetValue("DisplayName") -ne $ExpectedDisplayName) {
         throw "Apps & Features display name is incorrect: $($UninstallEntry.GetValue("DisplayName"))"
     }
-    if ($UninstallEntry.GetValue("DisplayIcon") -ne $Executable) { throw "Apps & Features icon is incorrect: $($UninstallEntry.GetValue("DisplayIcon"))" }
+    if ($UninstallEntry.GetValue("DisplayIcon") -ne $IconFile) { throw "Apps & Features icon is incorrect: $($UninstallEntry.GetValue("DisplayIcon"))" }
     $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Prism Vesicle"
     $Shell = New-Object -ComObject WScript.Shell
     foreach ($shortcutName in @("Configure Prism Vesicle.lnk", "Prism Vesicle Doctor.lnk", "Uninstall Prism Vesicle.lnk")) {
         $shortcutPath = Join-Path $StartMenu $shortcutName
         if (-not (Test-Path -LiteralPath $shortcutPath)) { throw "Start Menu shortcut is missing: $shortcutPath" }
         $shortcut = $Shell.CreateShortcut($shortcutPath)
-        if (-not $shortcut.IconLocation.StartsWith($Executable, [System.StringComparison]::OrdinalIgnoreCase)) {
+        if (-not $shortcut.IconLocation.StartsWith($IconFile, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Start Menu shortcut icon is incorrect for $shortcutName`: $($shortcut.IconLocation)"
         }
     }
@@ -162,6 +164,7 @@ try {
     )
 
     if (Test-Path -LiteralPath $Executable) { throw "Uninstall left the application executable behind." }
+    if (Test-Path -LiteralPath $IconFile) { throw "Uninstall left the installed brand icon behind." }
     if (Test-UserPathEntry $InstallDir) { throw "Uninstall left the install directory in the per-user PATH." }
     if (Test-Path -LiteralPath $DirectoryMenuKey) { throw "Uninstall left the directory context menu behind." }
     if (Test-Path -LiteralPath $BackgroundMenuKey) { throw "Uninstall left the directory background context menu behind." }

@@ -32,9 +32,13 @@ describe("Windows guided installer", () => {
     expect(source).toContain('Source: "{#SourceRoot}\\host-assets\\*"');
     expect(source).toContain('DestName: "{#AppExeName}"');
     expect(source).toContain('#define AppExeName "vesicle.exe"');
+    expect(source).toContain('#define AppIconName "prism-vesicle.ico"');
+    expect(source).toContain('DestName: "{#AppIconName}"');
+    expect(source).toContain('UninstallDisplayIcon={app}\\{#AppIconName}');
     expect(source).not.toContain('Source: "{#SourceRoot}\\vesicle.cmd"');
     expect(source).toContain('Parameters: "setup"');
-    expect(source).toContain('IconFilename: "{app}\\{#AppExeName}"');
+    expect(source).toContain('IconFilename: "{app}\\{#AppIconName}"');
+    expect(source).toContain('ValueName: "Icon"; ValueData: "{app}\\{#AppIconName}"');
     expect(source).not.toContain('Parameters: "launch"');
     expect(source).toContain('[InstallDelete]');
     expect(source).toContain('Name: "{app}\\prism-vesicle.exe"');
@@ -65,7 +69,7 @@ describe("Windows guided installer", () => {
     expect(source).toContain("LanguageName=简体中文");
   });
 
-  test("stages the declared runtime payload and installer-only brand inputs", async () => {
+  test("stages the declared runtime payload and installed brand input", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-installer-"));
     roots.push(root);
     await writeFile(join(root, "prism-vesicle.exe"), "pe");
