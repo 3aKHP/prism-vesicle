@@ -23,6 +23,7 @@ import { createModelPickerController } from "./model-picker-controller";
 import { createCommandCompletionController } from "./command-completion-controller";
 import { composerStateFromQueuedInput, type InputQueue } from "./input-queue";
 import type { Command } from "./commands/types";
+import type { ProjectPathEntry } from "../core/project/path-index";
 
 export type ComposerControllerOptions = {
   rootDir: string;
@@ -37,7 +38,7 @@ export type ComposerControllerOptions = {
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
-  listWorkspaceTargets?: () => Promise<{ path: string; kind: "file" | "dir" }[]>;
+  listWorkspaceTargets?: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   busy: Accessor<boolean>;
   activeModelCapabilities: Accessor<ModelCapabilities | undefined>;

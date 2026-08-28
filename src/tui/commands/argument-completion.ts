@@ -374,19 +374,17 @@ export const skillCommandCompletion: CommandCompletion = {
     const args = commandArguments(value, "skill");
     if (args === null) return null;
     const tokens = splitTokens(args);
-    if (tokens.values.length > 2) return null;
-    if (tokens.values.length === 2 || (tokens.values.length === 1 && tokens.trailingSpace)) {
-      if (tokens.values.length === 2 && !tokens.values[1]!.startsWith("--")) return null;
-      const name = tokens.values[0];
-      if (!name) return null;
-      return completion("skill:option", value, tokens.values[1] ?? "", "skill options", [
+    const stage = classifySkillStage(tokens);
+    if (stage.kind === "option") {
+      return completion("skill:option", value, stage.option, "skill options", [
         { id: "--context-only", label: "--context-only", detail: "Activate without starting a provider request" },
-      ], () => `/skill ${name} --context-only`);
+      ], () => `/skill ${stage.name} --context-only`);
     }
+    if (stage.kind === "invalid") return null;
     return completion(
       "skill:name",
       value,
-      tokens.values[0] ?? "",
+      stage.query,
       "skills",
       async () => {
         const { resolveSkillCatalog } = await import("../../core/skills");
@@ -401,6 +399,21 @@ export const skillCommandCompletion: CommandCompletion = {
     );
   },
 };
+
+type SkillStage =
+  | { kind: "name"; query: string }
+  | { kind: "option"; name: string; option: string }
+  | { kind: "invalid" };
+
+function classifySkillStage(tokens: { values: string[]; trailingSpace: boolean }): SkillStage {
+  if (tokens.values.length === 0) return { kind: "name", query: "" };
+  if (tokens.values.length === 1 && !tokens.trailingSpace) return { kind: "name", query: tokens.values[0]! };
+  if (tokens.values.length === 1 && tokens.trailingSpace) return { kind: "option", name: tokens.values[0]!, option: "" };
+  if (tokens.values.length === 2 && tokens.values[1]!.startsWith("--")) {
+    return { kind: "option", name: tokens.values[0]!, option: tokens.values[1]! };
+  }
+  return { kind: "invalid" };
+}
 
 export const workspaceCommandCompletion: CommandCompletion = {
   resolve(value, context) {

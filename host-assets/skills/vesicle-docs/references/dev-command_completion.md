@@ -34,7 +34,7 @@ Return `null` when the command has no completable position at the current cursor
 | `items` | Immediate `OptionItem[]` candidates, or an async loader for runtime data. |
 | `complete` | Returns the complete, canonical composer draft for a selected candidate. |
 
-The resolver receives a host-owned `CommandCompletionContext`. It exposes configured provider data, the active provider, refreshed artifact and session stores, active Agent rows, and the project root. Add a context capability only when a new command needs a distinct host-owned source; do not read component signals or project files directly from a command definition.
+The resolver receives a host-owned `CommandCompletionContext`. It exposes configured provider data, the active provider, refreshed artifact and session stores, active Agent rows, guarded Workspace path candidates through `listWorkspaceTargets`, and the project root. Add a context capability only when a new command needs a distinct host-owned source; do not read component signals or project files directly from a command definition.
 
 ## Adding A Command
 

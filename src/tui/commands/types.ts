@@ -15,6 +15,7 @@ import type { SessionTitleSource } from "../../core/session/store";
 import type { PermissionMode } from "../../core/permissions";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
 import type { ThemePreference } from "../theme";
+import type { ProjectPathEntry } from "../../core/project/path-index";
 import type { WebSearchOverrideResult } from "../web-search-controller";
 import type {
   ActivityEntry,
@@ -42,7 +43,7 @@ export type CommandCompletionContext = {
   providerRegistry: () => ProviderRegistry | null;
   activeProvider: () => string;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
-  listWorkspaceTargets?: () => Promise<{ path: string; kind: "file" | "dir" }[]>;
+  listWorkspaceTargets?: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentOptions: () => OptionItem[];
 };

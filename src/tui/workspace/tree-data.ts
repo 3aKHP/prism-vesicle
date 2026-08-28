@@ -1,7 +1,8 @@
-import { constants, type Dirent, type Stats } from "node:fs";
+import { constants, type Stats } from "node:fs";
 import { access, lstat, open, readFile, readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import { assertProjectRelativePath } from "./paths";
+import { buildProjectPathIndex, type ProjectPathEntry } from "../../core/project/path-index";
 
 /**
  * Filesystem model for the Workspace page (Scope B / #62, milestone B2).
@@ -37,10 +38,10 @@ export type WorkspaceVisibleRow = {
   expanded: boolean;
 };
 
-export type WorkspacePathEntry = {
-  path: string;
-  kind: "file" | "dir";
-};
+export type WorkspacePathEntry = ProjectPathEntry;
+
+/** Compatibility export for Workspace-local callers; implementation is core-owned. */
+export const buildWorkspacePathIndex = buildProjectPathIndex;
 
 const HIDDEN_ENTRY_NAMES = new Set([".git", ".vesicle", "node_modules", "dist"]);
 
@@ -175,7 +176,7 @@ export async function buildFileIndex(
   rootDir: string,
   options: { showHidden: boolean },
 ): Promise<string[]> {
-  const entries = await buildWorkspacePathIndex(rootDir, options);
+  const entries = await buildProjectPathIndex(rootDir, options);
   return entries.filter((entry) => entry.kind === "file").map((entry) => entry.path);
 }
 
@@ -184,37 +185,6 @@ export async function buildFileIndex(
  * completion surfaces. Symlinks are excluded rather than followed so a
  * completion result can never disclose or traverse an external target.
  */
-export async function buildWorkspacePathIndex(
-  rootDir: string,
-  options: { showHidden: boolean },
-  maxEntries = 2000,
-): Promise<WorkspacePathEntry[]> {
-  const entries: WorkspacePathEntry[] = [];
-  async function walk(absDir: string): Promise<void> {
-    if (entries.length >= maxEntries) return;
-    let children: Dirent[];
-    try {
-      children = await readdir(absDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const child of children) {
-      if (entries.length >= maxEntries) return;
-      if (!options.showHidden && isHiddenName(child.name)) continue;
-      if (child.isSymbolicLink()) continue;
-      const abs = join(absDir, child.name);
-      const path = relative(rootDir, abs).split("\\").join("/");
-      if (child.isDirectory()) {
-        entries.push({ path, kind: "dir" });
-        await walk(abs);
-      } else if (child.isFile()) {
-        entries.push({ path, kind: "file" });
-      }
-    }
-  }
-  await walk(rootDir);
-  return entries.sort((left, right) => left.path.localeCompare(right.path));
-}
 
 /**
  * Subsequence fuzzy match over indexed paths. Scores basename-prefix and

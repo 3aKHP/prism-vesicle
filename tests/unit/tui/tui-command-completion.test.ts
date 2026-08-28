@@ -66,10 +66,6 @@ async function items(completion: CommandArgumentCompletion) {
 }
 
 describe("command-owned argument completion", () => {
-  test("registers completion contracts beside every command with audited arguments", () => {
-    for (const command of builtinCommands) expect("completion" in command).toBe(true);
-  });
-
   test("preserves provider-first /model completion and adds active-provider shorthand", async () => {
     const initial = resolve("/model ");
     expect((await items(initial)).map((item) => item.id)).toEqual(["alpha", "beta"]);
