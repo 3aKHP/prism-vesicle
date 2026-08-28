@@ -97,6 +97,11 @@ describe("workspace file index and matching", () => {
     expect(index.some((path) => path.startsWith("node_modules/"))).toBe(false);
   });
 
+  test("keeps symlinked files reachable from the quick-open file index", async () => {
+    await symlink(join(root, "novels/draft.md"), join(root, "draft-link.md"));
+    expect(await buildFileIndex(root, { showHidden: false })).toContain("draft-link.md");
+  });
+
   test("matches subsequences with basename-prefix hits first", async () => {
     const index = await buildFileIndex(root, { showHidden: false });
     const hits = matchFiles(index, "mira");

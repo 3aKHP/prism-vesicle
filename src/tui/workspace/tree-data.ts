@@ -1,8 +1,7 @@
-import { constants, type Stats } from "node:fs";
+import { constants, type Dirent, type Stats } from "node:fs";
 import { access, lstat, open, readFile, readdir } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import { assertProjectRelativePath } from "./paths";
-import { buildProjectPathIndex, type ProjectPathEntry } from "../../core/project/path-index";
 
 /**
  * Filesystem model for the Workspace page (Scope B / #62, milestone B2).
@@ -38,10 +37,6 @@ export type WorkspaceVisibleRow = {
   expanded: boolean;
 };
 
-export type WorkspacePathEntry = ProjectPathEntry;
-
-/** Compatibility export for Workspace-local callers; implementation is core-owned. */
-export const buildWorkspacePathIndex = buildProjectPathIndex;
 
 const HIDDEN_ENTRY_NAMES = new Set([".git", ".vesicle", "node_modules", "dist"]);
 
@@ -176,15 +171,27 @@ export async function buildFileIndex(
   rootDir: string,
   options: { showHidden: boolean },
 ): Promise<string[]> {
-  const entries = await buildProjectPathIndex(rootDir, options);
-  return entries.filter((entry) => entry.kind === "file").map((entry) => entry.path);
+  const files: string[] = [];
+  async function walk(absDir: string): Promise<void> {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!options.showHidden && isHiddenName(entry.name)) continue;
+      const abs = join(absDir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(abs);
+      } else if (entry.isFile() || entry.isSymbolicLink()) {
+        files.push(relative(rootDir, abs).split("\\").join("/"));
+      }
+    }
+  }
+  await walk(rootDir);
+  return files.sort();
 }
-
-/**
- * Recursively index visible project-relative files and directories for host
- * completion surfaces. Symlinks are excluded rather than followed so a
- * completion result can never disclose or traverse an external target.
- */
 
 /**
  * Subsequence fuzzy match over indexed paths. Scores basename-prefix and

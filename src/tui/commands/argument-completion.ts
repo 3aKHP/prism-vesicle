@@ -341,7 +341,7 @@ export const initCommandCompletion: CommandCompletion = {
     if (tokens.values.length !== 1 || tokens.trailingSpace || !tokens.values[0]?.startsWith("--")) return null;
     return completion("init:option", value, tokens.values[0], "init options", [
       { id: "--force", label: "--force", detail: "Back up and replace an existing VESICLE.md" },
-    ], () => "/init --force ");
+    ], (item) => `/init ${item.id} `);
   },
 };
 
