@@ -25,6 +25,7 @@ export type CommandCompletionControllerOptions = {
   providerRegistry: Accessor<ProviderRegistry | null>;
   activeProvider: Accessor<string>;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  listWorkspaceTargets?: () => Promise<{ path: string; kind: "file" | "dir" }[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
@@ -52,6 +53,7 @@ export function createCommandCompletionController(options: CommandCompletionCont
     providerRegistry: options.providerRegistry,
     activeProvider: options.activeProvider,
     refreshArtifacts: options.refreshArtifacts,
+    listWorkspaceTargets: options.listWorkspaceTargets,
     listSessions: options.listSessions,
     agentOptions,
   }));

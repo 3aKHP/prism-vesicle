@@ -485,6 +485,7 @@ export function App(props: AppProps = {}) {
       reject: setStatus,
     });
   }
+  const workspaceController = createWorkspaceController();
   const composerController = createComposerController({
     rootDir: process.cwd(),
     commands: builtinCommands,
@@ -499,6 +500,7 @@ export function App(props: AppProps = {}) {
     sessionId,
     refreshArtifacts,
     listSessions,
+    listWorkspaceTargets: () => workspaceController.listWorkspaceTargets(),
     busy,
     activeModelCapabilities,
     status,
@@ -625,7 +627,6 @@ export function App(props: AppProps = {}) {
     copyText: (text) => copyTextToClipboard(renderer, text),
   });
   // Two-page shell (Scope B): page state outlives the per-page components.
-  const workspaceController = createWorkspaceController();
   const workspaceActive = () => workspaceController.activePage() === "workspace";
   function switchPage(): void {
     setFocusedArtifactPath(null);

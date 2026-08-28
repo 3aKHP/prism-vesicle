@@ -317,6 +317,34 @@ export const resumeCommandCompletion: CommandCompletion = {
   },
 };
 
+export const titleCommandCompletion: CommandCompletion = {
+  resolve(value) {
+    const args = commandArguments(value, "title");
+    if (args === null) return null;
+    const tokens = splitTokens(args);
+    if (tokens.values.length > 1 || (tokens.values.length === 1 && tokens.trailingSpace)) return null;
+    const items: OptionItem[] = [
+      { id: "rename", label: "rename", detail: "Set a user-authored session title" },
+      { id: "regenerate", label: "regenerate", detail: "Reset automatic title generation attempts" },
+    ];
+    return completion("title:action", value, tokens.values[0] ?? "", "title actions", items, (item) =>
+      item.id === "rename" ? "/title rename " : "/title regenerate",
+    );
+  },
+};
+
+export const initCommandCompletion: CommandCompletion = {
+  resolve(value) {
+    const args = commandArguments(value, "init");
+    if (args === null) return null;
+    const tokens = splitTokens(args);
+    if (tokens.values.length !== 1 || tokens.trailingSpace || !tokens.values[0]?.startsWith("--")) return null;
+    return completion("init:option", value, tokens.values[0], "init options", [
+      { id: "--force", label: "--force", detail: "Back up and replace an existing VESICLE.md" },
+    ], () => "/init --force ");
+  },
+};
+
 export const stageCommandCompletion: CommandCompletion = {
   resolve(value, context) {
     const args = commandArguments(value, "stage");
@@ -346,8 +374,15 @@ export const skillCommandCompletion: CommandCompletion = {
     const args = commandArguments(value, "skill");
     if (args === null) return null;
     const tokens = splitTokens(args);
-    if (tokens.values.length > 1) return null;
-    if (tokens.values.length === 1 && tokens.trailingSpace) return null;
+    if (tokens.values.length > 2) return null;
+    if (tokens.values.length === 2 || (tokens.values.length === 1 && tokens.trailingSpace)) {
+      if (tokens.values.length === 2 && !tokens.values[1]!.startsWith("--")) return null;
+      const name = tokens.values[0];
+      if (!name) return null;
+      return completion("skill:option", value, tokens.values[1] ?? "", "skill options", [
+        { id: "--context-only", label: "--context-only", detail: "Activate without starting a provider request" },
+      ], () => `/skill ${name} --context-only`);
+    }
     return completion(
       "skill:name",
       value,
@@ -363,6 +398,27 @@ export const skillCommandCompletion: CommandCompletion = {
         }));
       },
       (item) => `/skill ${item.id} `,
+    );
+  },
+};
+
+export const workspaceCommandCompletion: CommandCompletion = {
+  resolve(value, context) {
+    const args = commandArguments(value, "workspace");
+    if (args === null) return null;
+    const tokens = splitTokens(args);
+    if (tokens.values.length > 1) return null;
+    return completion(
+      "workspace:targets",
+      value,
+      tokens.values[0] ?? "",
+      "workspace paths",
+      async () => (await context.listWorkspaceTargets?.() ?? []).map((entry) => ({
+        id: entry.path,
+        label: entry.path,
+        detail: entry.kind,
+      })),
+      (item) => `/workspace ${quoteArgument(item.id)}`,
     );
   },
 };
@@ -456,7 +512,7 @@ function quoteArgument(value: string): string {
 }
 
 function isFixedArgumentCommand(value: string): value is FixedArgumentCommand {
-  return value === "engine" || value === "effort" || value === "reasoning" || value === "permissions" || value === "theme";
+  return value === "engine" || value === "effort" || value === "reasoning" || value === "permissions" || value === "theme" || value === "websearch";
 }
 
 function optionScore(query: string, item: OptionItem): number {

@@ -16,6 +16,7 @@ export function createProviderCommands(ctx: ProviderCommandContext): Command[] {
       busyBehavior: immediate,
       description: "Show current context window usage",
       usage: "/context",
+      completion: null,
       async run(_args, raw) {
         ctx.setMessages((prev) => [
           ...prev,

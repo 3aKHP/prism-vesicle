@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Built-in command argument completion now covers the recent command surface.** `/websearch`, `/title`, `/init`, `/workspace`, and the `/skill --context-only` continuation now expose their finite or guarded runtime candidates through the shared ↑/↓/Tab/Enter popup. Every built-in command explicitly declares whether it owns completion, preventing new commands from silently omitting the contract.
+
 - **Windows system surfaces now use the full-size canonical ICO.** The installer places `prism-vesicle.ico` beside `vesicle.exe` and points Apps & Features, Start Menu, and Explorer integration at that multi-size file, preventing Windows Settings from enlarging a low-resolution executable frame into a blurred icon.
 
 - **Windows asset overlays and guarded-path diagnostics now match the cross-platform contracts.** A project or user asset file now shadows lower-layer descendants even when Windows reports the attempted child lookup as `ENOENT` instead of POSIX `ENOTDIR`, so direct reads and merged listings cannot disagree. Model-visible file tools also classify rooted Windows and root-relative paths through the platform path API before the existing project-boundary guard.

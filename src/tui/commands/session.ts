@@ -2,7 +2,7 @@
 // resume, rewind picker, mid-session compaction, and project initialisation.
 
 import { afterAgentLoop, immediate, parseInitCommandArgs, resolveSessionTarget } from "./dispatch";
-import { resumeCommandCompletion } from "./argument-completion";
+import { initCommandCompletion, resumeCommandCompletion, titleCommandCompletion } from "./argument-completion";
 import type { Command, SessionCommandContext } from "./types";
 
 export function createSessionCommands(ctx: SessionCommandContext): Command[] {
@@ -12,6 +12,7 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
       busyBehavior: immediate,
       description: "View, rename, or regenerate the session title",
       usage: "/title [rename <text>|regenerate]",
+      completion: titleCommandCompletion,
       async run(args, raw) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
         if (!ctx.title) {
@@ -47,6 +48,7 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
       busyBehavior: afterAgentLoop,
       description: "Summarize this session and replace old provider context",
       usage: "/compact [summary instructions]",
+      completion: null,
       async run(args, raw) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
         const result = await ctx.compactSession(args);
@@ -62,6 +64,7 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
       busyBehavior: afterAgentLoop,
       description: "Scan the project and generate a VESICLE.md of persistent instructions",
       usage: "/init [--force] [notes]",
+      completion: initCommandCompletion,
       async run(args, raw) {
         const parsed = parseInitCommandArgs(args);
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
@@ -78,6 +81,7 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
       busyBehavior: afterAgentLoop,
       aliases: ["checkpoint"],
       description: "Restore code and/or conversation to an earlier point",
+      completion: null,
       async run() {
         await ctx.openRewindPicker();
       },
@@ -87,6 +91,7 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
       name: "branch",
       busyBehavior: afterAgentLoop,
       description: "Browse and switch candidate branches at any depth (Ctrl+B)",
+      completion: null,
       async run() {
         await ctx.openBranchPicker();
       },
@@ -96,6 +101,7 @@ export function createSessionCommands(ctx: SessionCommandContext): Command[] {
       name: "new",
       busyBehavior: afterAgentLoop,
       description: "Start a fresh session",
+      completion: null,
       async run(_args, raw) {
         ctx.resetRewindState();
         ctx.theme.clearOverride();

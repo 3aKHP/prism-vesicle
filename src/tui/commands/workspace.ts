@@ -3,7 +3,7 @@
 // artifact-preview ports.
 
 import { afterToolRound, immediate, resolveArtifactTarget } from "./dispatch";
-import { artifactCommandCompletion } from "./argument-completion";
+import { artifactCommandCompletion, workspaceCommandCompletion } from "./argument-completion";
 import { renderValidationNotice } from "./render";
 import type { Command, WorkspaceCommandContext } from "./types";
 
@@ -14,6 +14,7 @@ export function createWorkspaceCommands(ctx: WorkspaceCommandContext): Command[]
       busyBehavior: immediate,
       description: "Open the Workspace page, optionally locating a file or directory",
       usage: "/workspace [path]",
+      completion: workspaceCommandCompletion,
       async run(args, raw) {
         const located = await ctx.openWorkspaceTarget(args.trim() || undefined);
         ctx.setStatus("workspace page");

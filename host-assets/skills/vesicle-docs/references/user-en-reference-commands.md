@@ -4,7 +4,7 @@
 
 English | [简体中文](../../zh-CN/reference/commands.md)
 
-Type a command starting with `/` in the input box; typing `/` opens a candidate menu (↑↓ to choose, Tab/Enter to complete, Esc to cancel). Each command owns its argument grammar.
+Type a command starting with `/` in the input box; typing `/` opens a candidate menu (↑↓ to choose, Tab/Enter to complete, Esc to cancel). Commands with finite or guarded runtime arguments also open the same menu after a space; free-text arguments remain ordinary text. Each command owns its argument grammar.
 
 ## Session and context
 

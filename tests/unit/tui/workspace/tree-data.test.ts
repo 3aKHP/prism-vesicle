@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   buildFileIndex,
+  buildWorkspacePathIndex,
   classifyFile,
   flattenVisibleTree,
   matchFiles,
@@ -77,6 +78,15 @@ describe("workspace tree flattening", () => {
 });
 
 describe("workspace file index and matching", () => {
+  test("indexes visible files and directories without following symlinks", async () => {
+    await symlink(join(root, "novels"), join(root, "linked-novels"));
+    const index = await buildWorkspacePathIndex(root, { showHidden: false });
+    expect(index).toContainEqual({ path: "workspace", kind: "dir" });
+    expect(index).toContainEqual({ path: "workspace/cards/mira.md", kind: "file" });
+    expect(index.some((entry) => entry.path.startsWith("linked-novels"))).toBe(false);
+    expect(index.some((entry) => entry.path.startsWith(".hidden"))).toBe(false);
+  });
+
   test("indexes visible files recursively, skipping hidden subtrees", async () => {
     const index = await buildFileIndex(root, { showHidden: false });
     expect(index).toContain("workspace/cards/mira.md");

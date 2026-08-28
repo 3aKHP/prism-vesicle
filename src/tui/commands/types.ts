@@ -42,6 +42,7 @@ export type CommandCompletionContext = {
   providerRegistry: () => ProviderRegistry | null;
   activeProvider: () => string;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  listWorkspaceTargets?: () => Promise<{ path: string; kind: "file" | "dir" }[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentOptions: () => OptionItem[];
 };
@@ -236,8 +237,8 @@ export type Command = {
   description: string;
   /** Usage hint, e.g. "/engine <id>". */
   usage?: string;
-  /** Optional command-owned argument grammar and candidate sources. */
-  completion?: CommandCompletion;
+  /** Command-owned argument grammar and candidate sources, or explicit null when none apply. */
+  completion: CommandCompletion | null;
   /**
    * Execute the command. `args` is the raw text after the command name
    * (trimmed, whitespace-normalised); `raw` is the full input including the

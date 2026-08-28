@@ -37,6 +37,11 @@ export type WorkspaceVisibleRow = {
   expanded: boolean;
 };
 
+export type WorkspacePathEntry = {
+  path: string;
+  kind: "file" | "dir";
+};
+
 const HIDDEN_ENTRY_NAMES = new Set([".git", ".vesicle", "node_modules", "dist"]);
 
 const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown", ".mdx"]);
@@ -170,26 +175,45 @@ export async function buildFileIndex(
   rootDir: string,
   options: { showHidden: boolean },
 ): Promise<string[]> {
-  const files: string[] = [];
+  const entries = await buildWorkspacePathIndex(rootDir, options);
+  return entries.filter((entry) => entry.kind === "file").map((entry) => entry.path);
+}
+
+/**
+ * Recursively index visible project-relative files and directories for host
+ * completion surfaces. Symlinks are excluded rather than followed so a
+ * completion result can never disclose or traverse an external target.
+ */
+export async function buildWorkspacePathIndex(
+  rootDir: string,
+  options: { showHidden: boolean },
+  maxEntries = 2000,
+): Promise<WorkspacePathEntry[]> {
+  const entries: WorkspacePathEntry[] = [];
   async function walk(absDir: string): Promise<void> {
-    let entries: Dirent[];
+    if (entries.length >= maxEntries) return;
+    let children: Dirent[];
     try {
-      entries = await readdir(absDir, { withFileTypes: true });
+      children = await readdir(absDir, { withFileTypes: true });
     } catch {
       return;
     }
-    for (const entry of entries) {
-      if (!options.showHidden && isHiddenName(entry.name)) continue;
-      const abs = join(absDir, entry.name);
-      if (entry.isDirectory()) {
+    for (const child of children) {
+      if (entries.length >= maxEntries) return;
+      if (!options.showHidden && isHiddenName(child.name)) continue;
+      if (child.isSymbolicLink()) continue;
+      const abs = join(absDir, child.name);
+      const path = relative(rootDir, abs).split("\\").join("/");
+      if (child.isDirectory()) {
+        entries.push({ path, kind: "dir" });
         await walk(abs);
-      } else if (entry.isFile() || entry.isSymbolicLink()) {
-        files.push(relative(rootDir, abs).split("\\").join("/"));
+      } else if (child.isFile()) {
+        entries.push({ path, kind: "file" });
       }
     }
   }
   await walk(rootDir);
-  return files.sort();
+  return entries.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 /**
