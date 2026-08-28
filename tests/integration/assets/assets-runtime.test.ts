@@ -177,6 +177,34 @@ describe("runtime assets", () => {
     }
   });
 
+  test("project and user asset-root files shadow lower-layer descendants", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-asset-root-shadow-"));
+    const project = join(root, "project");
+    const config = join(root, "config");
+    const bundled = join(root, "bundled-assets");
+    try {
+      await mkdir(project, { recursive: true });
+      await writeFile(join(project, "assets"), "project root blocker", "utf8");
+      await write(join(bundled, "specs", "lower.md"), "must stay hidden");
+      const resolver = new AssetResolver(project, {
+        env: { VESICLE_CONFIG_DIR: config },
+        bundledDirectory: bundled,
+        executablePath: join(root, "missing", "vesicle"),
+      });
+
+      await expect(resolver.readText("assets/specs/lower.md")).rejects.toThrow("shadowed by a file");
+      await expect(resolver.listDirectory("assets")).rejects.toThrow("not a directory");
+
+      await rm(join(project, "assets"));
+      await mkdir(config, { recursive: true });
+      await writeFile(join(config, "assets"), "user root blocker", "utf8");
+      await expect(resolver.readText("assets/specs/lower.md")).rejects.toThrow("shadowed by a file");
+      await expect(resolver.listDirectory("assets")).rejects.toThrow("not a directory");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("uses one managed baseline without falling through to bundled legacy files", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-managed-assets-"));
     const project = join(root, "project");

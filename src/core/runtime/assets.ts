@@ -432,15 +432,17 @@ async function resolveLayerEntry(
 ): Promise<{ absolutePath: string; info: Stats } | undefined> {
   if (!layerAllowsPath(layer, logicalPath)) return undefined;
   const suffix = logicalPath === "assets" ? "" : logicalPath.slice("assets/".length);
-  const candidate = join(layer.directory, ...suffix.split("/").filter(Boolean));
-  const entry = await lstat(candidate).catch((error: unknown) => {
-    if (isMissing(error)) return undefined;
-    if (errorCode(error) === "ENOTDIR") {
+  const suffixParts = suffix.split("/").filter(Boolean);
+  const candidate = join(layer.directory, ...suffixParts);
+  try {
+    await lstat(candidate);
+  } catch (error) {
+    if (errorCode(error) === "ENOTDIR" || (isMissing(error) && await hasFileAncestor(layer, logicalPath, suffixParts))) {
       throw new AssetPathShadowError(logicalPath);
     }
+    if (isMissing(error)) return undefined;
     throw assetAccessError(logicalPath, error);
-  });
-  if (!entry) return undefined;
+  }
 
   const [rootPath, absolutePath] = await Promise.all([realpath(layer.directory), realpath(candidate)]).catch((error: unknown) => {
     throw assetAccessError(logicalPath, error);
@@ -463,6 +465,32 @@ async function resolveLayerEntry(
     throw assetAccessError(logicalPath, error);
   });
   return { absolutePath, info };
+}
+
+/** Windows reports a descendant below a regular file as ENOENT, not ENOTDIR. */
+async function hasFileAncestor(
+  layer: AssetLayer,
+  logicalPath: string,
+  suffixParts: readonly string[],
+): Promise<boolean> {
+  let current = layer.directory;
+  const ancestors = [current];
+  for (const part of suffixParts.slice(0, -1)) {
+    current = join(current, part);
+    ancestors.push(current);
+  }
+  for (const ancestor of ancestors) {
+    let info: Stats;
+    try {
+      info = await lstat(ancestor);
+    } catch (error) {
+      if (isMissing(error) || errorCode(error) === "ENOTDIR") return false;
+      throw assetAccessError(logicalPath, error);
+    }
+    if (info.isSymbolicLink()) throw new Error(`Asset symlinks are not supported: ${logicalPath}.`);
+    if (info.isFile()) return true;
+  }
+  return false;
 }
 
 class AssetPathShadowError extends Error {

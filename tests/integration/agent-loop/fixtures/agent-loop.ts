@@ -99,6 +99,9 @@ export async function configureTestProviderEnv(options: { models?: string[]; vis
   ].join("\n"), "utf8");
   await writeFile(join(configDir, ".env"), "TEST_PROVIDER_API_KEY=test-key\n", "utf8");
   process.env.VESICLE_PROVIDERS_FILE = configPath;
+  // Keep Agent Loop tests hermetic from a developer's user-level MCP registry.
+  // MCP-specific fixtures write this sibling path explicitly when needed.
+  process.env.VESICLE_MCP_FILE = join(configDir, "mcp.yaml");
   delete process.env.TEST_PROVIDER_API_KEY;
   delete process.env.VESICLE_API_KEY;
   delete process.env.VESICLE_PROVIDER;
