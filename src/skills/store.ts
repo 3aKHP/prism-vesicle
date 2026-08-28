@@ -27,10 +27,10 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { Database } from "bun:sqlite";
 import { userConfigDirectory } from "../config/paths";
 import { computeBundleHash, hashBundleDirectory, inspectSkillBundle, stageSkillBundle } from "./bundle";
 import type { SkillBundleFile } from "./bundle";
+import { withSqliteMutex } from "./sqlite-mutex";
 
 const INDEX_SCHEMA = "prism-vesicle-skill-store/v1";
 const PROVENANCE_SCHEMA = "prism-vesicle-skill-provenance/v1";
@@ -555,63 +555,17 @@ function updateActiveIndex(
 }
 
 const INDEX_LOCK_DATABASE = "index-lock.sqlite";
-const INDEX_LOCK_TIMEOUT_MS = 10_000;
 /** Prefix for in-flight install staging directories inside a skill family. */
 const STAGING_DIR_PREFIX = ".staging-";
 
 /** Hold an exclusive cross-process lock around `critical`. */
 async function withIndexLock<T>(storeRoot: string, critical: () => Promise<T>): Promise<T> {
   await mkdir(storeRoot, { recursive: true });
-  const database = new Database(join(storeRoot, INDEX_LOCK_DATABASE), { create: true });
-  let transactionOpen = false;
-  try {
-    await beginIndexLockWithRetry(database);
-    transactionOpen = true;
-    return await critical();
-  } catch (error) {
-    if (isSqliteBusy(error)) {
-      throw new Error("Skill Store index is locked by another process; retry later.", { cause: error });
-    }
-    throw error;
-  } finally {
-    if (transactionOpen) {
-      try {
-        // The transaction carries no Store data; it exists only as a mutex.
-        // Rolling it back avoids a fallible commit after the JSON publication
-        // has already become durable.
-        database.exec("ROLLBACK");
-      } catch {
-        // close(false) below still releases the transaction. Never replace the
-        // truthful result of the external index operation with a cleanup error.
-      }
-    }
-    database.close(false);
-  }
-}
-
-async function beginIndexLockWithRetry(database: Database): Promise<void> {
-  const deadline = Date.now() + INDEX_LOCK_TIMEOUT_MS;
-  while (true) {
-    try {
-      database.exec("BEGIN IMMEDIATE");
-      return;
-    } catch (error) {
-      if (!isSqliteBusy(error)) throw error;
-      if (Date.now() >= deadline) {
-        throw new Error("Skill Store index is locked by another process; retry later.", { cause: error });
-      }
-      await Bun.sleep(50);
-    }
-  }
-}
-
-function isSqliteBusy(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const sqliteError = error as Error & { code?: unknown; errno?: unknown };
-  if (sqliteError.code === "SQLITE_BUSY") return true;
-  if (typeof sqliteError.code === "string" && sqliteError.code.startsWith("SQLITE_BUSY_")) return true;
-  if (typeof sqliteError.errno === "number" && (sqliteError.errno & 0xff) === 5) return true;
-  return /database is locked|database is busy/i.test(error.message);
+  return withSqliteMutex(
+    join(storeRoot, INDEX_LOCK_DATABASE),
+    "Skill Store index is locked by another process; retry later.",
+    critical,
+  );
 }
 
 async function updateActiveIndexCritical(

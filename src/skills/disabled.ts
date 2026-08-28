@@ -16,8 +16,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { Database } from "bun:sqlite";
 import { userConfigDirectory } from "../config/paths";
+import { withSqliteMutex } from "./sqlite-mutex";
 import type { SkillScope } from "./types";
 
 export function userDisabledPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -55,7 +55,6 @@ export async function setDisabled(path: string, name: string, disabled: boolean)
 }
 
 const disabledLockChains = new Map<string, Promise<unknown>>();
-const DISABLED_LOCK_TIMEOUT_MS = 5_000;
 
 function withDisabledLock<T>(path: string, critical: () => Promise<T>): Promise<T> {
   const prev = disabledLockChains.get(path) ?? Promise.resolve();
@@ -67,38 +66,11 @@ function withDisabledLock<T>(path: string, critical: () => Promise<T>): Promise<
 async function withDisabledCrossProcessLock<T>(path: string, critical: () => Promise<T>): Promise<T> {
   const lockDir = dirname(path);
   await mkdir(lockDir, { recursive: true });
-  const database = new Database(join(lockDir, ".disabled-lock.sqlite"), { create: true });
-  let transactionOpen = false;
-  const deadline = Date.now() + DISABLED_LOCK_TIMEOUT_MS;
-  const execWithBusyRetry = (statement: "BEGIN IMMEDIATE" | "COMMIT"): void => {
-    while (true) {
-      try {
-        database.exec(statement);
-        return;
-      } catch (error) {
-        if (!(error instanceof Error) || !/database is locked|database is busy/i.test(error.message)) throw error;
-        if (Date.now() >= deadline) throw new Error("Skill disable state is locked by another process; retry later.", { cause: error });
-        Bun.sleepSync(25);
-      }
-    }
-  };
-  return (async () => {
-    try {
-      execWithBusyRetry("BEGIN IMMEDIATE");
-      transactionOpen = true;
-      const result = await critical();
-      execWithBusyRetry("COMMIT");
-      transactionOpen = false;
-      return result;
-    } catch (error) {
-      if (transactionOpen) {
-        try { database.exec("ROLLBACK"); } catch { /* preserve original */ }
-      }
-      throw error;
-    } finally {
-      database.close(false);
-    }
-  })();
+  return withSqliteMutex(
+    join(lockDir, ".disabled-lock.sqlite"),
+    "Skill disable state is locked by another process; retry later.",
+    critical,
+  );
 }
 
 async function writeDisabledNames(path: string, names: Set<string>): Promise<void> {

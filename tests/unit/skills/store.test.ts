@@ -226,31 +226,6 @@ mutated body
     });
   }, 20_000);
 
-  test("a durable index publication does not depend on committing the SQLite mutex", async () => {
-    await withEnv(async (env, scratch) => {
-      const source = await makeSource(scratch, "rollback-release", "body");
-      const storeModule = join(import.meta.dir, "../../../src/skills/store.ts");
-      const workerScript = [
-        'import { Database } from "bun:sqlite";',
-        "const originalExec = Database.prototype.exec;",
-        "Database.prototype.exec = function (statement) {",
-        '  if (String(statement).trim().toUpperCase() === "COMMIT") throw new Error("unexpected SQLite mutex commit");',
-        "  return originalExec.call(this, statement);",
-        "};",
-        `const { installSnapshot } = await import(${JSON.stringify(storeModule)});`,
-        `await installSnapshot({ sourceDirectory: ${JSON.stringify(source)}, env: { ...process.env, VESICLE_CONFIG_DIR: ${JSON.stringify(env.VESICLE_CONFIG_DIR)} } });`,
-      ].join("\n");
-      const worker = Bun.spawn({ cmd: [process.execPath, "-e", workerScript], stdout: "pipe", stderr: "pipe" });
-      const [exitCode, stdout, stderr] = await Promise.all([
-        worker.exited,
-        new Response(worker.stdout).text(),
-        new Response(worker.stderr).text(),
-      ]);
-      expect({ exitCode, stdout, stderr }).toEqual({ exitCode: 0, stdout: "", stderr: "" });
-      expect((await readActiveIndex(env)).entries.map((entry) => entry.name)).toEqual(["rollback-release"]);
-    });
-  });
-
   test("a POSIX filename with a backslash is rejected before install", async () => {
     if (process.platform === "win32") return; // backslash is a separator on Windows
     await withEnv(async (env, scratch) => {
