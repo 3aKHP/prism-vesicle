@@ -19,6 +19,15 @@ const EMERALD = "#10b981";
 
 type Frame = (typeof WINDOWS_ICON_FRAMES)[number];
 
+type IconBuildManifest = {
+  schema: string;
+  renderer: string;
+  sources: Record<string, string>;
+  frames: Array<{ size: number; source: string; sha256: string }>;
+  wizard: { size: number; source: string; sha256: string };
+  outputs: { icoSha256: string; wizardSha256: string };
+};
+
 function hash(content: Uint8Array): string {
   return createHash("sha256").update(content).digest("hex");
 }
@@ -87,25 +96,60 @@ async function checkFile(path: string, expected: Buffer | string): Promise<boole
   return Buffer.isBuffer(expected) ? actual.equals(expected) : actual.toString("utf8") === expected;
 }
 
+async function checkTrackedOutputs(): Promise<string[]> {
+  const drift: string[] = [];
+  const manifest = await Bun.file(BUILD_MANIFEST_PATH).json().catch(() => undefined) as IconBuildManifest | undefined;
+  if (!manifest) return ["missing or malformed icon-build.json"];
+  if (manifest.schema !== WINDOWS_ICON_SCHEMA) drift.push("manifest schema");
+  if (manifest.renderer !== "@resvg/resvg-js@2.6.2") drift.push("renderer version");
+  const expectedFrames = WINDOWS_ICON_FRAMES.map(({ size, source }) => ({ size, source }));
+  const recordedFrames = manifest.frames.map(({ size, source }) => ({ size, source }));
+  if (JSON.stringify(recordedFrames) !== JSON.stringify(expectedFrames)) drift.push("frame inventory");
+  if (manifest.wizard.size !== WINDOWS_WIZARD_SIZE || manifest.wizard.source !== WINDOWS_ICON_SOURCES.mark) {
+    drift.push("wizard inventory");
+  }
+  if (manifest.wizard.sha256 !== manifest.frames.find((frame) => frame.size === WINDOWS_WIZARD_SIZE && frame.source === "mark")?.sha256) {
+    drift.push("wizard frame hash");
+  }
+  if (manifest.frames.some((frame) => !/^[0-9a-f]{64}$/.test(frame.sha256))) drift.push("frame hashes");
+  for (const relativePath of Object.values(WINDOWS_ICON_SOURCES)) {
+    const actual = await sourceHash(resolve(ROOT, relativePath));
+    if (manifest.sources[relativePath] !== actual) drift.push(`source ${relativePath}`);
+  }
+  const ico = await readFile(ICO_PATH).catch(() => undefined);
+  const wizard = await readFile(WIZARD_PATH).catch(() => undefined);
+  if (!ico || hash(ico) !== manifest.outputs.icoSha256) drift.push("prism-vesicle.ico");
+  if (!wizard || hash(wizard) !== manifest.outputs.wizardSha256 || hash(wizard) !== manifest.wizard.sha256) {
+    drift.push("prism-vesicle-wizard.png");
+  }
+  return drift;
+}
+
 export async function buildWindowsIcons(checkOnly = false): Promise<void> {
-  const outputs = await buildOutputs();
   if (checkOnly) {
-    const checks = await Promise.all([
-      checkFile(ICO_PATH, outputs.ico),
-      checkFile(WIZARD_PATH, outputs.wizard),
-      checkFile(BUILD_MANIFEST_PATH, outputs.manifest),
-    ]);
-    if (checks.every(Boolean)) {
+    const drift = await checkTrackedOutputs();
+    if (drift.length === 0) {
       console.log("Windows brand icon outputs are deterministic and in sync.");
       return;
     }
-    throw new Error("Windows brand icon outputs are missing or out of sync. Run bun run build:windows-icon.");
+    throw new Error(`Windows brand icon outputs are missing or out of sync (${drift.join(", ")}). Run bun run build:windows-icon.`);
   }
+  const outputs = await buildOutputs();
   await mkdir(dirname(ICO_PATH), { recursive: true });
   await writeFile(ICO_PATH, outputs.ico);
   await writeFile(WIZARD_PATH, outputs.wizard);
   await writeFile(BUILD_MANIFEST_PATH, outputs.manifest, "utf8");
   console.log(`Generated ${ICO_PATH}, ${WIZARD_PATH}, and ${BUILD_MANIFEST_PATH}.`);
+}
+
+export async function verifyWindowsIconRegeneration(): Promise<boolean> {
+  const outputs = await buildOutputs();
+  const checks = await Promise.all([
+    checkFile(ICO_PATH, outputs.ico),
+    checkFile(WIZARD_PATH, outputs.wizard),
+    checkFile(BUILD_MANIFEST_PATH, outputs.manifest),
+  ]);
+  return checks.every(Boolean);
 }
 
 if (import.meta.main) await buildWindowsIcons(process.argv.includes("--check"));

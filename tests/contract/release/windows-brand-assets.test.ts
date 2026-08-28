@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { WINDOWS_ICON_FRAMES, WINDOWS_ICON_SCHEMA, WINDOWS_WIZARD_SIZE } from "../../../brand/windows/icon-source.manifest";
-import { buildWindowsIcons } from "../../../scripts/build/build-windows-icon";
+import { buildWindowsIcons, verifyWindowsIconRegeneration } from "../../../scripts/build/build-windows-icon";
 
 const root = join(import.meta.dir, "..", "..", "..");
 
@@ -20,11 +20,15 @@ describe("Windows brand assets", () => {
     expect(encodedSizes).toEqual(WINDOWS_ICON_FRAMES.map((frame) => frame.size));
   });
 
-  test("keeps generated ICO, wizard image, and hash manifest byte-identical", async () => {
+  test("keeps tracked sources and outputs aligned with the hash manifest", async () => {
     await expect(buildWindowsIcons(true)).resolves.toBeUndefined();
     const manifest = await Bun.file(join(root, "brand", "windows", "icon-build.json")).json();
     expect(manifest.schema).toBe(WINDOWS_ICON_SCHEMA);
     expect(manifest.renderer).toBe("@resvg/resvg-js@2.6.2");
     expect(manifest.wizard.size).toBe(WINDOWS_WIZARD_SIZE);
+  });
+
+  test("regenerates the canonical ICO, wizard image, and manifest byte-identically", async () => {
+    expect(await verifyWindowsIconRegeneration()).toBe(true);
   });
 });
