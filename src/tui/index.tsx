@@ -1,5 +1,6 @@
 import { render } from "@3akhp/opentui-solid";
 import { App, type AppProps } from "./app";
+import { createTerminalTitleController } from "./terminal-title";
 import { runHostShutdownCleanups } from "../core/process/shutdown";
 import {
   createThemePreferenceController,
@@ -25,6 +26,7 @@ async function resolveThemeController(rootDir: string, cliPreference: "dark" | "
 
 export async function runTui(options: RunTuiOptions = {}): Promise<void> {
   const rootDir = process.cwd();
+  const terminalTitle = createTerminalTitleController();
   const theme = await resolveThemeController(rootDir, options.themePreference);
   theme.applyStartup();
   const themeProps: AppProps = {
@@ -32,10 +34,12 @@ export async function runTui(options: RunTuiOptions = {}): Promise<void> {
     initialResume: options.resume === true,
     bootstrapOnly: options.bootstrapOnly === true,
     theme,
+    terminalTitle,
     // The renderer must be destroyed first; only then start host cleanup and
     // force a normal exit. Waiting for onDestroy before cleanup leaves Bun stuck
     // after this App has rendered (observed with `bun run dev` Ctrl+C).
     onExit: () => {
+      terminalTitle.clear();
       void runHostShutdownCleanups().finally(() => process.exit(process.exitCode ?? 0));
     },
   };

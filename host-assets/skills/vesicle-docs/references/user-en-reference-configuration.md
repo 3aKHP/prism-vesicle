@@ -17,7 +17,7 @@ All configuration files live in one user directory:
 
 Override with environment variables: `VESICLE_CONFIG_DIR` (the whole directory) or `VESICLE_PROVIDERS_FILE` (just the providers file; its directory is used).
 
-Display variables unrelated to the config directory: `VESICLE_REDUCED_MOTION=1` freezes the startup splash as a still frame, for motion-sensitive users or low-power terminals. `VESICLE_THEME=dark|light|default|auto` selects the interface theme, with four value semantics: `dark`/`light` force a theme; `default` follows the terminal's own light/dark mode (falling back to dark until one reports); `auto` follows the clock (light 07:00–19:00 local, dark otherwise). An invalid value surfaces a diagnostic and falls back to `default` rather than being silently treated as `auto`. Inside a session `/theme` switches temporarily (higher priority), and at launch the `--dark`/`--light` process flags select the initial preference; per-project persistence is covered [below](#project-theme-preference-optional).
+Display variables unrelated to the config directory: `VESICLE_REDUCED_MOTION=1` freezes the startup splash as a still frame, for motion-sensitive users or low-power terminals. `VESICLE_THEME=dark|light|default|auto` selects the interface theme, with four value semantics: `dark`/`light` force a theme; `default` follows the terminal's own light/dark mode (falling back to dark until one reports); `auto` follows the clock (light 07:00–19:00 local, dark otherwise). `VESICLE_TERMINAL_TITLE=auto|on|off` controls mirroring the active session title to interactive terminal tabs; `auto` is enabled only on a real TTY. An invalid value surfaces a diagnostic and falls back to `default` rather than being silently treated as `auto`. Inside a session `/theme` switches temporarily (higher priority), and at launch the `--dark`/`--light` process flags select the initial preference; per-project persistence is covered [below](#project-theme-preference-optional).
 
 Files in that directory:
 
@@ -28,7 +28,7 @@ Files in that directory:
 | `mcp.yaml` | No | Optional MCP tool servers |
 | `permissions.yaml` | No | Tool-approval default and the `shell_exec` switch (see [permissions](./permissions-and-security.md)) |
 | `quality.yaml` | No | Experimental Semantic Judge (`version: 2`; `mode: off` may retain a dormant provider/model/timeout tuple). See [quality guard](../advanced/quality-guard.md); `/quality` is the normal path |
-| `settings.yaml` | No | User-level host settings (`editor:` for the Workspace `Ctrl+X` external editor; reserved for future settings) |
+| `settings.yaml` | No | User-level host settings (`editor:` for the Workspace `Ctrl+X` external editor; `sessionTitle: auto|off` controls automatic first-turn titles) |
 | `assets/` | No | User-level asset overrides |
 | `VESICLE.md` / `VESICLE.<engine>.md` | No | Persistent Instructions (user-level, applies across all projects; see below) |
 

@@ -28,6 +28,7 @@ import { projectSessionHistory, projectSessionHostState } from "./history-projec
 import { repairProviderHistory } from "./provider-history-repair";
 import { findPendingQualityDecision, findPendingQualityRewrite, findQualityEvents, findQualityWarnings } from "./quality-recovery";
 import { recoverSessionInteractions, type PendingDelegationRetry } from "./interaction-recovery";
+import { projectSessionTitle, projectSessionTitleUsage, type SessionTitle } from "./title";
 
 export { buildActiveSessionBranch } from "./record-model";
 export type { SessionRecord, SessionRole } from "./record-model";
@@ -36,6 +37,20 @@ export type { SessionStore } from "./append-store";
 export type { PendingDelegationRetry } from "./interaction-recovery";
 export { FAILED_TURN_KIND } from "./history-projector";
 export { projectSessionHistory } from "./history-projector";
+export {
+  SESSION_TITLE_KIND,
+  SESSION_TITLE_GENERATION_KIND,
+  SESSION_TITLE_USAGE_KIND,
+  projectSessionTitle,
+  projectSessionTitleGeneration,
+  projectSessionTitleUsage,
+  sanitizeSessionTitle,
+  generateSessionTitle,
+  maybeGenerateSessionTitle,
+  appendSessionTitle,
+  resetSessionTitleGeneration,
+} from "./title";
+export type { SessionTitle, SessionTitleSource, SessionTitleGenerationState, TitleGenerationResult } from "./title";
 export {
   bindExecutionRound,
   clearExecutionRound,
@@ -80,6 +95,9 @@ export type SessionSummary = {
    * what each session was about without parsing the whole transcript.
    */
   preview: string;
+  /** Durable host-only title, when one has been generated or set by the user. */
+  title?: string;
+  titleSource?: SessionTitle["source"];
   /**
    * True when the session currently ends at an unresolved
    * request_confirmation call. The TUI can resume this as an interactive gate
@@ -161,6 +179,7 @@ export async function listSessions(
     const allRecords = normalizeSessionRecords(lines.map((line) => JSON.parse(line) as Partial<SessionRecord>));
     if (!options.includeSubagents && allRecords[0]?.metadata?.kind === "subagent-session") continue;
     const records = buildActiveSessionBranch(allRecords);
+    const title = projectSessionTitle(allRecords);
     for (const record of records) {
       if (!firstRecord) firstRecord = record;
       lastRecord = record;
@@ -185,6 +204,7 @@ export async function listSessions(
       updatedAt: lastRecord.ts,
       recordCount: allRecords.length,
       preview,
+      ...(title ? { title: title.title, titleSource: title.source } : {}),
       ...(pendingGate ? { pendingGate: { gate: pendingGate.gate.gate, summary: pendingGate.gate.summary } } : {}),
       ...(pendingEngineSwitch
         ? { pendingEngineSwitch: { targetEngine: pendingEngineSwitch.request.targetEngine, reason: pendingEngineSwitch.request.reason } }
@@ -284,6 +304,9 @@ export type SessionSnapshot = {
   harness?: HarnessRuntimeIdentity;
   /** Frozen Skill catalog snapshot persisted in the session header or a `skill-catalog` record. */
   skillCatalogSnapshot?: SkillCatalogSnapshot;
+  /** Host-only auxiliary usage (for example session-title generation). */
+  auxiliaryUsage?: ResponseUsage[];
+  title?: SessionTitle;
   /** Frozen character/scenario context for a Stage session. */
   stageBootstrap?: StageBootstrapMetadata;
   pendingGate?: {
@@ -392,6 +415,8 @@ export async function loadSessionSnapshot(
     ...(projection.assets ? { assets: projection.assets } : {}),
     ...(projection.harness ? { harness: projection.harness } : {}),
     ...(projection.skillCatalogSnapshot ? { skillCatalogSnapshot: projection.skillCatalogSnapshot } : {}),
+    ...(projectSessionTitleUsage(allRecords).length > 0 ? { auxiliaryUsage: projectSessionTitleUsage(allRecords) } : {}),
+    ...(projectSessionTitle(allRecords) ? { title: projectSessionTitle(allRecords) } : {}),
     ...(stageBootstrap ? { stageBootstrap } : {}),
     ...(pendingGate
       ? {

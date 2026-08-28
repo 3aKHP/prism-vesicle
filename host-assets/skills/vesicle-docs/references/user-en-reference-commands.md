@@ -20,6 +20,9 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/context` | Show current context usage and window occupancy |
 | `/instructions` | Show the Persistent Instructions active for the current engine (files, byte sizes, budget, and warnings) |
 | `/btw <question>` | Ask a temporary side question about the current conversation without interrupting the turn; no args reopens the latest answer |
+| `/title` | Show the durable session title and source |
+| `/title rename <text>` | Set a permanent user-authored session title |
+| `/title regenerate` | Reset automatic title-generation attempts |
 
 ## Model and engine
 

@@ -1,12 +1,47 @@
 // /new, /resume, /rewind, /compact, /init — session lifecycle: fresh session,
 // resume, rewind picker, mid-session compaction, and project initialisation.
 
-import { afterAgentLoop, parseInitCommandArgs, resolveSessionTarget } from "./dispatch";
+import { afterAgentLoop, immediate, parseInitCommandArgs, resolveSessionTarget } from "./dispatch";
 import { resumeCommandCompletion } from "./argument-completion";
 import type { Command, SessionCommandContext } from "./types";
 
 export function createSessionCommands(ctx: SessionCommandContext): Command[] {
   return [
+    {
+      name: "title",
+      busyBehavior: immediate,
+      description: "View, rename, or regenerate the session title",
+      usage: "/title [rename <text>|regenerate]",
+      async run(args, raw) {
+        ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
+        if (!ctx.title) {
+          ctx.setMessages((prev) => [...prev, { role: "system", content: "Session titles are unavailable." }]);
+          return;
+        }
+        const trimmed = args.trim();
+        if (!trimmed) {
+          const current = await ctx.title.current();
+          ctx.setMessages((prev) => [...prev, { role: "system", content: current.title ? `Title: ${current.title} (${current.source ?? "unknown"})` : "Title: (not set)" }]);
+          return;
+        }
+        if (trimmed === "regenerate") {
+          await ctx.title.regenerate();
+          ctx.setMessages((prev) => [...prev, { role: "system", content: "Session title generation has been reset." }]);
+          return;
+        }
+        if (trimmed.startsWith("rename ")) {
+          const value = trimmed.slice("rename ".length).trim();
+          if (!value) {
+            ctx.setMessages((prev) => [...prev, { role: "system", content: "Usage: /title rename <text>" }]);
+            return;
+          }
+          await ctx.title.rename(value);
+          ctx.setMessages((prev) => [...prev, { role: "system", content: "Session title updated." }]);
+          return;
+        }
+        ctx.setMessages((prev) => [...prev, { role: "system", content: "Usage: /title, /title rename <text>, or /title regenerate" }]);
+      },
+    },
     {
       name: "compact",
       busyBehavior: afterAgentLoop,

@@ -198,7 +198,9 @@ export async function runValidate(): Promise<void> {
     results.push({
       file: "settings.yaml",
       ok: true,
-      detail: settings.exists ? (settings.editor ? `editor=${settings.editor}` : "configured, no editor set") : "not configured",
+      detail: settings.exists
+        ? [settings.editor ? `editor=${settings.editor}` : undefined, `sessionTitle=${settings.sessionTitle ?? "auto"}`].filter(Boolean).join(", ")
+        : "not configured (sessionTitle=auto)",
     });
   } catch (error) {
     results.push({ file: "settings.yaml", ok: false, detail: messageOf(error) });
