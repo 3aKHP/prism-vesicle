@@ -11,6 +11,7 @@ import type { EngineId } from "../../core/engine/profile";
 import type { EngineTransition } from "../../core/engine/transition";
 import type { ReasoningTier, VesicleMessage } from "../../providers/shared/types";
 import type { ReasoningDisplayMode, SessionSummary } from "../../core/session/store";
+import type { SessionTitleSource } from "../../core/session/store";
 import type { PermissionMode } from "../../core/permissions";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
 import type { ThemePreference } from "../theme";
@@ -156,7 +157,7 @@ export type SessionCommandContext = CommandActivityPort & {
   webSearch: { clearOverride: () => void };
   title?: {
     sessionId: () => string | undefined;
-    current: () => Promise<{ title?: string; source?: string }>;
+    current: () => Promise<{ title?: string; source?: SessionTitleSource }>;
     rename: (title: string) => Promise<void>;
     regenerate: () => Promise<void>;
   };
