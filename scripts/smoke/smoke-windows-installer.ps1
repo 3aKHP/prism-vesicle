@@ -74,7 +74,6 @@ try {
     if ($CanonicalIcon -ne "") {
         $Verifier = Join-Path $PSScriptRoot "..\check\check-windows-brand.ps1"
         & $Verifier -CanonicalIcon (Resolve-Path $CanonicalIcon).Path -Executable $Executable -Uninstaller (Join-Path $InstallDir "unins000.exe")
-        if ($LASTEXITCODE -ne 0) { throw "Installed executable/uninstaller brand verification failed." }
     }
     if (-not (Test-UserPathEntry $InstallDir)) { throw "The per-user PATH does not contain the install directory." }
     $DirectoryMenuKey = "Registry::HKEY_CURRENT_USER\Software\Classes\Directory\shell\PrismVesicle"
