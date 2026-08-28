@@ -164,5 +164,7 @@ describe("release workflow contract", () => {
     expect(commands).toContain("check-windows-brand.ps1");
     expect(commands).toContain("bun run build:installer");
     expect(commands).toContain("smoke-windows-installer.ps1");
+    expect(build.jobs.checks?.steps?.find((step) => step.uses === "actions/checkout@v7")?.with?.lfs).toBe(true);
+    expect(build.jobs.windows?.steps?.find((step) => step.uses === "actions/checkout@v7")?.with?.lfs).toBe(true);
   });
 });
