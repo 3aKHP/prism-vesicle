@@ -474,11 +474,15 @@ async function hasFileAncestor(
   suffixParts: readonly string[],
 ): Promise<boolean> {
   let current = layer.directory;
+  const ancestors = [current];
   for (const part of suffixParts.slice(0, -1)) {
     current = join(current, part);
+    ancestors.push(current);
+  }
+  for (const ancestor of ancestors) {
     let info: Stats;
     try {
-      info = await lstat(current);
+      info = await lstat(ancestor);
     } catch (error) {
       if (isMissing(error) || errorCode(error) === "ENOTDIR") return false;
       throw assetAccessError(logicalPath, error);
