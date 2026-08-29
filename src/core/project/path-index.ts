@@ -1,4 +1,3 @@
-import { type Dirent } from "node:fs";
 import { relative, sep } from "node:path";
 import { projectPathRoot } from "./roots";
 import { observeDirectory, type ObservedDirectoryEntry } from "./directory-observation";
