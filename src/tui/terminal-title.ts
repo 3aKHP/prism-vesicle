@@ -36,7 +36,7 @@ export type TerminalTitleController = {
   enabled: () => boolean;
 };
 
-const WORKING_FRAMES = ["‹", "◇", "›", "◇"] as const;
+const WORKING_FRAMES = ["◇", "◈", "◆", "◈"] as const;
 export const TERMINAL_TITLE_FRAME_INTERVAL_MS = 800;
 const DEFAULT_MAX_WIDTH = 120;
 

@@ -51,6 +51,14 @@ export function treeSitterWorkerPathForTarget(targetId: string): string {
   return `${bunfsRoot}${TREE_SITTER_WORKER_RUNTIME_NAME}`;
 }
 
+export function assertNativeWindowsBuildRoot(platform: NodeJS.Platform, cwd: string): void {
+  if (platform === "win32" && /^(?:\\\\|\/\/)/.test(cwd)) {
+    throw new Error(
+      "Native Windows standalone builds require a drive-letter workspace; Bun does not preserve the embedded Worker path from a UNC build root.",
+    );
+  }
+}
+
 async function readInstalledCoreVersion(): Promise<string> {
   const pkg = await Bun.file("node_modules/@3akhp/opentui-core/package.json").json();
   if (!pkg.version) {
@@ -155,6 +163,7 @@ async function main(): Promise<void> {
   const selected = arg ? [arg] : ["windows", "linux"];
 
   if (selected.includes("windows")) {
+    assertNativeWindowsBuildRoot(process.platform, process.cwd());
     // A stale artifact from the other host class must never be mistaken for the
     // output of this build (especially by installer staging on WSL).
     const incompatibleArtifact = process.platform === "win32" ? WINDOWS_CROSS_ARTIFACT : WINDOWS_RELEASE_ARTIFACT;
