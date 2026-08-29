@@ -1,7 +1,7 @@
 import { type Dirent } from "node:fs";
-import { readdir } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { relative, sep } from "node:path";
 import { projectPathRoot } from "./roots";
+import { observeDirectory, type ObservedDirectoryEntry } from "./directory-observation";
 
 export type ProjectPathEntry = {
   path: string;
@@ -20,30 +20,16 @@ export async function buildProjectPathIndex(
   rootDir: string,
   options: { showHidden?: boolean } = {},
 ): Promise<ProjectPathEntry[]> {
-  const entries: ProjectPathEntry[] = [];
-  async function walk(absDir: string): Promise<void> {
-    if (entries.length >= MAX_PROJECT_PATH_ENTRIES) return;
-    let children: Dirent[];
-    try {
-      children = await readdir(absDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const child of children) {
-      if (entries.length >= MAX_PROJECT_PATH_ENTRIES) return;
-      if (!options.showHidden && isHiddenProjectName(child.name)) continue;
-      if (child.isSymbolicLink()) continue;
-      const abs = join(absDir, child.name);
-      const path = relative(rootDir, abs).split(sep).join("/");
-      if (!projectPathRoot(path)) continue;
-      if (child.isDirectory()) {
-        entries.push({ path, kind: "dir" });
-        await walk(abs);
-      } else if (child.isFile()) {
-        entries.push({ path, kind: "file" });
-      }
-    }
-  }
-  await walk(rootDir);
-  return entries.sort((left, right) => left.path.localeCompare(right.path));
+  const ignored = options.showHidden ? undefined : HIDDEN_ENTRY_NAMES;
+  const observed = await observeDirectory(rootDir, {
+    recursive: true,
+    entryLimit: MAX_PROJECT_PATH_ENTRIES,
+    ignoreNames: ignored,
+    includeTypes: new Set<ObservedDirectoryEntry["type"]>(["file", "directory"]),
+    tolerateDescendantErrors: true,
+  });
+  return observed.entries.map((entry) => {
+    const path = relative(rootDir, entry.absolutePath).split(sep).join("/");
+    return { path, kind: entry.type === "directory" ? "dir" : "file" };
+  }).filter((entry) => projectPathRoot(entry.path));
 }
