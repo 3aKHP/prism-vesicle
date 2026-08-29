@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Session-title generation keeps project and configuration ownership stable.** The auxiliary request now resolves `settings.yaml` from an explicit host-environment input instead of rereading mutable process-global test state, and active cancellation ownership is keyed by project root plus session id. Resetting a same-named session in another project can no longer abort the wrong request, while a stale cancelled request cannot detach the controller that replaced it.
+
 - **Built-in command argument completion now covers the recent command surface.** `/websearch`, `/title`, `/init`, `/workspace`, and the `/skill --context-only` continuation now expose their finite or guarded runtime candidates through the shared ↑/↓/Tab/Enter popup. Every built-in command explicitly declares whether it owns completion, preventing new commands from silently omitting the contract.
 
 - **Windows system surfaces now use the full-size canonical ICO.** The installer places `prism-vesicle.ico` beside `vesicle.exe` and points Apps & Features, Start Menu, and Explorer integration at that multi-size file, preventing Windows Settings from enlarging a low-resolution executable frame into a blurred icon.
