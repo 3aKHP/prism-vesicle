@@ -5,7 +5,7 @@ import type { SessionRecord } from "./record-model";
 import type { SessionStore } from "./append-store";
 import { createSessionStore } from "./append-store";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { normalizeSessionRecords } from "./record-model";
 
 async function readRecords(rootDir: string, sessionId: string): Promise<SessionRecord[]> {
@@ -28,6 +28,12 @@ export type SessionTitleGenerationState = {
   settled?: boolean;
   claimUntil?: string;
 };
+
+function titleControllerKey(rootDir: string, sessionId: string): string {
+  // NUL cannot occur in a path or session id, so it safely separates the
+  // components; resolve() keeps equivalent relative and absolute paths aligned.
+  return `${resolve(rootDir)}\0${sessionId}`;
+}
 
 function metadataRecords(records: SessionRecord[], kind: string): Record<string, unknown>[] {
   return records.flatMap((record) => {
@@ -182,14 +188,16 @@ export async function maybeGenerateSessionTitle(options: {
   session: SessionStore;
   provider: ProviderAdapter;
   config: VesicleConfig;
+  env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   onTitleChanged?: (title: string, sessionId: string) => void;
 }): Promise<void> {
-  const settings = await loadSettings();
+  const env = options.env ?? process.env;
+  const settings = await loadSettings(env);
   // Existing provider fixtures intentionally omit host settings; keeping the
   // implicit default side-effect-free there avoids an auxiliary request racing
   // tests that replace the process transport. Production defaults remain auto.
-  if (process.env.NODE_ENV === "test" && !settings.exists) return;
+  if (env.NODE_ENV === "test" && !settings.exists) return;
   if ((settings.sessionTitle ?? "auto") !== "auto") return;
   const records = await readRecords(options.rootDir, options.session.sessionId);
   if (projectSessionTitle(records)?.source === "user") return;
@@ -207,11 +215,12 @@ export async function maybeGenerateSessionTitle(options: {
     return;
   }
   const controller = new AbortController();
-  activeTitleControllers.set(options.session.sessionId, controller);
+  const controllerKey = titleControllerKey(options.rootDir, options.session.sessionId);
+  activeTitleControllers.set(controllerKey, controller);
   if (options.signal?.aborted) controller.abort(options.signal.reason);
   else options.signal?.addEventListener("abort", () => controller.abort(options.signal?.reason), { once: true });
   const result = await generateSessionTitle({ provider: options.provider, config: options.config, userContent: turn.user.content, assistantContent: turn.assistant.content, signal: controller.signal });
-  activeTitleControllers.delete(options.session.sessionId);
+  if (activeTitleControllers.get(controllerKey) === controller) activeTitleControllers.delete(controllerKey);
   const latest = await readRecords(options.rootDir, options.session.sessionId);
   if (projectSessionTitle(latest)?.source === "user") return;
   const latestState = projectSessionTitleGeneration(latest);
@@ -256,8 +265,9 @@ export async function appendSessionTitle(rootDir: string, sessionId: string, tit
 }
 
 export async function resetSessionTitleGeneration(rootDir: string, sessionId: string): Promise<void> {
-  activeTitleControllers.get(sessionId)?.abort();
-  activeTitleControllers.delete(sessionId);
+  const controllerKey = titleControllerKey(rootDir, sessionId);
+  activeTitleControllers.get(controllerKey)?.abort();
+  activeTitleControllers.delete(controllerKey);
   const session = await createSessionStore(rootDir, sessionId);
   await session.append({ role: "system", content: "", metadata: { kind: SESSION_TITLE_GENERATION_KIND, version: 1, attempts: 0, settled: false } });
 }
