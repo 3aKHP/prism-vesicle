@@ -11,9 +11,9 @@
   "engines": {
     "dyad": {
       "budgetCharacters": 24000,
-      "usedCharacters": 1248,
-      "remainingCharacters": 22752,
-      "usedBytes": 2170,
+      "usedCharacters": 1847,
+      "remainingCharacters": 22153,
+      "usedBytes": 3161,
       "sections": [
         {
           "path": "assets/prompts/host/runtime.md",
@@ -27,16 +27,16 @@
         },
         {
           "path": "assets/prompts/engines/dyad.md",
-          "characters": 937,
-          "bytes": 1569
+          "characters": 1536,
+          "bytes": 2560
         }
       ]
     },
     "etl": {
       "budgetCharacters": 24000,
-      "usedCharacters": 3543,
-      "remainingCharacters": 20457,
-      "usedBytes": 5787,
+      "usedCharacters": 3583,
+      "remainingCharacters": 20417,
+      "usedBytes": 5901,
       "sections": [
         {
           "path": "assets/prompts/host/authoring.md",
@@ -45,8 +45,8 @@
         },
         {
           "path": "assets/prompts/engines/etl.md",
-          "characters": 3463,
-          "bytes": 5557
+          "characters": 3503,
+          "bytes": 5671
         }
       ]
     },
@@ -75,9 +75,9 @@
     },
     "runtime": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2627,
-      "remainingCharacters": 21373,
-      "usedBytes": 4601,
+      "usedCharacters": 2796,
+      "remainingCharacters": 21204,
+      "usedBytes": 5018,
       "sections": [
         {
           "path": "assets/prompts/host/runtime.md",
@@ -91,16 +91,16 @@
         },
         {
           "path": "assets/prompts/engines/runtime.md",
-          "characters": 2316,
-          "bytes": 4000
+          "characters": 2485,
+          "bytes": 4417
         }
       ]
     },
     "stage": {
       "budgetCharacters": 24000,
-      "usedCharacters": 4397,
-      "remainingCharacters": 19603,
-      "usedBytes": 8936,
+      "usedCharacters": 4447,
+      "remainingCharacters": 19553,
+      "usedBytes": 9062,
       "sections": [
         {
           "path": "assets/prompts/host/consumer-stage.md",
@@ -114,16 +114,16 @@
         },
         {
           "path": "assets/prompts/engines/stage.md",
-          "characters": 4086,
-          "bytes": 8335
+          "characters": 4136,
+          "bytes": 8461
         }
       ]
     },
     "weaver": {
       "budgetCharacters": 24000,
-      "usedCharacters": 3289,
-      "remainingCharacters": 20711,
-      "usedBytes": 6823,
+      "usedCharacters": 3325,
+      "remainingCharacters": 20675,
+      "usedBytes": 6915,
       "sections": [
         {
           "path": "assets/prompts/host/writing.md",
@@ -137,16 +137,16 @@
         },
         {
           "path": "assets/prompts/engines/weaver.md",
-          "characters": 2977,
-          "bytes": 6219
+          "characters": 3013,
+          "bytes": 6311
         }
       ]
     },
     "weaver-orch": {
       "budgetCharacters": 24000,
-      "usedCharacters": 3305,
-      "remainingCharacters": 20695,
-      "usedBytes": 5572,
+      "usedCharacters": 3438,
+      "remainingCharacters": 20562,
+      "usedBytes": 5807,
       "sections": [
         {
           "path": "assets/prompts/host/writing.md",
@@ -160,8 +160,8 @@
         },
         {
           "path": "assets/prompts/engines/weaver-orch.md",
-          "characters": 2993,
-          "bytes": 4968
+          "characters": 3126,
+          "bytes": 5203
         }
       ]
     }
@@ -210,9 +210,9 @@
     },
     "scene-writer": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2516,
-      "remainingCharacters": 21484,
-      "usedBytes": 5554,
+      "usedCharacters": 2520,
+      "remainingCharacters": 21480,
+      "usedBytes": 5566,
       "sections": [
         {
           "path": "assets/prompts/host/writing.md",
@@ -226,8 +226,8 @@
         },
         {
           "path": "assets/prompts/agents/scene-writer.md",
-          "characters": 2204,
-          "bytes": 4950
+          "characters": 2208,
+          "bytes": 4962
         }
       ]
     }

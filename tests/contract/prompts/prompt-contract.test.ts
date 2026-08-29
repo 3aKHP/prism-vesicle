@@ -8,6 +8,7 @@ import { engineIds, loadEngineProfile } from "../../../src/core/engine/profile";
 import { getEffectivePromptToolNames } from "../../../src/cli/commands/prompt-dump";
 import { createEmptyMcpRegistry } from "../../../src/mcp/registry";
 import { createAssetResolver } from "../../../src/core/runtime/assets";
+import { composeSystemPrompt, loadPromptBundle } from "../../../src/core/prompt/loader";
 
 const rootDir = process.cwd();
 const assets = createAssetResolver(rootDir);
@@ -36,13 +37,40 @@ describe("prompt interaction contracts", () => {
   });
 
   test("Stage retains the compact Phase II prose and anti-AI constraints", async () => {
-    const stagePrompt = await readAsset("assets/prompts/engines/stage.md");
+    const stagePrompt = await composedPrompt("stage");
 
     expect(stagePrompt).toContain("## 反 AI 味约束");
     expect(stagePrompt).toContain("不是……而是……");
     expect(stagePrompt).toContain("空气中弥漫着");
     expect(stagePrompt).toContain("<!--[!Neural Chain]-->` 内部可使用结构术语");
     expect(stagePrompt).toContain("有首 beat 时");
+    expect(stagePrompt).toContain("结构输出使用英文半角标点");
+    expect(stagePrompt).toContain("```html\n<!--\n[!Neural Chain]");
+    expect(stagePrompt).toContain("```text\n【Status】");
+  });
+
+  test("stable Harness output and checkpoint guidance reaches composed prompts", async () => {
+    const [dyadPrompt, etlPrompt, orchestratorPrompt] = await Promise.all([
+      composedPrompt("dyad"),
+      composedPrompt("etl"),
+      composedPrompt("weaver-orch"),
+    ]);
+
+    expect(dyadPrompt).toContain("每轮以 `## Turn {N}` 为分隔追加到日志");
+    expect(dyadPrompt).toContain("[回应正文：200–800 字简体中文高密度叙事");
+    expect(etlPrompt).toContain("完成后输出各文件路径与压缩要点摘要");
+    expect(orchestratorPrompt).toContain("`Mode A` 为章节级（章节编译后）");
+    expect(orchestratorPrompt).toContain("`Mode B` 为场景级（每个 Scene 后）");
+  });
+
+  test("stable Harness template corrections are available through the active asset resolver", async () => {
+    const [moduleA, outline] = await Promise.all([
+      readAsset("assets/templates/tpl_module_a.md"),
+      readAsset("assets/templates/tpl_outline.md"),
+    ]);
+
+    expect(moduleA).toContain("- Extreme access condition:");
+    expect(outline).toContain("## Volume 1: [卷名] [可选，单卷/纯章项目删除此块]");
   });
 
   test("assets do not expose mismatched RooCode-era tool names", async () => {
@@ -126,6 +154,11 @@ describe("prompt audit tool surface", () => {
 
 async function readAsset(path: string): Promise<string> {
   return assets.readText(path);
+}
+
+async function composedPrompt(engine: (typeof engineIds)[number]): Promise<string> {
+  const profile = await loadEngineProfile(engine, rootDir, assets);
+  return composeSystemPrompt(await loadPromptBundle(profile, rootDir, assets));
 }
 
 async function listTextAssets(path: string): Promise<string[]> {

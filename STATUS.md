@@ -1,16 +1,16 @@
 # Prism Vesicle Project Status
 
-_Snapshot: 1.0.0-beta.2 (2026-08-24)._
+_Snapshot: current `develop` (2026-08-29), targeting 1.0.0-rc.1. Latest public release: 1.0.0-beta.2._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Release candidate: **1.0.0-beta.2**. The `State` column tracks the candidate's public contract: `released` = included in the 1.0.0-beta.2 GitHub Release and npm package once the accepted candidate is tagged; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)).
+Development package version: **1.0.0-beta.2**. Next release candidate: **1.0.0-rc.1**. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact 1.0.0-beta.2 contents.
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
-| Assets | Bundled V10 Harness (`prism-engine-v10@10.3.0-alpha.2`, verified 73-file inventory) | released |
+| Assets | Bundled V10 Harness (`prism-engine-v10@10.3.0`, verified 73-file inventory) | released |
 | Assets | Managed Harness Packs: offline `status` / `verify` / `install` / `use` / `rollback`, plus asset-overlay `init` / `materialize` | released |
 | Providers | OpenAI-compatible Chat, Anthropic Messages, and Gemini adapters with SSE streaming | released |
 | Providers | Explicit Responses profiles: official OpenAI HTTP/SSE/WebSocket + remote compact, and frozen MiMo/DeepSeek HTTP subsets | released |

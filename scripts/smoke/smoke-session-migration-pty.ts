@@ -29,12 +29,12 @@ const REPO_ROOT = join(import.meta.dir, "..", "..");
 
 const oldIdentity = {
   packId: "prism-engine-v10",
-  packVersion: "10.3.0-alpha.1",
-  sourceCommit: "0".repeat(40),
-  manifestSha256: "1".repeat(64),
+  packVersion: "10.3.0-alpha.2",
+  sourceCommit: "a31104b985aef35012bc4e2d0bd6d3e43a18e1e1",
+  manifestSha256: "def33899671ec8a88a89f9766fb492ee52d586c68542716b56fef5793b86648c",
   adapterId: "vesicle-v1",
   adapterVersion: "1.1.0",
-  adapterHash: "2".repeat(64),
+  adapterHash: "62e8cace6a1ca79d248ebe8ce2f092fd26643bd305d6ac75081ca1036a8c1197",
 };
 
 async function tmux(...args: string[]): Promise<string> {

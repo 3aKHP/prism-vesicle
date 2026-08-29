@@ -1,7 +1,7 @@
 {
   "schema": "prism-driver-contract/v1",
   "id": "prism-engine-v10",
-  "version": "10.3.0-alpha.2",
+  "version": "10.3.0",
   "protocolVersion": "v10.1-prompt-assembly",
   "resources": {
     "prompt.engine.etl": {
