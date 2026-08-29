@@ -73,6 +73,36 @@ describe("terminal title controller", () => {
     expect(fixture.titles).toEqual(["· Demo"]);
   });
 
+  test("restarts working animation when the renderer writer is replaced", () => {
+    const first = writerFixture();
+    const second = writerFixture();
+    let tick: (() => void) | undefined;
+    let intervals = 0;
+    let cleared = 0;
+    const controller = createTerminalTitleController({
+      writer: first.writer,
+      isTTY: true,
+      timers: {
+        setInterval: (handler) => {
+          intervals += 1;
+          tick = handler;
+          return intervals as unknown as ReturnType<typeof setInterval>;
+        },
+        clearInterval: () => { cleared += 1; },
+      },
+    });
+
+    controller.setSession("etl", "Demo");
+    controller.setPhase("working");
+    controller.attach(second.writer);
+    tick?.();
+
+    expect(intervals).toBe(2);
+    expect(cleared).toBe(1);
+    expect(first.titles).toEqual(["· Demo", "‹ Demo"]);
+    expect(second.titles).toEqual(["‹ Demo", "◇ Demo"]);
+  });
+
   test("projects working and input-required states with a fixed marker", () => {
     const fixture = writerFixture();
     let tick: (() => void) | undefined;

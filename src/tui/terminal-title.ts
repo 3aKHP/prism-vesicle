@@ -93,8 +93,10 @@ export function createTerminalTitleController(options: {
   function attach(nextWriter: TerminalTitleWriter): void {
     if (disposed) return;
     if (writer === nextWriter) return;
+    stopAnimation();
     writer = nextWriter;
     currentTitle = undefined;
+    ensureAnimation();
     render(true);
   }
 
@@ -105,7 +107,7 @@ export function createTerminalTitleController(options: {
   }
 
   function ensureAnimation(): void {
-    if (!enabled || reducedMotion || phase !== "working" || animation !== undefined) return;
+    if (!enabled || reducedMotion || setupTitle || phase !== "working" || animation !== undefined) return;
     animation = timers.setInterval(() => {
       frameIndex = (frameIndex + 1) % WORKING_FRAMES.length;
       render(true);

@@ -3,6 +3,8 @@
  *
  * The child runs through `script` so the raw OSC title writes remain observable
  * while the TUI itself still receives a real interactive terminal.
+ * This smoke is Linux/WSL-only; native Windows title acceptance is a separate
+ * Windows Terminal/manual boundary and is not inferred from this script.
  */
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,6 +22,10 @@ function hasOscTitle(raw: string, title: string): boolean {
 }
 
 async function main(): Promise<void> {
+  if (process.platform !== "linux") {
+    console.log("PTY terminal-title smoke skipped: script/stty harness requires Linux or WSL.");
+    return;
+  }
   const root = await mkdtemp(join(tmpdir(), "vesicle-terminal-title-pty-"));
   const project = join(root, "project");
   const configDir = join(root, "config");
@@ -91,7 +97,7 @@ async function main(): Promise<void> {
     type("ping");
     await Bun.sleep(60);
     type("\r");
-    const working = await waitFor(() => hasOscTitle(raw, "◇ Prism Vesicle · project"));
+    const working = await waitFor(() => hasOscTitle(raw, "◇ Prism Vesicle · project"), 20000);
     const replied = await waitFor(() => raw.includes("reply 1"), 20000);
     type("\x03");
     await Bun.sleep(250);
