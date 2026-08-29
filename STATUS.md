@@ -1,6 +1,6 @@
 # Prism Vesicle Project Status
 
-_Snapshot: current `develop` (2026-08-30). Published package version: 1.0.0-beta.2. Next candidate target: 1.0.0-rc.1._
+_Development snapshot date: 2026-08-30. Published package version: 1.0.0-beta.2. Next candidate target: 1.0.0-rc.1._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
