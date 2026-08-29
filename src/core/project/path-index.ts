@@ -27,7 +27,7 @@ export async function buildProjectPathIndex(
     includeTypes: new Set<ObservedDirectoryEntry["type"]>(["file", "directory"]),
     tolerateDescendantErrors: true,
   });
-  return observed.entries.map((entry) => {
+  return observed.entries.map((entry): ProjectPathEntry => {
     const path = relative(rootDir, entry.absolutePath).split(sep).join("/");
     return { path, kind: entry.type === "directory" ? "dir" : "file" };
   }).filter((entry) => projectPathRoot(entry.path));
