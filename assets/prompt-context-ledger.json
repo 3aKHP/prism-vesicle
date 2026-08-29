@@ -11,9 +11,9 @@
   "engines": {
     "dyad": {
       "budgetCharacters": 24000,
-      "usedCharacters": 1847,
-      "remainingCharacters": 22153,
-      "usedBytes": 3161,
+      "usedCharacters": 2428,
+      "remainingCharacters": 21572,
+      "usedBytes": 4306,
       "sections": [
         {
           "path": "assets/prompts/host/runtime.md",
@@ -27,8 +27,8 @@
         },
         {
           "path": "assets/prompts/engines/dyad.md",
-          "characters": 1536,
-          "bytes": 2560
+          "characters": 2117,
+          "bytes": 3705
         }
       ]
     },
@@ -75,9 +75,9 @@
     },
     "runtime": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2796,
-      "remainingCharacters": 21204,
-      "usedBytes": 5018,
+      "usedCharacters": 2806,
+      "remainingCharacters": 21194,
+      "usedBytes": 5028,
       "sections": [
         {
           "path": "assets/prompts/host/runtime.md",
@@ -91,8 +91,8 @@
         },
         {
           "path": "assets/prompts/engines/runtime.md",
-          "characters": 2485,
-          "bytes": 4417
+          "characters": 2495,
+          "bytes": 4427
         }
       ]
     },
@@ -210,9 +210,9 @@
     },
     "scene-writer": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2520,
-      "remainingCharacters": 21480,
-      "usedBytes": 5566,
+      "usedCharacters": 2548,
+      "remainingCharacters": 21452,
+      "usedBytes": 5606,
       "sections": [
         {
           "path": "assets/prompts/host/writing.md",
@@ -226,8 +226,8 @@
         },
         {
           "path": "assets/prompts/agents/scene-writer.md",
-          "characters": 2208,
-          "bytes": 4962
+          "characters": 2236,
+          "bytes": 5002
         }
       ]
     }

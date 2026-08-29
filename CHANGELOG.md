@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **The bundled Harness advances to the public `prism-engine-v10@10.3.1` Pack.** The complete verified 73-file inventory now matches Neural Narratology Release `harness-20260830-1`, built from accepted upstream merge `668c47805fe17ef59cbbf6590e18e76cca563899` with `sourceState: clean`. The Pack carries the Scene Writer checklist, Dyad State Navigator, and Runtime HUD review repairs; Driver operations, Engine and Agent inventories, required capabilities, bindings, and `protocolVersion` remain unchanged. Sessions recorded under the prior `10.3.0` baseline resume through the existing explicit migration flow.
+
 - **The bundled Harness is promoted to the stable `prism-engine-v10@10.3.0` baseline.** The complete verified 73-file inventory now matches the public Neural Narratology Release `harness-20260829-1` at source commit `134e634d`, including the reviewed Dyad packet definition, Runtime HUD guidance, Stage wording and fence corrections, ETL delivery closeout, Weaver/Scene Writer planning alignment, and template/spec formatting fixes. Driver operations, Engine and Agent inventories, resources, interactions, required capabilities, profile/prompt/quality bindings, manifest schema, and `protocolVersion` remain unchanged; the Driver version is `10.3.0`, while the Vesicle Adapter `1.2.0` minor records the alpha.1/alpha.2 tool-surface changes rather than a new stable-only binding. Because the manifest identity changed, sessions recorded under `10.3.0-alpha.2` resume through the existing explicit migration flow.
 
 ### Fixed

@@ -1,5 +1,8 @@
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
+import { runPrompt } from "../../../src/core/agent-loop/run";
 import { loadAgentProfile } from "../../../src/core/agents/profile";
 import { resolveChildTools } from "../../../src/core/agents/child-runner";
 import { agentToolDefinitions } from "../../../src/core/agents/tools";
@@ -71,6 +74,67 @@ describe("prompt interaction contracts", () => {
 
     expect(moduleA).toContain("- Extreme access condition:");
     expect(outline).toContain("## Volume 1: [卷名] [可选，单卷/纯章项目删除此块]");
+  });
+
+  test("stable Harness prompts reach the real provider request boundary", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-harness-consumer-"));
+    const configDir = join(root, "config");
+    const providersFile = join(configDir, "providers.yaml");
+    const previousEnv = {
+      VESICLE_CONFIG_DIR: process.env.VESICLE_CONFIG_DIR,
+      VESICLE_PROVIDERS_FILE: process.env.VESICLE_PROVIDERS_FILE,
+      VESICLE_MCP_FILE: process.env.VESICLE_MCP_FILE,
+      VESICLE_HOST_ASSETS_DIR: process.env.VESICLE_HOST_ASSETS_DIR,
+    };
+    const originalFetch = globalThis.fetch;
+    const requests: Array<{ messages?: Array<{ role?: string; content?: string }> }> = [];
+    try {
+      await mkdir(configDir, { recursive: true });
+      await writeFile(providersFile, [
+        "default:",
+        "  provider: fixture",
+        "  model: fixture-model",
+        "providers:",
+        "  fixture:",
+        "    protocol: openai-chat-compatible",
+        "    baseUrl: https://provider.test/v1",
+        "    apiKeyEnv: HARNESS_FIXTURE_KEY",
+        "    models:",
+        "      - fixture-model",
+        "",
+      ].join("\n"), "utf8");
+      await writeFile(join(configDir, ".env"), "HARNESS_FIXTURE_KEY=test-key\n", "utf8");
+      process.env.VESICLE_CONFIG_DIR = configDir;
+      process.env.VESICLE_PROVIDERS_FILE = providersFile;
+      process.env.VESICLE_MCP_FILE = join(configDir, "missing-mcp.yaml");
+      process.env.VESICLE_HOST_ASSETS_DIR = join(root, "empty-host-assets");
+      globalThis.fetch = (async (_input: unknown, init?: RequestInit & { body?: unknown }) => {
+        requests.push(JSON.parse(String(init?.body)));
+        return Response.json({
+          id: `harness-consumer-${requests.length}`,
+          choices: [{ message: { content: "fixture response" } }],
+        });
+      }) as unknown as typeof fetch;
+
+      for (const engine of ["dyad", "etl", "weaver-orch"] as const) {
+        const result = await runPrompt({ input: `consumer boundary ${engine}`, engine, rootDir: root });
+        expect(result.kind, engine).toBe("complete");
+      }
+
+      expect(requests).toHaveLength(3);
+      const systems = requests.map((request) => request.messages?.[0]?.content ?? "");
+      expect(systems[0]).toContain("## State Navigator");
+      expect(systems[0]).toContain("### 三段式回应 / Prose Content");
+      expect(systems[1]).toContain("完成后输出各文件路径与压缩要点摘要");
+      expect(systems[2]).toContain("`Mode A` 为章节级（章节编译后）");
+    } finally {
+      globalThis.fetch = originalFetch;
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("assets do not expose mismatched RooCode-era tool names", async () => {
