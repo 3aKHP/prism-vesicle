@@ -52,11 +52,13 @@ function makeOwner(overrides: {
     refreshes: 0,
     viewerReloads: [] as string[],
     viewerCloses: [] as string[],
+    returned: 0,
   };
   const runtime = mockRuntime();
   const owner = createExternalEditorOwner({
     rootDir: root,
     onStatus: (text, tone) => { calls.status.push([text, tone]); },
+    onReturned: () => { calls.returned += 1; },
     resolveHandoffTarget: () => ("target" in overrides ? overrides.target : "notes.txt") ?? null,
     buffer: {
       isDirty: () => overrides.dirty === true,
@@ -87,6 +89,7 @@ describe("workspace external-editor owner: handoff", () => {
     expect(runtime.calls.spawn).toEqual([`mockedit ${join(root, "notes.txt")}`]);
     expect(calls.status.some(([t]) => t.startsWith("opening notes.txt in mockedit"))).toBe(true);
     expect(calls.reconciles).toEqual(["notes.txt"]);
+    expect(calls.returned).toBe(1);
   });
 
   test("a null handoff target aborts before any spawn", async () => {
@@ -144,6 +147,7 @@ describe("workspace external-editor owner: return reconciliation", () => {
     expect(calls.refreshes).toBe(1);
     expect(calls.viewerReloads).toEqual(["notes.txt"]);
     expect(calls.viewerCloses.length).toBe(0);
+    expect(calls.returned).toBe(0);
   });
 
   test("removed closes the viewer; modified/unchanged touch neither", async () => {

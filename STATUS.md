@@ -22,7 +22,7 @@ Published package version: **1.0.0-beta.2**. Next candidate target: **1.0.0-rc.1
 | Context | Opt-in automatic compaction: pre-turn and exact provider-send guards over current history, queued/background input, and tool schemas; provider-observation delta projection; pre-install replacement ceiling validation; soft-trigger continue + hard-ceiling block; truthful `/context`; cancelled lifecycle | released |
 | Sessions | Host-only durable session titles (`sessionTitle: auto|off`), isolated first-turn generation, bounded retries/claims, `/title` commands, and picker projection | experimental |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
-| TUI | Interactive terminal tab title mirroring via OSC 0/2 with TTY gating and shutdown cleanup (`VESICLE_TERMINAL_TITLE`) | experimental |
+| TUI | Host-state terminal tab title projection through OpenTUI with idle/working/input-required markers, TTY gating, reduced-motion, hard disable, and shutdown cleanup | experimental |
 | TUI | Startup splash and empty-session hero derived from the brand ANSI mark; truecolour animation degrades to a static frame on 256-colour terminals and freezes under `VESICLE_REDUCED_MOTION=1` | released |
 | TUI | Static motif wiring: per-message role spectrum lanes, per-engine refraction accents, and ASCII-frame sidebar section labels | released |
 | TUI | Day/night theme: four-value preference (dark/light/default/auto), terminal-following `default` with dark fallback, time-based `auto` (light 07:00–19:00), `/theme` session override plus `--persist`/`--unset-project` project file, `--dark`/`--light` launch flags, and `VESICLE_THEME` env | released |
@@ -266,6 +266,7 @@ bun run lint
 bun run typecheck
 bun test
 bun run doctor
+bun run smoke:terminal-title-pty
 bun test tests/contract/release/windows-installer.test.ts # Linux/WSL stage-shape contract
 ```
 

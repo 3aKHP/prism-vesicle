@@ -101,6 +101,8 @@ jobs:
           )
       - name: Binary fail-closed smoke
         run: bun run smoke:binary
+      - name: Terminal title PTY smoke
+        run: bun run smoke:terminal-title-pty
       - name: Stage versioned Linux artifacts
         env:
           VERSION: ${{ needs.checks.outputs.version }}

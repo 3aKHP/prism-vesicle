@@ -46,6 +46,8 @@ export type ExternalEditorOwnerPorts = {
   rootDir: string;
   /** Status-line write (facade owns the line). */
   onStatus: (text: string, tone?: EditorStatusTone) => void;
+  /** Reproject host-owned surfaces after the renderer resumes. */
+  onReturned?: () => void;
   /** Resolve the Ctrl+X target by focus region (page state lives in the facade). */
   resolveHandoffTarget: () => string | null;
   buffer: ExternalBufferPort;
@@ -106,7 +108,11 @@ export function createExternalEditorOwner(options: ExternalEditorOwnerPorts) {
       return;
     }
     if (exitCode !== 0) onStatus(`editor exited with code ${exitCode}`, "warn");
-    await refreshAfterExternalEdit(target);
+    try {
+      await refreshAfterExternalEdit(target);
+    } finally {
+      options.onReturned?.();
+    }
   }
 
   /**

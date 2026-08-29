@@ -16,6 +16,7 @@ import {
 } from "../../../src/setup/app";
 import { createInitialSetupState, type SetupState } from "../../../src/setup/setup-state";
 import { SetupView } from "../../../src/setup/setup-views";
+import type { TerminalTitleController } from "../../../src/tui/terminal-title";
 
 describe("guided Setup UI", () => {
   test("renders a friendly no-YAML welcome screen", async () => {
@@ -27,6 +28,25 @@ describe("guided Setup UI", () => {
     expect(frame).toContain("Begin guided setup");
     expect(frame).toContain("No configuration files to edit");
     expect(frame).toContain("never writes them to YAML");
+  });
+
+  test("claims the fixed terminal title through the injected host controller", async () => {
+    const calls: string[] = [];
+    const terminalTitle = {
+      attach: () => { calls.push("attach"); },
+      set: () => undefined,
+      setSetup: () => { calls.push("setup"); },
+      setSession: () => undefined,
+      setPhase: () => undefined,
+      reproject: () => undefined,
+      clear: () => { calls.push("clear"); },
+      current: () => undefined,
+      enabled: () => true,
+    } satisfies TerminalTitleController;
+    const setup = await testRender(() => <SetupApp terminalTitle={terminalTitle} onComplete={() => undefined} />, { width: 80, height: 24 });
+    await setup.flush();
+    expect(calls.slice(0, 2)).toEqual(["attach", "setup"]);
+    setup.renderer.destroy();
   });
 
   test("keeps the welcome flow readable at the supported 80-column width", async () => {

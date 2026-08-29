@@ -53,6 +53,8 @@ During the beta line, npm's `latest` dist-tag intentionally follows the newest b
 
 The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
 
+Interactive TUI and Guided Setup runs also project their host state to the terminal tab through the renderer. See the [configuration reference](./docs/user/en/reference/configuration.md) for title markers, motion controls, and the hard no-write override.
+
 Inspect the active layers and the source of the effective manifest:
 
 ```bash

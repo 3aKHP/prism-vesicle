@@ -53,6 +53,8 @@ Beta 阶段中,npm 的 `latest` dist-tag 会有意跟随最新 Beta,因此发布
 
 软件包包含预编译的 TUI 入口，以及完整、只读的 `prism-engine-v10` 默认运行时基线；启动时不会在 `node_modules` 内编译应用 TSX。普通使用不需要项目锁，也不需要额外安装 Harness。Vesicle 会先解析当前项目与用户级全局的稀疏 `assets/` 覆盖，然后只使用一个经过验证的完整基线：项目固定的托管 Harness Pack，或当前软件包与独立发行版附带的内置 V10 Pack。Harness 自己拥有已声明的提示词片段；受限的宿主扩展层提供五个通用 SubAgent 及其提示词。
 
+交互式 TUI 和 Guided Setup 也会通过 renderer 把宿主状态投影到终端标签页。标题标记、动效控制和强制不写开关见[配置文件参考](./docs/user/zh-CN/reference/configuration.md)。
+
 查看当前资产层和生效 manifest 的来源：
 
 ```bash
