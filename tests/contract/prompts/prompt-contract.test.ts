@@ -109,7 +109,7 @@ describe("prompt interaction contracts", () => {
       process.env.VESICLE_MCP_FILE = join(configDir, "missing-mcp.yaml");
       process.env.VESICLE_HOST_ASSETS_DIR = join(root, "empty-host-assets");
       globalThis.fetch = (async (_input: unknown, init?: RequestInit & { body?: unknown }) => {
-        requests.push(JSON.parse(String(init?.body)));
+        requests.push(JSON.parse(String(init?.body)) as { messages?: Array<{ role?: string; content?: string }> });
         return Response.json({
           id: `harness-consumer-${requests.length}`,
           choices: [{ message: { content: "fixture response" } }],

@@ -30,7 +30,7 @@ function identity(version: string, sha: string, adapterVersion: string): Harness
 }
 
 const baselineA = identity("10.3.0-alpha.2", "a".repeat(64), "1.1.0");
-const baselineB = identity("10.3.1", "c".repeat(64), "1.2.0");
+const baselineB = identity("10.3.2", "c".repeat(64), "1.2.0");
 
 async function migrationRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-session-migration-e2e-"));
@@ -255,16 +255,16 @@ describe("session Harness migration (#239)", () => {
       expect(archived.startsWith(bytesBefore)).toBe(true);
       const tagRecord = JSON.parse(archived.split("\n").filter((line) => line.length > 0).at(-1)!) as SessionRecord;
       expect(tagRecord.metadata?.kind).toBe("session-archive");
-      expect((tagRecord.metadata as { archive: { to: { packVersion: string } } }).archive.to.packVersion).toBe("10.3.1");
+      expect((tagRecord.metadata as { archive: { to: { packVersion: string } } }).archive.to.packVersion).toBe(baselineB.packVersion);
 
       const snapshot = await loadSessionSnapshot(root, sessionId, { synthesizeDanglingToolResults: false });
       expect(snapshot.harness).toEqual(baselineB);
       const firstRecord = snapshot.records[0]!;
-      expect((firstRecord.metadata as { harness: { packVersion: string } }).harness.packVersion).toBe("10.3.0-alpha.2");
+      expect((firstRecord.metadata as { harness: { packVersion: string } }).harness.packVersion).toBe(baselineA.packVersion);
 
       // The resumed transcript carries the durable migration warning.
       const lastMessages = wired.messages.at(-1) ?? [];
-      expect(lastMessages.some((message) => message.role === "system" && message.content.includes("now runs under prism-engine-v10@10.3.1"))).toBe(true);
+      expect(lastMessages.some((message) => message.role === "system" && message.content.includes(`now runs under prism-engine-v10@${baselineB.packVersion}`))).toBe(true);
 
       // A second resume passes the identity check outright: no review, no duplicate archive.
       await wired.resume(summary);

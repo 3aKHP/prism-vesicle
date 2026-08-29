@@ -11,9 +11,9 @@
   "engines": {
     "dyad": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2428,
-      "remainingCharacters": 21572,
-      "usedBytes": 4306,
+      "usedCharacters": 2448,
+      "remainingCharacters": 21552,
+      "usedBytes": 4354,
       "sections": [
         {
           "path": "assets/prompts/host/runtime.md",
@@ -27,8 +27,8 @@
         },
         {
           "path": "assets/prompts/engines/dyad.md",
-          "characters": 2117,
-          "bytes": 3705
+          "characters": 2137,
+          "bytes": 3753
         }
       ]
     },

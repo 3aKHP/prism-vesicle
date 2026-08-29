@@ -27,6 +27,9 @@ export {};
 
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 
+// Pinned from the 10.3.0-alpha.2 harness-manifest.json to exercise a real
+// version-skew migration; update this block from that manifest when the old
+// consumer baseline changes.
 const oldIdentity = {
   packId: "prism-engine-v10",
   packVersion: "10.3.0-alpha.2",
