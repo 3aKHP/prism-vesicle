@@ -108,13 +108,13 @@ describe("prompt interaction contracts", () => {
       process.env.VESICLE_PROVIDERS_FILE = providersFile;
       process.env.VESICLE_MCP_FILE = join(configDir, "missing-mcp.yaml");
       process.env.VESICLE_HOST_ASSETS_DIR = join(root, "empty-host-assets");
-      globalThis.fetch = (async (_input: unknown, init?: RequestInit & { body?: unknown }) => {
+      globalThis.fetch = Object.assign(async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
         requests.push(JSON.parse(String(init?.body)) as { messages?: Array<{ role?: string; content?: string }> });
         return Response.json({
           id: `harness-consumer-${requests.length}`,
           choices: [{ message: { content: "fixture response" } }],
         });
-      }) as unknown as typeof fetch;
+      }, { preconnect: originalFetch.preconnect });
 
       for (const engine of ["dyad", "etl", "weaver-orch"] as const) {
         const result = await runPrompt({ input: `consumer boundary ${engine}`, engine, rootDir: root });
@@ -123,7 +123,7 @@ describe("prompt interaction contracts", () => {
 
       expect(requests).toHaveLength(3);
       const systems = requests.map((request) => request.messages?.[0]?.content ?? "");
-      expect(systems[0]).toContain("## State Navigator");
+      expect(systems[0]).toMatch(/^## State Navigator$/m);
       expect(systems[0]).toContain("### 三段式回应 / Prose Content");
       expect(systems[1]).toContain("完成后输出各文件路径与压缩要点摘要");
       expect(systems[2]).toContain("`Mode A` 为章节级（章节编译后）");

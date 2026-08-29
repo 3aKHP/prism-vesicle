@@ -29,8 +29,8 @@ function identity(version: string, sha: string, adapterVersion: string): Harness
   };
 }
 
-const baselineA = identity("10.3.0-alpha.2", "a".repeat(64), "1.1.0");
-const baselineB = identity("10.3.2", "c".repeat(64), "1.2.0");
+const baselineA = identity("10.3.2", "a".repeat(64), "1.2.0");
+const baselineB = identity("10.3.3", "c".repeat(64), "1.2.0");
 
 async function migrationRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "vesicle-session-migration-e2e-"));

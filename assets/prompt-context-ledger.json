@@ -11,9 +11,9 @@
   "engines": {
     "dyad": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2448,
-      "remainingCharacters": 21552,
-      "usedBytes": 4354,
+      "usedCharacters": 2447,
+      "remainingCharacters": 21553,
+      "usedBytes": 4353,
       "sections": [
         {
           "path": "assets/prompts/host/runtime.md",
@@ -27,8 +27,8 @@
         },
         {
           "path": "assets/prompts/engines/dyad.md",
-          "characters": 2137,
-          "bytes": 3753
+          "characters": 2136,
+          "bytes": 3752
         }
       ]
     },
@@ -75,9 +75,9 @@
     },
     "runtime": {
       "budgetCharacters": 24000,
-      "usedCharacters": 2806,
-      "remainingCharacters": 21194,
-      "usedBytes": 5028,
+      "usedCharacters": 2849,
+      "remainingCharacters": 21151,
+      "usedBytes": 5101,
       "sections": [
         {
           "path": "assets/prompts/host/runtime.md",
@@ -91,16 +91,16 @@
         },
         {
           "path": "assets/prompts/engines/runtime.md",
-          "characters": 2495,
-          "bytes": 4427
+          "characters": 2538,
+          "bytes": 4500
         }
       ]
     },
     "stage": {
       "budgetCharacters": 24000,
-      "usedCharacters": 4447,
-      "remainingCharacters": 19553,
-      "usedBytes": 9062,
+      "usedCharacters": 4476,
+      "remainingCharacters": 19524,
+      "usedBytes": 9121,
       "sections": [
         {
           "path": "assets/prompts/host/consumer-stage.md",
@@ -114,8 +114,8 @@
         },
         {
           "path": "assets/prompts/engines/stage.md",
-          "characters": 4136,
-          "bytes": 8461
+          "characters": 4165,
+          "bytes": 8520
         }
       ]
     },
