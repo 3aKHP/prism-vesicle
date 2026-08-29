@@ -42,6 +42,7 @@ function context(overrides: Partial<CommandCompletionContext> = {}): CommandComp
     providerRegistry: () => registry,
     activeProvider: () => "beta",
     refreshArtifacts: async () => artifacts,
+    listWorkspaceTargets: async () => artifacts.map((entry) => ({ path: entry.path, kind: "file" as const })),
     listSessions: async () => [{
       sessionId: "session-current-123",
       startedAt: "2026-07-20T00:00:00.000Z",
@@ -65,12 +66,6 @@ async function items(completion: CommandArgumentCompletion) {
 }
 
 describe("command-owned argument completion", () => {
-  test("registers completion contracts beside every command with audited arguments", () => {
-    for (const name of ["model", "engine", "stage", "quality", "artifact", "validate", "resume", "agents", "effort", "reasoning", "permissions"]) {
-      expect(builtinCommands.find((command) => command.name === name)?.completion).toBeDefined();
-    }
-  });
-
   test("preserves provider-first /model completion and adds active-provider shorthand", async () => {
     const initial = resolve("/model ");
     expect((await items(initial)).map((item) => item.id)).toEqual(["alpha", "beta"]);
@@ -138,6 +133,29 @@ describe("command-owned argument completion", () => {
 
     // After --unset-project nothing else is offered (it takes no arguments).
     expect(resolveCommandArgumentCompletion("/theme --unset-project ", builtinCommands, context())).toBeNull();
+  });
+
+  test("completes title, init, websearch, workspace, and skill continuation arguments", async () => {
+    const title = resolve("/title ");
+    expect((await items(title)).map((item) => item.id)).toEqual(["rename", "regenerate"]);
+    expect(title.complete((await items(title))[0]!)).toBe("/title rename ");
+    expect(resolveCommandArgumentCompletion("/title rename draft", builtinCommands, context())).toBeNull();
+
+    const init = resolve("/init --");
+    expect((await items(init)).map((item) => item.id)).toEqual(["--force"]);
+    expect(init.complete((await items(init))[0]!)).toBe("/init --force ");
+    expect(resolveCommandArgumentCompletion("/init ", builtinCommands, context())).toBeNull();
+
+    const websearch = resolve("/websearch ");
+    expect((await items(websearch)).map((item) => item.id)).toEqual(["on", "off"]);
+
+    const workspace = resolve("/workspace ");
+    expect((await items(workspace)).map((item) => item.id)).toEqual(artifacts.map((entry) => entry.path));
+    expect(workspace.complete((await items(workspace))[0]!)).toBe("/workspace workspace/cards/mira.md");
+
+    const skill = resolve("/skill vesicle-docs ");
+    expect((await items(skill)).map((item) => item.id)).toEqual(["--context-only"]);
+    expect(skill.complete((await items(skill))[0]!)).toBe("/skill vesicle-docs --context-only");
   });
 });
 

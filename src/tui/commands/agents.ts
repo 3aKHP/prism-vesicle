@@ -30,6 +30,7 @@ export function createAgentsCommands(ctx: AgentsCommandContext): Command[] {
       busyBehavior: immediate,
       description: "Ask a temporary question about the current conversation",
       usage: "/btw <question>",
+      completion: null,
       async run(args) {
         await ctx.openSideQuestion(args);
       },

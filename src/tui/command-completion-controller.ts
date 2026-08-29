@@ -10,6 +10,7 @@ import { clampCommandMenuSelection, moveCommandMenuSelection } from "./commands/
 import { normalizeKeyName, setComposerValue, type ComposerState } from "./composer";
 import type { TuiKeyEvent } from "./decision-interaction";
 import type { AgentCardState, OptionItem } from "./types";
+import type { ProjectPathEntry } from "../core/project/path-index";
 
 export type CommandCompletionControllerOptions = {
   rootDir: string;
@@ -25,6 +26,7 @@ export type CommandCompletionControllerOptions = {
   providerRegistry: Accessor<ProviderRegistry | null>;
   activeProvider: Accessor<string>;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
@@ -52,6 +54,7 @@ export function createCommandCompletionController(options: CommandCompletionCont
     providerRegistry: options.providerRegistry,
     activeProvider: options.activeProvider,
     refreshArtifacts: options.refreshArtifacts,
+    listWorkspaceTargets: options.listWorkspaceTargets,
     listSessions: options.listSessions,
     agentOptions,
   }));

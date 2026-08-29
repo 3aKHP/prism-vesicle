@@ -15,6 +15,7 @@ import type { SessionTitleSource } from "../../core/session/store";
 import type { PermissionMode } from "../../core/permissions";
 import type { ArtifactEntry } from "../../core/artifacts/workbench";
 import type { ThemePreference } from "../theme";
+import type { ProjectPathEntry } from "../../core/project/path-index";
 import type { WebSearchOverrideResult } from "../web-search-controller";
 import type {
   ActivityEntry,
@@ -42,6 +43,7 @@ export type CommandCompletionContext = {
   providerRegistry: () => ProviderRegistry | null;
   activeProvider: () => string;
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
+  listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentOptions: () => OptionItem[];
 };
@@ -236,8 +238,8 @@ export type Command = {
   description: string;
   /** Usage hint, e.g. "/engine <id>". */
   usage?: string;
-  /** Optional command-owned argument grammar and candidate sources. */
-  completion?: CommandCompletion;
+  /** Command-owned argument grammar and candidate sources, or explicit null when none apply. */
+  completion: CommandCompletion | null;
   /**
    * Execute the command. `args` is the raw text after the command name
    * (trimmed, whitespace-normalised); `raw` is the full input including the

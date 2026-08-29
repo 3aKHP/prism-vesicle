@@ -41,6 +41,7 @@ export function createHelpCommands(ctx: HelpCommandContext): Command[] {
       name: "help",
       busyBehavior: immediate,
       description: "Show available commands",
+      completion: null,
       async run(_args, raw) {
         ctx.setMessages((prev) => [
           ...prev,

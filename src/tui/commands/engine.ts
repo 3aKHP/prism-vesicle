@@ -71,6 +71,7 @@ export function createEngineCommands(ctx: EngineCommandContext): Command[] {
       busyBehavior: () => immediate,
       description: "Show the active Persistent Instructions for this engine",
       usage: "/instructions",
+      completion: null,
       async run(_args, raw) {
         ctx.setMessages((prev) => [...prev, { role: "user", content: raw }]);
         const selection = await resolveEffectiveSelection(ctx.activeEngine(), process.cwd());

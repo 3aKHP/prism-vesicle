@@ -5,6 +5,7 @@ import { createBufferOwner } from "./buffer-owner";
 import { createExternalEditorOwner } from "./external-editor-owner";
 import { createFileOperationOwner } from "./file-operation-owner";
 import { routeWorkspaceKey, type InputSurface } from "./input-router";
+import { buildProjectPathIndex, type ProjectPathEntry } from "../../core/project/path-index";
 import { readFilePreview, type WorkspaceFilePreview } from "./tree-data";
 import { createTreeOwner } from "./tree-owner";
 import { createValidationOwner } from "./validation-owner";
@@ -227,6 +228,10 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     await tree.ensureLoaded();
     if (!relPath) return null;
     return tree.locatePath(relPath);
+  }
+
+  async function listWorkspaceTargets(): Promise<ProjectPathEntry[]> {
+    return buildProjectPathIndex(rootDir, { showHidden: false });
   }
 
   /**
@@ -677,6 +682,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setActivePage: activatePage,
     togglePage,
     openWorkspaceTarget,
+    listWorkspaceTargets,
     focusRegion,
     cycleFocus,
     // tree
