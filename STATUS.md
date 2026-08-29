@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Development snapshot date: 2026-08-30. Published package version: 1.0.0-beta.2. Next candidate target: 1.0.0-rc.1._
+_Development snapshot date: 2026-08-30. Published package version: 1.0.0-beta.2 (npm `latest`). Current release candidate: 1.0.0-rc.1 (npm `next`)._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Published package version: **1.0.0-beta.2**. Next candidate target: **1.0.0-rc.1**. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact 1.0.0-beta.2 contents.
+Published package version: **1.0.0-beta.2** (npm `latest`). Current release candidate: **1.0.0-rc.1**, which publishes to npm `next` while `latest` keeps tracking the beta line. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact contents of each published version.
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|

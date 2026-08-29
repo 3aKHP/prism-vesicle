@@ -2,7 +2,7 @@
 
 English | [简体中文](../../zh-CN/advanced/harness-packs.md)
 
-> **Status as of `1.0.0-beta.2`:** 🟢 Offline verify/install/use/status/rollback is implemented. Online discovery, download, extraction, and automatic update are not.
+> **Status as of `1.0.0-rc.1`:** 🟢 Offline verify/install/use/status/rollback is implemented. Online discovery, download, extraction, and automatic update are not.
 
 A Harness Pack is a complete manifest-verified Prism creative baseline. Engine profiles, prompts, validators, Agent profiles, Skills, and the Adapter Binding must move together as one version. A normal first installation already includes the V10 baseline, so **you do not need to install a Pack**. Use this page only after receiving a complete, extracted Pack directory from a trusted source.
 
