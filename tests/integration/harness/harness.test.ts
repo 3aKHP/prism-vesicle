@@ -26,8 +26,8 @@ import { createSessionStore, loadSessionSnapshot } from "../../../src/core/sessi
 import { inspectAssets, materializeEditableAssets, parseHarnessReference } from "../../../src/cli/assets";
 
 // The bundled `harness-manifest.json` is the single source of truth for the
-// bundled pack's version and manifest SHA. Read it once here and assert
-// resolved runtime values against these, instead of pasting version/SHA
+// bundled pack's version, Adapter version, and manifest SHA. Read it once here and assert
+// resolved runtime values against these, instead of pasting identity/SHA
 // literals that drift on every Harness bump (issue #95).
 const bundledManifestPath = join(import.meta.dir, "..", "..", "..", "harness-manifest.json");
 const bundledManifestSource = await readFile(bundledManifestPath, "utf8");
@@ -47,7 +47,7 @@ describe("Harness Pack foundation", () => {
       expect(runtime?.lock).toMatchObject({
         packId: "prism-engine-v10",
         packVersion: bundledManifest.version,
-        adapterVersion: "1.1.0",
+        adapterVersion: bundledManifest.driver.adapterVersion,
         manifestSha256: bundledManifestSha256,
       });
       expect(runtime?.pack.assetCount).toBe(73);

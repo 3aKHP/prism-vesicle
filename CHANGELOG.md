@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Deterministic Windows brand resources (A Lane, #251).** Native Windows builds now carry the canonical multi-size Prism Vesicle icon and version metadata; Inno Setup and its wizard use the same SVG-derived icon family, including the generated uninstaller and Windows integration surfaces. WSL cross-builds remain available under an explicit non-release filename because Bun cannot write Windows PE resources while cross-compiling.
 
+### Changed
+
+- **The bundled Harness advances to the public `prism-engine-v10@10.3.3` Pack.** The complete verified 73-file inventory now matches Neural Narratology Release `harness-20260830-3`, built from accepted upstream merge `d3e17e77f1f875c033ab33e281726b2356c18bd3` with `sourceState: clean`. Runtime and Stage HUD guidance now permits only the turn counters required by their templates alongside the tension scalar, and Dyad State Navigator is a standalone section. Driver operations, Engine and Agent inventories, required capabilities, bindings, Adapter `1.2.0`, and `protocolVersion` remain unchanged. Sessions recorded under `10.3.2` resume through the existing explicit migration flow.
+
 ### Fixed
 
 - **Session-title generation keeps project and configuration ownership stable.** The auxiliary request now resolves `settings.yaml` from an explicit host-environment input instead of rereading mutable process-global test state, and active cancellation ownership is keyed by project root plus session id. Resetting a same-named session in another project can no longer abort the wrong request, while a stale cancelled request cannot detach the controller that replaced it.

@@ -4,10 +4,10 @@
   "version": "0.4.0",
   "primaryLanguage": "zh-CN",
   "sourceRepository": "3aKHP/Neural-Narratology",
-  "sourceCommit": "a31104b985aef35012bc4e2d0bd6d3e43a18e1e1",
+  "sourceCommit": "d3e17e77f1f875c033ab33e281726b2356c18bd3",
   "sourceState": "clean",
   "sourceHash": "3f0c9a0345204ece6aca49b97af1e54c3fdccc294b0bf8ab7115564cb4f3f684",
-  "moduleInputHash": "90af7ded7eb244766dfbb7a5b9afeb335c4aed408a4af37ce0e612ecb5c09448",
+  "moduleInputHash": "53415d28445a6eb70c476abc7d84d78bb2efd1e984558ac5db9ad7693603dd74",
   "compilerHash": "240782936f2f6fe1363895b270fdfad2d07cb27adbad2135104c9810b8628fbe",
   "ruleCount": 32,
   "projectionCounts": {
@@ -135,6 +135,6 @@
     "schemas/rewrite-case.schema.json": "b5ba7413ac9d9d0576a8e1347eca30748a2da92c6a7a1091929007f6eaed2ae6",
     "schemas/rule-pack.schema.json": "fe4623817c186290c22e982c4dfe04c8c36224dbb81c82fb239f1b6365761ec9",
     "schemas/semantic-rewrite-policy.schema.json": "21a1fcbfe9d523df1e07a6671ffbd7653ff7c46a34579c70eb5f8b1128d9eeec",
-    "THIRD_PARTY_NOTICES.md": "984d1d7272545b48c29280b30c93a60dfcf62bda2c63cf8eec398c4ea072c691"
+    "THIRD_PARTY_NOTICES.md": "bffeb48c0f3c8672293cabdc2a87209ee459a7359abce58125ac9a232831ee0c"
   }
 }
