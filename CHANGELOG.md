@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
-- **Terminal tab titles.** Interactive TUI sessions project host state through the OpenTUI renderer: `·` idle, `‹`/`◇`/`›`/`◇` working, and `!` while user input is required. Durable titles are displayed directly; untitled sessions use a sanitized project-basename fallback. Setup uses `Prism Vesicle Setup`; `VESICLE_REDUCED_MOTION=1` freezes working at `◇`, `VESICLE_DISABLE_TERMINAL_TITLE=1` guarantees no writes, and `VESICLE_TERMINAL_TITLE=auto|on|off` controls TTY admission. Shutdown, suspend/resume, and external-editor return clear or reproject the title.
+- **Terminal tab titles.** Interactive TUI sessions project host state through the OpenTUI renderer: `·` idle, a same-width `◇`/`◈`/`◆`/`◈` diamond pulse while working, and `!` while user input is required. Durable titles are displayed directly; untitled sessions use a sanitized project-basename fallback. Setup uses `Prism Vesicle Setup`; `VESICLE_REDUCED_MOTION=1` freezes working at `◇`, `VESICLE_DISABLE_TERMINAL_TITLE=1` guarantees no writes, and `VESICLE_TERMINAL_TITLE=auto|on|off` controls TTY admission. Shutdown, suspend/resume, and external-editor return clear or reproject the title.
 
 - **Durable session titles.** With user-level `settings.yaml` (`sessionTitle: auto|off`), the first complete ordinary turn can asynchronously generate a cleaned title through an isolated provider request. Host-only title, retry-state, claim, and auxiliary-usage records stay out of model history; `/title`, `/title rename <text>`, and `/title regenerate` manage the title lifecycle.
 
@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **The bundled Harness advances to the public `prism-engine-v10@10.3.3` Pack.** The complete verified 73-file inventory now matches Neural Narratology Release `harness-20260830-3`, built from accepted upstream merge `d3e17e77f1f875c033ab33e281726b2356c18bd3` with `sourceState: clean`. Runtime and Stage HUD guidance now permits only the turn counters required by their templates alongside the tension scalar, and Dyad State Navigator is a standalone section. Driver operations, Engine and Agent inventories, required capabilities, bindings, Adapter `1.2.0`, and `protocolVersion` remain unchanged. Sessions recorded under `10.3.2` resume through the existing explicit migration flow.
 
 ### Fixed
+
+- **Windows local builds reject UNC workspaces before producing a broken standalone Worker path.** Running native Windows Bun from a `\\wsl.localhost` or other UNC checkout relocates the secondary compile entrypoint outside Bun's normal virtual root while the runtime still targets `B:/~BUN/root/tree-sitter-worker.js`. `build:exe windows` and the installer build now fail before compilation with an actionable drive-letter-workspace requirement; normal native Windows CI and explicit non-release WSL cross-builds are unchanged.
 
 - **Session-title generation keeps project and configuration ownership stable.** The auxiliary request now resolves `settings.yaml` from an explicit host-environment input instead of rereading mutable process-global test state, and active cancellation ownership is keyed by project root plus session id. Resetting a same-named session in another project can no longer abort the wrong request, while a stale cancelled request cannot detach the controller that replaced it.
 

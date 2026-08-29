@@ -99,11 +99,11 @@ describe("terminal title controller", () => {
 
     expect(intervals).toBe(2);
     expect(cleared).toBe(1);
-    expect(first.titles).toEqual(["· Demo", "‹ Demo"]);
-    expect(second.titles).toEqual(["‹ Demo", "◇ Demo"]);
+    expect(first.titles).toEqual(["· Demo", "◇ Demo"]);
+    expect(second.titles).toEqual(["◇ Demo", "◈ Demo"]);
   });
 
-  test("projects working and input-required states with a fixed marker", () => {
+  test("projects working as a stable-width diamond pulse and input-required as a fixed marker", () => {
     const fixture = writerFixture();
     let tick: (() => void) | undefined;
     let cleared = 0;
@@ -121,12 +121,16 @@ describe("terminal title controller", () => {
 
     controller.setSession("etl", "Demo");
     controller.setPhase("working");
-    expect(fixture.titles.at(-1)).toBe("‹ Demo");
+    expect(fixture.titles.at(-1)).toBe("◇ Demo");
     expect(tick).toBeDefined();
     tick?.();
-    expect(fixture.titles.at(-1)).toBe("◇ Demo");
+    expect(fixture.titles.at(-1)).toBe("◈ Demo");
     tick?.();
-    expect(fixture.titles.at(-1)).toBe("› Demo");
+    expect(fixture.titles.at(-1)).toBe("◆ Demo");
+    tick?.();
+    expect(fixture.titles.at(-1)).toBe("◈ Demo");
+    tick?.();
+    expect(fixture.titles.at(-1)).toBe("◇ Demo");
     controller.setPhase("input-required");
     expect(fixture.titles.at(-1)).toBe("! Demo");
     expect(cleared).toBe(1);
@@ -186,7 +190,7 @@ describe("terminal title controller", () => {
     controller.setPhase("working");
     tick?.();
     controller.setPhase("working");
-    expect(fixture.titles).toEqual(["· Demo", "‹ Demo", "◇ Demo"]);
+    expect(fixture.titles).toEqual(["· Demo", "◇ Demo", "◈ Demo"]);
   });
 
   test("disable is a hard no-write boundary, including shutdown cleanup", () => {
