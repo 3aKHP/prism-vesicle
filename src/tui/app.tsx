@@ -739,7 +739,7 @@ export function App(props: AppProps = {}) {
     handleAgentEvent,
     onProviderContextSnapshot: sideQuestionController.captureSnapshot,
     onSessionTitleChanged: (title, titleSessionId) => {
-      if (sessionId() !== titleSessionId) return;
+      if (!terminalTitleLive || sessionId() !== titleSessionId) return;
       terminalTitle?.setSession(activeEngine(), title, basename(process.cwd()));
     },
     beginUsageTurn,
@@ -958,25 +958,25 @@ export function App(props: AppProps = {}) {
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
     if (id && ready) void continuationScheduler.notify(id).catch(reportError);
   });
+  const hostDecisionPending = () => Boolean(
+    pendingGate()
+    || pendingEngineSwitch()
+    || pendingUserQuestion()
+    || pendingPermission()
+    || pendingQualityDecision()
+    || pendingChildPermission()
+    || yoloConfirmStage()
+    || migrationReview()
+    || qualityRewriteConfirm(),
+  );
   createEffect(() => {
-    const inputRequired = Boolean(
-      pendingGate()
-      || pendingEngineSwitch()
-      || pendingUserQuestion()
-      || pendingPermission()
-      || pendingQualityDecision()
-      || pendingChildPermission()
-      || yoloConfirmStage()
-      || migrationReview()
-      || qualityRewriteConfirm(),
-    );
-    terminalTitle?.setPhase(resolveTerminalTitlePhase({ inputRequired, busy: busy(), restoring: restoringSession() }));
+    terminalTitle?.setPhase(resolveTerminalTitlePhase({ inputRequired: hostDecisionPending(), busy: busy(), restoring: restoringSession() }));
   });
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()) || Boolean(migrationReview()),
+    hostDecisionPending(),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(branchPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
@@ -1211,7 +1211,7 @@ export function App(props: AppProps = {}) {
           if (!id) throw new Error("No active session.");
           await appendSessionTitle(process.cwd(), id, value, "user");
           const title = projectSessionTitle(await loadSessionRecords(process.cwd(), id));
-          terminalTitle?.setSession(activeEngine(), title?.title, basename(process.cwd()));
+          if (terminalTitleLive) terminalTitle?.setSession(activeEngine(), title?.title, basename(process.cwd()));
         },
         regenerate: async () => {
           const id = sessionId();

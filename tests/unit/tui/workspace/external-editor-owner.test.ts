@@ -136,6 +136,7 @@ describe("workspace external-editor owner: handoff", () => {
     await owner.handoffToExternal();
     expect(calls.status.some(([t]) => t.includes("failed to start"))).toBe(true);
     expect(calls.invalidated.length).toBe(0);
+    expect(calls.returned).toBe(1);
   });
 });
 

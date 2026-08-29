@@ -51,6 +51,19 @@ describe("terminal title controller", () => {
     expect(fixture.titles.at(-1)).toBe("· Prism Vesicle · stage");
   });
 
+  test("extracts only the final project path segment for fallback titles", () => {
+    const fixture = writerFixture();
+    const controller = createTerminalTitleController({ writer: fixture.writer, isTTY: true });
+
+    controller.setSession("etl", undefined, "/home/alice/private/project");
+    expect(fixture.titles.at(-1)).toBe("· Prism Vesicle · project");
+    controller.clear();
+    const windows = writerFixture();
+    const windowsController = createTerminalTitleController({ writer: windows.writer, isTTY: true });
+    windowsController.setSession("etl", undefined, "C:\\Users\\alice\\project");
+    expect(windows.titles.at(-1)).toBe("· Prism Vesicle · project");
+  });
+
   test("attaches a renderer after the session context is known", () => {
     const fixture = writerFixture();
     const controller = createTerminalTitleController({ isTTY: true });
@@ -146,7 +159,7 @@ describe("terminal title controller", () => {
     expect(fixture.titles).toEqual(["· Demo", "‹ Demo", "◇ Demo"]);
   });
 
-  test("disable is a hard no-write boundary and clears the animation budget", () => {
+  test("disable is a hard no-write boundary, including shutdown cleanup", () => {
     const fixture = writerFixture();
     let intervals = 0;
     const controller = createTerminalTitleController({
@@ -162,14 +175,38 @@ describe("terminal title controller", () => {
       },
     });
 
-    controller.setSetup();
     controller.setSession("etl", "Demo");
-    controller.setPhase("working");
     controller.clear();
     expect(controller.enabled()).toBe(false);
     expect(controller.current()).toBeUndefined();
     expect(fixture.titles).toEqual([]);
     expect(intervals).toBe(0);
+  });
+
+  test("invalid terminal-title mode fails closed", () => {
+    const fixture = writerFixture();
+    const controller = createTerminalTitleController({
+      writer: fixture.writer,
+      isTTY: true,
+      env: { VESICLE_TERMINAL_TITLE: "unexpected" },
+    });
+
+    controller.setSession("etl", "Demo");
+    expect(controller.enabled()).toBe(false);
+    expect(fixture.titles).toEqual([]);
+  });
+
+  test("clear makes the controller inert so stale callbacks cannot resurrect a title", () => {
+    const fixture = writerFixture();
+    const controller = createTerminalTitleController({ writer: fixture.writer, isTTY: true });
+
+    controller.setSession("etl", "Demo");
+    controller.clear();
+    controller.setSession("etl", "Stale");
+    controller.setPhase("working");
+    controller.reproject();
+
+    expect(fixture.titles).toEqual(["· Demo", ""]);
   });
 
   test("auto mode is disabled off TTY and setup uses the fixed title", () => {

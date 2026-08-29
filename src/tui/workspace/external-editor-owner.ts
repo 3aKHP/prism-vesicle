@@ -99,20 +99,31 @@ export function createExternalEditorOwner(options: ExternalEditorOwnerPorts) {
     }
     const editor = resolveEditorCommand({ env: process.env, settings });
     onStatus(`opening ${target} in ${editor.command}…`, "info");
-    let exitCode = 0;
+    let result: { exitCode: number } | undefined;
+    let startError: unknown;
+    let editorStarted = false;
     try {
-      const result = await runExternalEditor({ absPath: abs, editor, runtime });
-      exitCode = result.exitCode;
+      result = await runExternalEditor({ absPath: abs, editor, runtime });
+      editorStarted = true;
     } catch (error) {
-      onStatus(`editor "${editor.command}" failed to start — ${errMsg(error)}`, "error");
+      startError = error;
+    } finally {
+      // runExternalEditor resumes the renderer before settling, including when
+      // spawn fails. Reproject immediately at that boundary; reconciliation is
+      // deliberately a later step and must not block host-surface recovery.
+      try {
+        options.onReturned?.();
+      } catch {
+        // A presentation refresh must not mask the editor outcome.
+      }
+    }
+    if (!editorStarted) {
+      onStatus(`editor "${editor.command}" failed to start — ${errMsg(startError)}`, "error");
       return;
     }
+    const exitCode = result?.exitCode ?? 0;
     if (exitCode !== 0) onStatus(`editor exited with code ${exitCode}`, "warn");
-    try {
-      await refreshAfterExternalEdit(target);
-    } finally {
-      options.onReturned?.();
-    }
+    await refreshAfterExternalEdit(target);
   }
 
   /**

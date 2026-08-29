@@ -88,8 +88,10 @@ export function createTerminalTitleController(options: {
   let frameIndex = 0;
   let animation: TimerHandle | undefined;
   let currentTitle: string | undefined;
+  let disposed = false;
 
   function attach(nextWriter: TerminalTitleWriter): void {
+    if (disposed) return;
     if (writer === nextWriter) return;
     writer = nextWriter;
     currentTitle = undefined;
@@ -118,7 +120,7 @@ export function createTerminalTitleController(options: {
   }
 
   function render(force: boolean): void {
-    if (!enabled || !writer) return;
+    if (disposed || !enabled || !writer) return;
     const title = composedTitle();
     if (!title || (!force && title === currentTitle)) return;
     writer.setTerminalTitle(title);
@@ -126,12 +128,14 @@ export function createTerminalTitleController(options: {
   }
 
   function set(title: string): void {
+    if (disposed) return;
     setupTitle = false;
     baseTitle = sanitizeTerminalTitle(title);
     render(false);
   }
 
   function setSetup(): void {
+    if (disposed) return;
     stopAnimation();
     setupTitle = true;
     baseTitle = undefined;
@@ -141,12 +145,13 @@ export function createTerminalTitleController(options: {
   }
 
   function setSession(engine: EngineId | string, sessionTitle?: string, projectBasename?: string): void {
+    if (disposed) return;
     setupTitle = false;
     const title = sanitizeTerminalTitle(sessionTitle ?? "");
     if (title) {
       baseTitle = title;
     } else {
-      const project = sanitizeTerminalTitle(projectBasename ?? "");
+      const project = safeProjectBasename(projectBasename);
       const fallback = project || sanitizeTerminalTitle(String(engine)) || "project";
       baseTitle = `Prism Vesicle · ${fallback}`;
     }
@@ -155,6 +160,7 @@ export function createTerminalTitleController(options: {
   }
 
   function setPhase(nextPhase: TerminalTitlePhase): void {
+    if (disposed) return;
     const changed = nextPhase !== phase;
     phase = nextPhase;
     if (changed) frameIndex = 0;
@@ -164,11 +170,14 @@ export function createTerminalTitleController(options: {
   }
 
   function reproject(): void {
+    if (disposed) return;
     ensureAnimation();
     render(true);
   }
 
   function clear(): void {
+    if (disposed) return;
+    disposed = true;
     stopAnimation();
     if (enabled && writer && currentTitle !== undefined) writer.setTerminalTitle("");
     currentTitle = undefined;
@@ -190,5 +199,11 @@ export function createTerminalTitleController(options: {
 }
 
 function parseMode(value: string | undefined): TerminalTitleMode {
-  return value === "on" || value === "off" || value === "auto" ? value : "auto";
+  if (value === undefined) return "auto";
+  return value === "on" || value === "off" || value === "auto" ? value : "off";
+}
+
+function safeProjectBasename(value: string | undefined): string {
+  const segment = value?.split(/[\\/]/).filter(Boolean).at(-1) ?? "";
+  return sanitizeTerminalTitle(segment);
 }
