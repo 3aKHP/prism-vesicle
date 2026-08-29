@@ -1,6 +1,7 @@
 import { render } from "@3akhp/opentui-solid";
 import { SetupApp, type SetupCompletion } from "./app";
 import { createThemePreferenceController, parseEnvTheme } from "../tui/theme-preference-controller";
+import { createTerminalTitleController } from "../tui/terminal-title";
 
 export type RunSetupOptions = {
   /** Process-scoped `--dark`/`--light` initial preference, if supplied on the launch command. */
@@ -19,8 +20,9 @@ export async function runGuidedSetup(options: RunSetupOptions = {}): Promise<Set
     project: {},
   });
   theme.applyStartup();
+  const terminalTitle = createTerminalTitleController();
   let completion: SetupCompletion = { launch: false };
-  await render(() => <SetupApp onComplete={(result) => { completion = result; }} />, {
+  await render(() => <SetupApp terminalTitle={terminalTitle} onComplete={(result) => { completion = result; }} />, {
     exitOnCtrlC: false,
     useKittyKeyboard: { events: true },
   });

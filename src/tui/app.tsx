@@ -86,7 +86,8 @@ import { WorkspacePage } from "./workspace/view";
 import { copyTextToClipboard } from "./clipboard";
 import { closeAllProviderSessions, closeProviderSession } from "../providers/lifecycle";
 import { registerHostShutdownCleanup } from "../core/process/shutdown";
-import type { TerminalTitleController } from "./terminal-title";
+import { resolveTerminalTitlePhase, type TerminalTitleController } from "./terminal-title";
+import { basename } from "node:path";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -119,6 +120,8 @@ export function App(props: AppProps = {}) {
   const renderer = useRenderer();
   const exitTui = props.onExit ?? (() => {});
   const terminalTitle = props.terminalTitle;
+  terminalTitle?.attach(renderer);
+  let terminalTitleLive = true;
   // The controller is constructed in runTui/setup before the first frame. Tests
   // that mount App directly fall back to an env-only controller (no project
   // read) so the palette and `/theme` still work without async I/O on mount.
@@ -134,6 +137,7 @@ export function App(props: AppProps = {}) {
   onMount(() => {
     if (props.bootstrapOnly) {
       process.nextTick(() => {
+        terminalTitle?.clear();
         renderer.destroy();
         exitTui();
       });
@@ -194,21 +198,27 @@ export function App(props: AppProps = {}) {
     const engine = activeEngine();
     const generation = ++titleEffectGeneration;
     if (!id) {
-      terminalTitle?.setSession(engine);
+      terminalTitle?.setSession(engine, undefined, basename(process.cwd()));
       return;
     }
     void loadSessionSnapshot(process.cwd(), id, { synthesizeDanglingToolResults: false })
       .then((snapshot) => {
-        if (generation !== titleEffectGeneration || sessionId() !== id || activeEngine() !== engine) return;
+        if (!terminalTitleLive || generation !== titleEffectGeneration || sessionId() !== id || activeEngine() !== engine) return;
         // The reactive engine signal is the current host selection; the
         // snapshot engine may lag while an /engine host record is being saved.
-        terminalTitle?.setSession(engine, snapshot.title?.title);
+        terminalTitle?.setSession(engine, snapshot.title?.title, basename(process.cwd()));
       })
       .catch(() => {
-        if (generation === titleEffectGeneration && sessionId() === id && activeEngine() === engine) terminalTitle?.setSession(engine);
+        if (terminalTitleLive && generation === titleEffectGeneration && sessionId() === id && activeEngine() === engine) {
+          terminalTitle?.setSession(engine, undefined, basename(process.cwd()));
+        }
       });
   });
-  onCleanup(() => terminalTitle?.clear());
+  onCleanup(() => {
+    terminalTitleLive = false;
+    titleEffectGeneration++;
+    terminalTitle?.clear();
+  });
   let providerResourceSessionId: string | undefined;
   createEffect(() => {
     const current = sessionId();
@@ -485,7 +495,11 @@ export function App(props: AppProps = {}) {
       reject: setStatus,
     });
   }
-  const workspaceController = createWorkspaceController();
+  const workspaceController = createWorkspaceController(process.cwd(), {
+    onExternalEditorReturn: () => {
+      if (terminalTitleLive) terminalTitle?.reproject();
+    },
+  });
   const composerController = createComposerController({
     rootDir: process.cwd(),
     commands: builtinCommands,
@@ -725,8 +739,8 @@ export function App(props: AppProps = {}) {
     handleAgentEvent,
     onProviderContextSnapshot: sideQuestionController.captureSnapshot,
     onSessionTitleChanged: (title, titleSessionId) => {
-      if (sessionId() !== titleSessionId) return;
-      terminalTitle?.setSession(activeEngine(), title);
+      if (!terminalTitleLive || sessionId() !== titleSessionId) return;
+      terminalTitle?.setSession(activeEngine(), title, basename(process.cwd()));
     },
     beginUsageTurn,
     publishTurnUsage,
@@ -944,11 +958,25 @@ export function App(props: AppProps = {}) {
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
     if (id && ready) void continuationScheduler.notify(id).catch(reportError);
   });
+  const hostDecisionPending = () => Boolean(
+    pendingGate()
+    || pendingEngineSwitch()
+    || pendingUserQuestion()
+    || pendingPermission()
+    || pendingQualityDecision()
+    || pendingChildPermission()
+    || yoloConfirmStage()
+    || migrationReview()
+    || qualityRewriteConfirm(),
+  );
+  createEffect(() => {
+    terminalTitle?.setPhase(resolveTerminalTitlePhase({ inputRequired: hostDecisionPending(), busy: busy(), restoring: restoringSession() }));
+  });
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()) || Boolean(migrationReview()),
+    hostDecisionPending(),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(branchPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
@@ -989,6 +1017,7 @@ export function App(props: AppProps = {}) {
 
   useInputRouting({
     renderer,
+    beforeExit: () => terminalTitle?.clear(),
     onExit: exitTui,
     setStatus,
     splashActive: () => !splashGone(),
@@ -1182,7 +1211,7 @@ export function App(props: AppProps = {}) {
           if (!id) throw new Error("No active session.");
           await appendSessionTitle(process.cwd(), id, value, "user");
           const title = projectSessionTitle(await loadSessionRecords(process.cwd(), id));
-          terminalTitle?.setSession(activeEngine(), title?.title);
+          if (terminalTitleLive) terminalTitle?.setSession(activeEngine(), title?.title, basename(process.cwd()));
         },
         regenerate: async () => {
           const id = sessionId();

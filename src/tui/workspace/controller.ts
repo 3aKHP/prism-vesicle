@@ -72,7 +72,7 @@ function isSaveKey(key: TuiKeyEvent): boolean {
   return isCtrl(key, "s") || key.sequence === "\x13" || key.raw === "\x13";
 }
 
-export function createWorkspaceController(rootDir: string = process.cwd()) {
+export function createWorkspaceController(rootDir: string = process.cwd(), options: { onExternalEditorReturn?: () => void } = {}) {
   const [page, setPage] = createSignal<ShellPage>("chat");
   const [focusRegion, setFocusRegion] = createSignal<WorkspaceFocusRegion>("tree");
 
@@ -299,6 +299,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   const externalEditor = createExternalEditorOwner({
     rootDir,
     onStatus: (text, tone) => status(text, tone),
+    onReturned: options.onExternalEditorReturn,
     resolveHandoffTarget: () => resolveHandoffTarget(),
     buffer: {
       isDirty: (path) => buffer.dirtyPaths().has(path),

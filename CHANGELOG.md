@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
-- **Terminal tab titles.** Interactive TUI sessions mirror the active engine/session title through OSC 0/2, covering WSL/ConPTY, npm, installed Windows, and standalone binaries. Durable titles are displayed directly to preserve tab width; untitled sessions retain a `Prism Vesicle · <engine>` fallback. `VESICLE_TERMINAL_TITLE=auto|on|off` controls the behavior, and shutdown clears the title.
+- **Terminal tab titles.** Interactive TUI sessions project host state through the OpenTUI renderer: `·` idle, `‹`/`◇`/`›`/`◇` working, and `!` while user input is required. Durable titles are displayed directly; untitled sessions use a sanitized project-basename fallback. Setup uses `Prism Vesicle Setup`; `VESICLE_REDUCED_MOTION=1` freezes working at `◇`, `VESICLE_DISABLE_TERMINAL_TITLE=1` guarantees no writes, and `VESICLE_TERMINAL_TITLE=auto|on|off` controls TTY admission. Shutdown, suspend/resume, and external-editor return clear or reproject the title.
 
 - **Durable session titles.** With user-level `settings.yaml` (`sessionTitle: auto|off`), the first complete ordinary turn can asynchronously generate a cleaned title through an isolated provider request. Host-only title, retry-state, claim, and auxiliary-usage records stay out of model history; `/title`, `/title rename <text>`, and `/title regenerate` manage the title lifecycle.
 

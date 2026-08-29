@@ -13,6 +13,8 @@ import type { MigrationReviewState } from "./session-migration-controller";
 
 export type InputRoutingOptions = {
   renderer: ReturnType<typeof useRenderer>;
+  /** Called immediately before the renderer is destroyed when quitting. */
+  beforeExit?: () => void;
   /** Called after the renderer has been destroyed when the user quits the TUI. */
   onExit?: () => void;
   setStatus: Setter<string>;
@@ -98,6 +100,7 @@ function resolveWorkspacePasteOwnership(options: InputRoutingOptions): Workspace
 export function createInputRouter(options: InputRoutingOptions): InputRouter {
   let lastCtrlCAt = 0;
   const quit = () => process.nextTick(() => {
+    options.beforeExit?.();
     options.renderer.destroy();
     options.onExit?.();
   });

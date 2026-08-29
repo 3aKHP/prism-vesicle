@@ -53,13 +53,16 @@ describe("TUI input routing: quit contract", () => {
   function buildQuitRouter() {
     let destroyed = 0;
     let exited = 0;
+    let beforeExit = 0;
+    const lifecycle: string[] = [];
     const statuses: string[] = [];
     const router = createInputRouter({
       renderer: {
-        destroy: () => { destroyed += 1; },
+        destroy: () => { destroyed += 1; lifecycle.push("destroy"); },
         clearSelection: () => {},
         getSelection: () => undefined,
       } as unknown as InputRoutingOptions["renderer"],
+      beforeExit: () => { beforeExit += 1; lifecycle.push("before-exit"); },
       onExit: () => { exited += 1; },
       setStatus: (value) => { if (typeof value === "string") statuses.push(value); },
       rewindPicker: () => null,
@@ -89,7 +92,7 @@ describe("TUI input routing: quit contract", () => {
       handleDecisionPaste: () => false,
       insertComposerPaste: () => undefined,
     });
-    return { router, destroyed: () => destroyed, exited: () => exited, statuses };
+    return { router, destroyed: () => destroyed, exited: () => exited, beforeExit: () => beforeExit, lifecycle, statuses };
   }
 
   test("first Ctrl+C only arms exit", async () => {
@@ -102,21 +105,25 @@ describe("TUI input routing: quit contract", () => {
   });
 
   test("second Ctrl+C within 3s destroys then invokes onExit", async () => {
-    const { router, destroyed, exited } = buildQuitRouter();
+    const { router, destroyed, exited, beforeExit, lifecycle } = buildQuitRouter();
     router.handleKey(keyEvent("c", { ctrl: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     router.handleKey(keyEvent("c", { ctrl: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(destroyed()).toBe(1);
     expect(exited()).toBe(1);
+    expect(beforeExit()).toBe(1);
+    expect(lifecycle).toEqual(["before-exit", "destroy"]);
   });
 
   test("Ctrl+Q destroys then invokes onExit immediately", async () => {
-    const { router, destroyed, exited } = buildQuitRouter();
+    const { router, destroyed, exited, beforeExit, lifecycle } = buildQuitRouter();
     router.handleKey(keyEvent("q", { ctrl: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(destroyed()).toBe(1);
     expect(exited()).toBe(1);
+    expect(beforeExit()).toBe(1);
+    expect(lifecycle).toEqual(["before-exit", "destroy"]);
   });
 });
 

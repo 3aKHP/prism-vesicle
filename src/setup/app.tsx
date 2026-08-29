@@ -1,5 +1,5 @@
 import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from "@3akhp/opentui-solid";
-import { createSignal } from "solid-js";
+import { createSignal, onCleanup } from "solid-js";
 import { applyComposerKey, insertComposerText, normalizeKeyName } from "../tui/composer";
 import { runSetupEffect, type SetupEffectDependencies } from "./setup-effects";
 import {
@@ -13,6 +13,7 @@ import {
   type SetupStep,
 } from "./setup-state";
 import { SetupView } from "./setup-views";
+import type { TerminalTitleController } from "../tui/terminal-title";
 
 export type { SetupCompletion, SetupStep } from "./setup-state";
 export {
@@ -28,6 +29,7 @@ export { maskValue, setupMultiSelectVisibleRowLimit, setupUsesCompactHeight } fr
 
 export type SetupAppProps = SetupEffectDependencies & {
   initialStep?: SetupStep;
+  terminalTitle?: TerminalTitleController;
   onComplete: (result: SetupCompletion) => void;
 };
 
@@ -35,7 +37,11 @@ export function SetupApp(props: SetupAppProps) {
   const renderer = useRenderer();
   const dimensions = useTerminalDimensions();
   const env = props.env ?? process.env;
+  const terminalTitle = props.terminalTitle;
   const [state, setState] = createSignal(createInitialSetupState(env, props.initialStep));
+  terminalTitle?.attach(renderer);
+  terminalTitle?.setSetup();
+  onCleanup(() => terminalTitle?.clear());
 
   useKeyboard((rawKey) => {
     const key = {
@@ -127,6 +133,7 @@ export function SetupApp(props: SetupAppProps) {
   }
 
   function complete(result: SetupCompletion): void {
+    terminalTitle?.clear();
     props.onComplete(result);
     process.nextTick(() => renderer.destroy());
   }
