@@ -30,5 +30,6 @@ export async function buildProjectPathIndex(
   return observed.entries.map((entry): ProjectPathEntry => {
     const path = relative(rootDir, entry.absolutePath).split(sep).join("/");
     return { path, kind: entry.type === "directory" ? "dir" : "file" };
-  }).filter((entry) => projectPathRoot(entry.path));
+  }).filter((entry) => projectPathRoot(entry.path)
+    && (options.showHidden || !entry.path.split("/").some((segment) => isHiddenProjectName(segment))));
 }
