@@ -81,6 +81,10 @@ export async function unsetSettingsKey(key: SettingsKey, env: NodeJS.ProcessEnv 
 
   const source = await readFile(path, "utf8");
   const keyPattern = new RegExp(`^\\s*${key}\\s*:`);
+  // loadSettings defaults sessionTitle to "auto", so the value guard above
+  // cannot tell a written key from a never-written one; only a key that owns
+  // a line in the file is removable (unset of an absent key stays a no-op).
+  if (!source.split(/\r?\n/).some((line) => keyPattern.test(line))) return false;
   const remaining = source.split(/\r?\n/).filter((line) => !keyPattern.test(line));
 
   const hasContent = remaining.some((line) => {

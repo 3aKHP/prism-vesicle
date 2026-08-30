@@ -878,6 +878,31 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("unset settings sessionTitle is a reported no-op when the key was never written", async () => {
+    await withTempProject("vesicle-config-unset-settings-title-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const original = ["version: 1", "editor: nano", ""].join("\n");
+      await writeFile(join(configDir, "settings.yaml"), original, "utf8");
+      const result = await runCli(["config", "unset", "settings", "sessionTitle"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('"removed": false');
+      const after = await readFile(join(configDir, "settings.yaml"), "utf8");
+      expect(after).toBe(original);
+    });
+  });
+
+  test("unset settings sessionTitle keeps a version-only settings.yaml on disk", async () => {
+    await withTempProject("vesicle-config-unset-settings-title-only-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      await writeFile(join(configDir, "settings.yaml"), "version: 1\n", "utf8");
+      const result = await runCli(["config", "unset", "settings", "sessionTitle"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('"removed": false');
+      const after = await readFile(join(configDir, "settings.yaml"), "utf8");
+      expect(after).toBe("version: 1\n");
+    });
+  });
+
   test("unset settings refuses an unsupported-version settings.yaml", async () => {
     await withTempProject("vesicle-config-unset-settings-v2-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);
