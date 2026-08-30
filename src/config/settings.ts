@@ -13,12 +13,15 @@ import { atomicWrite, safeUnlink } from "./atomic-write";
  */
 
 /** Settings fields the CLI may set/unset; shared by set and unset commands. */
-export const SETTINGS_KEYS = ["editor"] as const;
+export const SETTINGS_KEYS = ["editor", "sessionTitle"] as const;
 export type SettingsKey = (typeof SETTINGS_KEYS)[number];
+export type SessionTitlePreference = "auto" | "off";
 
 export type Settings = {
   /** Raw external-editor command line (e.g. `code --wait`, `nano`), if set. */
   editor?: string;
+  /** Automatic first-turn session title generation. Defaults to auto. */
+  sessionTitle?: SessionTitlePreference;
   /** Whether the file existed on disk (false → no settings.yaml yet). */
   exists: boolean;
   path: string;
@@ -35,7 +38,7 @@ export async function loadSettings(env: NodeJS.ProcessEnv = process.env): Promis
     source = await readFile(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && (error as { code: string }).code === "ENOENT") {
-      return { exists: false, path };
+      return { exists: false, sessionTitle: "auto", path };
     }
     throw error;
   }
@@ -54,7 +57,11 @@ export async function loadSettings(env: NodeJS.ProcessEnv = process.env): Promis
     throw new Error(`settings.yaml: unsupported version "${version}" (expected "1").`);
   }
   const editor = values.get("editor");
-  return { editor: editor && editor.length > 0 ? editor : undefined, exists: true, path };
+  const rawTitle = values.get("sessionTitle");
+  if (rawTitle !== undefined && rawTitle !== "auto" && rawTitle !== "off") {
+    throw new Error(`settings.yaml: sessionTitle must be auto or off (found "${rawTitle}").`);
+  }
+  return { editor: editor && editor.length > 0 ? editor : undefined, sessionTitle: (rawTitle as SessionTitlePreference | undefined) ?? "auto", exists: true, path };
 }
 
 /**
@@ -74,6 +81,10 @@ export async function unsetSettingsKey(key: SettingsKey, env: NodeJS.ProcessEnv 
 
   const source = await readFile(path, "utf8");
   const keyPattern = new RegExp(`^\\s*${key}\\s*:`);
+  // loadSettings defaults sessionTitle to "auto", so the value guard above
+  // cannot tell a written key from a never-written one; only a key that owns
+  // a line in the file is removable (unset of an absent key stays a no-op).
+  if (!source.split(/\r?\n/).some((line) => keyPattern.test(line))) return false;
   const remaining = source.split(/\r?\n/).filter((line) => !keyPattern.test(line));
 
   const hasContent = remaining.some((line) => {

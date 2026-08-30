@@ -182,7 +182,7 @@ export function addTurnUsageToSession(current: TokenUsageSummary, turn: TokenUsa
   };
 }
 
-export function sumSessionUsage(messages: ResumedMessage[]): TokenUsageSummary {
+export function sumSessionUsage(messages: ResumedMessage[], auxiliaryUsages: ResponseUsage[] = []): TokenUsageSummary {
   let session = emptyUsageSummary();
   let turn = emptyUsageSummary();
   let agents = emptyUsageSummary();
@@ -203,6 +203,7 @@ export function sumSessionUsage(messages: ResumedMessage[]): TokenUsageSummary {
   }
   const combined = mergeLogicalTurnUsage(turn, agents);
   if (hasUsageSummary(combined)) session = addTurnUsageToSession(session, combined);
+  for (const usage of auxiliaryUsages) session = addTurnUsageToSession(session, addIndependentUsageToTurn(emptyUsageSummary(), usage));
   return session;
 }
 

@@ -18,6 +18,7 @@ import {
   verifyBundledHarnessPack,
   verifyHarnessPack,
 } from "../../../src/core/harness";
+import { symlinkCapable } from "../../support/symlink-capability";
 import type { HarnessManifest } from "../../../src/core/harness";
 import { runPrompt } from "../../../src/core/agent-loop/run";
 import { listAgentProfiles } from "../../../src/core/agents/profile";
@@ -25,8 +26,8 @@ import { createSessionStore, loadSessionSnapshot } from "../../../src/core/sessi
 import { inspectAssets, materializeEditableAssets, parseHarnessReference } from "../../../src/cli/assets";
 
 // The bundled `harness-manifest.json` is the single source of truth for the
-// bundled pack's version and manifest SHA. Read it once here and assert
-// resolved runtime values against these, instead of pasting version/SHA
+// bundled pack's version, Adapter version, and manifest SHA. Read it once here and assert
+// resolved runtime values against these, instead of pasting identity/SHA
 // literals that drift on every Harness bump (issue #95).
 const bundledManifestPath = join(import.meta.dir, "..", "..", "..", "harness-manifest.json");
 const bundledManifestSource = await readFile(bundledManifestPath, "utf8");
@@ -46,7 +47,7 @@ describe("Harness Pack foundation", () => {
       expect(runtime?.lock).toMatchObject({
         packId: "prism-engine-v10",
         packVersion: bundledManifest.version,
-        adapterVersion: "1.1.0",
+        adapterVersion: bundledManifest.driver.adapterVersion,
         manifestSha256: bundledManifestSha256,
       });
       expect(runtime?.pack.assetCount).toBe(73);
@@ -235,10 +236,9 @@ describe("Harness Pack foundation", () => {
     }
   });
 
-  test("rejects tampered, unlisted, and unsafe pack files", async () => {
+  test("rejects tampered and unlisted pack files and unsafe manifest entries", async () => {
     const tampered = await createHarnessFixture();
     const extra = await createHarnessFixture();
-    const linked = await createHarnessFixture();
     try {
       await write(join(tampered.pack, "assets", "prompts", "engines", "etl.md"), "tampered");
       await expect(verifyHarnessPack(tampered.pack, tampered.options)).rejects.toThrow("hash mismatch");
@@ -249,15 +249,21 @@ describe("Harness Pack foundation", () => {
       const raw = JSON.parse(await readFile(join(extra.pack, "manifest.json"), "utf8")) as Record<string, unknown>;
       raw.assets = { ...(raw.assets as Record<string, string>), "assets/../escape.md": "a".repeat(64) };
       expect(() => parseHarnessManifest(raw)).toThrow("unsafe");
-
-      await symlink(linked.host, join(linked.pack, "assets", "linked-host"));
-      await expect(verifyHarnessPack(linked.pack, linked.options)).rejects.toThrow("symbolic link");
     } finally {
       await Promise.all([
         rm(tampered.root, { recursive: true, force: true }),
         rm(extra.root, { recursive: true, force: true }),
-        rm(linked.root, { recursive: true, force: true }),
       ]);
+    }
+  });
+
+  test.skipIf(!symlinkCapable)("rejects a pack file that is a symbolic link into host assets", async () => {
+    const linked = await createHarnessFixture();
+    try {
+      await symlink(linked.host, join(linked.pack, "assets", "linked-host"));
+      await expect(verifyHarnessPack(linked.pack, linked.options)).rejects.toThrow("symbolic link");
+    } finally {
+      await rm(linked.root, { recursive: true, force: true });
     }
   });
 

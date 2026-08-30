@@ -21,6 +21,25 @@ const tarSupported = await (async (): Promise<boolean> => {
   }
 })();
 
+// The product passes absolute archive paths to the system tar (the fixture's
+// create and extractTarball's extract alike). GNU tar from Git Bash parses the
+// drive letter of an absolute Windows path as a remote host, so probe the real
+// capability instead of assuming the tar found above is usable.
+const tarSupportsAbsoluteArchivePaths = await (async (): Promise<boolean> => {
+  const dir = await mkdtemp(join(tmpdir(), "vesicle-tar-probe-"));
+  try {
+    await writeFile(join(dir, "t"), "x", "utf8");
+    const created = Bun.spawnSync(["tar", "-czf", join(dir, "t.tar.gz"), "-C", dir, "t"]);
+    if (created.exitCode !== 0) return false;
+    const listed = Bun.spawnSync(["tar", "-tzf", join(dir, "t.tar.gz")]);
+    return listed.exitCode === 0;
+  } catch {
+    return false;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+})();
+
 async function withEnv<T>(work: (env: NodeJS.ProcessEnv, scratch: string) => Promise<T>): Promise<T> {
   const scratch = await mkdtemp(join(tmpdir(), "vesicle-skill-source-"));
   const env = { ...process.env, VESICLE_CONFIG_DIR: join(scratch, "config") };
@@ -225,7 +244,7 @@ describe("github url parsing", () => {
 });
 
 describe("github acquisition", () => {
-  test("installs a root skill from a GitHub URL via an injected fetch source", async () => {
+  test.skipIf(!tarSupportsAbsoluteArchivePaths)("installs a root skill from a GitHub URL via an injected fetch source", async () => {
     if (!tarSupported) return;
     await withEnv(async (env, scratch) => {
       const topLevel = "ghskill-abcdef0";
@@ -251,7 +270,7 @@ describe("github acquisition", () => {
     });
   });
 
-  test("the resolved commit is persisted as a SHA, never a floating ref", async () => {
+  test.skipIf(!tarSupportsAbsoluteArchivePaths)("the resolved commit is persisted as a SHA, never a floating ref", async () => {
     if (!tarSupported) return;
     await withEnv(async (env, scratch) => {
       const topLevel = "ghpinned-abcdef0";
@@ -274,7 +293,7 @@ describe("github acquisition", () => {
     });
   });
 
-  test("resolves the default branch when the URL has no /tree/<ref>", async () => {
+  test.skipIf(!tarSupportsAbsoluteArchivePaths)("resolves the default branch when the URL has no /tree/<ref>", async () => {
     if (!tarSupported) return;
     await withEnv(async (env, scratch) => {
       const topLevel = "defbranch-abcdef0";
@@ -300,7 +319,7 @@ describe("github acquisition", () => {
     });
   });
 
-  test("resolves a slash-bearing branch ref instead of truncating it", async () => {
+  test.skipIf(!tarSupportsAbsoluteArchivePaths)("resolves a slash-bearing branch ref instead of truncating it", async () => {
     if (!tarSupported) return;
     await withEnv(async (env, scratch) => {
       const topLevel = "slashskill-abcdef0";
@@ -325,7 +344,7 @@ describe("github acquisition", () => {
     });
   });
 
-  test("installs a root skill whose GitHub repo name is not lowercase", async () => {
+  test.skipIf(!tarSupportsAbsoluteArchivePaths)("installs a root skill whose GitHub repo name is not lowercase", async () => {
     if (!tarSupported) return;
     await withEnv(async (env, scratch) => {
       const topLevel = "MyCoolSkill-abcdef0";

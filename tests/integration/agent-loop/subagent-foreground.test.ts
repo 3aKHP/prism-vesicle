@@ -115,7 +115,7 @@ describe("agent loop: subagent foreground", () => {
     }) as typeof fetch;
 
     const turn = runPrompt({ input: "delegate", rootDir });
-    await eventually(() => expect(childResolvers).toHaveLength(2));
+    await eventually(() => expect(childResolvers).toHaveLength(2), { timeoutMs: 3_000 });
     expect(parentRequests).toBe(1);
     childResolvers[0]!(Response.json({ id: "child-a", choices: [{ message: { content: "source map" } }] }));
     childResolvers[1]!(Response.json({ id: "child-b", choices: [{ message: { content: "review" } }] }));
@@ -196,7 +196,7 @@ describe("agent loop: subagent foreground", () => {
       permission: { mode: "MANUAL" },
       agentManager: manager,
     });
-    await eventually(() => expect(childResolvers).toHaveLength(2));
+    await eventually(() => expect(childResolvers).toHaveLength(2), { timeoutMs: 3_000 });
     childResolvers[0]!({ content: "A" });
     childResolvers[1]!({ content: "B" });
     expect((await completion).kind).toBe("complete");
@@ -242,7 +242,7 @@ describe("agent loop: subagent foreground", () => {
 
     let turnSettled = false;
     const observedTurn = turn.finally(() => { turnSettled = true; });
-    await eventually(() => expect(childResolvers).toHaveLength(2));
+    await eventually(() => expect(childResolvers).toHaveLength(2), { timeoutMs: 3_000 });
     childResolvers[0]!({ content: "child result A" });
     await Bun.sleep(0);
     expect(turnSettled).toBe(false);

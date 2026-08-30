@@ -54,7 +54,7 @@ export function sessionPickerLine(session: SessionSummary, index: number, select
     ? ` [quality:${session.pendingQuality.state === "interrupted" ? "interrupted" : "decision"}]`
     : "";
   const id = session.sessionId.slice(0, 24);
-  const head = `${marker}${index + 1}. ${id}${pending}${pendingEngine}${pendingQuestion}${pendingPermission}${pendingQuality}`;
-  const detail = `${session.preview} (${session.recordCount} records)`;
+  const head = `${marker}${index + 1}. ${session.title ?? id}${pending}${pendingEngine}${pendingQuestion}${pendingPermission}${pendingQuality}`;
+  const detail = session.title ? `${session.preview} (${session.recordCount} records) · ${id}` : `${session.preview} (${session.recordCount} records)`;
   return truncateLine(`${head}  ${detail}`, width);
 }

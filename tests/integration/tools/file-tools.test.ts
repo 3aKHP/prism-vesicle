@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { executeFileTool } from "../../../src/core/tools";
 import type { ToolResult } from "../../../src/core/tools";
 import { AssetResolver } from "../../../src/core/runtime/assets";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 let rootDir = "";
 
@@ -107,7 +108,7 @@ describe("file tools v2", () => {
     expect(nested).toMatchObject({ entries: [], fileCount: 0, directoryCount: 0, empty: true });
   });
 
-  test("does not report a directory containing only a symlink as empty", async () => {
+  test.skipIf(!symlinkCapable)("does not report a directory containing only a symlink as empty", async () => {
     await symlink(join(rootDir, "source_materials", "seed.md"), join(rootDir, "workspace", "linked.md"));
 
     const listed = JSON.parse((await executeFileTool(rootDir, call("list_directory", {
@@ -454,7 +455,7 @@ describe("file tools v2", () => {
     }, "Only project-relative paths are allowed");
   });
 
-  test("rejects symbolic links below the project tmp/ scratch root", async () => {
+  test.skipIf(!symlinkCapable)("rejects symbolic links below the project tmp/ scratch root", async () => {
     const outside = await mkdtemp(join(tmpdir(), "vesicle-file-tools-outside-"));
     try {
       await mkdir(join(rootDir, "tmp"), { recursive: true });
@@ -469,7 +470,7 @@ describe("file tools v2", () => {
     }
   });
 
-  test("rejects symbolic links in model-visible paths", async () => {
+  test.skipIf(!symlinkCapable)("rejects symbolic links in model-visible paths", async () => {
     const outside = await mkdtemp(join(tmpdir(), "vesicle-file-tools-outside-"));
     try {
       await writeFile(join(outside, "secret.md"), "outside", "utf8");

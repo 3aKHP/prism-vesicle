@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { initializeEditableAssets, inspectAssets, materializeEditableAssets } from "../../../src/cli/assets";
 import { AssetResolver } from "../../../src/core/runtime/assets";
 import { inspectEngineAssetDrift, loadEngineAssetRuntime } from "../../../src/core/runtime/engine-assets";
+import { symlinkCapable } from "../../support/symlink-capability";
 
 describe("runtime assets", () => {
   test("falls back to bundled V10 assets and can materialize a full project override", async () => {
@@ -59,7 +60,7 @@ describe("runtime assets", () => {
     }
   });
 
-  test("refuses to materialize through a project asset symlink", async () => {
+  test.skipIf(!symlinkCapable)("refuses to materialize through a project asset symlink", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "vesicle-materialize-symlink-"));
     const project = join(rootDir, "project");
     const outside = join(rootDir, "outside");
@@ -173,6 +174,34 @@ describe("runtime assets", () => {
       await expect(resolver.readText("assets/escape.md")).rejects.toThrow("escapes its layer");
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test("project and user asset-root files shadow lower-layer descendants", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-asset-root-shadow-"));
+    const project = join(root, "project");
+    const config = join(root, "config");
+    const bundled = join(root, "bundled-assets");
+    try {
+      await mkdir(project, { recursive: true });
+      await writeFile(join(project, "assets"), "project root blocker", "utf8");
+      await write(join(bundled, "specs", "lower.md"), "must stay hidden");
+      const resolver = new AssetResolver(project, {
+        env: { VESICLE_CONFIG_DIR: config },
+        bundledDirectory: bundled,
+        executablePath: join(root, "missing", "vesicle"),
+      });
+
+      await expect(resolver.readText("assets/specs/lower.md")).rejects.toThrow("shadowed by a file");
+      await expect(resolver.listDirectory("assets")).rejects.toThrow("not a directory");
+
+      await rm(join(project, "assets"));
+      await mkdir(config, { recursive: true });
+      await writeFile(join(config, "assets"), "user root blocker", "utf8");
+      await expect(resolver.readText("assets/specs/lower.md")).rejects.toThrow("shadowed by a file");
+      await expect(resolver.listDirectory("assets")).rejects.toThrow("not a directory");
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 

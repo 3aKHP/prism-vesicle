@@ -21,6 +21,7 @@ Three facts, one line each:
 - It installs into your user directory (`%LOCALAPPDATA%\Programs\Prism Vesicle`) and **does not need administrator privileges**.
 - Upgrade or reinstall leaves your configuration and projects untouched (configuration lives in `%APPDATA%\prism-vesicle\`, separate from the program directory).
 - Running the same installer again offers maintenance choices: Reinstall / Repair / Uninstall. See [Reference: Update · uninstall · migrate](../reference/update-uninstall-migrate.md) for details.
+- The Prism Vesicle icon is shared by Setup, the generated uninstaller, Start Menu, Apps & Features, and the File Explorer entries; the wizard uses the matching compact mark.
 
 Keep **Configure and launch Prism Vesicle** checked on the installer's last page; it opens the configuration wizard automatically. The Start Menu group **Prism Vesicle** has three entries: **Configure Prism Vesicle** (reopen the wizard), **Prism Vesicle Doctor** (check the environment), and **Uninstall Prism Vesicle** (uninstall).
 

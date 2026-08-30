@@ -19,7 +19,7 @@
 
 Vesicle 使用 Bun 与 TypeScript 开发，将版本化 Harness Pack 连接到 DeepSeek V4 等直连模型供应商、MCP 工具、受权限门禁约束的宿主工具、前后台 SubAgent 与持久化会话。
 
-> **Beta 状态：**`1.0.0-beta.2` 是公开 Beta 候选版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
+> **RC 状态：**`1.0.0-rc.1` 是面向稳定化的发布候选（RC）版本，而不是已经完成的终端用户产品。Windows 用户可通过引导式安装器完成安装与配置，无需编辑 YAML。受支持的参考资料仍包括[用户手册](./docs/user/zh-CN/README.md)、本 README、`vesicle doctor` 与 [`docs/examples/`](./docs/examples/) 下的示例。
 
 如果你不熟悉终端、API 密钥或模型供应商，请先阅读[循序渐进的用户手册](./docs/user/zh-CN/README.md)，再使用下方的精简配置说明。
 
@@ -29,9 +29,9 @@ Vesicle 使用 Bun 与 TypeScript 开发，将版本化 Harness Pack 连接到 D
 
 从对应的 GitHub 预发布下载 `PrismVesicleSetup-<version>-windows-x64.exe` 并双击运行。该安装器按用户安装，不需要管理员权限。安装完成后会启动 Prism Vesicle Setup：用户只需填写 OpenAI 兼容服务的 Base URL 与 API Key，即可自动获取并勾选模型；也可选配 Tavily、MCP 和权限偏好，全程无需手写配置文件。项目选择可以跳过；即使选择，也只用于 Setup 完成后的那一次启动，Vesicle 不会保存全局唯一项目目录。
 
-`1.0.0-beta.2` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
+`1.0.0-rc.1` 的 Windows 可执行文件和安装器明确不带 Authenticode 签名。Windows 签名推迟到项目具备引入签名服务的条件后再考虑，不设版本截止期限。请只从官方 GitHub Release 下载，使用 `SHA256SUMS.txt` 核对文件，并且不要在系统范围内关闭 Windows 安全功能。除非某个 Release 的说明明确写明已签名，否则历史 Windows 制品也应视为未签名。依赖签名前请阅读[代码签名政策](./CODE_SIGNING_POLICY.zh-CN.md)；本地存储与外部服务数据传输方式见[隐私政策](./PRIVACY.zh-CN.md)。
 
-安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。安装器会注册原生 `vesicle.exe` 命令，并添加当前用户的资源管理器目录操作 **Open in Prism Vesicle**。再次运行安装器时会显示 **重新安装 / 修复 / 卸载** 维护选项。在终端中启动项目时，先进入目标目录：
+安装器包含独立 Windows 运行时与完整的内置 V10 Harness，此路径不要求预先安装 Bun。升级和普通卸载不会删除 `%APPDATA%\prism-vesicle` 下的用户配置或项目数据。安装器会注册原生 `vesicle.exe` 命令，并将 Prism Vesicle 图标统一用于可执行文件、安装器、卸载程序、开始菜单、应用和功能以及资源管理器入口，同时添加当前用户的资源管理器目录操作 **Open in Prism Vesicle**。再次运行安装器时会显示 **重新安装 / 修复 / 卸载** 维护选项。在终端中启动项目时，先进入目标目录：
 
 ```powershell
 Set-Location C:\path\to\my-project
@@ -49,9 +49,11 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-Beta 阶段中,npm 的 `latest` dist-tag 会有意跟随最新 Beta,因此发布后上面的无版本安装命令会安装 `1.0.0-beta.2`。如需继续停留在 Alpha 构建,请显式固定旧版本。
+`1.0.0-rc.1` 发布到 npm 的 `next` dist-tag;`latest` 会继续跟随最新 Beta,因此上面的无版本安装命令仍会安装 `1.0.0-beta.2`。请使用 `npm install -g prism-vesicle@next` 或固定精确版本来显式安装发布候选。
 
 软件包包含预编译的 TUI 入口，以及完整、只读的 `prism-engine-v10` 默认运行时基线；启动时不会在 `node_modules` 内编译应用 TSX。普通使用不需要项目锁，也不需要额外安装 Harness。Vesicle 会先解析当前项目与用户级全局的稀疏 `assets/` 覆盖，然后只使用一个经过验证的完整基线：项目固定的托管 Harness Pack，或当前软件包与独立发行版附带的内置 V10 Pack。Harness 自己拥有已声明的提示词片段；受限的宿主扩展层提供五个通用 SubAgent 及其提示词。
+
+交互式 TUI 和 Guided Setup 也会通过 renderer 把宿主状态投影到终端标签页。标题标记、动效控制和强制不写开关见[配置文件参考](./docs/user/zh-CN/reference/configuration.md)。
 
 查看当前资产层和生效 manifest 的来源：
 
@@ -202,9 +204,9 @@ bun run doctor
 | `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` | 运行可选的真实供应商验收通道(连通性 smoke + 严格 ETL 确认门);缺少环境变量或凭据时记为 skip 而非 pass |
 | `bun run pack:check` | 验证 npm 发布白名单 |
 | `bun run pack:smoke` | 对打包后的 npm 分发执行冒烟测试 |
-| `bun run build:exe` | 构建 Windows 和 Linux 独立可执行文件 |
+| `bun run build:exe` | 构建独立可执行文件(原生 Windows 输出带品牌资源的发布 PE;非 Windows 主机输出显式非发布的 Windows 交叉构建和 Linux ELF) |
 | `bun run build:assets` | 构建可编辑资产 ZIP |
-| `bun run build:installer:stage` | 暂存完整 Windows 安装器载荷 |
+| `bun run build:installer:stage` | 在生成 canonical 品牌 PE 后暂存原生 Windows 安装器载荷 |
 | `bun run build:installer` | 在 Windows 上构建 Inno Setup 安装器 |
 
 `vesicle debug markdown-runtime` 可以在不打开 TUI 的情况下验证独立 OpenTUI worker 和语法运行时。`vesicle prompt dump --engine <id>` 会输出模型可见的完整系统提示；`vesicle prompt shape --engine <id>` 只输出其组合结构。

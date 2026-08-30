@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 type WorkflowStep = {
+  name?: string;
   run?: string;
   uses?: string;
   env?: Record<string, string>;
@@ -13,6 +14,7 @@ type WorkflowJob = {
   if?: string;
   uses?: string;
   environment?: string;
+  outputs?: Record<string, string>;
   permissions?: Record<string, string>;
   steps?: WorkflowStep[];
 };
@@ -68,23 +70,52 @@ describe("release workflow contract", () => {
     expect(publish.jobs.npm?.permissions).toEqual({ contents: "read", "id-token": "write" });
   });
 
-  test("discloses the beta channel, known limits, and unsigned Windows artifacts", async () => {
+  test("publishes release candidates to next without advancing latest", async () => {
     const publish = await loadWorkflow("release.yml");
-    const releaseStep = publish.jobs["github-release"]?.steps?.find(
-      (step) => step.uses === "softprops/action-gh-release@v3",
-    );
-    const body = String(releaseStep?.with?.body ?? "");
 
+    const metadataScript = publish.jobs.metadata?.steps?.find((step) => step.run)?.run ?? "";
+    expect(metadataScript).toContain("*-rc.*)");
+    expect(publish.jobs.metadata?.outputs?.channel).toBe("${{ steps.release.outputs.channel }}");
+
+    // The npm dist-tag must come from the derived channel, never a hardcoded tag.
+    const npmScript =
+      publish.jobs.npm?.steps?.find((step) => step.name === "Publish the verified package if it is not already present")
+        ?.run ?? "";
+    expect(npmScript).toContain("DIST_TAG=next");
+    expect(npmScript).toContain("DIST_TAG=latest");
+    expect(npmScript).toContain('npm publish --provenance --access public --tag "$DIST_TAG"');
+    expect(npmScript).not.toContain("--tag latest");
+  });
+
+  test("composes channel-aware bilingual release notes with the standing disclosures", async () => {
+    const publish = await loadWorkflow("release.yml");
+    const job = publish.jobs["github-release"];
+    const notes = job?.steps?.find((step) => step.name === "Compose channel-aware release notes")?.run ?? "";
+    const releaseStep = job?.steps?.find((step) => step.uses === "softprops/action-gh-release@v3");
+
+    // Every supported channel writes its own section and an unknown channel fails closed.
+    expect(notes).toContain("Release candidate channel and known limits / RC 频道与已知限制");
+    expect(notes).toContain("Beta channel and known limits / Beta 频道与已知限制");
+    expect(notes).toContain("Stable channel and known limits / 稳定频道与已知限制");
+    expect(notes).toContain("Unsupported release channel");
+    // RC wording must steer consumers to next while latest keeps tracking the beta line.
+    expect(notes).toContain("npm install -g prism-vesicle@next");
+    // Standing disclosures stay attached to every channel.
+    expect(notes).toContain("npm install -g prism-vesicle");
+    expect(notes).toContain("deepseek-subset-2026-08-19");
+    expect(notes).toContain("MCP resource, audio, URL/link");
+    expect(notes).toContain("not Authenticode-signed");
+    expect(notes).toContain("没有 Authenticode 签名");
+    expect(notes).toContain("SHA256SUMS.txt");
+    expect(notes).toContain("CODE_SIGNING_POLICY.md");
+    expect(notes).toContain("CODE_SIGNING_POLICY.zh-CN.md");
+    // The version placeholder must be resolved before the body reaches the release.
+    expect(notes).toContain("s/%VERSION%/$VERSION/g");
+
+    expect(releaseStep?.with?.body).toBe("${{ steps.notes.outputs.body }}");
     expect(releaseStep?.with?.generate_release_notes).toBe(true);
-    expect(body).toContain("npm install -g prism-vesicle");
-    expect(body).toContain("deepseek-subset-2026-08-19");
-    expect(body).toContain("MCP resource, audio, URL/link");
-    expect(body).toContain("Beta 频道与已知限制");
-    expect(body).toContain("not Authenticode-signed");
-    expect(body).toContain("没有 Authenticode 签名");
-    expect(body).toContain("SHA256SUMS.txt");
-    expect(body).toContain("CODE_SIGNING_POLICY.md");
-    expect(body).toContain("CODE_SIGNING_POLICY.zh-CN.md");
+    expect(releaseStep?.with?.prerelease).toBe("${{ needs.metadata.outputs.channel != 'stable' }}");
+    expect(releaseStep?.with?.make_latest).toBe("${{ needs.metadata.outputs.channel == 'stable' }}");
   });
 
   test("uses Node 24 action runtime lines throughout CI and publication", async () => {
@@ -160,8 +191,12 @@ describe("release workflow contract", () => {
     expect(commands).toContain("bun run pack:check");
     expect(commands).toContain("bun run pack:smoke");
     expect(commands).toContain("bun run build:exe linux");
+    expect(commands).toContain("bun run smoke:terminal-title-pty");
     expect(commands).toContain("bun run build:exe windows");
+    expect(commands).toContain("check-windows-brand.ps1");
     expect(commands).toContain("bun run build:installer");
     expect(commands).toContain("smoke-windows-installer.ps1");
+    expect(build.jobs.checks?.steps?.find((step) => step.uses === "actions/checkout@v7")?.with?.lfs).toBe(true);
+    expect(build.jobs.windows?.steps?.find((step) => step.uses === "actions/checkout@v7")?.with?.lfs).toBe(true);
   });
 });

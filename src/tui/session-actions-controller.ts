@@ -122,7 +122,7 @@ export function createSessionActionsController(options: SessionActionsController
       options.setConversation(vesicleMessagesFromResumed(snapshot.messages));
       options.setMessages(displayTranscriptFromSnapshot(snapshot.messages, options.agentCards()));
       options.setLastTurnUsage(latestTurnUsage(snapshot.messages));
-      options.setSessionUsage(sumSessionUsage(snapshot.messages));
+      options.setSessionUsage(sumSessionUsage(snapshot.messages, snapshot.auxiliaryUsage));
       options.setOutput("");
       options.setNextSessionParent({ uuid: result.parentUuid });
       clearPendingInteractions();

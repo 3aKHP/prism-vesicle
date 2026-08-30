@@ -80,6 +80,7 @@ describe("TUI command scheduler", () => {
     const rejectCommand = [{
       name: "publish",
       description: "Publish",
+      completion: null,
       busyBehavior: { kind: "reject" as const, reason: "publish requires an idle session" },
       run: async () => undefined,
     }];

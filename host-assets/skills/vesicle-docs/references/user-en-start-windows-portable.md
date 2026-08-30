@@ -15,6 +15,8 @@ From the official Release (names match the actual artifacts):
 
 The asset pack contains three things: `harness-manifest.json`, `assets\`, and `host-assets\`. They must match the binary version; replace both together when upgrading.
 
+The official portable executable is built on native Windows and carries the Prism Vesicle icon and version metadata. A locally produced WSL cross-build has an explicit `-cross-` filename and is not a release artifact.
+
 ## Verify the download
 
 This page is the "home" for checksum verification (the installer page only links to it). Compare against `SHA256SUMS.txt` in PowerShell:
@@ -26,7 +28,7 @@ Get-FileHash .\prism-vesicle-assets-<version>.zip -Algorithm SHA256
 
 Match the output to the corresponding line in `SHA256SUMS.txt`.
 
-> The beta artifacts are intentionally not Authenticode-signed (signing is deferred). A checksum confirms the file was not tampered with; it is not the same as a signature. See [Reference: Checksums and signing](../reference/checksums-and-signing.md).
+> The release artifacts are intentionally not Authenticode-signed (signing is deferred). A checksum confirms the file was not tampered with; it is not the same as a signature. See [Reference: Checksums and signing](../reference/checksums-and-signing.md).
 
 ## Layout
 

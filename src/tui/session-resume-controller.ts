@@ -229,7 +229,7 @@ export function createSessionResumeController(options: SessionResumeControllerOp
     options.setActiveEngine(restoredEngine);
     options.setConversation(messages);
     options.setLastTurnUsage(latestTurnUsage(snapshot.messages));
-    options.setSessionUsage(sumSessionUsage(snapshot.messages));
+    options.setSessionUsage(sumSessionUsage(snapshot.messages, snapshot.auxiliaryUsage));
     options.setOutput(snapshot.pendingQualityDecision?.candidate.content
       ?? snapshot.pendingQualityRewrite?.candidate?.content
       ?? snapshot.pendingGate?.assistantContent

@@ -4,7 +4,39 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0-rc.1] - 2026-08-30
+
+### Release candidate channel and known limitations
+
+- **This release candidate publishes to npm's `next` dist-tag; `latest` keeps tracking the beta line.** `npm install -g prism-vesicle` still installs `1.0.0-beta.2`; install the candidate explicitly with `npm install -g prism-vesicle@next` or by pinning `1.0.0-rc.1`. The channel policy will be revisited for stable `1.0.0`.
+- **Sessions recorded under earlier bundled Harness baselines are not lost; they migrate explicitly.** The first resume after upgrading presents the migration review; nothing is rebound silently. SubAgent child sessions are not cascade-migrated and keep their fail-closed identity check in this version.
+- **Windows artifacts remain intentionally unsigned.** Verify downloads from the official GitHub Release against `SHA256SUMS.txt`, follow the public Code Signing Policy, and do not disable Windows security features globally.
+- **Windows Terminal working-title glyph jitter remains a known follow-up.** The working-state title can jitter horizontally on Windows Terminal; the fix is tracked in Issue #263 and intentionally deferred to the next formal release.
+
+### Added
+
+- **Terminal tab titles.** Interactive TUI sessions project host state through the OpenTUI renderer: `·` idle, a same-width `◇`/`◈`/`◆`/`◈` diamond pulse while working, and `!` while user input is required. Durable titles are displayed directly; untitled sessions use a sanitized project-basename fallback. Setup uses `Prism Vesicle Setup`; `VESICLE_REDUCED_MOTION=1` freezes working at `◇`, `VESICLE_DISABLE_TERMINAL_TITLE=1` guarantees no writes, and `VESICLE_TERMINAL_TITLE=auto|on|off` controls TTY admission. Shutdown, suspend/resume, and external-editor return clear or reproject the title.
+
+- **Durable session titles.** With user-level `settings.yaml` (`sessionTitle: auto|off`), the first complete ordinary turn can asynchronously generate a cleaned title through an isolated provider request. Host-only title, retry-state, claim, and auxiliary-usage records stay out of model history; `/title`, `/title rename <text>`, and `/title regenerate` manage the title lifecycle.
+
+- **Deterministic Windows brand resources (A Lane, #251).** Native Windows builds now carry the canonical multi-size Prism Vesicle icon and version metadata; Inno Setup and its wizard use the same SVG-derived icon family, including the generated uninstaller and Windows integration surfaces. WSL cross-builds remain available under an explicit non-release filename because Bun cannot write Windows PE resources while cross-compiling.
+
+### Changed
+
+- **The bundled Harness advances to the public `prism-engine-v10@10.3.3` Pack.** The complete verified 73-file inventory now matches Neural Narratology Release `harness-20260830-3`, built from accepted upstream merge `d3e17e77f1f875c033ab33e281726b2356c18bd3` with `sourceState: clean`. Runtime and Stage HUD guidance now permits only the turn counters required by their templates alongside the tension scalar, and Dyad State Navigator is a standalone section. Driver operations, Engine and Agent inventories, required capabilities, bindings, Adapter `1.2.0`, and `protocolVersion` remain unchanged. Sessions recorded under `10.3.2` resume through the existing explicit migration flow.
+
+### Fixed
+
+- **Windows local builds reject UNC workspaces before producing a broken standalone Worker path.** Running native Windows Bun from a `\\wsl.localhost` or other UNC checkout relocates the secondary compile entrypoint outside Bun's normal virtual root while the runtime still targets `B:/~BUN/root/tree-sitter-worker.js`. `build:exe windows` and the installer build now fail before compilation with an actionable drive-letter-workspace requirement; normal native Windows CI and explicit non-release WSL cross-builds are unchanged.
+
+- **Session-title generation keeps project and configuration ownership stable.** The auxiliary request now resolves `settings.yaml` from an explicit host-environment input instead of rereading mutable process-global test state, and active cancellation ownership is keyed by project root plus session id. Resetting a same-named session in another project can no longer abort the wrong request, while a stale cancelled request cannot detach the controller that replaced it.
+
+- **Built-in command argument completion now covers the recent command surface.** `/websearch`, `/title`, `/init`, `/workspace`, and the `/skill --context-only` continuation now expose their finite or guarded runtime candidates through the shared ↑/↓/Tab/Enter popup. Every built-in command explicitly declares whether it owns completion, preventing new commands from silently omitting the contract.
+
+- **Windows system surfaces now use the full-size canonical ICO.** The installer places `prism-vesicle.ico` beside `vesicle.exe` and points Apps & Features, Start Menu, and Explorer integration at that multi-size file, preventing Windows Settings from enlarging a low-resolution executable frame into a blurred icon.
+
+- **Windows asset overlays and guarded-path diagnostics now match the cross-platform contracts.** A project or user asset file now shadows lower-layer descendants even when Windows reports the attempted child lookup as `ENOENT` instead of POSIX `ENOTDIR`, so direct reads and merged listings cannot disagree. Model-visible file tools also classify rooted Windows and root-relative paths through the platform path API before the existing project-boundary guard.
+- **Concurrent Skill state writes keep cross-process exclusion without a post-publication SQLite commit.** The reported Windows lock failure was traced to a test holder becoming unreachable across an `await`; Bun then performed its documented garbage-collection close and released the SQLite transaction. Skill Store index updates and filesystem-scope enable/disable updates now share one asynchronous 10-second SQLite mutex owner that keeps its `Database` live through the complete critical section and always releases with `ROLLBACK` plus explicit close; this replaces disabled-state's previous synchronous 5-second wait with the shared 10-second budget. SQLite carries no Skill data, so a successful atomic `index.json` or `.disabled` update can no longer be misreported as failed by a later `COMMIT`, and lock contention no longer blocks the TUI event loop with synchronous sleeps.
 
 ## [1.0.0-beta.2] - 2026-08-24
 

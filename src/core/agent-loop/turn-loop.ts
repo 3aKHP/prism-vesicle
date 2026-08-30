@@ -23,6 +23,7 @@ import { executeToolRound } from "./tool-round-executor";
 import { planToolRound } from "./tool-round-planner";
 import { validateToolCallArguments } from "../tools/arguments";
 import { finalizeTurn } from "./turn-finalizer";
+import { scheduleSessionTitleGeneration } from "../session/title";
 import { createCompactionObservation, runMidTurnCompaction, updateProviderObservation } from "./mid-turn-compaction";
 import type { CompactionObservation, MidTurnCompactionParams } from "./mid-turn-compaction";
 import { clearFrozenInstructionBlocks, readFrozenInstructionBlocks } from "../instructions/instruction-context";
@@ -101,6 +102,7 @@ export type RunLoopArgs = {
   checkpoint?: FileCheckpointManager;
   signal?: AbortSignal;
   onEvent?: (event: AgentLoopEvent) => void;
+  onSessionTitleChanged?: (title: string, sessionId: string) => void;
   onProviderContextSnapshot?: (snapshot: import("../side-question/types").SideQuestionContextSnapshot) => void;
   agentManager?: AgentManager;
   permission?: PermissionRuntimeOptions;
@@ -239,7 +241,7 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
   // instruction set.
   clearFrozenInstructionBlocks(args.session.sessionId);
   clearFrozenProjectStateBlock(args.session.sessionId);
-  return finalizeTurn({
+  const result = await finalizeTurn({
     response,
     messages: args.messages,
     session: args.session,
@@ -249,6 +251,19 @@ async function runLoopInternal(args: RunLoopArgs): Promise<RunPromptResult> {
     quality: runtime.quality.lastResult,
     requestEstimateTokens: runtime.lastRequestEstimateTokens,
   });
+  // Title generation is host-only and deliberately fire-and-forget: a slow or
+  // failed auxiliary request must never change the primary turn result.
+  if (result.kind === "complete" && result.assistantRecordUuid) {
+    scheduleSessionTitleGeneration({
+        rootDir: args.rootDir,
+        session: args.session,
+        provider: args.provider,
+        config: args.config,
+        signal: args.signal,
+        onTitleChanged: args.onSessionTitleChanged,
+    });
+  }
+  return result;
 }
 
 async function advanceRound(

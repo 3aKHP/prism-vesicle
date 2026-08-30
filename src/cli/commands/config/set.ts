@@ -3,6 +3,7 @@
 // re-parsed by its owning parser to confirm validity. All writes are atomic
 // (temp file + rename) and output a single JSON result envelope.
 
+import { readFile } from "node:fs/promises";
 import { permissionSettingsPath, loadPermissionSettings } from "../../../config/permissions";
 import { settingsPath, loadSettings, SETTINGS_KEYS } from "../../../config/settings";
 import type { ProviderProfile } from "../../../config/providers";
@@ -192,14 +193,26 @@ async function setQuality(key: string, value: string): Promise<SetResult> {
 }
 
 async function setSettings(key: string, value: string): Promise<SetResult> {
-  if (key !== "editor") throw new Error(`Unknown settings key "${key}".`);
+  if (key !== "editor" && key !== "sessionTitle") throw new Error(`Unknown settings key "${key}".`);
+  if (key === "sessionTitle" && value !== "auto" && value !== "off") {
+    throw new Error(`sessionTitle must be auto or off (found "${value}").`);
+  }
   const path = settingsPath();
-  const source = [
-    "version: 1",
-    `editor: ${value}`,
-    "",
-  ].join("\n");
-  await atomicWrite(path, source);
+  const current = await loadSettings();
+  const source = current.exists ? await readFile(path, "utf8") : "version: 1\n";
+  const lines = source.split(/\r?\n/);
+  const pattern = new RegExp(`^(\\s*)${key}(\\s*:)`);
+  let replaced = false;
+  const updated = lines.map((line) => {
+    if (!pattern.test(line)) return line;
+    replaced = true;
+    return `${key}: ${value}`;
+  });
+  if (!replaced) {
+    const insertAt = updated.length > 0 && updated.at(-1) === "" ? updated.length - 1 : updated.length;
+    updated.splice(insertAt, 0, `${key}: ${value}`);
+  }
+  await atomicWrite(path, `${updated.join("\n").replace(/\n*$/, "")}\n`);
   // Verify round-trip.
   await loadSettings();
   return { ok: true, operation: "set", file: "settings", key, value, path, restartRequired: true };

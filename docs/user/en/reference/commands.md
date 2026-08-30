@@ -2,7 +2,7 @@
 
 English | [简体中文](../../zh-CN/reference/commands.md)
 
-Type a command starting with `/` in the input box; typing `/` opens a candidate menu (↑↓ to choose, Tab/Enter to complete, Esc to cancel). Each command owns its argument grammar.
+Type a command starting with `/` in the input box; typing `/` opens a candidate menu (↑↓ to choose, Tab/Enter to complete, Esc to cancel). Commands with finite or guarded runtime arguments also open the same menu after a space; free-text arguments remain ordinary text. Each command owns its argument grammar.
 
 ## Session and context
 
@@ -18,6 +18,9 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/context` | Show current context usage and window occupancy |
 | `/instructions` | Show the Persistent Instructions active for the current engine (files, byte sizes, budget, and warnings) |
 | `/btw <question>` | Ask a temporary side question about the current conversation without interrupting the turn; no args reopens the latest answer |
+| `/title` | Show the durable session title and source |
+| `/title rename <text>` | Set a permanent user-authored session title |
+| `/title regenerate` | Reset automatic title-generation attempts |
 
 ## Model and engine
 

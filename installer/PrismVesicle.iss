@@ -14,6 +14,7 @@
 #define AppName "Prism Vesicle"
 #define SourceExeName "prism-vesicle.exe"
 #define AppExeName "vesicle.exe"
+#define AppIconName "prism-vesicle.ico"
 #define AppPublisher "3aKHP"
 #define AppUrl "https://github.com/3aKHP/prism-vesicle"
 
@@ -39,10 +40,12 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
 OutputBaseFilename=PrismVesicleSetup-{#AppVersion}-windows-x64
+SetupIconFile={#SourceRoot}\brand\windows\prism-vesicle.ico
+WizardSmallImageFile={#SourceRoot}\brand\windows\prism-vesicle-wizard.png
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayIcon={app}\{#AppExeName}
+UninstallDisplayIcon={app}\{#AppIconName}
 LicenseFile={#SourceRoot}\LICENSE
 ChangesEnvironment=yes
 CloseApplications=yes
@@ -67,6 +70,7 @@ english.MaintenanceUninstallFailed=The existing Prism Vesicle uninstaller could 
 
 [Files]
 Source: "{#SourceRoot}\{#SourceExeName}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
+Source: "{#SourceRoot}\brand\windows\{#AppIconName}"; DestDir: "{app}"; DestName: "{#AppIconName}"; Flags: ignoreversion
 Source: "{#SourceRoot}\harness-manifest.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceRoot}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceRoot}\host-assets\*"; DestDir: "{app}\host-assets"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -77,16 +81,16 @@ Type: files; Name: "{app}\vesicle.cmd"
 Type: files; Name: "{group}\Prism Vesicle.lnk"
 
 [Icons]
-Name: "{group}\Configure Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"
-Name: "{group}\Prism Vesicle Doctor"; Filename: "{cmd}"; Parameters: "/k &quot;&quot;{app}\{#AppExeName}&quot; doctor&quot;"; WorkingDir: "{userdocs}"
-Name: "{group}\Uninstall Prism Vesicle"; Filename: "{uninstallexe}"
+Name: "{group}\Configure Prism Vesicle"; Filename: "{app}\{#AppExeName}"; Parameters: "setup"; WorkingDir: "{userdocs}"; IconFilename: "{app}\{#AppIconName}"
+Name: "{group}\Prism Vesicle Doctor"; Filename: "{cmd}"; Parameters: "/k &quot;&quot;{app}\{#AppExeName}&quot; doctor&quot;"; WorkingDir: "{userdocs}"; IconFilename: "{app}\{#AppIconName}"
+Name: "{group}\Uninstall Prism Vesicle"; Filename: "{uninstallexe}"; IconFilename: "{app}\{#AppIconName}"
 
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueData: "Open in Prism Vesicle"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppExeName}"
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppIconName}"
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\PrismVesicle\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle"; ValueType: string; ValueData: "Open in Prism Vesicle"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppExeName}"
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#AppIconName}"
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\PrismVesicle\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%V"""
 
 [Run]

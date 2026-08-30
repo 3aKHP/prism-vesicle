@@ -7,6 +7,10 @@ This document defines durable conversation history, provider projection, file ch
 ## Session Identity And Persistence
 
 - One interactive TUI run keeps one active session until the user starts or resumes another session.
+
+- Session titles are host-only durable metadata. After the first ordinary authored user record and its final assistant reply are persisted, `sessionTitle: auto` may launch one independent title request. The request has no Prism prompt, tools, Skills, search, or generation-token override; only cleaned `response.content` is used. Title and generation-state records are excluded from provider history, compact checkpoints, and transcript messages. Up to three retryable attempts are recorded with a five-minute cross-turn cooldown; manual titles (`/title rename`) always win. `/title regenerate` resets the logical attempt counter.
+
+- The interactive TUI projects that title and the current host phase to the terminal tab through the OpenTUI renderer. This is presentation-only and must never be treated as session authority; non-TTY commands do not emit it, the hard-disable override is a no-write boundary, and shutdown clears the title.
 - Session JSONL is append-only. Rewind, compaction, recovery, and branching append records and never truncate or rewrite prior records.
 - Conversational records carry stable `uuid` and `parentUuid` links. Legacy linear records project as an implicit parent chain.
 - A regenerated response is a sibling candidate subtree off its shared user record. The reused user record and every record the new candidate produces share one `logicalTurnId`; its provider attempt receives a fresh `providerRoundId`.

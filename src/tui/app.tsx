@@ -9,7 +9,7 @@ import { createThemeScheduler } from "./theme-runtime";
 import { createThemePreferenceController, parseEnvTheme, type ThemePreferenceController } from "./theme-preference-controller";
 import { createWebSearchController, type WebSearchController } from "./web-search-controller";
 import { clearSessionWebSearchOverride } from "../core/agent-loop/web-search-state";
-import { listSessions, loadSessionSnapshot } from "../core/session/store";
+import { listSessions, loadSessionSnapshot, loadSessionRecords, projectSessionTitle, appendSessionTitle, resetSessionTitleGeneration } from "../core/session/store";
 import type { ReasoningDisplayMode, SessionSummary } from "../core/session/store";
 import { createTurnFocusController } from "./turn-focus-controller";
 import { loadArtifactPreview, scanArtifacts } from "../core/artifacts/workbench";
@@ -86,6 +86,8 @@ import { WorkspacePage } from "./workspace/view";
 import { copyTextToClipboard } from "./clipboard";
 import { closeAllProviderSessions, closeProviderSession } from "../providers/lifecycle";
 import { registerHostShutdownCleanup } from "../core/process/shutdown";
+import { resolveTerminalTitlePhase, type TerminalTitleController } from "./terminal-title";
+import { basename } from "node:path";
 
 export type AppProps = {
   dangerouslySkipPermissions?: boolean;
@@ -97,6 +99,7 @@ export type AppProps = {
   theme?: ThemePreferenceController;
   /** Called after the renderer has been destroyed to finish a CLI TUI exit. */
   onExit?: () => void;
+  terminalTitle?: TerminalTitleController;
 };
 
 export {
@@ -116,6 +119,9 @@ export function App(props: AppProps = {}) {
   initDebugLogging();
   const renderer = useRenderer();
   const exitTui = props.onExit ?? (() => {});
+  const terminalTitle = props.terminalTitle;
+  terminalTitle?.attach(renderer);
+  let terminalTitleLive = true;
   // The controller is constructed in runTui/setup before the first frame. Tests
   // that mount App directly fall back to an env-only controller (no project
   // read) so the palette and `/theme` still work without async I/O on mount.
@@ -131,6 +137,7 @@ export function App(props: AppProps = {}) {
   onMount(() => {
     if (props.bootstrapOnly) {
       process.nextTick(() => {
+        terminalTitle?.clear();
         renderer.destroy();
         exitTui();
       });
@@ -185,6 +192,33 @@ export function App(props: AppProps = {}) {
   const [status, setStatus] = createSignal("loading provider config");
   const [sessionPath, setSessionPath] = createSignal("no session yet");
   const [sessionId, setSessionId] = createSignal<string | undefined>();
+  let titleEffectGeneration = 0;
+  createEffect(() => {
+    const id = sessionId();
+    const engine = activeEngine();
+    const generation = ++titleEffectGeneration;
+    if (!id) {
+      terminalTitle?.setSession(engine, undefined, basename(process.cwd()));
+      return;
+    }
+    void loadSessionSnapshot(process.cwd(), id, { synthesizeDanglingToolResults: false })
+      .then((snapshot) => {
+        if (!terminalTitleLive || generation !== titleEffectGeneration || sessionId() !== id || activeEngine() !== engine) return;
+        // The reactive engine signal is the current host selection; the
+        // snapshot engine may lag while an /engine host record is being saved.
+        terminalTitle?.setSession(engine, snapshot.title?.title, basename(process.cwd()));
+      })
+      .catch(() => {
+        if (terminalTitleLive && generation === titleEffectGeneration && sessionId() === id && activeEngine() === engine) {
+          terminalTitle?.setSession(engine, undefined, basename(process.cwd()));
+        }
+      });
+  });
+  onCleanup(() => {
+    terminalTitleLive = false;
+    titleEffectGeneration++;
+    terminalTitle?.clear();
+  });
   let providerResourceSessionId: string | undefined;
   createEffect(() => {
     const current = sessionId();
@@ -461,6 +495,11 @@ export function App(props: AppProps = {}) {
       reject: setStatus,
     });
   }
+  const workspaceController = createWorkspaceController(process.cwd(), {
+    onExternalEditorReturn: () => {
+      if (terminalTitleLive) terminalTitle?.reproject();
+    },
+  });
   const composerController = createComposerController({
     rootDir: process.cwd(),
     commands: builtinCommands,
@@ -475,6 +514,7 @@ export function App(props: AppProps = {}) {
     sessionId,
     refreshArtifacts,
     listSessions,
+    listWorkspaceTargets: () => workspaceController.listWorkspaceTargets(),
     busy,
     activeModelCapabilities,
     status,
@@ -601,7 +641,6 @@ export function App(props: AppProps = {}) {
     copyText: (text) => copyTextToClipboard(renderer, text),
   });
   // Two-page shell (Scope B): page state outlives the per-page components.
-  const workspaceController = createWorkspaceController();
   const workspaceActive = () => workspaceController.activePage() === "workspace";
   function switchPage(): void {
     setFocusedArtifactPath(null);
@@ -699,6 +738,10 @@ export function App(props: AppProps = {}) {
     runCancellable: (operation) => turnCancellation.run(operation),
     handleAgentEvent,
     onProviderContextSnapshot: sideQuestionController.captureSnapshot,
+    onSessionTitleChanged: (title, titleSessionId) => {
+      if (!terminalTitleLive || sessionId() !== titleSessionId) return;
+      terminalTitle?.setSession(activeEngine(), title, basename(process.cwd()));
+    },
     beginUsageTurn,
     publishTurnUsage,
     recordIndependentAgentUsage,
@@ -915,11 +958,25 @@ export function App(props: AppProps = {}) {
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
     if (id && ready) void continuationScheduler.notify(id).catch(reportError);
   });
+  const hostDecisionPending = () => Boolean(
+    pendingGate()
+    || pendingEngineSwitch()
+    || pendingUserQuestion()
+    || pendingPermission()
+    || pendingQualityDecision()
+    || pendingChildPermission()
+    || yoloConfirmStage()
+    || migrationReview()
+    || qualityRewriteConfirm(),
+  );
+  createEffect(() => {
+    terminalTitle?.setPhase(resolveTerminalTitlePhase({ inputRequired: hostDecisionPending(), busy: busy(), restoring: restoringSession() }));
+  });
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    Boolean(pendingGate()) || Boolean(pendingEngineSwitch()) || Boolean(pendingUserQuestion()) || Boolean(pendingPermission()) || Boolean(pendingQualityDecision()) || Boolean(pendingChildPermission()) || Boolean(yoloConfirmStage()) || Boolean(qualityRewriteConfirm()) || Boolean(migrationReview()),
+    hostDecisionPending(),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(branchPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
@@ -960,6 +1017,7 @@ export function App(props: AppProps = {}) {
 
   useInputRouting({
     renderer,
+    beforeExit: () => terminalTitle?.clear(),
     onExit: exitTui,
     setStatus,
     splashActive: () => !splashGone(),
@@ -1140,6 +1198,27 @@ export function App(props: AppProps = {}) {
       resetRewindState,
       theme: { clearOverride: () => themeController.clearOverride() },
       webSearch: { clearOverride: () => webSearchController.clearOverride() },
+      title: {
+        sessionId,
+        current: async () => {
+          const id = sessionId();
+          if (!id) return {};
+          const title = projectSessionTitle(await loadSessionRecords(process.cwd(), id));
+          return title ? { title: title.title, source: title.source } : {};
+        },
+        rename: async (value) => {
+          const id = sessionId();
+          if (!id) throw new Error("No active session.");
+          await appendSessionTitle(process.cwd(), id, value, "user");
+          const title = projectSessionTitle(await loadSessionRecords(process.cwd(), id));
+          if (terminalTitleLive) terminalTitle?.setSession(activeEngine(), title?.title, basename(process.cwd()));
+        },
+        regenerate: async () => {
+          const id = sessionId();
+          if (!id) throw new Error("No active session.");
+          await resetSessionTitleGeneration(process.cwd(), id);
+        },
+      },
     },
     quality: {
       setMessages, setStatus, recordActivity,

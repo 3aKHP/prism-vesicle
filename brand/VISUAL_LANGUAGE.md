@@ -74,7 +74,7 @@ When motion is delivered, accept only **slow, continuous, physically grounded** 
 
 ## Terminal Derivation
 
-Vesicle runs on the self-maintained OpenTUI fork (@3akhp/opentui-core, upstream v0.5.3 base) with Solid. The terminal probes but does **not** emit Kitty/Sixel/OSC1337 raster protocols, so a bitmap logo cannot render inline in the terminal. In-app marks (startup splash, empty-session hero, header) are therefore **ANSI character art derived from the brand mark**: rasterize the SVG, map luminance through the ` .:-=+*#%@` ramp with a floor at the ground colour, apply the locked palette, and respect the ~1:2 terminal cell aspect. Re-derive after any SVG change. Bitmaps are used only outside the terminal (README, social preview, npm, installer).
+Vesicle runs on the self-maintained OpenTUI fork (@3akhp/opentui-core, upstream v0.5.3 base) with Solid. The terminal probes but does **not** emit Kitty/Sixel/OSC1337 raster protocols, so a bitmap logo cannot render inline in the terminal. In-app marks (startup splash, empty-session hero, header) are therefore **ANSI character art derived from the brand mark**: rasterize the SVG, map luminance through the ` .:-=+*#%@` ramp with a floor at the ground colour, apply the locked palette, and respect the ~1:2 terminal cell aspect. Re-derive after any SVG change. Bitmaps are used only outside the terminal (README, social preview, npm, installer). Windows distribution derivatives stay outside the terminal language: the canonical ICO uses the mono silhouette for small frames and the transparent compact mark for larger frames, while the Inno Setup wizard uses the compact mark on a transparent surface. These are deterministic raster derivatives, not new logo variants.
 
 ## Signature Moments In The TUI
 

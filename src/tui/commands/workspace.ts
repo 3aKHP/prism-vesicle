@@ -3,7 +3,7 @@
 // artifact-preview ports.
 
 import { afterToolRound, immediate, resolveArtifactTarget } from "./dispatch";
-import { artifactCommandCompletion } from "./argument-completion";
+import { artifactCommandCompletion, workspaceCommandCompletion } from "./argument-completion";
 import { renderValidationNotice } from "./render";
 import type { Command, WorkspaceCommandContext } from "./types";
 
@@ -14,18 +14,23 @@ export function createWorkspaceCommands(ctx: WorkspaceCommandContext): Command[]
       busyBehavior: immediate,
       description: "Open the Workspace page, optionally locating a file or directory",
       usage: "/workspace [path]",
+      completion: workspaceCommandCompletion,
       async run(args, raw) {
-        const located = await ctx.openWorkspaceTarget(args.trim() || undefined);
+        // The argument completion emits a double-quoted path when the target
+        // contains spaces; the whole remainder is one path, so accept one
+        // wrapping quote pair.
+        const target = args.trim().replace(/^"(.*)"$/, "$1");
+        const located = await ctx.openWorkspaceTarget(target || undefined);
         ctx.setStatus("workspace page");
         ctx.setMessages((prev) => [
           ...prev,
           { role: "user", content: raw },
           {
             role: "system",
-            content: args.trim()
+            content: target
               ? located
-                ? `Opened ${args.trim()} in the Workspace page.`
-                : `Workspace page open — "${args.trim()}" was not found in the project.`
+                ? `Opened ${target} in the Workspace page.`
+                : `Workspace page open — "${target}" was not found in the project.`
               : "Workspace page open. Ctrl+O switches pages, Ctrl+P quick open, F6 cycles regions.",
           },
         ]);

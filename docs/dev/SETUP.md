@@ -6,10 +6,12 @@ This document defines the Windows installer scope, interactive onboarding, model
 
 - The Windows installer owns only the application lifecycle: complete runtime payload, per-user install location, PATH, shortcuts, upgrade identity, and uninstall. It must not parse provider/MCP schemas, accept secrets, or mutate `%APPDATA%\prism-vesicle`.
 - The installed terminal command is the native `vesicle.exe`, renamed from the staged release binary during installation rather than wrapped in a batch file. Upgrades remove superseded executable, wrapper, and Start Menu launch entries. A detected installation exposes Reinstall, Repair, and Uninstall maintenance choices; Repair restores installed files and Windows integration without reopening Guided Setup.
+- The Windows distribution uses the canonical deterministic `brand/windows/prism-vesicle.ico` for the standalone PE, Inno Setup, generated uninstaller, Start Menu, Apps & Features, and Explorer integration. The ICO is installed beside `vesicle.exe` so system surfaces can select its full-size frames; the compact `brand/windows/prism-vesicle-wizard.png` remains an installer compile input only. Native Windows builds carry PE resources; WSL cross-builds are explicitly non-release outputs.
 
 ## Onboarding
 
 - `src/setup` owns interactive onboarding. Network discovery, masked input, configuration merge/backup, validation, optional MCP/Tavily setup, permission defaults, and project selection stay in the application so they reuse runtime contracts.
+- Guided Setup owns the fixed host terminal title `Prism Vesicle Setup` for its renderer lifetime and clears it before teardown; it does not consume or create a session title.
 - Setup presents the wire protocol before collecting the endpoint: OpenAI-compatible Chat, official OpenAI Responses, or the dated MiMo/DeepSeek Responses subsets. It writes reviewed HTTP defaults and the exact `responsesProfile`; it never guesses a protocol, profile, WebSocket capability, or remote-compaction capability from a URL or model name.
 - Setup choice pages must expose a visible backward action in addition to Escape handling, reset selection when returning to a shorter option list, and keep every rendered row clipped within compact terminal bounds.
 

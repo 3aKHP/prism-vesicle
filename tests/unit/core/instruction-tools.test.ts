@@ -13,6 +13,8 @@ import {
   resolveEffectiveSelection,
 } from "../../../src/core/instructions";
 import { freezeInstructionBlocks, readFrozenInstructionBlocks } from "../../../src/core/instructions/instruction-context";
+import { symlinkCapable } from "../../support/symlink-capability";
+import { modeBitsPersist } from "../../support/chmod-capability";
 import type { InstructionTarget } from "../../../src/core/instructions";
 import type { ToolCall } from "../../../src/core/tools/types";
 
@@ -41,20 +43,6 @@ async function writeTarget(target: InstructionTarget, content: string, root: { p
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content, "utf8");
 }
-
-// Symlink capability probe (top-level await so skipIf sees the resolved value).
-const symlinkCapable = await (async (): Promise<boolean> => {
-  const dir = await mkdtemp(join(tmpdir(), "vesicle-instr-symlink-probe-"));
-  try {
-    await writeFile(join(dir, "t"), "x", "utf8");
-    await symlink(join(dir, "t"), join(dir, "l"));
-    return true;
-  } catch {
-    return false;
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-})();
 
 describe("read_instructions", () => {
   test("returns content and selectedForActiveEngine for a present target", async () => {
@@ -217,16 +205,22 @@ describe("update_instructions write/delete", () => {
     });
   });
 
-  test("writes a user-scope target to the user config dir (0o600) with backup there (S7)", async () => {
+  test("writes a user-scope target to the user config dir with backup there (S7)", async () => {
     await withRoots(async (root) => {
       const wrote = await executeUpdateInstructionsTool(call("update_instructions", { scope: "user", engine: "all", action: "write", content: "user rule", summary: "user" }), { rootDir: root.project, env: root.env });
       expect(wrote.ok).toBe(true);
       const userFile = join(root.config, "VESICLE.md");
       expect(await readFile(userFile, "utf8")).toContain("user rule");
-      expect((await stat(userFile)).mode & 0o777).toBe(0o600);
       // Overwrite lands a backup under the user config instruction-backups dir.
       await executeUpdateInstructionsTool(call("update_instructions", { scope: "user", engine: "all", action: "write", content: "v2", summary: "revise" }), { rootDir: root.project, env: root.env });
       expect(existsSync(join(root.config, "instruction-backups", "user-VESICLE.md.previous"))).toBe(true);
+    });
+  });
+
+  test.skipIf(!modeBitsPersist)("persists a user-scope target with owner-only 0o600 mode bits (S7)", async () => {
+    await withRoots(async (root) => {
+      await executeUpdateInstructionsTool(call("update_instructions", { scope: "user", engine: "all", action: "write", content: "user rule", summary: "user" }), { rootDir: root.project, env: root.env });
+      expect((await stat(join(root.config, "VESICLE.md"))).mode & 0o777).toBe(0o600);
     });
   });
 

@@ -5,6 +5,7 @@ import { createBufferOwner } from "./buffer-owner";
 import { createExternalEditorOwner } from "./external-editor-owner";
 import { createFileOperationOwner } from "./file-operation-owner";
 import { routeWorkspaceKey, type InputSurface } from "./input-router";
+import { buildProjectPathIndex, type ProjectPathEntry } from "../../core/project/path-index";
 import { readFilePreview, type WorkspaceFilePreview } from "./tree-data";
 import { createTreeOwner } from "./tree-owner";
 import { createValidationOwner } from "./validation-owner";
@@ -71,7 +72,7 @@ function isSaveKey(key: TuiKeyEvent): boolean {
   return isCtrl(key, "s") || key.sequence === "\x13" || key.raw === "\x13";
 }
 
-export function createWorkspaceController(rootDir: string = process.cwd()) {
+export function createWorkspaceController(rootDir: string = process.cwd(), options: { onExternalEditorReturn?: () => void } = {}) {
   const [page, setPage] = createSignal<ShellPage>("chat");
   const [focusRegion, setFocusRegion] = createSignal<WorkspaceFocusRegion>("tree");
 
@@ -229,6 +230,10 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     return tree.locatePath(relPath);
   }
 
+  async function listWorkspaceTargets(): Promise<ProjectPathEntry[]> {
+    return buildProjectPathIndex(rootDir, { showHidden: false });
+  }
+
   /**
    * Toggle Markdown preview ↔ source. Requires a Markdown file with loaded
    * text lines: a metadata-only symlink has `kind: "markdown"` but no lines,
@@ -294,6 +299,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
   const externalEditor = createExternalEditorOwner({
     rootDir,
     onStatus: (text, tone) => status(text, tone),
+    onReturned: options.onExternalEditorReturn,
     resolveHandoffTarget: () => resolveHandoffTarget(),
     buffer: {
       isDirty: (path) => buffer.dirtyPaths().has(path),
@@ -677,6 +683,7 @@ export function createWorkspaceController(rootDir: string = process.cwd()) {
     setActivePage: activatePage,
     togglePage,
     openWorkspaceTarget,
+    listWorkspaceTargets,
     focusRegion,
     cycleFocus,
     // tree

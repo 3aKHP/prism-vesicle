@@ -6,7 +6,7 @@ This document defines the extension contract for slash-command argument completi
 
 ## Ownership
 
-Command execution remains in `commands/builtin.ts`. A command that has completable arguments declares an optional `completion` property beside its `name`, `usage`, and `run` handler. The completion property owns only the editable command grammar and how a selected candidate rebuilds the composer draft.
+Command execution remains in `commands/builtin.ts`. Every command declares a `completion` property beside its `name`, `usage`, and `run` handler: use a resolver for completable arguments and explicit `null` for free-text or argument-less commands. The completion property owns only the editable command grammar and how a selected candidate rebuilds the composer draft.
 
 Every command also declares its busy-turn scheduling behavior in the same registry entry. See [Command Queue](./COMMAND_QUEUE.md). Completion must not infer or override that behavior.
 
@@ -34,12 +34,12 @@ Return `null` when the command has no completable position at the current cursor
 | `items` | Immediate `OptionItem[]` candidates, or an async loader for runtime data. |
 | `complete` | Returns the complete, canonical composer draft for a selected candidate. |
 
-The resolver receives a host-owned `CommandCompletionContext`. It exposes configured provider data, the active provider, refreshed artifact and session stores, active Agent rows, and the project root. Add a context capability only when a new command needs a distinct host-owned source; do not read component signals or project files directly from a command definition.
+The resolver receives a host-owned `CommandCompletionContext`. It exposes configured provider data, the active provider, refreshed artifact and session stores, active Agent rows, guarded Workspace path candidates through `listWorkspaceTargets`, and the project root. Add a context capability only when a new command needs a distinct host-owned source; do not read component signals or project files directly from a command definition.
 
 ## Adding A Command
 
 1. Implement or update the command's `run` handler in `builtin.ts`. The handler remains the execution authority and validates its input independently.
-2. Add a `completion` property if the command has finite or runtime-discoverable arguments.
+2. Add a resolver for finite or runtime-discoverable arguments, or set `completion: null` when no candidate stage applies.
 3. Parse only that command's grammar in `resolve`. Preserve accepted aliases as input, but emit the canonical command and canonical argument values from `complete`.
 4. Use an existing completion factory when it matches the command. Examples include `fixedCommandCompletion(...)` and `artifactCommandCompletion(...)`.
 5. Add focused tests for every completion stage, selected draft, empty source, and applicable path or runtime-state boundary.

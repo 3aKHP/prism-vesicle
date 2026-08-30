@@ -1,0 +1,64 @@
+{
+  "schema": "prism-vesicle-windows-icon-v1",
+  "renderer": "@resvg/resvg-js@2.6.2",
+  "sources": {
+    "brand/prism-vesicle-mono.svg": "c433a2a90e87fe0eceb241c9bb9c9dba5f7aeafeda4fea528d1ea30bf64d074f",
+    "brand/prism-vesicle-mark.svg": "3b2dadc375e53abc5128e91ea77402956e400b5a1a7f8d7c6e5c3922a20c0f16"
+  },
+  "frames": [
+    {
+      "size": 16,
+      "source": "mono",
+      "sha256": "f51b35e33792a55b9930b76e9daae33fc3fae20ef9f9a09e8b82e26e77d523a0"
+    },
+    {
+      "size": 20,
+      "source": "mono",
+      "sha256": "ee46a8cfdc94bddf6609440c495ccf939c84aa69188c93ea7d9357506a1e4da6"
+    },
+    {
+      "size": 24,
+      "source": "mono",
+      "sha256": "88836704ba579973f5761010e3a72b89ff6b663a22f599eb5a8a04330b179ccd"
+    },
+    {
+      "size": 32,
+      "source": "mono",
+      "sha256": "bcc51087deec01392b77fb69c96ddac43a06d91ec24fbab6c8a42ccaac88f372"
+    },
+    {
+      "size": 40,
+      "source": "mono",
+      "sha256": "23cec8efea9a2ad29541757b709d48cb60156aa7f1057bd7a80792797a340bd0"
+    },
+    {
+      "size": 48,
+      "source": "mono",
+      "sha256": "215760a2587d86aad629e03ffa2ad9ca668cee7e82e33cc12fb6bf7eca0b2654"
+    },
+    {
+      "size": 64,
+      "source": "mark",
+      "sha256": "9812e99ad809cc03d17066f2e210d1711411ee9804273001505cf611489e3ddd"
+    },
+    {
+      "size": 128,
+      "source": "mark",
+      "sha256": "7099dbcee4b2cbea041d5ebbda346de71f489ff5c7756d6eb68fe113b46f55fd"
+    },
+    {
+      "size": 256,
+      "source": "mark",
+      "sha256": "ab506d76d3f6bea9fedbcc8214c7eab5d4262a5080a5bc9eedb791beb39248de"
+    }
+  ],
+  "wizard": {
+    "size": 256,
+    "source": "brand/prism-vesicle-mark.svg",
+    "sha256": "ab506d76d3f6bea9fedbcc8214c7eab5d4262a5080a5bc9eedb791beb39248de"
+  },
+  "outputs": {
+    "icoSha256": "b1111f19da44d909e5fbd31c2acf1b44566c0c6e3a5a767d9dde0377cdd55041",
+    "wizardSha256": "ab506d76d3f6bea9fedbcc8214c7eab5d4262a5080a5bc9eedb791beb39248de"
+  }
+}

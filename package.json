@@ -1,6 +1,6 @@
 {
   "name": "prism-vesicle",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-rc.1",
   "description": "Open-source Agent Harness host and TUI for durable Prism Engine workflows.",
   "license": "MIT",
   "repository": {
@@ -55,6 +55,7 @@
     "skills:docs:check": "bun run scripts/check/sync-bundled-skill-references.ts --check",
     "smoke:malformed-tool-pty": "bun run scripts/smoke/smoke-malformed-tool-pty.ts",
     "smoke:session-migration-pty": "bun run scripts/smoke/smoke-session-migration-pty.ts",
+    "smoke:terminal-title-pty": "bun run scripts/smoke/smoke-terminal-title-pty.ts",
     "smoke:tmp-scratch-pty": "bun run scripts/smoke/smoke-tmp-scratch-pty.ts",
     "smoke:skillify-pty": "bun run scripts/smoke/smoke-skillify-pty.ts",
     "hooks:install": "git config core.hooksPath .githooks",
@@ -65,7 +66,7 @@
     "test:component": "bun test tests/component",
     "test:integration": "bun test tests/integration",
     "test:contract": "bun test tests/contract",
-    "test:deterministic": "bun test tests/unit tests/component tests/integration tests/contract",
+    "test:deterministic": "bun run test:unit && bun run test:component && bun run test:integration && bun run test:contract",
     "test:acceptance:provider": "bun test ./tests/acceptance/provider/provider-connectivity.acceptance.ts ./tests/acceptance/provider/e2e-gate.acceptance.ts",
     "test:acceptance:gemini": "bun test ./tests/acceptance/provider/gemini-image-tool-result.acceptance.ts",
     "test:acceptance:gemini:websearch": "bun test ./tests/acceptance/provider/gemini-builtin-web-search.acceptance.ts",
@@ -82,6 +83,8 @@
     "pack:smoke": "bun run scripts/smoke/smoke-npm-package.ts",
     "smoke:binary": "bun run scripts/smoke/smoke-binary.ts",
     "build:exe": "bun run scripts/build/build-exe.ts",
+    "build:windows-icon": "bun run scripts/build/build-windows-icon.ts",
+    "check:windows-icon": "bun run scripts/build/build-windows-icon.ts --check",
     "build:assets": "bun run scripts/build/build-assets.ts",
     "build:installer:stage": "bun run scripts/build/stage-windows-installer.ts",
     "build:installer": "bun run scripts/build/build-installer.ts"
@@ -92,9 +95,10 @@
     "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
+    "@3akhp/opentui-solid": "0.5.3-zv6",
     "@biomejs/biome": "2.5.4",
     "@eslint-community/regexpp": "4.12.2",
-    "@3akhp/opentui-solid": "0.5.3-zv6",
+    "@resvg/resvg-js": "2.6.2",
     "@types/bun": "1.3.14",
     "diff": "9.0.0",
     "solid-js": "1.9.12",

@@ -19,7 +19,7 @@
 
 Built with Bun and TypeScript, Vesicle connects versioned Harness Packs to DeepSeek V4 and other direct model providers, MCP tools, permission-gated host tools, foreground and background SubAgents, and durable sessions.
 
-> **Beta status:** `1.0.0-beta.2` is a public beta candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
+> **Release candidate status:** `1.0.0-rc.1` is a stabilization release candidate, not a finished end-user product. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 
 New to terminals, API keys, or model providers? Start with the [step-by-step user manual](./docs/user/en/README.md) before following the condensed setup below.
 
@@ -29,9 +29,9 @@ New to terminals, API keys, or model providers? Start with the [step-by-step use
 
 Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub prerelease and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, and choose a safe permission preset without manual configuration-file editing. Project selection is optional and applies only to the one-time launch immediately after Setup; Vesicle never stores one global project directory.
 
-The Windows executable and installer for `1.0.0-beta.2` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
+The Windows executable and installer for `1.0.0-rc.1` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
-The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
+The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action, with the Prism Vesicle icon carried through the executable, installer, uninstaller, Start Menu, Apps & Features, and Explorer entries. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
 ```powershell
 Set-Location C:\path\to\my-project
@@ -49,9 +49,11 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-During the beta line, npm's `latest` dist-tag intentionally follows the newest beta, so the unversioned install command above installs `1.0.0-beta.2` after publication. Pin an explicit older version if you need to remain on an alpha build.
+`1.0.0-rc.1` publishes to npm's `next` dist-tag; `latest` keeps tracking the newest beta, so the unversioned install command above still installs `1.0.0-beta.2`. Install the release candidate explicitly with `npm install -g prism-vesicle@next` or by pinning the exact version.
 
 The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
+
+Interactive TUI and Guided Setup runs also project their host state to the terminal tab through the renderer. See the [configuration reference](./docs/user/en/reference/configuration.md) for title markers, motion controls, and the hard no-write override.
 
 Inspect the active layers and the source of the effective manifest:
 
@@ -202,9 +204,9 @@ bun run doctor
 | `BUN_E2E_REAL_PROVIDER=1 bun run test:acceptance:provider` | Run the opt-in real-provider acceptance lane (connectivity smoke + strict ETL gate); skips, not passes, when the env or credentials are missing |
 | `bun run pack:check` | Verify the npm publish allowlist |
 | `bun run pack:smoke` | Smoke-test the packed npm distribution |
-| `bun run build:exe` | Build standalone Windows and Linux executables |
+| `bun run build:exe` | Build standalone executables (native Windows emits the branded release PE; non-Windows hosts emit an explicit non-release Windows cross-build plus Linux ELF) |
 | `bun run build:assets` | Build the editable assets ZIP |
-| `bun run build:installer:stage` | Stage the complete Windows installer payload |
+| `bun run build:installer:stage` | Stage the native-Windows installer payload after building the canonical branded PE |
 | `bun run build:installer` | Build the Inno Setup installer on Windows |
 
 `vesicle debug markdown-runtime` verifies the standalone OpenTUI worker and syntax runtime without opening the TUI. `vesicle prompt dump --engine <id>` prints the complete model-visible system prompt; `vesicle prompt shape --engine <id>` prints only its composed structure.

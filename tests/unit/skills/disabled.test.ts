@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { disabledPathForScope, readDisabledNames, setDisabled, userDisabledPath } from "../../../src/skills";
@@ -62,25 +62,58 @@ describe("skill disabled state", () => {
     await withTemp(async (dir) => {
       const path = join(dir, "missing", ".disabled");
       const disabledModule = join(import.meta.dir, "../../../src/skills/disabled.ts");
+      const readyRoot = join(dir, "workers-ready");
+      const barrier = join(dir, "workers-go");
+      await mkdir(readyRoot, { recursive: true });
       const workerScript = [
+        'import { lstat, writeFile } from "node:fs/promises";',
         `import { setDisabled } from ${JSON.stringify(disabledModule)};`,
+        'await writeFile(process.env.READY_PATH!, "ready");',
+        "while (true) {",
+        "  try { await lstat(process.env.BARRIER_PATH!); break; } catch (error) {",
+        '    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;',
+        "    await Bun.sleep(5);",
+        "  }",
+        "}",
         "await setDisabled(process.env.DISABLED_PATH!, process.env.SKILL_NAME!, true);",
       ].join("\n");
       const expected = Array.from({ length: 16 }, (_, index) => `skill-${index}`);
-      const workers = expected.map((name) => Bun.spawn({
+      const workers = expected.map((name, index) => Bun.spawn({
         cmd: [process.execPath, "-e", workerScript],
-        env: { ...process.env, DISABLED_PATH: path, SKILL_NAME: name },
+        env: {
+          ...process.env,
+          BARRIER_PATH: barrier,
+          DISABLED_PATH: path,
+          READY_PATH: join(readyRoot, `${index}.ready`),
+          SKILL_NAME: name,
+        },
         stdout: "pipe",
         stderr: "pipe",
       }));
-      const results = await Promise.all(workers.map(async (worker) => ({
-        exitCode: await worker.exited,
-        stderr: await new Response(worker.stderr).text(),
-      })));
-      expect(results).toEqual(expected.map(() => ({ exitCode: 0, stderr: "" })));
-      expect(await readDisabledNames(path)).toEqual(new Set(expected));
+      try {
+        let readyCount = 0;
+        for (let attempt = 0; attempt < 1_000; attempt++) {
+          const ready = await Promise.all(expected.map((_, index) => lstat(join(readyRoot, `${index}.ready`)).then(() => true, () => false)));
+          readyCount = ready.filter(Boolean).length;
+          if (readyCount === expected.length) break;
+          await Bun.sleep(10);
+        }
+        expect(readyCount).toBe(expected.length);
+        await writeFile(barrier, "go");
+        const results = await Promise.all(workers.map(async (worker) => ({
+          exitCode: await worker.exited,
+          stderr: await new Response(worker.stderr).text(),
+        })));
+        expect(results).toEqual(expected.map(() => ({ exitCode: 0, stderr: "" })));
+        expect(await readDisabledNames(path)).toEqual(new Set(expected));
+      } finally {
+        for (const worker of workers) {
+          if (worker.exitCode === null) worker.kill("SIGKILL");
+        }
+        await Promise.all(workers.map((worker) => worker.exited.catch(() => undefined)));
+      }
     });
-  });
+  }, 15_000);
 
   test("setDisabled removes a name", async () => {
     await withTemp(async (dir) => {

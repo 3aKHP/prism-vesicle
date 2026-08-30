@@ -17,7 +17,7 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 
 可用环境变量覆盖:`VESICLE_CONFIG_DIR`(整个目录)或 `VESICLE_PROVIDERS_FILE`(只指定 providers 文件,取其所在目录)。
 
-与配置目录无关的显示环境变量:`VESICLE_REDUCED_MOTION=1` 关闭启动画面的动画(冻结为静帧),适合对动态画面敏感或低性能终端。`VESICLE_THEME=dark|light|default|auto` 指定界面主题,四值语义:`dark`/`light` 强制对应主题;`default` 跟随终端自身的明暗模式(未报告时回退到深色);`auto` 按本地时间切换(07:00–19:00 浅色,其余深色)。无效值会给出一条诊断并回退到 `default`,不会被静默当成 `auto`。会话内可用 `/theme` 临时切换(优先级更高),启动时也可用 `--dark`/`--light` 进程级标志选择;项目级持久化见[下文](#项目主题偏好可选)。
+与配置目录无关的显示环境变量:`VESICLE_REDUCED_MOTION=1` 关闭启动画面和终端标题工作标记的动画(冻结为静帧),适合对动态画面敏感或低性能终端。`VESICLE_THEME=dark|light|default|auto` 指定界面主题,四值语义:`dark`/`light` 强制对应主题;`default` 跟随终端自身的明暗模式(未报告时回退到深色);`auto` 按本地时间切换(07:00–19:00 浅色,其余深色)。`VESICLE_TERMINAL_TITLE=auto|on|off` 控制是否把宿主状态和会话标题投影到交互式终端标签页;`auto` 只在真实 TTY 中启用。`VESICLE_DISABLE_TERMINAL_TITLE=1` 是进程级强制不写开关,包括退出清理。已有 durable session title 会直接显示;没有标题时使用清洗后的项目 basename 回退。标签页状态槽空闲时显示 `·`、工作时以低频显示同宽的 `◇`/`◈`/`◆`/`◈` 菱形脉冲、等待用户输入时显示 `!`。无效的 terminal-title 模式会 fail closed,不执行标题写入。Windows Terminal profile 若设置 `suppressApplicationTitle`,可能隐藏应用提供的标题。当前自动化标题消费者证据覆盖 Linux/WSL source TUI PTY;npm、standalone binary 和原生 Windows Terminal 标题验收仍是发布前后续工作。无效主题值会给出一条诊断并回退到 `default`,不会被静默当成 `auto`。会话内可用 `/theme` 临时切换(优先级更高),启动时也可用 `--dark`/`--light` 进程级标志选择;项目级持久化见[下文](#项目主题偏好可选)。
 
 该目录下的文件:
 
@@ -28,7 +28,7 @@ Vesicle 的配置是**用户级**的,跟项目目录分开。一份配置管你�
 | `mcp.yaml` | 否 | 可选的 MCP 工具服务器 |
 | `permissions.yaml` | 否 | 工具批准默认与 `shell_exec` 开关(见[权限](./permissions-and-security.md)) |
 | `quality.yaml` | 否 | 实验性 Semantic Judge(`version: 2`;`mode: off` 可保留一组休眠的 provider/model/timeout)。见[质量守卫](../advanced/quality-guard.md);常规入口是 `/quality` |
-| `settings.yaml` | 否 | 用户级宿主设置(`editor:` 用于 Workspace 页 `Ctrl+X` 外部编辑器;为后续设置项预留) |
+| `settings.yaml` | 否 | 用户级宿主设置(`editor:` 用于 Workspace 页 `Ctrl+X` 外部编辑器;`sessionTitle: auto|off` 控制首轮自动标题) |
 | `assets/` | 否 | 用户级资源覆盖 |
 | `VESICLE.md` / `VESICLE.<engine>.md` | 否 | 持久化指令(用户级,跨所有项目生效;见下文) |
 
