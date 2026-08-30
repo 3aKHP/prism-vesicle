@@ -68,6 +68,7 @@ function commandHarness(commandName = "artifact", refreshedEntries = entries) {
   const openedTargets: (string | undefined)[] = [];
 
   const ctx = {
+    setStatus(_status: string) {},
     setMessages(updater: (previous: Message[]) => Message[]) {
       messages = updater(messages);
     },
@@ -90,3 +91,20 @@ function commandHarness(commandName = "artifact", refreshedEntries = entries) {
     openedTargets: () => openedTargets,
   };
 }
+
+describe("/workspace command (Workspace page bridge)", () => {
+  test("accepts a completion-quoted target path containing spaces", async () => {
+    const harness = commandHarness("workspace");
+    await harness.command.run('"dir with space"', '/workspace "dir with space"');
+
+    expect(harness.openedTargets()).toEqual(["dir with space"]);
+    expect(harness.messages()[1]?.content).toContain("Opened dir with space");
+  });
+
+  test("passes an unquoted target through unchanged", async () => {
+    const harness = commandHarness("workspace");
+    await harness.command.run("notes/plain.md", "/workspace notes/plain.md");
+
+    expect(harness.openedTargets()).toEqual(["notes/plain.md"]);
+  });
+});
