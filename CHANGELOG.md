@@ -4,7 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0-rc.1] - 2026-08-30
+
+### Release candidate channel and known limitations
+
+- **This release candidate publishes to npm's `next` dist-tag; `latest` keeps tracking the beta line.** `npm install -g prism-vesicle` still installs `1.0.0-beta.2`; install the candidate explicitly with `npm install -g prism-vesicle@next` or by pinning `1.0.0-rc.1`. The channel policy will be revisited for stable `1.0.0`.
+- **Sessions recorded under earlier bundled Harness baselines are not lost; they migrate explicitly.** The first resume after upgrading presents the migration review; nothing is rebound silently. SubAgent child sessions are not cascade-migrated and keep their fail-closed identity check in this version.
+- **Windows artifacts remain intentionally unsigned.** Verify downloads from the official GitHub Release against `SHA256SUMS.txt`, follow the public Code Signing Policy, and do not disable Windows security features globally.
+- **Windows Terminal working-title glyph jitter remains a known follow-up.** The working-state title can jitter horizontally on Windows Terminal; the fix is tracked in Issue #263 and intentionally deferred to the next formal release.
 
 ### Added
 
