@@ -3,6 +3,7 @@ import { loadConfigForSelection } from "../../config/providers";
 import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderAdapter, ProviderCompactResult, ProviderRetryInfo, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
+import { prepareProviderMessages } from "../attachments/store";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
 import { createSessionStore, loadSessionSnapshot, type ResumedMessage, type SessionSnapshot } from "../session/store";
@@ -158,7 +159,14 @@ export async function runPortableCompaction(options: RunPortableCompactionOption
         const compacted = await provider.compact({
           id: `${options.sessionId}:compact:${selection.sourceHeadUuid}`,
           model: { provider: config.providerId, model: config.model },
-          messages: full.messages.map(toVesicleMessage),
+          // Remote compact serializes directly through the adapter, so durable
+          // image references materialize here too. A materialization failure
+          // falls into the same optional-optimization degrade below.
+          messages: await prepareProviderMessages(
+            options.rootDir,
+            full.messages.map(toVesicleMessage),
+            config.capabilities?.vision === true,
+          ),
           signal: options.signal,
           onRetry: options.onRetry,
         });
@@ -383,12 +391,19 @@ async function generateSummary(options: {
   const systemPrompt = (
     await composeSystemPromptWithInstructions(options.engine, enginePrompt, options.rootDir)
   ).systemPrompt;
+  // Like the portable summary, this from-point request bypasses
+  // completeProviderRound and materializes durable image references itself.
+  const summaryMessages = await prepareProviderMessages(
+    options.rootDir,
+    options.messages.map(toVesicleMessage),
+    config.capabilities?.vision === true,
+  );
   const request: VesicleRequest = {
     id: options.sessionId,
     model: { provider: config.providerId, model: config.model },
     system: [systemPrompt],
     messages: [
-      ...options.messages.map(toVesicleMessage),
+      ...summaryMessages,
       { role: "user", content: `${NO_TOOLS_COMPACT_PREAMBLE}\n\n${options.prompt}` },
     ],
     generation: options.generation,

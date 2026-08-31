@@ -2,6 +2,7 @@ import type { ProviderSelection } from "../../config/providers";
 import { loadConfigForSelection } from "../../config/providers";
 import { createProvider, resolveProviderProxyPolicy } from "../../providers";
 import type { ProviderRetryInfo, VesicleMessage, VesicleRequest, VesicleResponse } from "../../providers/shared/types";
+import { prepareProviderMessages } from "../attachments/store";
 import { loadEngineProfile, type EngineId } from "../engine/profile";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { composeSystemPrompt, loadPromptBundle } from "../prompt/loader";
@@ -57,12 +58,19 @@ export async function generatePortableSummary(options: GenerateSummaryOptions): 
   const profile = await loadEngineProfile(options.engine, options.rootDir);
   const enginePrompt = composeSystemPrompt(await loadPromptBundle(profile, options.rootDir));
   const systemPrompt = (await composeSystemPromptWithInstructions(options.engine, enginePrompt, options.rootDir)).systemPrompt;
+  // This request bypasses completeProviderRound, so durable image references
+  // must materialize here with the same vision gate as an ordinary round.
+  const summaryMessages = await prepareProviderMessages(
+    options.rootDir,
+    messages.map(toVesicleMessage),
+    config.capabilities?.vision === true,
+  );
   const request: VesicleRequest = {
     id: options.sessionId,
     model: { provider: config.providerId, model: config.model },
     system: [systemPrompt],
     messages: [
-      ...messages.map(toVesicleMessage),
+      ...summaryMessages,
       { role: "user", content: `${NO_TOOLS_COMPACT_PREAMBLE}\n\n${prompt}` },
     ],
     generation: options.generation,
