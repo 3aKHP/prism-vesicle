@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Windows Terminal working titles no longer jitter horizontally (Issue #263).** The working-state tab marker now rotates through the same-block quadrant squares `◰`/`◳`/`◲`/`◱` (U+25F0–F3, clockwise), which keep a pixel-stable advance across frames in the Windows Terminal tab strip where the previous `◇`/`◈`/`◆` diamond pulse visibly shifted the following title text. The frame set was selected by a human-observation probe against real Windows Terminal rendering (`scripts/probe/terminal-title-jitter-probe.ts`). The 800ms cadence, idle `·` and input-required `!` markers, the `VESICLE_REDUCED_MOTION=1` still frame (now `◰`), and the `VESICLE_DISABLE_TERMINAL_TITLE=1` no-write contract are unchanged.
+
 ## [1.0.0-rc.1] - 2026-08-30
 
 ### Release candidate channel and known limitations
