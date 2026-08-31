@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **`/compact` no longer fails for sessions whose history contains durable image attachments (issue #281, P1).** All compaction summary requests now materialize content-addressed image references into the in-memory request copy before provider serialization — manual `/compact`, opt-in automatic compaction, model-switch compaction, `/rewind` from-point summaries, and the optional remote Responses compact request. A missing or corrupted attachment fails closed with an explicit attachment error and leaves the session head unchanged; the durable JSONL transcript keeps storing reference-only attachments, never base64.
+- **OpenAI Responses requests no longer silently drop tool-result images.** `function_call_output` Items cannot carry media, so accepted MCP/tool images attached to a tool result are now held and flushed as a synthesized user input item after the complete tool batch, mirroring the OpenAI-compatible chat serializer; an unmaterialized reference still fails closed with the standard serialization guard.
 - **The release close-issues workflow now bridges closing declarations from the PRs it carries into `main`.** Closing keywords in a PR body targeting `develop` no longer depend on the release PR repeating them: at release-merge time the workflow recovers the constituent PRs from the release commit range (native-merge and squash-merge forms), scans their bodies plus the release PR body with GitHub-native inline keyword semantics, and closes each still-open issue with a comment linking the originating and release PRs. Rebase-merged constituent PRs leave no PR reference in the commit history and remain unbridgeable.
 
 ## [1.0.0] - 2026-08-31
