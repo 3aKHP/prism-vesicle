@@ -9,7 +9,7 @@
 [![npm](https://img.shields.io/npm/v/prism-vesicle?logo=npm&label=npm)](https://www.npmjs.com/package/prism-vesicle)
 [![Release](https://img.shields.io/github/v/release/3aKHP/prism-vesicle?include_prereleases&label=release)](https://github.com/3aKHP/prism-vesicle/releases)
 [![CI](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/3aKHP/prism-vesicle/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-public_beta-f59e0b)](#scope-and-lineage)
+[![Status](https://img.shields.io/badge/status-stable-brightgreen)](#scope-and-lineage)
 [![License](https://img.shields.io/github/license/3aKHP/prism-vesicle)](./LICENSE)
 
 [![Agent Harness](https://img.shields.io/badge/Agent_Harness-Prism_Engine-059669)](#what-vesicle-supports)
