@@ -4,11 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0] - 2026-08-31
+
+### Stable channel and known limitations
+
+- **`1.0.0` is the first stable release and publishes to npm's `latest` dist-tag:** `npm install -g prism-vesicle` installs it once publication completes. Earlier prerelease builds remain available through the `next` dist-tag and explicit versions.
+- **Sessions recorded under earlier bundled Harness baselines are not lost; they migrate explicitly** through the same two-stage review as before; nothing is rebound silently. SubAgent child sessions keep their fail-closed identity check.
+- **Windows artifacts remain intentionally unsigned.** Verify downloads from the official GitHub Release against `SHA256SUMS.txt`, follow the public Code Signing Policy, and do not disable Windows security features globally.
 
 ### Changed
 
-- **MCP tool-output persistence and branded Windows distribution assets graduate from experimental to released.** `mcpOutputPersistence` (with the `mcpOutputAutoTruncate` sub-toggle) remains opt-in by design, and the branded Windows PE, installer, uninstaller, and Explorer assets remain unsigned per the standing Code Signing Policy disclosure. Host-state terminal tab titles and durable session titles remain experimental pending native-Windows acceptance evidence.
+- **All four experimental surfaces from the prerelease line graduate to released.** Opt-in MCP tool-output persistence (`mcpOutputPersistence`, with the `mcpOutputAutoTruncate` sub-toggle) remains opt-in by design; the branded Windows PE, installer, uninstaller, and Explorer assets remain unsigned per the standing Code Signing Policy disclosure; host-state terminal tab titles and durable session titles graduated after the 1.0.0-rc.2 closed group test on the installed Windows build (working-marker anchor stability and the title lifecycle).
 
 ### Fixed
 
