@@ -1,7 +1,7 @@
 ---
 name: 备忘 / Memo
 about: 开发备忘——调研结论、backlog、设计空间(本仓主要 issue 体例)
-title: "备忘:"
+title: "[Memo] "
 labels: [memo]
 ---
 

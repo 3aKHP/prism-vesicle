@@ -1,5 +1,6 @@
 name: 功能提案 / Feature or enhancement
 description: 提出新能力或改进 / Propose a capability or improvement
+title: "[Enhancement] "
 labels: [enhancement]
 body:
   - type: textarea
