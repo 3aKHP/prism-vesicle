@@ -34,6 +34,7 @@ This document defines durable conversation history, provider projection, file ch
 - Thinking and provider-native metadata remain separate from ordinary assistant prose while being preserved when a protocol requires replay.
 - Usage metadata is host-only and must not be sent back as conversational content.
 - Host packets such as Engine handoffs and compact summaries use explicit record kinds so the provider projection, transcript, rewind accounting, and empty-session UI can treat them consistently.
+- Background shell completions persist as `background-process-results` system records (host-only `taskIds` metadata): durable history keeps the untrusted process output out of the authored-user role, while projection re-emits the exact envelope as a provider-visible user message. The envelope text itself — a host-notification framing sentence, an XML wrapper, and escaped per-task blocks bound to their originating tool call — carries the provenance on the wire, because no provider protocol offers a host-notification role. Legacy pre-#284 sessions carry the same kind on user-role records and project identically.
 - Projection must fail with an actionable session error when it encounters an unknown durable replacement format that cannot be interpreted safely.
 - Projection sanitizes malformed tool arguments in legacy assistant records to `{}` so an existing paired failure result remains protocol-replayable instead of trapping resume in a serialization loop.
 - Provider-owned state is cloned across load and every provider-message conversion. Resume, rewind, and append-only branching therefore reproduce the envelope attached to the selected assistant ancestor without sharing mutable payload objects.
@@ -58,7 +59,7 @@ This document defines durable conversation history, provider projection, file ch
 
 ## Failed Turns And Continuations
 
-- A top-level user turn whose provider round fails before any assistant response keeps the authored prompt in the transcript and appends a host-only failure marker.
+- A top-level user turn whose provider round fails before any assistant response keeps the authored prompt in the transcript and appends a host-only failure marker. A trailing `background-process-results` system record counts as the failed round's tail too: it projects as a user message and is dropped with the prompt exactly like the legacy user-role packet it replaces.
 - Provider projection excludes the failed round's unmatched user tail so resume or resend cannot create invalid consecutive same-role messages.
 - A completed compact checkpoint remains a valid replacement boundary even when a later provider round fails; failed-turn cleanup preserves both its portable summary and host-only provider-native marker.
 - A mid-loop failure after an assistant response retains the already valid alternation tail and is not rewritten as a failed top-level turn.

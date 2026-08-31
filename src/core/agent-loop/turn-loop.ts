@@ -557,6 +557,7 @@ async function prepareExactProviderBoundary(
   runtime: LoopRuntime,
 ): Promise<{ compacted: boolean; blocked: boolean; error?: AutoCompactBlockedError }> {
   await materializeBackgroundProcessNotifications({
+    rootDir: args.rootDir,
     messages: args.messages,
     processManager: runtime.processManager,
     session: args.session,

@@ -409,13 +409,17 @@ export function createTurnController(options: TurnControllerOptions) {
    * failed prompt from provider-visible history, so resuming or resending does
    * not produce consecutive same-role user messages. Only marks when the
    * trailing session record is a user (the first provider round failed before
-   * any assistant/tool reply); a mid-loop failure already leaves a valid
-   * alternation tail and is left alone.
+   * any assistant/tool reply) or a background-results host packet — a system
+   * record that projects as the turn's trailing user message; a mid-loop
+   * failure already leaves a valid alternation tail and is left alone.
    */
   async function markFailedUserTurn(sessionId: string): Promise<void> {
     try {
       const snapshot = await loadSessionSnapshot(session.rootDir, sessionId, { synthesizeDanglingToolResults: false });
-      if (snapshot.records.at(-1)?.role !== "user") return;
+      const tail = snapshot.records.at(-1);
+      const markable = tail?.role === "user"
+        || (tail?.role === "system" && tail.metadata?.kind === "background-process-results");
+      if (!markable) return;
       const store = await createSessionStore(session.rootDir, sessionId);
       await store.append({ role: "system", content: "", metadata: { kind: FAILED_TURN_KIND } });
     } catch {

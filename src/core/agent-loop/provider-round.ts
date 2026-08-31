@@ -7,7 +7,7 @@ import { withExecutionRound } from "../session/store";
 import type { ToolDefinition } from "../tools";
 import type { ProcessManager } from "../process/manager";
 import type { AgentLoopEvent } from "./types";
-import { renderBackgroundProcessNotifications } from "./background-process";
+import { findPersistedProcessResults, renderBackgroundProcessNotifications } from "./background-process";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "../side-question/types";
 import { ProviderAttemptCommitBarrier } from "../../providers/shared/attempt-commit";
 
@@ -79,21 +79,35 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
 }
 
 export async function materializeBackgroundProcessNotifications(
-  options: Pick<ProviderRoundOptions, "messages" | "processManager" | "session">,
+  options: Pick<ProviderRoundOptions, "rootDir" | "messages" | "processManager" | "session">,
 ): Promise<void> {
-  const backgroundNotifications = await options.processManager.drainNotifications(options.session.sessionId);
-  if (backgroundNotifications.length > 0) {
-    const content = renderBackgroundProcessNotifications(backgroundNotifications);
+  const backgroundNotifications = await options.processManager.collectNotifications(options.session.sessionId);
+  if (backgroundNotifications.length === 0) return;
+  const taskIds = backgroundNotifications.map((task) => task.taskId).sort();
+  const content = renderBackgroundProcessNotifications(backgroundNotifications);
+  // The durable record is the delivery, so the `notified` flip happens only
+  // after the record is safe. Exactly-once across crash replay and the idle
+  // delivery path: when a record for exactly this batch already exists, never
+  // append or push a second copy, and when it still projects into provider
+  // history the active conversation already carries it.
+  const persisted = await findPersistedProcessResults(options.rootDir, options.session.sessionId, taskIds);
+  if (!persisted) {
     options.messages.push({ role: "user", content });
     await options.session.append({
-      role: "user",
+      // Host packet, not authored input: persisted as a system record and
+      // projected back into a provider-visible user message by the history
+      // projector, which keeps audit history free of user-role process data.
+      role: "system",
       content,
       metadata: withExecutionRound(options.session.sessionId, {
         kind: "background-process-results",
-        taskIds: backgroundNotifications.map((task) => task.taskId),
+        taskIds,
       }),
     });
+  } else if (!persisted.projectionVisible) {
+    options.messages.push({ role: "user", content });
   }
+  await options.processManager.markNotified(taskIds);
 }
 
 export function emitAssistantResponse(response: VesicleResponse, onEvent?: (event: AgentLoopEvent) => void): void {

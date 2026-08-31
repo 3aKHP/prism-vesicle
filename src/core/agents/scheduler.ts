@@ -98,10 +98,10 @@ export function renderAgentResultPacket(entries: AgentInboxEntry[]): string {
   ].join("\n");
 }
 
-function escapeText(value: string): string {
+export function escapeText(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
-function escapeAttribute(value: string): string {
+export function escapeAttribute(value: string): string {
   return escapeText(value).replaceAll('"', "&quot;");
 }

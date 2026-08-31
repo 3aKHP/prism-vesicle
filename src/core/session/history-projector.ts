@@ -72,7 +72,9 @@ export const FAILED_TURN_KIND = "failed-turn";
  * handoff, a gate/user-question resolution, or a quality-rewrite feedback) is
  * the failed round's own input and must be dropped, otherwise resume/resend
  * emits consecutive same-role user messages. (SubAgent results are re-delivered
- * via the paused delivery; background-process results are re-drained.)
+ * via the paused delivery; background-process results are re-drained.) A
+ * background-process-results record may equally be a system-role host packet —
+ * it projects to the same user message, so the drop treats both shapes alike.
  */
 const failedTurnBoundaryKinds = new Set(["compact-summary", PROVIDER_NATIVE_CHECKPOINT_KIND]);
 
@@ -157,6 +159,16 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
             providerState: checkpoint.nativeProjection.state,
           });
         }
+        continue;
+      }
+      if (record.metadata?.kind === "background-process-results") {
+        // Host packet persisted as a system record so durable history keeps
+        // untrusted process output out of the authored-user stream; it still
+        // rides the provider request as a user message because no protocol
+        // offers a host-notification role — the envelope text carries the
+        // distinction, and `dropFailedTurnInput` above drops it exactly like
+        // the legacy user-role records it replaces.
+        messages.push({ recordUuid: record.uuid, role: "user", content: record.content, kind: "background-process-results" });
         continue;
       }
       continue;
