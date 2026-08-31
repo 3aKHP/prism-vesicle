@@ -170,9 +170,13 @@ describe("release workflow contract", () => {
     expect(job?.if).toContain("startsWith(github.head_ref, 'release/')");
     // The bridge validates constituent PRs via GET /pulls/{n}; without an
     // explicit read grant the restricted permissions block defaults it to
-    // none and every release merge fails with 403 (Bot Review finding).
-    expect(workflow.permissions?.["pull_requests"]).toBe("read");
+    // none and every release merge fails with 403. The scope is the
+    // hyphenated GITHUB_TOKEN permission name — an underscored key is an
+    // invalid scope that silently invalidates the whole workflow (observed
+    // as zero-job "No jobs were run" failure runs on every carrying push).
+    expect(workflow.permissions?.["pull-requests"]).toBe("read");
     expect(workflow.permissions?.["issues"]).toBe("write");
+    expect(workflow.permissions?.["pull_requests"]).toBeUndefined();
     // The bridge script must run at the exact merged release state, under the
     // pinned Bun runtime. Keyword semantics live with the script's unit tests
     // (tests/unit/scripts/close-bridged-issues.test.ts).
