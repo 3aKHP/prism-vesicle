@@ -38,6 +38,7 @@ import { AgentManager } from "../core/agents/manager";
 import { AgentStore } from "../core/agents/store";
 import { runChildAgent } from "../core/agents/child-runner";
 import { AgentContinuationScheduler } from "../core/agents/scheduler";
+import { ProcessCompletionScheduler } from "../core/process/completion-scheduler";
 import { agentActivitySummary } from "./agent-view";
 import { ToolPermissionBroker } from "../core/permissions";
 import { getProcessManager, type BackgroundProcessState } from "../core/process/manager";
@@ -604,6 +605,7 @@ export function App(props: AppProps = {}) {
   const shutdownHostResources = () => {
     shutdownHostResourcesPromise ??= (async () => {
       unsubscribeProcesses();
+      unsubscribeProcessCompletions();
       try {
         await processManager.shutdown();
       } finally {
@@ -624,6 +626,7 @@ export function App(props: AppProps = {}) {
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
   const pausedAgentDeliveries = new Set<string>();
+  const pausedProcessDeliveries = new Set<string>();
   let agentManager!: AgentManager;
   const mainActive = () => busy()
     || Boolean(pendingGate() || pendingEngineSwitch() || pendingUserQuestion()
@@ -733,6 +736,8 @@ export function App(props: AppProps = {}) {
     clearGateFeedback,
     setSessionPicker,
     pausedAgentDeliveries,
+    processManager,
+    pausedProcessDeliveries,
     agentManager: () => agentManager,
     permissionBroker,
     runCancellable: (operation) => turnCancellation.run(operation),
@@ -775,6 +780,26 @@ export function App(props: AppProps = {}) {
       && !pendingPermission()
       && !pendingQualityDecision()
       && !pendingChildPermission(),
+  });
+  const processCompletionScheduler = new ProcessCompletionScheduler(processManager, turnController.deliverBackgroundProcessResults, {
+    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
+      && !pausedProcessDeliveries.has(parentSessionId)
+      && !restoringSession()
+      && !busy()
+      && !pendingGate()
+      && !pendingEngineSwitch()
+      && !pendingUserQuestion()
+      && !pendingPermission()
+      && !pendingQualityDecision()
+      && !pendingChildPermission(),
+  });
+  // Terminal-state replay (subscribe re-emits every disk-loaded task after
+  // initialization) plus live completions both land here; the scheduler
+  // debounces, coalesces, and defers unless the parent session is idle.
+  const unsubscribeProcessCompletions = processManager.subscribe((event) => {
+    if (event.process.status !== "running" && !event.process.notified) {
+      void processCompletionScheduler.notify(event.process.parentSessionId).catch(turnController.reportError);
+    }
   });
   agentManager = new AgentManager(agentStore, runChildAgent, {
     onEvent: (event) => {
@@ -956,7 +981,10 @@ export function App(props: AppProps = {}) {
   createEffect(() => {
     const id = sessionId();
     const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
-    if (id && ready) void continuationScheduler.notify(id).catch(reportError);
+    if (id && ready) {
+      void continuationScheduler.notify(id).catch(reportError);
+      void processCompletionScheduler.notify(id).catch(reportError);
+    }
   });
   const hostDecisionPending = () => Boolean(
     pendingGate()

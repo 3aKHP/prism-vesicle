@@ -150,6 +150,21 @@ describe("TUI reactivity static guard", () => {
     expect(source).not.toContain("let continuationScheduler: AgentContinuationScheduler");
   });
 
+  // The process completion scheduler's subscribe callback and the idle re-arm
+  // effect both reference it, so it must exist before either can run — the
+  // sibling of the SubAgent scheduler ordering invariant above (issue #284).
+  test("process completion scheduler is initialized before AgentManager and after the SubAgent scheduler", async () => {
+    const source = await readFile(join(import.meta.dir, "..", "..", "..", "src", "tui", "app.tsx"), "utf8");
+    const agentScheduler = source.indexOf("const continuationScheduler = new AgentContinuationScheduler");
+    const processScheduler = source.indexOf("const processCompletionScheduler = new ProcessCompletionScheduler");
+    const manager = source.indexOf("agentManager = new AgentManager");
+
+    expect(agentScheduler).toBeGreaterThan(-1);
+    expect(processScheduler).toBeGreaterThan(agentScheduler);
+    expect(manager).toBeGreaterThan(processScheduler);
+    expect(source).not.toContain("let processCompletionScheduler");
+  });
+
   test("permission submission resolves the same parent-first request that the panel displays", async () => {
     const decisionSource = await readFile(join(import.meta.dir, "..", "..", "..", "src", "tui", "decision-controller.ts"), "utf8");
     expect(decisionSource).toContain("pendingPermission()?.request ?? pendingChildPermission()");

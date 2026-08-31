@@ -5,6 +5,7 @@ import type { AgentManager } from "../core/agents/manager";
 import type { AgentInboxEntry } from "../core/agents/types";
 import type { EngineId } from "../core/engine/profile";
 import type { PermissionMode, ToolPermissionBroker } from "../core/permissions";
+import type { ProcessManager } from "../core/process/manager";
 import type { ShellInterpreterPreference } from "../core/process/shell-profile";
 import type { ConversationRewind } from "../core/rewind/service";
 import type { SideQuestionContextSnapshot } from "../core/side-question/types";
@@ -117,6 +118,12 @@ export type TurnAgentPort = {
   onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
 };
 
+/** Background shell completion delivery: process runtime and pause state. */
+export type TurnProcessPort = {
+  processManager: ProcessManager;
+  pausedProcessDeliveries: Set<string>;
+};
+
 /** Turn / session / independent-Agent usage accounting. */
 export type TurnUsagePort = {
   beginUsageTurn: () => void;
@@ -201,6 +208,8 @@ export type TurnControllerOptions = {
   clearGateFeedback: () => void;
   setSessionPicker: Setter<SessionPickerState | null>;
   pausedAgentDeliveries: Set<string>;
+  processManager: ProcessManager;
+  pausedProcessDeliveries: Set<string>;
   agentManager: () => AgentManager;
   permissionBroker: ToolPermissionBroker;
   runCancellable: TurnRunCancellable;

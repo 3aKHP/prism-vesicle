@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
 import { createSessionStore, FAILED_TURN_KIND, loadSessionMessages } from "../../../src/core/session/store";
+import { ProcessManager } from "../../../src/core/process/manager";
 import type { VesicleMessage } from "../../../src/providers/shared/types";
 import { createTurnController } from "../../../src/tui/turn-controller";
 
@@ -41,6 +42,8 @@ test("turn failure appends a failed-turn marker to the session", async () => {
       providerConfigReady: () => true,
       permissionSettingsReady: () => true,
       pausedAgentDeliveries: new Set<string>(),
+      processManager: new ProcessManager(root),
+      pausedProcessDeliveries: new Set<string>(),
       queuedWork: { prepareTurn: () => {}, block: () => {}, takePendingUserInputs: () => [], runToolBoundaryCommands: async () => {} },
       recordPromptHistory: () => undefined,
       setHistoryIndex: () => undefined,
@@ -99,6 +102,8 @@ test("turn failure after a background-results packet still marks the failed turn
       providerConfigReady: () => true,
       permissionSettingsReady: () => true,
       pausedAgentDeliveries: new Set<string>(),
+      processManager: new ProcessManager(root),
+      pausedProcessDeliveries: new Set<string>(),
       queuedWork: { prepareTurn: () => {}, block: () => {}, takePendingUserInputs: () => [], runToolBoundaryCommands: async () => {} },
       recordPromptHistory: () => undefined,
       setHistoryIndex: () => undefined,
@@ -151,6 +156,8 @@ test("mid-turn failure refreshes the in-memory conversation from durable history
       providerConfigReady: () => true,
       permissionSettingsReady: () => true,
       pausedAgentDeliveries: new Set<string>(),
+      processManager: new ProcessManager(root),
+      pausedProcessDeliveries: new Set<string>(),
       queuedWork: { prepareTurn: () => {}, block: () => {}, takePendingUserInputs: () => [], runToolBoundaryCommands: async () => {} },
       recordPromptHistory: () => undefined,
       setHistoryIndex: () => undefined,
