@@ -9,65 +9,20 @@ on:
 permissions:
   contents: read
   issues: write
+  pull_requests: read
 
 jobs:
   close-released-issues:
     if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     steps:
-      - name: Find and close issues referenced by closing keywords
-        uses: actions/github-script@v9
+      - uses: actions/checkout@v7
         with:
-          script: |
-            // GitHub's native auto-close only fires for keywords in PRs that
-            // target the default branch. Release PRs must therefore declare
-            // every intended closure explicitly in their own body.
-            const { owner, repo } = context.repo;
-            const pr = context.payload.pull_request;
-            const issueRegex = /^\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\s*[.!]?\s*$/gim;
-            const candidates = new Set();
-            const collect = (text) => {
-              if (!text) return;
-              for (const match of text.matchAll(issueRegex)) {
-                candidates.add(Number(match[1]));
-              }
-            };
-            collect(pr.body);
-
-            const failures = [];
-            for (const issueNumber of candidates) {
-              try {
-                const { data: issue } = await github.rest.issues.get({
-                  owner,
-                  repo,
-                  issue_number: issueNumber,
-                });
-                if (issue.pull_request) {
-                  console.log(`#${issueNumber} is a pull request; skipping.`);
-                  continue;
-                }
-                if (issue.state !== "open") {
-                  console.log(`#${issueNumber} is already ${issue.state}; skipping.`);
-                  continue;
-                }
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number: issueNumber,
-                  body: `This issue has been automatically closed as part of the release to \`main\` in #${pr.number}.`,
-                });
-                await github.rest.issues.update({
-                  owner,
-                  repo,
-                  issue_number: issueNumber,
-                  state: "closed",
-                });
-                console.log(`Closed issue #${issueNumber}.`);
-              } catch (err) {
-                console.error(`Failed to close issue #${issueNumber}:`, err);
-                failures.push(issueNumber);
-              }
-            }
-            if (failures.length > 0) {
-              core.setFailed(`Failed to close: ${failures.map((n) => `#${n}`).join(", ")}`);
-            }
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Close issues declared by the PRs this release carried into main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/release/close-bridged-issues.ts

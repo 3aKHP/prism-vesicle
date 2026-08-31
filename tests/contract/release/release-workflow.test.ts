@@ -21,6 +21,7 @@ type WorkflowJob = {
 
 type Workflow = {
   on: Record<string, unknown>;
+  permissions?: Record<string, string>;
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -141,7 +142,6 @@ describe("release workflow contract", () => {
       "actions/setup-node@": "actions/setup-node@v7",
       "oven-sh/setup-bun@": "oven-sh/setup-bun@v2",
       "softprops/action-gh-release@": "softprops/action-gh-release@v3",
-      "actions/github-script@": "actions/github-script@v9",
     };
     for (const [prefix, required] of Object.entries(requiredActions)) {
       const matched = uses.filter((action) => action.startsWith(prefix));
@@ -161,20 +161,30 @@ describe("release workflow contract", () => {
     expect(setupNode?.with?.["node-version"]).toBe("24");
   });
 
-  test("closes only issues explicitly declared by a merged release PR", async () => {
+  test("closes issues through the cross-PR bridge script", async () => {
     const workflow = await loadWorkflow("close-issues.yml");
     const job = workflow.jobs["close-released-issues"];
-    const script = job?.steps?.find((step) => step.uses === "actions/github-script@v9")?.with?.script;
+    const steps = job?.steps ?? [];
 
     expect(job?.if).toContain("github.event.pull_request.merged == true");
     expect(job?.if).toContain("startsWith(github.head_ref, 'release/')");
-    expect(script).toContain("collect(pr.body)");
-    expect(script).not.toContain("compareCommits");
-
-    const explicitClosingLine = /^\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\s*[.!]?\s*$/gim;
-    const candidates = (text: string) => [...text.matchAll(explicitClosingLine)].map((match) => Number(match[1]));
-    expect(candidates("Closes #225\nFixes #226.")).toEqual([225, 226]);
-    expect(candidates("Should-fix #123\nbugfix #124\nMention fixes #125 in prose.")).toEqual([]);
+    // The bridge validates constituent PRs via GET /pulls/{n}; without an
+    // explicit read grant the restricted permissions block defaults it to
+    // none and every release merge fails with 403 (Bot Review finding).
+    expect(workflow.permissions?.["pull_requests"]).toBe("read");
+    expect(workflow.permissions?.["issues"]).toBe("write");
+    // The bridge script must run at the exact merged release state, under the
+    // pinned Bun runtime. Keyword semantics live with the script's unit tests
+    // (tests/unit/scripts/close-bridged-issues.test.ts).
+    expect(
+      steps.some(
+        (step) =>
+          step.uses === "actions/checkout@v7" && step.with?.["ref"] === "${{ github.event.pull_request.merge_commit_sha }}",
+      ),
+    ).toBe(true);
+    expect(steps.some((step) => step.uses === "oven-sh/setup-bun@v2")).toBe(true);
+    expect(steps.some((step) => step.run?.includes("bun scripts/release/close-bridged-issues.ts"))).toBe(true);
+    expect(steps.some((step) => step.uses?.startsWith("actions/github-script"))).toBe(false);
   });
 
   test("keeps every release gate in the reusable workflow", async () => {
