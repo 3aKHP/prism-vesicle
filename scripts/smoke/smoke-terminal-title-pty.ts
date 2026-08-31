@@ -97,7 +97,7 @@ async function main(): Promise<void> {
     type("ping");
     await Bun.sleep(60);
     type("\r");
-    const working = await waitFor(() => hasOscTitle(raw, "◇ Prism Vesicle · project"), 20000);
+    const working = await waitFor(() => hasOscTitle(raw, "◰ Prism Vesicle · project"), 20000);
     const replied = await waitFor(() => raw.includes("reply 1"), 20000);
     type("\x03");
     await Bun.sleep(250);

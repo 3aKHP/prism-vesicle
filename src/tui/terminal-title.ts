@@ -36,7 +36,10 @@ export type TerminalTitleController = {
   enabled: () => boolean;
 };
 
-const WORKING_FRAMES = ["◇", "◈", "◆", "◈"] as const;
+// Same-block quadrant squares (U+25F0–F3, clockwise) keep a pixel-stable
+// advance across frames in the Windows Terminal tab strip, where the previous
+// diamond set jittered the following title text (#263).
+const WORKING_FRAMES = ["◰", "◳", "◲", "◱"] as const;
 export const TERMINAL_TITLE_FRAME_INTERVAL_MS = 800;
 const DEFAULT_MAX_WIDTH = 120;
 
@@ -117,7 +120,7 @@ export function createTerminalTitleController(options: {
   function composedTitle(): string | undefined {
     if (setupTitle) return "Prism Vesicle Setup";
     if (!baseTitle) return undefined;
-    const marker = phase === "idle" ? "·" : phase === "input-required" ? "!" : reducedMotion ? "◇" : WORKING_FRAMES[frameIndex];
+    const marker = phase === "idle" ? "·" : phase === "input-required" ? "!" : reducedMotion ? "◰" : WORKING_FRAMES[frameIndex];
     return sanitizeTerminalTitle(`${marker} ${baseTitle}`);
   }
 
