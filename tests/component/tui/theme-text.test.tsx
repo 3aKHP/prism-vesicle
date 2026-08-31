@@ -39,7 +39,9 @@ describe("ThemedText native selection colors", () => {
       await setup.flush();
 
       expectSelection(setup, mode);
-      expect(setup.renderer.getSelection()?.getSelectedText()).toBe("select");
+      // Inclusive-end drag selection (upstream #1393 semantics): the final
+      // cell's trailing space is part of the selection. Do not trim it.
+      expect(setup.renderer.getSelection()?.getSelectedText()).toBe("select ");
       setup.renderer.destroy();
     });
   }
