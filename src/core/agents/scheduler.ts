@@ -1,5 +1,6 @@
 import { AgentStore } from "./store";
 import type { AgentInboxEntry } from "./types";
+import { escapeAttribute, escapeText } from "../../shared/xml-escape";
 
 export type AgentResultDelivery = (
   parentSessionId: string,
@@ -96,12 +97,4 @@ export function renderAgentResultPacket(entries: AgentInboxEntry[]): string {
     body,
     "</subagent-results>",
   ].join("\n");
-}
-
-function escapeText(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
-function escapeAttribute(value: string): string {
-  return escapeText(value).replaceAll('"', "&quot;");
 }
