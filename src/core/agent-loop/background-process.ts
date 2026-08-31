@@ -3,7 +3,7 @@ import { loadSessionSnapshot } from "../session/store";
 import type { ToolResult } from "../tools";
 import { processEventFromTask } from "../tools/shell";
 import type { BackgroundProcessState, ProcessManager } from "../process/manager";
-import { escapeAttribute, escapeText } from "../agents/scheduler";
+import { escapeAttribute, escapeText } from "../../shared/xml-escape";
 
 export function trackBackgroundProcessCompletion(
   manager: ProcessManager,
@@ -35,7 +35,12 @@ export type PersistedProcessResults = {
    * a branched-away record never appears in the active branch at all.
    */
   invisibleTaskIds: Set<string>;
-  /** The record matching exactly this batch, when one exists, for idempotent uuid reuse. */
+  /**
+   * The record matching exactly this batch, when one exists. Consumed by the
+   * idle delivery path (turn-controller), which reuses the uuid as its
+   * `prePersistedInputUuid` so a retried delivery never appends a second
+   * input record; boundary materialize itself does not need it.
+   */
   exact?: { uuid: string };
 };
 
@@ -54,7 +59,7 @@ export async function findPersistedProcessResults(
   sessionId: string,
   batch: string[],
 ): Promise<PersistedProcessResults> {
-  const undelivered: PersistedProcessResults = { coveredTaskIds: new Set(), invisibleTaskIds: new Set() };
+  const coverage: PersistedProcessResults = { coveredTaskIds: new Set(), invisibleTaskIds: new Set() };
   let snapshot: Awaited<ReturnType<typeof loadSessionSnapshot>>;
   try {
     snapshot = await loadSessionSnapshot(rootDir, sessionId, { synthesizeDanglingToolResults: false });
@@ -63,7 +68,7 @@ export async function findPersistedProcessResults(
     // record (a fresh session before its first append, or a store whose file
     // was removed while process state survived); treat it as undelivered
     // rather than failing the provider round.
-    return undelivered;
+    return coverage;
   }
   const visibleRecordUuids = new Set(snapshot.messages.filter((message) => message.role === "user").map((message) => message.recordUuid));
   const sortedBatch = [...batch].sort();
@@ -75,13 +80,13 @@ export async function findPersistedProcessResults(
     const inBatch = taskIds.filter((taskId) => batch.includes(taskId));
     if (inBatch.length === 0) continue;
     for (const taskId of inBatch) {
-      undelivered.coveredTaskIds.add(taskId);
+      coverage.coveredTaskIds.add(taskId);
       if (visibleRecordUuids.has(record.uuid)) visiblyCovered.add(taskId);
     }
-    if (sameTaskIds(taskIds, sortedBatch)) undelivered.exact = { uuid: record.uuid };
+    if (sameTaskIds(taskIds, sortedBatch)) coverage.exact = { uuid: record.uuid };
   }
-  undelivered.invisibleTaskIds = new Set([...undelivered.coveredTaskIds].filter((taskId) => !visiblyCovered.has(taskId)));
-  return undelivered;
+  coverage.invisibleTaskIds = new Set([...coverage.coveredTaskIds].filter((taskId) => !visiblyCovered.has(taskId)));
+  return coverage;
 }
 
 function readTaskIds(value: unknown): string[] {
