@@ -1,8 +1,11 @@
 import type { RunPromptResult } from "../core/agent-loop/run";
+import type { PermissionRequest } from "../core/permissions";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
 import { renderValidationNotice } from "./commands/render";
+import { truncateLine } from "./format";
 import type { QueuedWorkController } from "./queued-work-controller";
 import type { TurnDecisionPort, TurnHostActionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort } from "./turn-controller-options";
+import { parseToolArgs, toolTarget } from "./tool-render";
 import type { Message } from "./types";
 
 type ResultOptions = {
@@ -86,7 +89,12 @@ export function createTurnResultController(options: ResultOptions) {
   function applyPendingPermissionResult(result: Extract<RunPromptResult, { kind: "needs_permission" }>): void {
     applyPendingResultBase(result);
     setPendingPermission({ ...result, engine: result.profile.id });
-    appendPendingAssistant(result.assistantContent, `Permission pending: ${result.request.toolName}.`, Boolean(result.assistantContent));
+    const target = permissionTargetSummary(result.request);
+    appendPendingAssistant(
+      result.assistantContent,
+      `Permission pending: ${result.request.toolName}${target ? ` · ${target}` : ""}.`,
+      Boolean(result.assistantContent),
+    );
     setStatus(`permission pending: ${result.request.toolName}`);
   }
 
@@ -122,6 +130,17 @@ export function createTurnResultController(options: ResultOptions) {
       ...(!alreadyDisplayed && showAssistant ? [{ role: "assistant" as const, content }] : []),
       { role: "system", content: notice },
     ]);
+  }
+
+  /**
+   * One-line bounded summary of what the pending permission asks to do. The
+   * approval box disappears once the turn resolves, so the transcript line is
+   * the durable record; it reuses the `●` card header rendering so both stay
+   * in the same vocabulary.
+   */
+  function permissionTargetSummary(request: PermissionRequest): string {
+    const target = toolTarget(request.toolName, parseToolArgs(request.arguments));
+    return target ? truncateLine(target.replace(/\s+/g, " ").trim(), 200) : "";
   }
 
   function applyCompleteResult(result: Extract<RunPromptResult, { kind: "complete" }>): void {

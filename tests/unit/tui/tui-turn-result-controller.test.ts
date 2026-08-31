@@ -38,6 +38,36 @@ describe("TUI turn result controller", () => {
     ]);
   });
 
+  test("carries a bounded command summary on the pending shell_exec notice (#268)", () => {
+    const harness = createHarness();
+
+    harness.handle(shellPermissionResult({ command: "bun run build" }));
+
+    expect(harness.messages()).toEqual([
+      { role: "system", content: "Permission pending: shell_exec · bun run build." },
+    ]);
+  });
+
+  test("truncates an oversized pending command summary to one bounded line (#268)", () => {
+    const harness = createHarness();
+    const longCommand = `echo ${"x".repeat(400)}`;
+
+    harness.handle(shellPermissionResult({ command: longCommand }));
+
+    const notice = harness.messages().at(-1)?.content ?? "";
+    expect(notice.startsWith("Permission pending: shell_exec · echo ")).toBe(true);
+    expect(notice.endsWith("...")).toBe(true);
+    expect(notice.length).toBeLessThan(longCommand.length);
+  });
+
+  test("collapses a multiline pending command summary onto one line (#268 CR N1)", () => {
+    const harness = createHarness();
+
+    harness.handle(shellPermissionResult({ command: "printf one\necho two\nls -la" }));
+
+    expect(harness.messages().at(-1)?.content).toBe("Permission pending: shell_exec · printf one echo two ls -la.");
+  });
+
   test("projects an exhausted quality result into a dedicated decision without delivering the candidate", () => {
     const harness = createHarness();
     harness.handle(qualityDecisionResult());
@@ -218,6 +248,20 @@ function qualityDecisionResult(): RunPromptResult {
 }
 
 function permissionResult(assistantContent: string): RunPromptResult {
+  return withRequest(shellPermissionResult({}, assistantContent), {
+    id: "permission-test",
+    toolCallId: "call-test",
+    toolName: "read_file",
+    arguments: "{}",
+    permissionClass: "observe",
+    mode: "MANUAL",
+  });
+}
+
+function shellPermissionResult(
+  shell: Record<string, unknown>,
+  assistantContent = "",
+): RunPromptResult {
   const profile: EngineProfile = {
     id: "etl",
     displayName: "ETL",
@@ -230,12 +274,12 @@ function permissionResult(assistantContent: string): RunPromptResult {
     asset: { path: "assets/engines/etl.profile.yaml", source: "project" },
   };
   const request: PermissionRequest = {
-    id: "permission-test",
+    id: "permission-shell",
     sessionId: "session-test",
-    toolCallId: "call-test",
-    toolName: "read_file",
-    arguments: "{}",
-    permissionClass: "observe",
+    toolCallId: "call-shell",
+    toolName: "shell_exec",
+    arguments: JSON.stringify(shell),
+    permissionClass: "arbitrary_exec",
     mode: "MANUAL",
     createdAt: "2026-07-13T00:00:00.000Z",
   };
@@ -249,4 +293,8 @@ function permissionResult(assistantContent: string): RunPromptResult {
     messages: [],
     assistantContent,
   };
+}
+
+function withRequest(result: RunPromptResult, overrides: Partial<PermissionRequest>): RunPromptResult {
+  return result.kind === "needs_permission" ? { ...result, request: { ...result.request, ...overrides } } : result;
 }
