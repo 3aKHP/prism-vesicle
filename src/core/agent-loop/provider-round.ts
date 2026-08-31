@@ -84,14 +84,18 @@ export async function materializeBackgroundProcessNotifications(
   const backgroundNotifications = await options.processManager.collectNotifications(options.session.sessionId);
   if (backgroundNotifications.length === 0) return;
   const taskIds = backgroundNotifications.map((task) => task.taskId).sort();
-  const content = renderBackgroundProcessNotifications(backgroundNotifications);
   // The durable record is the delivery, so the `notified` flip happens only
-  // after the record is safe. Exactly-once across crash replay and the idle
-  // delivery path: when a record for exactly this batch already exists, never
-  // append or push a second copy, and when it still projects into provider
-  // history the active conversation already carries it.
+  // after the record is safe. Coverage is per task: a crash between the record
+  // append and the flip can regrow the replayed batch, and only the uncovered
+  // complement may append or send a second copy. Covered tasks whose records
+  // dropped out of projection (a failed-turn drop) still need the wire copy,
+  // because the active conversation no longer carries them.
   const persisted = await findPersistedProcessResults(options.rootDir, options.session.sessionId, taskIds);
-  if (!persisted) {
+  const undelivered = backgroundNotifications.filter((task) => !persisted.coveredTaskIds.has(task.taskId));
+  const droppedFromProjection = backgroundNotifications.filter((task) => persisted.invisibleTaskIds.has(task.taskId));
+  const needsWire = [...undelivered, ...droppedFromProjection];
+  if (undelivered.length > 0) {
+    const content = renderBackgroundProcessNotifications(needsWire);
     options.messages.push({ role: "user", content });
     await options.session.append({
       // Host packet, not authored input: persisted as a system record and
@@ -101,11 +105,11 @@ export async function materializeBackgroundProcessNotifications(
       content,
       metadata: withExecutionRound(options.session.sessionId, {
         kind: "background-process-results",
-        taskIds,
+        taskIds: needsWire.map((task) => task.taskId).sort(),
       }),
     });
-  } else if (!persisted.projectionVisible) {
-    options.messages.push({ role: "user", content });
+  } else if (droppedFromProjection.length > 0) {
+    options.messages.push({ role: "user", content: renderBackgroundProcessNotifications(droppedFromProjection) });
   }
   await options.processManager.markNotified(taskIds);
 }

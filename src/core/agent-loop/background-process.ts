@@ -27,28 +27,34 @@ export function trackBackgroundProcessCompletion(
 }
 
 export type PersistedProcessResults = {
-  uuid: string;
+  /** Task ids from the requested batch that a durable delivery record already carries. */
+  coveredTaskIds: Set<string>;
   /**
-   * False when the record exists but no longer projects into provider history
-   * (dropped by a failed-turn marker, or branched away): the completions are
-   * durable, yet the active conversation does not carry them.
+   * Covered task ids whose covering records all dropped out of provider-visible
+   * projection — the failed-turn drop; the only found-but-invisible shape, since
+   * a branched-away record never appears in the active branch at all.
    */
-  projectionVisible: boolean;
+  invisibleTaskIds: Set<string>;
+  /** The record matching exactly this batch, when one exists, for idempotent uuid reuse. */
+  exact?: { uuid: string };
 };
 
 /**
- * Find the durable completion record for exactly this task batch. Matching
- * requires the persisted `taskIds` list: a compaction rewrite keeps the record
- * kind but drops `taskIds` (see the compact replacement builder), so a
- * rewritten record can never prove it already carried these completions.
- * `expected` must already be sorted; legacy unsorted batches are normalized
- * during the comparison.
+ * Determine which tasks of a collected batch already have a durable completion
+ * record. Coverage requires the persisted `taskIds` list: a compaction rewrite
+ * keeps the record kind but drops `taskIds` (see the compact replacement
+ * builder), so a rewritten record can never prove it carried these
+ * completions. A crash between the record append and the `notified` flip can
+ * regrow the replayed batch (a task that was still running became interrupted
+ * on reload), so coverage is per task id, not per exact batch — only the
+ * uncovered complement may append a second record.
  */
 export async function findPersistedProcessResults(
   rootDir: string,
   sessionId: string,
-  expected: string[],
-): Promise<PersistedProcessResults | undefined> {
+  batch: string[],
+): Promise<PersistedProcessResults> {
+  const undelivered: PersistedProcessResults = { coveredTaskIds: new Set(), invisibleTaskIds: new Set() };
   let snapshot: Awaited<ReturnType<typeof loadSessionSnapshot>>;
   try {
     snapshot = await loadSessionSnapshot(rootDir, sessionId, { synthesizeDanglingToolResults: false });
@@ -57,21 +63,35 @@ export async function findPersistedProcessResults(
     // record (a fresh session before its first append, or a store whose file
     // was removed while process state survived); treat it as undelivered
     // rather than failing the provider round.
-    return undefined;
+    return undelivered;
   }
-  const record = snapshot.records.find((candidate) =>
-    candidate.metadata?.kind === "background-process-results"
-    && sameTaskIds(candidate.metadata?.taskIds, expected)
-  );
-  if (!record) return undefined;
-  const projectionVisible = snapshot.messages.some((message) => message.role === "user" && message.recordUuid === record.uuid);
-  return { uuid: record.uuid, projectionVisible };
+  const visibleRecordUuids = new Set(snapshot.messages.filter((message) => message.role === "user").map((message) => message.recordUuid));
+  const sortedBatch = [...batch].sort();
+  const visiblyCovered = new Set<string>();
+  for (const record of snapshot.records) {
+    if (record.metadata?.kind !== "background-process-results") continue;
+    const taskIds = readTaskIds(record.metadata?.taskIds);
+    if (taskIds.length === 0) continue;
+    const inBatch = taskIds.filter((taskId) => batch.includes(taskId));
+    if (inBatch.length === 0) continue;
+    for (const taskId of inBatch) {
+      undelivered.coveredTaskIds.add(taskId);
+      if (visibleRecordUuids.has(record.uuid)) visiblyCovered.add(taskId);
+    }
+    if (sameTaskIds(taskIds, sortedBatch)) undelivered.exact = { uuid: record.uuid };
+  }
+  undelivered.invisibleTaskIds = new Set([...undelivered.coveredTaskIds].filter((taskId) => !visiblyCovered.has(taskId)));
+  return undelivered;
 }
 
-function sameTaskIds(value: unknown, expected: string[]): boolean {
-  if (!Array.isArray(value) || value.length !== expected.length) return false;
-  const persisted = value.filter((entry): entry is string => typeof entry === "string").sort();
-  if (persisted.length !== expected.length) return false;
+function readTaskIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+function sameTaskIds(value: string[], expected: string[]): boolean {
+  if (value.length !== expected.length) return false;
+  const persisted = [...value].sort();
   return persisted.every((entry, index) => entry === expected[index]);
 }
 

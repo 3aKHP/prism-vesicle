@@ -72,6 +72,52 @@ describe.skipIf(!posixShSpawnable)("materializeBackgroundProcessNotifications", 
     }
   });
 
+  // A crash between the record append and the `notified` flip can regrow the
+  // replayed batch: the covered task is re-collected alongside a task that was
+  // still running at the crash and became interrupted on reload. Only the
+  // uncovered complement may append or send — the covered task must not ride
+  // the wire a second time (independent CR on the first cut of this change).
+  test("a regrown replay batch appends only the uncovered complement", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vesicle-bg-regrown-"));
+    try {
+      const { manager, session, task } = await primeTerminalTask(root);
+      await materializeBackgroundProcessNotifications({ rootDir: root, messages: [], processManager: manager, session });
+
+      const second = await manager.start({
+        command: "printf late",
+        cwd: ".",
+        shell: "posix-sh",
+        executablePath: "/bin/sh",
+        runtimePolicyVersion: 1,
+        timeoutMs: 5_000,
+        envPolicyVersion: 1,
+        runInBackground: true,
+      }, { parentSessionId: session.sessionId, parentToolCallId: "call-late" });
+      await manager.wait(second.taskId, { timeoutMs: 5_000 });
+      const taskPath = join(root, ".vesicle", "processes", `${task.taskId}.json`);
+      const state = JSON.parse(await readFile(taskPath, "utf8")) as BackgroundProcessState;
+      await writeFile(taskPath, `${JSON.stringify({ ...state, notified: false }, null, 2)}\n`, "utf8");
+      const replayManager = new ProcessManager(root);
+
+      const replayMessages: VesicleMessage[] = [];
+      await materializeBackgroundProcessNotifications({ rootDir: root, messages: replayMessages, processManager: replayManager, session });
+
+      const records = await loadSessionRecords(root, session.sessionId);
+      const packet = records.filter((record) => record.metadata?.kind === "background-process-results");
+      expect(packet).toHaveLength(2);
+      expect(packet[0]!.metadata?.taskIds).toEqual([task.taskId]);
+      expect(packet[1]!.metadata?.taskIds).toEqual([second.taskId]);
+      expect(packet[1]!.content).toContain(`id="${second.taskId}"`);
+      expect(packet[1]!.content).not.toContain(`id="${task.taskId}"`);
+      expect(replayMessages).toHaveLength(1);
+      expect(String(replayMessages[0]!.content)).toBe(packet[1]!.content);
+      expect((await replayManager.get(task.taskId))?.notified).toBe(true);
+      expect((await replayManager.get(second.taskId))?.notified).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("a legacy user-role delivery record still suppresses re-append", async () => {
     const root = await mkdtemp(join(tmpdir(), "vesicle-bg-legacy-"));
     try {
