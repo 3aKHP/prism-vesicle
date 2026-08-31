@@ -140,7 +140,7 @@ export function createTurnResultController(options: ResultOptions) {
    */
   function permissionTargetSummary(request: PermissionRequest): string {
     const target = toolTarget(request.toolName, parseToolArgs(request.arguments));
-    return target ? truncateLine(target, 200) : "";
+    return target ? truncateLine(target.replace(/\s+/g, " ").trim(), 200) : "";
   }
 
   function applyCompleteResult(result: Extract<RunPromptResult, { kind: "complete" }>): void {

@@ -60,6 +60,14 @@ describe("TUI turn result controller", () => {
     expect(notice.length).toBeLessThan(longCommand.length);
   });
 
+  test("collapses a multiline pending command summary onto one line (#268 CR N1)", () => {
+    const harness = createHarness();
+
+    harness.handle(shellPermissionResult({ command: "printf one\necho two\nls -la" }));
+
+    expect(harness.messages().at(-1)?.content).toBe("Permission pending: shell_exec · printf one echo two ls -la.");
+  });
+
   test("projects an exhausted quality result into a dedicated decision without delivering the candidate", () => {
     const harness = createHarness();
     harness.handle(qualityDecisionResult());
