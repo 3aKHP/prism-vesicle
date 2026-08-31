@@ -15,14 +15,14 @@ Enable it with `shellExec: true` in `permissions.yaml` (see the reference). The 
 ## Foreground vs background
 
 - **Foreground** (default): blocks the current turn and returns stdout/stderr, exit code, and duration when done.
-- **Background** (`runInBackground: true`): returns a task id immediately (like `shell-N`) without blocking. Progress and completion are visible in the TUI, and **completion is reported to the conversation on the next turn automatically — no polling**. Output is persisted under the project's `.vesicle/processes/`.
+- **Background** (`runInBackground: true`): returns a task id immediately (like `shell-N`) without blocking. Progress is visible in the TUI, and **completion is delivered to the conversation automatically — no polling**: folded into the next provider round while a turn is still active, or through an automatic continuation opened between turns when you are idle. Tasks finishing around the same time are merged into one delivery; a delivery whose provider round fails or is interrupted is paused and retried after your next message. Each delivery is a normal provider round, so it consumes tokens like any other turn. Output is persisted under the project's `.vesicle/processes/`.
 
 Two tools control background tasks:
 
 - `shell_output <taskId>` — read current output and status; add `wait` to wait for completion.
 - `shell_stop <taskId>` — stop it.
 
-> Restart recovery: when Vesicle restarts, a background task still running is **recovered as interrupted (not replayed)** — it does not re-run an in-flight command for you.
+> Restart recovery: when Vesicle restarts, a background task still running is **recovered as interrupted (not replayed)** — it does not re-run an in-flight command for you. A task that already finished while the host was down is still delivered when you resume the session.
 
 ## Output and timeout
 

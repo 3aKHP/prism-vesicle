@@ -239,7 +239,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     userRecord = { uuid: options.prePersistedInputUuid };
   } else {
     userRecord = await session.append({
-      role: "user",
+      role: options.inputRecordRole ?? "user",
       content: options.input,
       metadata: {
         ...(options.inputMetadata ?? {}),

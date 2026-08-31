@@ -36,6 +36,12 @@ export type RunPromptOptions = {
   messages?: VesicleMessage[];
   images?: VesicleImageAttachment[];
   inputMetadata?: Record<string, unknown>;
+  /**
+   * Role of the durable input record. Host-notification deliveries (background
+   * shell results) persist as `system` host packets while still sending the
+   * provider a user-role message via `messages`; defaults to `user`.
+   */
+  inputRecordRole?: "user" | "system";
   prePersistedInputUuid?: string;
   /**
    * Logical-turn identity for a deliberately reused input record. Regenerate

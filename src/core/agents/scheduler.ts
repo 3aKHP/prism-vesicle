@@ -15,6 +15,14 @@ export class AgentDeliveryDeferred extends Error {
   }
 }
 
+/**
+ * Delivers terminal SubAgent results to an idle parent session. The skeleton
+ * intentionally mirrors `ProcessCompletionScheduler` (debounce, idle gate,
+ * rerun edge) without sharing a base: the two inboxes differ in delivery
+ * semantics (three-state agent inbox vs. the process manager's per-task
+ * `notified` flag), so they are not unified — scheduling-semantics changes
+ * must update both.
+ */
 export class AgentContinuationScheduler {
   private readonly scheduled = new Map<string, Promise<void>>();
   private readonly rerunRequested = new Set<string>();

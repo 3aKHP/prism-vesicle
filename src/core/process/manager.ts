@@ -209,6 +209,23 @@ export class ProcessManager {
     }
   }
 
+  /**
+   * Re-arm a batch whose delivery turn failed after the record was durable:
+   * back to collectable, so the next provider boundary re-delivers the packet
+   * through the projection-dropped (push-only) path instead of stranding the
+   * completion out of the live session's wire. Idempotent.
+   */
+  async resetNotified(taskIds: string[]): Promise<void> {
+    await this.initialize();
+    for (const taskId of taskIds) {
+      const task = this.tasks.get(taskId);
+      if (!task || !task.state.notified) continue;
+      task.state.notified = false;
+      task.state.updatedAt = new Date().toISOString();
+      await this.persist(task);
+    }
+  }
+
   async shutdown(): Promise<void> {
     await this.initialize();
     const running = [...this.tasks.values()].filter((task) => task.state.status === "running" && task.handle);

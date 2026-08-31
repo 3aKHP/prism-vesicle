@@ -5,6 +5,9 @@ import { switchCandidateFileState, type CandidateFileStateOutcome } from "../cor
 import { AutoCompactBlockedError } from "../core/compact/auto-compact";
 import { AgentDeliveryDeferred } from "../core/agents/scheduler";
 import type { AgentInboxEntry } from "../core/agents/types";
+import { ProcessDeliveryDeferred } from "../core/process/completion-scheduler";
+import type { BackgroundProcessState } from "../core/process/manager";
+import { findPersistedProcessResults } from "../core/agent-loop/background-process";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot, FAILED_TURN_KIND } from "../core/session/store";
 import { appendCandidateSelection, contentLeafAtOrAbove, enumerateCandidateLeaves, findLatestSelection, ownerForkOfLeaf } from "../core/session/selection";
 import { listRewindPoints, rewindConversation } from "../core/rewind/service";
@@ -28,8 +31,8 @@ type CandidateSwitcherState = {
   total: number;
 };
 
-export type { TurnControllerOptions, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnDecisionPort, TurnAgentPort, TurnUsagePort, TurnComposerPort, TurnHostActionPort } from "./turn-controller-options";
-import type { TurnAgentPort, TurnComposerPort, TurnDecisionPort, TurnHostActionPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort, TurnControllerOptions } from "./turn-controller-options";
+export type { TurnControllerOptions, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnDecisionPort, TurnAgentPort, TurnProcessPort, TurnUsagePort, TurnComposerPort, TurnHostActionPort } from "./turn-controller-options";
+import type { TurnAgentPort, TurnComposerPort, TurnDecisionPort, TurnHostActionPort, TurnProcessPort, TurnRuntimePort, TurnSessionPort, TurnTranscriptPort, TurnUsagePort, TurnControllerOptions } from "./turn-controller-options";
 export function createTurnController(options: TurnControllerOptions) {
   let activeTurnSawResponse = false;
   // Synchronous latch for candidate actions (regenerate/switch): both await
@@ -109,6 +112,11 @@ export function createTurnController(options: TurnControllerOptions) {
     agentManager: options.agentManager,
     handleAgentEvent: options.handleAgentEvent,
     onProviderContextSnapshot: options.onProviderContextSnapshot,
+  };
+  const processPort: TurnProcessPort = {
+    markNotified: options.markProcessNotified,
+    resetNotified: options.resetProcessNotified,
+    pausedProcessDeliveries: options.pausedProcessDeliveries,
   };
   const usage: TurnUsagePort = {
     beginUsageTurn: options.beginUsageTurn,
@@ -213,7 +221,10 @@ export function createTurnController(options: TurnControllerOptions) {
     composer.recordPromptHistory(originalValue, elements, images);
     setCandidateSwitcher(null);
     const id = session.sessionId();
-    if (id) agent.pausedAgentDeliveries.delete(id);
+    if (id) {
+      agent.pausedAgentDeliveries.delete(id);
+      processPort.pausedProcessDeliveries.delete(id);
+    }
     composer.setHistoryIndex(null);
     session.setSessionPicker(null);
     transcript.setLastDisplayedToolAssistantContent(null);
@@ -361,6 +372,75 @@ export function createTurnController(options: TurnControllerOptions) {
     return snapshot.records.find((record) => record.role === "user"
       && record.metadata?.kind === "subagent-results"
       && sameInboxIds(record.metadata?.inboxIds, inboxIds));
+  }
+
+  /**
+   * Idle delivery for completed background shell tasks (issue #284): the same
+   * continuation shape as a SubAgent result delivery, but the persisted input
+   * record is a `background-process-results` system host packet. The loop's
+   * boundary materialize makes the record durable and flips `notified` before
+   * the provider request, so a failed or interrupted delivery must re-arm the
+   * batch here — mark the failed turn, rebuild the in-memory conversation from
+   * the durable projection, and reset `notified` so the next provider boundary
+   * re-delivers the packet (the projection-dropped push-only path).
+   */
+  async function deliverBackgroundProcessResults(parentSessionId: string, tasks: BackgroundProcessState[], packet: string): Promise<void> {
+    if (session.sessionId() !== parentSessionId || runtime.busy() || hasPendingInteraction()) throw new ProcessDeliveryDeferred();
+    options.queuedWork.prepareTurn();
+    runtime.setBusy(true);
+    const taskIds = tasks.map((task) => task.taskId).sort();
+    try {
+      beginProcessDelivery(tasks);
+      const requestMessages: VesicleMessage[] = [...session.conversation(), { role: "user", content: packet }];
+      activeTurnSawResponse = false;
+      usage.beginUsageTurn();
+      const persistedCoverage = await findPersistedProcessResults(session.rootDir, parentSessionId, taskIds);
+      const outcome = await options.runCancellable((signal) => runPrompt({
+        input: packet,
+        engine: runtime.activeEngine(),
+        sessionId: parentSessionId,
+        messages: requestMessages,
+        inputMetadata: { kind: "background-process-results", taskIds },
+        inputRecordRole: "system",
+        ...(persistedCoverage.exact ? { prePersistedInputUuid: persistedCoverage.exact.uuid } : {}),
+        providerSelection: runtime.activeProviderSelection(),
+        generation: runtime.activeGeneration(),
+        permission: permissionContext(),
+        signal,
+        onEvent: agent.handleAgentEvent,
+        onProviderContextSnapshot: agent.onProviderContextSnapshot,
+        onSessionTitleChanged: options.onSessionTitleChanged,
+        agentManager: agent.agentManager(),
+        permissionBroker: runtime.permissionBroker,
+        takePendingUserInputs: options.queuedWork.takePendingUserInputs,
+        runToolBoundaryCommands: options.queuedWork.runToolBoundaryCommands,
+      }));
+      if (outcome.kind === "interrupted") {
+        await options.queuedWork.handleInterruption(parentSessionId);
+        handleInterruptedTurn();
+        throw new ProcessDeliveryDeferred();
+      }
+      handleResult(outcome.value);
+      await processPort.markNotified(taskIds);
+    } catch (error) {
+      processPort.pausedProcessDeliveries.add(parentSessionId);
+      await markFailedUserTurn(parentSessionId);
+      await refreshConversationFromSession(parentSessionId);
+      await processPort.resetNotified(taskIds);
+      transcript.recordActivity({ kind: "tool", text: `background shell delivery paused: ${tasks.map((task) => task.taskId).join(", ")} — the results stay recorded and retry with your next message` });
+      throw error;
+    } finally {
+      runtime.setBusy(false);
+    }
+  }
+
+  function beginProcessDelivery(tasks: BackgroundProcessState[]): void {
+    transcript.setStatus(`delivering ${tasks.length} background shell result${tasks.length === 1 ? "" : "s"}`);
+    transcript.recordActivity({ kind: "tool", text: `delivering ${tasks.length} background shell result${tasks.length === 1 ? "" : "s"}` });
+    transcript.setMessages((current) => [...current, {
+      role: "system",
+      content: `Background shell task${tasks.length === 1 ? "" : "s"} completed: ${tasks.map((task) => `${task.taskId} (${task.status})`).join(", ")}. Delivering results…`,
+    }]);
   }
 
   function reportError(error: unknown): void {
@@ -756,6 +836,7 @@ export function createTurnController(options: TurnControllerOptions) {
   return {
     ...decisionContinuations,
     deliverAgentResults,
+    deliverBackgroundProcessResults,
     markTurnSawResponse,
     reportError,
     submitPrompt,
