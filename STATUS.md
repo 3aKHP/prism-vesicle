@@ -42,7 +42,7 @@ Published package version: **1.0.0-beta.2** (npm `latest`). Current release cand
 | Tools | Unified `list_directory` query, bounded Project State orientation, and structured missing-path observations | released |
 | Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`; hidden without `TAVILY_API_KEY`, and `web_search` yields to a session's enabled built-in search) | released |
 | Tools | Dual-era Streamable HTTP MCP tools: legacy `initialize` and modern `server/discover` with per-server `auto`/`legacy`/`modern` negotiation | released |
-| Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; optional `mcpOutputAutoTruncate` sub-toggle replaces oversized inline results with a bounded preview + reference; inline default unchanged | experimental |
+| Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; optional `mcpOutputAutoTruncate` sub-toggle replaces oversized inline results with a bounded preview + reference; inline default unchanged | released |
 | Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
 | Tools | Structured Skill scripts with independent `skill_exec` permission class (no `shellExec` gate) | released |
 | Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | released |
@@ -57,7 +57,7 @@ Published package version: **1.0.0-beta.2** (npm `latest`). Current release cand
 | Release | Standalone Windows PE and Linux ELF binaries | released |
 | Release | npm/Bun package with a precompiled Solid TUI entry, clean installed production tree, global/local consumer audit, and behavioral Linux PTY startup gate | released |
 | Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | released |
-| Release | Branded Windows PE, installer, uninstaller, and Explorer assets | experimental |
+| Release | Branded Windows PE, installer, uninstaller, and Explorer assets | released |
 | Release | Reusable Linux/Windows release build with tag-triggered publication | released |
 
 ## Scope

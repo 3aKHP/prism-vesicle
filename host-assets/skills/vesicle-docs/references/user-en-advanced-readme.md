@@ -18,7 +18,7 @@ This section covers capabilities that the tutorials and reference do not expand 
 | [SubAgents](./subagents.md) | 🟢 Implemented | Foreground/background child tasks; generic and Driver-contract agents |
 | [Stage consumer engine](./stage.md) | 🟢 Implemented | Open a continuous narrative session from a character card + scenario card |
 | [Skills](./skills.md) | 🟢 Implemented | On-demand procedural context: discovery, activation, resource reads, `/skill` command |
-| [MCP tools](./mcp.md) | 🟢 MCP tools · 🟡 Output persistence experimental | Connect external tools: connection setup, tool permissions, optional result archiving |
+| [MCP tools](./mcp.md) | 🟢 MCP tools · 🟢 Output persistence | Connect external tools: connection setup, tool permissions, optional result archiving |
 | [Harness Packs](./harness-packs.md) | 🟢 Offline management implemented | Verify, install, select, and roll back a complete creative baseline; materialize sparse overrides when needed |
 
 ## Prerequisites

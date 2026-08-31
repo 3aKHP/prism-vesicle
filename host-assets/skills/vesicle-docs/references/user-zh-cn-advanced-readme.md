@@ -18,7 +18,7 @@
 | [SubAgents](./subagents.md) | 🟢 已实现 | 前台/后台子任务;generic 与 Driver-contract 两类 Agent |
 | [Stage 消费引擎](./stage.md) | 🟢 已实现 | 用角色卡 + 情景卡开一个连续叙事会话 |
 | [Skills](./skills.md) | 🟢 已实现 | 按需过程性上下文：发现、激活、资源读取、`/skill` 命令 |
-| [MCP 工具](./mcp.md) | 🟢 MCP 工具 · 🟡 输出落盘实验性 | 接入外部工具:连接配置、工具权限、可选结果存档 |
+| [MCP 工具](./mcp.md) | 🟢 MCP 工具 · 🟢 输出落盘 | 接入外部工具:连接配置、工具权限、可选结果存档 |
 | [Harness Packs](./harness-packs.md) | 🟢 离线管理已实现 | 验证、安装、选择和回退一整套创作基线;按需制作稀疏覆盖 |
 
 ## 前置
