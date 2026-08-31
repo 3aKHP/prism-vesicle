@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runPrompt } from "../../../src/core/agent-loop/run";
 import { ProcessCompletionScheduler } from "../../../src/core/process/completion-scheduler";
+import { renderBackgroundProcessNotifications } from "../../../src/core/agent-loop/background-process";
 import { getProcessManager, ProcessManager } from "../../../src/core/process/manager";
 import { createSessionStore, loadSessionRecords } from "../../../src/core/session/store";
 import { resolveProjectHarnessRuntime } from "../../../src/core/harness";
@@ -65,7 +66,7 @@ describe("agent loop: background idle wake", () => {
       });
       if (continuation.kind !== "complete") throw new Error("expected complete continuation");
       await manager.markNotified(tasks.map((entry) => entry.taskId));
-    }, { debounceMs: 0 });
+    }, { renderPacket: renderBackgroundProcessNotifications, debounceMs: 0 });
     await scheduler.notify(first.sessionId);
 
     expect(deliveries).toBe(1);
@@ -139,7 +140,7 @@ describe("agent loop: background idle wake", () => {
 
     const replayManager = new ProcessManager(rootDir);
     let delivered = 0;
-    const scheduler = new ProcessCompletionScheduler(replayManager, async () => { delivered += 1; }, { debounceMs: 0 });
+    const scheduler = new ProcessCompletionScheduler(replayManager, async () => { delivered += 1; }, { renderPacket: renderBackgroundProcessNotifications, debounceMs: 0 });
     replayManager.subscribe((event) => {
       if (event.process.status !== "running" && !event.process.notified) {
         void scheduler.notify(event.process.parentSessionId).catch(() => undefined);

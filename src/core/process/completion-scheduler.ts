@@ -1,5 +1,4 @@
 import type { BackgroundProcessState, ProcessManager } from "./manager";
-import { renderBackgroundProcessNotifications } from "../agent-loop/background-process";
 
 export type ProcessResultDelivery = (
   parentSessionId: string,
@@ -15,12 +14,14 @@ export class ProcessDeliveryDeferred extends Error {
 }
 
 /**
- * Wakes an idle parent session when a background shell task completes,
- * mirroring the SubAgent `AgentContinuationScheduler` skeleton (debounce,
- * idle gate, rerun edge) over the ProcessManager's durable `notified` inbox.
- * The scheduler never flips `notified`: delivery owns the flip, and only after
- * the completion record is durable, so an interrupted or deferred delivery
- * leaves the batch drainable again.
+ * Wakes an idle parent session when a background shell task completes. The
+ * skeleton intentionally mirrors `AgentContinuationScheduler` (debounce, idle
+ * gate, rerun edge) without sharing a base: the two inboxes differ in delivery
+ * semantics (three-state agent inbox vs. the per-task `notified` flag), so
+ * they are not unified — scheduling-semantics changes must update both.
+ *
+ * The scheduler stays domain-pure: the composition root injects the packet
+ * renderer, so the process domain never imports agent-loop presentation.
  */
 export class ProcessCompletionScheduler {
   private readonly scheduled = new Map<string, Promise<void>>();
@@ -30,9 +31,10 @@ export class ProcessCompletionScheduler {
     private readonly processManager: ProcessManager,
     private readonly deliver: ProcessResultDelivery,
     private readonly options: {
+      renderPacket: (tasks: BackgroundProcessState[]) => string;
       debounceMs?: number;
       isParentIdle?: (parentSessionId: string) => boolean;
-    } = {},
+    },
   ) {}
 
   notify(parentSessionId: string): Promise<void> {
@@ -66,7 +68,7 @@ export class ProcessCompletionScheduler {
     const tasks = await this.processManager.collectNotifications(parentSessionId);
     if (tasks.length === 0) return;
     try {
-      await this.deliver(parentSessionId, tasks, renderBackgroundProcessNotifications(tasks));
+      await this.deliver(parentSessionId, tasks, this.options.renderPacket(tasks));
     } catch (error) {
       if (error instanceof ProcessDeliveryDeferred) return;
       throw error;

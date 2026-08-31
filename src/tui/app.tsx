@@ -39,6 +39,7 @@ import { AgentStore } from "../core/agents/store";
 import { runChildAgent } from "../core/agents/child-runner";
 import { AgentContinuationScheduler } from "../core/agents/scheduler";
 import { ProcessCompletionScheduler } from "../core/process/completion-scheduler";
+import { renderBackgroundProcessNotifications } from "../core/agent-loop/background-process";
 import { agentActivitySummary } from "./agent-view";
 import { ToolPermissionBroker } from "../core/permissions";
 import { getProcessManager, type BackgroundProcessState } from "../core/process/manager";
@@ -736,7 +737,8 @@ export function App(props: AppProps = {}) {
     clearGateFeedback,
     setSessionPicker,
     pausedAgentDeliveries,
-    processManager,
+    markProcessNotified: (taskIds) => processManager.markNotified(taskIds),
+    resetProcessNotified: (taskIds) => processManager.resetNotified(taskIds),
     pausedProcessDeliveries,
     agentManager: () => agentManager,
     permissionBroker,
@@ -769,29 +771,19 @@ export function App(props: AppProps = {}) {
     applyConversationRewind: (result) => sessionActions.applyConversationRewind(result),
   });
   const { reportError } = turnController;
+  // One idle oracle shared by both continuation schedulers: the target session
+  // must be the active one, not paused for its own delivery kind, and free of
+  // the busy/restore/pending-interaction state (`mainActive`).
+  const sessionIdleFor = (paused: Set<string>) => (parentSessionId: string) => sessionId() === parentSessionId
+    && !paused.has(parentSessionId)
+    && !restoringSession()
+    && !mainActive();
   const continuationScheduler = new AgentContinuationScheduler(agentStore, turnController.deliverAgentResults, {
-    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
-      && !pausedAgentDeliveries.has(parentSessionId)
-      && !restoringSession()
-      && !busy()
-      && !pendingGate()
-      && !pendingEngineSwitch()
-      && !pendingUserQuestion()
-      && !pendingPermission()
-      && !pendingQualityDecision()
-      && !pendingChildPermission(),
+    isParentIdle: sessionIdleFor(pausedAgentDeliveries),
   });
   const processCompletionScheduler = new ProcessCompletionScheduler(processManager, turnController.deliverBackgroundProcessResults, {
-    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
-      && !pausedProcessDeliveries.has(parentSessionId)
-      && !restoringSession()
-      && !busy()
-      && !pendingGate()
-      && !pendingEngineSwitch()
-      && !pendingUserQuestion()
-      && !pendingPermission()
-      && !pendingQualityDecision()
-      && !pendingChildPermission(),
+    renderPacket: renderBackgroundProcessNotifications,
+    isParentIdle: sessionIdleFor(pausedProcessDeliveries),
   });
   // Terminal-state replay (subscribe re-emits every disk-loaded task after
   // initialization) plus live completions both land here; the scheduler
@@ -980,7 +972,7 @@ export function App(props: AppProps = {}) {
   });
   createEffect(() => {
     const id = sessionId();
-    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
+    const ready = !restoringSession() && !mainActive();
     if (id && ready) {
       void continuationScheduler.notify(id).catch(reportError);
       void processCompletionScheduler.notify(id).catch(reportError);

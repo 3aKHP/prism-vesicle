@@ -114,7 +114,8 @@ export function createTurnController(options: TurnControllerOptions) {
     onProviderContextSnapshot: options.onProviderContextSnapshot,
   };
   const processPort: TurnProcessPort = {
-    processManager: options.processManager,
+    markNotified: options.markProcessNotified,
+    resetNotified: options.resetProcessNotified,
     pausedProcessDeliveries: options.pausedProcessDeliveries,
   };
   const usage: TurnUsagePort = {
@@ -420,12 +421,12 @@ export function createTurnController(options: TurnControllerOptions) {
         throw new ProcessDeliveryDeferred();
       }
       handleResult(outcome.value);
-      await processPort.processManager.markNotified(taskIds);
+      await processPort.markNotified(taskIds);
     } catch (error) {
       processPort.pausedProcessDeliveries.add(parentSessionId);
       await markFailedUserTurn(parentSessionId);
       await refreshConversationFromSession(parentSessionId);
-      await processPort.processManager.resetNotified(taskIds);
+      await processPort.resetNotified(taskIds);
       transcript.recordActivity({ kind: "tool", text: `background shell delivery paused: ${tasks.map((task) => task.taskId).join(", ")} — the results stay recorded and retry with your next message` });
       throw error;
     } finally {

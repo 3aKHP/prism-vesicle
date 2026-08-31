@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { ProcessCompletionScheduler, ProcessDeliveryDeferred } from "../../../src/core/process/completion-scheduler";
 import { ProcessManager } from "../../../src/core/process/manager";
+import { renderBackgroundProcessNotifications } from "../../../src/core/agent-loop/background-process";
 
 // The fixture shells out through an explicit POSIX /bin/sh; probe that the
 // interpreter actually spawns rather than merely existing on disk.
@@ -45,7 +46,7 @@ describe.skipIf(!posixShSpawnable)("process completion scheduler", () => {
         // notified after its turn succeeds, which is what keeps the rerun edge
         // below from re-delivering the same batch.
         await manager.markNotified(tasks.map((task) => task.taskId));
-      }, { debounceMs: 0 });
+      }, { renderPacket: renderBackgroundProcessNotifications, debounceMs: 0 });
       await Promise.all([scheduler.notify("parent"), scheduler.notify("parent")]);
 
       expect(deliveries).toHaveLength(1);
@@ -69,6 +70,7 @@ describe.skipIf(!posixShSpawnable)("process completion scheduler", () => {
       let idle = false;
       let delivered = 0;
       const scheduler = new ProcessCompletionScheduler(manager, async () => { delivered += 1; }, {
+        renderPacket: renderBackgroundProcessNotifications,
         debounceMs: 0,
         isParentIdle: () => idle,
       });
@@ -101,7 +103,7 @@ describe.skipIf(!posixShSpawnable)("process completion scheduler", () => {
           await new Promise<void>((resolve) => { releaseFirst = resolve; });
         }
         await manager.markNotified(tasks.map((task) => task.taskId));
-      }, { debounceMs: 0 });
+      }, { renderPacket: renderBackgroundProcessNotifications, debounceMs: 0 });
 
       const firstDelivery = scheduler.notify("parent");
       await started;
@@ -126,7 +128,7 @@ describe.skipIf(!posixShSpawnable)("process completion scheduler", () => {
       await manager.wait(deferredTask.taskId, { timeoutMs: 5_000 });
       const deferring = new ProcessCompletionScheduler(manager, async () => {
         throw new ProcessDeliveryDeferred();
-      }, { debounceMs: 0 });
+      }, { renderPacket: renderBackgroundProcessNotifications, debounceMs: 0 });
       await expect(deferring.notify("deferred-parent")).resolves.toBeUndefined();
       expect((await manager.get(deferredTask.taskId))?.notified).toBe(false);
 
@@ -134,7 +136,7 @@ describe.skipIf(!posixShSpawnable)("process completion scheduler", () => {
       await manager.wait(failingTask.taskId, { timeoutMs: 5_000 });
       const failing = new ProcessCompletionScheduler(manager, async () => {
         throw new Error("provider unavailable");
-      }, { debounceMs: 0 });
+      }, { renderPacket: renderBackgroundProcessNotifications, debounceMs: 0 });
       await expect(failing.notify("failing-parent")).rejects.toThrow("provider unavailable");
       expect((await manager.get(failingTask.taskId))?.notified).toBe(false);
     } finally {
