@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-08-31
+
+### Stable channel and known limitations
+
+- **`1.0.0` is the first stable release and publishes to npm's `latest` dist-tag:** `npm install -g prism-vesicle` installs it once publication completes. Earlier prerelease builds remain available through the `next` dist-tag and explicit versions.
+- **Sessions recorded under earlier bundled Harness baselines are not lost; they migrate explicitly** through the same two-stage review as before; nothing is rebound silently. SubAgent child sessions keep their fail-closed identity check.
+- **Windows artifacts remain intentionally unsigned.** Verify downloads from the official GitHub Release against `SHA256SUMS.txt`, follow the public Code Signing Policy, and do not disable Windows security features globally.
+
+### Changed
+
+- **All four experimental surfaces from the prerelease line graduate to released.** Opt-in MCP tool-output persistence (`mcpOutputPersistence`, with the `mcpOutputAutoTruncate` sub-toggle) remains opt-in by design; the branded Windows PE, installer, uninstaller, and Explorer assets remain unsigned per the standing Code Signing Policy disclosure; host-state terminal tab titles and durable session titles graduated after the 1.0.0-rc.2 closed group test on the installed Windows build (working-marker anchor stability and the title lifecycle).
+
+### Fixed
+
+- **Windows Terminal working titles no longer jitter horizontally (Issue #263).** The working-state tab marker now rotates through the same-block quadrant squares `◰`/`◳`/`◲`/`◱` (U+25F0–F3, clockwise), which keep a pixel-stable advance across frames in the Windows Terminal tab strip where the previous `◇`/`◈`/`◆` diamond pulse visibly shifted the following title text. The frame set was selected by a human-observation probe against real Windows Terminal rendering (`scripts/probe/terminal-title-jitter-probe.ts`). The 800ms cadence, idle `·` and input-required `!` markers, the `VESICLE_REDUCED_MOTION=1` still frame (now `◰`), and the `VESICLE_DISABLE_TERMINAL_TITLE=1` no-write contract are unchanged.
+
 ## [1.0.0-rc.1] - 2026-08-30
 
 ### Release candidate channel and known limitations

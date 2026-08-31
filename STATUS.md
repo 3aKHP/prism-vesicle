@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Development snapshot date: 2026-08-30. Published package version: 1.0.0-beta.2 (npm `latest`). Current release candidate: 1.0.0-rc.1 (npm `next`)._
+_Development snapshot date: 2026-08-31. Published package version: 1.0.0-rc.1 (npm `next`); `latest` still tracks the beta line until stable 1.0.0 publishes. This snapshot prepares stable 1.0.0._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Published package version: **1.0.0-beta.2** (npm `latest`). Current release candidate: **1.0.0-rc.1**, which publishes to npm `next` while `latest` keeps tracking the beta line. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact contents of each published version.
+Published package version: **1.0.0-rc.1** (npm `next`), while `latest` keeps tracking the beta line until stable **1.0.0** publishes. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact contents of each published version.
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
@@ -20,9 +20,9 @@ Published package version: **1.0.0-beta.2** (npm `latest`). Current release cand
 | Providers | Optional provider HTTP/WebSocket proxy (`VESICLE_PROVIDER_PROXY`): terminal-env precedence, native Bun CONNECT routing, redacted diagnostics | released |
 | Context | Portable `/compact` checkpoint (`compact-checkpoint-v1`): atomic replacement history (summary + verbatim retained tail), append-only transcript preserved, projection/resume/rewind exact across the checkpoint | released |
 | Context | Opt-in automatic compaction: pre-turn and exact provider-send guards over current history, queued/background input, and tool schemas; provider-observation delta projection; pre-install replacement ceiling validation; soft-trigger continue + hard-ceiling block; truthful `/context`; cancelled lifecycle | released |
-| Sessions | Host-only durable session titles (`sessionTitle: auto|off`), isolated first-turn generation, bounded retries/claims, `/title` commands, and picker projection | experimental |
+| Sessions | Host-only durable session titles (`sessionTitle: auto|off`), isolated first-turn generation, bounded retries/claims, `/title` commands, and picker projection | released |
 | TUI | OpenTUI + Solid responsive shell with host-owned multiline composer | released |
-| TUI | Host-state terminal tab title projection through OpenTUI with idle/working/input-required markers, TTY gating, reduced-motion, hard disable, and shutdown cleanup | experimental |
+| TUI | Host-state terminal tab title projection through OpenTUI with idle/working/input-required markers, TTY gating, reduced-motion, hard disable, and shutdown cleanup | released |
 | TUI | Startup splash and empty-session hero derived from the brand ANSI mark; truecolour animation degrades to a static frame on 256-colour terminals and freezes under `VESICLE_REDUCED_MOTION=1` | released |
 | TUI | Static motif wiring: per-message role spectrum lanes, per-engine refraction accents, and ASCII-frame sidebar section labels | released |
 | TUI | Day/night theme: four-value preference (dark/light/default/auto), terminal-following `default` with dark fallback, time-based `auto` (light 07:00–19:00), `/theme` session override plus `--persist`/`--unset-project` project file, `--dark`/`--light` launch flags, and `VESICLE_THEME` env | released |
@@ -42,7 +42,7 @@ Published package version: **1.0.0-beta.2** (npm `latest`). Current release cand
 | Tools | Unified `list_directory` query, bounded Project State orientation, and structured missing-path observations | released |
 | Tools | Tavily web tools (`web_search` / `web_fetch` / `web_map` / `web_crawl` / `web_research`; hidden without `TAVILY_API_KEY`, and `web_search` yields to a session's enabled built-in search) | released |
 | Tools | Dual-era Streamable HTTP MCP tools: legacy `initialize` and modern `server/discover` with per-server `auto`/`legacy`/`modern` negotiation | released |
-| Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; optional `mcpOutputAutoTruncate` sub-toggle replaces oversized inline results with a bounded preview + reference; inline default unchanged | experimental |
+| Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; optional `mcpOutputAutoTruncate` sub-toggle replaces oversized inline results with a bounded preview + reference; inline default unchanged | released |
 | Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
 | Tools | Structured Skill scripts with independent `skill_exec` permission class (no `shellExec` gate) | released |
 | Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | released |
@@ -57,7 +57,7 @@ Published package version: **1.0.0-beta.2** (npm `latest`). Current release cand
 | Release | Standalone Windows PE and Linux ELF binaries | released |
 | Release | npm/Bun package with a precompiled Solid TUI entry, clean installed production tree, global/local consumer audit, and behavioral Linux PTY startup gate | released |
 | Release | Guided per-user Windows installer (Inno Setup + `vesicle setup`) | released |
-| Release | Branded Windows PE, installer, uninstaller, and Explorer assets | experimental |
+| Release | Branded Windows PE, installer, uninstaller, and Explorer assets | released |
 | Release | Reusable Linux/Windows release build with tag-triggered publication | released |
 
 ## Scope

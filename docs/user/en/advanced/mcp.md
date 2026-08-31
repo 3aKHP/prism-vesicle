@@ -1,6 +1,6 @@
 # MCP tools
 
-🟢 MCP tools · 🟡 Output persistence experimental
+🟢 MCP tools · 🟢 Output persistence
 
 English | [简体中文](../../zh-CN/advanced/mcp.md)
 
@@ -84,7 +84,7 @@ The sidebar MCP section shows a short protocol marker.
 - **Images**: only when the active model supports vision (`capabilities.vision: true`) are PNG/JPEG/GIF/WebP images checked and sent to the model. If the model can't handle images, they're skipped—text still comes through, and you're told how many images were omitted. MCP error results never carry images either. Single-image limit is currently 20 MiB.
 - **Not-yet-supported kinds** (resource, audio, URL/link, etc.): only a brief "not supported" notice is given. Vesicle **never** downloads, reads, transcribes, or plays such content on its own.
 
-## Saving tool output (experimental)
+## Saving tool output
 
 By default, an MCP tool's result lives only in the current conversation—once it scrolls past, it's gone: to see it again the model must re-invoke, and that call may cost money, have side effects, or be impossible to repeat. Turn on output persistence and every MCP call's text and images are also saved to disk, so the model can go back and read the saved copy with `read_file`, `grep_files`, and `view_image` instead of repeating the call.
 
@@ -104,7 +104,7 @@ mcpOutputAutoTruncate: true           # optional, requires the master toggle
 - Text is saved under `tmp/mcp-output/<session-id>/`, images under `.../blob/` (saved as native `.png`/`.jpg`, not encoded text). Filenames are built from the tool name and its arguments, so they're easy to find.
 - No manual action needed once it's on: Vesicle tells the model where results are saved, and the model decides for itself when to go read them. `/resume` reuses the same session id, so the files stay at their original paths.
 - Saving is best-effort and never affects the result itself: even if the save fails, the model still receives what it should.
-- This feature is still experimental and off by default; the model is told about it only when the current engine actually has MCP tools.
+- This feature is off by default; the model is told about it only when the current engine actually has MCP tools.
 
 > These saved files live in `tmp/`: `/rewind` doesn't touch them, and Vesicle never cleans them up automatically. Delete them yourself with the file tools when you're done. See [Permissions and security model](../reference/permissions-and-security.md) for the full `tmp/` behavior.
 
