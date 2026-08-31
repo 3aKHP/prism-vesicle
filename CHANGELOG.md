@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **OpenTUI fork runtime advances to `0.5.9-zv1`** (from `0.5.3-zv6`; fork baseline rejoins upstream at v0.5.9). Carries upstream byte-accurate layout rewrite (#1428) and drag-selection inclusive-end semantics (#1393): dragging across cells now includes the end cell, so the two theme-text selection expectations carry a trailing space. Pre-publish validation on a production-shaped install passed in full (unit 1242/1242, integration 883/883, contract 58/58, component with the updated expectations; issue #273).
+
 ### Fixed
 
 - **The release close-issues workflow now bridges closing declarations from the PRs it carries into `main`.** Closing keywords in a PR body targeting `develop` no longer depend on the release PR repeating them: at release-merge time the workflow recovers the constituent PRs from the release commit range (native-merge and squash-merge forms), scans their bodies plus the release PR body with GitHub-native inline keyword semantics, and closes each still-open issue with a comment linking the originating and release PRs. Rebase-merged constituent PRs leave no PR reference in the commit history and remain unbridgeable.
