@@ -46,7 +46,7 @@ const CANDIDATES: Candidate[] = [
   {
     name: "control-baseline",
     frames: ["◇", "◈", "◆", "◈"],
-    note: "positive control — current v1.0.0 frames (U+25C6–C8, already consecutive); must reproduce the known jitter, or the probe is not sensitive enough",
+    note: "positive control — the pre-#263 diamond frames shipped through v1.0.0-rc.1 (U+25C6–C8, already consecutive); must reproduce the known jitter, or the probe is not sensitive enough",
     control: "positive",
   },
   {
@@ -115,7 +115,7 @@ function describeFrames(frames: string[]): string {
     .join(" → ");
 }
 
-function parseArgs(argv: string[]): {
+type ProbeArgs = {
   mode: "cycle" | "step";
   interval: number;
   seconds: number;
@@ -125,7 +125,9 @@ function parseArgs(argv: string[]): {
   anchor: string;
   list: boolean;
   force: boolean;
-} {
+};
+
+function parseArgs(argv: string[]): ProbeArgs {
   const args = {
     mode: "cycle" as "cycle" | "step",
     interval: 800,
@@ -189,7 +191,7 @@ function parseArgs(argv: string[]): {
 
 async function runCandidate(
   candidate: Candidate,
-  args: { mode: "cycle" | "step"; interval: number; seconds: number; stepSeconds: number; pause: number; anchor: string },
+  args: ProbeArgs,
   shouldCancel: () => boolean,
 ): Promise<void> {
   setTitle(`= PAUSE · next: ${candidate.name}`);
