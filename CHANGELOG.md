@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **The repository now carries issue and pull request templates** (`.github/`). Regular PRs prefill the WORKFLOW PR Body Shape — a `Grade` line naming the applicable Change Grading Workflow grade, the authoritative `Closes` closing declaration, and the verification checklist plus a targeted-tests line. Release PRs get a dedicated publication-prep checklist template opened via `gh pr create --template .github/PULL_REQUEST_TEMPLATE/release.md` (GitHub offers no PR template chooser). Issues offer structured bilingual bug / feature forms plus a memo template that fixes the repository's memo issue genre as the shape authority; blank issues are disabled. `docs/dev/WORKFLOW.md` § Release Lifecycle now lists the release-facing documentation stamps (README channel wording and Status badge, advanced user-manual maturity stamps, `STATUS.md` snapshot header) as part of the release freeze (issue #278).
+
 ### Changed
 
 - **OpenTUI fork runtime advances to `0.5.9-zv1`** (from `0.5.3-zv6`; fork baseline rejoins upstream at v0.5.9). Carries upstream byte-accurate layout rewrite (#1428) and drag-selection inclusive-end semantics (#1393): dragging across cells now includes the end cell, so the two theme-text selection expectations carry a trailing space. Pre-publish validation on a production-shaped install passed in full (unit 1242/1242, integration 883/883, contract 58/58, component with the updated expectations; issue #273).
