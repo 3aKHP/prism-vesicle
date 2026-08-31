@@ -232,6 +232,12 @@ async function executeApprovedEntry(
   options: ResolvePermissionOptions,
 ): Promise<ToolResult> {
   const call = permissionCall(entry.request);
+  // The gated call never reached the executor's tool_call emit (the permission
+  // gate holds it out of the executable batch), so emit it here for every
+  // resolution branch — allow, reject, and capability-gone — keeping the
+  // transcript's `●` card paired with the result row exactly like a
+  // non-permission round.
+  options.onEvent?.({ type: "tool_call", name: call.name, callId: call.id, arguments: call.arguments });
   if (entry.resolution.decision === "reject") {
     const content = context.harness && agentToolNames.has(call.name)
       ? JSON.stringify({
