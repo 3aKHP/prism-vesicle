@@ -1,0 +1,64 @@
+name: Bug 报告 / Bug report
+description: 报告可复现的缺陷 / Report a reproducible defect
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前先搜索既有 issue;对已有 issue 点 👍 即可,不必重复开单。
+        Prefer text over screenshots / 文字优于截图。
+  - type: textarea
+    id: phenomenon
+    attributes:
+      label: 现象 / Phenomenon
+      description: 发生了什么?哪里与预期不符?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现 / Reproduction
+      description: 精确的操作步骤、命令与相关配置。
+      placeholder: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: dropdown
+    id: channel
+    attributes:
+      label: 渠道 / Channel
+      description: 从哪个分发渠道安装的?
+      options:
+        - npm latest (stable)
+        - npm next (prerelease)
+        - Windows 安装器 / installer
+        - 源码运行 / source checkout
+        - 其他 / other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / Version
+      description: "`vesicle --version` 的输出。"
+  - type: input
+    id: os-terminal
+    attributes:
+      label: 系统与终端 / OS & terminal
+      placeholder: e.g. Windows 11 + Windows Terminal, Ubuntu 24.04 + zsh
+  - type: input
+    id: provider-model
+    attributes:
+      label: Provider / 模型(可选)
+      description: 请隐去密钥等敏感信息 / redact secrets.
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望 / Expected
+      description: 正确的行为应该是什么?
+  - type: textarea
+    id: notes
+    attributes:
+      label: 附注 / Notes
+      description: "`vesicle doctor` 输出(请脱敏)、相关文件与日志。"

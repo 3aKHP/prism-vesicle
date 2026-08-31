@@ -218,7 +218,7 @@ The empty-project smoke runs `debug markdown-runtime`, `assets status`, asset ma
 
 ### Release Lifecycle
 
-1. Freeze `package.json`, `CHANGELOG.md`, release notes, and supported user-facing scope on `release/v<version>-<topic>`. Release notes must link the public Code signing policy and state accurately whether that version's Windows artifacts are signed.
+1. Freeze `package.json`, `CHANGELOG.md`, release notes, and supported user-facing scope on `release/v<version>-<topic>`. The freeze also covers the release-facing documentation stamps: `README.md` and `README.zh-CN.md` channel wording and static Status badge, the advanced user-manual maturity stamps under `docs/user/{en,zh-CN}/advanced/`, and the `STATUS.md` snapshot header. Release notes must link the public Code signing policy and state accurately whether that version's Windows artifacts are signed.
 2. Run the standard local verification, then open a PR to `main`. PR CI executes the same reusable release build and provides short-lived Linux, Windows, assets-ZIP, and installer artifacts for review and human testing.
 3. Complete independent CR, the opt-in real-provider acceptance test, and any required small-group Windows acceptance. Merge the reviewed release PR to `main`.
 4. Update the local `main` with a fast-forward-only pull and confirm that `HEAD` is the accepted release commit.
@@ -400,10 +400,13 @@ GitHub auto-closes an issue only when a supported closing keyword is immediately
 - For staged work, only the final PR uses `Closes #<issue>`; earlier PRs use `Refs #<issue>`.
 - Closing declarations in a PR merged into `develop` take effect when its commits reach `main` through a release PR: the `close-issues` workflow runs `scripts/release/close-bridged-issues.ts` at release-merge time, recovers the constituent PRs from the release commit range (native-merge and squash-merge forms; rebase merges leave no PR reference and are not bridged), scans their bodies plus the release PR body with native inline semantics, and closes each still-open issue with a comment linking both PRs. Release PR bodies no longer need to repeat closing lines — GitHub handles those natively — but repetition keeps working.
 - When an issue is resolved and merged into `develop` but has not yet reached `main`, append a tracking comment at the end of the issue: `This issue has been solved in #<pr-number>.`
+- Issue bodies follow the repository issue templates under `.github/ISSUE_TEMPLATE/`; the memo template is the shape authority for memo issues, and collaborators creating issues through the API or CLI copy that skeleton.
 
 ## PR Body Shape
 
 ```markdown
+Grade: Quick PR
+
 Closes #<issue>
 
 ## Summary
@@ -416,11 +419,14 @@ Closes #<issue>
 - [ ] `bun run typecheck`
 - [ ] `bun test`
 - [ ] `bun run doctor`
+- [ ] Targeted tests / smoke for the change class (see Verification Matrix)
 
 ## Notes / Follow-ups
 
 - ...
 ```
+
+The `Grade` line keeps the applicable grade of the Change Grading Workflow (Quick PR / Standard PR / Huge PR / Hot-Fix) so the review bar is visible on the PR; Release PRs carry their own template instead of the grade line. The default PR template `.github/pull_request_template.md` carries this shape. Release PRs use `.github/PULL_REQUEST_TEMPLATE/release.md`; GitHub offers no PR template chooser, so select it explicitly with `gh pr create --template .github/PULL_REQUEST_TEMPLATE/release.md` or the `?template=` compare-URL parameter.
 
 ## Documentation Sweep
 
