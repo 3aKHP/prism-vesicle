@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The release close-issues workflow now bridges closing declarations from the PRs it carries into `main`.** Closing keywords in a PR body targeting `develop` no longer depend on the release PR repeating them: at release-merge time the workflow recovers the constituent PRs from the release commit range (native-merge and squash-merge forms), scans their bodies plus the release PR body with GitHub-native inline keyword semantics, and closes each still-open issue with a comment linking the originating and release PRs. Rebase-merged constituent PRs leave no PR reference in the commit history and remain unbridgeable.
+
 ## [1.0.0] - 2026-08-31
 
 ### Stable channel and known limitations

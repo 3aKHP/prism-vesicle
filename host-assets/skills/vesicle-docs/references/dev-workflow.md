@@ -392,12 +392,13 @@ The first version is deliberately minimal: five lenses, finder/scorer separation
 
 ## Issue Linking And Closure
 
-GitHub auto-closes an issue only when a supported closing keyword is immediately followed by the issue reference in the PR body or a commit message. Supported forms include `Closes #123`, `Fixes #123`, and `Resolves #123` (also `close`, `closed`, `fix`, `fixed`, `resolve`, `resolved`).
+GitHub auto-closes an issue only when a supported closing keyword is immediately followed by the issue reference in the PR body or a commit message. Supported forms include `Closes #123`, `Fixes #123`, and `Resolves #123` (also `close`, `closed`, `fix`, `fixed`, `resolve`, `resolved`); keywords work inline, not only on a line of their own.
 
-- A PR that resolves an issue must include one explicit line in its body: `Closes #<issue>`.
+- A PR that resolves an issue declares it in its body with a closing keyword (`Closes #<issue>`); a line of its own is the recommended, unambiguous form.
 - Use `Refs #<issue>` or plain `#<issue>` for related work that does not complete the issue.
 - `Implements #<issue>`, `Closes the follow-up in #<issue>`, and issue references in the PR title do not close issues.
 - For staged work, only the final PR uses `Closes #<issue>`; earlier PRs use `Refs #<issue>`.
+- Closing declarations in a PR merged into `develop` take effect when its commits reach `main` through a release PR: the `close-issues` workflow runs `scripts/release/close-bridged-issues.ts` at release-merge time, recovers the constituent PRs from the release commit range (native-merge and squash-merge forms; rebase merges leave no PR reference and are not bridged), scans their bodies plus the release PR body with native inline semantics, and closes each still-open issue with a comment linking both PRs. Release PR bodies no longer need to repeat closing lines — GitHub handles those natively — but repetition keeps working.
 - When an issue is resolved and merged into `develop` but has not yet reached `main`, append a tracking comment at the end of the issue: `This issue has been solved in #<pr-number>.`
 
 ## PR Body Shape
