@@ -120,7 +120,7 @@ export function createTerminalTitleController(options: {
   function composedTitle(): string | undefined {
     if (setupTitle) return "Prism Vesicle Setup";
     if (!baseTitle) return undefined;
-    const marker = phase === "idle" ? "·" : phase === "input-required" ? "!" : reducedMotion ? "◰" : WORKING_FRAMES[frameIndex];
+    const marker = phase === "idle" ? "·" : phase === "input-required" ? "!" : reducedMotion ? WORKING_FRAMES[0] : WORKING_FRAMES[frameIndex];
     return sanitizeTerminalTitle(`${marker} ${baseTitle}`);
   }
 

@@ -160,6 +160,7 @@ function parseArgs(argv: string[]): {
         break;
       }
       case "--only":
+        if (next === undefined) throw new Error("--only requires a comma-separated candidate list");
         args.only = new Set(
           next
             .split(",")
@@ -169,6 +170,7 @@ function parseArgs(argv: string[]): {
         i += 1;
         break;
       case "--anchor":
+        if (next === undefined) throw new Error("--anchor requires a text value");
         args.anchor = next;
         i += 1;
         break;
@@ -185,7 +187,11 @@ function parseArgs(argv: string[]): {
   return args;
 }
 
-async function runCandidate(candidate: Candidate, args: { mode: "cycle" | "step"; interval: number; seconds: number; stepSeconds: number; pause: number; anchor: string }): Promise<void> {
+async function runCandidate(
+  candidate: Candidate,
+  args: { mode: "cycle" | "step"; interval: number; seconds: number; stepSeconds: number; pause: number; anchor: string },
+  shouldCancel: () => boolean,
+): Promise<void> {
   setTitle(`= PAUSE · next: ${candidate.name}`);
   await sleep(args.pause * 1000);
   console.log(`${candidate.control ? `(${candidate.control} control) ` : ""}${candidate.name}`);
@@ -195,7 +201,7 @@ async function runCandidate(candidate: Candidate, args: { mode: "cycle" | "step"
     console.log(`  cycling ${args.seconds}s @ ${args.interval}ms — watch the ▼ anchor's left edge in the tab title`);
     const deadline = Date.now() + args.seconds * 1000;
     let index = 0;
-    while (Date.now() < deadline) {
+    while (!shouldCancel() && Date.now() < deadline) {
       const frame = candidate.frames[index % candidate.frames.length];
       setTitle(`${frame} ${args.anchor}`);
       process.stdout.write(`\r  frame ${index + 1}: ${frame} `);
@@ -205,6 +211,7 @@ async function runCandidate(candidate: Candidate, args: { mode: "cycle" | "step"
   } else {
     console.log(`  stepping one frame per ${args.stepSeconds}s — compare the anchor's settled position frame to frame`);
     for (let index = 0; index < candidate.frames.length; index += 1) {
+      if (shouldCancel()) break;
       const frame = candidate.frames[index];
       setTitle(`${frame} ${args.anchor}`);
       process.stdout.write(`\r  frame ${index + 1}/${candidate.frames.length}: ${frame} `);
@@ -247,7 +254,7 @@ async function main(): Promise<number> {
   try {
     for (const candidate of selected) {
       if (cancelled) break;
-      await runCandidate(candidate, args);
+      await runCandidate(candidate, args, () => cancelled);
     }
   } finally {
     process.off("SIGINT", onInterrupt);
