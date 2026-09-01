@@ -37,6 +37,9 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
   // Track diagnostic state per session and Engine. Empty states are retained so
   // a target that is fixed and later breaks in the same way re-notifies.
   const instructionWarningFingerprints = new Map<string, string>();
+  // project_roots_warning is a once-per-session-birth notice; the key guards
+  // against a duplicate if a fresh-session bootstrap is ever retried.
+  const rootsWarningNotifiedSessions = new Set<string>();
 
   function recordActivity(entry: ActivityEntry): void {
     options.setActivity((previous) => [...previous, entry].slice(-60));
@@ -362,6 +365,8 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
       }
       case "project_roots_warning": {
         if (event.failures.length === 0) return;
+        if (rootsWarningNotifiedSessions.has(event.sessionId)) return;
+        rootsWarningNotifiedSessions.add(event.sessionId);
         // One combined message (like instruction_warning above), not one
         // transcript line per failed root.
         const content = formatRootCreationFailures(event.failures);

@@ -15,11 +15,11 @@ function harness(sessionId = "session-1") {
   const [messages, setMessages] = createSignal<Message[]>([]);
   const [activity, setActivity] = createSignal<ActivityEntry[]>([]);
   const [background, setBackground] = createSignal<BackgroundProcessState[]>([]);
-  const [, setCards] = createSignal<AgentCardState[]>([]);
-  const [, setStatus] = createSignal("");
-  const [, setStreamingAssistant] = createSignal("");
-  const [, setStreamingReasoning] = createSignal("");
-  const [, setLastToolContent] = createSignal<string | null>(null);
+  const [cards, setCards] = createSignal<AgentCardState[]>([]);
+  const [status, setStatus] = createSignal("");
+  const [streamingAssistant, setStreamingAssistant] = createSignal("");
+  const [streamingReasoning, setStreamingReasoning] = createSignal("");
+  const [lastToolContent, setLastToolContent] = createSignal<string | null>(null);
   const controller = createAgentProcessController({
     sessionId: () => sessionId,
     busy: () => false,
@@ -40,7 +40,7 @@ function harness(sessionId = "session-1") {
     assetDriftKey: () => undefined,
     setAssetDriftKey: () => undefined,
   });
-  return { controller, messages, activity };
+  return { controller, messages, activity, status, background, cards, streamingAssistant, streamingReasoning, lastToolContent };
 }
 
 describe("project roots warning notice", () => {
@@ -67,6 +67,16 @@ describe("project roots warning notice", () => {
 
     expect(messages().length).toBe(0);
     expect(activity().length).toBe(0);
+    dispose();
+  }));
+
+  test("does not repeat the notice for the same session", () => createRoot((dispose) => {
+    const { controller, messages } = harness();
+
+    controller.handleAgentEvent(rootsWarningEvent([{ root: "workspace", message: "EEXIST" }]));
+    controller.handleAgentEvent(rootsWarningEvent([{ root: "workspace", message: "EEXIST" }]));
+
+    expect(messages().filter((message) => message.role === "system").length).toBe(1);
     dispose();
   }));
 });
