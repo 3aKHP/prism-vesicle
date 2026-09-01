@@ -47,6 +47,7 @@ import type { ToolDefinition } from "../tools";
 import { createAssetResolver } from "../runtime/assets";
 import { appendHostContext } from "../prompt/host-context";
 import { composeProjectStateBlock, freezeProjectStateBlock } from "../prompt/project-state";
+import { ensureProjectRoots } from "../project/ensure-roots";
 import { declaresDirectoryQuery } from "../tools/directory-query";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
@@ -95,6 +96,15 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     options.sessionId,
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
+  // A brand-new session explicitly creates the model-writable project roots
+  // (#291) so the first project-state observation reads "empty" instead of
+  // "absent". Resumed sessions skip this: a root the user deleted stays absent.
+  if (isNewSession) {
+    const rootFailures = await ensureProjectRoots(rootDir);
+    if (rootFailures.length > 0) {
+      options.onEvent?.({ type: "project_roots_warning", sessionId: session.sessionId, failures: rootFailures });
+    }
+  }
   const proxyPolicy = await resolveProviderProxyPolicy();
   const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
 

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { runPrompt } from "../../../src/core/agent-loop/run";
+import { runPrompt, type AgentLoopEvent } from "../../../src/core/agent-loop/run";
 import { bootstrapTurn } from "../../../src/core/agent-loop/turn-bootstrap";
 import { initializeSessionIdentity } from "../../../src/core/agent-loop/session-init";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
@@ -165,5 +165,41 @@ describe("initializeSessionIdentity (issue #131)", () => {
     ).rejects.toThrow("Session Harness identity does not match");
     clearSessionActivations(sessionId);
     clearSessionSkillCatalog(sessionId);
+  });
+
+  test("a root path squatted by a file is reported in rootFailures, not thrown (issue #291)", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "novels"), "squat\n");
+
+    const identity = await initializeSessionIdentity({ rootDir, permission: { mode: "MOMENTUM" } });
+
+    expect(identity.sessionId).toBeTruthy();
+    expect(identity.rootFailures.map((failure) => failure.root)).toEqual(["novels"]);
+  });
+
+  test("fresh-turn root failures emit project_roots_warning before instruction/provider events (issue #291)", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "novels"), "squat\n");
+    mockProviderFetch();
+    const events: AgentLoopEvent[] = [];
+
+    const result = await runPrompt({
+      input: "hello",
+      rootDir,
+      permission: { mode: "MOMENTUM" },
+      onEvent: (event) => { events.push(event); },
+    });
+
+    expect(result.kind).toBe("complete");
+    const types = events.map((event) => event.type);
+    const rootsIndex = types.indexOf("project_roots_warning");
+    expect(rootsIndex).toBeGreaterThanOrEqual(0);
+    // Transcript order: the roots notice must precede the instruction
+    // diagnostics and the first provider round of the same bootstrap.
+    expect(types.indexOf("instruction_warning")).toBeGreaterThan(rootsIndex);
+    expect(types.indexOf("provider_request")).toBeGreaterThan(rootsIndex);
+    const rootsEvent = events.find((event): event is Extract<AgentLoopEvent, { type: "project_roots_warning" }> =>
+      event.type === "project_roots_warning");
+    expect(rootsEvent?.failures.map((failure) => failure.root)).toContain("novels");
   });
 });

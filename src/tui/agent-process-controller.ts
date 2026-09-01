@@ -2,6 +2,7 @@ import type { Accessor, Setter } from "solid-js";
 import type { AgentLoopEvent } from "../core/agent-loop/run";
 import type { InstructionDiagnostic } from "../core/instructions";
 import type { BackgroundProcessEvent, BackgroundProcessState } from "../core/process/manager";
+import { formatRootCreationFailures } from "../core/project/ensure-roots";
 import type { ProcessToolEvent } from "../core/tools";
 import { processEventFromTask } from "../core/tools/shell";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
@@ -36,6 +37,11 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
   // Track diagnostic state per session and Engine. Empty states are retained so
   // a target that is fixed and later breaks in the same way re-notifies.
   const instructionWarningFingerprints = new Map<string, string>();
+  // project_roots_warning is a once-per-session-birth notice. The producer
+  // (bootstrapTurn's fresh-session branch) already guards empties and fires
+  // once per new session id; this Set is deliberate defense for a retried or
+  // duplicated bootstrap emission, not the primary ordering mechanism.
+  const rootsWarningNotifiedSessions = new Set<string>();
 
   function recordActivity(entry: ActivityEntry): void {
     options.setActivity((previous) => [...previous, entry].slice(-60));
@@ -357,6 +363,17 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
           content: [`Persistent instruction ${count === 1 ? "file was" : "files were"} skipped and not loaded into the system prompt:`, ...lines].join("\n"),
         }]);
         recordActivity({ kind: "system", text: `${count} instruction diagnostic${count === 1 ? "" : "s"}` });
+        return;
+      }
+      case "project_roots_warning": {
+        if (event.failures.length === 0) return;
+        if (rootsWarningNotifiedSessions.has(event.sessionId)) return;
+        rootsWarningNotifiedSessions.add(event.sessionId);
+        // One combined message (like instruction_warning above), not one
+        // transcript line per failed root.
+        const content = formatRootCreationFailures(event.failures);
+        options.setMessages((current) => [...current, { role: "system", content }]);
+        recordActivity({ kind: "system", text: `${event.failures.length} project root${event.failures.length === 1 ? "" : "s"} could not be created` });
         return;
       }
       default:

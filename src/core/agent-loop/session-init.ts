@@ -13,6 +13,7 @@
 import { loadConfigForSelection } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import type { VesicleRequest } from "../../providers/shared/types";
+import { ensureProjectRoots, type RootCreationFailure } from "../project/ensure-roots";
 import type { EffectiveInstructionSelection } from "../instructions";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { defaultPermissionRuntime, type PermissionRuntimeOptions } from "../permissions";
@@ -45,6 +46,11 @@ export type InitializeSessionIdentityOptions = Pick<
 export type SessionIdentity = {
   sessionId: string;
   sessionPath: string;
+  /**
+   * Best-effort project-root creation failures at session birth (#291);
+   * empty when every root exists. Structured so the client owns rendering.
+   */
+  rootFailures: RootCreationFailure[];
 };
 
 export type SessionHeaderParts = {
@@ -130,7 +136,10 @@ export async function initializeSessionIdentity(
   const instructional = await composeSystemPromptWithInstructions(engine, engineAssets.systemPrompt, rootDir);
   let systemPrompt = instructional.systemPrompt;
 
+  // Session store first (it owns .vesicle), then the writable roots — the same
+  // order as bootstrapTurn's fresh-session branch (#291).
   const session = await createSessionStore(rootDir);
+  const rootFailures = await ensureProjectRoots(rootDir);
 
   const frozenSkillCatalog = await resolveSessionSkillCatalog(
     rootDir,
@@ -174,5 +183,5 @@ export async function initializeSessionIdentity(
     }),
   );
 
-  return { sessionId: session.sessionId, sessionPath: session.sessionPath };
+  return { sessionId: session.sessionId, sessionPath: session.sessionPath, rootFailures };
 }

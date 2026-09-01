@@ -169,6 +169,7 @@ switch (parsed.kind) {
       case "once": {
         const { runPrompt } = await import("../core/agent-loop/run");
         const { loadPermissionSettings } = await import("../config/permissions");
+        const { formatRootCreationFailures } = await import("../core/project/ensure-roots");
         const permissionSettings = await loadPermissionSettings();
         const input = args.join(" ").trim();
         if (!input) {
@@ -179,6 +180,13 @@ switch (parsed.kind) {
         try {
           result = await runPrompt({
             input,
+            // Non-interactive runs have no transcript surface; project-root
+            // creation failures at session birth go to stderr (#291).
+            onEvent: (event) => {
+              if (event.type === "project_roots_warning") {
+                console.error(formatRootCreationFailures(event.failures));
+              }
+            },
             permission: dangerouslySkipPermissions
               ? {
                 mode: "YOLO",
