@@ -26,7 +26,11 @@ export async function executeReadSkillResourceTool(call: ToolCall, options: Skil
   const file = await resolveSkillFile(skill, relPath);
   if ("error" in file) return fail(call, file.error);
 
-  const raw = await readFile(file.absolutePath);
+  const raw = await readFile(file.absolutePath).catch((error: unknown) => {
+    // Node error messages embed the absolute host path; never surface it.
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "read error";
+    throw new Error(`Skill resource "${relPath}" could not be read (${code}).`);
+  });
   const capped = raw.byteLength > MAX_TEXT_REFERENCE_BYTES;
   const kept = capped ? raw.subarray(0, utf8SafeBoundary(raw, MAX_TEXT_REFERENCE_BYTES)) : raw;
   let text: string;

@@ -21,6 +21,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { MAX_TEXT_REFERENCE_BYTES, utf8SafeBoundary } from "../../skills/paths";
+import { SKILL_FILE_NAME } from "../../skills/loader";
 import { getActivatedSkill } from "./activation-state";
 import type { ResolvedSkillCatalog } from "./catalog";
 import { resolveActiveSkill, resolveSkillFile } from "./tools/activated-skill";
@@ -47,9 +48,12 @@ export type SkillMountListing = {
   directoryCount: number;
 };
 
-/** Normalize user-supplied separators to the mount's forward-slash grammar. */
+/**
+ * Normalize user-supplied separators to the mount's forward-slash grammar and
+ * drop trailing separators so persisted event paths are canonical.
+ */
 export function normalizeSkillMountPath(requestedPath: string): string {
-  return requestedPath.replaceAll("\\", "/");
+  return requestedPath.replaceAll("\\", "/").replace(/\/+$/, "");
 }
 
 type MountAddress = { name?: string; relPath?: string };
@@ -65,9 +69,9 @@ function parseMountPath(normalizedPath: string): MountAddress {
   return relPath === "" ? { name } : { name, relPath };
 }
 
-/** Mounted file inventory (skill-relative), headed by the entry `SKILL.md`. */
+/** Mounted file inventory (skill-relative), headed by the entry skill file. */
 function skillInventory(skill: ValidSkill): string[] {
-  return ["SKILL.md", ...skill.parsed.resources.map((resource) => resource.path)];
+  return [SKILL_FILE_NAME, ...skill.parsed.resources.map((resource) => resource.path)];
 }
 
 export class SkillMount {
@@ -200,10 +204,17 @@ export class SkillMount {
           : scoped.filter((path) => !path.slice(base.length).includes("/"));
       }
       for (const path of matches) {
-        if (resourceBytes(skill, path) > MAX_TEXT_REFERENCE_BYTES) {
-          notes.push(`skipped ${`skills/${skill.name}/${path}`} (exceeds the ${MAX_TEXT_REFERENCE_BYTES}-byte text limit)`);
+        const logical = `skills/${skill.name}/${path}`;
+        // Live size, not the frozen manifest: a file that grew past the text
+        // limit after the catalog froze is still skipped, and a file deleted
+        // since the freeze is skipped with a note instead of failing the scan.
+        const info = await lstat(join(skill.rootDirectory, ...path.split("/"))).catch(() => undefined);
+        if (!info?.isFile()) {
+          notes.push(`skipped ${logical} (missing from the skill root since the catalog froze)`);
+        } else if (info.size > MAX_TEXT_REFERENCE_BYTES) {
+          notes.push(`skipped ${logical} (exceeds the ${MAX_TEXT_REFERENCE_BYTES}-byte text limit)`);
         } else {
-          files.push(`skills/${skill.name}/${path}`);
+          files.push(logical);
         }
       }
     }
@@ -213,7 +224,7 @@ export class SkillMount {
   /** Read one mounted file with the 256 KiB cap shared with read_skill_resource. */
   async readText(logicalPath: string): Promise<{ text: string; bytes: number; truncated: boolean; note?: string }> {
     const file = await this.resolveFile(logicalPath);
-    const raw = await readFile(file.absolutePath);
+    const raw = await readSkillFileBytes(file.relPath, file.absolutePath);
     const capped = raw.byteLength > MAX_TEXT_REFERENCE_BYTES;
     const kept = capped ? raw.subarray(0, utf8SafeBoundary(raw, MAX_TEXT_REFERENCE_BYTES)) : raw;
     let text: string;
@@ -234,18 +245,18 @@ export class SkillMount {
 
   async readBytes(logicalPath: string): Promise<Uint8Array> {
     const file = await this.resolveFile(logicalPath);
-    return readFile(file.absolutePath);
+    return readSkillFileBytes(file.relPath, file.absolutePath);
   }
 
   /**
    * Uncapped, lossy UTF-8 read for grep scanning: mirrors `grep_files` over
-   * project files. Oversized files never reach this path (`grepFiles` skips
-   * them by manifest bytes), and match excerpts stay bounded by the shared
-   * grep output caps.
+   * project files. Oversized and vanished files never reach this path
+   * (`grepFiles` skips them by live size), and match excerpts stay bounded by
+   * the shared grep output caps.
    */
   async grepReadText(logicalPath: string): Promise<string> {
     const file = await this.resolveFile(logicalPath);
-    return readFile(file.absolutePath, "utf8");
+    return Buffer.from(await readSkillFileBytes(file.relPath, file.absolutePath)).toString("utf8");
   }
 
   private async resolveFile(logicalPath: string): Promise<{ skill: ValidSkill; relPath: string; absolutePath: string }> {
@@ -266,15 +277,23 @@ async function statDirectory(absolutePath: string): Promise<SkillMountStat | und
 }
 
 async function mountEntry(path: string, type: "file" | "directory", absolutePath: string): Promise<SkillMountEntry | undefined> {
-  // Inventory entries that vanished from disk since the catalog froze are
-  // omitted rather than reported with fabricated metadata.
+  // Inventory entries that vanished or changed type on disk since the catalog
+  // froze are omitted rather than reported with fabricated metadata.
   const info = await lstat(absolutePath).catch(() => undefined);
   if (!info) return undefined;
+  if (type === "file" ? !info.isFile() : !info.isDirectory()) return undefined;
   return { path, type, size: info.size, modifiedAt: info.mtime };
 }
 
-/** Manifest bytes when known; lstat size for the entry `SKILL.md`. */
-function resourceBytes(skill: ValidSkill, path: string): number {
-  if (path === "SKILL.md") return skill.parsed.bytes;
-  return skill.parsed.resources.find((resource) => resource.path === path)?.bytes ?? Number.POSITIVE_INFINITY;
+/**
+ * Read skill-root bytes with sanitized failures: Node error messages embed
+ * the absolute host path, and the mount contract never exposes it.
+ */
+async function readSkillFileBytes(relPath: string, absolutePath: string): Promise<Uint8Array> {
+  try {
+    return await readFile(absolutePath);
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "read error";
+    throw new Error(`Skill resource "${relPath}" could not be read (${code}).`);
+  }
 }

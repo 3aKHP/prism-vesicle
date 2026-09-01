@@ -103,7 +103,8 @@ function normalizeLines(content: string): string[] {
 async function executeGrepScan(
   input: GrepScanInput,
   args: { matcher: (line: string) => boolean; limit: number; contextLines: number; outputMode: GrepOutputMode },
-): Promise<GrepResult> {  const { matcher, limit, contextLines, outputMode } = args;
+): Promise<GrepResult> {
+  const { matcher, limit, contextLines, outputMode } = args;
 
   if (outputMode === "files_with_matches") {
     const files: string[] = [];
@@ -259,7 +260,7 @@ export async function grepAssetFiles(
   );
 }
 
-export type SkillGrepResult = GrepResult & { notes?: string[] };
+type SkillGrepResult = GrepResult & { notes?: string[] };
 
 /**
  * Grep the read-only mount of activated Skills (`skills/<name>/...` paths).

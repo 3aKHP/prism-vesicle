@@ -86,7 +86,7 @@ describe("SkillMount (skills/ read-only logical root)", () => {
   });
 
   test("enumeration follows the frozen catalog inventory, reads stay live", async () => {
-    const root = await writeSkill(scratch, "alpha", { files: { "references/note.md": "frozen marker" } });
+    const root = await writeSkill(scratch, "alpha", { files: { "references/note.md": "frozen marker", "references/gone.md": "vanishing marker" } });
     const catalog = catalogFor(await loadWritten(root));
     await executeActivateSkillTool(call("activate_skill", { name: "alpha" }), { catalog, sessionId });
     const mount = new SkillMount(catalog, sessionId);
@@ -94,11 +94,14 @@ describe("SkillMount (skills/ read-only logical root)", () => {
     const latePath = join(root, "references", "late.md");
     await mkdir(dirname(latePath), { recursive: true });
     await writeFile(latePath, "late marker", "utf8");
+    await rm(join(root, "references", "gone.md"));
 
     const listing = await mount.listDirectory("skills/alpha/references");
     expect(listing?.entries.map((entry) => entry.path)).toEqual(["skills/alpha/references/note.md"]);
     const scan = await mount.grepFiles("skills/alpha", true);
     expect(scan.files).toEqual(["skills/alpha/SKILL.md", "skills/alpha/references/note.md"]);
+    expect(scan.notes.join(" ")).toContain("skills/alpha/references/gone.md");
+    expect(scan.notes.join(" ")).toContain("missing from the skill root");
     // Live resolution mirrors read_skill_resource: a post-freeze file is
     // readable when addressed directly even though it is not enumerated.
     const read = await mount.readText("skills/alpha/references/late.md");

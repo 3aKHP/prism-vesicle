@@ -33,7 +33,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
         properties: {
           path: {
             type: "string",
-            description: `Use '.' for the virtual root, or a directory beginning with one of: ${readableRoots}. Example: workspace or assets/templates.`,
+            description: `Use '.' for the virtual root, or a directory beginning with one of: ${readableRoots}, or a skills/<name>/ path into the read-only mount of Skills activated in this session. Example: workspace or assets/templates.`,
           },
           recursive: {
             type: "boolean",
@@ -135,7 +135,7 @@ export const fileToolDefinitions: ToolDefinition[] = [
     type: "function",
     function: {
       name: "view_image",
-      description: "View an image under an allowed project root. Use this for visual inspection of files in source_materials, workspace, assets, novels, reports, test_runs, or tmp (scratch).",
+      description: "View an image under an allowed project root or the read-only skills/ mount of activated Skills. Use this for visual inspection of files in source_materials, workspace, assets, novels, reports, test_runs, tmp (scratch), or mounted Skill resources.",
       parameters: {
         type: "object",
         properties: {
