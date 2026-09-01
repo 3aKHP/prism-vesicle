@@ -323,6 +323,7 @@ export function App(props: AppProps = {}) {
   const {
     activeGateRequest,
     activePermissionRequest,
+    bodyScrollOffset,
     clearGateFeedback,
     clearQuestionFreeform,
     decisionPanelMinHeight,
@@ -341,10 +342,12 @@ export function App(props: AppProps = {}) {
     pendingPermission,
     pendingQualityDecision,
     pendingUserQuestion,
+    promptZone,
     questionFreeformCursor,
     questionFreeformText,
     questionSelected,
     qualitySelected,
+    registerBodyExtent,
     setGateFeedback,
     setGateFeedbackCursor,
     setGateFeedbackKillBuffer,
@@ -1527,6 +1530,9 @@ export function App(props: AppProps = {}) {
         qualitySelected={qualitySelected()}
         questionFreeformText={questionFreeformText()}
         questionFreeformCursor={questionFreeformCursor()}
+        promptZone={promptZone()}
+        bodyScrollOffset={bodyScrollOffset()}
+        onBodyExtent={registerBodyExtent}
         modelItems={modelPickerItems()}
         modelTitle={modelPickerTitle()}
         skillPickerItems={skillPickerItems()}

@@ -1,11 +1,11 @@
 import { ThemedText } from "./theme-text";
-import { For } from "solid-js";
+import { createEffect, For, Show } from "solid-js";
 import type { PermissionRequest } from "../core/permissions";
-import type { GateFocusTarget } from "./GatePrompt";
+import { BODY_ZONE_GUTTER, type GateFocusTarget, type PromptZone, promptBodyZoneHint } from "./GatePrompt";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 import { processShellDisplay } from "../core/process/runtime";
-import { displayWidth, truncateLine, visibleDisplayLines } from "./format";
+import { bodyScrollIndicator, bodyScrollWindow, displayWidth, truncateLine, visibleDisplayLines, wrapDisplayLines } from "./format";
 
 export const permissionPanelHeight = 14;
 const permissionContentRows = permissionPanelHeight - 2;
@@ -20,6 +20,9 @@ export type PermissionPromptProps = {
   feedback: string;
   feedbackCursor: number;
   width: number;
+  zone?: PromptZone;
+  bodyScrollOffset?: number;
+  onBodyExtent?: (total: number, visible: number) => void;
 };
 
 export function PermissionPrompt(props: PermissionPromptProps) {
@@ -49,8 +52,20 @@ export function PermissionPrompt(props: PermissionPromptProps) {
         : undefined;
     return warning ? visibleDisplayLines(warning, contentWidth(), flexibleLineBudget() - 1) : [];
   };
+  // Scrollable command/JSON detail (#268 item 4): wrapped once, windowed by
+  // the shared body scroll offset; the gutter column is reserved in every
+  // zone so toggling never reflows.
   const detailLineBudget = () => Math.max(1, flexibleLineBudget() - warningLines().length);
-  const detailLines = () => visibleDisplayLines(detail(), contentWidth(), detailLineBudget());
+  const detailWindow = () => {
+    const lines = wrapDisplayLines(detail(), Math.max(20, contentWidth() - 1));
+    const budget = detailLineBudget();
+    const visible = Math.max(1, budget - (lines.length > budget ? 1 : 0));
+    return { lines, visible, ...bodyScrollWindow(lines.length, visible, props.bodyScrollOffset ?? 0) };
+  };
+  createEffect(() => {
+    const window = detailWindow();
+    props.onBodyExtent?.(window.lines.length, window.visible);
+  });
   const title = () => {
     const full = kind() === "host-command"
       ? "Permission required · HOST COMMAND"
@@ -65,8 +80,12 @@ export function PermissionPrompt(props: PermissionPromptProps) {
         : "Permission";
   };
   const hint = () => {
-    const full = "↑/↓ choose · Enter confirm · Tab feedback · Esc reject";
-    return displayWidth(full) <= contentWidth() ? full : "↑/↓ · Enter · Tab · Esc reject";
+    if (props.zone === "body") return promptBodyZoneHint;
+    const full = "↑/↓ choose · Enter confirm · type note · Tab read · Esc reject";
+    if (displayWidth(full) <= contentWidth()) return full;
+    // Narrow fallback drops the self-evident ↑/↓ prefix so every remaining
+    // key name stays whole.
+    return "Enter · Tab read · Esc reject";
   };
   return (
     <box
@@ -87,7 +106,21 @@ export function PermissionPrompt(props: PermissionPromptProps) {
         <ThemedText content={truncateLine(`Interpreter: ${props.request.executionPlan.executablePath}`, contentWidth())} fg={palette.textDim} wrapMode="none" />
       ) : null}
       <For each={warningLines()}>{(line) => <ThemedText content={line} fg={kind() === "host-command" ? palette.error : palette.gateAccent} wrapMode="none" />}</For>
-      <For each={detailLines()}>{(line) => <ThemedText content={line || " "} fg={palette.textPrimary} wrapMode="none" />}</For>
+      <For each={detailWindow().lines.slice(detailWindow().start, detailWindow().end)}>
+        {(line) => <ThemedText content={`${props.zone === "body" ? BODY_ZONE_GUTTER : " "}${line || " "}`} fg={palette.textPrimary} wrapMode="none" />}
+      </For>
+      <Show when={detailWindow().folded} fallback={<box height={0} />}>
+        <ThemedText
+          content={bodyScrollIndicator(
+            detailWindow().start,
+            detailWindow().start + detailWindow().visible,
+            detailWindow().lines.length,
+            contentWidth(),
+          )}
+          fg={palette.textDim}
+          wrapMode="none"
+        />
+      </Show>
       <ThemedText content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} wrapMode="none" />
       <ThemedText content={`${props.focused === "reject" ? "›" : " "} Reject`} fg={props.focused === "reject" ? palette.error : palette.textDim} wrapMode="none" />
       {props.feedbackMode === "reject" ? (

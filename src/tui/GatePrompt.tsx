@@ -1,9 +1,9 @@
 import { ThemedText } from "./theme-text";
-import { For } from "solid-js";
+import { createEffect, For, Show } from "solid-js";
 import { TextAttributes } from "@3akhp/opentui-core";
 import { useRenderer } from "@3akhp/opentui-solid";
 import type { GateRequest, GateResolution } from "../core/gate/types";
-import { displayWidth } from "./format";
+import { bodyScrollIndicator, bodyScrollWindow, displayWidth } from "./format";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 
@@ -15,9 +15,27 @@ import { PromptComposer } from "./PromptComposer";
  *
  * Interaction shape borrows from Claude Code's PermissionPrompt:
  * - Numbered options with a focus indicator.
- * - Tab on confirm expands an inline note input.
+ * - Typing on the focused confirm option expands an inline note input
+ *   (#268 item 4; the former explicit Tab-note toggle is gone).
  * - Reject owns a visible input but may be submitted empty.
+ * - Tab toggles to a body-reading zone where ↑/↓ scroll the folded summary.
  */
+
+/** Focus zone of an open decision prompt (#268 item 4): "options" is the
+ * classic decision keymap; "body" reads the folded prompt text with the
+ * arrows. Toggled by Tab / Shift+Tab on gate, permission, and question
+ * prompts. */
+export type PromptZone = "options" | "body";
+
+/** Hint lines shared by the decision prompts' two zones; rendering and tests
+ * share these exact strings so the affordances stay discoverable. */
+export const gateOptionsZoneHint = "↑/↓ navigate · type to note · Enter select · Tab read · Esc cancel";
+export const promptBodyZoneHint = "↑/↓ scroll · Home/End top/bottom · Tab back";
+
+/** Column shown beside body text while the body zone owns the keyboard. The
+ * wrap width reserves it unconditionally so toggling zones never reflows. */
+export const BODY_ZONE_GUTTER = "▌";
+
 export type GatePromptProps = {
   gate: GateRequest;
   focused: GateFocusTarget;
@@ -27,6 +45,9 @@ export type GatePromptProps = {
   width?: number;
   maxSummaryLines?: number;
   showSummaryOption?: boolean;
+  zone?: PromptZone;
+  bodyScrollOffset?: number;
+  onBodyExtent?: (total: number, visible: number) => void;
 };
 
 export type GateFocusTarget = "confirm" | "confirm-summary" | "reject";
@@ -54,11 +75,20 @@ export function GatePrompt(props: GatePromptProps) {
   const renderer = useRenderer();
   const confirmLabel = labelFor(props.gate, "confirm", DEFAULT_CONFIRM_LABEL);
   const rejectLabel = labelFor(props.gate, "reject", DEFAULT_REJECT_LABEL);
-  const summaryLines = () => visibleGateSummaryLines(
-    renderGateSummaryText(props.gate.summary),
-    Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 4),
-    props.maxSummaryLines ?? 4,
-  );
+  // The gutter column is reserved in every zone so toggling zones never
+  // reflows the wrapped summary (#268 item 4).
+  const summaryWrapWidth = () => Math.max(MIN_SUMMARY_WIDTH - 1, (props.width ?? renderer.width) - 5);
+  const summaryWindow = () => {
+    const lines = wrapGateSummary(renderGateSummaryText(props.gate.summary), summaryWrapWidth());
+    const budget = Math.max(1, props.maxSummaryLines ?? 4);
+    // When folded, the position indicator takes the last summary row.
+    const visible = Math.max(1, budget - (lines.length > budget ? 1 : 0));
+    return { lines, visible, ...bodyScrollWindow(lines.length, visible, props.bodyScrollOffset ?? 0) };
+  };
+  createEffect(() => {
+    const window = summaryWindow();
+    props.onBodyExtent?.(window.lines.length, window.visible);
+  });
   const inputWidth = () => Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 8);
   const rows = (): GateRow[] => [
     { kind: "option", index: 1, label: confirmLabel, focused: props.focused === "confirm" },
@@ -81,13 +111,33 @@ export function GatePrompt(props: GatePromptProps) {
         <ThemedText content={`Stop Gate: ${props.gate.gate}`} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
       </box>
       <box flexDirection="column">
-        <For each={summaryLines()}>
+        <For each={summaryWindow().lines.slice(summaryWindow().start, summaryWindow().end)}>
           {(line) => (
             <box height={1}>
-              <ThemedText content={line || " "} fg={palette.textPrimary} width="100%" wrapMode="none" />
+              <ThemedText
+                content={`${props.zone === "body" ? BODY_ZONE_GUTTER : " "}${line || " "}`}
+                fg={palette.textPrimary}
+                width="100%"
+                wrapMode="none"
+              />
             </box>
           )}
         </For>
+        <Show when={summaryWindow().folded} fallback={<box height={0} />}>
+          <box height={1}>
+            <ThemedText
+              content={bodyScrollIndicator(
+                summaryWindow().start,
+                summaryWindow().start + summaryWindow().visible,
+                summaryWindow().lines.length,
+                Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 4),
+              )}
+              fg={palette.textDim}
+              width="100%"
+              wrapMode="none"
+            />
+          </box>
+        </Show>
       </box>
 
       <For each={rows()}>
@@ -105,7 +155,7 @@ export function GatePrompt(props: GatePromptProps) {
 
       <box>
         <ThemedText
-          content="↑/↓ navigate · Tab note · Enter select · Esc cancel"
+          content={props.zone === "body" ? promptBodyZoneHint : gateOptionsZoneHint}
           fg={palette.textDim}
           wrapMode="none"
         />

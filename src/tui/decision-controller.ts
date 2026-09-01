@@ -5,6 +5,7 @@ import type { PermissionMode, PermissionRequest, PermissionResolution } from "..
 import {
   applyComposerKey,
   insertComposerText,
+  printableTextFromKey,
   type ComposerState,
 } from "./composer";
 import {
@@ -13,6 +14,7 @@ import {
   gateFocusOrder,
   gateResolutionFromState,
   type GateFocusTarget,
+  type PromptZone,
 } from "./GatePrompt";
 import { questionComposerIsActive, questionPanelMinHeight } from "./QuestionPrompt";
 import { permissionPanelHeight } from "./PermissionPrompt";
@@ -43,12 +45,12 @@ export type DecisionControllerOptions = {
 };
 
 export function createDecisionController(options: DecisionControllerOptions) {
-  const [pendingGate, setPendingGate] = createSignal<PendingGateState | null>(null);
-  const [pendingEngineSwitch, setPendingEngineSwitch] = createSignal<PendingEngineSwitchState | null>(null);
-  const [pendingUserQuestion, setPendingUserQuestion] = createSignal<PendingUserQuestionState | null>(null);
-  const [pendingPermission, setPendingPermission] = createSignal<PendingPermissionState | null>(null);
+  const [pendingGate, rawSetPendingGate] = createSignal<PendingGateState | null>(null);
+  const [pendingEngineSwitch, rawSetPendingEngineSwitch] = createSignal<PendingEngineSwitchState | null>(null);
+  const [pendingUserQuestion, rawSetPendingUserQuestion] = createSignal<PendingUserQuestionState | null>(null);
+  const [pendingPermission, rawSetPendingPermission] = createSignal<PendingPermissionState | null>(null);
   const [pendingQualityDecision, setPendingQualityDecision] = createSignal<PendingQualityDecisionState | null>(null);
-  const [pendingChildPermission, setPendingChildPermission] = createSignal<PermissionRequest | null>(null);
+  const [pendingChildPermission, rawSetPendingChildPermission] = createSignal<PermissionRequest | null>(null);
   const [yoloConfirmStage, setYoloConfirmStage] = createSignal<1 | 2 | null>(null);
   const [questionSelected, setQuestionSelected] = createSignal(0);
   const [qualitySelected, setQualitySelected] = createSignal(0);
@@ -60,6 +62,97 @@ export function createDecisionController(options: DecisionControllerOptions) {
   const [gateFeedback, setGateFeedback] = createSignal("");
   const [gateFeedbackCursor, setGateFeedbackCursor] = createSignal(0);
   const [gateFeedbackKillBuffer, setGateFeedbackKillBuffer] = createSignal<string | undefined>();
+
+  // —— body-reading focus zone (#268 item 4) ——
+  // While a decision prompt with folded body text (gate summary, permission
+  // detail, question text) is open, Tab/Shift+Tab toggle between the options
+  // zone (today's decision keys) and a body zone where ↑/↓ scroll the folded
+  // text. The scroll extent is reported by whichever prompt component is
+  // rendering (registerBodyExtent), so the offset always clamps to the real
+  // window even when wrapping or the panel budget changes.
+  const [promptZone, setPromptZone] = createSignal<PromptZone>("options");
+  const [bodyScrollOffset, setBodyScrollOffset] = createSignal(0);
+  const [bodyExtent, setBodyExtent] = createSignal<{ total: number; visible: number }>({ total: 0, visible: 0 });
+
+  const bodyScrollMax = () => Math.max(0, bodyExtent().total - bodyExtent().visible);
+  function scrollBody(delta: 1 | -1): void {
+    setBodyScrollOffset((current) => Math.min(bodyScrollMax(), Math.max(0, current + delta)));
+  }
+  function scrollBodyToEdge(edge: "home" | "end"): void {
+    setBodyScrollOffset(edge === "home" ? 0 : bodyScrollMax());
+  }
+  /** Report the rendered body's line extent; the active prompt component
+   * calls this whenever its wrapped-line count or visible budget changes. */
+  function registerBodyExtent(total: number, visible: number): void {
+    setBodyExtent({ total, visible });
+    setBodyScrollOffset((current) => Math.min(Math.max(0, total - visible), current));
+  }
+  function enterBodyZone(): void {
+    // No offset reset here: re-entering the body zone mid-prompt keeps the
+    // reading position; only a new prompt (the reset effect) scrolls to top.
+    setPromptZone("body");
+  }
+  function leaveBodyZone(): void {
+    setPromptZone("options");
+  }
+  function isZoneToggleKey(key: TuiKeyEvent): boolean {
+    return key.name === "tab";
+  }
+  /** Body-zone key routing, shared by the gate and question handlers: arrows
+   * scroll, Home/End jump, Tab/Enter/Esc return to the options zone — Enter
+   * never submits from the reading zone — and every other key is swallowed. */
+  function handleBodyZoneKey(key: TuiKeyEvent): boolean {
+    if (key.name === "up" || (key.ctrl && key.name === "p")) {
+      scrollBody(-1);
+      return true;
+    }
+    if (key.name === "down" || (key.ctrl && key.name === "n")) {
+      scrollBody(1);
+      return true;
+    }
+    if (key.name === "home") {
+      scrollBodyToEdge("home");
+      return true;
+    }
+    if (key.name === "end") {
+      scrollBodyToEdge("end");
+      return true;
+    }
+    if (isZoneToggleKey(key) || key.name === "return" || key.name === "enter" || key.name === "escape") {
+      leaveBodyZone();
+      return true;
+    }
+    return true;
+  }
+  // A new decision prompt (fresh request object) starts over: options zone,
+  // scrolled to the top. The pending setters wrap this imperatively (not via
+  // an effect) so the reset is exercised by the same unit tests that drive
+  // the key routing.
+  function resetBodyZoneState(): void {
+    setPromptZone("options");
+    setBodyScrollOffset(0);
+    setBodyExtent({ total: 0, visible: 0 });
+  }
+  const setPendingGate: Setter<PendingGateState | null> = (value) => {
+    resetBodyZoneState();
+    return rawSetPendingGate(value);
+  };
+  const setPendingEngineSwitch: Setter<PendingEngineSwitchState | null> = (value) => {
+    resetBodyZoneState();
+    return rawSetPendingEngineSwitch(value);
+  };
+  const setPendingUserQuestion: Setter<PendingUserQuestionState | null> = (value) => {
+    resetBodyZoneState();
+    return rawSetPendingUserQuestion(value);
+  };
+  const setPendingPermission: Setter<PendingPermissionState | null> = (value) => {
+    resetBodyZoneState();
+    return rawSetPendingPermission(value);
+  };
+  const setPendingChildPermission: Setter<PermissionRequest | null> = (value) => {
+    resetBodyZoneState();
+    return rawSetPendingChildPermission(value);
+  };
 
   const activeGateRequest = createMemo(() => {
     const gate = pendingGate();
@@ -103,8 +196,17 @@ export function createDecisionController(options: DecisionControllerOptions) {
 
   function handleGateKey(key: TuiKeyEvent): boolean {
     if (options.busy() && !pendingChildPermission()) return false;
+    if (promptZone() === "body") return handleBodyZoneKey(key);
     const focusOrder = currentGateFocusOrder();
-    if (gateComposerIsActive(gateFocus(), gateFeedbackMode()) && key.name !== "tab" && key.name !== "escape") {
+    const composerActive = gateComposerIsActive(gateFocus(), gateFeedbackMode());
+    // Type-to-note (#268 item 4): plain typing (or paste, in handlePaste)
+    // on a focused confirm option arms its note composer and lands there —
+    // the question prompt's "free answer accepts typing" behavior, adopted
+    // for the gate family. Reject always owns its composer already;
+    // confirm-summary has no note surface, so typing there stays swallowed.
+    const typeToNote = !composerActive && gateFocus() === "confirm" && printableTextFromKey(key).length > 0;
+    if ((composerActive || typeToNote) && !isZoneToggleKey(key) && key.name !== "escape") {
+      if (typeToNote) setGateFeedbackMode("confirm");
       const result = applyComposerKey(currentGateFeedbackState(), key);
       if (result.handled) {
         applyGateFeedbackState(result.state);
@@ -122,11 +224,8 @@ export function createDecisionController(options: DecisionControllerOptions) {
       moveGateFocus(1, focusOrder);
       return true;
     }
-    if (key.name === "tab") {
-      const target = gateFocus();
-      if (target === "reject" || target === "confirm-summary") return true;
-      setGateFeedbackMode((previous) => previous === target ? null : target);
-      clearGateFeedback();
+    if (isZoneToggleKey(key)) {
+      enterBodyZone();
       return true;
     }
     if (key.name === "return" || key.name === "enter") {
@@ -176,6 +275,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
   function handleQuestionKey(key: TuiKeyEvent): boolean {
     const pending = pendingUserQuestion();
     if (!pending || options.busy()) return false;
+    if (promptZone() === "body") return handleBodyZoneKey(key);
     const selectedOption = pending.question.options[questionSelected()];
     if (questionComposerIsActive(selectedOption)) return handleQuestionComposerKey(key, pending.question.options.length, pending.question.header);
     if (key.name === "up" || (key.ctrl && key.name === "p")) {
@@ -186,6 +286,10 @@ export function createDecisionController(options: DecisionControllerOptions) {
       moveQuestionSelection(1, pending.question.options.length);
       return true;
     }
+    if (isZoneToggleKey(key)) {
+      enterBodyZone();
+      return true;
+    }
     if (key.name === "return" || key.name === "enter") {
       options.submitQuestionOption(questionSelected());
       return true;
@@ -194,6 +298,10 @@ export function createDecisionController(options: DecisionControllerOptions) {
   }
 
   function handleQuestionComposerKey(key: TuiKeyEvent, optionCount: number, header: string): boolean {
+    if (isZoneToggleKey(key)) {
+      enterBodyZone();
+      return true;
+    }
     if (key.name === "escape") {
       clearQuestionFreeform();
       options.setStatus(`question pending: ${header}`);
@@ -210,11 +318,18 @@ export function createDecisionController(options: DecisionControllerOptions) {
 
   function handlePaste(text: string): boolean {
     if ((pendingGate() || pendingEngineSwitch() || pendingPermission() || pendingChildPermission())
-      && gateComposerIsActive(gateFocus(), gateFeedbackMode())) {
+      && promptZone() === "options") {
+      // Same auto-arm as typing: paste into the gate family while no note
+      // composer is live arms the focused option's note first (confirm only —
+      // reject already owns its composer, confirm-summary has none).
+      if (!gateComposerIsActive(gateFocus(), gateFeedbackMode())) {
+        if (gateFocus() !== "confirm") return true;
+        setGateFeedbackMode("confirm");
+      }
       applyGateFeedbackState(insertComposerText(currentGateFeedbackState(), text));
       return true;
     }
-    if (pendingUserQuestion() && questionComposerIsActive(selectedQuestionOption())) {
+    if (pendingUserQuestion() && promptZone() === "options" && questionComposerIsActive(selectedQuestionOption())) {
       applyQuestionFreeformState(insertComposerText(currentQuestionFreeformState(), text));
       return true;
     }
@@ -275,6 +390,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
   return {
     activeGateRequest,
     activePermissionRequest,
+    bodyScrollOffset,
     clearGateFeedback,
     clearQuestionFreeform,
     decisionPanelMinHeight,
@@ -293,10 +409,12 @@ export function createDecisionController(options: DecisionControllerOptions) {
     pendingPermission,
     pendingQualityDecision,
     pendingUserQuestion,
+    promptZone,
     questionFreeformCursor,
     questionFreeformText,
     questionSelected,
     qualitySelected,
+    registerBodyExtent,
     setGateFeedback,
     setGateFeedbackCursor,
     setGateFeedbackKillBuffer,

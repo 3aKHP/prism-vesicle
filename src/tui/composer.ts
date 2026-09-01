@@ -427,7 +427,10 @@ function lineEnd(value: string, cursor: number): number {
   return index === -1 ? value.length : index;
 }
 
-function printableTextFromKey(key: ComposerKey): string {
+/** Printable text a key would insert into a composer input, or "" when it is
+ * not a plain-typing key. Exported for the decision prompts' type-to-note
+ * auto-arm (#268 item 4): plain typing on a focused option arms the note. */
+export function printableTextFromKey(key: ComposerKey): string {
   if (key.ctrl || key.meta || key.option) return "";
   const sequence = key.sequence ?? key.raw;
   if (sequence && isPrintableSequence(sequence)) return sequence;
