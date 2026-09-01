@@ -11,7 +11,7 @@ You are answering a question about Prism Vesicle using its bundled public docume
 
 1. Answer in the user's language unless they request another language.
 2. Classify the question: installation/update, usage/workflow, commands/keys, configuration, troubleshooting, permissions/process, feature behavior, or developer/runtime architecture.
-3. Read the smallest directly relevant reference. Read `references/index.md` first only when the route is unclear or multiple pages are required.
+3. Read the smallest directly relevant reference. When the routing table or `references/index.md` does not settle the route, or the question is keyword-shaped (a command, flag, key, error text, or exact term), first search the mounted references with `grep_files` under `skills/vesicle-docs/` (e.g. `outputMode: "files_with_matches"`), then read the smallest hit with `read_file` or `read_skill_resource` using a tight line range.
 4. Route by topic:
    - Chinese user-facing questions → `docs/user/zh-CN` references.
    - English user-facing questions → `docs/user/en` references.
