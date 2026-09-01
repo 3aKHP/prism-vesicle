@@ -33,3 +33,12 @@ export async function ensureProjectRoots(rootDir: string): Promise<RootCreationF
 export function formatRootCreationFailure(failure: RootCreationFailure): string {
   return `Project root "${failure.root}" could not be created (${failure.message}); writes under it will fail until the path is fixed.`;
 }
+
+/**
+ * All failures as one combined notice (one bullet per root) so transcript
+ * surfaces append a single system message, matching the instruction-warning
+ * notice pattern.
+ */
+export function formatRootCreationFailures(failures: RootCreationFailure[]): string {
+  return failures.map((failure) => `- ${formatRootCreationFailure(failure)}`).join("\n");
+}

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { runPrompt } from "../../../src/core/agent-loop/run";
@@ -165,5 +165,15 @@ describe("initializeSessionIdentity (issue #131)", () => {
     ).rejects.toThrow("Session Harness identity does not match");
     clearSessionActivations(sessionId);
     clearSessionSkillCatalog(sessionId);
+  });
+
+  test("a root path squatted by a file is reported in rootFailures, not thrown (issue #291)", async () => {
+    const rootDir = await createPromptRoot();
+    await writeFile(join(rootDir, "novels"), "squat\n");
+
+    const identity = await initializeSessionIdentity({ rootDir, permission: { mode: "MOMENTUM" } });
+
+    expect(identity.sessionId).toBeTruthy();
+    expect(identity.rootFailures.map((failure) => failure.root)).toEqual(["novels"]);
   });
 });

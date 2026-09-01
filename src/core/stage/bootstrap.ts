@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolveAllowedPath, toProjectPath } from "../tools/file/path-policy";
 import { listDirectoryEntries } from "../tools/file/query-operations";
 import { projectContentRoots } from "../project/roots";
-import { ensureProjectRoots, formatRootCreationFailure } from "../project/ensure-roots";
+import { ensureProjectRoots, type RootCreationFailure } from "../project/ensure-roots";
 import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { createSessionStore } from "../session/store";
@@ -35,8 +35,8 @@ export type StartedStageSession = {
   messages: VesicleMessage[];
   bootstrap: StageBootstrapMetadata;
   warnings: string[];
-  /** Best-effort project-root creation failures at session birth (#291), formatted for display. */
-  rootWarnings: string[];
+  /** Best-effort project-root creation failures at session birth (#291); empty when all roots exist. */
+  rootFailures: RootCreationFailure[];
 };
 
 /** List guarded project-relative files eligible for Stage card selection. */
@@ -133,7 +133,7 @@ export async function startStageSession(options: StartStageSessionOptions): Prom
     messages: [{ role: "assistant", content: bootstrap.renderedOpening, kind: "stage-bootstrap-opening" }],
     bootstrap,
     warnings: compatibilityWarnings(characterContent, scenarioContent, rendered.unclosedLogicMarker),
-    rootWarnings: rootFailures.map(formatRootCreationFailure),
+    rootFailures,
   };
 }
 

@@ -2,7 +2,7 @@ import type { Accessor, Setter } from "solid-js";
 import type { AgentLoopEvent } from "../core/agent-loop/run";
 import type { InstructionDiagnostic } from "../core/instructions";
 import type { BackgroundProcessEvent, BackgroundProcessState } from "../core/process/manager";
-import { formatRootCreationFailure } from "../core/project/ensure-roots";
+import { formatRootCreationFailures } from "../core/project/ensure-roots";
 import type { ProcessToolEvent } from "../core/tools";
 import { processEventFromTask } from "../core/tools/shell";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
@@ -362,10 +362,10 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
       }
       case "project_roots_warning": {
         if (event.failures.length === 0) return;
-        options.setMessages((current) => [...current, ...event.failures.map((failure) => ({
-          role: "system" as const,
-          content: formatRootCreationFailure(failure),
-        }))]);
+        // One combined message (like instruction_warning above), not one
+        // transcript line per failed root.
+        const content = formatRootCreationFailures(event.failures);
+        options.setMessages((current) => [...current, { role: "system", content }]);
         recordActivity({ kind: "system", text: `${event.failures.length} project root${event.failures.length === 1 ? "" : "s"} could not be created` });
         return;
       }

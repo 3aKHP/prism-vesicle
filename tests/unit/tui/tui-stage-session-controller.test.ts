@@ -4,8 +4,8 @@ import type { VesicleMessage } from "../../../src/providers/shared/types";
 import { createStageSessionController } from "../../../src/tui/stage-session-controller";
 import type { ActivityEntry, Message } from "../../../src/tui/types";
 
-test("Stage startup applies the durable bootstrap result to host session state", async () => {
-  const started: StartedStageSession = {
+function makeStarted(overrides: Partial<StartedStageSession> = {}): StartedStageSession {
+  return {
     sessionId: "stage-session",
     sessionPath: "/tmp/stage-session.jsonl",
     systemPrompt: "system",
@@ -14,8 +14,12 @@ test("Stage startup applies the durable bootstrap result to host session state",
     messages: [{ role: "assistant", content: "Stage opening", kind: "stage-bootstrap-opening" }],
     bootstrap: {} as StartedStageSession["bootstrap"],
     warnings: ["scenario warning"],
-    rootWarnings: [],
+    rootFailures: [],
+    ...overrides,
   };
+}
+
+async function startWith(started: StartedStageSession) {
   const state = {
     queueCleared: false,
     sessionId: "",
@@ -59,6 +63,12 @@ test("Stage startup applies the durable bootstrap result to host session state",
   });
 
   await controller.start("workspace/character.md", "workspace/scenario.md", "/stage workspace/character.md workspace/scenario.md");
+  return { state, bootstrapOptions };
+}
+
+test("Stage startup applies the durable bootstrap result to host session state", async () => {
+  const started = makeStarted();
+  const { state, bootstrapOptions } = await startWith(started);
 
   expect(bootstrapOptions).toEqual({
     rootDir: "/project",
@@ -87,4 +97,26 @@ test("Stage startup applies the durable bootstrap result to host session state",
   ]);
   expect(state.status).toBe("Stage session ready");
   expect(state.activity).toEqual([{ kind: "system", text: "started Stage session stage-session" }]);
+});
+
+test("Stage startup surfaces project-root creation failures as one system message", async () => {
+  const started = makeStarted({
+    rootFailures: [
+      { root: "workspace", message: "EEXIST: file exists" },
+      { root: "tmp", message: "EACCES: permission denied" },
+    ],
+  });
+  const { state } = await startWith(started);
+
+  const systemLines = state.messages.filter((message) => message.role === "system");
+  expect(systemLines.length).toBe(2);
+  expect(systemLines[1]!.content).toContain('"workspace"');
+  expect(systemLines[1]!.content).toContain('"tmp"');
+});
+
+test("Stage startup with all roots created adds no extra system message", async () => {
+  const { state } = await startWith(makeStarted({ rootFailures: [] }));
+
+  const systemLines = state.messages.filter((message) => message.role === "system");
+  expect(systemLines.map((message) => message.content)).toEqual(["Stage card warning: scenario warning"]);
 });

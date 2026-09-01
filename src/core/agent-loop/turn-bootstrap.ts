@@ -99,7 +99,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   // A brand-new session explicitly creates the model-writable project roots
   // (#291) so the first project-state observation reads "empty" instead of
   // "absent". Resumed sessions skip this: a root the user deleted stays absent.
-  if (!options.sessionId) {
+  if (isNewSession) {
     const rootFailures = await ensureProjectRoots(rootDir);
     if (rootFailures.length > 0) {
       options.onEvent?.({ type: "project_roots_warning", sessionId: session.sessionId, failures: rootFailures });

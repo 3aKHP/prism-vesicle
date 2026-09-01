@@ -81,6 +81,7 @@ import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
 
 import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-loop/session-init";
+import { formatRootCreationFailures } from "../core/project/ensure-roots";
 import { createSessionIdentityCoordinator } from "./session-identity-coordinator";
 import { createSkillActivationOwner, type SkillActivationOptions } from "./skills/session-activation";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
@@ -1139,9 +1140,9 @@ export function App(props: AppProps = {}) {
     apply: (identity) => {
       setSessionId(identity.sessionId);
       setSessionPath(identity.sessionPath);
-      if (identity.rootWarnings && identity.rootWarnings.length > 0) {
-        const warnings = identity.rootWarnings;
-        setMessages((prev) => [...prev, ...warnings.map((content) => ({ role: "system" as const, content }))]);
+      if (identity.rootFailures.length > 0) {
+        const content = formatRootCreationFailures(identity.rootFailures);
+        setMessages((prev) => [...prev, { role: "system" as const, content }]);
       }
     },
   });

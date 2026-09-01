@@ -13,7 +13,7 @@
 import { loadConfigForSelection } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import type { VesicleRequest } from "../../providers/shared/types";
-import { ensureProjectRoots, formatRootCreationFailure } from "../project/ensure-roots";
+import { ensureProjectRoots, type RootCreationFailure } from "../project/ensure-roots";
 import type { EffectiveInstructionSelection } from "../instructions";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { defaultPermissionRuntime, type PermissionRuntimeOptions } from "../permissions";
@@ -47,10 +47,10 @@ export type SessionIdentity = {
   sessionId: string;
   sessionPath: string;
   /**
-   * Best-effort project-root creation failures at session birth (#291), already
-   * formatted for display. Present only when at least one root failed.
+   * Best-effort project-root creation failures at session birth (#291);
+   * empty when every root exists. Structured so the client owns rendering.
    */
-  rootWarnings?: string[];
+  rootFailures: RootCreationFailure[];
 };
 
 export type SessionHeaderParts = {
@@ -181,9 +181,5 @@ export async function initializeSessionIdentity(
     }),
   );
 
-  return {
-    sessionId: session.sessionId,
-    sessionPath: session.sessionPath,
-    ...(rootFailures.length > 0 ? { rootWarnings: rootFailures.map(formatRootCreationFailure) } : {}),
-  };
+  return { sessionId: session.sessionId, sessionPath: session.sessionPath, rootFailures };
 }
