@@ -13,6 +13,7 @@ import type { HarnessDelegationDecision, HarnessRuntimeContext } from "../harnes
 import type { AssetResolver } from "../runtime/assets";
 import type { ValidationResult } from "../validators/registry";
 import type { InstructionDiagnostic } from "../instructions";
+import type { RootCreationFailure } from "../project/ensure-roots";
 import type { QualityDecisionRequest, QualityFindingSummary, QualityOutcome, QualityTargetWarningReason } from "../quality";
 import type { ExperimentalQualityProfile } from "../../config/quality";
 
@@ -80,6 +81,13 @@ export type AgentLoopEvent =
       sessionId: string;
       engine: EngineId;
       diagnostics: InstructionDiagnostic[];
+    }
+  | {
+      // Emitted once at a brand-new session's birth when explicit project-root
+      // creation partially failed (#291); clients render and never re-notify.
+      type: "project_roots_warning";
+      sessionId: string;
+      failures: RootCreationFailure[];
     }
   | { type: "provider_request"; iteration: number }
   | { type: "provider_retry"; attempt: number; maxRetries: number; delayMs: number; status?: number; iteration: number; scope?: "quality-judge" }

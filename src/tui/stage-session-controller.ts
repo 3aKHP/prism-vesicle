@@ -66,6 +66,7 @@ export function createStageSessionController(options: StageSessionControllerOpti
     options.setMessages([
       { role: "user", content: commandEcho },
       ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
+      ...started.rootWarnings.map((content) => ({ role: "system" as const, content })),
       { id: started.openingRecordUuid, role: "assistant", content: started.opening, kind: "stage-bootstrap-opening", engine: "stage" },
     ]);
     options.setStatus("Stage session ready");

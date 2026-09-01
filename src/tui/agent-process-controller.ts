@@ -2,6 +2,7 @@ import type { Accessor, Setter } from "solid-js";
 import type { AgentLoopEvent } from "../core/agent-loop/run";
 import type { InstructionDiagnostic } from "../core/instructions";
 import type { BackgroundProcessEvent, BackgroundProcessState } from "../core/process/manager";
+import { formatRootCreationFailure } from "../core/project/ensure-roots";
 import type { ProcessToolEvent } from "../core/tools";
 import { processEventFromTask } from "../core/tools/shell";
 import { displayTextFromThinkingBlocks } from "../providers/shared/thinking";
@@ -357,6 +358,15 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
           content: [`Persistent instruction ${count === 1 ? "file was" : "files were"} skipped and not loaded into the system prompt:`, ...lines].join("\n"),
         }]);
         recordActivity({ kind: "system", text: `${count} instruction diagnostic${count === 1 ? "" : "s"}` });
+        return;
+      }
+      case "project_roots_warning": {
+        if (event.failures.length === 0) return;
+        options.setMessages((current) => [...current, ...event.failures.map((failure) => ({
+          role: "system" as const,
+          content: formatRootCreationFailure(failure),
+        }))]);
+        recordActivity({ kind: "system", text: `${event.failures.length} project root${event.failures.length === 1 ? "" : "s"} could not be created` });
         return;
       }
       default:

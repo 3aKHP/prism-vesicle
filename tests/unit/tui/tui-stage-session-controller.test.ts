@@ -14,6 +14,7 @@ test("Stage startup applies the durable bootstrap result to host session state",
     messages: [{ role: "assistant", content: "Stage opening", kind: "stage-bootstrap-opening" }],
     bootstrap: {} as StartedStageSession["bootstrap"],
     warnings: ["scenario warning"],
+    rootWarnings: [],
   };
   const state = {
     queueCleared: false,

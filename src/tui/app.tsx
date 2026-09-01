@@ -1139,6 +1139,10 @@ export function App(props: AppProps = {}) {
     apply: (identity) => {
       setSessionId(identity.sessionId);
       setSessionPath(identity.sessionPath);
+      if (identity.rootWarnings && identity.rootWarnings.length > 0) {
+        const warnings = identity.rootWarnings;
+        setMessages((prev) => [...prev, ...warnings.map((content) => ({ role: "system" as const, content }))]);
+      }
     },
   });
   const skillActivation = createSkillActivationOwner({

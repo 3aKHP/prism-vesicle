@@ -13,6 +13,7 @@
 import { loadConfigForSelection } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import type { VesicleRequest } from "../../providers/shared/types";
+import { ensureProjectRoots, formatRootCreationFailure } from "../project/ensure-roots";
 import type { EffectiveInstructionSelection } from "../instructions";
 import { composeSystemPromptWithInstructions, selectionToRecord } from "../instructions";
 import { defaultPermissionRuntime, type PermissionRuntimeOptions } from "../permissions";
@@ -45,6 +46,11 @@ export type InitializeSessionIdentityOptions = Pick<
 export type SessionIdentity = {
   sessionId: string;
   sessionPath: string;
+  /**
+   * Best-effort project-root creation failures at session birth (#291), already
+   * formatted for display. Present only when at least one root failed.
+   */
+  rootWarnings?: string[];
 };
 
 export type SessionHeaderParts = {
@@ -130,6 +136,7 @@ export async function initializeSessionIdentity(
   const instructional = await composeSystemPromptWithInstructions(engine, engineAssets.systemPrompt, rootDir);
   let systemPrompt = instructional.systemPrompt;
 
+  const rootFailures = await ensureProjectRoots(rootDir);
   const session = await createSessionStore(rootDir);
 
   const frozenSkillCatalog = await resolveSessionSkillCatalog(
@@ -174,5 +181,9 @@ export async function initializeSessionIdentity(
     }),
   );
 
-  return { sessionId: session.sessionId, sessionPath: session.sessionPath };
+  return {
+    sessionId: session.sessionId,
+    sessionPath: session.sessionPath,
+    ...(rootFailures.length > 0 ? { rootWarnings: rootFailures.map(formatRootCreationFailure) } : {}),
+  };
 }
