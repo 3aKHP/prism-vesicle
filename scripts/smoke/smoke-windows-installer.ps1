@@ -72,8 +72,8 @@ try {
     foreach ($required in @($Executable, $IconFile, (Join-Path $InstallDir "harness-manifest.json"), (Join-Path $InstallDir "assets"), (Join-Path $InstallDir "host-assets"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\SKILL.md"), (Join-Path $InstallDir "host-assets\skills\vesicle-docs\references\index.md"), (Join-Path $InstallDir "unins000.exe"))) {
         if (-not (Test-Path -LiteralPath $required)) { throw "Installed payload is missing: $required" }
     }
-    if ((Get-FileHash -LiteralPath $IconFile -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Resolve-Path $CanonicalIcon).Path -Algorithm SHA256).Hash) { throw "Installed icon does not match the canonical ICO." }
     if ($CanonicalIcon -ne "") {
+        if ((Get-FileHash -LiteralPath $IconFile -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Resolve-Path $CanonicalIcon).Path -Algorithm SHA256).Hash) { throw "Installed icon does not match the canonical ICO." }
         $Verifier = Join-Path $PSScriptRoot "..\check\check-windows-brand.ps1"
         & $Verifier -CanonicalIcon (Resolve-Path $CanonicalIcon).Path -Executable $Executable -Uninstaller (Join-Path $InstallDir "unins000.exe")
     }
