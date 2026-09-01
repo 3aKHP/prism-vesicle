@@ -202,10 +202,10 @@ export function createDecisionController(options: DecisionControllerOptions) {
     // on a focused confirm option arms its note composer and lands there —
     // the question prompt's "free answer accepts typing" behavior, adopted
     // for the gate family. Reject always owns its composer already;
-    // confirm-summary has no note surface, and permission prompts have none
-    // end to end (the panel renders only Reject's composer and
-    // permissionResolutionFromGate drops confirm feedback) — typing there
-    // stays swallowed so no invisible note can ride a later reject.
+    // confirm-summary has no note surface, and permission prompts offer a
+    // note only on Reject (rendered when focused;
+    // permissionResolutionFromGate drops confirm feedback) — typing on their
+    // confirm stays swallowed so no invisible note can ride a later reject.
     const typeToNote = !composerActive
       && !permissionPromptActive()
       && gateFocus() === "confirm"

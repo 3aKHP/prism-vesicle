@@ -89,6 +89,9 @@ export function createTurnResultController(options: ResultOptions) {
   function applyPendingPermissionResult(result: Extract<RunPromptResult, { kind: "needs_permission" }>): void {
     applyPendingResultBase(result);
     setPendingPermission({ ...result, engine: result.profile.id });
+    setGateFocus("confirm");
+    setGateFeedbackMode(null);
+    clearGateFeedback();
     const target = permissionTargetSummary(result.request);
     appendPendingAssistant(
       result.assistantContent,

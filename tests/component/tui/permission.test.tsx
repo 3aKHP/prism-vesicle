@@ -146,7 +146,7 @@ describe("tui: permission surfaces", () => {
           planHash: "hash-narrow",
         }}
         focused="reject"
-        feedbackMode="reject"
+        feedbackMode={null}
         feedback=""
         feedbackCursor={0}
         width={width}

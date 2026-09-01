@@ -46,7 +46,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
   const flexibleLineBudget = () => Math.max(2, permissionContentRows
     - 5
     - (props.request.executionPlan?.executablePath ? 1 : 0)
-    - (props.feedbackMode === "reject" ? 2 : 0));
+    - (props.focused === "reject" ? 2 : 0));
   const warningLines = () => {
     const warning = kind() === "host-command"
       ? hostAuthorityWarning
@@ -127,7 +127,11 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       </Show>
       <ThemedText content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} wrapMode="none" />
       <ThemedText content={`${props.focused === "reject" ? "›" : " "} Reject`} fg={props.focused === "reject" ? palette.error : palette.textDim} wrapMode="none" />
-      {props.feedbackMode === "reject" ? (
+      {/* The Reject note renders whenever Reject is focused (mirroring
+          GatePrompt). It previously keyed on feedbackMode === "reject",
+          which no code path ever set — the row was unreachable, so typed
+          rejection reasons were sent unseen. */}
+      {props.focused === "reject" ? (
         <PromptComposer
           value={props.feedback}
           cursor={props.feedbackCursor}
