@@ -63,7 +63,7 @@ export function createTurnResultController(options: ResultOptions) {
     setGateFocus("confirm");
     setGateFeedbackMode(null);
     clearGateFeedback();
-    appendPendingAssistant(result.assistantContent, `Stop gate pending: ${result.gate.gate}. Use ↑/↓ + Enter, or type into the amend box (Tab).`);
+    appendPendingAssistant(result.assistantContent, `Stop gate pending: ${result.gate.gate}. Use ↑/↓ + Enter, type to add a note, Tab to read the summary.`);
     setStatus(`gate pending: ${result.gate.gate}`);
   }
 
@@ -89,6 +89,9 @@ export function createTurnResultController(options: ResultOptions) {
   function applyPendingPermissionResult(result: Extract<RunPromptResult, { kind: "needs_permission" }>): void {
     applyPendingResultBase(result);
     setPendingPermission({ ...result, engine: result.profile.id });
+    setGateFocus("confirm");
+    setGateFeedbackMode(null);
+    clearGateFeedback();
     const target = permissionTargetSummary(result.request);
     appendPendingAssistant(
       result.assistantContent,

@@ -50,7 +50,7 @@ describe("tui: gate surfaces", () => {
     setup.renderer.destroy();
 
     const lines = frame.split("\n");
-    const ellipsisLine = lines.findIndex((line) => line.includes("..."));
+    const ellipsisLine = lines.findIndex((line) => line.includes("lines folded · Tab to read"));
     const confirmLine = lines.findIndex((line) => line.includes("1. Confirm"));
     const rejectLine = lines.findIndex((line) => line.includes(">2. Reject"));
     const inputLine = lines.findIndex((line) => line.includes("✎"));
@@ -61,6 +61,44 @@ describe("tui: gate surfaces", () => {
     expect(inputLine).toBeGreaterThan(rejectLine);
     expect(lines[confirmLine]).not.toContain("...");
     expect(lines[confirmLine]).not.toContain("Core Desire");
+  });
+
+  test("the zone rail shares its row with body text in both zones", async () => {
+    const summary = "First line\n\nSecond line";
+    const bodySetup = await testRender(() => (
+      <GatePrompt
+        gate={{ gate: "request_confirmation", summary }}
+        focused="confirm"
+        feedbackMode={null}
+        feedback=""
+        width={80}
+        maxSummaryLines={4}
+        zone="body"
+      />
+    ), { width: 80, height: 10 });
+    await bodySetup.flush();
+    const bodyFrame = bodySetup.captureCharFrame();
+    bodySetup.renderer.destroy();
+    // A width="100%" text element used to start at column 0 and paint over
+    // the rail, leaving it visible only on blank lines.
+    expect(bodyFrame).toContain("▌First line");
+    expect(bodyFrame).toContain("▌Second line");
+    expect(bodyFrame).toContain("▌ ");
+
+    const optionsSetup = await testRender(() => (
+      <GatePrompt
+        gate={{ gate: "request_confirmation", summary }}
+        focused="confirm"
+        feedbackMode={null}
+        feedback=""
+        width={80}
+        maxSummaryLines={4}
+      />
+    ), { width: 80, height: 10 });
+    await optionsSetup.flush();
+    const optionsFrame = optionsSetup.captureCharFrame();
+    optionsSetup.renderer.destroy();
+    expect(optionsFrame).toContain("▏First line");
   });
 
   test("renders stop gate markdown summaries instead of raw markdown markers", async () => {

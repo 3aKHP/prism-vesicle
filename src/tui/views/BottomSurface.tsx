@@ -8,7 +8,7 @@ import type { CommandArgumentCompletion } from "../commands/types";
 import type { Command } from "../commands/types";
 import { commandArgumentHint } from "../commands/options";
 import type { GateFocusTarget } from "../GatePrompt";
-import { GatePrompt, gateComposerIsActive, gateSummaryLineBudget } from "../GatePrompt";
+import { GatePrompt, gateComposerIsActive, gateSummaryLineBudget, type PromptZone } from "../GatePrompt";
 import { PermissionPrompt } from "../PermissionPrompt";
 import { PromptComposer } from "../PromptComposer";
 import { QualityRewritePrompt } from "../QualityRewritePrompt";
@@ -155,6 +155,10 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   qualitySelected: number;
   questionFreeformText: string;
   questionFreeformCursor: number;
+  /** Body-reading focus zone of the open decision prompt (#268 item 4). */
+  promptZone?: PromptZone;
+  bodyScrollOffset?: number;
+  onBodyExtent?: (total: number, visible: number) => void;
   modelItems: OptionItem[];
   modelTitle: string;
   skillPickerItems: OptionItem[];
@@ -214,6 +218,9 @@ export function BottomSurface(props: BottomSurfaceProps) {
               feedback={props.gateFeedback}
               feedbackCursor={props.gateFeedbackCursor}
               width={props.layout.width}
+              zone={props.promptZone}
+              bodyScrollOffset={props.bodyScrollOffset}
+              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}
@@ -227,6 +234,9 @@ export function BottomSurface(props: BottomSurfaceProps) {
               width={props.layout.width}
               freeformValue={props.questionFreeformText}
               freeformCursor={props.questionFreeformCursor}
+              zone={props.promptZone}
+              bodyScrollOffset={props.bodyScrollOffset}
+              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}
@@ -259,6 +269,9 @@ export function BottomSurface(props: BottomSurfaceProps) {
                 props.engineSwitchPending ? 1 : 0,
               )}
               showSummaryOption={props.engineSwitchPending}
+              zone={props.promptZone}
+              bodyScrollOffset={props.bodyScrollOffset}
+              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}

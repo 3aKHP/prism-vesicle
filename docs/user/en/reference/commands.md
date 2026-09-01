@@ -72,6 +72,26 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 
 After a complete tool round, queued messages are added to the active conversation before its next provider request. If the loop completes without another tool boundary, the next queued input is processed immediately. Slash commands declare their own busy-turn behavior: `/help`, `/context`, `/reasoning`, `/theme`, `/workspace`, read-only settings forms, and `/agents` inspection or stop run immediately; `/artifact` and `/validate` wait for the current tool round; configuration changes, pickers, session commands, `/compact`, `/init`, and `/agents retry` wait for the Agent Loop. A picker pauses the remaining queue, and switching or resetting the session clears it.
 
+## Interactive prompt keys
+
+When permission approvals, stop gates, questions, and quality decisions arrive as bottom panels, each panel has two key sets and `Tab` toggles between them:
+
+| Key (options zone) | Action |
+|---|---|
+| ↑ / ↓ / Ctrl+P / Ctrl+N | Move focus between the options |
+| Type / paste directly | Expands the focused confirm option's note input on stop-gate and engine-switch prompts; permission prompts carry notes only on Reject (always-on input). Esc clears the note and returns to the options |
+| Enter | Submit the focused option; a typed note is submitted with the decision (permission Allow takes no note) |
+| Tab / Shift+Tab | Switch to the body zone to read the folded summary / command detail |
+| Esc | Clear the note and move focus to Reject |
+
+| Key (body zone) | Action |
+|---|---|
+| ↑ / ↓ | Scroll the folded body line by line; a bright position row (e.g. `▾ lines 5-8 of 30`) marks the window |
+| Home / End | Jump to the top / bottom |
+| Tab / Enter / Esc | Return to the options zone (Enter in the body zone **never** submits) |
+
+Question prompts wrap their question text with the same budget and scrolling; the quality-decision panel is a fixed option list with no body zone. While the body is folded the panel shows an accent-colored `▸ N lines folded · Tab to read` affordance row, and the rail column beside the body lights up in the brand color when the body zone holds the keyboard and stays dim while the options do — the focused zone is visible at a glance. The panel hint line shows the keys available in the current zone.
+
 ## Workspace page keys
 
 The Workspace page has three focus regions: the file tree, the viewer / editor, and the input box. `F6` / `Shift+F6` cycle between them (the viewer is skipped when no file is open), and `Esc` steps focus back (editor → tree → input box; Markdown source has one extra level: source → preview → tree). Printable shortcuts only act in their focused region and never collide with the input box.
