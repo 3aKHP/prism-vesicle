@@ -245,7 +245,7 @@ async function main(): Promise<number> {
   console.log(`  mode=${args.mode} interval=${args.interval}ms anchor="${args.anchor}"`);
   console.log(`  ${selected.length} candidate(s); start a screen recording NOW, review it frame-by-frame afterwards`);
   console.log("  verdict per candidate: stable / jitter / unreadable (glyph too faint or tofu at tab size)");
-  console.log("  also judge: does the motion read as 'working', and does it sit well next to idle '·' and input-required '!'?");
+  console.log("  also judge: does the motion read as 'working', and does it sit well next to idle '■' and input-required '▣'?");
   console.log("");
 
   let cancelled = false;
