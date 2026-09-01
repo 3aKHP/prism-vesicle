@@ -98,6 +98,8 @@ describe("SkillMount (skills/ read-only logical root)", () => {
 
     const listing = await mount.listDirectory("skills/alpha/references");
     expect(listing?.entries.map((entry) => entry.path)).toEqual(["skills/alpha/references/note.md"]);
+    // The vanished inventory entry is omitted and that omission is disclosed.
+    expect(listing?.truncated).toBe(true);
     const scan = await mount.grepFiles("skills/alpha", true);
     expect(scan.files).toEqual(["skills/alpha/SKILL.md", "skills/alpha/references/note.md"]);
     expect(scan.notes.join(" ")).toContain("skills/alpha/references/gone.md");

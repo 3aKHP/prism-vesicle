@@ -1034,6 +1034,29 @@ describe("skills read-only mount", () => {
     expect(result.images?.length).toBe(1);
   });
 
+  test("rejects oversized images before buffering on every view_image surface", async () => {
+    // The pre-flight protects the host from buffering a multi-gigabyte file
+    // before the 20 MiB attachment cap fires; the error must come from the
+    // size check on all three surfaces (project, assets, skills mount).
+    const oversized = Buffer.alloc(20 * 1024 * 1024 + 1, 0x89);
+    await writeFile(join(rootDir, "source_materials", "huge.png"), oversized);
+    await mkdir(join(rootDir, "assets", "imgs"), { recursive: true });
+    await writeFile(join(rootDir, "assets", "imgs", "huge.png"), oversized);
+    const mount = await mountFor([await writeMountedSkill("alpha", { "assets/huge.png": new Uint8Array(oversized) })]);
+
+    const project = await executeFileTool(rootDir, call("view_image", { path: "source_materials/huge.png" }));
+    expect(project.ok).toBe(false);
+    expect(project.content).toContain("exceeds the 20 MiB limit");
+
+    const asset = await executeFileTool(rootDir, call("view_image", { path: "assets/imgs/huge.png" }));
+    expect(asset.ok).toBe(false);
+    expect(asset.content).toContain("exceeds the 20 MiB limit");
+
+    const mounted = await executeFileTool(rootDir, call("view_image", { path: "skills/alpha/assets/huge.png" }), { skillMount: mount });
+    expect(mounted.ok).toBe(false);
+    expect(mounted.content).toContain("exceeds the 20 MiB limit");
+  });
+
   test("unactivated and absent mounts fail closed with redirects", async () => {
     const alpha = await writeMountedSkill("alpha", { "references/note.md": "text" });
     const locked = await mountFor([alpha], []);

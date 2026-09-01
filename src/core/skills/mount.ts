@@ -122,11 +122,15 @@ export class SkillMount {
     const { name, relPath } = parseMountPath(normalizeSkillMountPath(logicalPath));
     if (name === undefined) {
       const entries: SkillMountEntry[] = [];
+      let omitted = false;
       for (const skill of this.activatedSkills()) {
         const entry = await mountEntry(`skills/${skill.name}`, "directory", skill.rootDirectory);
         if (entry) entries.push(entry);
+        else omitted = true;
       }
-      return { entries, truncated: false, fileCount: 0, directoryCount: entries.length };
+      // Omitted inventory entries make the counts non-exhaustive; disclose
+      // that instead of silently reporting a shrunken mount.
+      return { entries, truncated: omitted, fileCount: 0, directoryCount: entries.length };
     }
     const skill = this.gate(name);
     const prefix = relPath ?? "";
@@ -156,15 +160,18 @@ export class SkillMount {
     }
 
     const entries: SkillMountEntry[] = [];
+    let omitted = false;
     if (!options.filesOnly) {
       for (const dirPath of [...directoryPaths].sort()) {
         const entry = await mountEntry(`skills/${name}/${dirPath}`, "directory", join(skill.rootDirectory, ...dirPath.split("/")));
         if (entry) entries.push(entry);
+        else omitted = true;
       }
     }
     for (const filePath of filePaths.sort()) {
       const entry = await mountEntry(`skills/${name}/${filePath}`, "file", join(skill.rootDirectory, ...filePath.split("/")));
       if (entry) entries.push(entry);
+      else omitted = true;
     }
     // Directories and files interleave by path so listing order is one
     // deterministic sequence, mirroring ordinary directory observations.
@@ -172,7 +179,7 @@ export class SkillMount {
     const fileCount = entries.filter((entry) => entry.type === "file").length;
     return {
       entries,
-      truncated: false,
+      truncated: omitted,
       fileCount,
       directoryCount: entries.length - fileCount,
     };

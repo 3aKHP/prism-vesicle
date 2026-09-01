@@ -1,6 +1,6 @@
 import { lstat, stat, readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { ingestImageBytes, ingestImageFile } from "../../attachments/store";
+import { assertImageAttachmentSize, ingestImageBytes, ingestImageFile } from "../../attachments/store";
 import { normalizeAssetPath, type AssetResolver } from "../../runtime/assets";
 import { normalizeSkillMountPath } from "../../skills/mount";
 import type { SkillMount } from "../../skills/mount";
@@ -145,11 +145,7 @@ export async function executeFileReadOperation(
         : skillRequest
           ? await grepSkillFiles(requireSkillMount(skillMount), args.path, args)
           : await grepFiles(rootDir, resolved!, args);
-      const eventPath = assetRequest
-        ? normalizeAssetPath(args.path, { allowRoot: true })
-        : skillRequest
-          ? normalizeSkillMountPath(args.path)
-          : toProjectPath(rootDir, resolved!);
+      const eventPath = pickResultPath({ assetRequest, skillRequest, requestedPath: args.path, rootDir, resolved });
       const base = {
         kind: "file_operation" as const,
         operation: "grep" as const,
@@ -234,7 +230,12 @@ export async function executeFileReadOperation(
       }
       if (isSkillPath(args.path)) {
         const logicalPath = normalizeSkillMountPath(args.path);
-        const bytes = await requireSkillMount(skillMount).readBytes(logicalPath);
+        const mount = requireSkillMount(skillMount);
+        // Pre-flight the shared image cap so an oversized bundled asset is
+        // rejected before readBytes buffers the whole file.
+        const info = await mount.stat(logicalPath);
+        if (info?.type === "file" && info.size !== undefined) assertImageAttachmentSize(info.size);
+        const bytes = await mount.readBytes(logicalPath);
         const image = await ingestImageBytes(rootDir, bytes, {
           source: "project",
           filename: basename(logicalPath),
@@ -255,6 +256,12 @@ export async function executeFileReadOperation(
       const asset = isAssetPath(args.path) ? await assets.resolveFile(args.path) : undefined;
       const filePath = asset?.absolutePath ?? await resolveAllowedPath(rootDir, args.path, readableFileRoots);
       const projectPath = asset?.logicalPath ?? toProjectPath(rootDir, filePath);
+      if (asset) {
+        // Same pre-flight as the skills mount: reject oversized assets before
+        // readBytes buffers the whole file.
+        const assetInfo = await assets.statIfExists(asset.logicalPath);
+        if (assetInfo?.type === "file") assertImageAttachmentSize(assetInfo.size);
+      }
       const image = asset
         ? await ingestImageBytes(rootDir, await assets.readBytes(asset.logicalPath), {
           source: "project",
@@ -295,6 +302,19 @@ function requireSkillMount(mount: SkillMount | undefined): SkillMount {
     throw new Error("The skills/ mount is unavailable: no Skill catalog is active in this session.");
   }
   return mount;
+}
+
+/** Canonical event path for a diverted (assets/skills) or resolved read target. */
+function pickResultPath(diversion: {
+  assetRequest: boolean;
+  skillRequest: boolean;
+  requestedPath: string;
+  rootDir: string;
+  resolved?: string;
+}): string {
+  if (diversion.skillRequest) return normalizeSkillMountPath(diversion.requestedPath);
+  if (diversion.assetRequest) return normalizeAssetPath(diversion.requestedPath, { allowRoot: true });
+  return toProjectPath(diversion.rootDir, diversion.resolved!);
 }
 
 function listVirtualRoot(call: ToolCall, detail: "full" | "names", skillsMounted: boolean): ToolResult {
