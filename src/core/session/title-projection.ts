@@ -59,13 +59,8 @@ export function projectSessionTitleGeneration(records: SessionRecord[]): Session
 export function projectSessionTitleUsage(records: SessionRecord[]): ResponseUsage[] {
   return metadataRecords(records, SESSION_TITLE_USAGE_KIND).flatMap((value) => {
     if (!value.usage || typeof value.usage !== "object") return [];
-    const source = value.usage as Record<string, unknown>;
-    const usage: ResponseUsage = {};
-    for (const key of ["inputTokens", "outputTokens", "totalTokens", "reasoningTokens", "effectiveTokens"] as const) {
-      const number = source[key];
-      if (typeof number === "number" && Number.isFinite(number) && number >= 0 && number <= 1_000_000_000) usage[key] = number;
-    }
-    return Object.keys(usage).length > 0 ? [usage] : [];
+    const usage = normalizeTitleUsage(value.usage as ResponseUsage);
+    return usage ? [usage] : [];
   });
 }
 
