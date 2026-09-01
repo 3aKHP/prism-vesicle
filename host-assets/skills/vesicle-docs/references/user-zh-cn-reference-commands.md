@@ -35,7 +35,7 @@
 | `/reasoning hidden\|collapsed\|expanded` | 控制推理过程的显示(别名 off/preview/on) |
 | `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | 切换界面主题;`default` 跟随终端明暗模式,`auto` 按本地时间切换;`--persist` 写入项目 `.vesicle/preferences.yaml`,`--unset-project` 移除项目偏好;不带参数显示当前 preference/来源/解析结果 |
 | `/websearch [on\|off]` | 查看或切换模型的内置联网搜索;仅在协议/profile、模型能力和当前 Engine 工具面均支持时可用,否则命令会说明拒绝原因;默认值来自 providers.yaml 模型条目的 `webSearchDefault`,`/new` 或恢复会话后回到默认;开启后搜索在供应商侧执行、查询词随请求外发、无逐次审批,详见隐私政策的「内置联网搜索」一节 |
-| `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返 |
+| `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返(底面提示面板或选择器打开时也可用;启动画面与 `/btw` 覆盖层独占键盘时除外) |
 
 ## 制品
 
@@ -77,6 +77,8 @@ Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当�
 ## Workspace 页按键
 
 Workspace 页有三个焦点区：文件树、查看器/编辑器、输入框。`F6` / `Shift+F6` 在焦点区间循环(没有打开的文件时跳过查看器),`Esc` 逐级回退(编辑器 → 文件树 → 输入框;Markdown 源码多一级预览:源码 → 预览 → 文件树)。可打印快捷键只在对应焦点区生效,不会与输入框冲突。
+
+回合运行途中到达的交互式决策提示(权限批准、停止门、问题、质量决策)不会占据本页底部:它们折叠为输入框上方的一行待决条(如 `◆ Permission pending · Ctrl+O to answer`),键盘仍归三区焦点,工作区不再被遮挡。`Ctrl+O` 切到 Chat 页即可看到完整提示并应答;应答前输入框的 Enter 既不发送也不排队,草稿原样保留。你主动打开的选择器与确认框(YOLO 确认、迁移审查等)仍以完整面板占据底部。
 
 ### 文件树与只读查看器
 

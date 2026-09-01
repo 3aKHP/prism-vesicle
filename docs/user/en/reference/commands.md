@@ -33,7 +33,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display (aliases off/preview/on) |
 | `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | Switch the interface theme; `default` follows the terminal's own mode, `auto` follows the clock; `--persist` writes `.vesicle/preferences.yaml`, `--unset-project` removes the project preference; with no argument it reports preference/source/resolved mode |
 | `/websearch [on\|off]` | Show or toggle the model's built-in web search; it is available only when the protocol/profile, model capability, and current Engine tool surface all admit it, otherwise the command explains the rejection; the default comes from the model entry's `webSearchDefault` in providers.yaml, and `/new` or resuming a session reverts to it; while enabled, searches run on the provider side, queries leave with the request, and no per-call approval applies — see the Built-in Web Search section of the privacy policy |
-| `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages |
+| `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages (available while a bottom-surface prompt panel or picker is open; the startup splash and the `/btw` overlay still own the keyboard) |
 
 ## Artifacts
 
@@ -75,6 +75,8 @@ After a complete tool round, queued messages are added to the active conversatio
 ## Workspace page keys
 
 The Workspace page has three focus regions: the file tree, the viewer / editor, and the input box. `F6` / `Shift+F6` cycle between them (the viewer is skipped when no file is open), and `Esc` steps focus back (editor → tree → input box; Markdown source has one extra level: source → preview → tree). Printable shortcuts only act in their focused region and never collide with the input box.
+
+Interactive decision prompts that arrive mid-turn (permission approval, stop gates, questions, quality decisions) do not take over this page's bottom: they collapse to a one-line pending strip above the input box (e.g. `◆ Permission pending · Ctrl+O to answer`), the keyboard stays with the three focus regions, and the workbench is never occluded. Press `Ctrl+O` to see the full prompt on the Chat page and answer it there; until it is answered, Enter in the input box neither sends nor queues — the draft is kept as-is. Pickers and confirms you open yourself (YOLO confirm, migration review, …) still show their full panels at the bottom.
 
 ### File tree and read-only viewer
 

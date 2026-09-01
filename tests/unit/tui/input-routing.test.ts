@@ -566,6 +566,184 @@ describe("TUI input routing: modal ownership of Esc", () => {
   });
 });
 
+describe("TUI input routing: workspace pending-decision strip (#268 item 3)", () => {
+  function stripRouter(overrides: Partial<InputRoutingOptions> = {}) {
+    const modalKeys: string[] = [];
+    const workspaceKeys: string[] = [];
+    const composerKeys: string[] = [];
+    let toggles = 0;
+    const router = createInputRouter({
+      renderer: {} as InputRoutingOptions["renderer"],
+      setStatus: () => {},
+      rewindPicker: () => null,
+      handleRewindKey: () => false,
+      branchPicker: () => null,
+      handleBranchKey: () => false,
+      modelPicker: () => null,
+      handleModelPickerKey: () => false,
+      qualityPicker: () => null,
+      handleQualityPickerKey: () => false,
+      qualityRewriteConfirm: () => null,
+      handleRewriteConfirmKey: () => false,
+      sessionPicker: () => null,
+      handleSessionPickerKey: () => false,
+      skillPicker: () => null,
+      handleSkillPickerKey: () => false,
+      yoloConfirmStage: () => null,
+      handleYoloKey: () => false,
+      activePermissionRequest: () => undefined,
+      pendingUserQuestion: () => null,
+      handleQuestionKey: () => false,
+      activeGateRequest: () => null,
+      handleGateKey: (key) => { modalKeys.push(key.name ?? ""); return true; },
+      pasteClipboardImage: async () => undefined,
+      handleComposerKey: (key) => { composerKeys.push(key.name ?? ""); return true; },
+      handlePromptEscape: () => {},
+      handleDecisionPaste: () => false,
+      insertComposerPaste: () => undefined,
+      togglePage: () => { toggles += 1; },
+      workspaceActive: () => false,
+      workspaceFocusRegion: () => "tree",
+      handleWorkspaceKey: (key) => { workspaceKeys.push(key.name ?? ""); return true; },
+      ...overrides,
+    });
+    return {
+      router,
+      modalKeys,
+      workspaceKeys,
+      composerKeys,
+      toggleCount: () => toggles,
+    };
+  }
+
+  const permissionOverrides: Partial<InputRoutingOptions> = {
+    activePermissionRequest: () => ({ id: "p", sessionId: "s", toolCallId: "t", toolName: "shell_exec", arguments: "ls", permissionClass: "arbitrary_exec", mode: "MOMENTUM", createdAt: "2026-07-31T00:00:00.000Z" }),
+  };
+  const gateOverrides: Partial<InputRoutingOptions> = {
+    activeGateRequest: () => ({ gate: "request_confirmation", summary: "confirm" }),
+  };
+
+  test("Ctrl+O outranks an open gate modal and toggles the page instead", () => {
+    const { router, modalKeys, toggleCount } = stripRouter(gateOverrides);
+    router.handleKey(keyEvent("o", { ctrl: true }));
+    expect(toggleCount()).toBe(1);
+    expect(modalKeys).toEqual([]);
+  });
+
+  test("Ctrl+O also outranks a picker modal", () => {
+    const pickerKeys: string[] = [];
+    const { router, toggleCount } = stripRouter({
+      modelPicker: () => ({}) as never,
+      handleModelPickerKey: (key) => { pickerKeys.push(key.name ?? ""); return true; },
+    });
+    router.handleKey(keyEvent("o", { ctrl: true }));
+    expect(toggleCount()).toBe(1);
+    expect(pickerKeys).toEqual([]);
+  });
+
+  test("Ctrl+O outranks the self-opened confirms (YOLO, migration review) too", () => {
+    const yoloKeys: string[] = [];
+    const yolo = stripRouter({
+      yoloConfirmStage: () => 1,
+      handleYoloKey: (key) => { yoloKeys.push(key.name ?? ""); return true; },
+    });
+    yolo.router.handleKey(keyEvent("o", { ctrl: true }));
+    expect(yolo.toggleCount()).toBe(1);
+    expect(yoloKeys).toEqual([]);
+
+    const migrationKeys: string[] = [];
+    const migration = stripRouter({
+      migrationReview: () => ({}) as never,
+      handleMigrationKey: (key) => { migrationKeys.push(key.name ?? ""); return true; },
+    });
+    migration.router.handleKey(keyEvent("o", { ctrl: true }));
+    expect(migration.toggleCount()).toBe(1);
+    expect(migrationKeys).toEqual([]);
+  });
+
+  test("on the Workspace page a pending permission hands keys to workspace routing", () => {
+    const { router, modalKeys, workspaceKeys } = stripRouter({
+      ...permissionOverrides,
+      workspaceActive: () => true,
+    });
+    router.handleKey(keyEvent("up"));
+    expect(modalKeys).toEqual([]);
+    expect(workspaceKeys).toEqual(["up"]);
+  });
+
+  test("on the Workspace page a pending gate with composer focus falls through to the composer", () => {
+    const { router, modalKeys, workspaceKeys, composerKeys } = stripRouter({
+      ...gateOverrides,
+      workspaceActive: () => true,
+      workspaceFocusRegion: () => "composer",
+      handleWorkspaceKey: () => false,
+    });
+    router.handleKey(keyEvent("a"));
+    expect(modalKeys).toEqual([]);
+    expect(workspaceKeys).toEqual([]);
+    expect(composerKeys).toEqual(["a"]);
+  });
+
+  test("pickers keep their modal capture on the Workspace page", () => {
+    const pickerKeys: string[] = [];
+    const { router, workspaceKeys } = stripRouter({
+      modelPicker: () => ({}) as never,
+      handleModelPickerKey: (key) => { pickerKeys.push(key.name ?? ""); return true; },
+      workspaceActive: () => true,
+    });
+    router.handleKey(keyEvent("up"));
+    expect(pickerKeys).toEqual(["up"]);
+    expect(workspaceKeys).toEqual([]);
+  });
+
+  function stripPasteEvent(text: string) {
+    let prevented = 0;
+    const event = {
+      bytes: new TextEncoder().encode(text),
+      preventDefault: () => { prevented += 1; },
+    };
+    return { event, preventCount: () => prevented };
+  }
+
+  test("paste on the Workspace page with a suppressed pending question reaches the composer, not the hidden freeform", () => {
+    const decisionPastes: string[] = [];
+    const textPastes: string[] = [];
+    const { router } = stripRouter({
+      pendingUserQuestion: () => ({ question: { prompt: "pick", choices: [] } }) as never,
+      handleQuestionKey: () => false,
+      handleDecisionPaste: (text) => { decisionPastes.push(text); return true; },
+      insertComposerPaste: (text) => { textPastes.push(text); },
+      workspaceActive: () => true,
+      workspaceFocusRegion: () => "composer",
+      handleWorkspaceKey: () => false,
+    });
+    const paste = stripPasteEvent("pasted draft");
+    router.handlePaste(paste.event);
+    // The recorder claims everything it is asked; an empty list proves the
+    // hidden freeform's paste claim was never consulted.
+    expect(decisionPastes).toEqual([]);
+    expect(textPastes).toEqual(["pasted draft"]);
+    expect(paste.preventCount()).toBe(1);
+  });
+
+  test("paste still reaches the visible decision panel on the Chat page", () => {
+    const decisionPastes: string[] = [];
+    const textPastes: string[] = [];
+    const { router } = stripRouter({
+      pendingUserQuestion: () => ({ question: { prompt: "pick", choices: [] } }) as never,
+      handleQuestionKey: () => false,
+      handleDecisionPaste: (text) => { decisionPastes.push(text); return true; },
+      insertComposerPaste: (text) => { textPastes.push(text); },
+      workspaceActive: () => false,
+    });
+    const paste = stripPasteEvent("answer edit");
+    router.handlePaste(paste.event);
+    expect(decisionPastes).toEqual(["answer edit"]);
+    expect(textPastes).toEqual([]);
+    expect(paste.preventCount()).toBe(1);
+  });
+});
+
 function keyEvent(name: string, modifiers: {
   ctrl?: boolean;
   meta?: boolean;

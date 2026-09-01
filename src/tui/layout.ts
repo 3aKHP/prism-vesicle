@@ -31,6 +31,10 @@ export function resolveTuiLayout(
     : hasPicker
       ? clamp(Math.floor(height * 0.34), pickerMinimum, pickerMaximum)
       : 3;
+  // The Workspace page's pending-decision strip (#268 item 3) is a one-row
+  // sibling ABOVE this band, not part of it: every bottomHeight consumer
+  // sizes the bottom surface itself, so the strip's row is paid from the
+  // main row's flexGrow budget and bottomHeight stays untouched here.
 
   return {
     width,

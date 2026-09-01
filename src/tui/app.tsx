@@ -57,10 +57,10 @@ import {
   type TokenUsageSummary,
 } from "./telemetry";
 import { displayTranscriptFromSnapshot, isEmptySessionTranscript } from "./session-presenter";
-import { BottomSurface } from "./views/BottomSurface";
+import { BottomSurface, pendingDecisionPromptLabel, pendingDecisionStripLine } from "./views/BottomSurface";
 import { createAgentProcessController } from "./agent-process-controller";
 import { createSessionResumeController } from "./session-resume-controller";
-import { createComposerController } from "./composer-controller";
+import { createComposerController, createDecisionPendingRefusal } from "./composer-controller";
 import { createDecisionController } from "./decision-controller";
 import { createTurnController } from "./turn-controller";
 import { createProviderConfigController, createProviderState } from "./provider-config-controller";
@@ -485,6 +485,10 @@ export function App(props: AppProps = {}) {
     setMessages,
   });
   function submitCommand(raw: string): boolean {
+    // Same shared refusal as the composer's own submit guard (#268 item 3):
+    // slash commands reached through the completion menu bypass the composer,
+    // so both entry points ask the one guard before anything can execute.
+    if (refuseForPendingDecision()) return false;
     return routeCommandSubmission(raw, busy(), builtinCommands(), {
       execute: (value) => {
         void executeCommand(value, builtinCommands(), { setMessages }).catch((error) => turnController.reportError(error));
@@ -527,6 +531,7 @@ export function App(props: AppProps = {}) {
     reportError: (error) => turnController.reportError(error),
     inputQueue,
     submitCommand,
+    hostDecisionPending: () => hostDecisionPending(),
     submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
     abortTurn: () => {
       const aborted = turnCancellation.abort();
@@ -993,11 +998,39 @@ export function App(props: AppProps = {}) {
   createEffect(() => {
     terminalTitle?.setPhase(resolveTerminalTitlePhase({ inputRequired: hostDecisionPending(), busy: busy(), restoring: restoringSession() }));
   });
+  // The one decision-pending refusal shared with the composer controller
+  // (#268 item 3): submitCommand (the completion menu's direct path) and the
+  // composer's Enter path ask the same guard, so the status text and the
+  // refuse-and-keep-the-draft semantics cannot drift apart.
+  const refuseForPendingDecision = createDecisionPendingRefusal(hostDecisionPending, setStatus);
+
+  // #268 item 3 (Workspace page prompt occlusion): while the Workspace page is
+  // active, the four host-decision prompts collapse to a one-row strip above
+  // the composer instead of taking the bottom band; the full panels render on
+  // the Chat page, where Ctrl+O (which outranks every modal) takes the user
+  // to answer. `decisionStripped` also releases the layout's gate band so the
+  // workbench keeps its rows.
+  const pendingDecisionLabel = createMemo(() => pendingDecisionPromptLabel({
+    yoloStage: yoloConfirmStage(),
+    migrationReview: migrationReview(),
+    permissionRequest: activePermissionRequest(),
+    question: pendingUserQuestion(),
+    quality: pendingQualityDecision() ?? null,
+    gate: activeGateRequest(),
+    rewind: rewindPicker(),
+    branch: branchPicker(),
+    session: sessionPicker(),
+    skillPicker: skillPicker(),
+    qualityRewriteConfirm: qualityRewriteConfirm(),
+    qualityPicker: qualityPicker(),
+    model: modelPicker(),
+  }));
+  const decisionStripped = createMemo(() => workspaceActive() && pendingDecisionLabel() !== null);
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    hostDecisionPending(),
+    hostDecisionPending() && !decisionStripped(),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(branchPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
@@ -1453,9 +1486,24 @@ export function App(props: AppProps = {}) {
             Host sidebar holds the persistent artifact list. */}
       </box>
 
+      {/* Pending-decision strip (#268 item 3): while the Workspace page defers
+          a host decision to the Chat page, one constant line above the
+          composer keeps the prompt discoverable without owning the bottom or
+          the keyboard. */}
+      <Show when={!sideQuestionController.overlay() && decisionStripped()} fallback={<box height={0} />}>
+        <box height={1} paddingLeft={1}>
+          <ThemedText
+            content={pendingDecisionStripLine(pendingDecisionLabel()!, layout().width - 1)}
+            fg={palette.gateAccent}
+            wrapMode="none"
+          />
+        </box>
+      </Show>
+
       <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>
         <BottomSurface
         layout={layout()}
+        suppressDecisionPanels={decisionStripped()}
         composerFocused={!workspaceActive() || workspaceController.focusRegion() === "composer"}
         yoloStage={yoloConfirmStage()}
         migrationReview={migrationReview()}

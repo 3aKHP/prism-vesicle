@@ -49,10 +49,37 @@ export type ComposerControllerOptions = {
   reportError: (error: unknown) => void;
   inputQueue: InputQueue;
   submitCommand: (value: string) => boolean;
+  /** True while a host decision prompt (permission/gate/question/quality)
+   * awaits the user. The composer stays editable for drafting, but Enter
+   * neither sends nor queues — the pending decision owns the next provider
+   * request (#268 item 3, Workspace pending strip). */
+  hostDecisionPending?: () => boolean;
   submitPrompt: (value: string, images?: VesicleImageAttachment[], elements?: ComposerElement[]) => Promise<void>;
   abortTurn: () => boolean;
   openRewind: () => Promise<void>;
 };
+
+/** Status shown when Enter is refused because a decision prompt is pending.
+ * Both refusal paths (composer submit and the app-level slash-command guard)
+ * go through `createDecisionPendingRefusal`, so this string has one home. */
+export const decisionPendingSubmitStatus = "decision pending · Ctrl+O to answer · draft kept";
+
+/** The single decision-pending refusal for every composer submission entry
+ * point (#268 item 3): the composer's Enter path and the app-level
+ * `submitCommand` (which the command-completion menu reaches directly)
+ * both ask this guard, so the predicate, the status text, and the
+ * refuse-and-keep-the-draft semantics can never drift apart. Returns true
+ * when the submission was refused. */
+export function createDecisionPendingRefusal(
+  hostDecisionPending: () => boolean,
+  setStatus: (status: string) => void,
+): () => boolean {
+  return () => {
+    if (!hostDecisionPending()) return false;
+    setStatus(decisionPendingSubmitStatus);
+    return true;
+  };
+}
 
 export function createComposerController(options: ComposerControllerOptions) {
   const [inputValue, setInputValue] = createSignal("");
@@ -63,6 +90,10 @@ export function createComposerController(options: ComposerControllerOptions) {
   const [promptHistory, setPromptHistory] = createSignal<PromptHistoryEntry[]>([]);
   const [historyIndex, setHistoryIndex] = createSignal<number | null>(null);
   const promptEscape = new PromptEscapeController();
+  const refuseForPendingDecision = createDecisionPendingRefusal(
+    () => options.hostDecisionPending?.() === true,
+    options.setStatus,
+  );
   const modelPickerController = createModelPickerController(options);
   const commandCompletionController = createCommandCompletionController({
     rootDir: options.rootDir,
@@ -138,6 +169,10 @@ export function createComposerController(options: ComposerControllerOptions) {
 
   function submitComposerAction(value: string, elements: ComposerElement[]): void {
     if (value.trim().length === 0) return;
+    // Before the slash and busy branches, and before clear(): a pending host
+    // decision owns the turn, so neither a message nor a command may start
+    // something new; the draft stays for after the prompt is answered.
+    if (refuseForPendingDecision()) return;
     const images = imagesForElements(elements);
     if (images.length === 0 && value.trimStart().startsWith("/")) {
       if (options.submitCommand(value.trim())) {

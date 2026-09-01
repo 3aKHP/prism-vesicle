@@ -100,7 +100,8 @@ describe("TUI reactivity static guard", () => {
     const composerRouting = source.indexOf("if (options.handleComposerKey(key))");
 
     expect(modeResolution).toBeGreaterThan(-1);
-    expect(source).toContain('if (bottomSurfaceMode().kind !== "composer")');
+    expect(source).toContain('const mode = bottomSurfaceMode();');
+    expect(source).toContain('if (mode.kind !== "composer")');
     expect(imagePaste).toBeGreaterThan(modeResolution);
     expect(composerRouting).toBeGreaterThan(imagePaste);
   });
