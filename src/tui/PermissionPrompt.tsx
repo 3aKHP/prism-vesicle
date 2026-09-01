@@ -5,9 +5,12 @@ import { type GateFocusTarget, type PromptZone, PromptBodyRow, promptBodyZoneHin
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 import { processShellDisplay } from "../core/process/runtime";
-import { bodyReadAffordance, bodyScrollIndicator, bodyScrollWindow, displayWidth, truncateLine, visibleDisplayLines, wrapDisplayLines } from "./format";
+import { bodyReadAffordance, bodyScrollIndicator, displayWidth, promptBodyWindow, truncateLine, visibleDisplayLines, wrapDisplayLines } from "./format";
 
 export const permissionPanelHeight = 14;
+/** Options-zone hint shared by rendering and tests (the gate and question
+ * prompts export their zone hints from GatePrompt.tsx). */
+export const permissionOptionsZoneHint = "↑/↓ choose · Enter confirm · type note · Tab read · Esc reject";
 const permissionContentRows = permissionPanelHeight - 2;
 const hostAuthorityWarning = "This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
 const skillScriptAuthorityWarning = "This selected Skill script uses structured arguments but may access files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
@@ -56,12 +59,11 @@ export function PermissionPrompt(props: PermissionPromptProps) {
   // the shared body scroll offset; the gutter column is reserved in every
   // zone so toggling never reflows.
   const detailLineBudget = () => Math.max(1, flexibleLineBudget() - warningLines().length);
-  const detailWindow = () => {
-    const lines = wrapDisplayLines(detail(), Math.max(20, contentWidth() - 1));
-    const budget = detailLineBudget();
-    const visible = Math.max(1, budget - (lines.length > budget ? 1 : 0));
-    return { lines, visible, ...bodyScrollWindow(lines.length, visible, props.bodyScrollOffset ?? 0) };
-  };
+  const detailWindow = () => promptBodyWindow(
+    wrapDisplayLines(detail(), Math.max(20, contentWidth() - 1)),
+    detailLineBudget(),
+    props.bodyScrollOffset ?? 0,
+  );
   createEffect(() => {
     const window = detailWindow();
     props.onBodyExtent?.(window.lines.length, window.visible);
@@ -81,7 +83,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
   };
   const hint = () => {
     if (props.zone === "body") return promptBodyZoneHint;
-    const full = "↑/↓ choose · Enter confirm · type note · Tab read · Esc reject";
+    const full = permissionOptionsZoneHint;
     if (displayWidth(full) <= contentWidth()) return full;
     // Narrow fallback drops the self-evident ↑/↓ prefix so every remaining
     // key name stays whole.

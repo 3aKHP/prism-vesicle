@@ -3,7 +3,7 @@ import { createEffect, For, Show } from "solid-js";
 import { TextAttributes } from "@3akhp/opentui-core";
 import type { UserQuestionOption, UserQuestionRequest } from "../core/user-question/types";
 import { type PromptZone, PromptBodyRow, promptBodyZoneHint } from "./GatePrompt";
-import { bodyReadAffordance, bodyScrollIndicator, bodyScrollWindow, truncateLine, wrapDisplayLines } from "./format";
+import { bodyReadAffordance, bodyScrollIndicator, promptBodyWindow, truncateLine, wrapDisplayLines } from "./format";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 
@@ -36,12 +36,11 @@ export function QuestionPrompt(props: QuestionPromptProps) {
   const width = () => Math.max(20, props.width - 4);
   // The gutter column is reserved in every zone so toggling zones never
   // reflows the wrapped question text.
-  const questionWindow = () => {
-    const lines = wrapDisplayLines(props.question.question, Math.max(20, width() - 1));
-    const budget = questionTextLineBudget;
-    const visible = Math.max(1, budget - (lines.length > budget ? 1 : 0));
-    return { lines, visible, ...bodyScrollWindow(lines.length, visible, props.bodyScrollOffset ?? 0) };
-  };
+  const questionWindow = () => promptBodyWindow(
+    wrapDisplayLines(props.question.question, Math.max(20, width() - 1)),
+    questionTextLineBudget,
+    props.bodyScrollOffset ?? 0,
+  );
   createEffect(() => {
     const window = questionWindow();
     props.onBodyExtent?.(window.lines.length, window.visible);

@@ -17,6 +17,7 @@ import {
   type PromptZone,
 } from "./GatePrompt";
 import { questionComposerIsActive, questionPanelMinHeight } from "./QuestionPrompt";
+import { bodyScrollMaxOffset, bodyScrollWindow } from "./format";
 import { permissionPanelHeight } from "./PermissionPrompt";
 import {
   engineSwitchGateRequest,
@@ -74,7 +75,10 @@ export function createDecisionController(options: DecisionControllerOptions) {
   const [bodyScrollOffset, setBodyScrollOffset] = createSignal(0);
   const [bodyExtent, setBodyExtent] = createSignal<{ total: number; visible: number }>({ total: 0, visible: 0 });
 
-  const bodyScrollMax = () => Math.max(0, bodyExtent().total - bodyExtent().visible);
+  const bodyScrollMax = () => {
+    const { total, visible } = bodyExtent();
+    return bodyScrollMaxOffset(total, visible);
+  };
   function scrollBody(delta: 1 | -1): void {
     setBodyScrollOffset((current) => Math.min(bodyScrollMax(), Math.max(0, current + delta)));
   }
@@ -82,10 +86,12 @@ export function createDecisionController(options: DecisionControllerOptions) {
     setBodyScrollOffset(edge === "home" ? 0 : bodyScrollMax());
   }
   /** Report the rendered body's line extent; the active prompt component
-   * calls this whenever its wrapped-line count or visible budget changes. */
+   * calls this whenever its wrapped-line count or visible budget changes.
+   * The offset re-clamps through the shared window primitive so the rule
+   * lives in one place. */
   function registerBodyExtent(total: number, visible: number): void {
     setBodyExtent({ total, visible });
-    setBodyScrollOffset((current) => Math.min(Math.max(0, total - visible), current));
+    setBodyScrollOffset(bodyScrollWindow(total, visible, bodyScrollOffset()).start);
   }
   function enterBodyZone(): void {
     // No offset reset here: re-entering the body zone mid-prompt keeps the
@@ -95,7 +101,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
   function leaveBodyZone(): void {
     setPromptZone("options");
   }
-  function isZoneToggleKey(key: TuiKeyEvent): boolean {
+  function isTabKey(key: TuiKeyEvent): boolean {
     return key.name === "tab";
   }
   /** Body-zone key routing, shared by the gate and question handlers: arrows
@@ -118,7 +124,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
       scrollBodyToEdge("end");
       return true;
     }
-    if (isZoneToggleKey(key) || key.name === "return" || key.name === "enter" || key.name === "escape") {
+    if (isTabKey(key) || key.name === "return" || key.name === "enter" || key.name === "escape") {
       leaveBodyZone();
       return true;
     }
@@ -133,26 +139,19 @@ export function createDecisionController(options: DecisionControllerOptions) {
     setBodyScrollOffset(0);
     setBodyExtent({ total: 0, visible: 0 });
   }
-  const setPendingGate: Setter<PendingGateState | null> = (value) => {
-    resetBodyZoneState();
-    return rawSetPendingGate(value);
-  };
-  const setPendingEngineSwitch: Setter<PendingEngineSwitchState | null> = (value) => {
-    resetBodyZoneState();
-    return rawSetPendingEngineSwitch(value);
-  };
-  const setPendingUserQuestion: Setter<PendingUserQuestionState | null> = (value) => {
-    resetBodyZoneState();
-    return rawSetPendingUserQuestion(value);
-  };
-  const setPendingPermission: Setter<PendingPermissionState | null> = (value) => {
-    resetBodyZoneState();
-    return rawSetPendingPermission(value);
-  };
-  const setPendingChildPermission: Setter<PermissionRequest | null> = (value) => {
-    resetBodyZoneState();
-    return rawSetPendingChildPermission(value);
-  };
+  function wrapPendingSetter<T>(raw: Setter<T | null>): Setter<T | null> {
+    // Solid's Setter is an overloaded generic; the assertion is confined to
+    // this one seam and the wrapper forwards every form unchanged.
+    return ((value: never) => {
+      resetBodyZoneState();
+      return raw(value);
+    }) as Setter<T | null>;
+  }
+  const setPendingGate = wrapPendingSetter(rawSetPendingGate);
+  const setPendingEngineSwitch = wrapPendingSetter(rawSetPendingEngineSwitch);
+  const setPendingUserQuestion = wrapPendingSetter(rawSetPendingUserQuestion);
+  const setPendingPermission = wrapPendingSetter(rawSetPendingPermission);
+  const setPendingChildPermission = wrapPendingSetter(rawSetPendingChildPermission);
 
   const activeGateRequest = createMemo(() => {
     const gate = pendingGate();
@@ -205,7 +204,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
     // for the gate family. Reject always owns its composer already;
     // confirm-summary has no note surface, so typing there stays swallowed.
     const typeToNote = !composerActive && gateFocus() === "confirm" && printableTextFromKey(key).length > 0;
-    if ((composerActive || typeToNote) && !isZoneToggleKey(key) && key.name !== "escape") {
+    if ((composerActive || typeToNote) && !isTabKey(key) && key.name !== "escape") {
       if (typeToNote) setGateFeedbackMode("confirm");
       const result = applyComposerKey(currentGateFeedbackState(), key);
       if (result.handled) {
@@ -224,7 +223,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
       moveGateFocus(1, focusOrder);
       return true;
     }
-    if (isZoneToggleKey(key)) {
+    if (isTabKey(key)) {
       enterBodyZone();
       return true;
     }
@@ -286,7 +285,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
       moveQuestionSelection(1, pending.question.options.length);
       return true;
     }
-    if (isZoneToggleKey(key)) {
+    if (isTabKey(key)) {
       enterBodyZone();
       return true;
     }
@@ -298,7 +297,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
   }
 
   function handleQuestionComposerKey(key: TuiKeyEvent, optionCount: number, header: string): boolean {
-    if (isZoneToggleKey(key)) {
+    if (isTabKey(key)) {
       enterBodyZone();
       return true;
     }

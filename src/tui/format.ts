@@ -13,9 +13,31 @@ export function bodyScrollWindow(total: number, visible: number, offset: number)
   folded: boolean;
 } {
   const shown = Math.max(1, visible);
-  const max = Math.max(0, total - shown);
-  const start = Math.max(0, Math.min(max, offset));
+  const start = Math.max(0, Math.min(bodyScrollMaxOffset(total, shown), offset));
   return { start, end: Math.min(total, start + shown), folded: total > shown };
+}
+
+/** The largest valid scroll offset for a body of `total` lines in a window
+ * of `visible` rows. The single clamp primitive behind the window helper and
+ * the decision controller's scroll-state transitions. */
+export function bodyScrollMaxOffset(total: number, visible: number): number {
+  return Math.max(0, total - Math.max(1, visible));
+}
+
+/** Full prompt-body window construction shared by the gate, permission, and
+ * question prompts: applies the budget, reserves the position-indicator row
+ * when folded, and clamps the offset. One home for the "indicator takes the
+ * last row when folded" invariant. */
+export function promptBodyWindow(lines: string[], budget: number, offset: number): {
+  lines: string[];
+  visible: number;
+  start: number;
+  end: number;
+  folded: boolean;
+} {
+  const capped = Math.max(1, budget);
+  const visible = Math.max(1, capped - (lines.length > capped ? 1 : 0));
+  return { lines, visible, ...bodyScrollWindow(lines.length, visible, offset) };
 }
 
 /** Live position row shown at the bottom of a prompt body while the body

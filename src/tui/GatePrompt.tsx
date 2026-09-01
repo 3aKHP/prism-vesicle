@@ -3,7 +3,7 @@ import { createEffect, For, Show } from "solid-js";
 import { TextAttributes } from "@3akhp/opentui-core";
 import { useRenderer } from "@3akhp/opentui-solid";
 import type { GateRequest, GateResolution } from "../core/gate/types";
-import { bodyReadAffordance, bodyScrollIndicator, bodyScrollWindow, displayWidth } from "./format";
+import { bodyReadAffordance, bodyScrollIndicator, displayWidth, promptBodyWindow } from "./format";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 
@@ -32,12 +32,12 @@ export type PromptZone = "options" | "body";
 export const gateOptionsZoneHint = "↑/↓ navigate · type to note · Enter select · Tab read · Esc cancel";
 export const promptBodyZoneHint = "↑/↓ scroll · Home/End top/bottom · Tab back";
 
-/** Column shown beside body text while the body zone owns the keyboard. The
- * wrap width reserves the column unconditionally so toggling zones never
- * reflows; while the options zone owns the keyboard the same column shows a
- * dim rail, so the body region stays visible as a focusable zone. */
-export const BODY_ZONE_GUTTER = "▌";
-export const BODY_ZONE_RAIL = "▏";
+/** Columns shown beside body text for the zone rail: the bright gutter while
+ * the body zone owns the keyboard, the dim rail while the options zone does.
+ * The wrap width reserves the column unconditionally so toggling zones never
+ * reflows. Private to the PromptBodyRow below — the glyphs are one pair. */
+const BODY_ZONE_GUTTER = "▌";
+const BODY_ZONE_RAIL = "▏";
 
 /** One rendered row of a decision-prompt body: the zone rail column plus the
  * wrapped text. Shared by the gate, permission, and question prompts
@@ -100,13 +100,11 @@ export function GatePrompt(props: GatePromptProps) {
   // The gutter column is reserved in every zone so toggling zones never
   // reflows the wrapped summary (#268 item 4).
   const summaryWrapWidth = () => Math.max(MIN_SUMMARY_WIDTH - 1, (props.width ?? renderer.width) - 5);
-  const summaryWindow = () => {
-    const lines = wrapGateSummary(renderGateSummaryText(props.gate.summary), summaryWrapWidth());
-    const budget = Math.max(1, props.maxSummaryLines ?? 4);
-    // When folded, the position indicator takes the last summary row.
-    const visible = Math.max(1, budget - (lines.length > budget ? 1 : 0));
-    return { lines, visible, ...bodyScrollWindow(lines.length, visible, props.bodyScrollOffset ?? 0) };
-  };
+  const summaryWindow = () => promptBodyWindow(
+    wrapGateSummary(renderGateSummaryText(props.gate.summary), summaryWrapWidth()),
+    props.maxSummaryLines ?? 4,
+    props.bodyScrollOffset ?? 0,
+  );
   createEffect(() => {
     const window = summaryWindow();
     props.onBodyExtent?.(window.lines.length, window.visible);
