@@ -202,8 +202,14 @@ export function createDecisionController(options: DecisionControllerOptions) {
     // on a focused confirm option arms its note composer and lands there —
     // the question prompt's "free answer accepts typing" behavior, adopted
     // for the gate family. Reject always owns its composer already;
-    // confirm-summary has no note surface, so typing there stays swallowed.
-    const typeToNote = !composerActive && gateFocus() === "confirm" && printableTextFromKey(key).length > 0;
+    // confirm-summary has no note surface, and permission prompts have none
+    // end to end (the panel renders only Reject's composer and
+    // permissionResolutionFromGate drops confirm feedback) — typing there
+    // stays swallowed so no invisible note can ride a later reject.
+    const typeToNote = !composerActive
+      && !permissionPromptActive()
+      && gateFocus() === "confirm"
+      && printableTextFromKey(key).length > 0;
     if ((composerActive || typeToNote) && !isTabKey(key) && key.name !== "escape") {
       if (typeToNote) setGateFeedbackMode("confirm");
       const result = applyComposerKey(currentGateFeedbackState(), key);
@@ -322,7 +328,7 @@ export function createDecisionController(options: DecisionControllerOptions) {
       // composer is live arms the focused option's note first (confirm only —
       // reject already owns its composer, confirm-summary has none).
       if (!gateComposerIsActive(gateFocus(), gateFeedbackMode())) {
-        if (gateFocus() !== "confirm") return true;
+        if (gateFocus() !== "confirm" || permissionPromptActive()) return true;
         setGateFeedbackMode("confirm");
       }
       applyGateFeedbackState(insertComposerText(currentGateFeedbackState(), text));
@@ -337,6 +343,10 @@ export function createDecisionController(options: DecisionControllerOptions) {
 
   function currentGateFocusOrder(): GateFocusTarget[] {
     return pendingEngineSwitch() ? engineSwitchGateFocusOrder : gateFocusOrder;
+  }
+
+  function permissionPromptActive(): boolean {
+    return Boolean(pendingPermission() || pendingChildPermission());
   }
 
   function moveGateFocus(delta: -1 | 1, order = currentGateFocusOrder()): void {

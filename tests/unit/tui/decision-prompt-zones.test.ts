@@ -24,7 +24,7 @@ describe("decision prompt body zones (#268 item 4): controller key routing", () 
         activeEngine: () => "etl" as never,
         permissionMode: () => "MOMENTUM" as never,
         setStatus: (value) => { if (typeof value === "string") statuses.push(value); },
-        submitPermission: () => { submits.push("permission"); },
+        submitPermission: (resolution) => { submits.push(`permission:${JSON.stringify(resolution)}`); },
         submitChildPermission: () => { submits.push("child-permission"); },
         submitEngineSwitch: () => { submits.push("engine-switch"); },
         submitGate: () => { submits.push("gate"); },
@@ -100,6 +100,50 @@ describe("decision prompt body zones (#268 item 4): controller key routing", () 
       expect(c.handlePaste("note text")).toBe(true);
       expect(c.gateFeedbackMode()).toBe("confirm");
       expect(c.gateFeedback()).toBe("note text");
+    } finally {
+      c.dispose();
+    }
+  });
+
+  test("typing on a permission confirm never arms an invisible note (allow drops it, later reject must not inherit it)", () => {
+    const c = buildController();
+    try {
+      c.setPendingGate(null);
+      c.setPendingPermission({
+        kind: "needs_permission",
+        sessionId: "s",
+        sessionPath: "p",
+        request: {
+          id: "p1",
+          sessionId: "s",
+          toolCallId: "t",
+          toolName: "shell_exec",
+          arguments: "ls",
+          permissionClass: "arbitrary_exec",
+          mode: "MOMENTUM",
+          createdAt: "2026-07-31T00:00:00.000Z",
+        },
+        remainingToolCalls: [],
+        assistantContent: "",
+        messages: [],
+        engine: "etl",
+      } as never);
+      // Typing on Allow is swallowed: no note surface exists end to end.
+      expect(c.handleGateKey(printable("please use utf8"))).toBe(false);
+      expect(c.gateFeedbackMode()).toBeNull();
+      expect(c.gateFeedback()).toBe("");
+      // Paste on Allow is claimed and dropped, not armed.
+      expect(c.handlePaste("pasted note")).toBe(true);
+      expect(c.gateFeedbackMode()).toBeNull();
+      expect(c.gateFeedback()).toBe("");
+      // Allow submits with no feedback; moving to Reject cannot inherit any.
+      expect(c.handleGateKey(key("enter"))).toBe(true);
+      c.setGateFocus("reject");
+      expect(c.handleGateKey(key("enter"))).toBe(true);
+      const allow = JSON.parse(c.submits[0]!.slice("permission:".length));
+      const reject = JSON.parse(c.submits[1]!.slice("permission:".length));
+      expect(allow).toEqual({ decision: "allow_once", resolvedAt: allow.resolvedAt });
+      expect(reject).toEqual({ decision: "reject", resolvedAt: reject.resolvedAt });
     } finally {
       c.dispose();
     }

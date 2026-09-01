@@ -63,7 +63,7 @@ export function createTurnResultController(options: ResultOptions) {
     setGateFocus("confirm");
     setGateFeedbackMode(null);
     clearGateFeedback();
-    appendPendingAssistant(result.assistantContent, `Stop gate pending: ${result.gate.gate}. Use ↑/↓ + Enter, or type into the amend box (Tab).`);
+    appendPendingAssistant(result.assistantContent, `Stop gate pending: ${result.gate.gate}. Use ↑/↓ + Enter, type to add a note, Tab to read the summary.`);
     setStatus(`gate pending: ${result.gate.gate}`);
   }
 

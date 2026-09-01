@@ -81,8 +81,8 @@ When permission approvals, stop gates, questions, and quality decisions arrive a
 | Key (options zone) | Action |
 |---|---|
 | ↑ / ↓ / Ctrl+P / Ctrl+N | Move focus between the options |
-| Type / paste directly | Expands the focused confirm option's note input (Reject always owns its input; Esc clears the note and returns to the options) |
-| Enter | Submit the focused option; a typed note is submitted with the decision |
+| Type / paste directly | Expands the focused confirm option's note input on stop-gate and engine-switch prompts; permission prompts carry notes only on Reject (always-on input). Esc clears the note and returns to the options |
+| Enter | Submit the focused option; a typed note is submitted with the decision (permission Allow takes no note) |
 | Tab / Shift+Tab | Switch to the body zone to read the folded summary / command detail |
 | Esc | Clear the note and move focus to Reject |
 

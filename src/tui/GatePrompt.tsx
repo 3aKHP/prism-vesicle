@@ -77,7 +77,7 @@ export type GateFocusTarget = "confirm" | "confirm-summary" | "reject";
 export const gateFocusOrder: GateFocusTarget[] = ["confirm", "reject"];
 export const engineSwitchGateFocusOrder: GateFocusTarget[] = ["confirm", "confirm-summary", "reject"];
 
-/** Reject always owns its visible composer; confirm requires Tab amend. */
+/** Reject always owns its visible composer; typing on confirm arms its note. */
 export function gateComposerIsActive(
   focused: GateFocusTarget,
   feedbackMode: GateFocusTarget | null,

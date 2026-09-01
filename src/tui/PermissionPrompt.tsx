@@ -10,7 +10,7 @@ import { bodyReadAffordance, bodyScrollIndicator, displayWidth, promptBodyWindow
 export const permissionPanelHeight = 14;
 /** Options-zone hint shared by rendering and tests (the gate and question
  * prompts export their zone hints from GatePrompt.tsx). */
-export const permissionOptionsZoneHint = "↑/↓ choose · Enter confirm · type note · Tab read · Esc reject";
+export const permissionOptionsZoneHint = "↑/↓ choose · Enter confirm · Tab read · Esc reject";
 const permissionContentRows = permissionPanelHeight - 2;
 const hostAuthorityWarning = "This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
 const skillScriptAuthorityWarning = "This selected Skill script uses structured arguments but may access files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
