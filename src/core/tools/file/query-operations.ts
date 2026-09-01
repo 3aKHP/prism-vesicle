@@ -1,6 +1,7 @@
 import { open, readFile, stat } from "node:fs/promises";
 import { normalizeAssetPath, type AssetResolver } from "../../runtime/assets";
 import { observeDirectory } from "../../project/directory-observation";
+import type { SkillMount } from "../../skills/mount";
 import { toProjectPath } from "./path-policy";
 
 export function sliceLines(content: string, startLine: number | undefined, endLine: number | undefined): string {
@@ -102,8 +103,7 @@ function normalizeLines(content: string): string[] {
 async function executeGrepScan(
   input: GrepScanInput,
   args: { matcher: (line: string) => boolean; limit: number; contextLines: number; outputMode: GrepOutputMode },
-): Promise<GrepResult> {
-  const { matcher, limit, contextLines, outputMode } = args;
+): Promise<GrepResult> {  const { matcher, limit, contextLines, outputMode } = args;
 
   if (outputMode === "files_with_matches") {
     const files: string[] = [];
@@ -199,14 +199,24 @@ function validateOutputMode(value: GrepOutputMode | undefined): GrepOutputMode {
   throw new Error("outputMode must be one of: content, files_with_matches, count.");
 }
 
+/** Shared argument validation and clamping for every grep surface. */
+async function runGrepScan(input: GrepScanInput, args: GrepArgs): Promise<GrepResult> {
+  if (!args.pattern) throw new Error("pattern must not be empty.");
+  const limit = clampPositiveInteger(args.maxMatches ?? 50, "maxMatches", 200);
+  const matcher = createMatcher(args.pattern, Boolean(args.regex), Boolean(args.caseSensitive));
+  return executeGrepScan(input, {
+    matcher,
+    limit,
+    contextLines: clampContextLines(args.contextLines),
+    outputMode: validateOutputMode(args.outputMode),
+  });
+}
+
 export async function grepFiles(
   rootDir: string,
   targetPath: string,
   args: GrepArgs,
 ): Promise<GrepResult> {
-  if (!args.pattern) throw new Error("pattern must not be empty.");
-  const limit = clampPositiveInteger(args.maxMatches ?? 50, "maxMatches", 200);
-  const matcher = createMatcher(args.pattern, Boolean(args.regex), Boolean(args.caseSensitive));
   const info = await stat(targetPath);
   const files = info.isFile()
     ? [targetPath]
@@ -219,13 +229,13 @@ export async function grepFiles(
         includeTypes: new Set(["file"]),
       })).entries.map((entry) => entry.absolutePath)
       : [];
-  return executeGrepScan(
+  return runGrepScan(
     {
       files,
       readText: (file) => readFile(file, "utf8"),
       toResultPath: (file) => toProjectPath(rootDir, file),
     },
-    { matcher, limit, contextLines: clampContextLines(args.contextLines), outputMode: validateOutputMode(args.outputMode) },
+    args,
   );
 }
 
@@ -234,22 +244,44 @@ export async function grepAssetFiles(
   requestedPath: string,
   args: GrepArgs,
 ): Promise<GrepResult> {
-  if (!args.pattern) throw new Error("pattern must not be empty.");
-  const limit = clampPositiveInteger(args.maxMatches ?? 50, "maxMatches", 200);
-  const matcher = createMatcher(args.pattern, Boolean(args.regex), Boolean(args.caseSensitive));
   const logicalPath = normalizeAssetPath(requestedPath, { allowRoot: true });
   const info = await assets.stat(logicalPath);
   const files = info.type === "file"
     ? [logicalPath]
     : await assets.listFiles(logicalPath, args.recursive ?? true);
-  return executeGrepScan(
+  return runGrepScan(
     {
       files,
       readText: (file) => assets.readText(file),
       toResultPath: (file) => file,
     },
-    { matcher, limit, contextLines: clampContextLines(args.contextLines), outputMode: validateOutputMode(args.outputMode) },
+    args,
   );
+}
+
+export type SkillGrepResult = GrepResult & { notes?: string[] };
+
+/**
+ * Grep the read-only mount of activated Skills (`skills/<name>/...` paths).
+ * The mount owns activation gating and the frozen file inventory; oversized
+ * resources are skipped and disclosed through `notes` so the bounded-output
+ * contract stays observable.
+ */
+export async function grepSkillFiles(
+  mount: SkillMount,
+  requestedPath: string,
+  args: GrepArgs,
+): Promise<SkillGrepResult> {
+  const { files, notes } = await mount.grepFiles(requestedPath, args.recursive ?? true);
+  const result = await runGrepScan(
+    {
+      files,
+      readText: (file) => mount.grepReadText(file),
+      toResultPath: (file) => file,
+    },
+    args,
+  );
+  return notes.length > 0 ? { ...result, notes } : result;
 }
 
 function createMatcher(pattern: string, regex: boolean, caseSensitive: boolean): (line: string) => boolean {

@@ -66,6 +66,7 @@ import {
   runSkillScriptToolDefinition,
 } from "../skills/tools";
 import type { ResolvedSkillCatalog } from "../skills/catalog";
+import { SkillMount } from "../skills/mount";
 
 export { executeFileTool, fileToolDefinitions, readWritableProjectText } from "./fs";
 export {
@@ -266,5 +267,13 @@ export async function executeHostTool(
   if (call.name === "web_map") return executeWebMapTool(call);
   if (call.name === "web_crawl") return executeWebCrawlTool(call);
   if (call.name === "web_research") return executeWebResearchTool(call);
-  return executeFileTool(rootDir, call, options);
+  // The session Skill mount is built from the same catalog + session the Skill
+  // tool executors gate on, so `skills/` file-tool paths and read_skill_resource
+  // always agree on which Skills are readable.
+  return executeFileTool(rootDir, call, {
+    ...options,
+    ...(options.skillCatalog && options.parentSessionId
+      ? { skillMount: new SkillMount(options.skillCatalog, options.parentSessionId) }
+      : {}),
+  });
 }

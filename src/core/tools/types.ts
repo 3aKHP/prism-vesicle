@@ -158,6 +158,12 @@ export type FileToolExecutionOptions = {
   beforeMutation?: (paths: string[]) => Promise<void>;
   /** Override the effective asset namespace, primarily for isolated runtimes/tests. */
   assets?: import("../runtime/assets").AssetResolver;
+  /**
+   * Read-only mount of activated Skills backing the `skills/` namespace,
+   * primarily for isolated runtimes/tests; the host wires the session mount.
+   * When absent, `skills/` paths fail closed with a clear error.
+   */
+  skillMount?: import("../skills/mount").SkillMount;
 };
 
 export type ToolDefinition = {

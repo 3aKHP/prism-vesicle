@@ -2,7 +2,7 @@ import type { ToolDefinition } from "../types";
 import { readableFileRoots } from "./path-policy";
 
 const readableRoots = readableFileRoots.join(", ");
-const guardedReadPath = `Project-relative path beginning with one of: ${readableRoots}. Do not use '.' or absolute paths; paths outside these logical roots are rejected. Project-root VESICLE*.md files are host-managed Persistent Instructions, not file-tool paths.`;
+const guardedReadPath = `Project-relative path beginning with one of: ${readableRoots}, or a skills/<name>/... path into the read-only mount of Skills activated in this session. Do not use '.' or absolute paths; other paths are rejected. Project-root VESICLE*.md files are host-managed Persistent Instructions, not file-tool paths.`;
 
 export const fileToolDefinitions: ToolDefinition[] = [
   {
