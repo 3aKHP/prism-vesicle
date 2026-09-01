@@ -695,6 +695,53 @@ describe("TUI input routing: workspace pending-decision strip (#268 item 3)", ()
     expect(pickerKeys).toEqual(["up"]);
     expect(workspaceKeys).toEqual([]);
   });
+
+  function stripPasteEvent(text: string) {
+    let prevented = 0;
+    const event = {
+      bytes: new TextEncoder().encode(text),
+      preventDefault: () => { prevented += 1; },
+    };
+    return { event, preventCount: () => prevented };
+  }
+
+  test("paste on the Workspace page with a suppressed pending question reaches the composer, not the hidden freeform", () => {
+    const decisionPastes: string[] = [];
+    const textPastes: string[] = [];
+    const { router } = stripRouter({
+      pendingUserQuestion: () => ({ question: { prompt: "pick", choices: [] } }) as never,
+      handleQuestionKey: () => false,
+      handleDecisionPaste: (text) => { decisionPastes.push(text); return true; },
+      insertComposerPaste: (text) => { textPastes.push(text); },
+      workspaceActive: () => true,
+      workspaceFocusRegion: () => "composer",
+      handleWorkspaceKey: () => false,
+    });
+    const paste = stripPasteEvent("pasted draft");
+    router.handlePaste(paste.event);
+    // The recorder claims everything it is asked; an empty list proves the
+    // hidden freeform's paste claim was never consulted.
+    expect(decisionPastes).toEqual([]);
+    expect(textPastes).toEqual(["pasted draft"]);
+    expect(paste.preventCount()).toBe(1);
+  });
+
+  test("paste still reaches the visible decision panel on the Chat page", () => {
+    const decisionPastes: string[] = [];
+    const textPastes: string[] = [];
+    const { router } = stripRouter({
+      pendingUserQuestion: () => ({ question: { prompt: "pick", choices: [] } }) as never,
+      handleQuestionKey: () => false,
+      handleDecisionPaste: (text) => { decisionPastes.push(text); return true; },
+      insertComposerPaste: (text) => { textPastes.push(text); },
+      workspaceActive: () => false,
+    });
+    const paste = stripPasteEvent("answer edit");
+    router.handlePaste(paste.event);
+    expect(decisionPastes).toEqual(["answer edit"]);
+    expect(textPastes).toEqual([]);
+    expect(paste.preventCount()).toBe(1);
+  });
 });
 
 function keyEvent(name: string, modifiers: {

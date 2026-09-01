@@ -301,11 +301,21 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     const text = new TextDecoder().decode(event.bytes);
-    if (options.handleDecisionPaste(text)) {
+    const mode = bottomSurfaceMode();
+    // The decision-prompt paste claim is valid only while the prompt's panel
+    // is actually visible. On the Workspace page the four decision prompts
+    // collapse to a pending strip (#268 item 3): their hidden sub-composers
+    // must not capture a paste meant for the workspace composer — the text
+    // would ride along with the eventual decision.
+    const decisionPanelVisible = mode.kind === "permission"
+      || mode.kind === "gate"
+      || mode.kind === "question"
+      || mode.kind === "quality";
+    if (decisionPanelVisible && options.handleDecisionPaste(text)) {
       event.preventDefault();
       return;
     }
-    if (bottomSurfaceMode().kind !== "composer") {
+    if (mode.kind !== "composer") {
       event.preventDefault();
       return;
     }
