@@ -16,7 +16,7 @@ export async function executeFileTool(
   const assets = options.assets ?? createAssetResolver(rootDir);
   try {
     const result = readToolNames.has(call.name)
-      ? await executeFileReadOperation(rootDir, call, assets)
+      ? await executeFileReadOperation(rootDir, call, assets, options.skillMount)
       : await executeFileMutationOperation(rootDir, call, options, assets);
     return result;
   } catch (error) {
