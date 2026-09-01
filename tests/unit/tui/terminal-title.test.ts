@@ -39,6 +39,15 @@ describe("terminal title controller", () => {
     expect(displayWidth(fixture.titles.at(-1) ?? "")).toBeLessThanOrEqual(120);
   });
 
+  // The status slot is documented as one column (docs/dev/TUI.md); #263 showed
+  // tab-strip jitter comes from unstable advance, so guard the glyph widths
+  // themselves rather than only the composed strings.
+  test("all phase markers keep a one-column advance", () => {
+    for (const glyph of ["■", "▣", "◰", "◳", "◲", "◱"]) {
+      expect(displayWidth(glyph)).toBe(1);
+    }
+  });
+
   test("projects durable titles directly and falls back to a safe project basename", () => {
     const fixture = writerFixture();
     const controller = createTerminalTitleController({ writer: fixture.writer, isTTY: true });

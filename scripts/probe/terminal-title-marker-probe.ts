@@ -113,7 +113,12 @@ function sleep(ms: number): Promise<void> {
 
 function describeFrames(frames: string[]): string {
   return frames
-    .map((frame) => `${frame} U+${frame.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0")}`)
+    .map((frame) => {
+      const points = Array.from(frame)
+        .map((char) => `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`)
+        .join(" ");
+      return `${frame} ${points}`;
+    })
     .join(" → ");
 }
 
