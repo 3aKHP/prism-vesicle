@@ -49,10 +49,20 @@ export type ComposerControllerOptions = {
   reportError: (error: unknown) => void;
   inputQueue: InputQueue;
   submitCommand: (value: string) => boolean;
+  /** True while a host decision prompt (permission/gate/question/quality)
+   * awaits the user. The composer stays editable for drafting, but Enter
+   * neither sends nor queues — the pending decision owns the next provider
+   * request (#268 item 3, Workspace pending strip). */
+  hostDecisionPending?: () => boolean;
   submitPrompt: (value: string, images?: VesicleImageAttachment[], elements?: ComposerElement[]) => Promise<void>;
   abortTurn: () => boolean;
   openRewind: () => Promise<void>;
 };
+
+/** Status shown when Enter is refused because a decision prompt is pending.
+ * The app-level slash-command guard reuses the same string so both refusal
+ * paths read identically. */
+export const decisionPendingSubmitStatus = "decision pending · Ctrl+O to answer · draft kept";
 
 export function createComposerController(options: ComposerControllerOptions) {
   const [inputValue, setInputValue] = createSignal("");
@@ -138,6 +148,13 @@ export function createComposerController(options: ComposerControllerOptions) {
 
   function submitComposerAction(value: string, elements: ComposerElement[]): void {
     if (value.trim().length === 0) return;
+    // Before the slash and busy branches, and before clear(): a pending host
+    // decision owns the turn, so neither a message nor a command may start
+    // something new; the draft stays for after the prompt is answered.
+    if (options.hostDecisionPending?.()) {
+      options.setStatus(decisionPendingSubmitStatus);
+      return;
+    }
     const images = imagesForElements(elements);
     if (images.length === 0 && value.trimStart().startsWith("/")) {
       if (options.submitCommand(value.trim())) {

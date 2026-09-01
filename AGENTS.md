@@ -117,7 +117,7 @@ These are non-negotiable boundaries; start with `docs/dev/ARCHITECTURE.md` and f
 - One interactive TUI run should keep one active session until the user starts or resumes another session.
 - Session JSONL records are append-only and should preserve user, assistant, tool, provider/model, validation, and gate information needed for replay.
 - Provider/model switching and artifact workbench commands are host actions; they should not call the provider unless the command explicitly starts a revision prompt.
-- Keep the TUI operational and readable at 80 columns. Gate and picker panels own the bottom area while active.
+- Keep the TUI operational and readable at 80 columns. Picker panels own the bottom area while active. Decision prompts (permission/gate/question/quality) own the bottom on the Chat page; on the Workspace page they collapse to a one-line pending strip and `Ctrl+O` carries the user to the full panel — page switching outranks every bottom-surface modal.
 
 ## Verification And Documentation Sweep
 
