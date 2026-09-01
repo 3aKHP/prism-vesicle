@@ -136,8 +136,10 @@ export async function initializeSessionIdentity(
   const instructional = await composeSystemPromptWithInstructions(engine, engineAssets.systemPrompt, rootDir);
   let systemPrompt = instructional.systemPrompt;
 
-  const rootFailures = await ensureProjectRoots(rootDir);
+  // Session store first (it owns .vesicle), then the writable roots — the same
+  // order as bootstrapTurn's fresh-session branch (#291).
   const session = await createSessionStore(rootDir);
+  const rootFailures = await ensureProjectRoots(rootDir);
 
   const frozenSkillCatalog = await resolveSessionSkillCatalog(
     rootDir,

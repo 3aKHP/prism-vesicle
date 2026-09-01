@@ -1,9 +1,7 @@
-import { createRoot, createSignal } from "solid-js";
+import { createRoot } from "solid-js";
 import { describe, expect, test } from "bun:test";
-import { createAgentProcessController } from "../../../src/tui/agent-process-controller";
 import type { AgentLoopEvent } from "../../../src/core/agent-loop/run";
-import type { ActivityEntry, AgentCardState, Message } from "../../../src/tui/types";
-import type { BackgroundProcessState } from "../../../src/core/process/manager";
+import { agentProcessControllerHarness } from "./support/agent-process-controller-harness";
 
 type RootsWarningEvent = Extract<AgentLoopEvent, { type: "project_roots_warning" }>;
 
@@ -11,41 +9,9 @@ function rootsWarningEvent(failures: RootsWarningEvent["failures"], sessionId = 
   return { type: "project_roots_warning", sessionId, failures };
 }
 
-function harness(sessionId = "session-1") {
-  const [messages, setMessages] = createSignal<Message[]>([]);
-  const [activity, setActivity] = createSignal<ActivityEntry[]>([]);
-  const [background, setBackground] = createSignal<BackgroundProcessState[]>([]);
-  const [cards, setCards] = createSignal<AgentCardState[]>([]);
-  const [status, setStatus] = createSignal("");
-  const [streamingAssistant, setStreamingAssistant] = createSignal("");
-  const [streamingReasoning, setStreamingReasoning] = createSignal("");
-  const [lastToolContent, setLastToolContent] = createSignal<string | null>(null);
-  const controller = createAgentProcessController({
-    sessionId: () => sessionId,
-    busy: () => false,
-    activeEngine: () => "runtime",
-    activeModel: () => "test-model",
-    backgroundProcesses: background,
-    setBackgroundProcesses: setBackground,
-    setAgentCards: setCards,
-    setMessages,
-    setActivity,
-    setStatus,
-    setStreamingAssistant,
-    setStreamingReasoning,
-    setLastDisplayedToolAssistantContent: setLastToolContent,
-    markTurnSawResponse: () => undefined,
-    recordResponseUsage: () => undefined,
-    recordIndependentAgentUsage: () => undefined,
-    assetDriftKey: () => undefined,
-    setAssetDriftKey: () => undefined,
-  });
-  return { controller, messages, activity, status, background, cards, streamingAssistant, streamingReasoning, lastToolContent };
-}
-
 describe("project roots warning notice", () => {
   test("appends one combined system message naming each failed root and records activity", () => createRoot((dispose) => {
-    const { controller, messages, activity } = harness();
+    const { controller, messages, activity } = agentProcessControllerHarness();
 
     controller.handleAgentEvent(rootsWarningEvent([
       { root: "workspace", message: "EEXIST: file exists" },
@@ -61,7 +27,7 @@ describe("project roots warning notice", () => {
   }));
 
   test("ignores an empty failure list", () => createRoot((dispose) => {
-    const { controller, messages, activity } = harness();
+    const { controller, messages, activity } = agentProcessControllerHarness();
 
     controller.handleAgentEvent(rootsWarningEvent([]));
 
@@ -71,7 +37,7 @@ describe("project roots warning notice", () => {
   }));
 
   test("does not repeat the notice for the same session", () => createRoot((dispose) => {
-    const { controller, messages } = harness();
+    const { controller, messages } = agentProcessControllerHarness();
 
     controller.handleAgentEvent(rootsWarningEvent([{ root: "workspace", message: "EEXIST" }]));
     controller.handleAgentEvent(rootsWarningEvent([{ root: "workspace", message: "EEXIST" }]));

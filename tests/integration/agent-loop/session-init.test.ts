@@ -198,7 +198,8 @@ describe("initializeSessionIdentity (issue #131)", () => {
     // diagnostics and the first provider round of the same bootstrap.
     expect(types.indexOf("instruction_warning")).toBeGreaterThan(rootsIndex);
     expect(types.indexOf("provider_request")).toBeGreaterThan(rootsIndex);
-    const rootsEvent = events.find((event) => event.type === "project_roots_warning");
-    expect(rootsEvent?.type === "project_roots_warning" && rootsEvent.failures.map((failure) => failure.root)).toContain("novels");
+    const rootsEvent = events.find((event): event is Extract<AgentLoopEvent, { type: "project_roots_warning" }> =>
+      event.type === "project_roots_warning");
+    expect(rootsEvent?.failures.map((failure) => failure.root)).toContain("novels");
   });
 });
