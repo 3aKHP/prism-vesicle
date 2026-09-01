@@ -41,7 +41,9 @@ export const BODY_ZONE_RAIL = "▏";
 
 /** One rendered row of a decision-prompt body: the zone rail column plus the
  * wrapped text. Shared by the gate, permission, and question prompts
- * (#268 item 4). */
+ * (#268 item 4). The text element must NOT claim width="100%" — in a row
+ * box that would start it at column 0 and paint over the rail column
+ * (visible only on blank lines, whose spaces paint nothing). */
 export function PromptBodyRow(props: { line: string; zone?: PromptZone; fg?: string }) {
   const inBodyZone = () => props.zone === "body";
   return (
@@ -51,7 +53,7 @@ export function PromptBodyRow(props: { line: string; zone?: PromptZone; fg?: str
         fg={inBodyZone() ? palette.brand : palette.textDim}
         wrapMode="none"
       />
-      <ThemedText content={props.line || " "} fg={props.fg ?? palette.textPrimary} width="100%" wrapMode="none" />
+      <ThemedText content={props.line || " "} fg={props.fg ?? palette.textPrimary} wrapMode="none" />
     </box>
   );
 }
