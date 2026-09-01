@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createRoot } from "solid-js";
 import { createDecisionController } from "../../../src/tui/decision-controller";
-import { bodyScrollIndicator, bodyScrollWindow } from "../../../src/tui/format";
+import { bodyReadAffordance, bodyScrollIndicator, bodyScrollWindow } from "../../../src/tui/format";
 import type { TuiKeyEvent } from "../../../src/tui/decision-interaction";
 
 function key(name: string, extras: Partial<TuiKeyEvent> = {}): TuiKeyEvent {
@@ -168,7 +168,9 @@ describe("decision prompt body zones: scroll window math", () => {
     expect(bodyScrollWindow(3, 4, 1)).toEqual({ start: 0, end: 3, folded: false });
   });
 
-  test("the position indicator names the visible slice", () => {
-    expect(bodyScrollIndicator(4, 8, 30, 80)).toBe(" … lines 5-8 of 30");
+  test("the position indicator and the read affordance name their state", () => {
+    expect(bodyScrollIndicator(4, 8, 30, 80)).toBe("▾ lines 5-8 of 30");
+    expect(bodyReadAffordance(43, 80)).toBe("▸ 43 lines folded · Tab to read");
+    expect(bodyReadAffordance(1, 80)).toBe("▸ 1 line folded · Tab to read");
   });
 });

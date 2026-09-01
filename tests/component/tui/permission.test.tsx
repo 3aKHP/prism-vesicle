@@ -111,7 +111,7 @@ describe("tui: permission surfaces", () => {
     const frame = setup.captureCharFrame();
     setup.renderer.destroy();
 
-    expect(frame).toContain("… lines");
+    expect(frame).toContain("lines folded · Tab to read");
     expect(frame).toContain("Allow once");
     expect(frame).toContain("Reject");
     expect(frame).toContain("Esc reject");
@@ -157,7 +157,7 @@ describe("tui: permission surfaces", () => {
     setup.renderer.destroy();
 
     expect(frame).toContain("Permission · HOST COMMAND");
-    expect(frame).toContain("… lines");
+    expect(frame).toContain("lines folded · Tab to read");
     expect(frame).toContain("Allow once");
     expect(frame).toContain("Reject");
     expect(frame).toContain("Esc reject");

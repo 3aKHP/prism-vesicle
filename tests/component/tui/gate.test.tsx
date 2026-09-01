@@ -50,7 +50,7 @@ describe("tui: gate surfaces", () => {
     setup.renderer.destroy();
 
     const lines = frame.split("\n");
-    const ellipsisLine = lines.findIndex((line) => line.includes("… lines"));
+    const ellipsisLine = lines.findIndex((line) => line.includes("lines folded · Tab to read"));
     const confirmLine = lines.findIndex((line) => line.includes("1. Confirm"));
     const rejectLine = lines.findIndex((line) => line.includes(">2. Reject"));
     const inputLine = lines.findIndex((line) => line.includes("✎"));

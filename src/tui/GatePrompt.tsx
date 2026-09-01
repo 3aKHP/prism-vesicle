@@ -3,7 +3,7 @@ import { createEffect, For, Show } from "solid-js";
 import { TextAttributes } from "@3akhp/opentui-core";
 import { useRenderer } from "@3akhp/opentui-solid";
 import type { GateRequest, GateResolution } from "../core/gate/types";
-import { bodyScrollIndicator, bodyScrollWindow, displayWidth } from "./format";
+import { bodyReadAffordance, bodyScrollIndicator, bodyScrollWindow, displayWidth } from "./format";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 
@@ -33,8 +33,28 @@ export const gateOptionsZoneHint = "↑/↓ navigate · type to note · Enter se
 export const promptBodyZoneHint = "↑/↓ scroll · Home/End top/bottom · Tab back";
 
 /** Column shown beside body text while the body zone owns the keyboard. The
- * wrap width reserves it unconditionally so toggling zones never reflows. */
+ * wrap width reserves the column unconditionally so toggling zones never
+ * reflows; while the options zone owns the keyboard the same column shows a
+ * dim rail, so the body region stays visible as a focusable zone. */
 export const BODY_ZONE_GUTTER = "▌";
+export const BODY_ZONE_RAIL = "▏";
+
+/** One rendered row of a decision-prompt body: the zone rail column plus the
+ * wrapped text. Shared by the gate, permission, and question prompts
+ * (#268 item 4). */
+export function PromptBodyRow(props: { line: string; zone?: PromptZone; fg?: string }) {
+  const inBodyZone = () => props.zone === "body";
+  return (
+    <box height={1} flexDirection="row">
+      <ThemedText
+        content={inBodyZone() ? BODY_ZONE_GUTTER : BODY_ZONE_RAIL}
+        fg={inBodyZone() ? palette.brand : palette.textDim}
+        wrapMode="none"
+      />
+      <ThemedText content={props.line || " "} fg={props.fg ?? palette.textPrimary} width="100%" wrapMode="none" />
+    </box>
+  );
+}
 
 export type GatePromptProps = {
   gate: GateRequest;
@@ -112,31 +132,24 @@ export function GatePrompt(props: GatePromptProps) {
       </box>
       <box flexDirection="column">
         <For each={summaryWindow().lines.slice(summaryWindow().start, summaryWindow().end)}>
-          {(line) => (
-            <box height={1}>
-              <ThemedText
-                content={`${props.zone === "body" ? BODY_ZONE_GUTTER : " "}${line || " "}`}
-                fg={palette.textPrimary}
-                width="100%"
-                wrapMode="none"
-              />
-            </box>
-          )}
+          {(line) => <PromptBodyRow line={line} zone={props.zone} />}
         </For>
         <Show when={summaryWindow().folded} fallback={<box height={0} />}>
-          <box height={1}>
-            <ThemedText
-              content={bodyScrollIndicator(
-                summaryWindow().start,
-                summaryWindow().start + summaryWindow().visible,
-                summaryWindow().lines.length,
-                Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 4),
-              )}
-              fg={palette.textDim}
-              width="100%"
-              wrapMode="none"
-            />
-          </box>
+          <PromptBodyRow
+            zone={props.zone}
+            fg={props.zone === "body" ? palette.textPrimary : palette.gateAccent}
+            line={props.zone === "body"
+              ? bodyScrollIndicator(
+                  summaryWindow().start,
+                  summaryWindow().start + summaryWindow().visible,
+                  summaryWindow().lines.length,
+                  Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 4),
+                )
+              : bodyReadAffordance(
+                  summaryWindow().lines.length - summaryWindow().visible,
+                  Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 4),
+                )}
+          />
         </Show>
       </box>
 

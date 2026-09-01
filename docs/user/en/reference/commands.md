@@ -86,11 +86,11 @@ When permission approvals, stop gates, questions, and quality decisions arrive a
 
 | Key (body zone) | Action |
 |---|---|
-| ↑ / ↓ | Scroll the folded body line by line; a position indicator (e.g. `… lines 5-8 of 30`) marks the window |
+| ↑ / ↓ | Scroll the folded body line by line; a bright position row (e.g. `▾ lines 5-8 of 30`) marks the window |
 | Home / End | Jump to the top / bottom |
 | Tab / Enter / Esc | Return to the options zone (Enter in the body zone **never** submits) |
 
-Question prompts wrap their question text with the same budget and scrolling; the quality-decision panel is a fixed option list with no body zone. The panel hint line shows the keys available in the current zone.
+Question prompts wrap their question text with the same budget and scrolling; the quality-decision panel is a fixed option list with no body zone. While the body is folded the panel shows an accent-colored `▸ N lines folded · Tab to read` affordance row, and the rail column beside the body lights up in the brand color when the body zone holds the keyboard and stays dim while the options do — the focused zone is visible at a glance. The panel hint line shows the keys available in the current zone.
 
 ## Workspace page keys
 

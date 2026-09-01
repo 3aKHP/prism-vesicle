@@ -18,10 +18,18 @@ export function bodyScrollWindow(total: number, visible: number, offset: number)
   return { start, end: Math.min(total, start + shown), folded: total > shown };
 }
 
-/** Position indicator line rendered as the last row of a folded prompt body
- * while the body zone can scroll it. */
+/** Live position row shown at the bottom of a prompt body while the body
+ * zone scrolls it (#268 item 4). Rendered bright — it is the reading
+ * state's focal line. */
 export function bodyScrollIndicator(start: number, end: number, total: number, width: number): string {
-  return truncateLine(` … lines ${start + 1}-${end} of ${total}`, width);
+  return truncateLine(`▾ lines ${start + 1}-${end} of ${total}`, width);
+}
+
+/** Affordance row shown while the body is folded and the options zone owns
+ * the keyboard: brighter than a hint line, names the hidden line count and
+ * the key that reveals it. */
+export function bodyReadAffordance(hidden: number, width: number): string {
+  return truncateLine(`▸ ${hidden} line${hidden === 1 ? "" : "s"} folded · Tab to read`, width);
 }
 
 export function truncateLine(value: string, width: number): string {

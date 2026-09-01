@@ -2,8 +2,8 @@ import { ThemedText } from "./theme-text";
 import { createEffect, For, Show } from "solid-js";
 import { TextAttributes } from "@3akhp/opentui-core";
 import type { UserQuestionOption, UserQuestionRequest } from "../core/user-question/types";
-import { BODY_ZONE_GUTTER, type PromptZone, promptBodyZoneHint } from "./GatePrompt";
-import { bodyScrollIndicator, bodyScrollWindow, truncateLine, wrapDisplayLines } from "./format";
+import { type PromptZone, PromptBodyRow, promptBodyZoneHint } from "./GatePrompt";
+import { bodyReadAffordance, bodyScrollIndicator, bodyScrollWindow, truncateLine, wrapDisplayLines } from "./format";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 
@@ -66,31 +66,21 @@ export function QuestionPrompt(props: QuestionPromptProps) {
       </box>
       <box flexDirection="column">
         <For each={questionWindow().lines.slice(questionWindow().start, questionWindow().end)}>
-          {(line) => (
-            <box height={1}>
-              <ThemedText
-                content={`${props.zone === "body" ? BODY_ZONE_GUTTER : " "}${line || " "}`}
-                fg={palette.textPrimary}
-                width="100%"
-                wrapMode="none"
-              />
-            </box>
-          )}
+          {(line) => <PromptBodyRow line={line} zone={props.zone} />}
         </For>
         <Show when={questionWindow().folded} fallback={<box height={0} />}>
-          <box height={1}>
-            <ThemedText
-              content={bodyScrollIndicator(
-                questionWindow().start,
-                questionWindow().start + questionWindow().visible,
-                questionWindow().lines.length,
-                width(),
-              )}
-              fg={palette.textDim}
-              width="100%"
-              wrapMode="none"
-            />
-          </box>
+          <PromptBodyRow
+            zone={props.zone}
+            fg={props.zone === "body" ? palette.textPrimary : palette.gateAccent}
+            line={props.zone === "body"
+              ? bodyScrollIndicator(
+                  questionWindow().start,
+                  questionWindow().start + questionWindow().visible,
+                  questionWindow().lines.length,
+                  width(),
+                )
+              : bodyReadAffordance(questionWindow().lines.length - questionWindow().visible, width())}
+          />
         </Show>
       </box>
       <For each={rows()}>

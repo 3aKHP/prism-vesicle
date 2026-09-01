@@ -1,11 +1,11 @@
 import { ThemedText } from "./theme-text";
 import { createEffect, For, Show } from "solid-js";
 import type { PermissionRequest } from "../core/permissions";
-import { BODY_ZONE_GUTTER, type GateFocusTarget, type PromptZone, promptBodyZoneHint } from "./GatePrompt";
+import { type GateFocusTarget, type PromptZone, PromptBodyRow, promptBodyZoneHint } from "./GatePrompt";
 import { palette } from "./theme";
 import { PromptComposer } from "./PromptComposer";
 import { processShellDisplay } from "../core/process/runtime";
-import { bodyScrollIndicator, bodyScrollWindow, displayWidth, truncateLine, visibleDisplayLines, wrapDisplayLines } from "./format";
+import { bodyReadAffordance, bodyScrollIndicator, bodyScrollWindow, displayWidth, truncateLine, visibleDisplayLines, wrapDisplayLines } from "./format";
 
 export const permissionPanelHeight = 14;
 const permissionContentRows = permissionPanelHeight - 2;
@@ -107,18 +107,20 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       ) : null}
       <For each={warningLines()}>{(line) => <ThemedText content={line} fg={kind() === "host-command" ? palette.error : palette.gateAccent} wrapMode="none" />}</For>
       <For each={detailWindow().lines.slice(detailWindow().start, detailWindow().end)}>
-        {(line) => <ThemedText content={`${props.zone === "body" ? BODY_ZONE_GUTTER : " "}${line || " "}`} fg={palette.textPrimary} wrapMode="none" />}
+        {(line) => <PromptBodyRow line={line} zone={props.zone} />}
       </For>
       <Show when={detailWindow().folded} fallback={<box height={0} />}>
-        <ThemedText
-          content={bodyScrollIndicator(
-            detailWindow().start,
-            detailWindow().start + detailWindow().visible,
-            detailWindow().lines.length,
-            contentWidth(),
-          )}
-          fg={palette.textDim}
-          wrapMode="none"
+        <PromptBodyRow
+          zone={props.zone}
+          fg={props.zone === "body" ? palette.textPrimary : palette.gateAccent}
+          line={props.zone === "body"
+            ? bodyScrollIndicator(
+                detailWindow().start,
+                detailWindow().start + detailWindow().visible,
+                detailWindow().lines.length,
+                contentWidth(),
+              )
+            : bodyReadAffordance(detailWindow().lines.length - detailWindow().visible, contentWidth())}
         />
       </Show>
       <ThemedText content={`${props.focused === "confirm" ? "›" : " "} Allow once`} fg={props.focused === "confirm" ? palette.success : palette.textDim} wrapMode="none" />
