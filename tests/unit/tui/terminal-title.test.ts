@@ -44,11 +44,11 @@ describe("terminal title controller", () => {
     const controller = createTerminalTitleController({ writer: fixture.writer, isTTY: true });
 
     controller.setSession("etl", "Demo");
-    expect(fixture.titles).toEqual(["· Demo"]);
+    expect(fixture.titles).toEqual(["■ Demo"]);
     controller.setSession("etl", undefined, "my-project");
-    expect(fixture.titles.at(-1)).toBe("· Prism Vesicle · my-project");
+    expect(fixture.titles.at(-1)).toBe("■ Prism Vesicle · my-project");
     controller.setSession("stage");
-    expect(fixture.titles.at(-1)).toBe("· Prism Vesicle · stage");
+    expect(fixture.titles.at(-1)).toBe("■ Prism Vesicle · stage");
   });
 
   test("extracts only the final project path segment for fallback titles", () => {
@@ -56,12 +56,12 @@ describe("terminal title controller", () => {
     const controller = createTerminalTitleController({ writer: fixture.writer, isTTY: true });
 
     controller.setSession("etl", undefined, "/home/alice/private/project");
-    expect(fixture.titles.at(-1)).toBe("· Prism Vesicle · project");
+    expect(fixture.titles.at(-1)).toBe("■ Prism Vesicle · project");
     controller.clear();
     const windows = writerFixture();
     const windowsController = createTerminalTitleController({ writer: windows.writer, isTTY: true });
     windowsController.setSession("etl", undefined, "C:\\Users\\alice\\project");
-    expect(windows.titles.at(-1)).toBe("· Prism Vesicle · project");
+    expect(windows.titles.at(-1)).toBe("■ Prism Vesicle · project");
   });
 
   test("attaches a renderer after the session context is known", () => {
@@ -70,7 +70,7 @@ describe("terminal title controller", () => {
 
     controller.setSession("etl", "Demo");
     controller.attach(fixture.writer);
-    expect(fixture.titles).toEqual(["· Demo"]);
+    expect(fixture.titles).toEqual(["■ Demo"]);
   });
 
   test("restarts working animation when the renderer writer is replaced", () => {
@@ -99,7 +99,7 @@ describe("terminal title controller", () => {
 
     expect(intervals).toBe(2);
     expect(cleared).toBe(1);
-    expect(first.titles).toEqual(["· Demo", "◰ Demo"]);
+    expect(first.titles).toEqual(["■ Demo", "◰ Demo"]);
     expect(second.titles).toEqual(["◰ Demo", "◳ Demo"]);
   });
 
@@ -132,10 +132,10 @@ describe("terminal title controller", () => {
     tick?.();
     expect(fixture.titles.at(-1)).toBe("◰ Demo");
     controller.setPhase("input-required");
-    expect(fixture.titles.at(-1)).toBe("! Demo");
+    expect(fixture.titles.at(-1)).toBe("▣ Demo");
     expect(cleared).toBe(1);
     controller.setPhase("idle");
-    expect(fixture.titles.at(-1)).toBe("· Demo");
+    expect(fixture.titles.at(-1)).toBe("■ Demo");
   });
 
   test("reduced motion freezes working at the neutral frame", () => {
@@ -166,9 +166,9 @@ describe("terminal title controller", () => {
 
     controller.setSession("etl", "Demo");
     controller.setSession("etl", "Demo");
-    expect(fixture.titles).toEqual(["· Demo"]);
+    expect(fixture.titles).toEqual(["■ Demo"]);
     controller.reproject();
-    expect(fixture.titles).toEqual(["· Demo", "· Demo"]);
+    expect(fixture.titles).toEqual(["■ Demo", "■ Demo"]);
   });
 
   test("does not reset or rewrite an unchanged working phase", () => {
@@ -190,7 +190,7 @@ describe("terminal title controller", () => {
     controller.setPhase("working");
     tick?.();
     controller.setPhase("working");
-    expect(fixture.titles).toEqual(["· Demo", "◰ Demo", "◳ Demo"]);
+    expect(fixture.titles).toEqual(["■ Demo", "◰ Demo", "◳ Demo"]);
   });
 
   test("disable is a hard no-write boundary, including shutdown cleanup", () => {
@@ -240,7 +240,7 @@ describe("terminal title controller", () => {
     controller.setPhase("working");
     controller.reproject();
 
-    expect(fixture.titles).toEqual(["· Demo", ""]);
+    expect(fixture.titles).toEqual(["■ Demo", ""]);
   });
 
   test("auto mode is disabled off TTY and setup uses the fixed title", () => {
@@ -275,7 +275,7 @@ describe("terminal title controller", () => {
     controller.setPhase("working");
     controller.setSetup();
     controller.setSession("etl", "Next");
-    expect(fixture.titles.at(-1)).toBe("· Next");
+    expect(fixture.titles.at(-1)).toBe("■ Next");
     expect(intervals).toBe(1);
   });
 

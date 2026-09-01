@@ -93,7 +93,7 @@ async function main(): Promise<void> {
     await Bun.sleep(1200);
     type("x");
     await Bun.sleep(250);
-    const idle = await waitFor(() => hasOscTitle(raw, "· Prism Vesicle · project"));
+    const idle = await waitFor(() => hasOscTitle(raw, "■ Prism Vesicle · project"));
     type("ping");
     await Bun.sleep(60);
     type("\r");
