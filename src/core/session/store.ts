@@ -28,7 +28,7 @@ import { projectSessionHistory, projectSessionHostState } from "./history-projec
 import { repairProviderHistory } from "./provider-history-repair";
 import { findPendingQualityDecision, findPendingQualityRewrite, findQualityEvents, findQualityWarnings } from "./quality-recovery";
 import { recoverSessionInteractions, type PendingDelegationRetry } from "./interaction-recovery";
-import { projectSessionTitle, projectSessionTitleUsage, type SessionTitle } from "./title";
+import { projectSessionTitle, projectSessionTitleUsage, type SessionTitle } from "./title-projection";
 
 export { buildActiveSessionBranch } from "./record-model";
 export type { SessionRecord, SessionRole } from "./record-model";
@@ -45,12 +45,15 @@ export {
   projectSessionTitleGeneration,
   projectSessionTitleUsage,
   sanitizeSessionTitle,
+} from "./title-projection";
+export {
   generateSessionTitle,
   maybeGenerateSessionTitle,
   appendSessionTitle,
   resetSessionTitleGeneration,
 } from "./title";
-export type { SessionTitle, SessionTitleSource, SessionTitleGenerationState, TitleGenerationResult } from "./title";
+export type { SessionTitle, SessionTitleSource, SessionTitleGenerationState } from "./title-projection";
+export type { TitleGenerationResult } from "./title";
 export {
   bindExecutionRound,
   clearExecutionRound,
