@@ -37,8 +37,10 @@ export function createAgentProcessController(options: AgentProcessControllerOpti
   // Track diagnostic state per session and Engine. Empty states are retained so
   // a target that is fixed and later breaks in the same way re-notifies.
   const instructionWarningFingerprints = new Map<string, string>();
-  // project_roots_warning is a once-per-session-birth notice; the key guards
-  // against a duplicate if a fresh-session bootstrap is ever retried.
+  // project_roots_warning is a once-per-session-birth notice. The producer
+  // (bootstrapTurn's fresh-session branch) already guards empties and fires
+  // once per new session id; this Set is deliberate defense for a retried or
+  // duplicated bootstrap emission, not the primary ordering mechanism.
   const rootsWarningNotifiedSessions = new Set<string>();
 
   function recordActivity(entry: ActivityEntry): void {

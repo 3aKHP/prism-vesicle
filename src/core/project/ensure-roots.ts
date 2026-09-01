@@ -29,8 +29,8 @@ export async function ensureProjectRoots(rootDir: string): Promise<RootCreationF
   return failures;
 }
 
-/** Shared warning phrasing for every surface that reports creation failures. */
-export function formatRootCreationFailure(failure: RootCreationFailure): string {
+/** Shared per-failure phrasing; file-local until a second surface needs it. */
+function formatRootCreationFailure(failure: RootCreationFailure): string {
   return `Project root "${failure.root}" could not be created (${failure.message}); writes under it will fail until the path is fixed.`;
 }
 

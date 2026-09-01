@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ensureProjectRoots, formatRootCreationFailure } from "../../../../src/core/project/ensure-roots";
+import { ensureProjectRoots, formatRootCreationFailures } from "../../../../src/core/project/ensure-roots";
 import { modelWritableRoots } from "../../../../src/core/project/roots";
 
 let root: string;
@@ -45,7 +45,7 @@ describe("ensureProjectRoots", () => {
 
     expect(failures.length).toBe(1);
     expect(failures[0]!.root).toBe("workspace");
-    expect(formatRootCreationFailure(failures[0]!)).toContain('"workspace"');
+    expect(formatRootCreationFailures(failures)).toContain('"workspace"');
     // The remaining roots were still created.
     expect((await lstat(join(root, "novels"))).isDirectory()).toBe(true);
   });

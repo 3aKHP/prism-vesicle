@@ -17,11 +17,11 @@ function warningEvent(
   return { type: "instruction_warning", sessionId, engine: "runtime", diagnostics };
 }
 
-const harness = agentProcessControllerHarness;
+
 
 describe("instruction warning notice", () => {
   test("dedups identical warnings across events and re-notifies when the diagnostic changes", () => createRoot((dispose) => {
-    const { controller, messages } = harness();
+    const { controller, messages } = agentProcessControllerHarness();
 
     controller.handleAgentEvent(warningEvent([makeDiagnostic()]));
     expect(messages().filter((m) => m.role === "system" && m.content.includes("skipped")).length).toBe(1);
@@ -39,7 +39,7 @@ describe("instruction warning notice", () => {
   }));
 
   test("an empty status resets dedupe so the same later failure re-notifies", () => createRoot((dispose) => {
-    const { controller, messages } = harness();
+    const { controller, messages } = agentProcessControllerHarness();
 
     controller.handleAgentEvent(warningEvent([makeDiagnostic()]));
     controller.handleAgentEvent(warningEvent([]));
@@ -50,7 +50,7 @@ describe("instruction warning notice", () => {
   }));
 
   test("uses the event session id so identical failures in different sessions both notify", () => createRoot((dispose) => {
-    const { controller, messages } = harness("");
+    const { controller, messages } = agentProcessControllerHarness("");
 
     controller.handleAgentEvent(warningEvent([makeDiagnostic()], "new-session-1"));
     controller.handleAgentEvent(warningEvent([makeDiagnostic()], "new-session-2"));
@@ -60,7 +60,7 @@ describe("instruction warning notice", () => {
   }));
 
   test("message and target Engine changes are part of the diagnostic fingerprint", () => createRoot((dispose) => {
-    const { controller, messages } = harness();
+    const { controller, messages } = agentProcessControllerHarness();
     const diagnostic = makeDiagnostic();
 
     controller.handleAgentEvent(warningEvent([diagnostic]));

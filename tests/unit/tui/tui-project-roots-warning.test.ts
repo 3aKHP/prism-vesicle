@@ -45,4 +45,14 @@ describe("project roots warning notice", () => {
     expect(messages().filter((message) => message.role === "system").length).toBe(1);
     dispose();
   }));
+
+  test("dedups per session id, so distinct sessions both notify", () => createRoot((dispose) => {
+    const { controller, messages } = agentProcessControllerHarness();
+
+    controller.handleAgentEvent(rootsWarningEvent([{ root: "workspace", message: "EEXIST" }], "session-a"));
+    controller.handleAgentEvent(rootsWarningEvent([{ root: "workspace", message: "EEXIST" }], "session-b"));
+
+    expect(messages().filter((message) => message.role === "system").length).toBe(2);
+    dispose();
+  }));
 });

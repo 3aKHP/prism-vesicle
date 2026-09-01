@@ -89,8 +89,8 @@ export async function startStageSession(options: StartStageSessionOptions): Prom
     renderedCharacterContext: rendered.characterContext,
     renderedOpening: rendered.opening,
   };
-  const rootFailures = await ensureProjectRoots(rootDir);
   const session = await createSessionStore(rootDir);
+  const rootFailures = await ensureProjectRoots(rootDir);
   const instructional = await composeSystemPromptWithInstructions("stage", engineAssets.systemPrompt, rootDir);
   const systemPrompt = `${instructional.systemPrompt}\n\n${bootstrap.renderedCharacterContext}`;
   const records = await session.appendMany([

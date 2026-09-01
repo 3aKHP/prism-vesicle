@@ -3,7 +3,7 @@ import { lstat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runCli, withTempProject } from "./support";
 
-/** Connection-refused provider: no network egress, fails the round fast. */
+/** Connection-refused provider: no network egress, fails the round fast. Depends on the kernel refusing loopback immediately (fine on CI/dev machines; a heavily sandboxed loopback would hit runCli's 30s guard instead). */
 const DEAD_PROVIDER_YAML = `default:
   provider: local
   model: stub
