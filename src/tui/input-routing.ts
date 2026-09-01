@@ -163,8 +163,9 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     const mode = bottomSurfaceMode();
     // Page switch (Ctrl+O) outranks the modal switch so the user can move
     // between Chat and Workspace while any bottom-surface modal — a stop
-    // gate on Chat, a picker anywhere — is open (#268 item 3). The modal
-    // keeps every other key; only the page beneath it changes.
+    // gate on Chat, a picker anywhere, the YOLO and migration confirms — is
+    // open (#268 item 3). The modal keeps every other key; only the page
+    // beneath it changes.
     if (key.ctrl && !key.shift && key.name === "o" && options.togglePage) {
       options.togglePage();
       consumeKey(key);

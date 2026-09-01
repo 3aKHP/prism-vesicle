@@ -641,6 +641,26 @@ describe("TUI input routing: workspace pending-decision strip (#268 item 3)", ()
     expect(pickerKeys).toEqual([]);
   });
 
+  test("Ctrl+O outranks the self-opened confirms (YOLO, migration review) too", () => {
+    const yoloKeys: string[] = [];
+    const yolo = stripRouter({
+      yoloConfirmStage: () => 1,
+      handleYoloKey: (key) => { yoloKeys.push(key.name ?? ""); return true; },
+    });
+    yolo.router.handleKey(keyEvent("o", { ctrl: true }));
+    expect(yolo.toggleCount()).toBe(1);
+    expect(yoloKeys).toEqual([]);
+
+    const migrationKeys: string[] = [];
+    const migration = stripRouter({
+      migrationReview: () => ({}) as never,
+      handleMigrationKey: (key) => { migrationKeys.push(key.name ?? ""); return true; },
+    });
+    migration.router.handleKey(keyEvent("o", { ctrl: true }));
+    expect(migration.toggleCount()).toBe(1);
+    expect(migrationKeys).toEqual([]);
+  });
+
   test("on the Workspace page a pending permission hands keys to workspace routing", () => {
     const { router, modalKeys, workspaceKeys } = stripRouter({
       ...permissionOverrides,

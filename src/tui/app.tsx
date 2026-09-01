@@ -60,7 +60,7 @@ import { displayTranscriptFromSnapshot, isEmptySessionTranscript } from "./sessi
 import { BottomSurface, pendingDecisionPromptLabel, pendingDecisionStripLine } from "./views/BottomSurface";
 import { createAgentProcessController } from "./agent-process-controller";
 import { createSessionResumeController } from "./session-resume-controller";
-import { createComposerController, decisionPendingSubmitStatus } from "./composer-controller";
+import { createComposerController, createDecisionPendingRefusal } from "./composer-controller";
 import { createDecisionController } from "./decision-controller";
 import { createTurnController } from "./turn-controller";
 import { createProviderConfigController, createProviderState } from "./provider-config-controller";
@@ -485,13 +485,10 @@ export function App(props: AppProps = {}) {
     setMessages,
   });
   function submitCommand(raw: string): boolean {
-    // Guarded alongside the composer's own submit guard (#268 item 3): slash
-    // commands reached through the completion menu bypass the composer, so
-    // both entry points must refuse to execute while a decision is pending.
-    if (hostDecisionPending()) {
-      setStatus(decisionPendingSubmitStatus);
-      return false;
-    }
+    // Same shared refusal as the composer's own submit guard (#268 item 3):
+    // slash commands reached through the completion menu bypass the composer,
+    // so both entry points ask the one guard before anything can execute.
+    if (refuseForPendingDecision()) return false;
     return routeCommandSubmission(raw, busy(), builtinCommands(), {
       execute: (value) => {
         void executeCommand(value, builtinCommands(), { setMessages }).catch((error) => turnController.reportError(error));
@@ -1001,6 +998,12 @@ export function App(props: AppProps = {}) {
   createEffect(() => {
     terminalTitle?.setPhase(resolveTerminalTitlePhase({ inputRequired: hostDecisionPending(), busy: busy(), restoring: restoringSession() }));
   });
+  // The one decision-pending refusal shared with the composer controller
+  // (#268 item 3): submitCommand (the completion menu's direct path) and the
+  // composer's Enter path ask the same guard, so the status text and the
+  // refuse-and-keep-the-draft semantics cannot drift apart.
+  const refuseForPendingDecision = createDecisionPendingRefusal(hostDecisionPending, setStatus);
+
   // #268 item 3 (Workspace page prompt occlusion): while the Workspace page is
   // active, the four host-decision prompts collapse to a one-row strip above
   // the composer instead of taking the bottom band; the full panels render on

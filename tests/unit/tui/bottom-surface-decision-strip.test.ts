@@ -8,6 +8,10 @@ import {
 } from "../../../src/tui/views/BottomSurface";
 import type { GateRequest } from "../../../src/core/gate/types";
 import type { PermissionRequest } from "../../../src/core/permissions";
+import {
+  createDecisionPendingRefusal,
+  decisionPendingSubmitStatus,
+} from "../../../src/tui/composer-controller";
 
 function baseState(overrides: Partial<BottomSurfaceState> = {}): BottomSurfaceState {
   return {
@@ -92,5 +96,31 @@ describe("pendingDecisionStripLine", () => {
     const line = pendingDecisionStripLine("Quality decision", 20);
     expect(line.startsWith("◆")).toBe(true);
     expect(line.endsWith("...")).toBe(true);
+  });
+});
+
+describe("createDecisionPendingRefusal: the one submission guard for both entry points (#268 item 3)", () => {
+  test("refuses with the shared status while a decision is pending", () => {
+    const statuses: string[] = [];
+    const refuse = createDecisionPendingRefusal(() => true, (status) => statuses.push(status));
+    expect(refuse()).toBe(true);
+    expect(statuses).toEqual([decisionPendingSubmitStatus]);
+  });
+
+  test("passes through without a status when no decision is pending", () => {
+    const statuses: string[] = [];
+    const refuse = createDecisionPendingRefusal(() => false, (status) => statuses.push(status));
+    expect(refuse()).toBe(false);
+    expect(statuses).toEqual([]);
+  });
+
+  test("re-checks the pending state on every call", () => {
+    const statuses: string[] = [];
+    let pending = false;
+    const refuse = createDecisionPendingRefusal(() => pending, (status) => statuses.push(status));
+    expect(refuse()).toBe(false);
+    pending = true;
+    expect(refuse()).toBe(true);
+    expect(statuses).toEqual([decisionPendingSubmitStatus]);
   });
 });
