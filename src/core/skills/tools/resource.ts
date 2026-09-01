@@ -3,7 +3,7 @@
 // import interpreter or process — resource reading is pure file I/O.
 
 import { readFile } from "node:fs/promises";
-import { MAX_TEXT_REFERENCE_BYTES } from "../../../skills/paths";
+import { MAX_TEXT_REFERENCE_BYTES, utf8SafeBoundary } from "../../../skills/paths";
 import type { ToolCall, ToolResult } from "../../tools/types";
 import type { SkillToolEvent } from "../types";
 import { requireRuntime, requireActivatedSkill, resolveSkillFile, fail } from "./activated-skill";
@@ -49,12 +49,4 @@ export async function executeReadSkillResourceTool(call: ToolCall, options: Skil
   const event: SkillToolEvent = { kind: "skill_resource_read", name: skill.name, path: relPath, bytes: raw.byteLength, truncated: capped };
   const body = `[skill_resource name="${skill.name}" path="${relPath}"]\n${sliced}${notes.length > 0 ? `\n${notes.join("\n")}` : ""}`;
   return { callId: call.id, name: call.name, ok: true, content: body, skillEvent: event };
-}
-
-/** Largest prefix length ≤ maxBytes that does not split a UTF-8 sequence. */
-function utf8SafeBoundary(raw: Uint8Array, maxBytes: number): number {
-  let boundary = Math.min(maxBytes, raw.byteLength);
-  // 0b10xxxxxx bytes are UTF-8 continuations; back off to the sequence start.
-  while (boundary > 0 && (raw[boundary]! & 0b1100_0000) === 0b1000_0000) boundary -= 1;
-  return boundary;
 }

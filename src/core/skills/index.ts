@@ -75,3 +75,6 @@ export type {
   SkillDraftPublication,
   SkillDraftTarget,
 } from "./draft-publisher";
+
+export { SkillMount, normalizeSkillMountPath } from "./mount";
+export type { SkillMountEntry, SkillMountListing, SkillMountStat } from "./mount";

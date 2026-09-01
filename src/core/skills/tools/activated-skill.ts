@@ -64,20 +64,37 @@ export function requireRuntime(call: ToolCall, options: SkillToolRuntimeOptions)
   return undefined;
 }
 
+/**
+ * Shared activation gate for every surface that exposes Skill content: the
+ * catalog winner must exist and be activated in the session. Used by the tool
+ * executors (`requireActivatedSkill`) and the read-only `skills/` mount.
+ */
+export function resolveActiveSkill(
+  catalog: ResolvedSkillCatalog,
+  sessionId: string,
+  name: string,
+): { skill: ValidSkill } | { error: string } {
+  const skill = catalog.byName.get(name);
+  if (!skill || !skill.parsed.ok) {
+    const available = [...catalog.byName.keys()].join(", ") || "(none)";
+    return { error: `Unknown skill "${name}". Available skills: ${available}.` };
+  }
+  if (!getActivatedSkill(sessionId, name)) {
+    return {
+      error: `Skill "${name}" is not active in this session; call activate_skill("${name}") before using its resources or scripts.`,
+    };
+  }
+  return { skill: skill as ValidSkill };
+}
+
 export async function requireActivatedSkill(
   call: ToolCall,
   options: SkillToolRuntimeOptions,
   name: string,
 ): Promise<{ skill: ValidSkill } | { result: ToolResult }> {
-  const skill = options.catalog!.byName.get(name);
-  if (!skill || !skill.parsed.ok) {
-    const available = [...options.catalog!.byName.keys()].join(", ") || "(none)";
-    return { result: fail(call, `Unknown skill "${name}". Available skills: ${available}.`) };
-  }
-  if (!getActivatedSkill(options.sessionId!, name)) {
-    return { result: fail(call, `Skill "${name}" is not active in this session; call activate_skill("${name}") before using its resources or scripts.`) };
-  }
-  return { skill: skill as ValidSkill };
+  const resolved = resolveActiveSkill(options.catalog!, options.sessionId!, name);
+  if ("error" in resolved) return { result: fail(call, resolved.error) };
+  return { skill: resolved.skill };
 }
 
 /**
