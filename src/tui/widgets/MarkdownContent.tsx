@@ -74,6 +74,7 @@ export function MarkdownContent(props: { content: string; fg?: string }) {
       fg={initialForeground}
       selectionBg={initialSelectionBackground}
       selectionFg={initialSelectionForeground}
+      strikethrough="double-tilde"
       conceal={true}
     />
   );

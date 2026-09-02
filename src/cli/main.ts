@@ -66,12 +66,16 @@ Commands:
   setup, launch, doctor, once, prompt, quality, debug, assets, skills, config, dev`;
 
 async function configureTreeSitterRuntime(): Promise<void> {
+  const { configureTreeSitterWorkerPath, registerStrictMarkdownInlineParser } = await import("../tui/tree-sitter-runtime");
   // Compiled executables receive an explicit flat worker entrypoint through
   // the build-time OTUI_TREE_SITTER_WORKER_PATH define. Source/Bun-package
   // runs use the installed OpenTUI worker from node_modules instead.
-  if (isCompiledBinary) return;
-  const { configureTreeSitterWorkerPath } = await import("../tui/tree-sitter-runtime");
-  configureTreeSitterWorkerPath();
+  if (!isCompiledBinary) configureTreeSitterWorkerPath();
+  // The strict double-tilde markdown flavor must be registered before the
+  // first markdown highlight initializes the tree-sitter client. Setup does
+  // not render markdown (its staging surfaces are plain text) and never
+  // reaches this function, so it stays unregistered there.
+  await registerStrictMarkdownInlineParser();
 }
 
 async function launchProject(

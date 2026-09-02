@@ -39,3 +39,19 @@ function installedTreeSitterWorkerPath(): string | undefined {
 function setGlobalTreeSitterWorkerPath(path: string): void {
   (globalThis as typeof globalThis & { OTUI_TREE_SITTER_WORKER_PATH?: string }).OTUI_TREE_SITTER_WORKER_PATH = path;
 }
+
+/**
+ * Register the fork's strict double-tilde strikethrough flavor as the default
+ * markdown_inline parser before the first tree-sitter client initializes:
+ * the client reads default-parser overrides at init time and posts one
+ * ADD_FILETYPE_PARSER per entry to the worker, which replaces the stock
+ * parser options wholesale and invalidates its parser caches. The bare
+ * dynamic import keeps @3akhp/opentui-core out of the CLI entry chunk —
+ * bundlers inline it, so no runtime specifier survives in packed outputs.
+ * The helper returned a plain options object through 0.5.10-zv4 and a
+ * promise from the bundled-resolution fix on; awaiting covers both shapes.
+ */
+export async function registerStrictMarkdownInlineParser(): Promise<void> {
+  const { addDefaultParsers, strictMarkdownInlineParserOptions } = await import("@3akhp/opentui-core");
+  addDefaultParsers([await strictMarkdownInlineParserOptions()]);
+}
