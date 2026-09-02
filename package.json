@@ -91,12 +91,12 @@
     "build:installer": "bun run scripts/build/build-installer.ts"
   },
   "dependencies": {
-    "@3akhp/opentui-core": "0.5.9-zv1",
+    "@3akhp/opentui-core": "0.5.10-zv5",
     "@modelcontextprotocol/client": "2.0.0",
     "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
-    "@3akhp/opentui-solid": "0.5.9-zv1",
+    "@3akhp/opentui-solid": "0.5.10-zv5",
     "@biomejs/biome": "2.5.4",
     "@eslint-community/regexpp": "4.12.2",
     "@resvg/resvg-js": "2.6.2",
