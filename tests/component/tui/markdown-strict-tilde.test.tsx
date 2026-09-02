@@ -2,26 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { testRender } from "@3akhp/opentui-solid";
 import { configureTreeSitterWorkerPath, registerStrictMarkdownInlineParser } from "../../../src/tui/tree-sitter-runtime";
 import { MarkdownContent } from "../../../src/tui/widgets/MarkdownContent";
+import { captureFrameUntil } from "../../support/markdown-frame";
 
 // Register before the first tree-sitter client initializes in this process:
 // default-parser overrides are read at client-init time. Single-tilde spans in
 // the fixtures carry CJK content because the host's subscript pre-transform
-// consumes ASCII single-tilde spans (H~2~O) before the parser ever sees them.
+// consumes eligible ASCII single-tilde spans (digit-bearing or
+// single-character, such as H~2~O) before the parser ever sees them.
 configureTreeSitterWorkerPath();
 await registerStrictMarkdownInlineParser();
-
-// The markdown renderable highlights asynchronously through the tree-sitter
-// worker; poll the rendered frame until the needle is visible (same pattern
-// as markdown-escape.test.tsx).
-async function captureFrameWhen(setup: Awaited<ReturnType<typeof testRender>>, needle: string): Promise<string> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    await setup.flush();
-    const frame = setup.captureCharFrame();
-    if (frame.includes(needle)) return frame;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  return setup.captureCharFrame();
-}
 
 describe("MarkdownContent strict double-tilde strikethrough", () => {
   test("renders lone single-tilde prose literally and conceals doubled tildes (tree-sitter path)", async () => {
@@ -32,9 +21,9 @@ describe("MarkdownContent strict double-tilde strikethrough", () => {
 
     // Under the strict parser the single-tilde delimiters stay visible; the
     // doubled-tilde delimiters are concealed once the highlight lands. Under
-    // the stock parser this frame would read "中文标记" without tildes.
-    const frame = await captureFrameWhen(setup, "结尾");
-    expect(frame).toContain("~中文标记~");
+    // the stock parser this frame would read "中文标记" without tildes. Settle
+    // on the post-highlight state — the raw first frames still show ~~删除~~.
+    const frame = await captureFrameUntil(setup, (current) => current.includes("~中文标记~") && !current.includes("~~"));
     expect(frame).toContain("删除");
     expect(frame).not.toContain("~~");
     setup.renderer.destroy();
