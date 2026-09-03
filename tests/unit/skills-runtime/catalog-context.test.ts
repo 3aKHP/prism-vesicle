@@ -160,7 +160,18 @@ describe("peekSessionSkillCatalog", () => {
     await writeUserSkill("alpha");
     await writeUserSkill("beta");
     const sessionId = randomUUID();
-    await resolveSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, undefined, undefined, noHost());
+    const frozen = await resolveSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, undefined, undefined, noHost());
+
+    // Persist the snapshot as well, so this test discriminates both drift
+    // axes: consulting the snapshot before the freeze would drop the changed
+    // alpha (yielding ["beta"]), while skipping the freeze entirely would add
+    // gamma — only the freeze-first order keeps the activatable set intact.
+    const store = await createSessionStore(scratch, sessionId);
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", skills: snapshotSkillCatalog(frozen) },
+    });
 
     // Live drift after the freeze: activation still serves the frozen catalog,
     // so the peek must not drop frozen entries a snapshot re-resolution would.
