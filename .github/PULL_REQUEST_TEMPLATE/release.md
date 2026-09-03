@@ -20,12 +20,12 @@
 ## Release checklist
 
 - [ ] `package.json` version frozen to the target version
-- [ ] `CHANGELOG.md` section added for this version
+- [ ] `CHANGELOG.md` + `CHANGELOG.zh-CN.md` sections added for this version and paired (`bun run changelog:check`)
 - [ ] `README.md` + `README.zh-CN.md` channel wording updated (dist-tag / install guidance)
 - [ ] README static Status badge (both languages) reflects the new channel
 - [ ] `STATUS.md` snapshot date / published version updated
 - [ ] Advanced user-manual maturity stamps updated (`docs/user/{en,zh-CN}/advanced/`)
-- [ ] Release notes disclose Windows signing status accurately (link the Code Signing Policy)
+- [ ] Release body will be composed at tag time from the paired CHANGELOG sections (`scripts/release/compose-notes.ts`; signing disclosure included, `generate_release_notes` stays off)
 
 ## Test Plan
 

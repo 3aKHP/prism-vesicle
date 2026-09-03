@@ -54,6 +54,7 @@
     "docs:check:staged": "bun run scripts/check/check-staged-markdown-wrap.ts",
     "skills:docs:sync": "bun run scripts/check/sync-bundled-skill-references.ts",
     "skills:docs:check": "bun run scripts/check/sync-bundled-skill-references.ts --check",
+    "changelog:check": "bun run scripts/check/check-changelog-pair.ts",
     "smoke:malformed-tool-pty": "bun run scripts/smoke/smoke-malformed-tool-pty.ts",
     "smoke:session-migration-pty": "bun run scripts/smoke/smoke-session-migration-pty.ts",
     "smoke:terminal-title-pty": "bun run scripts/smoke/smoke-terminal-title-pty.ts",
