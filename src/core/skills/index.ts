@@ -44,6 +44,7 @@ export {
   composeSkillCatalogBlock,
   eligibleCatalogHashes,
   eligibleCatalogNames,
+  peekSessionSkillCatalog,
   readFrozenSessionSkillCatalog,
   resolveEngineEligibleCatalog,
   resolveSessionSkillCatalog,

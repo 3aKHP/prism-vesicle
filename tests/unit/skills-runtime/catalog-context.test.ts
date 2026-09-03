@@ -8,7 +8,9 @@ import {
   composeSkillCatalogBlock,
   isMeaningfulSkillCatalogSnapshot,
   parseSkillCatalogSnapshot,
+  peekSessionSkillCatalog,
   pruneSessionActivations,
+  readFrozenSessionSkillCatalog,
   recordActivation,
   clearSessionActivations,
   isDuplicateActivation,
@@ -16,6 +18,7 @@ import {
   resolveSessionSkillCatalog,
   snapshotSkillCatalog,
 } from "../../../src/core/skills";
+import { createSessionStore, loadSessionSnapshot } from "../../../src/core/session/store";
 import { buildCatalog } from "../../../src/skills";
 import { makeScratch, writeSkill, loadWritten } from "./helpers";
 
@@ -116,6 +119,65 @@ describe("persisted snapshot resume", () => {
     expect(parseSkillCatalogSnapshot(JSON.parse(serialized))).toEqual(snapshot);
     expect(parseSkillCatalogSnapshot({ catalogHash: 1 })).toBeUndefined();
     expect(parseSkillCatalogSnapshot("garbage")).toBeUndefined();
+  });
+});
+
+describe("peekSessionSkillCatalog", () => {
+  test("under resume drift, previews exactly the activation set and writes no freeze", async () => {
+    await writeUserSkill("alpha");
+    await writeUserSkill("beta");
+    const sessionId = randomUUID();
+    const frozen = await resolveSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, undefined, undefined, noHost());
+    const snapshot = snapshotSkillCatalog(frozen);
+
+    // Persist the snapshot the way a real session does, then restart the process.
+    const store = await createSessionStore(scratch, sessionId);
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", skills: snapshot },
+    });
+    clearSessionSkillCatalog(sessionId);
+
+    // Drift: alpha's body changes, gamma is installed after the freeze.
+    await writeUserSkill("alpha", "# alpha\n\nCHANGED body.");
+    await writeUserSkill("gamma");
+
+    const peeked = await peekSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, undefined, noHost());
+    expect(catalogNames(peeked)).toEqual(["beta"]);
+    // The preview is read-only: it must not establish the session's freeze.
+    expect(readFrozenSessionSkillCatalog(sessionId)).toBeUndefined();
+
+    // Activation resolves the same set from the same durable snapshot (#309:
+    // the picker must not promise what `/skill <name>` cannot activate).
+    const durable = await loadSessionSnapshot(scratch, sessionId, { synthesizeDanglingToolResults: false });
+    const activation = await resolveSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, durable?.skillCatalogSnapshot, undefined, noHost());
+    expect(catalogNames(activation)).toEqual(catalogNames(peeked));
+    clearSessionSkillCatalog(sessionId);
+  });
+
+  test("an existing freeze wins over live drift, matching what activation serves", async () => {
+    await writeUserSkill("alpha");
+    await writeUserSkill("beta");
+    const sessionId = randomUUID();
+    await resolveSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, undefined, undefined, noHost());
+
+    // Live drift after the freeze: activation still serves the frozen catalog,
+    // so the peek must not drop frozen entries a snapshot re-resolution would.
+    await writeUserSkill("alpha", "# alpha\n\nCHANGED body.");
+    await writeUserSkill("gamma");
+
+    const peeked = await peekSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, undefined, noHost());
+    expect(catalogNames(peeked)).toEqual(["alpha", "beta"]);
+    clearSessionSkillCatalog(sessionId);
+  });
+
+  test("a missing session id and a record-less session resolve fresh", async () => {
+    await writeUserSkill("alpha");
+    const withoutSession = await peekSessionSkillCatalog(scratch, env(), { id: "etl" }, undefined, undefined, noHost());
+    expect(catalogNames(withoutSession)).toEqual(["alpha"]);
+    const recordless = await peekSessionSkillCatalog(scratch, env(), { id: "etl" }, randomUUID(), undefined, noHost());
+    expect(catalogNames(recordless)).toEqual(["alpha"]);
   });
 });
 
