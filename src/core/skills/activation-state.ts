@@ -55,17 +55,21 @@ export function hydrateSessionActivations(sessionId: string, entries: readonly A
 }
 
 /**
- * Drop every activation whose name is not in the eligible set. Pruned Skills
- * become simply un-activated (dedup no longer suppresses reactivation). Used
- * after hydration with the engine-eligible catalog names, which covers the
- * engine-switch rule: previously injected content stays historical, and a
- * Skill ineligible in the new Engine is inactive.
+ * Drop every activation that the engine-eligible catalog no longer serves at
+ * the recorded content hash: a name missing from the map, or present with a
+ * different `bodySha256`, counts as inactive. This is the enforcement point of
+ * the live-activation rule — an activation survives only while the frozen
+ * catalog serves the same content — so a Skill re-frozen at new content by a
+ * confirmed Harness migration must be activated again (its old activation
+ * record stays in history as an audit trail, and dedup does not suppress the
+ * reactivation). Within one frozen catalog the hash check is an identity
+ * operation; it only takes effect across a catalog re-freeze.
  */
-export function pruneSessionActivations(sessionId: string, eligibleNames: ReadonlySet<string>): void {
+export function pruneSessionActivations(sessionId: string, eligible: ReadonlyMap<string, string>): void {
   const session = activationsBySession.get(sessionId);
   if (!session) return;
-  for (const name of [...session.keys()]) {
-    if (!eligibleNames.has(name)) session.delete(name);
+  for (const [name, contentHash] of [...session.entries()]) {
+    if (eligible.get(name) !== contentHash) session.delete(name);
   }
 }
 

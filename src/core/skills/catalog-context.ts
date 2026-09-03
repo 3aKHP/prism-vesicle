@@ -165,6 +165,20 @@ export function eligibleCatalogNames(eligible: ResolvedSkillCatalog): string[] {
 }
 
 /**
+ * Per-name `bodySha256` of the engine-eligible catalog. Feeds the activation
+ * hash gate (`pruneSessionActivations`): an activation stays live only while
+ * the frozen catalog serves the same content hash it was recorded with.
+ */
+export function eligibleCatalogHashes(eligible: ResolvedSkillCatalog): Map<string, string> {
+  const hashes = new Map<string, string>();
+  for (const entry of eligible.catalog.entries) {
+    const skill = eligible.byName.get(entry.name);
+    if (skill?.parsed.ok) hashes.set(entry.name, skill.parsed.bodySha256);
+  }
+  return hashes;
+}
+
+/**
  * Render the bounded routing catalog as a clearly delimited system-prompt
  * block. Only name/scope/description lines — never bodies or paths. The host
  * rule inside the block states that Skill metadata is routing data, not

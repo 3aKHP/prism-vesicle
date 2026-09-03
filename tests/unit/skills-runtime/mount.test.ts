@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { buildCatalog } from "../../../src/skills";
 import { MAX_TEXT_REFERENCE_BYTES } from "../../../src/skills/paths";
 import type { ToolCall } from "../../../src/core/tools/types";
-import { clearSessionActivations, executeActivateSkillTool, SkillMount } from "../../../src/core/skills";
+import { clearSessionActivations, eligibleCatalogHashes, executeActivateSkillTool, pruneSessionActivations, recordActivation, SkillMount } from "../../../src/core/skills";
 import type { ResolvedSkillCatalog } from "../../../src/core/skills";
 import { catalogFor, loadWritten, makeScratch, writeSkill } from "./helpers";
 
@@ -57,6 +57,19 @@ describe("SkillMount (skills/ read-only logical root)", () => {
   test("compaction/rewind loss unmounts the skill", async () => {
     const mount = await mountedCatalog({ "references/note.md": "text" });
     clearSessionActivations(sessionId);
+    await expect(mount.stat("skills/alpha")).rejects.toThrow("not active in this session");
+  });
+
+  test("an activation recorded at a stale content hash is not mounted after the re-freeze prune", async () => {
+    const catalog = catalogFor(await loadWritten(await writeSkill(scratch, "alpha", { files: { "references/note.md": "text" } })));
+    // The session activated "alpha" before a Harness migration re-froze the
+    // catalog at its current content; the registry still holds the stale hash.
+    recordActivation(sessionId, "alpha", "0".repeat(64));
+    const mount = new SkillMount(catalog, sessionId);
+    await expect(mount.stat("skills/alpha")).resolves.toBeDefined();
+    // Bootstrap prunes activations against the re-frozen catalog's per-name
+    // hashes (#298): the stale-hash activation stops counting as live.
+    pruneSessionActivations(sessionId, eligibleCatalogHashes(catalog));
     await expect(mount.stat("skills/alpha")).rejects.toThrow("not active in this session");
   });
 

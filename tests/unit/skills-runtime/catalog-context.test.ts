@@ -134,9 +134,21 @@ describe("engine eligibility", () => {
     const sessionId = randomUUID();
     recordActivation(sessionId, "alpha", "h1");
     recordActivation(sessionId, "beta", "h2");
-    pruneSessionActivations(sessionId, new Set(["beta"]));
+    pruneSessionActivations(sessionId, new Map([["beta", "h2"]]));
     expect(isDuplicateActivation(sessionId, "alpha", "h1")).toBe(false);
     expect(isDuplicateActivation(sessionId, "beta", "h2")).toBe(true);
+    clearSessionActivations(sessionId);
+  });
+
+  test("pruning drops a same-name activation recorded at a stale content hash", async () => {
+    // The re-freeze case: the frozen catalog now serves "beta" at a new body
+    // hash, so the pre-re-freeze activation no longer counts as live and dedup
+    // must not suppress re-activating the new content.
+    const sessionId = randomUUID();
+    recordActivation(sessionId, "beta", "old-hash");
+    pruneSessionActivations(sessionId, new Map([["beta", "new-hash"]]));
+    expect(isDuplicateActivation(sessionId, "beta", "old-hash")).toBe(false);
+    expect(isDuplicateActivation(sessionId, "beta", "new-hash")).toBe(false);
     clearSessionActivations(sessionId);
   });
 });

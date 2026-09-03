@@ -16,7 +16,7 @@ import { createSessionStore, loadSessionSnapshot, withSessionActivationLock } fr
 import type { SkillDiagnostic, SkillResource, SkillScope } from "../../skills/types";
 import { deriveSessionActivations } from "./activation-derivation";
 import { hydrateSessionActivations, isDuplicateActivation, pruneSessionActivations, recordActivation } from "./activation-state";
-import { resolveEngineEligibleCatalog, resolveSessionSkillCatalog } from "./catalog-context";
+import { eligibleCatalogHashes, resolveEngineEligibleCatalog, resolveSessionSkillCatalog } from "./catalog-context";
 import { formatSkillActivationBlock, type ValidSkill } from "./tools";
 import { SKILL_ACTIVATION_KIND } from "./types";
 import type { ResolveFilesystemSkillsOptions } from "./catalog-sources";
@@ -125,7 +125,7 @@ export async function activateSkillForSession(
       // by earlier turns or processes.
       const fresh = await loadSnapshotOrUndefined(rootDir, sessionId);
       hydrateSessionActivations(sessionId, deriveSessionActivations(fresh?.records ?? []));
-      pruneSessionActivations(sessionId, new Set(eligible.byName.keys()));
+      pruneSessionActivations(sessionId, eligibleCatalogHashes(eligible));
       if (isDuplicateActivation(sessionId, valid.name, valid.parsed.bodySha256)) {
         return { ...base, alreadyActive: true };
       }
