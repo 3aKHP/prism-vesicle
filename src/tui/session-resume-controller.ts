@@ -38,7 +38,6 @@ import {
 } from "../core/harness";
 import { pendingQualityDecisionFromSnapshot } from "./quality-decision-state";
 import { sessionHarnessIdentityMatches } from "../core/harness";
-import { findLastSessionMigration } from "../core/session/session-migration";
 import type { HarnessRuntimeIdentity } from "../core/harness/driver";
 
 /** Everything the migration review needs about a mismatched resume attempt. */
@@ -258,10 +257,12 @@ export function createSessionResumeController(options: SessionResumeControllerOp
       });
     }
     restorePermissionMode(snapshot, hostMessages);
-    // The durable migration notice derives from session records, so every
-    // future resume re-displays it — the session never silently runs under a
+    // The durable migration notice derives from the physical record stream
+    // (session-level, like the effective identity), so every resume
+    // re-displays it — including fork branches truncated before the
+    // migration record — and the session never silently runs under a
     // baseline it was not recorded with.
-    const migration = findLastSessionMigration(snapshot.records);
+    const migration = snapshot.lastMigration;
     if (migration) {
       const from = migration.from
         ? `${migration.from.packId}@${migration.from.packVersion}`

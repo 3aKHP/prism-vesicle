@@ -26,21 +26,45 @@ export type HistoryProjection = {
   reasoningDisplayMode?: ReasoningDisplayMode;
   permissionMode?: PermissionMode;
   assets?: AssetFingerprint;
+  /** Harness identity recorded on the session header; the effective identity adds the session-level migration rebind from {@link projectSessionHostState}. */
   harness?: HarnessRuntimeIdentity;
-  /** Latest persisted frozen Skill catalog snapshot (session header or `skill-catalog` record). */
+};
+
+/** Session-level Host state: projected from the physical record stream in order, independent of the selected content branch. */
+export type SessionHostState = Pick<HistoryProjection, "engine" | "providerSelection" | "reasoningTier" | "reasoningDisplayMode" | "permissionMode"> & {
+  /** Effective Harness identity after the last confirmed migration; undefined when the session never migrated. */
+  harness?: HarnessRuntimeIdentity;
+  /** Latest persisted frozen Skill catalog snapshot (session header, `skill-catalog`, or `session-migration` record). */
   skillCatalogSnapshot?: SkillCatalogSnapshot;
 };
 
-/** Project host preferences from the append-only session tail, independent of the selected content branch. */
-export function projectSessionHostState(records: SessionRecord[]): Pick<HistoryProjection, "engine" | "providerSelection" | "reasoningTier" | "reasoningDisplayMode" | "permissionMode"> {
+/**
+ * Project session-level Host state from the append-only record stream. This is
+ * the single authority for host preferences and for the two migration-scoped
+ * facts — the effective post-migration Harness identity and the latest frozen
+ * Skill catalog — because those bind the session file, not a branch position:
+ * a regenerate/rewind/candidate fork that truncates away the migration record
+ * still runs under the post-migration baseline and catalog.
+ */
+export function projectSessionHostState(records: SessionRecord[]): SessionHostState {
   let engine: EngineId | undefined;
   let providerSelection: ProviderSelection | undefined;
   let reasoningTier: ReasoningTier | undefined;
   let reasoningDisplayMode: ReasoningDisplayMode | undefined;
   let permissionMode: PermissionMode | undefined;
+  let harness: HarnessRuntimeIdentity | undefined;
+  let skillCatalogSnapshot: SkillCatalogSnapshot | undefined;
   for (const record of records) {
     const metadata = record.metadata;
     if (!metadata) continue;
+    if (record.role === "system" && metadata.kind === SESSION_MIGRATION_KIND) {
+      // Last migration in physical order wins. The payload is strictly parsed
+      // so a malformed record fails closed exactly like a malformed header
+      // identity instead of partially rebinding.
+      harness = parseSessionMigrationRecord(metadata.migration).to;
+    }
+    const skills = parseSkillCatalogSnapshot(metadata.skills);
+    if (skills) skillCatalogSnapshot = skills;
     const nextEngine = readEngineId(metadata.engine);
     if (nextEngine) engine = nextEngine;
     if (typeof metadata.providerId === "string" && typeof metadata.model === "string") {
@@ -50,7 +74,7 @@ export function projectSessionHostState(records: SessionRecord[]): Pick<HistoryP
     if (Object.hasOwn(metadata, "reasoningDisplayMode")) reasoningDisplayMode = readReasoningDisplayMode(metadata.reasoningDisplayMode);
     if (isPermissionMode(metadata.permissionMode)) permissionMode = metadata.permissionMode as PermissionMode;
   }
-  return { engine, providerSelection, reasoningTier, reasoningDisplayMode, permissionMode };
+  return { engine, providerSelection, reasoningTier, reasoningDisplayMode, permissionMode, harness, skillCatalogSnapshot };
 }
 
 /**
@@ -105,17 +129,12 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
   let permissionMode: PermissionMode | undefined;
   let assets: AssetFingerprint | undefined;
   let harness: HarnessRuntimeIdentity | undefined;
-  let skillCatalogSnapshot: SkillCatalogSnapshot | undefined;
 
   for (const record of records) {
     if (record.metadata && Object.hasOwn(record.metadata, "engine")) {
       const nextEngine = readEngineId(record.metadata.engine);
       if (nextEngine) engine = nextEngine;
     }
-    // The session header and any later `skill-catalog` system record carry the
-    // frozen catalog snapshot under the same `skills` key; latest wins.
-    const skills = parseSkillCatalogSnapshot(record.metadata?.skills);
-    if (skills) skillCatalogSnapshot = skills;
     const providerId = record.metadata?.providerId;
     const model = record.metadata?.model;
     if (typeof providerId === "string" && typeof model === "string") providerSelection = { provider: providerId, model };
@@ -130,12 +149,11 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
         skippedFirstSystem = true;
       }
       if (record.metadata?.kind === SESSION_MIGRATION_KIND) {
-        // A confirmed Harness migration rebinds the session's effective
-        // identity; every earlier record keeps the identity it was recorded
-        // under and the last migration wins. The full migration payload is
-        // parsed so a malformed record fails closed exactly like a malformed
-        // header identity instead of partially rebinding.
-        harness = parseSessionMigrationRecord(record.metadata.migration).to;
+        // Migration records never join provider-visible history. The identity
+        // rebind itself is session-level Host state projected from the
+        // physical record stream (projectSessionHostState), so branch
+        // truncation cannot resurrect a pre-migration baseline for a
+        // regenerate/rewind/candidate fork.
         continue;
       }
       if (record.metadata?.kind === FAILED_TURN_KIND) {
@@ -210,7 +228,7 @@ export function projectSessionHistory(records: SessionRecord[]): HistoryProjecti
     const usage = readResponseUsage(record.metadata?.usage);
     messages.push({ recordUuid: record.uuid, role: "tool", content: record.content, ...(toolCallId ? { toolCallId } : {}), ...(typeof toolOk === "boolean" ? { toolOk } : {}), ...(toolFileEvent ? { toolFileEvent } : {}), ...(toolWebEvent ? { toolWebEvent } : {}), ...(toolMcpEvent ? { toolMcpEvent } : {}), ...(toolProcessEvent ? { toolProcessEvent } : {}), ...(toolSkillEvent ? { toolSkillEvent } : {}), ...(kind ? { kind } : {}), ...(usage ? { usage } : {}), ...(images ? { images } : {}) });
   }
-  return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}), ...(skillCatalogSnapshot ? { skillCatalogSnapshot } : {}) };
+  return { messages, ...(engine ? { engine } : {}), ...(providerSelection ? { providerSelection } : {}), ...(reasoningTier ? { reasoningTier } : {}), ...(reasoningDisplayMode ? { reasoningDisplayMode } : {}), ...(permissionMode ? { permissionMode } : {}), ...(assets ? { assets } : {}), ...(harness ? { harness } : {}) };
 }
 
 function readReplayableToolCalls(value: unknown): ResumedToolCall[] | undefined {

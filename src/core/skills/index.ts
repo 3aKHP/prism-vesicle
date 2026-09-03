@@ -39,6 +39,7 @@ export type { FilesystemSkillInspection, ResolveFilesystemSkillsOptions } from "
 export {
   clearSessionSkillCatalog,
   composeSkillCatalogBlock,
+  eligibleCatalogHashes,
   eligibleCatalogNames,
   readFrozenSessionSkillCatalog,
   resolveEngineEligibleCatalog,

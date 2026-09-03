@@ -33,6 +33,7 @@ import { loadSessionSnapshot, type ResumedMessage, type SessionRecord, type Sess
 import {
   catalogNames,
   composeSkillCatalogBlock,
+  eligibleCatalogHashes,
   deriveSessionActivations,
   hydrateSessionActivations,
   isMeaningfulSkillCatalogSnapshot,
@@ -126,7 +127,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const skillCatalogSnapshot = snapshotSkillCatalog(frozenSkillCatalog);
   if (snapshot) {
     hydrateSessionActivations(session.sessionId, deriveSessionActivations(snapshot.records));
-    pruneSessionActivations(session.sessionId, new Set(catalogNames(skillCatalog)));
+    pruneSessionActivations(session.sessionId, eligibleCatalogHashes(skillCatalog));
   }
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
   systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock);

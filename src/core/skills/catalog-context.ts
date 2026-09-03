@@ -55,19 +55,19 @@ export async function resolveSessionSkillCatalog(
 ): Promise<ResolvedSkillCatalog> {
   const frozen = frozenCatalogsBySession.get(sessionId);
   if (frozen) return frozen;
-  const resolved = await previewSessionSkillCatalogResolution(rootDir, env, profile, persistedSnapshot, contextWindow, options);
+  const resolved = await resolveSessionCatalogPreview(rootDir, env, profile, persistedSnapshot, contextWindow, options);
   frozenCatalogsBySession.set(sessionId, resolved);
   return resolved;
 }
 
 /**
- * Resolve the catalog a resumed session would use, without freezing anything:
- * with a persisted snapshot, bodies re-resolve by name+hash exactly like the
- * freeze path; without one, this is a plain fresh resolution. Read-only
- * preview callers (the session-migration preflight) must not mutate the
- * in-process freeze map for a session whose migration may still be declined.
+ * Resolve the catalog a session would use, without touching the in-process
+ * freeze map: with a persisted snapshot, bodies re-resolve by name+hash
+ * exactly like the freeze path; without one, this is a plain fresh
+ * resolution. The freeze path (`resolveSessionSkillCatalog`) resolves through
+ * this shared core before writing the freeze.
  */
-export async function previewSessionSkillCatalogResolution(
+async function resolveSessionCatalogPreview(
   rootDir: string,
   env: NodeJS.ProcessEnv,
   profile: Pick<EngineProfile, "id">,
@@ -162,6 +162,20 @@ export function resolveEngineEligibleCatalog(
 /** Names of the engine-eligible catalog, for tool-surface gating. */
 export function eligibleCatalogNames(eligible: ResolvedSkillCatalog): string[] {
   return catalogNames(eligible);
+}
+
+/**
+ * Per-name `bodySha256` of the engine-eligible catalog. Feeds the activation
+ * hash gate (`pruneSessionActivations`): an activation stays live only while
+ * the frozen catalog serves the same content hash it was recorded with.
+ */
+export function eligibleCatalogHashes(eligible: ResolvedSkillCatalog): Map<string, string> {
+  const hashes = new Map<string, string>();
+  for (const entry of eligible.catalog.entries) {
+    const skill = eligible.byName.get(entry.name);
+    if (skill?.parsed.ok) hashes.set(entry.name, skill.parsed.bodySha256);
+  }
+  return hashes;
 }
 
 /**

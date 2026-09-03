@@ -19,6 +19,7 @@ import {
   archiveSessionBeforeMigration,
   type SessionMigrationRecord,
 } from "../core/session/session-migration";
+import { clearSessionSkillCatalog } from "../core/skills";
 import { runSessionMigrationPreflight, type SessionMigrationPreflightReport } from "../core/agent-loop/session-migration-preflight";
 import type { SessionMigrationReviewContext } from "./session-resume-controller";
 import type { TuiKeyEvent } from "./decision-interaction";
@@ -129,14 +130,24 @@ export function createSessionMigrationController(options: SessionMigrationContro
           layers: [...new Set(state.report.findings.map((finding) => finding.layer))],
         },
       };
-      await appendSessionMigrationRecord(await createSessionStore(options.rootDir, state.target.sessionId), record);
+      await appendSessionMigrationRecord(await createSessionStore(options.rootDir, state.target.sessionId), record, state.report.skillRefreeze?.snapshot);
+      // The migration record carries the catalog re-freeze; drop any
+      // in-process freeze so the post-migration resume resolves through the
+      // rebased snapshot instead of a stale one. This runs immediately after
+      // the durable rebind lands, before the fallible archive-tag append, so
+      // a tag-write failure cannot leave a committed migration paired with a
+      // stale in-process freeze. The activation registry needs no explicit
+      // reset: every bootstrap and host activation replaces it via
+      // hydrateSessionActivations.
+      clearSessionSkillCatalog(state.target.sessionId);
       await appendSessionArchiveTag(options.rootDir, archivePath, state.target.sessionId, {
         archivedAt: now,
         from: state.report.from ?? null,
         to,
         reason: "harness-migration",
       });
-      options.setStatus(`session migrated to ${to.packId}@${to.packVersion}`);
+      const reactivate = state.report.skillRefreeze?.reactivate ?? [];
+      options.setStatus(`session migrated to ${to.packId}@${to.packVersion}${reactivate.length > 0 ? `; re-activate: ${reactivate.join(", ")}` : ""}`);
       // Keep the busy migration surface mounted until resume has finished.
       // Clearing it earlier lets picker/composer input race the restore path.
       await options.resumeSession(state.target, state.commandEcho);

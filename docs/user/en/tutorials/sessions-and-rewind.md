@@ -38,6 +38,7 @@ Upgrading Vesicle can also update the bundled engine pack. Resuming a session re
 - After confirming: the session's full transcript is first **archived** under `.vesicle/sessions/archive/`, then the session continues under the new engine pack. Every later resume of this session shows a "recorded under an older engine pack" notice — the switch is never silent.
 - If the report lists a red `✗` item (for example, the engine the session used no longer exists): the migration is refused, the session stays untouched, and you can start a new session instead.
 - `⚠` items (context near the limit, changed Skills, and so on) allow the migration; the consequences are listed in the report.
+- After the migration completes, Skills the report marked as changed need one more `/skill <name>` activation before they can be used again; their earlier activated content stays in the session history and is not lost.
 
 To start fresh instead of resuming:
 

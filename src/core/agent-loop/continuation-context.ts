@@ -28,6 +28,7 @@ import {
   catalogNames,
   composeSkillCatalogBlock,
   deriveSessionActivations,
+  eligibleCatalogHashes,
   hydrateSessionActivations,
   pruneSessionActivations,
   resolveEngineEligibleCatalog,
@@ -109,7 +110,7 @@ export async function loadContinuationContext(
   );
   const skillCatalog = resolveEngineEligibleCatalog(frozenSkillCatalog, profile);
   hydrateSessionActivations(options.sessionId, deriveSessionActivations(snapshot.records));
-  pruneSessionActivations(options.sessionId, new Set(catalogNames(skillCatalog)));
+  pruneSessionActivations(options.sessionId, eligibleCatalogHashes(skillCatalog));
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
   systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock);
   const frozenProjectState = readFrozenProjectStateBlock(options.sessionId);

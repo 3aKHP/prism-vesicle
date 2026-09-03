@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRoot, createSignal } from "solid-js";
 import { AssetResolver } from "../../../src/core/runtime/assets";
-import { createSessionStore, listSessions, loadSessionSnapshot } from "../../../src/core/session/store";
+import { createSessionStore, listSessions, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
 import type { SessionRecord } from "../../../src/core/session/record-model";
 import type { SessionSummary } from "../../../src/core/session/store";
 import type { ProjectHarnessRuntime } from "../../../src/core/harness/activation";
@@ -14,6 +14,14 @@ import { createSessionMigrationController } from "../../../src/tui/session-migra
 import type { MigrationReviewState } from "../../../src/tui/session-migration-controller";
 import { runSessionMigrationPreflight } from "../../../src/core/agent-loop/session-migration-preflight";
 import { configureFixtureProvider } from "../harness/fixtures/harness";
+import {
+  activateSkillForSession,
+  clearSessionActivations,
+  clearSessionSkillCatalog,
+  resolveSkillCatalog,
+  snapshotSkillCatalog,
+  SKILL_ACTIVATION_KIND,
+} from "../../../src/core/skills";
 import type { TuiKeyEvent } from "../../../src/tui/decision-interaction";
 import type { Message } from "../../../src/tui/types";
 
@@ -337,5 +345,150 @@ describe("session Harness migration (#239)", () => {
     releaseResume();
     await waitFor(() => wired.migrationReview() === null);
     expect(wired.errors).toEqual([]);
+  });
+
+  // #298: the migration re-freezes the Skill catalog at the current
+  // installation's content and re-activation works again for a changed host
+  // Skill whose pre-migration activation went stale.
+  test("re-freezes the Skill catalog at migration and lets a changed host Skill be activated again", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const skillRoot = join(hostAssets, "skills", "docs-like");
+    await mkdir(skillRoot, { recursive: true });
+    const writeBody = async (body: string) => {
+      await writeFile(join(skillRoot, "SKILL.md"), `---\nname: docs-like\ndescription: docs-like description\n---\n\n${body}\n`, "utf8");
+    };
+    const env = (): NodeJS.ProcessEnv => ({ ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets });
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      await writeBody("# docs-like\n\nProcedure body v1.");
+      const sessionId = "sess-skill-refreeze-e2e";
+
+      // Record the pre-migration session: header freezes the v1 catalog, a
+      // host activation record pins docs-like at the v1 hash.
+      const v1Snapshot = snapshotSkillCatalog(await resolveSkillCatalog(root, env(), { id: "etl" }));
+      expect(v1Snapshot.entries.map((entry) => entry.name)).toEqual(["docs-like"]);
+      const v1Hash = v1Snapshot.entries[0]!.bodySha256;
+      const store = await createSessionStore(root, sessionId);
+      await store.append({
+        role: "system",
+        content: "",
+        metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: v1Snapshot },
+      });
+      const preMigrationUser = await store.append({
+        role: "user",
+        content: `[skill_activation name="docs-like" scope="host" hash="${v1Hash}" status="activated"]\nv1 body\n[/skill_activation]`,
+        metadata: { kind: SKILL_ACTIVATION_KIND, name: "docs-like", scope: "host", contentHash: v1Hash, mode: "invoke", scripts: [] },
+      });
+      await store.append({ role: "assistant", content: "used the docs", metadata: { engine: "etl", model: "test-model" } });
+
+      // The host installation moves on: the Skill body changes underneath.
+      await writeBody("# docs-like\n\nProcedure body v2 with the read-only mount note.");
+
+      const harness = projectHarness(root, baselineB);
+      const report = await runSessionMigrationPreflight({ rootDir: root, sessionId, projectHarness: harness });
+      expect(report.verdict).not.toBe("blocking");
+      expect(report.findings.some((finding) => finding.severity === "warning" && finding.message.includes("docs-like") && finding.message.includes("must be activated again"))).toBe(true);
+      expect(report.skillRefreeze?.reactivate).toEqual(["docs-like"]);
+      const v2Hash = report.skillRefreeze!.snapshot.entries.find((entry) => entry.name === "docs-like")!.bodySha256;
+      expect(v2Hash).not.toBe(v1Hash);
+
+      // Two-stage confirmation commit through the real controllers.
+      await createRoot(async () => {
+        const wired = wireControllers(root, harness);
+        const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 4, preview: "" };
+        await wired.resume(summary);
+        expect(wired.migration.handleMigrationKey(key("return"))).toBe(true);
+        expect(wired.migration.handleMigrationKey(key("return"))).toBe(true);
+        await waitFor(() => wired.migrationReview() === null);
+        expect(wired.errors).toEqual([]);
+
+        // The migration record carries the re-freeze; the header keeps its
+        // append-only v1 bytes.
+        const records = await loadSessionRecords(root, sessionId);
+        const migrationRecord = records.find((record) => record.metadata?.kind === "session-migration")!;
+        expect((migrationRecord.metadata as { skills?: { entries?: { name: string; bodySha256: string }[] } }).skills?.entries?.find((entry) => entry.name === "docs-like")?.bodySha256).toBe(v2Hash);
+        const headerMetadata = records[0]!.metadata as { skills?: { entries?: { name: string; bodySha256: string }[] } };
+        expect(headerMetadata.skills?.entries?.find((entry) => entry.name === "docs-like")?.bodySha256).toBe(v1Hash);
+
+        // The re-freeze is session-level: the default head and a fork truncated
+        // before the migration record both resolve the v2 snapshot (#298 I2).
+        const active = await loadSessionSnapshot(root, sessionId, { synthesizeDanglingToolResults: false });
+        expect(active.skillCatalogSnapshot?.entries.find((entry) => entry.name === "docs-like")?.bodySha256).toBe(v2Hash);
+        const forked = await loadSessionSnapshot(root, sessionId, { headUuid: preMigrationUser.uuid, synthesizeDanglingToolResults: false });
+        expect(forked.skillCatalogSnapshot?.entries.find((entry) => entry.name === "docs-like")?.bodySha256).toBe(v2Hash);
+        expect(forked.harness).toEqual(baselineB);
+
+        // Re-activation works again, at the new content hash, without dedup
+        // suppressing it — and settles into alreadyActive on the second call.
+        const first = await activateSkillForSession(root, env(), sessionId, "docs-like", { profile: { id: "etl" } });
+        expect(first.alreadyActive).toBe(false);
+        expect(first.contentHash).toBe(v2Hash);
+        expect(typeof first.recordUuid).toBe("string");
+        const second = await activateSkillForSession(root, env(), sessionId, "docs-like", { profile: { id: "etl" } });
+        expect(second.alreadyActive).toBe(true);
+        expect(second.contentHash).toBe(v2Hash);
+      });
+    } finally {
+      clearSessionSkillCatalog("sess-skill-refreeze-e2e");
+      clearSessionActivations("sess-skill-refreeze-e2e");
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
+  });
+
+  // Review finding: a legacy snapshot-less session fresh-freezes on any
+  // resume, so Skills joining the catalog are not a migration consequence for
+  // it; only sessions that actually froze a catalog may report the join.
+  test("a legacy session without a frozen catalog reports no spurious join warning", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const writeHostSkill = async (name: string) => {
+      const skillRoot = join(hostAssets, "skills", name);
+      await mkdir(skillRoot, { recursive: true });
+      await writeFile(join(skillRoot, "SKILL.md"), `---\nname: ${name}\ndescription: ${name} description\n---\n\n# ${name}\n\nProcedure body.\n`, "utf8");
+    };
+    await writeHostSkill("alpha");
+    // Freeze while only "alpha" exists, then add "beta" to the installation.
+    const alphaSnapshot = snapshotSkillCatalog(await resolveSkillCatalog(root, { ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets }, { id: "etl" }));
+    expect(alphaSnapshot.entries.map((entry) => entry.name)).toEqual(["alpha"]);
+    await writeHostSkill("beta");
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      const sessionId = "sess-legacy-no-snapshot";
+      const store = await createSessionStore(root, sessionId);
+      await store.append({ role: "system", content: "", metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA } });
+      await store.append({ role: "user", content: "hello" });
+      await store.append({ role: "assistant", content: "reply", metadata: { engine: "etl", model: "test-model" } });
+
+      const harness = projectHarness(root, baselineB);
+      const report = await runSessionMigrationPreflight({ rootDir: root, sessionId, projectHarness: harness });
+      expect(report.verdict).toBe("clean");
+      expect(report.findings.some((finding) => finding.message.includes("will join it"))).toBe(false);
+
+      // Positive control: the same host catalog reported against a session
+      // that froze only "alpha" does surface the join as a migration finding.
+      const frozenSession = "sess-frozen-alpha";
+      const frozen = await createSessionStore(root, frozenSession);
+      await frozen.append({
+        role: "system",
+        content: "",
+        metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: alphaSnapshot },
+      });
+      await frozen.append({ role: "user", content: "hello" });
+      await frozen.append({ role: "assistant", content: "reply", metadata: { engine: "etl", model: "test-model" } });
+      const frozenReport = await runSessionMigrationPreflight({ rootDir: root, sessionId: frozenSession, projectHarness: harness });
+      expect(frozenReport.verdict).toBe("warning");
+      expect(frozenReport.findings.some((finding) => finding.message.includes("1 Skill(s) not in the frozen catalog will join it: beta"))).toBe(true);
+    } finally {
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
   });
 });
