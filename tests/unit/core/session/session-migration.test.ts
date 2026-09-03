@@ -139,6 +139,9 @@ describe("session-level migration rebind survives branch truncation", () => {
     const snapshot = await loadSessionSnapshot(rootDir, "sess-1", { synthesizeDanglingToolResults: false });
     expect(snapshot.headUuid).toBe(marker.uuid);
     expect(snapshot.harness).toEqual(identity("10.3.0-alpha.2"));
+    // The durable migration notice is session-level too: a branch truncated
+    // before the migration record still knows the session migrated.
+    expect(snapshot.lastMigration).toEqual(migration("10.3.0-alpha.2"));
   });
 
   test("a session without a migration record keeps its header identity at any head", async () => {

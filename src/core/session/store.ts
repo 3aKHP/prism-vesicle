@@ -25,6 +25,7 @@ import type { HarnessRuntimeIdentity } from "../harness/driver";
 import { parseStageBootstrapMetadata, type StageBootstrapMetadata } from "../stage/types";
 import { buildActiveSessionBranch, normalizeSessionRecords, type ResumedToolCall, type SessionRecord } from "./record-model";
 import { projectSessionHistory, projectSessionHostState } from "./history-projector";
+import { findLastSessionMigration, type SessionMigrationRecord } from "./session-migration";
 import { repairProviderHistory } from "./provider-history-repair";
 import { findPendingQualityDecision, findPendingQualityRewrite, findQualityEvents, findQualityWarnings } from "./quality-recovery";
 import { recoverSessionInteractions, type PendingDelegationRetry } from "./interaction-recovery";
@@ -308,6 +309,8 @@ export type SessionSnapshot = {
   harness?: HarnessRuntimeIdentity;
   /** Frozen Skill catalog snapshot: the latest in physical record order (session header, `skill-catalog`, or `session-migration` record). */
   skillCatalogSnapshot?: SkillCatalogSnapshot;
+  /** Last confirmed migration in physical record order (session-level, branch-independent); undefined when the session never migrated. */
+  lastMigration?: SessionMigrationRecord;
   /** Host-only auxiliary usage (for example session-title generation). */
   auxiliaryUsage?: ResponseUsage[];
   title?: SessionTitle;
@@ -378,6 +381,7 @@ export async function loadSessionSnapshot(
   // truncated before the migration record (regenerate/rewind/candidate fork)
   // still runs under the post-migration baseline and catalog.
   projection.harness = hostState.harness ?? projection.harness;
+  const lastMigration = findLastSessionMigration(allRecords);
   const messages = projection.messages;
 
   const {
@@ -424,6 +428,7 @@ export async function loadSessionSnapshot(
     ...(projection.assets ? { assets: projection.assets } : {}),
     ...(projection.harness ? { harness: projection.harness } : {}),
     ...(hostState.skillCatalogSnapshot ? { skillCatalogSnapshot: hostState.skillCatalogSnapshot } : {}),
+    ...(lastMigration ? { lastMigration } : {}),
     ...(projectSessionTitleUsage(allRecords).length > 0 ? { auxiliaryUsage: projectSessionTitleUsage(allRecords) } : {}),
     ...(projectSessionTitle(allRecords) ? { title: projectSessionTitle(allRecords) } : {}),
     ...(stageBootstrap ? { stageBootstrap } : {}),
