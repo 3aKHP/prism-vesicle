@@ -63,7 +63,7 @@ See [Terminal command reference](../reference/cli-commands.md) for complete synt
 
 ## `/skill` TUI command
 
-- `/skill` — opens a picker showing available Skills with their scope.
+- `/skill` — opens a picker showing the Skills this session can actually activate, with their scope. Skills installed after the session's catalog was frozen, or whose content has since changed, do not appear in the list; run `/skill refresh` to re-freeze and see them.
 - `/skill <name> [task]` — activates and invokes.
 - `/skill <name> --context-only` — loads context only, no provider request.
 - `/skill refresh` — re-freezes this session's Skill catalog at the current installation content. A Skill whose body changed needs one more `/skill <name>` activation to come back into the session; when nothing changed, the command does nothing.

@@ -63,7 +63,7 @@ vesicle skills install <GitHub-URL> --ref <tag或commit> --all
 
 ## `/skill` TUI 命令
 
-- `/skill` — 打开选择器，显示可用 Skill 及其范围。
+- `/skill` — 打开选择器，显示本会话可激活的 Skill 及其范围。会话冻结目录之后新装或内容已变化的 Skill 不会出现在列表中；运行 `/skill refresh` 重冻结后即可见。
 - `/skill <名称> [任务]` — 激活并调用。
 - `/skill <名称> --context-only` — 仅加载上下文，不发送提供程序请求。
 - `/skill refresh` — 把本会话的 Skill 目录按当前安装内容重新冻结。正文变更的 Skill 需要再 `/skill <名称>` 激活一次才能回到会话里；没有变化时什么都不做。
