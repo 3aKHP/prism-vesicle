@@ -17,4 +17,10 @@ bun run skills:docs:check || {
 	exit 1
 }
 
+bun run changelog:check || {
+	echo >&2 "CHANGELOG.zh-CN.md is out of pair with CHANGELOG.md."
+	echo >&2 "Mirror the changed version sections: identical ## anchors, matching per-version ### and bullet counts."
+	exit 1
+}
+
 exit 0

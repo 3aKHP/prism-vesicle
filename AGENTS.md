@@ -17,7 +17,7 @@ For any non-trivial code, prompt-runtime, TUI, provider, session, tool, workflow
 - `README.md`: project entry point, installation, first run, concise capability overview, and documentation navigation.
 - `docs/user/zh-CN/README.md`: canonical user-manual entry point; pair user-manual changes with the matching `docs/user/en/` page.
 
-Read `CHANGELOG.md` before any user-visible behavior, config, runtime contract, tool surface, TUI, prompt, or documentation-status change.
+Read `CHANGELOG.md` before any user-visible behavior, config, runtime contract, tool surface, TUI, prompt, or documentation-status change. `CHANGELOG.md` is canonical English with a structure-paired Simplified Chinese companion, `CHANGELOG.zh-CN.md`: update both files in the same change (`bun run changelog:check` enforces the pairing).
 
 Read asset-specific docs when touching assets:
 
@@ -36,7 +36,7 @@ Use the docs by responsibility:
 | `README.md` | Project entry point, installation, first run, feature overview, and doc navigation |
 | `docs/user/` | Channel-funnelled user manuals (start pages, tutorials, reference); Simplified Chinese canonical, English mirrored |
 | `STATUS.md` | Current implemented state, limits, tool surface, verification |
-| `CHANGELOG.md` | User-visible and notable unreleased changes |
+| `CHANGELOG.md` + `CHANGELOG.zh-CN.md` | User-visible and notable unreleased changes; bilingual, English canonical, structure-paired |
 | `CONTRIBUTING.md` | Contributor workflow, repo boundary, provider setup, and documentation style |
 | `docs/dev/README.md` | Public developer-document index, path boundary, and maintenance rules |
 | `CODE_SIGNING_POLICY.md` | Windows signing scope, approval, verification, and incident handling |
@@ -53,7 +53,7 @@ When one of these files becomes stale because of your change, update it in the s
 
 Follow the Markdown conventions in `CONTRIBUTING.md`: prose uses natural line wrapping rather than fixed-column hard wraps.
 
-`README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
+`README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
 
 ## Branch And PR Rules
 

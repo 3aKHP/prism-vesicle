@@ -73,7 +73,7 @@ Keep root-document responsibilities distinct:
 
 - `README.md` is the project entry point: installation, first run, concise feature overview, and documentation navigation.
 - `STATUS.md` is the authoritative current implementation inventory, including tool surface, validators, verification, and known limits.
-- `CHANGELOG.md` records notable released and unreleased changes.
+- `CHANGELOG.md` records notable released and unreleased changes. Its Simplified Chinese companion `CHANGELOG.zh-CN.md` mirrors the same version sections; update both in the same change and keep them structurally paired (identical version headings and per-version subsection/bullet counts, enforced by `bun run changelog:check`).
 - `CONTRIBUTING.md` owns contributor setup, repository boundaries, and documentation conventions.
 - `docs/dev/README.md` indexes the tracked public developer contracts and defines their maintenance boundary.
 - `docs/dev/STYLE.md` owns source-code structure and maintainability rules.
@@ -88,20 +88,20 @@ New files under `docs/dev/` and active files under `dev/docs/working/` or `dev/d
 
 ### Documentation Languages
 
-`README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. Their Simplified Chinese counterparts use the `.zh-CN.md` suffix and should be updated in the same change whenever shared meaning changes.
+`README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. Their Simplified Chinese counterparts use the `.zh-CN.md` suffix and should be updated in the same change whenever shared meaning changes.
 
 The user manual scales by language directory: `docs/user/zh-CN/` is canonical and `docs/user/en/` mirrors the same relative filenames, navigation, commands, and shared meaning. `docs/user/README.md` is the language landing page.
 
 Keep commands, paths, configuration keys, code, and product identifiers unchanged across languages. Translate the surrounding explanation for clarity rather than mirroring English sentence structure mechanically.
 
-`STATUS.md`, `CHANGELOG.md`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, and `docs/dev/` remain single-language documents. Do not create translated copies without revisiting this policy.
+`STATUS.md`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, and `docs/dev/` remain single-language documents. Do not create translated copies without revisiting this policy. `CHANGELOG.md` left this list when release bodies began shipping bilingual: its `.zh-CN.md` companion is structure-paired rather than a free translation, because the release-notes composer interleaves the two files per version section.
 
 ## Pull Request Checklist
 
 - Explain the behavior change and why it belongs in the current milestone.
 - Include verification commands in the PR description.
 - When the PR completes an issue, put an explicit closing keyword such as `Closes #<issue>` on its own line in the PR body. Use `Refs #<issue>` for related work that does not close the issue; `Implements #<issue>` and title references are not closing syntax. See [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md).
-- Update `README.md`, `STATUS.md`, `CHANGELOG.md`, `docs/dev/ARCHITECTURE.md`, or the owning domain contract when user-visible behavior, runtime behavior, or an architecture boundary changes. Update `docs/dev/STYLE.md` only when source-code conventions change.
+- Update `README.md`, `STATUS.md`, `CHANGELOG.md` (with its `CHANGELOG.zh-CN.md` companion), `docs/dev/ARCHITECTURE.md`, or the owning domain contract when user-visible behavior, runtime behavior, or an architecture boundary changes. Update `docs/dev/STYLE.md` only when source-code conventions change.
 - Keep generated `.vesicle/` sessions out of git.
 - Keep new or edited Markdown prose naturally wrapped.
 

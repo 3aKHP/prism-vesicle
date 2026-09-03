@@ -88,33 +88,32 @@ describe("release workflow contract", () => {
     expect(npmScript).not.toContain("--tag latest");
   });
 
-  test("composes channel-aware bilingual release notes with the standing disclosures", async () => {
+  test("composes the release body through the paired-CHANGELOG script", async () => {
     const publish = await loadWorkflow("release.yml");
     const job = publish.jobs["github-release"];
-    const notes = job?.steps?.find((step) => step.name === "Compose channel-aware release notes")?.run ?? "";
-    const releaseStep = job?.steps?.find((step) => step.uses === "softprops/action-gh-release@v3");
+    const steps = job?.steps ?? [];
+    const compose = steps.find((step) => step.run?.includes("compose-notes"));
+    const releaseStep = steps.find((step) => step.uses === "softprops/action-gh-release@v3");
 
-    // Every supported channel writes its own section and an unknown channel fails closed.
-    expect(notes).toContain("Release candidate channel and known limits / RC 频道与已知限制");
-    expect(notes).toContain("Beta channel and known limits / Beta 频道与已知限制");
-    expect(notes).toContain("Stable channel and known limits / 稳定频道与已知限制");
-    expect(notes).toContain("Unsupported release channel");
-    // RC wording must steer consumers to next while latest keeps tracking the beta line.
-    expect(notes).toContain("npm install -g prism-vesicle@next");
-    // Standing disclosures stay attached to every channel.
-    expect(notes).toContain("npm install -g prism-vesicle");
-    expect(notes).toContain("deepseek-subset-2026-08-19");
-    expect(notes).toContain("MCP resource, audio, URL/link");
-    expect(notes).toContain("not Authenticode-signed");
-    expect(notes).toContain("没有 Authenticode 签名");
-    expect(notes).toContain("SHA256SUMS.txt");
-    expect(notes).toContain("CODE_SIGNING_POLICY.md");
-    expect(notes).toContain("CODE_SIGNING_POLICY.zh-CN.md");
-    // The version placeholder must be resolved before the body reaches the release.
-    expect(notes).toContain("s/%VERSION%/$VERSION/g");
+    // The body comes from scripts/release/compose-notes.ts, which interleaves
+    // the version sections of CHANGELOG.md and CHANGELOG.zh-CN.md and derives
+    // the compare base from the fetched tag history. Channel blocks, the
+    // bilingual signing disclosure, and the slimmed standing disclosures are
+    // content contracts of the script, unit-tested in
+    // tests/unit/scripts/compose-notes.test.ts — not workflow text.
+    expect(compose?.run).toContain('bun scripts/release/compose-notes.ts --version "$VERSION" --out release-notes.md');
+    expect(compose?.env?.VERSION).toBe("${{ needs.metadata.outputs.version }}");
+    const checkout = steps.find((step) => step.uses === "actions/checkout@v7");
+    expect(checkout?.with?.["fetch-depth"]).toBe(0);
+    expect(checkout?.with?.["fetch-tags"]).toBe(true);
+    expect(steps.some((step) => step.uses === "oven-sh/setup-bun@v2")).toBe(true);
 
-    expect(releaseStep?.with?.body).toBe("${{ steps.notes.outputs.body }}");
-    expect(releaseStep?.with?.generate_release_notes).toBe(true);
+    // GitHub's autogen must stay off (its compare-base fallback dumped the
+    // full history into the first non-prerelease body, issue #268 item 10);
+    // the body rides the composed file only.
+    expect(releaseStep?.with?.body_path).toBe("release-notes.md");
+    expect(releaseStep?.with?.body).toBeUndefined();
+    expect(releaseStep?.with?.generate_release_notes).toBeUndefined();
     expect(releaseStep?.with?.prerelease).toBe("${{ needs.metadata.outputs.channel != 'stable' }}");
     expect(releaseStep?.with?.make_latest).toBe("${{ needs.metadata.outputs.channel == 'stable' }}");
   });
