@@ -41,7 +41,7 @@ function key(name: string): TuiKeyEvent {
 
 describe("tui: session migration prompt", () => {
   test("renders the stage-1 review with identity line and confirm options", async () => {
-    const current = state({ report: report({ verdict: "warning", findings: [{ severity: "warning", layer: "resume", message: "Skill \"novel-outline-v3\" no longer resolves to the body this session froze and will leave the catalog." }] }) });
+    const current = state({ report: report({ verdict: "warning", findings: [{ severity: "warning", layer: "resume", message: "Skill \"novel-outline-v3\" no longer resolves under the current installation and will leave the catalog." }] }) });
     const setup = await testRender(() => <MigrationPrompt state={current} width={100} />, { width: 100, height: migrationPanelHeight(current, 100) });
     await setup.flush();
     const frame = setup.captureCharFrame();
