@@ -135,8 +135,13 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void
 function wireControllers(
   root: string,
   harness: ProjectHarnessRuntime,
-  resumeAfterMigration?: (target: SessionSummary, commandEcho: string | undefined) => Promise<void>,
+  options: {
+    resumeAfterMigration?: (target: SessionSummary, commandEcho: string | undefined) => Promise<void>;
+    /** Omit `beginMigrationReview` — the headless wiring where only a pending quality decision survives an identity mismatch. */
+    omitMigrationReview?: boolean;
+  } = {},
 ) {
+  const { resumeAfterMigration, omitMigrationReview = false } = options;
   let resume!: (target: SessionSummary, commandEcho?: string) => Promise<void>;
   const errors: unknown[] = [];
   const messages: Message[][] = [];
@@ -202,7 +207,7 @@ function wireControllers(
     setQuestionFreeformCursor: noop,
     setQuestionFreeformKillBuffer: noop,
     clearQueuedInputs: noop,
-    beginMigrationReview: migration.beginMigrationReview,
+    ...(omitMigrationReview ? {} : { beginMigrationReview: migration.beginMigrationReview }),
   } as never));
   return { resume, migration, migrationReview, errors, messages, statuses };
 }
@@ -330,7 +335,7 @@ describe("session Harness migration (#239)", () => {
       resumeEntered = true;
       await new Promise<void>((resolve) => { releaseResume = resolve; });
     };
-    const wired = wireControllers(root, harness, resumeAfterMigration);
+    const wired = wireControllers(root, harness, { resumeAfterMigration });
     const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 5, preview: "" };
 
     await wired.resume(summary);
@@ -486,6 +491,253 @@ describe("session Harness migration (#239)", () => {
       expect(frozenReport.verdict).toBe("warning");
       expect(frozenReport.findings.some((finding) => finding.message.includes("1 Skill(s) not in the frozen catalog will join it: beta"))).toBe(true);
     } finally {
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
+  });
+});
+
+// #308: a Skill body that drifted without a Harness identity change is the
+// non-migration drift case — resume must surface an actionable hint pointing
+// at the explicit re-freeze command, without writing anything.
+describe("session Skill catalog drift hint (#308)", () => {
+  test("resume with unchanged identity shows the drift hint and appends nothing", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const skillRoot = join(hostAssets, "skills", "docs-like");
+    await mkdir(skillRoot, { recursive: true });
+    const writeBody = async (body: string) => {
+      await writeFile(join(skillRoot, "SKILL.md"), `---\nname: docs-like\ndescription: docs-like description\n---\n\n${body}\n`, "utf8");
+    };
+    await writeBody("# docs-like\n\nProcedure body v1.");
+    const v1Snapshot = snapshotSkillCatalog(
+      await resolveSkillCatalog(root, { ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets }, { id: "etl" }),
+    );
+    const sessionId = "sess-skill-drift-hint";
+    const v1Hash = v1Snapshot.entries[0]!.bodySha256;
+    const store = await createSessionStore(root, sessionId);
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: v1Snapshot },
+    });
+    // A live activation at the stale hash: exactly the Skill the hint's
+    // re-activation sentence is about.
+    await store.append({
+      role: "user",
+      content: `[skill_activation name="docs-like" scope="host" hash="${v1Hash}" status="activated"]\nv1 body\n[/skill_activation]`,
+      metadata: { kind: SKILL_ACTIVATION_KIND, name: "docs-like", scope: "host", contentHash: v1Hash, mode: "invoke", scripts: [] },
+    });
+    await store.append({ role: "user", content: "hello" });
+    await store.append({ role: "assistant", content: "reply", metadata: { engine: "etl", model: "test-model" } });
+    const recordCount = (await loadSessionRecords(root, sessionId)).length;
+
+    // The installation moves on without any Harness identity change.
+    await writeBody("# docs-like\n\nProcedure body v2.");
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      await createRoot(async () => {
+        // Same identity on both sides: no migration review, only the hint.
+        const wired = wireControllers(root, projectHarness(root, baselineA));
+        const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 3, preview: "" };
+        await wired.resume(summary);
+        expect(wired.errors).toEqual([]);
+        expect(wired.migrationReview()).toBeNull();
+        const transcript = wired.messages.at(-1) ?? [];
+        const driftNotice = transcript.find((message) => message.content.includes("Skill catalog drift detected"));
+        expect(driftNotice?.content).toContain("1 changed, 0 removed, 0 added");
+        expect(driftNotice?.content).toContain("/skill refresh");
+        expect(driftNotice?.content).toContain("must be activated again");
+        // Advisory only: nothing was appended to the durable session.
+        expect(await loadSessionRecords(root, sessionId)).toHaveLength(recordCount);
+      });
+    } finally {
+      clearSessionSkillCatalog(sessionId);
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
+  });
+
+  test("resume stays silent without drift and for a legacy snapshot-less session", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const skillRoot = join(hostAssets, "skills", "docs-like");
+    await mkdir(skillRoot, { recursive: true });
+    await writeFile(
+      join(skillRoot, "SKILL.md"),
+      "---\nname: docs-like\ndescription: docs-like description\n---\n\n# docs-like\n\nProcedure body.\n",
+      "utf8",
+    );
+    const snapshot = snapshotSkillCatalog(
+      await resolveSkillCatalog(root, { ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets }, { id: "etl" }),
+    );
+    const frozenSession = "sess-skill-drift-silent";
+    const frozen = await createSessionStore(root, frozenSession);
+    await frozen.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: snapshot },
+    });
+    await frozen.append({ role: "user", content: "hello" });
+    // A legacy session that never froze a catalog: additions are ordinary
+    // resume behavior for it, not drift (#307 lesson).
+    const legacySession = "sess-skill-drift-legacy";
+    const legacy = await createSessionStore(root, legacySession);
+    await legacy.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA },
+    });
+    await legacy.append({ role: "user", content: "hello" });
+
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      await createRoot(async () => {
+        const wired = wireControllers(root, projectHarness(root, baselineA));
+        const resumeSession = async (sessionId: string) => {
+          const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 2, preview: "" };
+          await wired.resume(summary);
+          expect(wired.errors).toEqual([]);
+          const transcript = wired.messages.at(-1) ?? [];
+          expect(transcript.some((message) => message.content.includes("Skill catalog drift detected"))).toBe(false);
+        };
+        // The frozen catalog matches the installation exactly: no drift.
+        await resumeSession(frozenSession);
+
+        // Then the installation grows "beta": the frozen session would now
+        // drift, but the legacy snapshot-less session must stay silent —
+        // additions are ordinary resume behavior for it (#307 lesson).
+        const betaRoot = join(hostAssets, "skills", "beta");
+        await mkdir(betaRoot, { recursive: true });
+        await writeFile(
+          join(betaRoot, "SKILL.md"),
+          "---\nname: beta\ndescription: beta description\n---\n\n# beta\n\nProcedure body.\n",
+          "utf8",
+        );
+        await resumeSession(legacySession);
+      });
+    } finally {
+      clearSessionSkillCatalog(frozenSession);
+      clearSessionSkillCatalog(legacySession);
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
+  });
+
+  // The hint's defining gate: identity mismatch must never render it. The
+  // only resume path that continues past a mismatch without the migration
+  // review is a pending quality decision (the quality-blocked fail-soft
+  // path), so that is the negative that pins the gate.
+  test("resume with a mismatched identity never shows the drift hint", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const skillRoot = join(hostAssets, "skills", "docs-like");
+    await mkdir(skillRoot, { recursive: true });
+    const writeBody = async (body: string) => {
+      await writeFile(join(skillRoot, "SKILL.md"), `---\nname: docs-like\ndescription: docs-like description\n---\n\n${body}\n`, "utf8");
+    };
+    await writeBody("# docs-like\n\nProcedure body v1.");
+    const v1Snapshot = snapshotSkillCatalog(
+      await resolveSkillCatalog(root, { ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets }, { id: "etl" }),
+    );
+    const v1Hash = v1Snapshot.entries[0]!.bodySha256;
+    const sessionId = "sess-skill-drift-identity-mismatch";
+    const store = await createSessionStore(root, sessionId);
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: v1Snapshot },
+    });
+    await store.append({
+      role: "user",
+      content: `[skill_activation name="docs-like" scope="host" hash="${v1Hash}" status="activated"]\nv1 body\n[/skill_activation]`,
+      metadata: { kind: SKILL_ACTIVATION_KIND, name: "docs-like", scope: "host", contentHash: v1Hash, mode: "invoke", scripts: [] },
+    });
+    // A pending quality decision is what lets resume continue at all when the
+    // identity mismatches and no migration review is wired (headless shape).
+    const qualityTarget = {
+      id: "assistant:dense",
+      kind: "assistant-response",
+      candidateHash: "d".repeat(64),
+      status: "findings",
+      findingIds: ["dense-document-metric"],
+      findings: [],
+    };
+    const qualityWarning = {
+      id: "quality-warning_drift",
+      guard: "anti-ai-flavor",
+      reason: "exhausted",
+      producer: "etl",
+      attempt: 0,
+      targets: [qualityTarget],
+    };
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: {
+        kind: "quality-warning",
+        qualityWarning: qualityWarning,
+        qualityDecision: {
+          request: {
+            id: qualityWarning.id,
+            reason: "exhausted",
+            producer: "etl",
+            findingCount: 1,
+            targets: [{ id: qualityTarget.id, findingIds: qualityTarget.findingIds }],
+            canRetry: true,
+          },
+          warning: qualityWarning,
+          qualityState: {
+            producer: "etl",
+            packId: "prism-engine-v10",
+            packVersion: "10.3.2",
+            manifestSha256: "a".repeat(64),
+            ruleVersion: "0.2.1",
+            ruleSourceHash: "b".repeat(64),
+            attempts: 0,
+            rejectedHashes: [],
+          },
+          candidate: { responseId: "resp-1", content: "candidate text", toolCalls: [] },
+          phase: "before-mutations",
+          candidateRecorded: true,
+        },
+      },
+    });
+    await store.append({ role: "user", content: "hello" });
+
+    // The installation drifts while the recorded identity goes stale.
+    await writeBody("# docs-like\n\nProcedure body v2.");
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      await createRoot(async () => {
+        const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 5, preview: "" };
+
+        // Mismatched identity, no migration review wired: resume continues
+        // only through the quality-blocked path — and must not hint.
+        const mismatched = wireControllers(root, projectHarness(root, baselineB), { omitMigrationReview: true });
+        await mismatched.resume(summary);
+        expect(mismatched.errors).toEqual([]);
+        const blockedTranscript = mismatched.messages.at(-1) ?? [];
+        expect(blockedTranscript.some((message) => message.content.includes("Skill catalog drift detected"))).toBe(false);
+
+        // Positive control, same session: a matching identity does show it.
+        const matched = wireControllers(root, projectHarness(root, baselineA));
+        await matched.resume(summary);
+        expect(matched.errors).toEqual([]);
+        const matchedTranscript = matched.messages.at(-1) ?? [];
+        expect(matchedTranscript.some((message) => message.content.includes("Skill catalog drift detected"))).toBe(true);
+      });
+    } finally {
+      clearSessionSkillCatalog(sessionId);
       if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
       else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
       delete process.env.VESICLE_PROVIDERS_FILE;

@@ -68,6 +68,7 @@ See [Terminal command reference](../reference/cli-commands.md) for complete synt
 - `/skill` — opens a picker showing available Skills with their scope.
 - `/skill <name> [task]` — activates and invokes.
 - `/skill <name> --context-only` — loads context only, no provider request.
+- `/skill refresh` — re-freezes this session's Skill catalog at the current installation content. A Skill whose body changed needs one more `/skill <name>` activation to come back into the session; when nothing changed, the command does nothing.
 
 ## Read-only `skills/` mount after activation
 
@@ -116,7 +117,7 @@ The Stage Engine does not resolve a Skill catalog and does not support `activate
 
 ## Session freeze
 
-The Skill catalog is frozen on first resolution per session. On resume, Skills are re-resolved by name and content hash; a Skill whose content changed is dropped with a diagnostic, never silently substituted.
+The Skill catalog is frozen on first resolution per session. On resume, Skills are re-resolved by name and content hash; a Skill whose content changed is dropped with a diagnostic, never silently substituted. When a Skill's content changes without triggering the migration review — for example a host-asset update that does not touch the Harness version — resume shows a drift notice: run `/skill refresh` to re-freeze at the current content, then activate each changed Skill once more.
 
 ## Capability and permissions
 

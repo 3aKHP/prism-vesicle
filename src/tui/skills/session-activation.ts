@@ -1,11 +1,15 @@
-import { activateSkillForSession } from "../../core/skills";
+import { activateSkillForSession, refreshSessionSkillCatalog } from "../../core/skills";
+import type { SessionSkillCatalogRefresh } from "../../core/skills";
 import type { EngineId } from "../../core/engine/profile";
 
 /**
  * Skill command / session-activation owner (Phase 2 / `/skill`). Owns the
  * complete host use case behind `/skill <name> [task]` and the picker: session
  * identity, branch-parent chaining, catalog activation, system-card
- * projection, and turn submission.
+ * projection, and turn submission. `refresh()` owns `/skill refresh`: the
+ * explicit session catalog re-freeze (#308), executed without a confirmation
+ * panel (typing the command is the confirmation; the operation is repeatable
+ * and append-only) and reported as a changed/removed/added diff card.
  *
  * Boundary: the owner receives only narrow ports — the session-identity
  * coordinator's `ensure`, the active Engine / model-limits accessors, the
@@ -59,7 +63,49 @@ export function createSkillActivationOwner(options: SkillActivationOwnerPorts) {
     }
   }
 
-  return { activate };
+  async function refresh(): Promise<void> {
+    const sid = await options.sessionIdentity.ensure();
+    const result = await refreshSessionSkillCatalog({
+      rootDir: options.rootDir,
+      env: process.env,
+      sessionId: sid,
+    });
+    options.onNotice(renderSkillRefreshCard(result));
+  }
+
+  return { activate, refresh };
+}
+
+export function renderSkillRefreshCard(result: SessionSkillCatalogRefresh): string {
+  const { drift, appended } = result;
+  if (!appended) {
+    return drift.persisted
+      ? "Skill catalog already matches the installed Skills; nothing to re-freeze."
+      : "No Skills resolve under the current installation; nothing to freeze.";
+  }
+  const count = drift.snapshot.entries.length;
+  const lines = [
+    drift.persisted
+      ? "Skill catalog re-frozen at the current installation content."
+      : `Skill catalog frozen for this session (${count} Skill${count === 1 ? "" : "s"}).`,
+  ];
+  for (const event of drift.events) {
+    if (event.kind === "removed") {
+      lines.push(`- Removed: ${event.name} (no longer resolves under the current installation)`);
+    } else {
+      lines.push(
+        event.mustReactivate
+          ? `- Changed: ${event.name} (activate it again with /skill ${event.name})`
+          : `- Changed: ${event.name}`,
+      );
+    }
+  }
+  if (drift.added.length > 0) lines.push(`- Added: ${drift.added.join(", ")}`);
+  if (result.unbudgeted) {
+    lines.push("Provider configuration was unavailable; the catalog was frozen without a context-window budget.");
+  }
+  lines.push("The updated catalog applies from the next turn; earlier activation records stay in history.");
+  return lines.join("\n");
 }
 
 export type SkillActivationOwner = ReturnType<typeof createSkillActivationOwner>;

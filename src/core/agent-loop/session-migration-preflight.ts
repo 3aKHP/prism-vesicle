@@ -25,11 +25,11 @@ import { composeSystemPromptWithInstructions } from "../instructions";
 import { loadSessionSnapshot, type SessionSnapshot } from "../session/store";
 import type { SessionMigrationPreflightLayer } from "../session/session-migration";
 import { composeSkillCatalogBlock, eligibleCatalogNames, resolveEngineEligibleCatalog } from "../skills/catalog-context";
-import { deriveSessionActivations, isMeaningfulSkillCatalogSnapshot, resolveSkillCatalog, snapshotSkillCatalog, type SkillCatalogSnapshot } from "../skills";
+import { computeSkillCatalogDrift, isMeaningfulSkillCatalogSnapshot, type SkillCatalogSnapshot } from "../skills";
 import { matchesQualityIdentity } from "./quality-continuation-bootstrap";
 import { resolveBuiltInTools, resolveWebSearchSurfaceOptions } from "./tool-surface";
 import { agentToolDefinitions } from "../agents/tools";
-import { loadConfigForSelection } from "../../config/providers";
+import { loadConfigWithProviderFallback } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import { prepareProviderMessages } from "../attachments/store";
 import { toVesicleMessage } from "../compact/summary-generator";
@@ -159,52 +159,42 @@ export async function runSessionMigrationPreflight(options: {
   // Loaded before the Skill step so the re-freeze resolution applies the same
   // context-window catalog budget a fresh bootstrap would. The unavailability
   // early-exit below keeps its original position in the finding order.
-  let config: VesicleConfig | undefined;
-  try {
-    config = await loadConfigForSelection(snapshot.providerSelection, env);
-  } catch {
-    try {
-      config = await loadConfigForSelection(undefined, env);
-    } catch {
-      config = undefined;
-    }
-  }
+  const config = await loadConfigWithProviderFallback(snapshot.providerSelection, env);
 
   // The migration re-freezes the Skill catalog at the current installation's
   // content: a full fresh resolution, the same catalog a brand-new session
   // would freeze — not a re-resolution filtered by the old snapshot's hashes.
   // The serializer dry-run below uses this fresh catalog too, so it simulates
-  // the post-migration request shape.
-  const freshCatalog = await resolveSkillCatalog(options.rootDir, env, engineAssets.profile, config?.limits?.contextWindow);
-  const freshSnapshot = snapshotSkillCatalog(freshCatalog);
-  const freshByName = new Map(freshSnapshot.entries.map((entry) => [entry.name, entry]));
-  const staleActivationNames = new Set(
-    deriveSessionActivations(snapshot.records)
-      .filter((activation) => freshByName.get(activation.name)?.bodySha256 !== activation.contentHash)
-      .map((activation) => activation.name),
-  );
-  const persistedNames = new Set((snapshot.skillCatalogSnapshot?.entries ?? []).map((entry) => entry.name));
-  const addedNames = freshSnapshot.entries.filter((entry) => !persistedNames.has(entry.name)).map((entry) => entry.name);
-  for (const entry of snapshot.skillCatalogSnapshot?.entries ?? []) {
-    const fresh = freshByName.get(entry.name);
-    if (!fresh) {
+  // the post-migration request shape. The diff itself is the shared drift
+  // computation, so an explicit `/skill refresh` reports exactly the same
+  // catalog changes migration would apply.
+  const drift = await computeSkillCatalogDrift({
+    rootDir: options.rootDir,
+    env,
+    profile: engineAssets.profile,
+    ...(config?.limits?.contextWindow !== undefined ? { contextWindow: config.limits.contextWindow } : {}),
+    ...(snapshot.skillCatalogSnapshot ? { persistedSnapshot: snapshot.skillCatalogSnapshot } : {}),
+    records: snapshot.records,
+  });
+  for (const event of drift.events) {
+    if (event.kind === "removed") {
       findings.push({
         severity: "warning",
         layer: "resume",
-        message: `Skill "${entry.name}" no longer resolves under the current installation and will leave the catalog.`,
+        message: `Skill "${event.name}" no longer resolves under the current installation and will leave the catalog.`,
       });
-    } else if (fresh.bodySha256 !== entry.bodySha256) {
+    } else {
       findings.push(
-        staleActivationNames.has(entry.name)
+        event.mustReactivate
           ? {
               severity: "warning",
               layer: "resume",
-              message: `Skill "${entry.name}" changed since this session froze it; the migration re-freezes the catalog at its current content, and ${entry.name} must be activated again.`,
+              message: `Skill "${event.name}" changed since this session froze it; the migration re-freezes the catalog at its current content, and ${event.name} must be activated again.`,
             }
           : {
               severity: "warning",
               layer: "resume",
-              message: `Skill "${entry.name}" changed since this session froze it; the migration re-freezes the catalog at its current content.`,
+              message: `Skill "${event.name}" changed since this session froze it; the migration re-freezes the catalog at its current content.`,
             },
       );
     }
@@ -212,17 +202,17 @@ export async function runSessionMigrationPreflight(options: {
   // Only sessions that actually froze a catalog can observe Skills "join" as
   // a migration consequence: a legacy snapshot-less session fresh-freezes on
   // any resume, so additions there are ordinary resume behavior, not drift.
-  if (snapshot.skillCatalogSnapshot !== undefined && addedNames.length > 0) {
+  if (drift.persisted && drift.added.length > 0) {
     findings.push({
       severity: "warning",
       layer: "resume",
-      message: `${addedNames.length} Skill(s) not in the frozen catalog will join it: ${addedNames.join(", ")}.`,
+      message: `${drift.added.length} Skill(s) not in the frozen catalog will join it: ${drift.added.join(", ")}.`,
     });
   }
-  const skillRefreeze = snapshot.skillCatalogSnapshot !== undefined || isMeaningfulSkillCatalogSnapshot(freshSnapshot)
-    ? { snapshot: freshSnapshot, reactivate: [...staleActivationNames].filter((name) => freshByName.has(name)).sort() }
+  const skillRefreeze = drift.persisted || isMeaningfulSkillCatalogSnapshot(drift.snapshot)
+    ? { snapshot: drift.snapshot, reactivate: drift.reactivate }
     : undefined;
-  const eligibleCatalog = resolveEngineEligibleCatalog(freshCatalog, engineAssets.profile);
+  const eligibleCatalog = resolveEngineEligibleCatalog(drift.catalog, engineAssets.profile);
 
   if (snapshot.pendingQualityRewrite && !matchesQualityIdentity(options.projectHarness.harness.quality, snapshot.pendingQualityRewrite)) {
     const pending = snapshot.pendingQualityRewrite;

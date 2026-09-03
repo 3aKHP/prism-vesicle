@@ -28,6 +28,7 @@ const HELP_TEXT = [
   "  /skill            list available skills (no args = picker)",
   "  /skill <name> [task] activate a skill and optionally invoke it with a task",
   "  /skill <name> --context-only activate without starting a provider request",
+  "  /skill refresh    re-freeze the session Skill catalog at the current installation content",
   "  /resume           list sessions",
   "  /resume <n|id>    resume a session",
   "  /new              start a fresh session",

@@ -51,7 +51,7 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Show or set the tool approval mode |
 | `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | Show or configure the experimental Semantic Judge; no arguments open guided settings. `off` disables the Judge and retains the profile; `observe`/`rewrite` without a profile use the retained or active provider/model. Selecting Review and revise (or `/quality rewrite`) opens one red confirmation panel — there is no `/quality confirm` second command |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry SubAgent delivery |
-| `/skill [name [task]]` | Activate a Skill; no args opens a picker, `<name> [task]` activates and invokes, `<name> --context-only` loads without invoking |
+| `/skill [refresh \| name [task]]` | Activate a Skill; no args opens a picker, `<name> [task]` activates and invokes, `<name> --context-only` loads without invoking, `refresh` re-freezes the session catalog at the current installation content |
 
 ## Input-box keys
 

@@ -1292,6 +1292,7 @@ export function App(props: AppProps = {}) {
       setMessages,
       openSkillPicker,
       activateSkill: (name, options) => activateSkill(name, options),
+      refreshSkillCatalog: () => skillActivation.refresh(),
     },
     workspace: {
       setMessages, setStatus, recordActivity,

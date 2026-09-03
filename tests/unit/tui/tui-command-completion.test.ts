@@ -153,6 +153,14 @@ describe("command-owned argument completion", () => {
     expect((await items(workspace)).map((item) => item.id)).toEqual(artifacts.map((entry) => entry.path));
     expect(workspace.complete((await items(workspace))[0]!)).toBe("/workspace workspace/cards/mira.md");
 
+    const skillNames = resolve("/skill re");
+    const refresh = (await items(skillNames)).find((item) => item.id === "refresh");
+    expect(refresh).toBeDefined();
+    expect(skillNames.complete(refresh!)).toBe("/skill refresh ");
+
+    // The reserved subcommand takes nothing after it: no --context-only offer.
+    expect(resolveCommandArgumentCompletion("/skill refresh ", builtinCommands, context())).toBeNull();
+
     const skill = resolve("/skill vesicle-docs ");
     expect((await items(skill)).map((item) => item.id)).toEqual(["--context-only"]);
     expect(skill.complete((await items(skill))[0]!)).toBe("/skill vesicle-docs --context-only");
