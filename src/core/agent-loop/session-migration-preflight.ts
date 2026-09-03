@@ -29,7 +29,7 @@ import { computeSkillCatalogDrift, isMeaningfulSkillCatalogSnapshot, type SkillC
 import { matchesQualityIdentity } from "./quality-continuation-bootstrap";
 import { resolveBuiltInTools, resolveWebSearchSurfaceOptions } from "./tool-surface";
 import { agentToolDefinitions } from "../agents/tools";
-import { loadConfigForSelection } from "../../config/providers";
+import { loadConfigWithProviderFallback } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import { prepareProviderMessages } from "../attachments/store";
 import { toVesicleMessage } from "../compact/summary-generator";
@@ -159,16 +159,7 @@ export async function runSessionMigrationPreflight(options: {
   // Loaded before the Skill step so the re-freeze resolution applies the same
   // context-window catalog budget a fresh bootstrap would. The unavailability
   // early-exit below keeps its original position in the finding order.
-  let config: VesicleConfig | undefined;
-  try {
-    config = await loadConfigForSelection(snapshot.providerSelection, env);
-  } catch {
-    try {
-      config = await loadConfigForSelection(undefined, env);
-    } catch {
-      config = undefined;
-    }
-  }
+  const config = await loadConfigWithProviderFallback(snapshot.providerSelection, env);
 
   // The migration re-freezes the Skill catalog at the current installation's
   // content: a full fresh resolution, the same catalog a brand-new session

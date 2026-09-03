@@ -135,9 +135,13 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void
 function wireControllers(
   root: string,
   harness: ProjectHarnessRuntime,
-  resumeAfterMigration?: (target: SessionSummary, commandEcho: string | undefined) => Promise<void>,
-  omitMigrationReview = false,
+  options: {
+    resumeAfterMigration?: (target: SessionSummary, commandEcho: string | undefined) => Promise<void>;
+    /** Omit `beginMigrationReview` — the headless wiring where only a pending quality decision survives an identity mismatch. */
+    omitMigrationReview?: boolean;
+  } = {},
 ) {
+  const { resumeAfterMigration, omitMigrationReview = false } = options;
   let resume!: (target: SessionSummary, commandEcho?: string) => Promise<void>;
   const errors: unknown[] = [];
   const messages: Message[][] = [];
@@ -331,7 +335,7 @@ describe("session Harness migration (#239)", () => {
       resumeEntered = true;
       await new Promise<void>((resolve) => { releaseResume = resolve; });
     };
-    const wired = wireControllers(root, harness, resumeAfterMigration);
+    const wired = wireControllers(root, harness, { resumeAfterMigration });
     const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 5, preview: "" };
 
     await wired.resume(summary);
@@ -719,7 +723,7 @@ describe("session Skill catalog drift hint (#308)", () => {
 
         // Mismatched identity, no migration review wired: resume continues
         // only through the quality-blocked path — and must not hint.
-        const mismatched = wireControllers(root, projectHarness(root, baselineB), undefined, true);
+        const mismatched = wireControllers(root, projectHarness(root, baselineB), { omitMigrationReview: true });
         await mismatched.resume(summary);
         expect(mismatched.errors).toEqual([]);
         const blockedTranscript = mismatched.messages.at(-1) ?? [];

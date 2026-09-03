@@ -1,6 +1,5 @@
 import type { Accessor, Setter } from "solid-js";
-import { loadConfigForSelection, type ProviderSelection } from "../config/providers";
-import type { VesicleConfig } from "../config/env";
+import { loadConfigWithProviderFallback, type ProviderSelection } from "../config/providers";
 import type { EngineId } from "../core/engine/profile";
 import { computeSkillCatalogDrift } from "../core/skills";
 import { inspectEngineAssetDrift } from "../core/runtime/engine-assets";
@@ -481,16 +480,7 @@ async function computeSkillCatalogDriftNotice(
   // Legacy sessions without a persisted snapshot fresh-freeze on resume, so
   // additions there are ordinary resume behavior, not drift (#307 lesson).
   if (!snapshot.skillCatalogSnapshot) return undefined;
-  let config: VesicleConfig | undefined;
-  try {
-    config = await loadConfigForSelection(snapshot.providerSelection, process.env);
-  } catch {
-    try {
-      config = await loadConfigForSelection(undefined, process.env);
-    } catch {
-      config = undefined;
-    }
-  }
+  const config = await loadConfigWithProviderFallback(snapshot.providerSelection, process.env);
   try {
     const drift = await computeSkillCatalogDrift({
       rootDir,

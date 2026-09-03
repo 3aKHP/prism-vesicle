@@ -28,8 +28,7 @@
  * refresh just froze.
  */
 
-import { loadConfigForSelection } from "../../config/providers";
-import type { VesicleConfig } from "../../config/env";
+import { loadConfigWithProviderFallback } from "../../config/providers";
 import type { EngineProfile } from "../engine/profile";
 import type { SessionRecord } from "../session/record-model";
 import { createSessionStore, loadSessionSnapshot } from "../session/store";
@@ -126,16 +125,7 @@ export async function refreshSessionSkillCatalog(options: {
   const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, {
     synthesizeDanglingToolResults: false,
   });
-  let config: VesicleConfig | undefined;
-  try {
-    config = await loadConfigForSelection(snapshot.providerSelection, options.env);
-  } catch {
-    try {
-      config = await loadConfigForSelection(undefined, options.env);
-    } catch {
-      config = undefined;
-    }
-  }
+  const config = await loadConfigWithProviderFallback(snapshot.providerSelection, options.env);
   const drift = await computeSkillCatalogDrift({
     rootDir: options.rootDir,
     env: options.env,
