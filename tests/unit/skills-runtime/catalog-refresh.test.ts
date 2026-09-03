@@ -126,13 +126,15 @@ describe("refreshSessionSkillCatalog", () => {
       rootDir: scratch,
       env: env(),
       sessionId,
-      profile: { id: "etl" },
       filesystemOptions: noHost(),
     });
     expect(result.appended).toBe(false);
     expect(result.drift.events).toEqual([]);
     expect(result.drift.added).toEqual([]);
     expect(await loadSessionRecords(scratch, sessionId)).toHaveLength(1);
+    // No provider registry exists in the scratch config dir: the (empty)
+    // resolution ran without any context-window budget and says so.
+    expect(result.unbudgeted).toBe(true);
   });
 
   test("a drifted Skill is re-frozen at current content and can be activated again", async () => {
@@ -145,11 +147,16 @@ describe("refreshSessionSkillCatalog", () => {
     await store.append(activationRecord(sessionId, "alpha", v1Hash));
 
     await writeUserSkill("alpha", "# alpha\n\nCHANGED body.");
+    // The #308 recovery flow starts from a failed `/skill alpha`: resolving
+    // the stale v1 snapshot drops alpha and leaves exactly this in-process
+    // freeze behind. A refresh that forgets to clear it would keep serving
+    // this empty catalog for the rest of the process.
+    const stale = await resolveSessionSkillCatalog(scratch, env(), { id: "etl" }, sessionId, v1, undefined, noHost());
+    expect(catalogNames(stale)).toEqual([]);
     const result = await refreshSessionSkillCatalog({
       rootDir: scratch,
       env: env(),
       sessionId,
-      profile: { id: "etl" },
       filesystemOptions: noHost(),
     });
     expect(result.appended).toBe(true);
@@ -196,7 +203,6 @@ describe("refreshSessionSkillCatalog", () => {
       rootDir: scratch,
       env: env(),
       sessionId,
-      profile: { id: "etl" },
       filesystemOptions: noHost(),
     });
     expect(result.appended).toBe(true);
@@ -213,7 +219,6 @@ describe("refreshSessionSkillCatalog", () => {
       rootDir: scratch,
       env: env(),
       sessionId,
-      profile: { id: "etl" },
       filesystemOptions: noHost(),
     });
     expect(result.appended).toBe(false);

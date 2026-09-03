@@ -7,9 +7,9 @@ import type { EngineId } from "../../core/engine/profile";
  * complete host use case behind `/skill <name> [task]` and the picker: session
  * identity, branch-parent chaining, catalog activation, system-card
  * projection, and turn submission. `refresh()` owns `/skill refresh`: the
- * explicit session catalog re-freeze (#308), run immediately with a diff
- * report (typing the command is the confirmation; the operation is
- * repeatable and append-only).
+ * explicit session catalog re-freeze (#308), executed without a confirmation
+ * panel (typing the command is the confirmation; the operation is repeatable
+ * and append-only) and reported as a changed/removed/added diff card.
  *
  * Boundary: the owner receives only narrow ports — the session-identity
  * coordinator's `ensure`, the active Engine / model-limits accessors, the
@@ -69,7 +69,6 @@ export function createSkillActivationOwner(options: SkillActivationOwnerPorts) {
       rootDir: options.rootDir,
       env: process.env,
       sessionId: sid,
-      profile: { id: options.activeEngine() },
     });
     options.onNotice(renderSkillRefreshCard(result));
   }
@@ -102,6 +101,9 @@ export function renderSkillRefreshCard(result: SessionSkillCatalogRefresh): stri
     }
   }
   if (drift.added.length > 0) lines.push(`- Added: ${drift.added.join(", ")}`);
+  if (result.unbudgeted) {
+    lines.push("Provider configuration was unavailable; the catalog was frozen without a context-window budget.");
+  }
   lines.push("The updated catalog applies from the next turn; earlier activation records stay in history.");
   return lines.join("\n");
 }

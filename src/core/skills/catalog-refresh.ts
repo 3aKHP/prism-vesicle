@@ -20,11 +20,12 @@
  *   existing name+hash prune; nothing is rewritten and no old record is
  *   removed.
  *
- * The context-window budget comes from the same config source bootstrap and
- * the migration preflight use (`loadConfigForSelection` for the session's
- * provider selection, two-level fallback). Freezing under any other budget
- * would let the next bootstrap's re-resolution drop entries this refresh just
- * froze.
+ * The context-window budget follows the session's recorded provider selection
+ * through `loadConfigForSelection` (two-level fallback, like the migration
+ * preflight) — the same selection the next bootstrap re-resolves with, keeping
+ * the refresh and the bootstrap budgets aligned. Freezing under any other
+ * budget would let the next bootstrap's re-resolution drop entries this
+ * refresh just froze.
  */
 
 import { loadConfigForSelection } from "../../config/providers";
@@ -108,13 +109,18 @@ export type SessionSkillCatalogRefresh = {
   drift: SkillCatalogDrift;
   /** False for the idempotent no-op: no drift and the session already froze exactly this catalog. */
   appended: boolean;
+  /**
+   * True when no provider configuration could be loaded at all, so the fresh
+   * snapshot was frozen without any context-window budget. A later refresh
+   * under a loadable config re-freezes under the real budget.
+   */
+  unbudgeted: boolean;
 };
 
 export async function refreshSessionSkillCatalog(options: {
   rootDir: string;
   env: NodeJS.ProcessEnv;
   sessionId: string;
-  profile: Pick<EngineProfile, "id">;
   filesystemOptions?: ResolveFilesystemSkillsOptions;
 }): Promise<SessionSkillCatalogRefresh> {
   const snapshot = await loadSessionSnapshot(options.rootDir, options.sessionId, {
@@ -133,7 +139,9 @@ export async function refreshSessionSkillCatalog(options: {
   const drift = await computeSkillCatalogDrift({
     rootDir: options.rootDir,
     env: options.env,
-    profile: options.profile,
+    // The session's recorded Engine, the same one the next bootstrap
+    // resolves under — not the engine the TUI happens to be showing.
+    profile: { id: snapshot.engine ?? "etl" },
     ...(config?.limits?.contextWindow !== undefined ? { contextWindow: config.limits.contextWindow } : {}),
     ...(snapshot.skillCatalogSnapshot ? { persistedSnapshot: snapshot.skillCatalogSnapshot } : {}),
     records: snapshot.records,
@@ -146,7 +154,7 @@ export async function refreshSessionSkillCatalog(options: {
     drift.events.length > 0 ||
     drift.added.length > 0 ||
     (!drift.persisted && isMeaningfulSkillCatalogSnapshot(drift.snapshot));
-  if (!shouldAppend) return { drift, appended: false };
+  if (!shouldAppend) return { drift, appended: false, unbudgeted: config === undefined };
 
   const session = await createSessionStore(options.rootDir, options.sessionId);
   await session.append({
@@ -158,5 +166,5 @@ export async function refreshSessionSkillCatalog(options: {
   // append succeeds, drop the in-process freeze so any later resolution in
   // this process re-reads the new persisted snapshot.
   clearSessionSkillCatalog(options.sessionId);
-  return { drift, appended: true };
+  return { drift, appended: true, unbudgeted: config === undefined };
 }

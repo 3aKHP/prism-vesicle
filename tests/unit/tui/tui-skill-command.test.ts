@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createSkillCommands } from "../../../src/tui/commands/skills";
 import { renderSkillRefreshCard } from "../../../src/tui/skills/session-activation";
 import type { SkillCommandContext } from "../../../src/tui/commands/types";
-import type { SkillCatalogDrift } from "../../../src/core/skills";
+import type { SessionSkillCatalogRefresh, SkillCatalogDrift } from "../../../src/core/skills";
 import type { Message } from "../../../src/tui/types";
 
 function makeContext() {
@@ -70,11 +70,15 @@ function driftStub(overrides: Partial<SkillCatalogDrift> = {}): SkillCatalogDrif
   };
 }
 
+function refreshStub(drift: SkillCatalogDrift, appended: boolean, unbudgeted = false): SessionSkillCatalogRefresh {
+  return { drift, appended, unbudgeted };
+}
+
 describe("renderSkillRefreshCard", () => {
   test("an in-sync catalog reports the no-op without any diff lines", () => {
-    expect(renderSkillRefreshCard({ drift: driftStub(), appended: false }))
+    expect(renderSkillRefreshCard(refreshStub(driftStub(), false)))
       .toBe("Skill catalog already matches the installed Skills; nothing to re-freeze.");
-    expect(renderSkillRefreshCard({ drift: driftStub({ persisted: false }), appended: false }))
+    expect(renderSkillRefreshCard(refreshStub(driftStub({ persisted: false }), false)))
       .toBe("No Skills resolve under the current installation; nothing to freeze.");
   });
 
@@ -83,22 +87,19 @@ describe("renderSkillRefreshCard", () => {
       persisted: false,
       snapshot: { catalogHash: "h", entries: [{ name: "alpha", scope: "user", bodySha256: "a".repeat(64) }], omittedCount: 0, diagnosticsCount: 0 },
     });
-    expect(renderSkillRefreshCard({ drift, appended: true }).split("\n")[0])
+    expect(renderSkillRefreshCard(refreshStub(drift, true)).split("\n")[0])
       .toBe("Skill catalog frozen for this session (1 Skill).");
   });
 
   test("a re-freeze reports changed, removed, and added entries with the re-activation hint", () => {
-    const card = renderSkillRefreshCard({
-      drift: driftStub({
-        events: [
-          { kind: "changed", name: "alpha", mustReactivate: true },
-          { kind: "changed", name: "beta", mustReactivate: false },
-          { kind: "removed", name: "gone" },
-        ],
-        added: ["delta"],
-      }),
-      appended: true,
-    });
+    const card = renderSkillRefreshCard(refreshStub(driftStub({
+      events: [
+        { kind: "changed", name: "alpha", mustReactivate: true },
+        { kind: "changed", name: "beta", mustReactivate: false },
+        { kind: "removed", name: "gone" },
+      ],
+      added: ["delta"],
+    }), true));
     const lines = card.split("\n");
     expect(lines[0]).toBe("Skill catalog re-frozen at the current installation content.");
     expect(lines).toContain("- Changed: alpha (activate it again with /skill alpha)");
@@ -106,5 +107,12 @@ describe("renderSkillRefreshCard", () => {
     expect(lines).toContain("- Removed: gone (no longer resolves under the current installation)");
     expect(lines).toContain("- Added: delta");
     expect(lines.at(-1)).toBe("The updated catalog applies from the next turn; earlier activation records stay in history.");
+
+    // Config-unavailable degradation is disclosed instead of a silent unbudgeted freeze.
+    const unbudgeted = renderSkillRefreshCard(refreshStub(driftStub({ added: ["delta"] }), true, true)).split("\n");
+    expect(unbudgeted).toContain("- Added: delta");
+    expect(unbudgeted).toContain("Provider configuration was unavailable; the catalog was frozen without a context-window budget.");
+    expect(renderSkillRefreshCard(refreshStub(driftStub(), false, true)))
+      .toBe("Skill catalog already matches the installed Skills; nothing to re-freeze.");
   });
 });

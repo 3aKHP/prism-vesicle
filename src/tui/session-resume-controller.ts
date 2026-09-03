@@ -491,18 +491,30 @@ async function computeSkillCatalogDriftNotice(
       config = undefined;
     }
   }
-  const drift = await computeSkillCatalogDrift({
-    rootDir,
-    env: process.env,
-    profile: { id: snapshot.engine ?? "etl" },
-    ...(config?.limits?.contextWindow !== undefined ? { contextWindow: config.limits.contextWindow } : {}),
-    persistedSnapshot: snapshot.skillCatalogSnapshot,
-    records: snapshot.records,
-  });
-  if (drift.events.length === 0 && drift.added.length === 0) return undefined;
-  const changed = drift.events.filter((event) => event.kind === "changed").length;
-  const removed = drift.events.length - changed;
-  return `Skill catalog drift detected since this session froze it: ${changed} changed, ${removed} removed, ${drift.added.length} added. Run /skill refresh to re-freeze at the current content; changed Skills must be activated again afterwards.`;
+  try {
+    const drift = await computeSkillCatalogDrift({
+      rootDir,
+      env: process.env,
+      profile: { id: snapshot.engine ?? "etl" },
+      ...(config?.limits?.contextWindow !== undefined ? { contextWindow: config.limits.contextWindow } : {}),
+      persistedSnapshot: snapshot.skillCatalogSnapshot,
+      records: snapshot.records,
+    });
+    if (drift.events.length === 0 && drift.added.length === 0) return undefined;
+    const changed = drift.events.filter((event) => event.kind === "changed").length;
+    const removed = drift.events.length - changed;
+    // Only changed Skills with a live stale-hash activation need a re-activation;
+    // a changed-but-never-activated Skill works once the catalog is re-frozen.
+    const reactivation = drift.reactivate.length > 0
+      ? "; activated Skills among the changed ones must be activated again afterwards"
+      : "";
+    return `Skill catalog drift detected since this session froze it: ${changed} changed, ${removed} removed, ${drift.added.length} added. Run /skill refresh to re-freeze at the current content${reactivation}.`;
+  } catch {
+    // Purely advisory: an unexpected catalog-resolution failure must never
+    // abort the resume. The next turn's bootstrap hits the same resolution
+    // and surfaces real failures through the normal error path.
+    return undefined;
+  }
 }
 
 function qualityIdentityMessage(snapshot: SessionSnapshot): string {
