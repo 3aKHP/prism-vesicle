@@ -42,6 +42,7 @@ describe("TUI command scheduler", () => {
       ["/engine runtime", { kind: "queue", boundary: "agent-loop" }],
       ["/compact", { kind: "queue", boundary: "agent-loop" }],
       ["/init", { kind: "queue", boundary: "agent-loop" }],
+      ["/skill refresh", { kind: "queue", boundary: "agent-loop" }],
       ["/context", { kind: "immediate" }],
       ["/model alpha", { kind: "queue", boundary: "agent-loop" }],
       ["/effort", { kind: "immediate" }],

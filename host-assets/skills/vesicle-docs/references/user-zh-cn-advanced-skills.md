@@ -68,6 +68,7 @@ vesicle skills install <GitHub-URL> --ref <tag或commit> --all
 - `/skill` — 打开选择器，显示可用 Skill 及其范围。
 - `/skill <名称> [任务]` — 激活并调用。
 - `/skill <名称> --context-only` — 仅加载上下文，不发送提供程序请求。
+- `/skill refresh` — 把本会话的 Skill 目录按当前安装内容重新冻结。正文变更的 Skill 需要再 `/skill <名称>` 激活一次才能回到会话里；没有变化时什么都不做。
 
 ## 激活后的只读 `skills/` 挂载
 
@@ -116,7 +117,7 @@ Stage Engine 不解析 Skill 目录，不支持 `activate_skill`、`read_skill_r
 
 ## 会话冻结
 
-Skill 目录在会话首次解析时冻结。恢复会话时按名称和内容哈希重新解析；内容已变更的 Skill 被丢弃并报告诊断，不会静默替换。
+Skill 目录在会话首次解析时冻结。恢复会话时按名称和内容哈希重新解析；内容已变更的 Skill 被丢弃并报告诊断，不会静默替换。如果宿主版本更新等原因让某个 Skill 的内容变了、但会话本身没有触发迁移审查，恢复时会看到一条漂移提示：运行 `/skill refresh` 即可按当前内容重新冻结，报告里标记为已变更的 Skill 再激活一次即可恢复使用。
 
 ## 能力与权限
 

@@ -389,11 +389,15 @@ export const skillCommandCompletion: CommandCompletion = {
       async () => {
         const { resolveSkillCatalog } = await import("../../core/skills");
         const catalog = await resolveSkillCatalog(context.rootDir, process.env, { id: context.activeEngine() as import("../../core/engine/profile").EngineId });
-        return catalog.catalog.entries.map((entry) => ({
-          id: entry.name,
-          label: entry.name,
-          detail: `[${entry.scope}] ${entry.description}`,
-        }));
+        return [
+          // Reserved subcommand (#308), offered before the catalog names it shadows.
+          { id: "refresh", label: "refresh", detail: "Re-freeze the session catalog at the current installation content" },
+          ...catalog.catalog.entries.map((entry) => ({
+            id: entry.name,
+            label: entry.name,
+            detail: `[${entry.scope}] ${entry.description}`,
+          })),
+        ];
       },
       (item) => `/skill ${item.id} `,
     );

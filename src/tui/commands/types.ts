@@ -174,10 +174,12 @@ export type QualityCommandContext = CommandActivityPort & {
   activeModel: () => string;
 };
 
-/** /skill — skill picker and activation. */
+/** /skill — skill picker, activation, and explicit catalog re-freeze. */
 export type SkillCommandContext = CommandEchoPort & {
   openSkillPicker: () => Promise<void>;
   activateSkill: (name: string, options: { mode: "invoke" | "context-only"; taskText?: string }) => Promise<void>;
+  /** `/skill refresh` (#308): re-freeze the session catalog at current installation content. */
+  refreshSkillCatalog: () => Promise<void>;
 };
 
 /** /workspace, /artifact, /validate — Workspace page and artifact preview. */

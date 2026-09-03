@@ -492,3 +492,129 @@ describe("session Harness migration (#239)", () => {
     }
   });
 });
+
+// #308: a Skill body that drifted without a Harness identity change is the
+// non-migration drift case — resume must surface an actionable hint pointing
+// at the explicit re-freeze command, without writing anything.
+describe("session Skill catalog drift hint (#308)", () => {
+  test("resume with unchanged identity shows the drift hint and appends nothing", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const skillRoot = join(hostAssets, "skills", "docs-like");
+    await mkdir(skillRoot, { recursive: true });
+    const writeBody = async (body: string) => {
+      await writeFile(join(skillRoot, "SKILL.md"), `---\nname: docs-like\ndescription: docs-like description\n---\n\n${body}\n`, "utf8");
+    };
+    await writeBody("# docs-like\n\nProcedure body v1.");
+    const v1Snapshot = snapshotSkillCatalog(
+      await resolveSkillCatalog(root, { ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets }, { id: "etl" }),
+    );
+    const sessionId = "sess-skill-drift-hint";
+    const store = await createSessionStore(root, sessionId);
+    await store.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: v1Snapshot },
+    });
+    await store.append({ role: "user", content: "hello" });
+    await store.append({ role: "assistant", content: "reply", metadata: { engine: "etl", model: "test-model" } });
+    const recordCount = (await loadSessionRecords(root, sessionId)).length;
+
+    // The installation moves on without any Harness identity change.
+    await writeBody("# docs-like\n\nProcedure body v2.");
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      await createRoot(async () => {
+        // Same identity on both sides: no migration review, only the hint.
+        const wired = wireControllers(root, projectHarness(root, baselineA));
+        const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 3, preview: "" };
+        await wired.resume(summary);
+        expect(wired.errors).toEqual([]);
+        expect(wired.migrationReview()).toBeNull();
+        const transcript = wired.messages.at(-1) ?? [];
+        const driftNotice = transcript.find((message) => message.content.includes("Skill catalog drift detected"));
+        expect(driftNotice?.content).toContain("1 changed, 0 removed, 0 added");
+        expect(driftNotice?.content).toContain("/skill refresh");
+        expect(driftNotice?.content).toContain("must be activated again");
+        // Advisory only: nothing was appended to the durable session.
+        expect(await loadSessionRecords(root, sessionId)).toHaveLength(recordCount);
+      });
+    } finally {
+      clearSessionSkillCatalog(sessionId);
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
+  });
+
+  test("resume stays silent without drift and for a legacy snapshot-less session", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const skillRoot = join(hostAssets, "skills", "docs-like");
+    await mkdir(skillRoot, { recursive: true });
+    await writeFile(
+      join(skillRoot, "SKILL.md"),
+      "---\nname: docs-like\ndescription: docs-like description\n---\n\n# docs-like\n\nProcedure body.\n",
+      "utf8",
+    );
+    const snapshot = snapshotSkillCatalog(
+      await resolveSkillCatalog(root, { ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets }, { id: "etl" }),
+    );
+    const frozenSession = "sess-skill-drift-silent";
+    const frozen = await createSessionStore(root, frozenSession);
+    await frozen.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: snapshot },
+    });
+    await frozen.append({ role: "user", content: "hello" });
+    // A legacy session that never froze a catalog: additions are ordinary
+    // resume behavior for it, not drift (#307 lesson).
+    const legacySession = "sess-skill-drift-legacy";
+    const legacy = await createSessionStore(root, legacySession);
+    await legacy.append({
+      role: "system",
+      content: "",
+      metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA },
+    });
+    await legacy.append({ role: "user", content: "hello" });
+
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      await createRoot(async () => {
+        const wired = wireControllers(root, projectHarness(root, baselineA));
+        const resumeSession = async (sessionId: string) => {
+          const summary: SessionSummary = { sessionId, startedAt: "", updatedAt: "", recordCount: 2, preview: "" };
+          await wired.resume(summary);
+          expect(wired.errors).toEqual([]);
+          const transcript = wired.messages.at(-1) ?? [];
+          expect(transcript.some((message) => message.content.includes("Skill catalog drift detected"))).toBe(false);
+        };
+        // The frozen catalog matches the installation exactly: no drift.
+        await resumeSession(frozenSession);
+
+        // Then the installation grows "beta": the frozen session would now
+        // drift, but the legacy snapshot-less session must stay silent —
+        // additions are ordinary resume behavior for it (#307 lesson).
+        const betaRoot = join(hostAssets, "skills", "beta");
+        await mkdir(betaRoot, { recursive: true });
+        await writeFile(
+          join(betaRoot, "SKILL.md"),
+          "---\nname: beta\ndescription: beta description\n---\n\n# beta\n\nProcedure body.\n",
+          "utf8",
+        );
+        await resumeSession(legacySession);
+      });
+    } finally {
+      clearSessionSkillCatalog(frozenSession);
+      clearSessionSkillCatalog(legacySession);
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
+  });
+});
