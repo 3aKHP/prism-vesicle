@@ -59,4 +59,8 @@ You are answering a question about Prism Vesicle using its bundled public docume
 | SubAgents usage | `references/user-zh-cn-advanced-subagents.md` or `references/user-en-advanced-subagents.md` |
 | Quality guard usage | `references/user-zh-cn-advanced-quality-guard.md` or `references/user-en-advanced-quality-guard.md` |
 | Developer doc index | `references/dev-readme.md` |
+| Guided Setup and installer behavior | `references/dev-setup.md` |
+| Input queue and command scheduling | `references/dev-command_queue.md` |
+| OpenAI Responses conformance profile | `references/dev-openai_responses_conformance.md` |
+| Audit database drift (release maintenance) | `references/dev-audit_drift.md` |
 | Full index | `references/index.md` |

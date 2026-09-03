@@ -51,7 +51,7 @@ Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当�
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | 查看或设置工具批准模式 |
 | `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | 查看或配置实验性 Semantic Judge;不带参数打开引导式设置。`off` 关闭 Judge 并保留 profile;不带 profile 的 `observe`/`rewrite` 使用已保留或当前的 provider/model。选择 Review and revise(或 `/quality rewrite`)只打开一个红色确认面板——已没有 `/quality confirm` 这第二条命令 |
 | `/agents [handle\|stop <handle>\|retry]` | 查看/中断/重试 SubAgent |
-| `/skill [refresh \| name [task]]` | 激活 Skill；不带参数打开选择器，`<name> [task]` 激活并调用，`<name> --context-only` 仅加载不触发，`refresh` 按当前安装内容重冻结会话目录 |
+| `/skill [refresh \| name [task]]` | 激活 Skill；不带参数打开选择器，`<name> [task]` 激活并调用，`<name> --context-only` 仅加载不触发，`refresh` 按当前安装内容重冻结会话目录，并报告有变化（可用 `/skill <名称>` 重新激活）、已移除与新增的 Skill；目录本就一致时不做任何改动 |
 
 ## 输入框按键
 
@@ -60,7 +60,7 @@ Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当�
 | Enter | 空闲时发送；Agent Loop 运行时将普通消息和延迟命令加入队列 |
 | Ctrl+Enter | 换行 |
 | Up(回合运行且输入框为空) | 取回最新一条队列输入进行编辑 |
-| Esc | 中断当前供应商请求或工具操作；重建中断会话后提交捕获的队首输入一次，队列为空时只中断 |
+| Esc | 中断当前供应商请求或工具操作；重建中断会话后,捕获的队首输入仍是队首时才提交一次，队列为空时只中断 |
 | 双击 Esc(输入框空,800ms 内) | 打开回退选择器 |
 | 双击 Esc(输入框有内容) | 存草稿并清空,不发送 |
 | Ctrl+V / Alt/Option+V | 粘贴剪贴板图片(仅视觉模型接收；终端文本粘贴仍按普通文本插入) |

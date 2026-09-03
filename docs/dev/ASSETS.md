@@ -7,7 +7,7 @@ Prism Vesicle ships one verified V10 Harness baseline and a small, host-owned ex
 ```text
 harness-manifest.json   # exact prism-harness-pack/v1 Release manifest
 assets/                 # exact 73-file V10 Harness inventory
-host-assets/            # 14 Vesicle-owned host extension files
+host-assets/            # Vesicle-owned host extension layer (agents/, prompts/, skills/)
 ```
 
 The current bundled Harness is the `prism-engine-v10` V10 baseline, sourced from the Neural Narratology repository. Its version, source commit, and manifest SHA-256 are recorded in `harness-manifest.json` (the single source of truth) and are not restated here, so a Harness bump needs no doc sync.
