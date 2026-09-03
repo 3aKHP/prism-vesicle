@@ -524,6 +524,7 @@ export function App(props: AppProps = {}) {
     sessionId,
     refreshArtifacts,
     listSessions,
+    skillCatalogEntries: async () => (await resolveSkillSessionCatalog()).catalog.entries,
     listWorkspaceTargets: () => workspaceController.listWorkspaceTargets(),
     busy,
     activeModelCapabilities,
@@ -594,7 +595,7 @@ export function App(props: AppProps = {}) {
     openRewriteConfirm,
   } = qualityPickerController;
   const skillPickerController = createSkillPickerController({
-    resolveCatalog: () => resolveSkillPickerCatalog(),
+    resolveCatalog: () => resolveSkillSessionCatalog(),
     setStatus,
     reportError: (error) => turnController.reportError(error),
     onActivate: (name) => activateSkill(name, { mode: "context-only" }),
@@ -1190,14 +1191,15 @@ export function App(props: AppProps = {}) {
     submitTurn: (prompt) => turnController.submitPrompt(prompt),
   });
   // Function declarations (hoisted like the pre-T1 use case) so the picker's
-  // onActivate/resolveCatalog closures cannot trip a TDZ regardless of
-  // construction order; they only run post-render, when skillActivation is
-  // initialized.
+  // and completion's closures cannot trip a TDZ regardless of construction
+  // order; they only run post-render, when skillActivation is initialized.
   async function activateSkill(name: string, options: SkillActivationOptions): Promise<void> {
     return skillActivation.activate(name, options);
   }
 
-  async function resolveSkillPickerCatalog() {
+  /** The session's activatable catalog: one read-only resolution shared by
+   *  the `/skill` picker list and `/skill <Tab>` name completion (#309, #312). */
+  async function resolveSkillSessionCatalog() {
     return skillActivation.resolveCatalog();
   }
 
