@@ -3,7 +3,7 @@ import type { ProviderRegistry } from "../config/providers";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { SessionSummary } from "../core/session/store";
 import type { VesicleImageAttachment } from "../providers/shared/types";
-import type { Command } from "./commands/types";
+import type { Command, SkillCatalogCompletionEntry } from "./commands/types";
 import { matchOptionItems, resolveCommandArgumentCompletion } from "./commands/argument-completion";
 import { matchCommands } from "./commands/match";
 import { clampCommandMenuSelection, moveCommandMenuSelection } from "./commands/selection";
@@ -11,7 +11,6 @@ import { normalizeKeyName, setComposerValue, type ComposerState } from "./compos
 import type { TuiKeyEvent } from "./decision-interaction";
 import type { AgentCardState, OptionItem } from "./types";
 import type { ProjectPathEntry } from "../core/project/path-index";
-import type { SkillCatalogCompletionEntry } from "./commands/types";
 
 export type CommandCompletionControllerOptions = {
   rootDir: string;
