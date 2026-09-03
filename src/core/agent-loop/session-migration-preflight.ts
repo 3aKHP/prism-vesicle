@@ -63,10 +63,12 @@ export type SessionMigrationPreflightReport = {
   verdict: "clean" | "warning" | "blocking";
   /**
    * The Skill catalog re-freeze a confirmed migration persists in the
-   * `session-migration` record: the fresh snapshot plus the names whose live
-   * activations went stale (they must be activated again). Absent when neither
-   * the session nor the current installation carries a meaningful catalog.
-   * `reactivate` is advisory data for tests and future UI; it is not persisted.
+   * `session-migration` record: the fresh snapshot plus the still-present
+   * names whose live activations went stale (they must be activated again;
+   * Skills that left the catalog cannot be re-activated and are excluded).
+   * Absent when neither the session nor the current installation carries a
+   * meaningful catalog. `reactivate` is advisory data for tests and future
+   * UI; it is not persisted.
    */
   skillRefreeze?: { snapshot: SkillCatalogSnapshot; reactivate: string[] };
 };
@@ -207,7 +209,10 @@ export async function runSessionMigrationPreflight(options: {
       );
     }
   }
-  if (addedNames.length > 0) {
+  // Only sessions that actually froze a catalog can observe Skills "join" as
+  // a migration consequence: a legacy snapshot-less session fresh-freezes on
+  // any resume, so additions there are ordinary resume behavior, not drift.
+  if (snapshot.skillCatalogSnapshot !== undefined && addedNames.length > 0) {
     findings.push({
       severity: "warning",
       layer: "resume",
@@ -215,7 +220,7 @@ export async function runSessionMigrationPreflight(options: {
     });
   }
   const skillRefreeze = snapshot.skillCatalogSnapshot !== undefined || isMeaningfulSkillCatalogSnapshot(freshSnapshot)
-    ? { snapshot: freshSnapshot, reactivate: [...staleActivationNames].sort() }
+    ? { snapshot: freshSnapshot, reactivate: [...staleActivationNames].filter((name) => freshByName.has(name)).sort() }
     : undefined;
   const eligibleCatalog = resolveEngineEligibleCatalog(freshCatalog, engineAssets.profile);
 

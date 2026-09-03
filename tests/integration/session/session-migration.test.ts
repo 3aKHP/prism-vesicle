@@ -439,4 +439,56 @@ describe("session Harness migration (#239)", () => {
       delete process.env.VESICLE_PROVIDERS_FILE;
     }
   });
+
+  // Review finding: a legacy snapshot-less session fresh-freezes on any
+  // resume, so Skills joining the catalog are not a migration consequence for
+  // it; only sessions that actually froze a catalog may report the join.
+  test("a legacy session without a frozen catalog reports no spurious join warning", async () => {
+    const root = await migrationRoot();
+    configureFixtureProvider(root);
+    const hostAssets = join(root, "host-assets");
+    const writeHostSkill = async (name: string) => {
+      const skillRoot = join(hostAssets, "skills", name);
+      await mkdir(skillRoot, { recursive: true });
+      await writeFile(join(skillRoot, "SKILL.md"), `---\nname: ${name}\ndescription: ${name} description\n---\n\n# ${name}\n\nProcedure body.\n`, "utf8");
+    };
+    await writeHostSkill("alpha");
+    // Freeze while only "alpha" exists, then add "beta" to the installation.
+    const alphaSnapshot = snapshotSkillCatalog(await resolveSkillCatalog(root, { ...process.env, VESICLE_HOST_ASSETS_DIR: hostAssets }, { id: "etl" }));
+    expect(alphaSnapshot.entries.map((entry) => entry.name)).toEqual(["alpha"]);
+    await writeHostSkill("beta");
+    const previousHostAssets = process.env.VESICLE_HOST_ASSETS_DIR;
+    process.env.VESICLE_HOST_ASSETS_DIR = hostAssets;
+    try {
+      const sessionId = "sess-legacy-no-snapshot";
+      const store = await createSessionStore(root, sessionId);
+      await store.append({ role: "system", content: "", metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA } });
+      await store.append({ role: "user", content: "hello" });
+      await store.append({ role: "assistant", content: "reply", metadata: { engine: "etl", model: "test-model" } });
+
+      const harness = projectHarness(root, baselineB);
+      const report = await runSessionMigrationPreflight({ rootDir: root, sessionId, projectHarness: harness });
+      expect(report.verdict).toBe("clean");
+      expect(report.findings.some((finding) => finding.message.includes("will join it"))).toBe(false);
+
+      // Positive control: the same host catalog reported against a session
+      // that froze only "alpha" does surface the join as a migration finding.
+      const frozenSession = "sess-frozen-alpha";
+      const frozen = await createSessionStore(root, frozenSession);
+      await frozen.append({
+        role: "system",
+        content: "",
+        metadata: { engine: "etl", providerId: "test", model: "test-model", harness: baselineA, skills: alphaSnapshot },
+      });
+      await frozen.append({ role: "user", content: "hello" });
+      await frozen.append({ role: "assistant", content: "reply", metadata: { engine: "etl", model: "test-model" } });
+      const frozenReport = await runSessionMigrationPreflight({ rootDir: root, sessionId: frozenSession, projectHarness: harness });
+      expect(frozenReport.verdict).toBe("warning");
+      expect(frozenReport.findings.some((finding) => finding.message.includes("1 Skill(s) not in the frozen catalog will join it: beta"))).toBe(true);
+    } finally {
+      if (previousHostAssets === undefined) delete process.env.VESICLE_HOST_ASSETS_DIR;
+      else process.env.VESICLE_HOST_ASSETS_DIR = previousHostAssets;
+      delete process.env.VESICLE_PROVIDERS_FILE;
+    }
+  });
 });
