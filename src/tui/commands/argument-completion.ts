@@ -387,12 +387,15 @@ export const skillCommandCompletion: CommandCompletion = {
       stage.query,
       "skills",
       async () => {
-        const { resolveSkillCatalog } = await import("../../core/skills");
-        const catalog = await resolveSkillCatalog(context.rootDir, process.env, { id: context.activeEngine() as import("../../core/engine/profile").EngineId });
+        // The port serves the session's activatable catalog (#312): the same
+        // freeze-then-snapshot resolution the picker and activation use, so a
+        // drifted or newly installed Skill is never suggested only to fail
+        // with Unknown skill.
+        const entries = await context.skillCatalogEntries();
         return [
           // Reserved subcommand (#308), offered before the catalog names it shadows.
           { id: "refresh", label: "refresh", detail: "Re-freeze the session catalog at the current installation content" },
-          ...catalog.catalog.entries.map((entry) => ({
+          ...entries.map((entry) => ({
             id: entry.name,
             label: entry.name,
             detail: `[${entry.scope}] ${entry.description}`,

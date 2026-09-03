@@ -8,7 +8,7 @@ import { listStageCardPaths } from "../../../src/core/stage/bootstrap";
 import { resolveCommandArgumentCompletion } from "../../../src/tui/commands/argument-completion";
 import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
 import { argumentMenuLabelBudget } from "../../../src/tui/widgets/ArgumentMenu";
-import type { BuiltinCommandContexts, CommandArgumentCompletion, CommandCompletionContext } from "../../../src/tui/commands/types";
+import type { BuiltinCommandContexts, CommandArgumentCompletion, CommandCompletionContext, SkillCatalogCompletionEntry } from "../../../src/tui/commands/types";
 import { symlinkCapable } from "../../support/symlink-capability";
 
 // Completion contracts and busy metadata are resolved without invoking run,
@@ -51,6 +51,7 @@ function context(overrides: Partial<CommandCompletionContext> = {}): CommandComp
       preview: "Resume this work",
     }],
     agentOptions: () => [{ id: "explore-1", label: "explore-1", detail: "running · inspect files" }],
+    skillCatalogEntries: async () => [],
     ...overrides,
   };
 }
@@ -164,6 +165,20 @@ describe("command-owned argument completion", () => {
     const skill = resolve("/skill vesicle-docs ");
     expect((await items(skill)).map((item) => item.id)).toEqual(["--context-only"]);
     expect(skill.complete((await items(skill))[0]!)).toBe("/skill vesicle-docs --context-only");
+  });
+
+  test("/skill name completion offers the session's catalog, never a fresh disk scan (#312)", async () => {
+    // The session's frozen catalog holds only the winner; a fresh scan would
+    // also surface drifted or newly installed Skills that activation would
+    // reject with Unknown skill.
+    const frozenCatalog: readonly SkillCatalogCompletionEntry[] = [
+      { name: "alpha-skill", scope: "user", description: "Frozen winner." },
+    ];
+    const names = resolve("/skill ", { skillCatalogEntries: async () => frozenCatalog });
+    const offered = await items(names);
+    expect(offered.map((item) => item.id)).toEqual(["refresh", "alpha-skill"]);
+    expect(offered[1]!.detail).toBe("[user] Frozen winner.");
+    expect(names.complete(offered[1]!)).toBe("/skill alpha-skill ");
   });
 });
 

@@ -22,7 +22,7 @@ import { PromptEscapeController } from "./prompt-escape";
 import { createModelPickerController } from "./model-picker-controller";
 import { createCommandCompletionController } from "./command-completion-controller";
 import { composerStateFromQueuedInput, type InputQueue } from "./input-queue";
-import type { Command } from "./commands/types";
+import type { Command, SkillCatalogCompletionEntry } from "./commands/types";
 import type { ProjectPathEntry } from "../core/project/path-index";
 
 export type ComposerControllerOptions = {
@@ -40,6 +40,8 @@ export type ComposerControllerOptions = {
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
   listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
+  /** The session's activatable Skill catalog, shared with the `/skill` picker (#312). */
+  skillCatalogEntries: () => Promise<readonly SkillCatalogCompletionEntry[]>;
   busy: Accessor<boolean>;
   activeModelCapabilities: Accessor<ModelCapabilities | undefined>;
   status: Accessor<string>;
@@ -109,6 +111,7 @@ export function createComposerController(options: ComposerControllerOptions) {
     refreshArtifacts: options.refreshArtifacts,
     listWorkspaceTargets: options.listWorkspaceTargets,
     listSessions: options.listSessions,
+    skillCatalogEntries: options.skillCatalogEntries,
     agentCards: options.agentCards,
     sessionId: options.sessionId,
     submitCommand: options.submitCommand,

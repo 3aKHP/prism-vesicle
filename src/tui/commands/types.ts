@@ -32,6 +32,13 @@ export type UsageTelemetrySummary = {
   contextInputTokens: number;
 };
 
+/** One session-catalog entry offered to `/skill` name completion. */
+export type SkillCatalogCompletionEntry = {
+  name: string;
+  scope: string;
+  description: string;
+};
+
 /**
  * Host-owned data sources available to command argument completion. Command
  * definitions describe their grammar; the TUI controller owns async loading,
@@ -46,6 +53,12 @@ export type CommandCompletionContext = {
   listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentOptions: () => OptionItem[];
+  /**
+   * The session's activatable Skill catalog (#312): the same read-only
+   * freeze-then-snapshot resolution the `/skill` picker and activation use,
+   * so completion never suggests a name that would fail with `Unknown skill`.
+   */
+  skillCatalogEntries: () => Promise<readonly SkillCatalogCompletionEntry[]>;
 };
 
 export type CommandArgumentCompletion = {
