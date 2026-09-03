@@ -77,6 +77,11 @@ describe("CHANGELOG section extraction", () => {
     );
   });
 
+  test("excludes the trailing link-reference footer when extracting the oldest section", () => {
+    const withFooter = `${markdown}\n[Unreleased]: https://github.com/example/prism-vesicle/compare/v1.0.0...HEAD\n`;
+    expect(extractChangelogSection(withFooter, "0.1.0")).toBe(["### Added", "", "- Older bullet."].join("\n"));
+  });
+
   test("fails closed when the version heading is absent", () => {
     expect(() => extractChangelogSection(markdown, "2.0.0")).toThrow("CHANGELOG section not found: [2.0.0]");
   });

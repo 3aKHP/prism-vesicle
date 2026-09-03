@@ -73,7 +73,7 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 
 - `README.md` 是项目入口，负责安装、首次运行、简明能力概览和文档导航。
 - `STATUS.md` 是当前实现清单的权威来源，包括工具接口、验证器、验证方式和已知限制。
-- `CHANGELOG.md` 记录值得关注的已发布和未发布变更。
+- `CHANGELOG.md` 记录值得关注的已发布和未发布变更。其简体中文伴生文件 `CHANGELOG.zh-CN.md` 镜像相同的版本段落；同一次变更中同步更新两者，并保持结构配对（版本标题逐字一致、逐版本子节与条目计数一致，由 `bun run changelog:check` 强制）。
 - `CONTRIBUTING.md` 负责贡献者配置、仓库边界和文档约定。
 - `docs/dev/README.md` 负责索引受版本控制的公开开发者契约，并定义其维护边界。
 - `docs/dev/STYLE.md` 负责源代码结构与可维护性规范。
@@ -88,20 +88,20 @@ Markdown 正文使用自然换行。每个段落或列表项在源文件中保�
 
 ### 文档语言
 
-`README.md`、`CONTRIBUTING.md`、`CODE_SIGNING_POLICY.md` 和 `PRIVACY.md` 是根目录文档的英文规范原文。对应的简体中文版本使用 `.zh-CN.md` 后缀；只要共享语义发生变化，就应在同一次变更中同步更新两种语言。
+`README.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`CODE_SIGNING_POLICY.md` 和 `PRIVACY.md` 是根目录文档的英文规范原文。对应的简体中文版本使用 `.zh-CN.md` 后缀；只要共享语义发生变化，就应在同一次变更中同步更新两种语言。
 
 用户手册使用语言目录扩展：`docs/user/zh-CN/` 是规范原文，`docs/user/en/` 使用相同的相对文件名、章节编号、导航和命令，并保持共享语义同步。`docs/user/README.md` 是语言入口页。
 
 命令、路径、配置键、代码和产品标识在不同语言中保持不变。翻译说明文字时应以清晰自然为目标，不必机械复刻英文句式。
 
-`STATUS.md`、`CHANGELOG.md`、`AGENTS.md`、`CLAUDE.md`、`LICENSE` 和 `docs/dev/` 保持单语。没有重新讨论本规则前，不要为它们创建翻译副本。
+`STATUS.md`、`AGENTS.md`、`CLAUDE.md`、`LICENSE` 和 `docs/dev/` 保持单语。没有重新讨论本规则前，不要为它们创建翻译副本。`CHANGELOG.md` 在发布正文开始双语交付时离开了这份清单：它的 `.zh-CN.md` 伴生文件是结构配对而非自由翻译，因为发布说明组装脚本按版本段交错读取这两个文件。
 
 ## Pull Request 检查清单
 
 - 说明行为发生了什么变化，以及它为何属于当前里程碑。
 - 在 PR 描述中列出验证命令。
 - 当 PR 完成某个 issue 时，在 PR 描述中单独写一行显式关闭句式，例如 `Closes #<issue>`。仅相关但不会关闭 issue 的引用使用 `Refs #<issue>`；`Implements #<issue>` 和标题中的引用都不是关闭语法。参见 [`docs/dev/WORKFLOW.md`](./docs/dev/WORKFLOW.md)。
-- 用户可见行为、运行时行为或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md`、`docs/dev/ARCHITECTURE.md` 或对应的领域契约。仅在源代码规范变化时更新 `docs/dev/STYLE.md`。
+- 用户可见行为、运行时行为或架构边界变化时，同步更新 `README.md`、`STATUS.md`、`CHANGELOG.md`（连同其 `CHANGELOG.zh-CN.md` 伴生文件）、`docs/dev/ARCHITECTURE.md` 或对应的领域契约。仅在源代码规范变化时更新 `docs/dev/STYLE.md`。
 - 不要把生成的 `.vesicle/` 会话提交到 Git。
 - 新增或编辑的 Markdown 正文应使用自然换行。
 

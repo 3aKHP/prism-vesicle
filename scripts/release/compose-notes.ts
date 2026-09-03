@@ -102,14 +102,15 @@ export function derivePreviousTag(tags: string[], version: string): string | und
 export function extractChangelogSection(markdown: string, anchor: string): string {
   // Headings carry a date suffix at release time (`## [1.1.0] - 2026-09-14`),
   // so match the bracketed anchor as a prefix; the closing `]` keeps
-  // `1.0.0` from matching `1.0.0-alpha.1`.
+  // `1.0.0` from matching `1.0.0-alpha.1`. The oldest section ends at the
+  // trailing link-reference footer (`[Unreleased]: …/compare/…` lines).
   const prefix = `## [${anchor}]`;
   const lines = markdown.split("\n");
   const start = lines.findIndex((line) => line.startsWith(prefix));
   if (start === -1) {
     throw new Error(`CHANGELOG section not found: [${anchor}] — the release PR must stamp the version heading before tagging`);
   }
-  const end = lines.findIndex((line, i) => i > start && line.startsWith("## "));
+  const end = lines.findIndex((line, i) => i > start && (line.startsWith("## ") || line.startsWith("[")));
   return lines.slice(start + 1, end === -1 ? undefined : end).join("\n").trim();
 }
 
