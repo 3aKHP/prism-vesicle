@@ -1,21 +1,21 @@
-import { createMemo, createSignal, type Accessor, type Setter } from "solid-js";
-import type { EngineId } from "../core/engine/profile";
+import { createMemo, createSignal, type Setter } from "solid-js";
 import type { TuiKeyEvent } from "./decision-interaction";
-import { resolveSkillCatalog, resolveEngineEligibleCatalog } from "../core/skills";
 import type { ResolvedSkillCatalog } from "../core/skills";
-import type { Message, OptionItem } from "./types";
+import type { OptionItem } from "./types";
 
 export type SkillPickerState = {
   selected: number;
 };
 
 export type SkillPickerControllerOptions = {
-  rootDir: string;
-  env: NodeJS.ProcessEnv;
-  activeEngineProfile: Accessor<{ id: EngineId; defaultTools?: readonly string[] }>;
-  contextWindow: Accessor<number | undefined>;
+  /**
+   * The catalog the picker lists: the engine-eligible, session-aware set the
+   * host resolves (read-only peek — what activation would resolve, #309).
+   * The controller never resolves the store itself, so the list can only
+   * promise what `/skill <name>` can actually activate.
+   */
+  resolveCatalog: () => Promise<ResolvedSkillCatalog>;
   setStatus: Setter<string>;
-  setMessages: Setter<Message[]>;
   reportError: (error: unknown) => void;
   onActivate: (name: string) => Promise<void>;
 };
@@ -98,15 +98,7 @@ export function createSkillPickerController(options: SkillPickerControllerOption
   async function openSkillPicker(): Promise<void> {
     try {
       setSkillPickerBusy(true);
-      const profile = options.activeEngineProfile();
-      const catalog = await resolveSkillCatalog(
-        options.rootDir,
-        options.env,
-        profile,
-        options.contextWindow(),
-      );
-      const eligible = resolveEngineEligibleCatalog(catalog, profile);
-      setResolvedCatalog(eligible);
+      setResolvedCatalog(await options.resolveCatalog());
       setSkillPickerBusy(false);
       setSkillPicker({ selected: 0 });
     } catch (error) {

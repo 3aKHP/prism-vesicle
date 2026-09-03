@@ -1,5 +1,5 @@
-import { activateSkillForSession, refreshSessionSkillCatalog } from "../../core/skills";
-import type { SessionSkillCatalogRefresh } from "../../core/skills";
+import { activateSkillForSession, peekSessionSkillCatalog, refreshSessionSkillCatalog, resolveEngineEligibleCatalog } from "../../core/skills";
+import type { ResolvedSkillCatalog, SessionSkillCatalogRefresh } from "../../core/skills";
 import type { EngineId } from "../../core/engine/profile";
 
 /**
@@ -10,11 +10,16 @@ import type { EngineId } from "../../core/engine/profile";
  * explicit session catalog re-freeze (#308), executed without a confirmation
  * panel (typing the command is the confirmation; the operation is repeatable
  * and append-only) and reported as a changed/removed/added diff card.
+ * `resolveCatalog()` owns the picker's list (#309): the engine-eligible
+ * catalog read through the same freeze-then-snapshot resolution activation
+ * uses, so the picker can only list Skills the session can actually activate.
  *
  * Boundary: the owner receives only narrow ports — the session-identity
- * coordinator's `ensure`, the active Engine / model-limits accessors, the
- * branch-parent get/set, a system-notice sink, and turn submission. It never
- * receives the App, a command domain context, TurnControllerOptions, or a signal bundle.
+ * coordinator's `ensure`, a read-only current-session accessor (the picker
+ * must not create a session, so it never goes through `ensure`), the active
+ * Engine / model-limits accessors, the branch-parent get/set, a system-notice
+ * sink, and turn submission. It never receives the App, a command domain
+ * context, TurnControllerOptions, or a signal bundle.
  */
 
 export type SkillActivationOptions = {
@@ -26,6 +31,8 @@ export type SkillActivationOwnerPorts = {
   rootDir: string;
   /** Lazy session-identity resolution (serialized by the host coordinator). */
   sessionIdentity: { ensure: () => Promise<string> };
+  /** The session that already exists, if any — read-only, never ensured. */
+  currentSessionId: () => string | undefined;
   activeEngine: () => EngineId;
   activeModelLimits: () => { contextWindow?: number } | undefined;
   /** The current branch head (chain point for the activation record). */
@@ -73,7 +80,25 @@ export function createSkillActivationOwner(options: SkillActivationOwnerPorts) {
     options.onNotice(renderSkillRefreshCard(result));
   }
 
-  return { activate, refresh };
+  /**
+   * The picker's catalog, resolved read-only through the peek path (#309):
+   * freeze hit, else snapshot-filtered re-resolution, else fresh — exactly
+   * what `activate` would resolve, so a drift between disk and the session's
+   * frozen catalog can no longer make the picker promise `Unknown skill`.
+   */
+  async function resolveCatalog(): Promise<ResolvedSkillCatalog> {
+    const profile = { id: options.activeEngine() };
+    const catalog = await peekSessionSkillCatalog(
+      options.rootDir,
+      process.env,
+      profile,
+      options.currentSessionId(),
+      options.activeModelLimits()?.contextWindow,
+    );
+    return resolveEngineEligibleCatalog(catalog, profile);
+  }
+
+  return { activate, refresh, resolveCatalog };
 }
 
 export function renderSkillRefreshCard(result: SessionSkillCatalogRefresh): string {

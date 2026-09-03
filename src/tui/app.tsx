@@ -594,12 +594,8 @@ export function App(props: AppProps = {}) {
     openRewriteConfirm,
   } = qualityPickerController;
   const skillPickerController = createSkillPickerController({
-    rootDir: process.cwd(),
-    env: process.env,
-    activeEngineProfile: () => ({ id: activeEngine() }),
-    contextWindow: () => activeModelLimits()?.contextWindow,
+    resolveCatalog: () => resolveSkillPickerCatalog(),
     setStatus,
-    setMessages,
     reportError: (error) => turnController.reportError(error),
     onActivate: (name) => activateSkill(name, { mode: "context-only" }),
   });
@@ -1185,6 +1181,7 @@ export function App(props: AppProps = {}) {
   const skillActivation = createSkillActivationOwner({
     rootDir: process.cwd(),
     sessionIdentity: { ensure: () => sessionIdentityCoordinator.ensure() },
+    currentSessionId: () => sessionId(),
     activeEngine,
     activeModelLimits,
     branchParent: nextSessionParent,
@@ -1192,11 +1189,16 @@ export function App(props: AppProps = {}) {
     onNotice: (card) => setMessages((prev) => [...prev, { role: "system", content: card }]),
     submitTurn: (prompt) => turnController.submitPrompt(prompt),
   });
-  // Function declaration (hoisted like the pre-T1 use case) so the picker's
-  // onActivate closure cannot trip a TDZ regardless of construction order;
-  // it only runs post-render, when skillActivation is initialized.
+  // Function declarations (hoisted like the pre-T1 use case) so the picker's
+  // onActivate/resolveCatalog closures cannot trip a TDZ regardless of
+  // construction order; they only run post-render, when skillActivation is
+  // initialized.
   async function activateSkill(name: string, options: SkillActivationOptions): Promise<void> {
     return skillActivation.activate(name, options);
+  }
+
+  async function resolveSkillPickerCatalog() {
+    return skillActivation.resolveCatalog();
   }
 
   // Slash-command domain contexts: each command family receives only the

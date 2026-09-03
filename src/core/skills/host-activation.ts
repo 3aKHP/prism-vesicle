@@ -12,11 +12,11 @@
  */
 
 import type { EngineProfile } from "../engine/profile";
-import { createSessionStore, loadSessionSnapshot, withSessionActivationLock } from "../session/store";
+import { createSessionStore, withSessionActivationLock } from "../session/store";
 import type { SkillDiagnostic, SkillResource, SkillScope } from "../../skills/types";
 import { deriveSessionActivations } from "./activation-derivation";
 import { hydrateSessionActivations, isDuplicateActivation, pruneSessionActivations, recordActivation } from "./activation-state";
-import { eligibleCatalogHashes, resolveEngineEligibleCatalog, resolveSessionSkillCatalog } from "./catalog-context";
+import { eligibleCatalogHashes, loadSnapshotOrUndefined, resolveEngineEligibleCatalog, resolveSessionSkillCatalog } from "./catalog-context";
 import { formatSkillActivationBlock, type ValidSkill } from "./tools";
 import { SKILL_ACTIVATION_KIND } from "./types";
 import type { ResolveFilesystemSkillsOptions } from "./catalog-sources";
@@ -49,18 +49,6 @@ export type HostSkillActivation = {
   /** UUID of the appended activation record; absent when alreadyActive. */
   recordUuid?: string;
 };
-
-async function loadSnapshotOrUndefined(
-  rootDir: string,
-  sessionId: string,
-): Promise<Awaited<ReturnType<typeof loadSessionSnapshot>> | undefined> {
-  try {
-    return await loadSessionSnapshot(rootDir, sessionId, { synthesizeDanglingToolResults: false });
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    return undefined;
-  }
-}
 
 const activationTails = new Map<string, Promise<unknown>>();
 
