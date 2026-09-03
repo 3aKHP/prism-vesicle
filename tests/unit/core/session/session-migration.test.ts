@@ -6,7 +6,7 @@ import type { HarnessRuntimeIdentity } from "../../../../src/core/harness/driver
 import type { SessionRecord } from "../../../../src/core/session/record-model";
 import { createSessionStore } from "../../../../src/core/session/append-store";
 import { listSessions, loadSessionSnapshot } from "../../../../src/core/session/store";
-import { projectSessionHistory } from "../../../../src/core/session/history-projector";
+import { projectSessionHistory, projectSessionHostState } from "../../../../src/core/session/history-projector";
 import {
   appendSessionArchiveTag,
   appendSessionMigrationRecord,
@@ -74,16 +74,20 @@ describe("session migration projection", () => {
     return record("m1", "u1", "system", "", { kind: SESSION_MIGRATION_KIND, harness: m.to, migration: m });
   }
 
-  test("a migration record rebinds the effective harness identity", () => {
+  test("a migration record rebinds the session-level harness identity", () => {
     const m = migration("10.3.0-alpha.2");
-    const projection = projectSessionHistory([
+    const records = [
       record("s", null, "system", "", { harness: identity("10.3.0-alpha.1") }),
       record("u1", "s", "user", "hello"),
       migrationSystemRecord(m),
       record("u2", "m1", "user", "continue"),
-    ]);
-    expect(projection.harness).toEqual(identity("10.3.0-alpha.2"));
-    expect(projection.messages.map((message) => message.content)).toEqual(["hello", "continue"]);
+    ];
+    expect(projectSessionHostState(records).harness).toEqual(identity("10.3.0-alpha.2"));
+    // The branch projection keeps the header identity and excludes the
+    // migration record from provider-visible history.
+    const history = projectSessionHistory(records);
+    expect(history.harness).toEqual(identity("10.3.0-alpha.1"));
+    expect(history.messages.map((message) => message.content)).toEqual(["hello", "continue"]);
   });
 
   test("the last migration wins", () => {
@@ -94,15 +98,60 @@ describe("session migration projection", () => {
       record("m1", "s", "system", "", { kind: SESSION_MIGRATION_KIND, harness: first.to, migration: first }),
       record("m2", "m1", "system", "", { kind: SESSION_MIGRATION_KIND, harness: second.to, migration: second }),
     ];
-    expect(projectSessionHistory(records).harness).toEqual(identity("10.3.0-beta.1"));
+    expect(projectSessionHostState(records).harness).toEqual(identity("10.3.0-beta.1"));
     expect(findLastSessionMigration(records)).toEqual(second);
   });
 
   test("a malformed migration payload fails closed", () => {
-    expect(() => projectSessionHistory([
+    expect(() => projectSessionHostState([
       record("s", null, "system", "", { harness: identity("10.3.0-alpha.1") }),
       record("m1", "s", "system", "", { kind: SESSION_MIGRATION_KIND, migration: { migratedAt: "x" } }),
     ])).toThrow();
+  });
+});
+
+describe("session-level migration rebind survives branch truncation", () => {
+  test("a fork head before the migration record still reports the migrated identity", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-migration-"));
+    const store = await createSessionStore(rootDir, "sess-1");
+    await store.append({ role: "system", content: "", metadata: { harness: identity("10.3.0-alpha.1") } });
+    const user = await store.append({ role: "user", content: "hello" });
+    await appendSessionMigrationRecord(store, migration("10.3.0-alpha.2"));
+
+    const snapshot = await loadSessionSnapshot(rootDir, "sess-1", { headUuid: user.uuid, synthesizeDanglingToolResults: false });
+    expect(snapshot.harness).toEqual(identity("10.3.0-alpha.2"));
+    expect(snapshot.headUuid).toBe(user.uuid);
+    expect(snapshot.messages.map((message) => message.content)).toEqual(["hello"]);
+  });
+
+  test("an active branch that skips the migration record still reports the migrated identity", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-migration-"));
+    const store = await createSessionStore(rootDir, "sess-1");
+    await store.append({ role: "system", content: "", metadata: { harness: identity("10.3.0-alpha.1") } });
+    await store.append({ role: "user", content: "hello" });
+    const assistant = await store.append({ role: "assistant", content: "old reply" });
+    await appendSessionMigrationRecord(store, migration("10.3.0-alpha.2"));
+    // A candidate selection rooted at the pre-migration leaf forks the active
+    // branch away from the physical-tail migration record.
+    const forked = await createSessionStore(rootDir, "sess-1", { parentUuid: assistant.uuid });
+    const marker = await forked.append({ role: "system", content: "", metadata: { kind: "candidate-selection" } });
+
+    const snapshot = await loadSessionSnapshot(rootDir, "sess-1", { synthesizeDanglingToolResults: false });
+    expect(snapshot.headUuid).toBe(marker.uuid);
+    expect(snapshot.harness).toEqual(identity("10.3.0-alpha.2"));
+  });
+
+  test("a session without a migration record keeps its header identity at any head", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-session-migration-"));
+    const store = await createSessionStore(rootDir, "sess-1");
+    await store.append({ role: "system", content: "", metadata: { harness: identity("10.3.0-alpha.1") } });
+    const user = await store.append({ role: "user", content: "hello" });
+    await store.append({ role: "assistant", content: "reply" });
+
+    const forked = await loadSessionSnapshot(rootDir, "sess-1", { headUuid: user.uuid, synthesizeDanglingToolResults: false });
+    expect(forked.harness).toEqual(identity("10.3.0-alpha.1"));
+    const full = await loadSessionSnapshot(rootDir, "sess-1", { synthesizeDanglingToolResults: false });
+    expect(full.harness).toEqual(identity("10.3.0-alpha.1"));
   });
 });
 
