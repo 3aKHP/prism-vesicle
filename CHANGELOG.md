@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Bottom panels share an expandable, read-only detail view (#315).** `Tab` / `Shift+Tab` reads permission requests (including shell, Skill, MCP and child Agent requests), gates, questions, quality decisions, confirmations and selected picker items. Truncated content expands between the app header and footer; fully visible short content stays compact. Arrow keys / `Ctrl+P,N` and `Home` / `End` scroll; `Tab`, `Enter` and `Esc` only return, preserving the selection, note, cursor and reading position. Terminal resizing keeps the source position, and `Ctrl+O` remains available: model decisions keep the Workspace pending strip, while user-opened dialogs follow the page. Compact panels budget their controls against actual terminal height, and migration reading includes every reported finding.
+
 ## [1.1.0] - 2026-09-04
 
 ### Added

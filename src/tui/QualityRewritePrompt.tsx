@@ -5,7 +5,7 @@ import { palette } from "./theme";
 
 export type QualityRewriteFocus = "confirm" | "reject";
 
-const stageDescriptions = {
+export const qualityRewriteDescriptions = {
   1: "Eligible narrative prose is sent to this Judge in an additional provider request, on top of the deterministic quality guard.",
   2: "Judge findings may request up to two original-Engine revisions of the same target. This is experimental and not calibrated production policy.",
 } as const;
@@ -31,7 +31,7 @@ export function qualityRewritePanelHeight(
   width: number,
 ): number {
   const inner = innerWidth(width);
-  const desc = wrapDisplayLines(stageDescriptions[stage], inner).length;
+  const desc = wrapDisplayLines(qualityRewriteDescriptions[stage], inner).length;
   const judge = wrapDisplayLines(judgeLine(providerAlias, modelId, judgeTimeoutMs), inner).length;
   // title + judge + description + action + cancel + hint + 2 border rows.
   return desc + judge + 6;
@@ -51,10 +51,11 @@ export function QualityRewritePrompt(props: {
   modelId: string;
   judgeTimeoutMs: number;
   width: number;
+  height?: number;
 }) {
   const inner = () => innerWidth(props.width);
-  const judgeLines = () => wrapDisplayLines(judgeLine(props.providerAlias, props.modelId, props.judgeTimeoutMs), inner());
-  const descriptionLines = () => wrapDisplayLines(stageDescriptions[props.stage], inner());
+  const judgeLines = () => wrapDisplayLines(judgeLine(props.providerAlias, props.modelId, props.judgeTimeoutMs), inner()).slice(0, props.height === undefined ? undefined : 1);
+  const descriptionLines = () => wrapDisplayLines(qualityRewriteDescriptions[props.stage], inner()).slice(0, props.height === undefined ? undefined : Math.max(1, props.height - 6 - judgeLines().length));
   const action = () => stageAction[props.stage];
   return (
     <box border borderColor={palette.error} paddingX={1} flexDirection="column" width={props.width} height="100%">

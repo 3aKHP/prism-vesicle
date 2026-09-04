@@ -518,6 +518,41 @@ describe("TUI input routing: modal ownership of Esc", () => {
   }
 
   for (const modal of owned) {
+    test(`reading owns return keys and paste above the ${modal.label} surface`, () => {
+      const recorder: EscRecorder = { keys: [] };
+      let reading = true;
+      let pages = 0;
+      let pasted = false;
+      const { router, promptEscapeCount } = modalRouter({
+        ...modal.overrides(recorder),
+        readingActive: () => reading,
+        handleReadingKey: (key) => {
+          if (!reading) return false;
+          if (["tab", "enter", "return", "escape"].includes(key.name ?? "")) reading = false;
+          return true;
+        },
+        togglePage: () => { pages += 1; },
+        handleDecisionPaste: () => { pasted = true; return true; },
+        insertComposerPaste: () => { pasted = true; },
+      });
+      router.handleKey(keyEvent("o", { ctrl: true }));
+      expect(pages).toBe(1);
+      expect(reading).toBe(true);
+      let prevented = false;
+      router.handlePaste({ bytes: new TextEncoder().encode("do not insert"), preventDefault: () => { prevented = true; } });
+      expect(prevented).toBe(true);
+      expect(pasted).toBe(false);
+      for (const name of ["tab", "return", "escape"]) {
+        reading = true;
+        const event = keyEvent(name);
+        router.handleKey(event);
+        expect(reading).toBe(false);
+        expect(event.defaultPrevented).toBe(true);
+      }
+      expect(recorder.keys).toEqual([]);
+      expect(promptEscapeCount()).toBe(0);
+    });
+
     test(`prompt-level Esc is not called while the ${modal.label} surface owns the key`, () => {
       const recorder: EscRecorder = { keys: [] };
       const { router, promptEscapeCount } = modalRouter(modal.overrides(recorder));

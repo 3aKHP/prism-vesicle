@@ -76,29 +76,29 @@ After a complete tool round, queued messages are added to the active conversatio
 
 ## Interactive prompt keys
 
-When permission approvals, stop gates, questions, and quality decisions arrive as bottom panels, each panel has two key sets and `Tab` toggles between them:
+All bottom dialogs and pickers offer `Tab` / `Shift+Tab` to read details. This includes shell/Skill/MCP/child Agent permissions, gates, questions and option descriptions, quality decisions, YOLO/migration/rewrite confirmations, rewind/branch dialogs, and the selected model/Skill/session/quality picker item. The decision options keep their usual keys:
 
 | Key (options zone) | Action |
 |---|---|
 | ↑ / ↓ / Ctrl+P / Ctrl+N | Move focus between the options |
 | Type / paste directly | Expands the focused confirm option's note input on stop-gate and engine-switch prompts; permission prompts carry notes only on Reject (always-on input). Esc clears the note and returns to the options |
 | Enter | Submit the focused option; a typed note is submitted with the decision (permission Allow takes no note) |
-| Tab / Shift+Tab | Switch to the body zone to read the folded summary / command detail |
+| Tab / Shift+Tab | Read the dialog or selected item's details |
 | Esc | Clear the note and move focus to Reject |
 
 | Key (body zone) | Action |
 |---|---|
-| ↑ / ↓ | Scroll the folded body line by line; a bright position row (e.g. `▾ lines 5-8 of 30`) marks the window |
+| ↑ / ↓ / Ctrl+P / Ctrl+N | Scroll details line by line; the position indicator shows the visible range |
 | Home / End | Jump to the top / bottom |
-| Tab / Enter / Esc | Return to the options zone (Enter in the body zone **never** submits) |
+| Tab / Shift+Tab / Enter / Esc | Return to the options without submitting, rejecting or clearing a note |
 
-Question prompts wrap their question text with the same budget and scrolling; the quality-decision panel is a fixed option list with no body zone. While the body is folded the panel shows an accent-colored `▸ N lines folded · Tab to read` affordance row, and the rail column beside the body lights up in the brand color when the body zone holds the keyboard and stays dim while the options do — the focused zone is visible at a glance. The panel hint line shows the keys available in the current zone.
+If any details are hidden in the compact panel, reading expands between the app header and footer. Fully visible short content stays compact. Reading is read-only: typing and paste do not edit the original input. Returning preserves your selection, note and cursor; reopening resumes the reading position, and resizing keeps your place in the source text. A new request, confirmation stage or selected item starts fresh. Migration reading includes every finding; session previews remain summaries. Composer completion menus, Workspace-local dialogs and BTW retain their existing interactions.
 
 ## Workspace page keys
 
 The Workspace page has three focus regions: the file tree, the viewer / editor, and the input box. `F6` / `Shift+F6` cycle between them (the viewer is skipped when no file is open), and `Esc` steps focus back (editor → tree → input box; Markdown source has one extra level: source → preview → tree). Printable shortcuts only act in their focused region and never collide with the input box.
 
-Interactive decision prompts that arrive mid-turn (permission approval, stop gates, questions, quality decisions) do not take over this page's bottom: they collapse to a one-line pending strip above the input box (e.g. `◆ Permission pending · Ctrl+O to answer`), the keyboard stays with the three focus regions, and the workbench is never occluded. Press `Ctrl+O` to see the full prompt on the Chat page and answer it there; until it is answered, Enter in the input box neither sends nor queues — the draft is kept as-is. Pickers and confirms you open yourself (YOLO confirm, migration review, …) still show their full panels at the bottom.
+Interactive decision prompts that arrive mid-turn (permission approval, stop gates, questions, quality decisions) collapse to a one-line pending strip above the input box (e.g. `◆ Permission pending · Ctrl+O to answer`), and the keyboard stays with the three focus regions. `Ctrl+O` works even during expanded reading: it switches to Workspace and restores the reading position when you return to Chat. Until the decision is answered, Enter in the input box neither sends nor queues; the draft is kept. Pickers and confirms you open yourself (YOLO, migration, rewrite, rewind, branch, model, Skill, session, quality) stay open on both pages, including their expanded reader.
 
 ### File tree and read-only viewer
 

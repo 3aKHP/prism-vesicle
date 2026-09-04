@@ -72,6 +72,8 @@ export type InputRoutingOptions = {
   workspaceFocusRegion?: Accessor<string>;
   workspaceEditableSourcePasteActive?: Accessor<boolean>;
   handleWorkspaceKey?: (key: TuiKeyEvent) => boolean;
+  handleReadingKey?: (key: TuiKeyEvent) => boolean;
+  readingActive?: Accessor<boolean>;
 };
 
 export type InputRouter = {
@@ -168,6 +170,10 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     // beneath it changes.
     if (key.ctrl && !key.shift && key.name === "o" && options.togglePage) {
       options.togglePage();
+      consumeKey(key);
+      return;
+    }
+    if (options.handleReadingKey?.(key)) {
       consumeKey(key);
       return;
     }
@@ -297,6 +303,10 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     if (options.sideQuestionOverlay?.()) {
+      event.preventDefault();
+      return;
+    }
+    if (options.readingActive?.()) {
       event.preventDefault();
       return;
     }

@@ -1,5 +1,5 @@
 import { ThemedText } from "./theme-text";
-import { createEffect, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { TextAttributes } from "@3akhp/opentui-core";
 import { useRenderer } from "@3akhp/opentui-solid";
 import type { GateRequest, GateResolution } from "../core/gate/types";
@@ -18,13 +18,10 @@ import { PromptComposer } from "./PromptComposer";
  * - Typing on the focused confirm option expands an inline note input
  *   (#268 item 4; the former explicit Tab-note toggle is gone).
  * - Reject owns a visible input but may be submitted empty.
- * - Tab toggles to a body-reading zone where ↑/↓ scroll the folded summary.
+ * - Tab delegates full detail reading to the shared bottom-surface reader.
  */
 
-/** Focus zone of an open decision prompt (#268 item 4): "options" is the
- * classic decision keymap; "body" reads the folded prompt text with the
- * arrows. Toggled by Tab / Shift+Tab on gate, permission, and question
- * prompts. */
+/** Presentation focus for compact prompts; the shared reader owns input. */
 export type PromptZone = "options" | "body";
 
 /** Hint lines shared by the decision prompts' two zones; rendering and tests
@@ -68,8 +65,6 @@ export type GatePromptProps = {
   maxSummaryLines?: number;
   showSummaryOption?: boolean;
   zone?: PromptZone;
-  bodyScrollOffset?: number;
-  onBodyExtent?: (total: number, visible: number) => void;
 };
 
 export type GateFocusTarget = "confirm" | "confirm-summary" | "reject";
@@ -103,12 +98,8 @@ export function GatePrompt(props: GatePromptProps) {
   const summaryWindow = () => promptBodyWindow(
     wrapGateSummary(renderGateSummaryText(props.gate.summary), summaryWrapWidth()),
     props.maxSummaryLines ?? 4,
-    props.bodyScrollOffset ?? 0,
+    0,
   );
-  createEffect(() => {
-    const window = summaryWindow();
-    props.onBodyExtent?.(window.lines.length, window.visible);
-  });
   const inputWidth = () => Math.max(MIN_SUMMARY_WIDTH, (props.width ?? renderer.width) - 8);
   const rows = (): GateRow[] => [
     { kind: "option", index: 1, label: confirmLabel, focused: props.focused === "confirm" },
@@ -134,7 +125,7 @@ export function GatePrompt(props: GatePromptProps) {
         <For each={summaryWindow().lines.slice(summaryWindow().start, summaryWindow().end)}>
           {(line) => <PromptBodyRow line={line} zone={props.zone} />}
         </For>
-        <Show when={summaryWindow().folded} fallback={<box height={0} />}>
+        <Show when={summaryWindow().showIndicator} fallback={<box height={0} />}>
           <PromptBodyRow
             zone={props.zone}
             fg={props.zone === "body" ? palette.textPrimary : palette.gateAccent}
@@ -162,6 +153,7 @@ export function GatePrompt(props: GatePromptProps) {
             value={props.feedback}
             cursor={props.feedbackCursor ?? props.feedback.length}
             width={inputWidth()}
+            focused={props.zone !== "body"}
           />
         )}
       </For>
@@ -258,7 +250,7 @@ export function visibleGateSummaryLines(value: string, maxWidth: number, maxLine
   return [...lines.slice(0, limit - 1), "..."];
 }
 
-function FeedbackLine(props: { placeholder: string; value: string; cursor: number; width: number }) {
+function FeedbackLine(props: { placeholder: string; value: string; cursor: number; width: number; focused: boolean }) {
   return (
     <box marginLeft={4} height={1} flexDirection="row">
       <ThemedText content="✎ " fg={palette.warn} wrapMode="none" />
@@ -268,7 +260,7 @@ function FeedbackLine(props: { placeholder: string; value: string; cursor: numbe
         placeholder={props.placeholder}
         width={props.width}
         maxLines={1}
-        focused={true}
+        focused={props.focused}
       />
     </box>
   );

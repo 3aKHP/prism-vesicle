@@ -41,10 +41,12 @@ export function rewindPickerPanelHeight(state: RewindPickerState): number {
   return Math.min(14, 8 + optionRows + warningRows);
 }
 
-export function RewindPicker(props: { state: RewindPickerState; width: number }) {
+export function RewindPicker(props: { state: RewindPickerState; width: number; height?: number }) {
   const target = () => props.state.target;
   const options = () => target() ? rewindRestoreOptions(target()!) : [];
-  const visible = () => visibleRewindRows(props.state.points, props.state.selected, rewindVisibleRowLimit);
+  const visible = () => visibleRewindRows(props.state.points, props.state.selected, props.height === undefined ? rewindVisibleRowLimit : Math.max(1, props.height - 5));
+  const showIntroduction = () => props.height === undefined || props.height >= 7 + options().length;
+  const warningCapacity = () => props.height === undefined ? 3 : Math.max(0, props.height - 6 - Number(showIntroduction()) - options().length);
 
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">
@@ -77,7 +79,7 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
         }>
           {(point) => (
             <box flexDirection="column">
-              <ThemedText content={truncateLine("Confirm you want to restore to the point before you sent this message:", props.width - 4)} fg={palette.textSecondary} wrapMode="none" />
+              <Show when={showIntroduction()} fallback={<box height={0} />}><ThemedText content={truncateLine("Confirm you want to restore to the point before you sent this message:", props.width - 4)} fg={palette.textSecondary} wrapMode="none" /></Show>
               <ThemedText content={truncateLine(`  ${point().content.replace(/\s+/g, " ")} · ${formatRelativeTime(point().timestamp)}`, props.width - 4)} fg={palette.textPrimary} wrapMode="none" />
               <ThemedText content={truncateLine(restoreDescription(options()[props.state.restoreSelected]?.value, point()), props.width - 4)} fg={palette.textDim} wrapMode="none" />
               <For each={options()}>
@@ -98,13 +100,13 @@ export function RewindPicker(props: { state: RewindPickerState; width: number })
                   );
                 }}
               </For>
-              <For each={point().diffStats?.filesChanged.length ? [true] : []}>
+              <For each={point().diffStats?.filesChanged.length && warningCapacity() > 0 ? [true] : []}>
                 {() => <ThemedText content={truncateLine("⚠ Rewinding does not affect files edited manually outside Vesicle tools.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
               </For>
-              <For each={point().checkpointTainted ? [true] : []}>
+              <For each={point().checkpointTainted && warningCapacity() > (point().diffStats?.filesChanged.length ? 1 : 0) ? [true] : []}>
                 {() => <ThemedText content={truncateLine("⚠ This turn ran a host process; its file changes may not be restored.", props.width - 4)} fg={palette.error} wrapMode="none" />}
               </For>
-              <For each={point().failedTurn ? [true] : []}>
+              <For each={point().failedTurn && warningCapacity() > Number(Boolean(point().diffStats?.filesChanged.length)) + Number(Boolean(point().checkpointTainted)) ? [true] : []}>
                 {() => <ThemedText content={truncateLine("⚠ This turn failed before a reply; its prompt was not delivered to the provider.", props.width - 4)} fg={palette.warn} wrapMode="none" />}
               </For>
               <ThemedText content={props.state.busy

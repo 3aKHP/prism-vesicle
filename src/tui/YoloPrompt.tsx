@@ -4,7 +4,7 @@ import type { GateFocusTarget } from "./GatePrompt";
 import { displayWidth, wrapDisplayLines } from "./format";
 import { palette } from "./theme";
 
-const yoloDescriptions = {
+export const yoloDescriptions = {
   1: "YOLO automatically approves every model-visible tool, including shell_exec when enabled and all MCP tools.",
   2: "Shell commands may access project-external files and the network. MCP and SubAgents may cause external side effects. Rewind cannot guarantee recovery.",
 } as const;
@@ -20,9 +20,9 @@ function yoloHint(width: number): string {
     : "↑/↓ · Enter confirm · Esc cancel";
 }
 
-export function YoloPrompt(props: { stage: 1 | 2; focused: GateFocusTarget; width: number }) {
+export function YoloPrompt(props: { stage: 1 | 2; focused: GateFocusTarget; width: number; height?: number }) {
   const description = () => yoloDescriptions[props.stage];
-  const descriptionLines = () => wrapDisplayLines(description(), Math.max(20, props.width - 4));
+  const descriptionLines = () => wrapDisplayLines(description(), Math.max(20, props.width - 4)).slice(0, props.height === undefined ? undefined : Math.max(1, props.height - 6));
   return (
     <box border borderColor={palette.error} paddingX={1} flexDirection="column" width={props.width} height="100%">
       <ThemedText content={`DANGER · Enable YOLO (${props.stage}/2)`} fg={palette.error} attributes={1} wrapMode="none" />
