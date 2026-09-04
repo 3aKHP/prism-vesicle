@@ -65,6 +65,26 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Ordering invariant: checkout cleans the workspace, so it must run
+      # before any artifact staging under release/. At the v1.1.0 tag this
+      # order was inverted and checkout wiped the staged artifacts, so the
+      # published release carried no files (the body was fine).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.metadata.outputs.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      # The release body is composed from the paired bilingual CHANGELOG by
+      # scripts/release/compose-notes.ts. GitHub's generate_release_notes
+      # autogen is deliberately absent: its compare-base fallback dumped the
+      # full history into the first non-prerelease body (issue #268 item 10).
+      - name: Compose bilingual release notes from the paired CHANGELOG
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: bun scripts/release/compose-notes.ts --version "$VERSION" --out release-notes.md
       - uses: actions/download-artifact@v8
         with:
           digest-mismatch: error
@@ -74,22 +94,6 @@ jobs:
       - name: Write checksums
         working-directory: release
         run: sha256sum * > SHA256SUMS.txt
-      # The release body is composed from the paired bilingual CHANGELOG by
-      # scripts/release/compose-notes.ts. GitHub's generate_release_notes
-      # autogen is deliberately absent: its compare-base fallback dumped the
-      # full history into the first non-prerelease body (issue #268 item 10).
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.metadata.outputs.sha }}
-          fetch-depth: 0
-          fetch-tags: true
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-      - name: Compose bilingual release notes from the paired CHANGELOG
-        env:
-          VERSION: ${{ needs.metadata.outputs.version }}
-        run: bun scripts/release/compose-notes.ts --version "$VERSION" --out release-notes.md
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
