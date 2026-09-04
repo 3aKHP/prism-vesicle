@@ -3,6 +3,7 @@ import {
   collectIssueOrigins,
   extractClosingIssueNumbers,
   extractPrNumbersFromCommits,
+  mapCompareCommitMessages,
 } from "../../../scripts/release/close-bridged-issues";
 
 describe("constituent PR extraction", () => {
@@ -39,6 +40,17 @@ describe("constituent PR extraction", () => {
         { message: "docs(readme): mark the project status badge stable for 1.0.0 (#267)" },
       ]),
     ).toEqual([267]);
+  });
+
+  test("maps the compare endpoint's nested commit payload before extraction", () => {
+    // Wire-shape regression: the compare API nests messages under `.commit`,
+    // and feeding raw entries to extraction crashed the v1.1.0 bridge run.
+    const compareEntries = [
+      { sha: "abc", commit: { message: "fix(tui): wire the strict double-tilde flavor (#305)" } },
+      { sha: "def", commit: { message: "Merge pull request #307 from 3aKHP/fix/issue-298" } },
+      { sha: "ghi" },
+    ];
+    expect(extractPrNumbersFromCommits(mapCompareCommitMessages(compareEntries))).toEqual([305, 307]);
   });
 });
 
