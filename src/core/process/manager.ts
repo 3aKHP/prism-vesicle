@@ -180,19 +180,50 @@ export class ProcessManager {
     return task.settled.then(cloneState);
   }
 
-  async drainNotifications(parentSessionId: string): Promise<BackgroundProcessState[]> {
+  /**
+   * Terminal tasks of one parent session that still owe a completion record.
+   * Read-only peek: the `notified` flip belongs to `markNotified`, called only
+   * after the delivery has made the completion durable.
+   */
+  async collectNotifications(parentSessionId: string): Promise<BackgroundProcessState[]> {
     await this.initialize();
-    const completed = [...this.tasks.values()].filter((task) =>
-      task.state.parentSessionId === parentSessionId
-      && task.state.status !== "running"
-      && !task.state.notified
-    );
-    for (const task of completed) {
+    return [...this.tasks.values()]
+      .filter((task) =>
+        task.state.parentSessionId === parentSessionId
+        && task.state.status !== "running"
+        && !task.state.notified
+      )
+      .sort((a, b) => a.state.startedAt.localeCompare(b.state.startedAt) || a.state.taskId.localeCompare(b.state.taskId))
+      .map((task) => cloneState(task.state));
+  }
+
+  /** Mark tasks as notified once their completion record is durable. Idempotent. */
+  async markNotified(taskIds: string[]): Promise<void> {
+    await this.initialize();
+    for (const taskId of taskIds) {
+      const task = this.tasks.get(taskId);
+      if (!task || task.state.notified) continue;
       task.state.notified = true;
       task.state.updatedAt = new Date().toISOString();
       await this.persist(task);
     }
-    return completed.map((task) => cloneState(task.state));
+  }
+
+  /**
+   * Re-arm a batch whose delivery turn failed after the record was durable:
+   * back to collectable, so the next provider boundary re-delivers the packet
+   * through the projection-dropped (push-only) path instead of stranding the
+   * completion out of the live session's wire. Idempotent.
+   */
+  async resetNotified(taskIds: string[]): Promise<void> {
+    await this.initialize();
+    for (const taskId of taskIds) {
+      const task = this.tasks.get(taskId);
+      if (!task || !task.state.notified) continue;
+      task.state.notified = false;
+      task.state.updatedAt = new Date().toISOString();
+      await this.persist(task);
+    }
   }
 
   async shutdown(): Promise<void> {

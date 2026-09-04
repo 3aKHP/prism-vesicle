@@ -84,12 +84,14 @@ const long = (n: number) => `turn ${n}: ` + "x".repeat(400);
 describe("pre-turn auto-compaction", () => {
   test("compacts the existing head before the new user record is persisted", async () => {
     // The provider-visible tool schema is part of the estimate. The first turn
-    // remains below 4k; the second completed turn pushes the next request over.
-    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5000\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
+    // remains below the soft trigger; the second completed turn pushes the next
+    // request over it. Budgets are calibrated against the real tool surface,
+    // so schema-text changes re-touch these numbers.
+    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5500\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
     stubReplies();
     const first = await runPrompt({ input: long(1), rootDir: rootDir!, messages: [{ role: "user", content: long(1) }] });
     if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
-    // Second turn stays below the soft trigger (one turn ~205 tokens < 300).
+    // Second turn stays below the soft trigger (history + schema fit).
     const second = await runPrompt({ input: long(2), rootDir: rootDir!, sessionId: first.sessionId, messages: [{ role: "user", content: long(2) }] });
     if (second.kind !== "complete") throw new Error(`expected complete, got ${second.kind}`);
     const recordsBefore = await loadSessionRecords(rootDir!, first.sessionId);
@@ -129,7 +131,7 @@ describe("pre-turn auto-compaction", () => {
   });
 
   test("rejects an oversized replacement before installing its checkpoint", async () => {
-    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5000\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
+    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5500\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
     stubReplies();
     const first = await runPrompt({ input: long(1), rootDir: rootDir!, messages: [{ role: "user", content: long(1) }] });
     if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
@@ -159,7 +161,7 @@ describe("pre-turn auto-compaction", () => {
   });
 
   test("does not install a soft-trigger checkpoint when the summary enlarges the next request", async () => {
-    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5000\n          autoCompact:\n            enabled: true\n            threshold: 0.08\n            reserveOutputTokens: 500"));
+    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5500\n          autoCompact:\n            enabled: true\n            threshold: 0.08\n            reserveOutputTokens: 500"));
     stubReplies();
     const first = await runPrompt({ input: long(1), rootDir: rootDir!, messages: [{ role: "user", content: long(1) }] });
     if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
@@ -213,7 +215,7 @@ describe("pre-turn auto-compaction", () => {
   });
 
   test("propagates compaction cancellation without recording a failure or checkpoint", async () => {
-    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5000\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
+    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5500\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
     stubReplies();
     const first = await runPrompt({ input: long(1), rootDir: rootDir!, messages: [{ role: "user", content: long(1) }] });
     if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
@@ -248,7 +250,7 @@ describe("pre-turn auto-compaction", () => {
   });
 
   test.skipIf(!posixShSpawnable)("materializes background output before the exact provider-send hard guard", async () => {
-    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5000\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
+    await configure(provider("      - id: m\n        limits:\n          contextWindow: 5500\n          autoCompact:\n            enabled: true\n            threshold: 0.8\n            reserveOutputTokens: 500"));
     let normalCalls = 0;
     globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { messages?: Array<{ content?: string }> };

@@ -117,6 +117,13 @@ export type TurnAgentPort = {
   onProviderContextSnapshot?: (snapshot: SideQuestionContextSnapshot) => void;
 };
 
+/** Background shell completion delivery: the two notified-flag capabilities the controller consumes, plus pause state. */
+export type TurnProcessPort = {
+  markNotified: (taskIds: string[]) => Promise<void>;
+  resetNotified: (taskIds: string[]) => Promise<void>;
+  pausedProcessDeliveries: Set<string>;
+};
+
 /** Turn / session / independent-Agent usage accounting. */
 export type TurnUsagePort = {
   beginUsageTurn: () => void;
@@ -201,6 +208,9 @@ export type TurnControllerOptions = {
   clearGateFeedback: () => void;
   setSessionPicker: Setter<SessionPickerState | null>;
   pausedAgentDeliveries: Set<string>;
+  markProcessNotified: (taskIds: string[]) => Promise<void>;
+  resetProcessNotified: (taskIds: string[]) => Promise<void>;
+  pausedProcessDeliveries: Set<string>;
   agentManager: () => AgentManager;
   permissionBroker: ToolPermissionBroker;
   runCancellable: TurnRunCancellable;

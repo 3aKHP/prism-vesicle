@@ -3,7 +3,7 @@ import type { ProviderRegistry } from "../config/providers";
 import type { ArtifactEntry } from "../core/artifacts/workbench";
 import type { SessionSummary } from "../core/session/store";
 import type { VesicleImageAttachment } from "../providers/shared/types";
-import type { Command } from "./commands/types";
+import type { Command, SkillCatalogCompletionEntry } from "./commands/types";
 import { matchOptionItems, resolveCommandArgumentCompletion } from "./commands/argument-completion";
 import { matchCommands } from "./commands/match";
 import { clampCommandMenuSelection, moveCommandMenuSelection } from "./commands/selection";
@@ -28,6 +28,8 @@ export type CommandCompletionControllerOptions = {
   refreshArtifacts: () => Promise<ArtifactEntry[]>;
   listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
+  /** The session's activatable Skill catalog, shared with the `/skill` picker (#312). */
+  skillCatalogEntries: () => Promise<readonly SkillCatalogCompletionEntry[]>;
   agentCards: Accessor<AgentCardState[]>;
   sessionId: Accessor<string | undefined>;
   submitCommand: (value: string) => boolean;
@@ -56,6 +58,7 @@ export function createCommandCompletionController(options: CommandCompletionCont
     refreshArtifacts: options.refreshArtifacts,
     listWorkspaceTargets: options.listWorkspaceTargets,
     listSessions: options.listSessions,
+    skillCatalogEntries: options.skillCatalogEntries,
     agentOptions,
   }));
   const commandArgumentSourceKey = createMemo(() => commandArgumentDraft()?.sourceKey ?? null);

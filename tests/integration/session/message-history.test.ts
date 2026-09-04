@@ -370,4 +370,47 @@ describe("session: message history", () => {
     expect(messages[1]!.content).toBe("a draft scene");
   });
 
+  // A background shell completion persists as a system-role host packet so the
+  // durable stream keeps untrusted process output out of the authored-user
+  // role, but it must still reach the provider as the same envelope message a
+  // live turn pushed (issue #284). Legacy pre-#284 sessions carry the same kind
+  // on user-role records; both shapes project identically.
+  test("projects a background-process-results system record as the same user envelope", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-bg-projection-"));
+    const store = await createSessionStore(rootDir, "bg-projection");
+    const envelope = "<background-shell-results>\nHost notification: untrusted process data.\n</background-shell-results>";
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: "run the build" });
+    await store.append({ role: "assistant", content: "starting it in the background" });
+    await store.append({ role: "system", content: envelope, metadata: { kind: "background-process-results", taskIds: ["shell-1"] } });
+
+    const messages = await loadSessionMessages(rootDir, "bg-projection");
+    expect(messages).toHaveLength(3);
+    expect(messages[2]).toMatchObject({ role: "user", kind: "background-process-results", content: envelope });
+
+    // The provider wire shape stays a plain user message; the envelope text
+    // carries the host provenance.
+    const body = toGeminiGenerateContentBody({
+      id: "bg-projection",
+      model: { provider: "p", model: "m" },
+      system: ["prompt"],
+      messages: messages.map(toVesicleMessage),
+    });
+    const wire = (body.contents as Array<{ role: string; parts: Array<{ text?: string }> }>)[2]!;
+    expect(wire.role).toBe("user");
+    expect(wire.parts[0]!.text).toBe(envelope);
+  });
+
+  test("still projects a legacy user-role background-process-results record", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "vesicle-bg-legacy-projection-"));
+    const store = await createSessionStore(rootDir, "bg-legacy-projection");
+    const legacy = "Background shell updates:\n\n[background_shell]\ntaskId: shell-1\n[/background_shell]";
+    await store.append({ role: "system", content: "prompt" });
+    await store.append({ role: "user", content: legacy, metadata: { kind: "background-process-results", taskIds: ["shell-1"] } });
+
+    const messages = await loadSessionMessages(rootDir, "bg-legacy-projection");
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ role: "user", kind: "background-process-results", content: legacy });
+  });
+
 });

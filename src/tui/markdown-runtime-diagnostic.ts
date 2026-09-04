@@ -234,6 +234,7 @@ async function probeNativeMarkdownSelection(
     syntaxStyle: syntaxStyle(),
     selectionBg: light.selectionBackground,
     selectionFg: light.selectionForeground,
+    strikethrough: "double-tilde",
   });
   renderer.root.add(markdown);
 

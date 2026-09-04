@@ -11,7 +11,7 @@ mock.module("../../../src/tui/clipboard", () => ({
   readImageFromClipboard: async () => pngBytes,
 }));
 
-import { createComposerController } from "../../../src/tui/composer-controller";
+import { createComposerController, decisionPendingSubmitStatus } from "../../../src/tui/composer-controller";
 import { createInputQueue } from "../../../src/tui/input-queue";
 import type { Message } from "../../../src/tui/types";
 
@@ -42,6 +42,7 @@ function buildController() {
     sessionId: () => "session-test",
     refreshArtifacts: async () => [],
     listSessions: async () => [],
+    skillCatalogEntries: async () => [],
     listWorkspaceTargets: async () => [],
     busy: () => false,
     activeModelCapabilities: () => ({ vision: true }),
@@ -93,6 +94,7 @@ describe("composer controller: busy Esc interrupt preserves the draft", () => {
         sessionId: () => "session-test",
         refreshArtifacts: async () => [],
         listSessions: async () => [],
+        skillCatalogEntries: async () => [],
         listWorkspaceTargets: async () => [],
         busy: () => true,
         activeModelCapabilities: () => ({ vision: true }),
@@ -177,5 +179,81 @@ describe("composer controller: clipboard image paste status numbering (#134)", (
       expect(elements[0].placeholder).toBe("[Image #1]");
       expect(elements[1].placeholder).toBe("[Image #2]");
     });
+  });
+});
+
+describe("composer controller: decision-pending submit guard (#268 item 3)", () => {
+  function buildPendingController() {
+    let dispose!: () => void;
+    let submits = 0;
+    let commands = 0;
+    const inputQueue = createInputQueue();
+    const built = createRoot((disposeRoot) => {
+      dispose = disposeRoot;
+      const [status, setStatus] = createSignal("");
+      const [, setMessages] = createSignal<Message[]>([]);
+      const controller = createComposerController({
+        rootDir: root,
+        commands: () => [],
+        activeEngine: () => "etl",
+        terminalWidth: () => 80,
+        providerRegistry: () => null,
+        activeProvider: () => "test",
+        ensureProviderRegistry: async () => { throw new Error("not used"); },
+        applyProviderSelection: async () => { throw new Error("not used"); },
+        persistProviderSwitch: async () => undefined,
+        agentCards: () => [],
+        sessionId: () => "session-test",
+        refreshArtifacts: async () => [],
+        listSessions: async () => [],
+        skillCatalogEntries: async () => [],
+        listWorkspaceTargets: async () => [],
+        busy: () => false,
+        activeModelCapabilities: () => ({ vision: true }),
+        status,
+        setStatus,
+        setMessages,
+        recordActivity: () => undefined,
+        reportError: () => undefined,
+        inputQueue,
+        submitCommand: () => { commands += 1; return true; },
+        submitPrompt: async () => { submits += 1; },
+        hostDecisionPending: () => true,
+        abortTurn: () => false,
+        openRewind: async () => undefined,
+      });
+      return { controller, status };
+    });
+    return { built, dispose: () => dispose(), submits: () => submits, commands: () => commands };
+  }
+
+  test("Enter neither sends nor queues a message while a decision is pending; the draft stays", () => {
+    const pending = buildPendingController();
+    try {
+      const { controller, status } = pending.built;
+      for (const char of "follow-up") controller.handleKey({ name: char, sequence: char });
+      controller.handleKey({ name: "enter" });
+      expect(pending.submits()).toBe(0);
+      expect(controller.queuedInputs()).toEqual([]);
+      expect(controller.inputValue()).toBe("follow-up");
+      expect(status()).toBe(decisionPendingSubmitStatus);
+    } finally {
+      pending.dispose();
+    }
+  });
+
+  test("a slash command draft is refused the same way, not executed", () => {
+    const pending = buildPendingController();
+    try {
+      const { controller, status } = pending.built;
+      for (const char of "/help") controller.handleKey({ name: char, sequence: char });
+      controller.handleKey({ name: "enter" });
+      expect(pending.commands()).toBe(0);
+      expect(controller.queuedInputs()).toEqual([]);
+      expect(controller.inputValue()).toBe("/help");
+      expect(status()).toBe(decisionPendingSubmitStatus);
+    } finally {
+      pending.dispose();
+    }
   });
 });

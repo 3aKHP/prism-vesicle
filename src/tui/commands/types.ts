@@ -32,6 +32,13 @@ export type UsageTelemetrySummary = {
   contextInputTokens: number;
 };
 
+/** One session-catalog entry offered to `/skill` name completion. */
+export type SkillCatalogCompletionEntry = {
+  name: string;
+  scope: string;
+  description: string;
+};
+
 /**
  * Host-owned data sources available to command argument completion. Command
  * definitions describe their grammar; the TUI controller owns async loading,
@@ -46,6 +53,12 @@ export type CommandCompletionContext = {
   listWorkspaceTargets: () => Promise<ProjectPathEntry[]>;
   listSessions: () => Promise<SessionSummary[]>;
   agentOptions: () => OptionItem[];
+  /**
+   * The session's activatable Skill catalog (#312): the same read-only
+   * freeze-then-snapshot resolution the `/skill` picker and activation use,
+   * so completion never suggests a name that would fail with `Unknown skill`.
+   */
+  skillCatalogEntries: () => Promise<readonly SkillCatalogCompletionEntry[]>;
 };
 
 export type CommandArgumentCompletion = {
@@ -174,10 +187,12 @@ export type QualityCommandContext = CommandActivityPort & {
   activeModel: () => string;
 };
 
-/** /skill — skill picker and activation. */
+/** /skill — skill picker, activation, and explicit catalog re-freeze. */
 export type SkillCommandContext = CommandEchoPort & {
   openSkillPicker: () => Promise<void>;
   activateSkill: (name: string, options: { mode: "invoke" | "context-only"; taskText?: string }) => Promise<void>;
+  /** `/skill refresh` (#308): re-freeze the session catalog at current installation content. */
+  refreshSkillCatalog: () => Promise<void>;
 };
 
 /** /workspace, /artifact, /validate — Workspace page and artifact preview. */

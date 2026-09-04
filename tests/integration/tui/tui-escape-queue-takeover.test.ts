@@ -97,6 +97,7 @@ async function buildHarness(root: string, sessionId: string): Promise<Harness> {
       sessionId: () => sessionId,
       refreshArtifacts: async () => [],
       listSessions: async () => [],
+      skillCatalogEntries: async () => [],
       listWorkspaceTargets: async () => [],
       busy: () => busy,
       activeModelCapabilities: () => ({ vision: true }),

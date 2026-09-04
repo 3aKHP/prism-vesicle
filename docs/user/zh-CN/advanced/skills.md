@@ -63,9 +63,16 @@ vesicle skills install <GitHub-URL> --ref <tag或commit> --all
 
 ## `/skill` TUI 命令
 
-- `/skill` — 打开选择器，显示可用 Skill 及其范围。
+- `/skill` — 打开选择器，显示本会话可激活的 Skill 及其范围。会话冻结目录之后新装或内容已变化的 Skill 不会出现在列表中；运行 `/skill refresh` 重冻结后即可见。
 - `/skill <名称> [任务]` — 激活并调用。
 - `/skill <名称> --context-only` — 仅加载上下文，不发送提供程序请求。
+- `/skill refresh` — 把本会话的 Skill 目录按当前安装内容重新冻结。正文变更的 Skill 需要再 `/skill <名称>` 激活一次才能回到会话里；没有变化时什么都不做。
+
+## 激活后的只读 `skills/` 挂载
+
+激活一个 Skill 后，它捆绑的文件同时以只读逻辑根 `skills/<名称>/<Skill 相对路径>` 挂载进普通文件工具：模型可以用 `grep_files` 直接检索（例如在 `vesicle-docs` 里按关键词定位文档页），再用 `read_file` 按行区间精读命中位置，`list_directory` 与 `stat_path` 用于浏览，`view_image` 可查看捆绑图片。
+
+挂载面与激活状态一致：激活即挂载，压缩丢失或回退卸载；只解析会话目录中的胜者副本。列表与检索遵循加载时冻结的资源清单；单文件读取与 `read_skill_resource` 同源同护栏（含 256 KiB 文本上限）。`skills/` 是只读根——写入、移动、复制目标与删除一律拒绝。`read_skill_resource` 本身不变，仍是带来源事件的读取路径。
 
 ## 启用与禁用
 
@@ -78,7 +85,7 @@ vesicle skills install <GitHub-URL> --ref <tag或commit> --all
 
 ## 第一方 `vesicle-docs` Skill
 
-每个 Vesicle 安装包自带 `vesicle-docs`（范围 `host`），包含版本匹配的公共文档：README、用户手册（中/英）、开发者合约和配置示例。它没有脚本、没有进程权限，仅通过 `read_skill_resource` 提供只读文本参考。
+每个 Vesicle 安装包自带 `vesicle-docs`（范围 `host`），包含版本匹配的公共文档：README、用户手册（中/英）、开发者合约和配置示例。它没有脚本、没有进程权限，捆绑参考可经 `read_skill_resource` 读取，激活后也可经只读 `skills/` 挂载用 `grep_files` 检索。
 
 当用户询问 Vesicle 的安装、配置、命令、故障排除或架构时，模型可自动激活此 Skill 获取准确信息。
 
@@ -92,7 +99,7 @@ vesicle skills install <GitHub-URL> --ref <tag或commit> --all
 
 每个 Vesicle 安装包自带 `novel-outline-v3`（范围 `host`），提供分层长篇小说纲要工作流（卷纲 → 章纲 → 场景）。它教授正文为先的方法论：读齐全部素材 → 维护两本全局档案（角色成长、世界观状态）→ 定卷纲 → 逐章定纲（先定张力总值再分场景）→ 闭合校验 → 回写档案 → 标待确认。
 
-它没有脚本、没有进程权限，仅通过 `read_skill_resource` 提供只读文本参考（纲要模板、档案格式、张力模型）。与 Harness 的张力预算系统互补。
+它没有脚本、没有进程权限，捆绑参考可经 `read_skill_resource` 读取，激活后也可经只读 `skills/` 挂载检索（纲要模板、档案格式、张力模型）。与 Harness 的张力预算系统互补。
 
 当用户要求「明确前三章」「写某卷纲要」「把大纲细化到场景级」「分配张力」或「列举伏笔收放」时，模型可自动激活此 Skill。
 
@@ -108,7 +115,7 @@ Stage Engine 不解析 Skill 目录，不支持 `activate_skill`、`read_skill_r
 
 ## 会话冻结
 
-Skill 目录在会话首次解析时冻结。恢复会话时按名称和内容哈希重新解析；内容已变更的 Skill 被丢弃并报告诊断，不会静默替换。
+Skill 目录在会话首次解析时冻结。恢复会话时按名称和内容哈希重新解析；内容已变更的 Skill 被丢弃并报告诊断，不会静默替换。如果宿主版本更新等原因让某个 Skill 的内容变了、但会话本身没有触发迁移审查，恢复时会看到一条漂移提示：运行 `/skill refresh` 即可按当前内容重新冻结，报告里标记为已变更的 Skill 再激活一次即可恢复使用。
 
 ## 能力与权限
 

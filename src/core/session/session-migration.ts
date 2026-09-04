@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { join } from "node:path";
 import { parseHarnessRuntimeIdentity } from "../harness/activation";
 import type { HarnessRuntimeIdentity } from "../harness/driver";
+import type { SkillCatalogSnapshot } from "../skills/catalog-snapshot";
 import type { SessionStore } from "./append-store";
 import type { SessionRecord } from "./record-model";
 
@@ -133,15 +134,25 @@ export async function appendSessionArchiveTag(
   await appendFile(destination, `${JSON.stringify(record)}\n`, "utf8");
 }
 
-/** Append the durable migration record that rebinds the live session's effective Harness identity. */
+/**
+ * Append the durable migration record that rebinds the live session's effective
+ * Harness identity. `skills` is the catalog re-freeze at migration time: it
+ * rides the same single append as the identity rebind (atomic) and, like the
+ * identity, is session-level Host state read from the physical record stream
+ * by the projector's `metadata.skills` scan. It is metadata-level only — the
+ * migration payload shape and its strict parser stay untouched, and a missing
+ * or malformed snapshot degrades per `parseSkillCatalogSnapshot` without
+ * affecting the migration record itself.
+ */
 export async function appendSessionMigrationRecord(
   session: SessionStore,
   record: SessionMigrationRecord,
+  skills?: SkillCatalogSnapshot,
 ): Promise<SessionRecord> {
   return session.append({
     role: "system",
     content: migrationSummary(record),
-    metadata: { kind: SESSION_MIGRATION_KIND, harness: record.to, migration: record },
+    metadata: { kind: SESSION_MIGRATION_KIND, harness: record.to, migration: record, ...(skills ? { skills } : {}) },
   });
 }
 

@@ -17,7 +17,7 @@ For any non-trivial code, prompt-runtime, TUI, provider, session, tool, workflow
 - `README.md`: project entry point, installation, first run, concise capability overview, and documentation navigation.
 - `docs/user/zh-CN/README.md`: canonical user-manual entry point; pair user-manual changes with the matching `docs/user/en/` page.
 
-Read `CHANGELOG.md` before any user-visible behavior, config, runtime contract, tool surface, TUI, prompt, or documentation-status change.
+Read `CHANGELOG.md` before any user-visible behavior, config, runtime contract, tool surface, TUI, prompt, or documentation-status change. `CHANGELOG.md` is canonical English with a structure-paired Simplified Chinese companion, `CHANGELOG.zh-CN.md`: update both files in the same change (`bun run changelog:check` enforces the pairing).
 
 Read asset-specific docs when touching assets:
 
@@ -36,7 +36,7 @@ Use the docs by responsibility:
 | `README.md` | Project entry point, installation, first run, feature overview, and doc navigation |
 | `docs/user/` | Channel-funnelled user manuals (start pages, tutorials, reference); Simplified Chinese canonical, English mirrored |
 | `STATUS.md` | Current implemented state, limits, tool surface, verification |
-| `CHANGELOG.md` | User-visible and notable unreleased changes |
+| `CHANGELOG.md` + `CHANGELOG.zh-CN.md` | User-visible and notable unreleased changes; bilingual, English canonical, structure-paired |
 | `CONTRIBUTING.md` | Contributor workflow, repo boundary, provider setup, and documentation style |
 | `docs/dev/README.md` | Public developer-document index, path boundary, and maintenance rules |
 | `CODE_SIGNING_POLICY.md` | Windows signing scope, approval, verification, and incident handling |
@@ -53,7 +53,7 @@ When one of these files becomes stale because of your change, update it in the s
 
 Follow the Markdown conventions in `CONTRIBUTING.md`: prose uses natural line wrapping rather than fixed-column hard wraps.
 
-`README.md`, `CONTRIBUTING.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
+`README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `CODE_SIGNING_POLICY.md`, and `PRIVACY.md` are canonical English root documents. When shared meaning changes, update their `.zh-CN.md` counterparts in the same change. For user manuals, the Simplified Chinese pages under `docs/user/zh-CN/` are canonical; mirror every changed page to the same relative path under `docs/user/en/`.
 
 ## Branch And PR Rules
 
@@ -104,7 +104,7 @@ These are non-negotiable boundaries; start with `docs/dev/ARCHITECTURE.md` and f
 - Provider adapters convert normalized Vesicle requests to provider wire format and back. They must not read/write project files, mutate sessions, know Prism phases, or execute host tools.
 - Model-visible filesystem tools must stay behind `core/tools` path guards.
 - Filesystem tool paths are project-relative only; absolute paths and `..` escapes are rejected. The opt-in `shell_exec` process tool is the explicit exception: it has host-user authority, is controlled by Tool Permission Runtime, and must never be described as path-guarded or rewind-safe.
-- Write tools are limited to approved roots: `source_materials/`, `workspace/`, `test_runs/`, `novels/`, and `reports/`. `source_materials/` holds imported, researched, or model-generated source material; deployed artifacts belong in the other four roots.
+- Write tools are limited to approved roots: `source_materials/`, `workspace/`, `test_runs/`, `novels/`, `reports/`, and the scratch root `tmp/`. `source_materials/` holds imported, researched, or model-generated source material; deployed artifacts belong in the other four roots.
 - Prompt assets are runtime files under `assets/`; do not hardcode Prism prompts into TypeScript source.
 - Host-specific prompts, coding-agent identities, and tool assumptions must not leak into Prism engine prompts except as explicit negative examples.
 - `request_confirmation` is a workflow gate declared by engine profile `stopGates`, not a generic permission prompt.
@@ -117,7 +117,7 @@ These are non-negotiable boundaries; start with `docs/dev/ARCHITECTURE.md` and f
 - One interactive TUI run should keep one active session until the user starts or resumes another session.
 - Session JSONL records are append-only and should preserve user, assistant, tool, provider/model, validation, and gate information needed for replay.
 - Provider/model switching and artifact workbench commands are host actions; they should not call the provider unless the command explicitly starts a revision prompt.
-- Keep the TUI operational and readable at 80 columns. Gate and picker panels own the bottom area while active.
+- Keep the TUI operational and readable at 80 columns. Picker panels own the bottom area while active. Decision prompts (permission/gate/question/quality) own the bottom on the Chat page; on the Workspace page they collapse to a one-line pending strip and `Ctrl+O` carries the user to the full panel — page switching outranks every bottom-surface modal.
 
 ## Verification And Documentation Sweep
 

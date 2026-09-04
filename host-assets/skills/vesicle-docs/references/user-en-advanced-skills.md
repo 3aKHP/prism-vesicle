@@ -65,9 +65,16 @@ See [Terminal command reference](../reference/cli-commands.md) for complete synt
 
 ## `/skill` TUI command
 
-- `/skill` — opens a picker showing available Skills with their scope.
+- `/skill` — opens a picker showing the Skills this session can actually activate, with their scope. Skills installed after the session's catalog was frozen, or whose content has since changed, do not appear in the list; run `/skill refresh` to re-freeze and see them.
 - `/skill <name> [task]` — activates and invokes.
 - `/skill <name> --context-only` — loads context only, no provider request.
+- `/skill refresh` — re-freezes this session's Skill catalog at the current installation content. A Skill whose body changed needs one more `/skill <name>` activation to come back into the session; when nothing changed, the command does nothing.
+
+## Read-only `skills/` mount after activation
+
+Once a Skill is activated, its bundled files are also mounted as the read-only logical root `skills/<name>/<skill-relative path>` behind the ordinary file tools: the model can search them directly with `grep_files` (for example keyword-locating a documentation page inside `vesicle-docs`), then read the matching lines with `read_file`; `list_directory` and `stat_path` browse the inventory, and `view_image` shows bundled images.
+
+The mount tracks activation state: activating mounts, compaction loss or rewind unmounts, and only the session catalog's winner copy is ever resolved. Listing and search follow the resource inventory frozen at load time; single-file reads share the same guards and the 256 KiB text cap as `read_skill_resource`. `skills/` is a read-only root — writes, moves, copy targets, and deletes are all rejected. `read_skill_resource` itself is unchanged and remains the provenance-carrying read path.
 
 ## Enable and disable
 
@@ -80,7 +87,7 @@ Disabling affects newly resolved session catalogs; an already frozen catalog is 
 
 ## First-party `vesicle-docs` Skill
 
-Every Vesicle installation ships with `vesicle-docs` (scope `host`), containing version-matched public documentation: README, user manual (Chinese/English), developer contracts, and configuration examples. It has no scripts, no process capability, and provides read-only text references through `read_skill_resource`.
+Every Vesicle installation ships with `vesicle-docs` (scope `host`), containing version-matched public documentation: README, user manual (Chinese/English), developer contracts, and configuration examples. It has no scripts, no process capability; its bundled references are readable through `read_skill_resource` and, once activated, searchable through the read-only `skills/` mount with `grep_files`.
 
 When the user asks about Vesicle installation, configuration, commands, troubleshooting, or architecture, the model may automatically activate this Skill for accurate information.
 
@@ -94,7 +101,7 @@ Publication is create-only: no overwrite or upgrade. The draft is always retaine
 
 Every Vesicle installation ships with `novel-outline-v3` (scope `host`), a hierarchical novel-outline workflow (volume outline → chapter outline → scene). It teaches a text-first methodology: read all source material, maintain two living-document ledgers (character growth and world state), draft volume/chapter/scene outlines, allocate a per-chapter tension budget with closed-form checks (Σ scenes = chapter total), track foreshadow plant/resolve, write back ledgers, and mark uncertain items.
 
-It has no scripts, no process capability, and provides read-only text references through `read_skill_resource` (outline templates, ledger formats, tension model). It complements the Harness tension-budget system.
+It has no scripts, no process capability; its bundled references (outline templates, ledger formats, tension model) are readable through `read_skill_resource` and, once activated, searchable through the read-only `skills/` mount. It complements the Harness tension-budget system.
 
 When the user asks to "outline the first three chapters", "write a volume outline", "break the outline down to scene level", "allocate tension", or "track foreshadow", the model may automatically activate this Skill.
 
@@ -110,7 +117,7 @@ The Stage Engine does not resolve a Skill catalog and does not support `activate
 
 ## Session freeze
 
-The Skill catalog is frozen on first resolution per session. On resume, Skills are re-resolved by name and content hash; a Skill whose content changed is dropped with a diagnostic, never silently substituted.
+The Skill catalog is frozen on first resolution per session. On resume, Skills are re-resolved by name and content hash; a Skill whose content changed is dropped with a diagnostic, never silently substituted. When a Skill's content changes without triggering the migration review — for example a host-asset update that does not touch the Harness version — resume shows a drift notice: run `/skill refresh` to re-freeze at the current content, then activate each changed Skill once more.
 
 ## Capability and permissions
 

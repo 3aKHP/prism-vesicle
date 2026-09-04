@@ -297,6 +297,28 @@ export async function loadConfigForSelection(
   return resolveProviderConfig(registry, selection, effectiveEnv);
 }
 
+/**
+ * `loadConfigForSelection` with the two-level degradation used by
+ * budget-sensitive consumers (skill catalog resolution, migration preflight):
+ * try the session's recorded selection first, then an undefined selection,
+ * then give up and return undefined. Keep this the single owner of that
+ * fallback contract — duplicating the try/catch ladder drifts.
+ */
+export async function loadConfigWithProviderFallback(
+  selection?: Partial<ProviderSelection>,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<VesicleConfig | undefined> {
+  try {
+    return await loadConfigForSelection(selection, env);
+  } catch {
+    try {
+      return await loadConfigForSelection(undefined, env);
+    } catch {
+      return undefined;
+    }
+  }
+}
+
 export async function inspectProviderConfig(
   selection?: Partial<ProviderSelection>,
   env: NodeJS.ProcessEnv = process.env,

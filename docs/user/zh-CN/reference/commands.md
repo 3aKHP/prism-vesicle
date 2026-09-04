@@ -33,7 +33,7 @@
 | `/reasoning hidden\|collapsed\|expanded` | 控制推理过程的显示(别名 off/preview/on) |
 | `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | 切换界面主题;`default` 跟随终端明暗模式,`auto` 按本地时间切换;`--persist` 写入项目 `.vesicle/preferences.yaml`,`--unset-project` 移除项目偏好;不带参数显示当前 preference/来源/解析结果 |
 | `/websearch [on\|off]` | 查看或切换模型的内置联网搜索;仅在协议/profile、模型能力和当前 Engine 工具面均支持时可用,否则命令会说明拒绝原因;默认值来自 providers.yaml 模型条目的 `webSearchDefault`,`/new` 或恢复会话后回到默认;开启后搜索在供应商侧执行、查询词随请求外发、无逐次审批,详见隐私政策的「内置联网搜索」一节 |
-| `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返 |
+| `/workspace [path]` | 切到 Workspace 页(项目文件工作台);带路径时在文件树中定位该文件或目录;`Ctrl+O` 在两页间往返(底面提示面板或选择器打开时也可用;启动画面与 `/btw` 覆盖层独占键盘时除外) |
 
 ## 制品
 
@@ -51,7 +51,7 @@ Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当�
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | 查看或设置工具批准模式 |
 | `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | 查看或配置实验性 Semantic Judge;不带参数打开引导式设置。`off` 关闭 Judge 并保留 profile;不带 profile 的 `observe`/`rewrite` 使用已保留或当前的 provider/model。选择 Review and revise(或 `/quality rewrite`)只打开一个红色确认面板——已没有 `/quality confirm` 这第二条命令 |
 | `/agents [handle\|stop <handle>\|retry]` | 查看/中断/重试 SubAgent |
-| `/skill [name [task]]` | 激活 Skill；不带参数打开选择器，`<name> [task]` 激活并调用，`<name> --context-only` 仅加载不触发 |
+| `/skill [refresh \| name [task]]` | 激活 Skill；不带参数打开选择器，`<name> [task]` 激活并调用，`<name> --context-only` 仅加载不触发，`refresh` 按当前安装内容重冻结会话目录，并报告有变化（可用 `/skill <名称>` 重新激活）、已移除与新增的 Skill；目录本就一致时不做任何改动 |
 
 ## 输入框按键
 
@@ -60,7 +60,7 @@ Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当�
 | Enter | 空闲时发送；Agent Loop 运行时将普通消息和延迟命令加入队列 |
 | Ctrl+Enter | 换行 |
 | Up(回合运行且输入框为空) | 取回最新一条队列输入进行编辑 |
-| Esc | 中断当前供应商请求或工具操作；重建中断会话后提交捕获的队首输入一次，队列为空时只中断 |
+| Esc | 中断当前供应商请求或工具操作；重建中断会话后,捕获的队首输入仍是队首时才提交一次，队列为空时只中断 |
 | 双击 Esc(输入框空,800ms 内) | 打开回退选择器 |
 | 双击 Esc(输入框有内容) | 存草稿并清空,不发送 |
 | Ctrl+V / Alt/Option+V | 粘贴剪贴板图片(仅视觉模型接收；终端文本粘贴仍按普通文本插入) |
@@ -72,9 +72,31 @@ Host 侧栏在一个窄列中列出制品。按 `Alt+A` 聚焦该列表(仅当�
 
 当前完整工具轮次结束后，队列消息会在下一次供应商请求前加入当前对话。如果 Agent Loop 没有经过下一个工具边界便已结束，下一条队列输入会被立即处理。Slash 命令各自声明忙碌时的行为：`/help`、`/context`、`/reasoning`、`/theme`、`/workspace`、只读设置形式，以及 `/agents` 查看或停止会立即执行；`/artifact` 和 `/validate` 等待当前工具轮次；配置变更、选择器、会话命令、`/compact`、`/init` 和 `/agents retry` 等待 Agent Loop。选择器打开时会暂停剩余队列，切换或重置会话时会清空队列。
 
+## 交互提示按键
+
+权限批准、停止门、问题和质量决策以底部面板到达时,面板内有两套键位,`Tab` 在其间切换:
+
+| 按键(options 区) | 作用 |
+|---|---|
+| ↑ / ↓ / Ctrl+P / Ctrl+N | 在选项间移动焦点 |
+| 直接打字 / 粘贴 | 在停止门/引擎切换提示的聚焦确认选项上直接展开备注输入;权限提示的备注只存在于 Reject(常驻输入框)。Esc 清空备注并回到选项 |
+| Enter | 提交当前聚焦的选项;已输入的备注随决策一起提交(权限提示的 Allow 不收备注) |
+| Tab / Shift+Tab | 切到正文区阅读折叠的长摘要 / 命令详情 |
+| Esc | 清空备注并把焦点移到 Reject |
+
+| 按键(正文区) | 作用 |
+|---|---|
+| ↑ / ↓ | 逐行滚动折叠正文;高亮位置行(如 `▾ lines 5-8 of 30`)标明当前窗口 |
+| Home / End | 跳到顶部 / 底部 |
+| Tab / Enter / Esc | 返回选项区(Enter 在正文区**不会**提交决策) |
+
+问题面板的问题文本同样按行预算折叠并可滚动;质量决策面板是固定选项列表,无正文区。正文区折叠时,面板以强调色显示 `▸ N lines folded · Tab to read` 引导行;正文左侧的轨道列在正文区聚焦时点亮为品牌色,聚焦在选项时保持黯淡——当前焦点在哪一区一目了然。面板提示行会随当前区显示可用键位。
+
 ## Workspace 页按键
 
 Workspace 页有三个焦点区：文件树、查看器/编辑器、输入框。`F6` / `Shift+F6` 在焦点区间循环(没有打开的文件时跳过查看器),`Esc` 逐级回退(编辑器 → 文件树 → 输入框;Markdown 源码多一级预览:源码 → 预览 → 文件树)。可打印快捷键只在对应焦点区生效,不会与输入框冲突。
+
+回合运行途中到达的交互式决策提示(权限批准、停止门、问题、质量决策)不会占据本页底部:它们折叠为输入框上方的一行待决条(如 `◆ Permission pending · Ctrl+O to answer`),键盘仍归三区焦点,工作区不再被遮挡。`Ctrl+O` 切到 Chat 页即可看到完整提示并应答;应答前输入框的 Enter 既不发送也不排队,草稿原样保留。你主动打开的选择器与确认框(YOLO 确认、迁移审查等)仍以完整面板占据底部。
 
 ### 文件树与只读查看器
 

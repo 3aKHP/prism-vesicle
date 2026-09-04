@@ -15,6 +15,7 @@ import {
   uninstallSkill,
 } from "../../../src/skills";
 import { SkillStoreError } from "../../../src/skills/store";
+import { startWorkerBarrier } from "../../support/worker-barrier";
 
 const symlinkSupported = await (async (): Promise<boolean> => {
   const dir = await mkdtemp(join(tmpdir(), "vesicle-store-symlink-probe-"));
@@ -179,24 +180,18 @@ mutated body
   test("cross-process installs preserve every index entry under burst contention", async () => {
     await withEnv(async (env, scratch) => {
       const storeModule = join(import.meta.dir, "../../../src/skills/store.ts");
-      const readyRoot = join(scratch, "workers-ready");
-      const barrier = join(scratch, "workers-go");
-      await mkdir(readyRoot, { recursive: true });
+      const barrier = await startWorkerBarrier(scratch);
       const expected = Array.from({ length: 12 }, (_, index) => `process-${index}`);
       const sources = await Promise.all(expected.map((name, index) => makeSource(join(scratch, `source-${index}`), name, `body-${index}`)));
-      const workerScript = [
-        'import { lstat, writeFile } from "node:fs/promises";',
-        `import { installSnapshot } from ${JSON.stringify(storeModule)};`,
-        'await writeFile(process.env.READY_PATH!, "ready");',
-        "while (!(await lstat(process.env.BARRIER_PATH!).catch(() => undefined))) await Bun.sleep(5);",
-        "await installSnapshot({ sourceDirectory: process.env.SOURCE_PATH!, env: { ...process.env, VESICLE_CONFIG_DIR: process.env.STORE_CONFIG_DIR! } });",
-      ].join("\n");
+      const workerScript = barrier.workerScript({
+        imports: [`import { installSnapshot } from ${JSON.stringify(storeModule)};`],
+        payload: ["await installSnapshot({ sourceDirectory: process.env.SOURCE_PATH!, env: { ...process.env, VESICLE_CONFIG_DIR: process.env.STORE_CONFIG_DIR! } });"],
+      });
       const workers = sources.map((source, index) => Bun.spawn({
         cmd: [process.execPath, "-e", workerScript],
         env: {
           ...process.env,
-          BARRIER_PATH: barrier,
-          READY_PATH: join(readyRoot, `${index}.ready`),
+          ...barrier.workerEnv(index),
           SOURCE_PATH: source,
           STORE_CONFIG_DIR: env.VESICLE_CONFIG_DIR!,
         },
@@ -204,24 +199,12 @@ mutated body
         stderr: "pipe",
       }));
       try {
-        let readyCount = 0;
-        for (let attempt = 0; attempt < 1_000; attempt++) {
-          const ready = await Promise.all(expected.map((_, index) => lstat(join(readyRoot, `${index}.ready`)).then(() => true, () => false)));
-          readyCount = ready.filter(Boolean).length;
-          if (readyCount === expected.length) break;
-          await Bun.sleep(10);
-        }
-        expect(readyCount).toBe(expected.length);
-        await writeFile(barrier, "go");
-        const results = await Promise.all(workers.map(async (worker) => ({
-          exitCode: await worker.exited,
-          stderr: await new Response(worker.stderr).text(),
-        })));
+        await barrier.releaseWhenReady(expected.length);
+        const results = await barrier.collect(workers);
         expect(results).toEqual(expected.map(() => ({ exitCode: 0, stderr: "" })));
         expect((await readActiveIndex(env)).entries.map((entry) => entry.name).sort()).toEqual([...expected].sort());
       } finally {
-        for (const worker of workers) worker.kill("SIGKILL");
-        await Promise.all(workers.map((worker) => worker.exited));
+        await barrier.shutdown(workers);
       }
     });
   }, 20_000);

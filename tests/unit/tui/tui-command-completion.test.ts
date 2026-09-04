@@ -8,7 +8,7 @@ import { listStageCardPaths } from "../../../src/core/stage/bootstrap";
 import { resolveCommandArgumentCompletion } from "../../../src/tui/commands/argument-completion";
 import { createBuiltinCommands } from "../../../src/tui/commands/builtin";
 import { argumentMenuLabelBudget } from "../../../src/tui/widgets/ArgumentMenu";
-import type { BuiltinCommandContexts, CommandArgumentCompletion, CommandCompletionContext } from "../../../src/tui/commands/types";
+import type { BuiltinCommandContexts, CommandArgumentCompletion, CommandCompletionContext, SkillCatalogCompletionEntry } from "../../../src/tui/commands/types";
 import { symlinkCapable } from "../../support/symlink-capability";
 
 // Completion contracts and busy metadata are resolved without invoking run,
@@ -51,6 +51,7 @@ function context(overrides: Partial<CommandCompletionContext> = {}): CommandComp
       preview: "Resume this work",
     }],
     agentOptions: () => [{ id: "explore-1", label: "explore-1", detail: "running · inspect files" }],
+    skillCatalogEntries: async () => [],
     ...overrides,
   };
 }
@@ -153,9 +154,31 @@ describe("command-owned argument completion", () => {
     expect((await items(workspace)).map((item) => item.id)).toEqual(artifacts.map((entry) => entry.path));
     expect(workspace.complete((await items(workspace))[0]!)).toBe("/workspace workspace/cards/mira.md");
 
+    const skillNames = resolve("/skill re");
+    const refresh = (await items(skillNames)).find((item) => item.id === "refresh");
+    expect(refresh).toBeDefined();
+    expect(skillNames.complete(refresh!)).toBe("/skill refresh ");
+
+    // The reserved subcommand takes nothing after it: no --context-only offer.
+    expect(resolveCommandArgumentCompletion("/skill refresh ", builtinCommands, context())).toBeNull();
+
     const skill = resolve("/skill vesicle-docs ");
     expect((await items(skill)).map((item) => item.id)).toEqual(["--context-only"]);
     expect(skill.complete((await items(skill))[0]!)).toBe("/skill vesicle-docs --context-only");
+  });
+
+  test("/skill name completion offers the session's catalog, never a fresh disk scan (#312)", async () => {
+    // The session's frozen catalog holds only the winner; a fresh scan would
+    // also surface drifted or newly installed Skills that activation would
+    // reject with Unknown skill.
+    const frozenCatalog: readonly SkillCatalogCompletionEntry[] = [
+      { name: "alpha-skill", scope: "user", description: "Frozen winner." },
+    ];
+    const names = resolve("/skill ", { skillCatalogEntries: async () => frozenCatalog });
+    const offered = await items(names);
+    expect(offered.map((item) => item.id)).toEqual(["refresh", "alpha-skill"]);
+    expect(offered[1]!.detail).toBe("[user] Frozen winner.");
+    expect(names.complete(offered[1]!)).toBe("/skill alpha-skill ");
   });
 });
 

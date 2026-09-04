@@ -6,6 +6,9 @@ import { runPrompt } from "../../../src/core/agent-loop/run";
 import { compactConversation } from "../../../src/core/compact/service";
 import { appendCandidateSelection, enumerateCandidateLeaves, findLatestSelection } from "../../../src/core/session/selection";
 import { createSessionStore, loadSessionRecords, loadSessionSnapshot } from "../../../src/core/session/store";
+import { appendSessionMigrationRecord } from "../../../src/core/session/session-migration";
+import { requireProjectHarnessRuntime, resolveProjectHarnessRuntime } from "../../../src/core/harness/activation";
+import type { HarnessRuntimeIdentity } from "../../../src/core/harness/driver";
 import {
   configureTestProviderEnv,
   createPromptRoot,
@@ -454,5 +457,94 @@ describe("agent loop: regenerate turn", () => {
     // ...but stays in the append-only transcript, reachable by branch switching.
     expect(records.some((record) => record.content === "turn two")).toBe(true);
     expect(enumerateCandidateLeaves(records, user1.uuid)).toHaveLength(2);
+  });
+
+  // #298: the migration rebind is session-level Host state, so a fork head
+  // truncated before the session-migration record must still bootstrap under
+  // the migrated identity instead of reporting identity drift.
+  function skewedIdentity(): HarnessRuntimeIdentity {
+    return {
+      packId: "prism-engine-v10",
+      packVersion: "10.3.0-alpha.2",
+      sourceCommit: "0e4bbb5".repeat(4),
+      manifestSha256: "c".repeat(64),
+      adapterId: "vesicle-v1",
+      adapterVersion: "1.1.0",
+      adapterHash: "d".repeat(64),
+    };
+  }
+
+  async function recordPreMigrationSession(rootDir: string, sessionId: string): Promise<string> {
+    const store = await createSessionStore(rootDir, sessionId);
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl", harness: skewedIdentity() } });
+    const user = await store.append({ role: "user", content: "the prompt" });
+    await store.append({ role: "assistant", content: "old reply", metadata: { engine: "etl", model: "mock-model" } });
+    return user.uuid;
+  }
+
+  test("regenerating a pre-migration turn bootstraps under the migrated identity", async () => {
+    const rootDir = await createPromptRoot();
+    globalThis.fetch = (async () => Response.json({ id: "c2", choices: [{ message: { content: "regenerated-under-new-baseline" } }] })) as unknown as typeof fetch;
+    const sessionId = "pre-migration-regenerate";
+    const userUuid = await recordPreMigrationSession(rootDir, sessionId);
+
+    const current = requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir)).harness.identity;
+    const store = await createSessionStore(rootDir, sessionId);
+    await appendSessionMigrationRecord(store, {
+      migratedAt: "2026-09-03T00:00:00.000Z",
+      from: skewedIdentity(),
+      to: current!,
+      archivePath: `.vesicle/sessions/archive/${sessionId}.jsonl`,
+      preflight: { verdict: "clean", warningCount: 0, layers: [] },
+    });
+
+    const result = await regenerateTurn({ rootDir, sessionId, userRecordUuid: userUuid });
+    if (result.kind !== "complete") throw new Error(`expected complete regenerate, got ${result.kind}`);
+    expect(result.messages.at(-1)?.content).toBe("regenerated-under-new-baseline");
+    const selection = findLatestSelection(await loadSessionRecords(rootDir, sessionId));
+    expect(selection?.forkPointUuid).toBe(userUuid);
+  });
+
+  test("two turns after a post-migration rewind both bootstrap under the migrated identity", async () => {
+    const rootDir = await createPromptRoot();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return Response.json({ id: `c${calls}`, choices: [{ message: { content: `rewound-turn-${calls}` } }] });
+    }) as unknown as typeof fetch;
+    const sessionId = "pre-migration-rewind";
+    await recordPreMigrationSession(rootDir, sessionId);
+    const headerUuid = (await loadSessionRecords(rootDir, sessionId))[0]!.uuid;
+
+    const current = requireProjectHarnessRuntime(await resolveProjectHarnessRuntime(rootDir)).harness.identity;
+    const store = await createSessionStore(rootDir, sessionId);
+    await appendSessionMigrationRecord(store, {
+      migratedAt: "2026-09-03T00:00:00.000Z",
+      from: skewedIdentity(),
+      to: current!,
+      archivePath: `.vesicle/sessions/archive/${sessionId}.jsonl`,
+      preflight: { verdict: "clean", warningCount: 0, layers: [] },
+    });
+
+    // Rewind to before the pre-migration turn: the continuation chains from the
+    // header, so the active branch no longer passes through the migration
+    // record on the physical tail. Both turns must still bootstrap under the
+    // migrated identity — the second one is the regression (#298).
+    const first = await runPrompt({
+      input: "turn one after rewind",
+      rootDir,
+      sessionId,
+      sessionParentUuid: headerUuid,
+      messages: [{ role: "user", content: "turn one after rewind" }],
+    });
+    if (first.kind !== "complete") throw new Error(`expected complete, got ${first.kind}`);
+    const second = await runPrompt({
+      input: "turn two after rewind",
+      rootDir,
+      sessionId,
+      messages: [...first.messages, { role: "user", content: "turn two after rewind" }],
+    });
+    if (second.kind !== "complete") throw new Error(`expected complete, got ${second.kind}`);
+    expect(second.messages.at(-1)?.content).toBe("rewound-turn-2");
   });
 });

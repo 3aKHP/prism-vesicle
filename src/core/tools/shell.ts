@@ -30,7 +30,7 @@ export const shellExecToolDefinition: ToolDefinition = {
         },
         runInBackground: {
           type: "boolean",
-          description: "Run the command in the background and return a task id immediately. Vesicle will surface progress and completion without requiring polling.",
+          description: "Run the command in the background and return a task id immediately. Vesicle delivers progress in the TUI, and hands the completed result back to the conversation automatically — at the next round while a turn is active, or by opening a continuation between turns — so no polling is needed.",
         },
       },
       required: ["command"],
@@ -58,7 +58,7 @@ export const shellOutputToolDefinition: ToolDefinition = {
   type: "function",
   function: {
     name: "shell_output",
-    description: "Read the current output and status of a background shell task. Vesicle also notifies the conversation when a task completes, so polling is unnecessary.",
+    description: "Read the current output and status of a background shell task. Vesicle also delivers completion to the conversation automatically — at the next round while a turn is active, or as a continuation between turns — so polling is unnecessary.",
     parameters: {
       type: "object",
       properties: {
@@ -154,7 +154,7 @@ export async function executeShellExecTool(
         callId: call.id,
         name: call.name,
         ok: true,
-        content: `Background shell task ${task.taskId} started. Vesicle will notify the conversation when it completes. Use shell_output for current output or shell_stop to stop it.`,
+        content: `Background shell task ${task.taskId} started. Vesicle will automatically deliver the result to the conversation when it completes. Use shell_output for current output or shell_stop to stop it.`,
         processEvent: event,
       };
     } catch (error) {

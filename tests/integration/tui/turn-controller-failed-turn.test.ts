@@ -41,6 +41,9 @@ test("turn failure appends a failed-turn marker to the session", async () => {
       providerConfigReady: () => true,
       permissionSettingsReady: () => true,
       pausedAgentDeliveries: new Set<string>(),
+      markProcessNotified: async () => {},
+      resetProcessNotified: async () => {},
+      pausedProcessDeliveries: new Set<string>(),
       queuedWork: { prepareTurn: () => {}, block: () => {}, takePendingUserInputs: () => [], runToolBoundaryCommands: async () => {} },
       recordPromptHistory: () => undefined,
       setHistoryIndex: () => undefined,
@@ -64,6 +67,64 @@ test("turn failure appends a failed-turn marker to the session", async () => {
     expect(raw.includes(`"kind":"${FAILED_TURN_KIND}"`)).toBe(true);
 
     // Projection drops the failed prompt, so resume sees no dangling user.
+    const resumed = await loadSessionMessages(root, store.sessionId);
+    expect(resumed.map((m) => m.role)).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// A first provider round that fails right after materializing a background
+// shell completion leaves the system-role host packet as the trailing record;
+// it projects as a user message, so the failed-turn marker must fire for it
+// too or resume/resend pairs it with the next real prompt as consecutive user
+// messages (issue #284).
+test("turn failure after a background-results packet still marks the failed turn", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vesicle-tui-failed-bg-"));
+  try {
+    const store = await createSessionStore(root, "failed-turn-bg");
+    await store.append({ role: "system", content: "prompt", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "run the build" });
+    await store.append({
+      role: "system",
+      content: "<background-shell-results>\nHost notification.\n</background-shell-results>",
+      metadata: { kind: "background-process-results", taskIds: ["shell-1"] },
+    });
+
+    const controller = createTurnController({
+      rootDir: root,
+      busy: () => false,
+      setBusy: () => false,
+      sessionId: () => store.sessionId,
+      conversation: () => [],
+      setConversation: () => [],
+      setMessages: () => undefined,
+      providerConfigReady: () => true,
+      permissionSettingsReady: () => true,
+      pausedAgentDeliveries: new Set<string>(),
+      markProcessNotified: async () => {},
+      resetProcessNotified: async () => {},
+      pausedProcessDeliveries: new Set<string>(),
+      queuedWork: { prepareTurn: () => {}, block: () => {}, takePendingUserInputs: () => [], runToolBoundaryCommands: async () => {} },
+      recordPromptHistory: () => undefined,
+      setHistoryIndex: () => undefined,
+      setSessionPicker: () => undefined,
+      setLastDisplayedToolAssistantContent: () => undefined,
+      setStatus: () => undefined,
+      recordActivity: () => undefined,
+      beginUsageTurn: () => undefined,
+      setStreamingAssistant: () => undefined,
+      setStreamingReasoning: () => undefined,
+      nextSessionParent: () => null,
+      setNextSessionParent: () => undefined,
+      runCancellable: async () => { throw new Error("provider HTTP 500"); },
+    } as any);
+
+    await controller.submitPrompt("run the build", [], []);
+
+    const raw = await readFile(join(root, ".vesicle", "sessions", `${store.sessionId}.jsonl`), "utf8");
+    expect(raw.includes(`"kind":"${FAILED_TURN_KIND}"`)).toBe(true);
+
     const resumed = await loadSessionMessages(root, store.sessionId);
     expect(resumed.map((m) => m.role)).toEqual([]);
   } finally {
@@ -96,6 +157,9 @@ test("mid-turn failure refreshes the in-memory conversation from durable history
       providerConfigReady: () => true,
       permissionSettingsReady: () => true,
       pausedAgentDeliveries: new Set<string>(),
+      markProcessNotified: async () => {},
+      resetProcessNotified: async () => {},
+      pausedProcessDeliveries: new Set<string>(),
       queuedWork: { prepareTurn: () => {}, block: () => {}, takePendingUserInputs: () => [], runToolBoundaryCommands: async () => {} },
       recordPromptHistory: () => undefined,
       setHistoryIndex: () => undefined,

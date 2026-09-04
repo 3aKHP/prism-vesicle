@@ -4,7 +4,7 @@
 
 English | [简体中文](../../zh-CN/advanced/quality-guard.md)
 
-> **Status (as of `1.0.0`):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
+> **Status (as of `1.1.0`):** 🟢 The guard body (deterministic findings + the anti-ai-flavor rule pack) is implemented and wired per the active Harness; 🟡 the Semantic Judge, document metrics under the rewrite binding, and the `semantic-rewrite@1` policy are **experimental**. Maturity per [`STATUS.md`](../../../../STATUS.md).
 
 The Output Quality Guard is a **target-aware** quality layer: at the quality boundary it re-reads the complete post-image of a guarded artifact and checks the prose against an anti-ai-flavor rule pack, optionally followed by an experimental Semantic Judge. Its goal is to make produced prose read more human — not to judge whether the author was AI.
 
@@ -43,7 +43,7 @@ The normal path is the guided `/quality` command (run with no arguments). It ope
 
 Selecting **Review and revise** (or running `/quality rewrite [provider model [timeout-ms]]`) stages the candidate and opens a red, two-stage confirmation panel modelled on the `/permissions YOLO` flow: Enter advances from `Continue` to `Enable Review and Rewrite`, a second Enter persists the setting, and Esc at either stage leaves the prior configuration unchanged. No `/quality confirm` second command exists anymore.
 
-For automation and beta diagnostics the same settings live in `quality.yaml` beside `providers.yaml`:
+For automation and diagnostics the same settings live in `quality.yaml` beside `providers.yaml`:
 
 ```yaml
 version: 2
@@ -53,7 +53,7 @@ modelId: deepseek-v4-flash
 judgeTimeoutMs: 15000
 ```
 
-A complete tuple may also stay under `mode: off` as a dormant retained profile. Version 2 is an alpha-era forward migration; older Vesicle builds may not read it, and the first setting change rewrites a version 1 file as version 2.
+A complete tuple may also stay under `mode: off` as a dormant retained profile. Version 2 dates from the alpha line as a forward migration; older Vesicle builds may not read it, and the first setting change rewrites a version 1 file as version 2.
 
 It only runs when: the producer is `runtime` or `stage`, **and** the deterministic guard already decided `pass` (a second pass over an already-clean candidate). Properties:
 
@@ -96,4 +96,4 @@ If the first item says `Revision unavailable`, do not select it. A common cause 
 
 ## Status will change
 
-The 🟢/🟡 markers on this page reflect maturity in `1.0.0`. The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.
+The 🟢/🟡 markers on this page reflect maturity in `1.1.0`. The Semantic Judge, document metrics, and Semantic Rewrite Policy may all stabilize over releases — treat [`STATUS.md`](../../../../STATUS.md) as the authoritative current state.

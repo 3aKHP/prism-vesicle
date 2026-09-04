@@ -118,6 +118,10 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
     qualityPicker: options.qualityPicker(),
     qualityRewriteConfirm: options.qualityRewriteConfirm(),
     model: options.modelPicker(),
+    // On the Workspace page the four decision prompts collapse to a pending
+    // strip, so their modal key capture must not fire there either (#268
+    // item 3): the page's three focus regions keep the keyboard.
+    suppressDecisionPanels: options.workspaceActive?.() === true,
   });
 
   function handleKey(rawKey: TuiKeyEvent): void {
@@ -157,6 +161,16 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     const mode = bottomSurfaceMode();
+    // Page switch (Ctrl+O) outranks the modal switch so the user can move
+    // between Chat and Workspace while any bottom-surface modal — a stop
+    // gate on Chat, a picker anywhere, the YOLO and migration confirms — is
+    // open (#268 item 3). The modal keeps every other key; only the page
+    // beneath it changes.
+    if (key.ctrl && !key.shift && key.name === "o" && options.togglePage) {
+      options.togglePage();
+      consumeKey(key);
+      return;
+    }
     // While a turn is in flight, an Escape that no modal handles must not be
     // dropped: it falls back to the global prompt interrupt so busy windows
     // that decline keys (e.g. the permission panel while its continuation
@@ -211,20 +225,11 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       case "composer":
         break;
     }
-    // Page switch (Ctrl+O) sits above artifact focus and composer keys so it
-    // works from every non-modal surface; bottom-surface modals above still
-    // own their keys while active.
-    if (key.ctrl && !key.shift && key.name === "o" && options.togglePage) {
-      options.togglePage();
-      consumeKey(key);
-      return;
-    }
-    // Candidate tree (Ctrl+B) sits at the same layer: above workspace routing
-    // so the Workspace tree's catch-all never swallows it, after the modal
-    // switch so an open panel keeps its keys. Plain Ctrl+B is 0x02 in
-    // traditional VT terminals on all three platforms. Taking it over
-    // supersedes the composer's Emacs backward-char (bare left arrow and
-    // Meta+b word movement remain).
+    // Candidate tree (Ctrl+B) sits above workspace routing so the Workspace
+    // tree's catch-all never swallows it, after the modal switch so an open
+    // panel keeps its keys. Plain Ctrl+B is 0x02 in traditional VT terminals
+    // on all three platforms. Taking it over supersedes the composer's Emacs
+    // backward-char (bare left arrow and Meta+b word movement remain).
     if (key.ctrl && !key.shift && key.name === "b" && options.triggerBranch) {
       options.triggerBranch();
       consumeKey(key);
@@ -296,11 +301,21 @@ export function createInputRouter(options: InputRoutingOptions): InputRouter {
       return;
     }
     const text = new TextDecoder().decode(event.bytes);
-    if (options.handleDecisionPaste(text)) {
+    const mode = bottomSurfaceMode();
+    // The decision-prompt paste claim is valid only while the prompt's panel
+    // is actually visible. On the Workspace page the four decision prompts
+    // collapse to a pending strip (#268 item 3): their hidden sub-composers
+    // must not capture a paste meant for the workspace composer — the text
+    // would ride along with the eventual decision.
+    const decisionPanelVisible = mode.kind === "permission"
+      || mode.kind === "gate"
+      || mode.kind === "question"
+      || mode.kind === "quality";
+    if (decisionPanelVisible && options.handleDecisionPaste(text)) {
       event.preventDefault();
       return;
     }
-    if (bottomSurfaceMode().kind !== "composer") {
+    if (mode.kind !== "composer") {
       event.preventDefault();
       return;
     }

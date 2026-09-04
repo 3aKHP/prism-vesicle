@@ -30,9 +30,9 @@ describe("tui: question surfaces", () => {
       ],
     };
 
-    expect(questionPanelMinHeight(question, 0)).toBe(10);
-    expect(questionPanelMinHeight(question, 5)).toBe(12);
-    expect(resolveTuiLayout(100, 24, true, false, questionPanelMinHeight(question, 5)).bottomHeight).toBe(12);
+    expect(questionPanelMinHeight(question, 0)).toBe(12);
+    expect(questionPanelMinHeight(question, 5)).toBe(14);
+    expect(resolveTuiLayout(100, 24, true, false, questionPanelMinHeight(question, 5)).bottomHeight).toBe(14);
   });
 
   test("renders the question open answer fallback with inline input", async () => {

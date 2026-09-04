@@ -3,6 +3,57 @@
  * reactive state. Extracted so view/widget components and the App shell share
  * one truncation discipline.
  */
+
+/** Scroll window over a folded prompt body (#268 item 4): clamps the offset
+ * to the real extent and reports the slice to render plus whether a position
+ * indicator row is needed. */
+export function bodyScrollWindow(total: number, visible: number, offset: number): {
+  start: number;
+  end: number;
+  folded: boolean;
+} {
+  const shown = Math.max(1, visible);
+  const start = Math.max(0, Math.min(bodyScrollMaxOffset(total, shown), offset));
+  return { start, end: Math.min(total, start + shown), folded: total > shown };
+}
+
+/** The largest valid scroll offset for a body of `total` lines in a window
+ * of `visible` rows. The single clamp primitive behind the window helper and
+ * the decision controller's scroll-state transitions. */
+export function bodyScrollMaxOffset(total: number, visible: number): number {
+  return Math.max(0, total - Math.max(1, visible));
+}
+
+/** Full prompt-body window construction shared by the gate, permission, and
+ * question prompts: applies the budget, reserves the position-indicator row
+ * when folded, and clamps the offset. One home for the "indicator takes the
+ * last row when folded" invariant. */
+export function promptBodyWindow(lines: string[], budget: number, offset: number): {
+  lines: string[];
+  visible: number;
+  start: number;
+  end: number;
+  folded: boolean;
+} {
+  const capped = Math.max(1, budget);
+  const visible = Math.max(1, capped - (lines.length > capped ? 1 : 0));
+  return { lines, visible, ...bodyScrollWindow(lines.length, visible, offset) };
+}
+
+/** Live position row shown at the bottom of a prompt body while the body
+ * zone scrolls it (#268 item 4). Rendered bright — it is the reading
+ * state's focal line. */
+export function bodyScrollIndicator(start: number, end: number, total: number, width: number): string {
+  return truncateLine(`▾ lines ${start + 1}-${end} of ${total}`, width);
+}
+
+/** Affordance row shown while the body is folded and the options zone owns
+ * the keyboard: brighter than a hint line, names the hidden line count and
+ * the key that reveals it. */
+export function bodyReadAffordance(hidden: number, width: number): string {
+  return truncateLine(`▸ ${hidden} line${hidden === 1 ? "" : "s"} folded · Tab to read`, width);
+}
+
 export function truncateLine(value: string, width: number): string {
   const limit = Math.max(8, width);
   if (displayWidth(value) <= limit) return value;

@@ -13,6 +13,7 @@ describe("tui: session identity coordinator", () => {
         return {
           sessionId: `session-${initializationCount}`,
           sessionPath: `.vesicle/sessions/session-${initializationCount}.jsonl`,
+          rootFailures: [],
         };
       },
       apply: (identity) => { currentSessionId = identity.sessionId; },
@@ -42,7 +43,7 @@ describe("tui: session identity coordinator", () => {
 
     const first = coordinator.ensure();
     const second = coordinator.ensure();
-    resolveIdentity({ sessionId: "shared", sessionPath: ".vesicle/sessions/shared.jsonl" });
+    resolveIdentity({ sessionId: "shared", sessionPath: ".vesicle/sessions/shared.jsonl", rootFailures: [] });
 
     expect(await Promise.all([first, second])).toEqual(["shared", "shared"]);
     expect(initializationCount).toBe(1);

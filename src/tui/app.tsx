@@ -38,6 +38,8 @@ import { AgentManager } from "../core/agents/manager";
 import { AgentStore } from "../core/agents/store";
 import { runChildAgent } from "../core/agents/child-runner";
 import { AgentContinuationScheduler } from "../core/agents/scheduler";
+import { ProcessCompletionScheduler } from "../core/process/completion-scheduler";
+import { renderBackgroundProcessNotifications } from "../core/agent-loop/background-process";
 import { agentActivitySummary } from "./agent-view";
 import { ToolPermissionBroker } from "../core/permissions";
 import { getProcessManager, type BackgroundProcessState } from "../core/process/manager";
@@ -55,10 +57,10 @@ import {
   type TokenUsageSummary,
 } from "./telemetry";
 import { displayTranscriptFromSnapshot, isEmptySessionTranscript } from "./session-presenter";
-import { BottomSurface } from "./views/BottomSurface";
+import { BottomSurface, pendingDecisionPromptLabel, pendingDecisionStripLine } from "./views/BottomSurface";
 import { createAgentProcessController } from "./agent-process-controller";
 import { createSessionResumeController } from "./session-resume-controller";
-import { createComposerController } from "./composer-controller";
+import { createComposerController, createDecisionPendingRefusal } from "./composer-controller";
 import { createDecisionController } from "./decision-controller";
 import { createTurnController } from "./turn-controller";
 import { createProviderConfigController, createProviderState } from "./provider-config-controller";
@@ -79,6 +81,7 @@ import { createStageSessionController } from "./stage-session-controller";
 import { createStartupController } from "./startup-controller";
 
 import { initializeSessionIdentity, type SessionIdentity } from "../core/agent-loop/session-init";
+import { formatRootCreationFailures } from "../core/project/ensure-roots";
 import { createSessionIdentityCoordinator } from "./session-identity-coordinator";
 import { createSkillActivationOwner, type SkillActivationOptions } from "./skills/session-activation";
 import { SideQuestionOverlay } from "./views/SideQuestionOverlay";
@@ -320,6 +323,7 @@ export function App(props: AppProps = {}) {
   const {
     activeGateRequest,
     activePermissionRequest,
+    bodyScrollOffset,
     clearGateFeedback,
     clearQuestionFreeform,
     decisionPanelMinHeight,
@@ -338,10 +342,12 @@ export function App(props: AppProps = {}) {
     pendingPermission,
     pendingQualityDecision,
     pendingUserQuestion,
+    promptZone,
     questionFreeformCursor,
     questionFreeformText,
     questionSelected,
     qualitySelected,
+    registerBodyExtent,
     setGateFeedback,
     setGateFeedbackCursor,
     setGateFeedbackKillBuffer,
@@ -482,6 +488,10 @@ export function App(props: AppProps = {}) {
     setMessages,
   });
   function submitCommand(raw: string): boolean {
+    // Same shared refusal as the composer's own submit guard (#268 item 3):
+    // slash commands reached through the completion menu bypass the composer,
+    // so both entry points ask the one guard before anything can execute.
+    if (refuseForPendingDecision()) return false;
     return routeCommandSubmission(raw, busy(), builtinCommands(), {
       execute: (value) => {
         void executeCommand(value, builtinCommands(), { setMessages }).catch((error) => turnController.reportError(error));
@@ -514,6 +524,7 @@ export function App(props: AppProps = {}) {
     sessionId,
     refreshArtifacts,
     listSessions,
+    skillCatalogEntries: async () => (await resolveSkillSessionCatalog()).catalog.entries,
     listWorkspaceTargets: () => workspaceController.listWorkspaceTargets(),
     busy,
     activeModelCapabilities,
@@ -524,6 +535,7 @@ export function App(props: AppProps = {}) {
     reportError: (error) => turnController.reportError(error),
     inputQueue,
     submitCommand,
+    hostDecisionPending: () => hostDecisionPending(),
     submitPrompt: (value, images, elements) => turnController.submitPrompt(value, images, elements),
     abortTurn: () => {
       const aborted = turnCancellation.abort();
@@ -583,12 +595,8 @@ export function App(props: AppProps = {}) {
     openRewriteConfirm,
   } = qualityPickerController;
   const skillPickerController = createSkillPickerController({
-    rootDir: process.cwd(),
-    env: process.env,
-    activeEngineProfile: () => ({ id: activeEngine() }),
-    contextWindow: () => activeModelLimits()?.contextWindow,
+    resolveCatalog: () => resolveSkillSessionCatalog(),
     setStatus,
-    setMessages,
     reportError: (error) => turnController.reportError(error),
     onActivate: (name) => activateSkill(name, { mode: "context-only" }),
   });
@@ -604,6 +612,7 @@ export function App(props: AppProps = {}) {
   const shutdownHostResources = () => {
     shutdownHostResourcesPromise ??= (async () => {
       unsubscribeProcesses();
+      unsubscribeProcessCompletions();
       try {
         await processManager.shutdown();
       } finally {
@@ -624,6 +633,7 @@ export function App(props: AppProps = {}) {
   const permissionBroker = new ToolPermissionBroker();
   permissionBroker.subscribe((request) => setPendingChildPermission(request ?? null));
   const pausedAgentDeliveries = new Set<string>();
+  const pausedProcessDeliveries = new Set<string>();
   let agentManager!: AgentManager;
   const mainActive = () => busy()
     || Boolean(pendingGate() || pendingEngineSwitch() || pendingUserQuestion()
@@ -733,6 +743,9 @@ export function App(props: AppProps = {}) {
     clearGateFeedback,
     setSessionPicker,
     pausedAgentDeliveries,
+    markProcessNotified: (taskIds) => processManager.markNotified(taskIds),
+    resetProcessNotified: (taskIds) => processManager.resetNotified(taskIds),
+    pausedProcessDeliveries,
     agentManager: () => agentManager,
     permissionBroker,
     runCancellable: (operation) => turnCancellation.run(operation),
@@ -764,17 +777,27 @@ export function App(props: AppProps = {}) {
     applyConversationRewind: (result) => sessionActions.applyConversationRewind(result),
   });
   const { reportError } = turnController;
+  // One idle oracle shared by both continuation schedulers: the target session
+  // must be the active one, not paused for its own delivery kind, and free of
+  // the busy/restore/pending-interaction state (`mainActive`).
+  const sessionIdleFor = (paused: Set<string>) => (parentSessionId: string) => sessionId() === parentSessionId
+    && !paused.has(parentSessionId)
+    && !restoringSession()
+    && !mainActive();
   const continuationScheduler = new AgentContinuationScheduler(agentStore, turnController.deliverAgentResults, {
-    isParentIdle: (parentSessionId) => sessionId() === parentSessionId
-      && !pausedAgentDeliveries.has(parentSessionId)
-      && !restoringSession()
-      && !busy()
-      && !pendingGate()
-      && !pendingEngineSwitch()
-      && !pendingUserQuestion()
-      && !pendingPermission()
-      && !pendingQualityDecision()
-      && !pendingChildPermission(),
+    isParentIdle: sessionIdleFor(pausedAgentDeliveries),
+  });
+  const processCompletionScheduler = new ProcessCompletionScheduler(processManager, turnController.deliverBackgroundProcessResults, {
+    renderPacket: renderBackgroundProcessNotifications,
+    isParentIdle: sessionIdleFor(pausedProcessDeliveries),
+  });
+  // Terminal-state replay (subscribe re-emits every disk-loaded task after
+  // initialization) plus live completions both land here; the scheduler
+  // debounces, coalesces, and defers unless the parent session is idle.
+  const unsubscribeProcessCompletions = processManager.subscribe((event) => {
+    if (event.process.status !== "running" && !event.process.notified) {
+      void processCompletionScheduler.notify(event.process.parentSessionId).catch(turnController.reportError);
+    }
   });
   agentManager = new AgentManager(agentStore, runChildAgent, {
     onEvent: (event) => {
@@ -955,8 +978,11 @@ export function App(props: AppProps = {}) {
   });
   createEffect(() => {
     const id = sessionId();
-    const ready = !restoringSession() && !busy() && !pendingGate() && !pendingEngineSwitch() && !pendingUserQuestion() && !pendingPermission() && !pendingQualityDecision() && !pendingChildPermission();
-    if (id && ready) void continuationScheduler.notify(id).catch(reportError);
+    const ready = !restoringSession() && !mainActive();
+    if (id && ready) {
+      void continuationScheduler.notify(id).catch(reportError);
+      void processCompletionScheduler.notify(id).catch(reportError);
+    }
   });
   const hostDecisionPending = () => Boolean(
     pendingGate()
@@ -972,11 +998,39 @@ export function App(props: AppProps = {}) {
   createEffect(() => {
     terminalTitle?.setPhase(resolveTerminalTitlePhase({ inputRequired: hostDecisionPending(), busy: busy(), restoring: restoringSession() }));
   });
+  // The one decision-pending refusal shared with the composer controller
+  // (#268 item 3): submitCommand (the completion menu's direct path) and the
+  // composer's Enter path ask the same guard, so the status text and the
+  // refuse-and-keep-the-draft semantics cannot drift apart.
+  const refuseForPendingDecision = createDecisionPendingRefusal(hostDecisionPending, setStatus);
+
+  // #268 item 3 (Workspace page prompt occlusion): while the Workspace page is
+  // active, the four host-decision prompts collapse to a one-row strip above
+  // the composer instead of taking the bottom band; the full panels render on
+  // the Chat page, where Ctrl+O (which outranks every modal) takes the user
+  // to answer. `decisionStripped` also releases the layout's gate band so the
+  // workbench keeps its rows.
+  const pendingDecisionLabel = createMemo(() => pendingDecisionPromptLabel({
+    yoloStage: yoloConfirmStage(),
+    migrationReview: migrationReview(),
+    permissionRequest: activePermissionRequest(),
+    question: pendingUserQuestion(),
+    quality: pendingQualityDecision() ?? null,
+    gate: activeGateRequest(),
+    rewind: rewindPicker(),
+    branch: branchPicker(),
+    session: sessionPicker(),
+    skillPicker: skillPicker(),
+    qualityRewriteConfirm: qualityRewriteConfirm(),
+    qualityPicker: qualityPicker(),
+    model: modelPicker(),
+  }));
+  const decisionStripped = createMemo(() => workspaceActive() && pendingDecisionLabel() !== null);
 
   const layout = createMemo(() => resolveTuiLayout(
     dimensions().width,
     dimensions().height,
-    hostDecisionPending(),
+    hostDecisionPending() && !decisionStripped(),
     Boolean(sessionPicker()) || Boolean(rewindPicker()) || Boolean(branchPicker()) || Boolean(skillPicker()) || Boolean(modelPicker()) || Boolean(qualityPicker()) || inputNeedsExpandedBottom(),
     yoloConfirmStage()
       ? Math.max(decisionPanelMinHeight(), yoloPanelHeight(yoloConfirmStage()!, dimensions().width))
@@ -1119,11 +1173,16 @@ export function App(props: AppProps = {}) {
     apply: (identity) => {
       setSessionId(identity.sessionId);
       setSessionPath(identity.sessionPath);
+      if (identity.rootFailures.length > 0) {
+        const content = formatRootCreationFailures(identity.rootFailures);
+        setMessages((prev) => [...prev, { role: "system" as const, content }]);
+      }
     },
   });
   const skillActivation = createSkillActivationOwner({
     rootDir: process.cwd(),
     sessionIdentity: { ensure: () => sessionIdentityCoordinator.ensure() },
+    currentSessionId: () => sessionId(),
     activeEngine,
     activeModelLimits,
     branchParent: nextSessionParent,
@@ -1131,11 +1190,17 @@ export function App(props: AppProps = {}) {
     onNotice: (card) => setMessages((prev) => [...prev, { role: "system", content: card }]),
     submitTurn: (prompt) => turnController.submitPrompt(prompt),
   });
-  // Function declaration (hoisted like the pre-T1 use case) so the picker's
-  // onActivate closure cannot trip a TDZ regardless of construction order;
-  // it only runs post-render, when skillActivation is initialized.
+  // Function declarations (hoisted like the pre-T1 use case) so the picker's
+  // and completion's closures cannot trip a TDZ regardless of construction
+  // order; they only run post-render, when skillActivation is initialized.
   async function activateSkill(name: string, options: SkillActivationOptions): Promise<void> {
     return skillActivation.activate(name, options);
+  }
+
+  /** The session's activatable catalog: one read-only resolution shared by
+   *  the `/skill` picker list and `/skill <Tab>` name completion (#309, #312). */
+  async function resolveSkillSessionCatalog() {
+    return skillActivation.resolveCatalog();
   }
 
   // Slash-command domain contexts: each command family receives only the
@@ -1231,6 +1296,7 @@ export function App(props: AppProps = {}) {
       setMessages,
       openSkillPicker,
       activateSkill: (name, options) => activateSkill(name, options),
+      refreshSkillCatalog: () => skillActivation.refresh(),
     },
     workspace: {
       setMessages, setStatus, recordActivity,
@@ -1428,9 +1494,24 @@ export function App(props: AppProps = {}) {
             Host sidebar holds the persistent artifact list. */}
       </box>
 
+      {/* Pending-decision strip (#268 item 3): while the Workspace page defers
+          a host decision to the Chat page, one constant line above the
+          composer keeps the prompt discoverable without owning the bottom or
+          the keyboard. */}
+      <Show when={!sideQuestionController.overlay() && decisionStripped()} fallback={<box height={0} />}>
+        <box height={1} paddingLeft={1}>
+          <ThemedText
+            content={pendingDecisionStripLine(pendingDecisionLabel()!, layout().width - 1)}
+            fg={palette.gateAccent}
+            wrapMode="none"
+          />
+        </box>
+      </Show>
+
       <Show when={!sideQuestionController.overlay()} fallback={<box height={0} />}>
         <BottomSurface
         layout={layout()}
+        suppressDecisionPanels={decisionStripped()}
         composerFocused={!workspaceActive() || workspaceController.focusRegion() === "composer"}
         yoloStage={yoloConfirmStage()}
         migrationReview={migrationReview()}
@@ -1454,6 +1535,9 @@ export function App(props: AppProps = {}) {
         qualitySelected={qualitySelected()}
         questionFreeformText={questionFreeformText()}
         questionFreeformCursor={questionFreeformCursor()}
+        promptZone={promptZone()}
+        bodyScrollOffset={bodyScrollOffset()}
+        onBodyExtent={registerBodyExtent}
         modelItems={modelPickerItems()}
         modelTitle={modelPickerTitle()}
         skillPickerItems={skillPickerItems()}

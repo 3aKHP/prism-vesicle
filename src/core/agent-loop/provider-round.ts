@@ -7,7 +7,7 @@ import { withExecutionRound } from "../session/store";
 import type { ToolDefinition } from "../tools";
 import type { ProcessManager } from "../process/manager";
 import type { AgentLoopEvent } from "./types";
-import { renderBackgroundProcessNotifications } from "./background-process";
+import { findPersistedProcessResults, renderBackgroundProcessNotifications } from "./background-process";
 import { cloneSideQuestionMessages, type SideQuestionContextSnapshot } from "../side-question/types";
 import { ProviderAttemptCommitBarrier } from "../../providers/shared/attempt-commit";
 
@@ -79,21 +79,39 @@ export async function completeProviderRound(options: ProviderRoundOptions): Prom
 }
 
 export async function materializeBackgroundProcessNotifications(
-  options: Pick<ProviderRoundOptions, "messages" | "processManager" | "session">,
+  options: Pick<ProviderRoundOptions, "rootDir" | "messages" | "processManager" | "session">,
 ): Promise<void> {
-  const backgroundNotifications = await options.processManager.drainNotifications(options.session.sessionId);
-  if (backgroundNotifications.length > 0) {
-    const content = renderBackgroundProcessNotifications(backgroundNotifications);
+  const backgroundNotifications = await options.processManager.collectNotifications(options.session.sessionId);
+  if (backgroundNotifications.length === 0) return;
+  const taskIds = backgroundNotifications.map((task) => task.taskId).sort();
+  // The durable record is the delivery, so the `notified` flip happens only
+  // after the record is safe. Coverage is per task: a crash between the record
+  // append and the flip can regrow the replayed batch, and only the uncovered
+  // complement may append or send a second copy. Covered tasks whose records
+  // dropped out of projection (a failed-turn drop) still need the wire copy,
+  // because the active conversation no longer carries them.
+  const persisted = await findPersistedProcessResults(options.rootDir, options.session.sessionId, taskIds);
+  const undelivered = backgroundNotifications.filter((task) => !persisted.coveredTaskIds.has(task.taskId));
+  const droppedFromProjection = backgroundNotifications.filter((task) => persisted.invisibleTaskIds.has(task.taskId));
+  const needsWire = [...undelivered, ...droppedFromProjection];
+  if (undelivered.length > 0) {
+    const content = renderBackgroundProcessNotifications(needsWire);
     options.messages.push({ role: "user", content });
     await options.session.append({
-      role: "user",
+      // Host packet, not authored input: persisted as a system record and
+      // projected back into a provider-visible user message by the history
+      // projector, which keeps audit history free of user-role process data.
+      role: "system",
       content,
       metadata: withExecutionRound(options.session.sessionId, {
         kind: "background-process-results",
-        taskIds: backgroundNotifications.map((task) => task.taskId),
+        taskIds: needsWire.map((task) => task.taskId).sort(),
       }),
     });
+  } else if (droppedFromProjection.length > 0) {
+    options.messages.push({ role: "user", content: renderBackgroundProcessNotifications(droppedFromProjection) });
   }
+  await options.processManager.markNotified(taskIds);
 }
 
 export function emitAssistantResponse(response: VesicleResponse, onEvent?: (event: AgentLoopEvent) => void): void {

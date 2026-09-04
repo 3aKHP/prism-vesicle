@@ -1,10 +1,22 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { cloneProviderStateEnvelope } from "../../providers/shared/state";
 import type { ImageDetail, VesicleImageAttachment, VesicleMessage } from "../../providers/shared/types";
 
 export const maxImageAttachmentBytes = 20 * 1024 * 1024;
+
+/**
+ * Pre-flight the shared attachment cap on an observed file size so callers
+ * that would otherwise buffer whole files (view_image paths) can reject
+ * oversized images before reading them into memory. The in-bytes check inside
+ * `ingestImageBytes` remains the enforcement backstop.
+ */
+export function assertImageAttachmentSize(sizeBytes: number): void {
+  if (sizeBytes > maxImageAttachmentBytes) {
+    throw new Error(`Image attachment exceeds the ${formatImageAttachmentBytes(maxImageAttachmentBytes)} limit.`);
+  }
+}
 
 export type SupportedImageMime = VesicleImageAttachment["mediaType"];
 
@@ -63,6 +75,10 @@ export async function ingestImageFile(
     expectedMediaType?: SupportedImageMime;
   },
 ): Promise<VesicleImageAttachment> {
+  // Pre-flight the cap on the observed size so a multi-gigabyte path is
+  // rejected before the whole file is buffered.
+  const info = await stat(absolutePath).catch(() => undefined);
+  if (info?.isFile()) assertImageAttachmentSize(info.size);
   return ingestImageBytes(rootDir, await readFile(absolutePath), {
     ...options,
     filename: options.filename ?? basename(absolutePath),

@@ -42,6 +42,7 @@ describe("agent loop: shell permission", () => {
     expect(paused.request.executionPlan?.command).toBe("printf approved");
     expect(requests).toBe(1);
 
+    const events: Array<{ type: string; name?: string; callId?: string; arguments?: string }> = [];
     const resumed = await resolvePermission({
       engine: "etl",
       rootDir,
@@ -51,9 +52,21 @@ describe("agent loop: shell permission", () => {
       remainingToolCalls: paused.remainingToolCalls,
       resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
       permission: { mode: "MOMENTUM", shellExecEnabled: true },
+      onEvent: (event) => events.push(event as { type: string }),
     });
     expect(resumed.kind).toBe("complete");
     expect(requests).toBe(2);
+    // The approved path emits the gated call's tool_call before its result so
+    // the transcript `●` card pairs with the footnote like a normal round (#268).
+    const callIndex = events.findIndex((event) => event.type === "tool_call");
+    const resultIndex = events.findIndex((event) => event.type === "tool_result");
+    expect(callIndex).toBeGreaterThanOrEqual(0);
+    expect(events[callIndex]).toMatchObject({
+      name: "shell_exec",
+      callId: "call-shell",
+      arguments: JSON.stringify({ command: "printf approved" }),
+    });
+    expect(resultIndex).toBeGreaterThan(callIndex);
     const records = await loadSessionRecords(rootDir, paused.sessionId);
     expect(records.some((record) => record.metadata?.kind === "permission-request")).toBe(true);
     expect(records.some((record) => record.metadata?.kind === "permission-resolution")).toBe(true);
@@ -85,6 +98,7 @@ describe("agent loop: shell permission", () => {
       followUpRequests += 1;
       return Response.json({ id: "chat-permission-disabled-result", choices: [{ message: { content: "not run" } }] });
     }) as unknown as typeof fetch;
+    const events: Array<{ type: string; name?: string; callId?: string }> = [];
     const resumed = await resolvePermission({
       engine: "etl",
       rootDir,
@@ -94,10 +108,18 @@ describe("agent loop: shell permission", () => {
       remainingToolCalls: paused.remainingToolCalls,
       resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
       permission: { mode: "MOMENTUM", shellExecEnabled: false },
+      onEvent: (event) => events.push(event as { type: string }),
     });
     expect(resumed.kind).toBe("complete");
     expect(followUpRequests).toBe(1);
     expect(await Bun.file(join(rootDir, "workspace", "should-not-exist")).exists()).toBe(false);
+    // Even the capability-gone branch emits the call first: the transcript
+    // shows what was asked before the not-executed result (#268).
+    expect(events.find((event) => event.type === "tool_call")).toMatchObject({
+      name: "shell_exec",
+      callId: "call-shell-disabled",
+    });
+    expect(events.some((event) => event.type === "tool_result")).toBe(true);
     const records = await loadSessionRecords(rootDir, paused.sessionId);
     expect(records.find((record) => record.metadata?.toolCallId === "call-shell-disabled" && record.role === "tool")?.content)
       .toContain("no longer in the current Engine's effective tool surface");
@@ -258,9 +280,19 @@ describe("agent loop: shell permission", () => {
       permission: { mode: "YOLO", shellExecEnabled: true },
     });
     expect(second.kind).toBe("complete");
-    expect(continuationBody.messages.some((message: any) => String(message.content).includes("Background shell update"))).toBe(true);
+    // The completion rides the wire as a user message whose envelope text
+    // carries the host provenance, and persists as a system-role host packet
+    // stamped with the active execution identity (issue #284).
+    const envelope = continuationBody.messages.filter((message: any) => message.role === "user")
+      .find((message: any) => String(message.content).startsWith("<background-shell-results>"));
+    expect(envelope).toBeTruthy();
+    expect(String(envelope.content)).toContain(`callId="call-background"`);
     const records = await loadSessionRecords(rootDir, first.sessionId);
-    expect(records.some((record) => record.metadata?.kind === "background-process-results")).toBe(true);
+    const packet = records.find((record) => record.metadata?.kind === "background-process-results");
+    expect(packet?.role).toBe("system");
+    expect(packet?.metadata?.taskIds).toEqual([task.taskId]);
+    expect(typeof packet?.metadata?.logicalTurnId).toBe("string");
+    expect(packet?.content).toBe(String(envelope.content));
   });
 
   test("returns malformed shell arguments as a tool failure without pausing or aborting the turn", async () => {

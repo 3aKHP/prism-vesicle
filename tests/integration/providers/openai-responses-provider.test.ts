@@ -78,6 +78,46 @@ describe("OpenAI Responses request codec", () => {
     }, context(), false, "openai-public")).toThrow("Unsupported reasoning tier: invalid");
   });
 
+  test("flushes materialized tool-result images as a user input item after the tool batch", () => {
+    const imageData = Buffer.from("png").toString("base64");
+    const attachment = {
+      id: "img_flush",
+      path: ".vesicle/attachments/flush.png",
+      mediaType: "image/png",
+      bytes: 3,
+      sha256: "0".repeat(64),
+      source: "project",
+      data: imageData,
+    } as const;
+    const body = toResponsesBody({
+      ...request(),
+      messages: [
+        { role: "user", content: "inspect the capture" },
+        { role: "assistant", content: "", toolCalls: [{ id: "call_view", name: "view_image", arguments: "{\"path\":\"a.png\"}" }] },
+        { role: "tool", toolCallId: "call_view", content: "{\"ok\":true}", images: [attachment] },
+        { role: "assistant", content: "done" },
+      ],
+    }, context(), false, "openai-public");
+
+    expect(body.input).toEqual([
+      { role: "user", content: "inspect the capture" },
+      { type: "function_call", call_id: "call_view", name: "view_image", arguments: "{\"path\":\"a.png\"}" },
+      { type: "function_call_output", call_id: "call_view", output: "{\"ok\":true}" },
+      { role: "user", content: [{ type: "input_image", image_url: `data:image/png;base64,${imageData}` }] },
+      { role: "assistant", content: "done" },
+    ]);
+    // An unmaterialized durable reference still fails closed instead of being
+    // silently dropped with the function_call_output Item.
+    expect(() => toResponsesBody({
+      ...request(),
+      messages: [
+        { role: "assistant", content: "", toolCalls: [{ id: "call_view", name: "view_image", arguments: "{}" }] },
+        { role: "tool", toolCallId: "call_view", content: "{\"ok\":true}", images: [{ ...attachment, data: undefined }] },
+        { role: "assistant", content: "done" },
+      ],
+    }, context(), false, "openai-public")).toThrow("Image attachment was not materialized before provider serialization: img_flush.");
+  });
+
   test("omits service_tier from the codex-http-relay compatibility-tier request", () => {
     const body = toResponsesBody({
       ...request(),

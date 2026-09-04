@@ -33,13 +33,18 @@ export { deriveSessionActivations } from "./activation-derivation";
 export { catalogNames, resolveSkillCatalog } from "./catalog";
 export type { ResolvedSkillCatalog } from "./catalog";
 
+export { computeSkillCatalogDrift, refreshSessionSkillCatalog } from "./catalog-refresh";
+export type { SessionSkillCatalogRefresh, SkillCatalogDrift, SkillCatalogDriftEvent } from "./catalog-refresh";
+
 export { resolveFilesystemSkills } from "./catalog-sources";
 export type { FilesystemSkillInspection, ResolveFilesystemSkillsOptions } from "./catalog-sources";
 
 export {
   clearSessionSkillCatalog,
   composeSkillCatalogBlock,
+  eligibleCatalogHashes,
   eligibleCatalogNames,
+  peekSessionSkillCatalog,
   readFrozenSessionSkillCatalog,
   resolveEngineEligibleCatalog,
   resolveSessionSkillCatalog,
@@ -75,3 +80,5 @@ export type {
   SkillDraftPublication,
   SkillDraftTarget,
 } from "./draft-publisher";
+
+export { SkillMount } from "./mount";

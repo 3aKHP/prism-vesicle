@@ -17,15 +17,34 @@
  * currently being bootstrapped (Stage is the only Skill-less engine). Engine
  * switching therefore recomputes eligibility without touching the frozen
  * session catalog.
+ *
+ * `peekSessionSkillCatalog` is the read-only mirror of the freeze path for
+ * hosts that must show exactly what activation would resolve (#309): it
+ * consults the freeze, re-resolves a persisted snapshot, or resolves fresh —
+ * and never writes the freeze or creates a session.
  */
 
 import { createHash } from "node:crypto";
 import type { EngineProfile } from "../engine/profile";
+import { loadSessionSnapshot } from "../session/store";
 import type { SkillCatalog, SkillDiagnostic } from "../../skills";
 import { catalogNames, resolveSkillCatalog } from "./catalog";
 import type { ResolvedSkillCatalog } from "./catalog";
 import type { ResolveFilesystemSkillsOptions } from "./catalog-sources";
 import type { SkillCatalogSnapshot } from "./catalog-snapshot";
+
+/** Load a session snapshot, tolerating a not-yet-created session (ENOENT). */
+export async function loadSnapshotOrUndefined(
+  rootDir: string,
+  sessionId: string,
+): Promise<Awaited<ReturnType<typeof loadSessionSnapshot>> | undefined> {
+  try {
+    return await loadSessionSnapshot(rootDir, sessionId, { synthesizeDanglingToolResults: false });
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return undefined;
+  }
+}
 
 const frozenCatalogsBySession = new Map<string, ResolvedSkillCatalog>();
 
@@ -55,19 +74,19 @@ export async function resolveSessionSkillCatalog(
 ): Promise<ResolvedSkillCatalog> {
   const frozen = frozenCatalogsBySession.get(sessionId);
   if (frozen) return frozen;
-  const resolved = await previewSessionSkillCatalogResolution(rootDir, env, profile, persistedSnapshot, contextWindow, options);
+  const resolved = await resolveSessionCatalogPreview(rootDir, env, profile, persistedSnapshot, contextWindow, options);
   frozenCatalogsBySession.set(sessionId, resolved);
   return resolved;
 }
 
 /**
- * Resolve the catalog a resumed session would use, without freezing anything:
- * with a persisted snapshot, bodies re-resolve by name+hash exactly like the
- * freeze path; without one, this is a plain fresh resolution. Read-only
- * preview callers (the session-migration preflight) must not mutate the
- * in-process freeze map for a session whose migration may still be declined.
+ * Resolve the catalog a session would use, without touching the in-process
+ * freeze map: with a persisted snapshot, bodies re-resolve by name+hash
+ * exactly like the freeze path; without one, this is a plain fresh
+ * resolution. The freeze path (`resolveSessionSkillCatalog`) resolves through
+ * this shared core before writing the freeze.
  */
-export async function previewSessionSkillCatalogResolution(
+async function resolveSessionCatalogPreview(
   rootDir: string,
   env: NodeJS.ProcessEnv,
   profile: Pick<EngineProfile, "id">,
@@ -78,6 +97,33 @@ export async function previewSessionSkillCatalogResolution(
   return persistedSnapshot
     ? await reresolveFromSnapshot(rootDir, env, profile, persistedSnapshot, contextWindow, options)
     : await resolveSkillCatalog(rootDir, env, profile, contextWindow, options);
+}
+
+/**
+ * Resolve exactly what `resolveSessionSkillCatalog` would return for this
+ * session, read-only: an existing freeze is consulted without being replaced
+ * or refreshed, and a freeze-less session re-resolves through its persisted
+ * snapshot by name+hash, dropping drifted content instead of listing it. A
+ * missing session id resolves fresh, so pre-session surfaces keep the
+ * no-session behavior. This is the preview surface for hosts that must
+ * promise only what activation can deliver (the `/skill` picker, #309) —
+ * callers pass the session identity they already have and never create one.
+ */
+export async function peekSessionSkillCatalog(
+  rootDir: string,
+  env: NodeJS.ProcessEnv,
+  profile: Pick<EngineProfile, "id">,
+  sessionId: string | undefined,
+  contextWindow?: number,
+  options?: ResolveFilesystemSkillsOptions,
+): Promise<ResolvedSkillCatalog> {
+  if (sessionId === undefined) {
+    return resolveSkillCatalog(rootDir, env, profile, contextWindow, options);
+  }
+  const frozen = frozenCatalogsBySession.get(sessionId);
+  if (frozen) return frozen;
+  const snapshot = await loadSnapshotOrUndefined(rootDir, sessionId);
+  return resolveSessionCatalogPreview(rootDir, env, profile, snapshot?.skillCatalogSnapshot, contextWindow, options);
 }
 
 /**
@@ -162,6 +208,20 @@ export function resolveEngineEligibleCatalog(
 /** Names of the engine-eligible catalog, for tool-surface gating. */
 export function eligibleCatalogNames(eligible: ResolvedSkillCatalog): string[] {
   return catalogNames(eligible);
+}
+
+/**
+ * Per-name `bodySha256` of the engine-eligible catalog. Feeds the activation
+ * hash gate (`pruneSessionActivations`): an activation stays live only while
+ * the frozen catalog serves the same content hash it was recorded with.
+ */
+export function eligibleCatalogHashes(eligible: ResolvedSkillCatalog): Map<string, string> {
+  const hashes = new Map<string, string>();
+  for (const entry of eligible.catalog.entries) {
+    const skill = eligible.byName.get(entry.name);
+    if (skill?.parsed.ok) hashes.set(entry.name, skill.parsed.bodySha256);
+  }
+  return hashes;
 }
 
 /**

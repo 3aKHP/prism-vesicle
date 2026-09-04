@@ -25,10 +25,11 @@ import type { HarnessRuntimeIdentity } from "../harness/driver";
 import { parseStageBootstrapMetadata, type StageBootstrapMetadata } from "../stage/types";
 import { buildActiveSessionBranch, normalizeSessionRecords, type ResumedToolCall, type SessionRecord } from "./record-model";
 import { projectSessionHistory, projectSessionHostState } from "./history-projector";
+import { findLastSessionMigration, type SessionMigrationRecord } from "./session-migration";
 import { repairProviderHistory } from "./provider-history-repair";
 import { findPendingQualityDecision, findPendingQualityRewrite, findQualityEvents, findQualityWarnings } from "./quality-recovery";
 import { recoverSessionInteractions, type PendingDelegationRetry } from "./interaction-recovery";
-import { projectSessionTitle, projectSessionTitleUsage, type SessionTitle } from "./title";
+import { projectSessionTitle, projectSessionTitleUsage, type SessionTitle } from "./title-projection";
 
 export { buildActiveSessionBranch } from "./record-model";
 export type { SessionRecord, SessionRole } from "./record-model";
@@ -45,12 +46,15 @@ export {
   projectSessionTitleGeneration,
   projectSessionTitleUsage,
   sanitizeSessionTitle,
+} from "./title-projection";
+export {
   generateSessionTitle,
   maybeGenerateSessionTitle,
   appendSessionTitle,
   resetSessionTitleGeneration,
 } from "./title";
-export type { SessionTitle, SessionTitleSource, SessionTitleGenerationState, TitleGenerationResult } from "./title";
+export type { SessionTitle, SessionTitleSource, SessionTitleGenerationState } from "./title-projection";
+export type { TitleGenerationResult } from "./title";
 export {
   bindExecutionRound,
   clearExecutionRound,
@@ -301,9 +305,12 @@ export type SessionSnapshot = {
   permissionMode?: PermissionMode;
   /** Asset profile/prompt fingerprint recorded when the session began. */
   assets?: AssetFingerprint;
+  /** Effective Harness identity: the header identity overridden by the last confirmed migration (session-level, branch-independent). */
   harness?: HarnessRuntimeIdentity;
-  /** Frozen Skill catalog snapshot persisted in the session header or a `skill-catalog` record. */
+  /** Frozen Skill catalog snapshot: the latest in physical record order (session header, `skill-catalog`, or `session-migration` record). */
   skillCatalogSnapshot?: SkillCatalogSnapshot;
+  /** Last confirmed migration in physical record order (session-level, branch-independent); undefined when the session never migrated. */
+  lastMigration?: SessionMigrationRecord;
   /** Host-only auxiliary usage (for example session-title generation). */
   auxiliaryUsage?: ResponseUsage[];
   title?: SessionTitle;
@@ -369,6 +376,12 @@ export async function loadSessionSnapshot(
   projection.reasoningTier = hostState.reasoningTier;
   projection.reasoningDisplayMode = hostState.reasoningDisplayMode;
   projection.permissionMode = hostState.permissionMode;
+  // The effective Harness identity and the frozen Skill catalog are
+  // session-level facts projected from the physical record stream: a branch
+  // truncated before the migration record (regenerate/rewind/candidate fork)
+  // still runs under the post-migration baseline and catalog.
+  projection.harness = hostState.harness ?? projection.harness;
+  const lastMigration = findLastSessionMigration(allRecords);
   const messages = projection.messages;
 
   const {
@@ -414,7 +427,8 @@ export async function loadSessionSnapshot(
     ...(projection.permissionMode ? { permissionMode: projection.permissionMode } : {}),
     ...(projection.assets ? { assets: projection.assets } : {}),
     ...(projection.harness ? { harness: projection.harness } : {}),
-    ...(projection.skillCatalogSnapshot ? { skillCatalogSnapshot: projection.skillCatalogSnapshot } : {}),
+    ...(hostState.skillCatalogSnapshot ? { skillCatalogSnapshot: hostState.skillCatalogSnapshot } : {}),
+    ...(lastMigration ? { lastMigration } : {}),
     ...(projectSessionTitleUsage(allRecords).length > 0 ? { auxiliaryUsage: projectSessionTitleUsage(allRecords) } : {}),
     ...(projectSessionTitle(allRecords) ? { title: projectSessionTitle(allRecords) } : {}),
     ...(stageBootstrap ? { stageBootstrap } : {}),

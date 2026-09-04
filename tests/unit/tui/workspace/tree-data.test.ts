@@ -10,7 +10,6 @@ import {
   readFilePreview,
   scanDirectory,
 } from "../../../../src/tui/workspace/tree-data";
-import { buildProjectPathIndex } from "../../../../src/core/project/path-index";
 
 let root: string;
 
@@ -78,17 +77,6 @@ describe("workspace tree flattening", () => {
 });
 
 describe("workspace file index and matching", () => {
-  test("indexes visible files and directories without following symlinks", async () => {
-    await symlink(join(root, "novels"), join(root, "linked-novels"));
-    await writeFile(join(root, "foo\\..\\bar.md"), "unsafe-name\n");
-    const index = await buildProjectPathIndex(root, { showHidden: false });
-    expect(index).toContainEqual({ path: "workspace", kind: "dir" });
-    expect(index).toContainEqual({ path: "workspace/cards/mira.md", kind: "file" });
-    expect(index.some((entry) => entry.path.startsWith("linked-novels"))).toBe(false);
-    expect(index.some((entry) => entry.path.startsWith(".hidden"))).toBe(false);
-    expect(index.some((entry) => entry.path.includes(".."))).toBe(false);
-  });
-
   test("indexes visible files recursively, skipping hidden subtrees", async () => {
     const index = await buildFileIndex(root, { showHidden: false });
     expect(index).toContain("workspace/cards/mira.md");

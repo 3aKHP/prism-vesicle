@@ -1,11 +1,13 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   ERROR_PENDING_INTERACTION,
   compactConversation,
+  compactConversationFromPoint,
 } from "../../../src/core/compact/service";
+import { ingestImageBytes } from "../../../src/core/attachments/store";
 import {
   COMPACT_CHECKPOINT_KIND,
   createSessionStore,
@@ -14,6 +16,11 @@ import {
   parseCompactCheckpoint,
 } from "../../../src/core/session/store";
 import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
+
+const png = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0x00, 0x00, 0x00, 0x00,
+]);
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -211,6 +218,157 @@ describe("conversation compact", () => {
     expect(retries).toHaveLength(1);
     expect(retries[0]!.attempt).toBe(1);
     expect(retries[0]!.status).toBe(429);
+  });
+
+  test("materializes evicted image attachments into the summary request without persisting base64 (#281)", async () => {
+    await writeFile(join(configDir!, "providers.yaml"), [
+      "default:", "  provider: test", "  model: test-model", "providers:",
+      "  test:", "    protocol: openai-chat-compatible", "    baseUrl: https://provider.test/v1",
+      "    apiKeyEnv: TEST_PROVIDER_API_KEY", "    models:", "      - id: test-model",
+      "        capabilities:", "          vision: true", "",
+    ].join("\n"), "utf8");
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-image");
+    const image = await ingestImageBytes(rootDir, png, { source: "clipboard" });
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first", metadata: { images: [image] } });
+    await store.append({ role: "assistant", content: "answer one" });
+    await store.append({ role: "user", content: "second" });
+    await store.append({ role: "assistant", content: "answer two" });
+
+    let requestBody: { messages?: Array<{ content?: unknown }> } = {};
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        id: "compact",
+        choices: [{ message: { content: "<summary>Image session summary.</summary>" } }],
+      });
+    }) as typeof fetch;
+
+    const result = await compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" });
+
+    expect(result.summary).toBe("Image session summary.");
+    const expectedUrl = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
+    expect(imagePartFromMessages(requestBody.messages)).toMatchObject({ image_url: { url: expectedUrl } });
+    // The durable transcript keeps the content-addressed reference only.
+    const jsonl = await readFile(store.sessionPath, "utf8");
+    expect(jsonl).not.toContain(Buffer.from(png).toString("base64"));
+    expect(jsonl).toContain(image.id);
+  });
+
+  test("fails closed on a changed attachment and keeps the session head (#281)", async () => {
+    await writeFile(join(configDir!, "providers.yaml"), [
+      "default:", "  provider: test", "  model: test-model", "providers:",
+      "  test:", "    protocol: openai-chat-compatible", "    baseUrl: https://provider.test/v1",
+      "    apiKeyEnv: TEST_PROVIDER_API_KEY", "    models:", "      - id: test-model",
+      "        capabilities:", "          vision: true", "",
+    ].join("\n"), "utf8");
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-image-tampered");
+    const image = await ingestImageBytes(rootDir, png, { source: "clipboard" });
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first", metadata: { images: [image] } });
+    await store.append({ role: "assistant", content: "answer one" });
+    await store.append({ role: "user", content: "second" });
+    await store.append({ role: "assistant", content: "answer two" });
+    await writeFile(join(rootDir, image.path), "tampered bytes", "utf8");
+
+    globalThis.fetch = (async () => {
+      throw new Error("The summary request must not be sent after a materialization failure.");
+    }) as unknown as typeof fetch;
+
+    await expect(compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" }))
+      .rejects.toThrow(/changed on disk: img_/);
+    const records = await loadSessionRecords(rootDir, store.sessionId);
+    expect(records.at(-1)?.metadata?.kind).not.toBe(COMPACT_CHECKPOINT_KIND);
+    expect(records.at(-1)?.role).toBe("assistant");
+    expect(records.at(-1)?.content).toBe("answer two");
+  });
+
+  test("materializes image attachments for a from-point summary (#281)", async () => {
+    await writeFile(join(configDir!, "providers.yaml"), [
+      "default:", "  provider: test", "  model: test-model", "providers:",
+      "  test:", "    protocol: openai-chat-compatible", "    baseUrl: https://provider.test/v1",
+      "    apiKeyEnv: TEST_PROVIDER_API_KEY", "    models:", "      - id: test-model",
+      "        capabilities:", "          vision: true", "",
+    ].join("\n"), "utf8");
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-image-point");
+    const image = await ingestImageBytes(rootDir, png, { source: "clipboard" });
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first", metadata: { images: [image] } });
+    await store.append({ role: "assistant", content: "answer one" });
+    const point = await store.append({ role: "user", content: "second" });
+    await store.append({ role: "assistant", content: "answer two" });
+
+    let requestBody: { messages?: Array<{ content?: unknown }> } = {};
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body));
+      return Response.json({
+        id: "compact",
+        choices: [{ message: { content: "<summary>Point summary.</summary>" } }],
+      });
+    }) as typeof fetch;
+
+    const result = await compactConversationFromPoint({
+      rootDir,
+      sessionId: store.sessionId,
+      point: { uuid: point.uuid, parentUuid: point.parentUuid, content: point.content },
+      engine: "etl",
+    });
+
+    expect(result.summary).toBe("Point summary.");
+    const expectedUrl = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
+    expect(imagePartFromMessages(requestBody.messages)).toMatchObject({ image_url: { url: expectedUrl } });
+  });
+
+  test("materializes history images for the remote Responses compact request (#281)", async () => {
+    await writeFile(join(configDir!, "providers.yaml"), [
+      "default:", "  provider: openai", "  model: gpt-5.6", "providers:",
+      "  openai:", "    protocol: openai-responses", "    baseUrl: https://api.openai.com/v1",
+      "    apiKeyEnv: TEST_PROVIDER_API_KEY", "    responsesProfile: openai-public", "    responsesTransport: http",
+      "    models:", "      - id: gpt-5.6", "        capabilities:", "          remoteCompact: true",
+      "          vision: true", "",
+    ].join("\n"), "utf8");
+    const rootDir = await createPromptRoot();
+    const store = await createSessionStore(rootDir, "compact-image-native");
+    const image = await ingestImageBytes(rootDir, png, { source: "clipboard" });
+    await store.append({ role: "system", content: "base\n\netl", metadata: { engine: "etl" } });
+    await store.append({ role: "user", content: "first", metadata: { images: [image] } });
+    await store.append({ role: "assistant", content: "answer one" });
+    await store.append({ role: "user", content: "second" });
+    await store.append({ role: "assistant", content: "answer two" });
+
+    let compactBody: { input?: unknown[] } = {};
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(input)).pathname.endsWith("/responses/compact")) {
+        compactBody = JSON.parse(String(init?.body));
+        return Response.json({
+          id: "compact-native",
+          object: "response.compaction",
+          output: [
+            { id: "msg_compact", type: "message", role: "user", content: [{ type: "input_text", text: "canonical context" }] },
+            { id: "cmp_1", type: "compaction", encrypted_content: "opaque-compact" },
+          ],
+        });
+      }
+      return Response.json({
+        id: "summary-response",
+        status: "completed",
+        output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "<summary>Native with image.</summary>" }] }],
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await compactConversation({ rootDir, sessionId: store.sessionId, engine: "etl" });
+
+    expect(result.summary).toBe("Native with image.");
+    const expectedUrl = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
+    const imageItem = compactBody.input?.find((item) =>
+      item !== null && typeof item === "object" && Array.isArray((item as { content?: unknown }).content));
+    expect(imageItem).toMatchObject({ role: "user", content: [
+      { type: "input_text", text: "first" },
+      { type: "input_image", image_url: expectedUrl },
+    ] });
   });
 
   test("refuses to compact while an interactive request is pending", async () => {
@@ -529,6 +687,14 @@ describe("conversation compact", () => {
     expect(compacted.parentUuid).toBeDefined();
   });
 });
+
+function imagePartFromMessages(
+  messages: Array<{ content?: unknown }> | undefined,
+): Record<string, unknown> | undefined {
+  const imageUser = messages?.find((message) => Array.isArray(message.content));
+  const content = imageUser?.content as Array<Record<string, unknown>> | undefined;
+  return content?.find((part) => part.type === "image_url");
+}
 
 async function createPromptRoot(): Promise<string> {
   const rootDir = await mkdtemp(join(tmpdir(), "vesicle-compact-"));

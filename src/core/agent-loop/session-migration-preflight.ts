@@ -11,7 +11,7 @@
  * Layers:
  * - `resume`: the dry-run of the pure resume steps (snapshot projection,
  *   engine/prompt resolution under the new baseline, pending-state
- *   compatibility, skill catalog re-resolution).
+ *   compatibility, Skill catalog re-freeze preview).
  * - `serializer`: a request-body round-trip through the session's own
  *   provider serializer. A throw predicts a request the serializer itself
  *   would refuse before any network I/O.
@@ -24,11 +24,12 @@ import { loadEngineAssetRuntime } from "../runtime/engine-assets";
 import { composeSystemPromptWithInstructions } from "../instructions";
 import { loadSessionSnapshot, type SessionSnapshot } from "../session/store";
 import type { SessionMigrationPreflightLayer } from "../session/session-migration";
-import { composeSkillCatalogBlock, eligibleCatalogNames, previewSessionSkillCatalogResolution, resolveEngineEligibleCatalog } from "../skills/catalog-context";
+import { composeSkillCatalogBlock, eligibleCatalogNames, resolveEngineEligibleCatalog } from "../skills/catalog-context";
+import { computeSkillCatalogDrift, isMeaningfulSkillCatalogSnapshot, type SkillCatalogSnapshot } from "../skills";
 import { matchesQualityIdentity } from "./quality-continuation-bootstrap";
 import { resolveBuiltInTools, resolveWebSearchSurfaceOptions } from "./tool-surface";
 import { agentToolDefinitions } from "../agents/tools";
-import { loadConfigForSelection } from "../../config/providers";
+import { loadConfigWithProviderFallback } from "../../config/providers";
 import type { VesicleConfig } from "../../config/env";
 import { prepareProviderMessages } from "../attachments/store";
 import { toVesicleMessage } from "../compact/summary-generator";
@@ -60,6 +61,16 @@ export type SessionMigrationPreflightReport = {
   to: HarnessRuntimeIdentity | undefined;
   findings: MigrationPreflightFinding[];
   verdict: "clean" | "warning" | "blocking";
+  /**
+   * The Skill catalog re-freeze a confirmed migration persists in the
+   * `session-migration` record: the fresh snapshot plus the still-present
+   * names whose live activations went stale (they must be activated again;
+   * Skills that left the catalog cannot be re-activated and are excluded).
+   * Absent when neither the session nor the current installation carries a
+   * meaningful catalog. `reactivate` is advisory data for tests and future
+   * UI; it is not persisted.
+   */
+  skillRefreeze?: { snapshot: SkillCatalogSnapshot; reactivate: string[] };
 };
 
 export async function runSessionMigrationPreflight(options: {
@@ -145,22 +156,63 @@ export async function runSessionMigrationPreflight(options: {
     });
   }
 
-  const previewedCatalog = await previewSessionSkillCatalogResolution(
-    options.rootDir,
+  // Loaded before the Skill step so the re-freeze resolution applies the same
+  // context-window catalog budget a fresh bootstrap would. The unavailability
+  // early-exit below keeps its original position in the finding order.
+  const config = await loadConfigWithProviderFallback(snapshot.providerSelection, env);
+
+  // The migration re-freezes the Skill catalog at the current installation's
+  // content: a full fresh resolution, the same catalog a brand-new session
+  // would freeze — not a re-resolution filtered by the old snapshot's hashes.
+  // The serializer dry-run below uses this fresh catalog too, so it simulates
+  // the post-migration request shape. The diff itself is the shared drift
+  // computation, so an explicit `/skill refresh` reports exactly the same
+  // catalog changes migration would apply.
+  const drift = await computeSkillCatalogDrift({
+    rootDir: options.rootDir,
     env,
-    engineAssets.profile,
-    snapshot.skillCatalogSnapshot,
-  );
-  const eligibleCatalog = resolveEngineEligibleCatalog(previewedCatalog, engineAssets.profile);
-  for (const entry of snapshot.skillCatalogSnapshot?.entries ?? []) {
-    if (!previewedCatalog.catalog.entries.some((candidate) => candidate.name === entry.name)) {
+    profile: engineAssets.profile,
+    ...(config?.limits?.contextWindow !== undefined ? { contextWindow: config.limits.contextWindow } : {}),
+    ...(snapshot.skillCatalogSnapshot ? { persistedSnapshot: snapshot.skillCatalogSnapshot } : {}),
+    records: snapshot.records,
+  });
+  for (const event of drift.events) {
+    if (event.kind === "removed") {
       findings.push({
         severity: "warning",
         layer: "resume",
-        message: `Skill "${entry.name}" no longer resolves to the body this session froze and will leave the catalog.`,
+        message: `Skill "${event.name}" no longer resolves under the current installation and will leave the catalog.`,
       });
+    } else {
+      findings.push(
+        event.mustReactivate
+          ? {
+              severity: "warning",
+              layer: "resume",
+              message: `Skill "${event.name}" changed since this session froze it; the migration re-freezes the catalog at its current content, and ${event.name} must be activated again.`,
+            }
+          : {
+              severity: "warning",
+              layer: "resume",
+              message: `Skill "${event.name}" changed since this session froze it; the migration re-freezes the catalog at its current content.`,
+            },
+      );
     }
   }
+  // Only sessions that actually froze a catalog can observe Skills "join" as
+  // a migration consequence: a legacy snapshot-less session fresh-freezes on
+  // any resume, so additions there are ordinary resume behavior, not drift.
+  if (drift.persisted && drift.added.length > 0) {
+    findings.push({
+      severity: "warning",
+      layer: "resume",
+      message: `${drift.added.length} Skill(s) not in the frozen catalog will join it: ${drift.added.join(", ")}.`,
+    });
+  }
+  const skillRefreeze = drift.persisted || isMeaningfulSkillCatalogSnapshot(drift.snapshot)
+    ? { snapshot: drift.snapshot, reactivate: drift.reactivate }
+    : undefined;
+  const eligibleCatalog = resolveEngineEligibleCatalog(drift.catalog, engineAssets.profile);
 
   if (snapshot.pendingQualityRewrite && !matchesQualityIdentity(options.projectHarness.harness.quality, snapshot.pendingQualityRewrite)) {
     const pending = snapshot.pendingQualityRewrite;
@@ -179,23 +231,13 @@ export async function runSessionMigrationPreflight(options: {
   }
 
   // --- Layer A + B: serializer round-trip and protocol invariants --------------
-  let config: VesicleConfig | undefined;
-  try {
-    config = await loadConfigForSelection(snapshot.providerSelection, env);
-  } catch {
-    try {
-      config = await loadConfigForSelection(undefined, env);
-    } catch {
-      config = undefined;
-    }
-  }
   if (!config) {
     findings.push({
       severity: "warning",
       layer: "serializer",
       message: "Provider configuration is unavailable; the serializer dry-run was skipped.",
     });
-    return conclude(options.sessionId, engine, from, to, findings);
+    return conclude(options.sessionId, engine, from, to, findings, skillRefreeze);
   }
 
   let sendable: SessionSnapshot;
@@ -207,7 +249,7 @@ export async function runSessionMigrationPreflight(options: {
       layer: "serializer",
       message: `The sendable projection could not be rebuilt; the serializer dry-run was skipped: ${messageOf(error)}`,
     });
-    return conclude(options.sessionId, engine, from, to, findings);
+    return conclude(options.sessionId, engine, from, to, findings, skillRefreeze);
   }
 
   let messages: VesicleMessage[] = sendable.messages.map(toVesicleMessage);
@@ -295,7 +337,7 @@ export async function runSessionMigrationPreflight(options: {
     });
   }
 
-  return conclude(options.sessionId, engine, from, to, findings);
+  return conclude(options.sessionId, engine, from, to, findings, skillRefreeze);
 }
 
 function validatorFor(config: VesicleConfig): ((messages: VesicleMessage[]) => string[]) | undefined {
@@ -348,13 +390,14 @@ function conclude(
   from: HarnessRuntimeIdentity | undefined,
   to: HarnessRuntimeIdentity | undefined,
   findings: MigrationPreflightFinding[],
+  skillRefreeze?: SessionMigrationPreflightReport["skillRefreeze"],
 ): SessionMigrationPreflightReport {
   const verdict = findings.some((finding) => finding.severity === "blocking")
     ? "blocking"
     : findings.some((finding) => finding.severity === "warning")
       ? "warning"
       : "clean";
-  return { sessionId, engine, from, to, findings, verdict };
+  return { sessionId, engine, from, to, findings, verdict, ...(skillRefreeze ? { skillRefreeze } : {}) };
 }
 
 function messageOf(error: unknown): string {

@@ -14,7 +14,9 @@ Press Enter. The message appears in the FIFO above the composer. Vesicle lets th
 
 Queue one more message, then press Up while the composer is empty. The latest queued input returns to the composer so you can edit and resubmit it. The queue is processed in submission order; actions that switch or reset the session clear the current queue.
 
-If a new instruction must replace the direction being executed right now, press Esc. Vesicle interrupts the current provider request or tool operation, rebuilds the interrupted projection from durable history, and only then submits the exact FIFO head captured at the keypress once, as a fresh top-level input. With an empty queue, Esc just interrupts and submits nothing; any draft stays untouched and is never auto-enqueued. Do not use Esc as an ordinary “make this urgent” control: interruption may leave the current turn incomplete.
+If the running turn pauses at some point to wait for your decision (a permission approval, a stop gate, …) while you are working on the Workspace page, no prompt panel suddenly takes over the bottom: only a one-line pending strip appears above the input box and the keyboard stays with your focus regions; press `Ctrl+O` when you are ready to answer on the Chat page, then switch back and continue.
+
+If a new instruction must replace the direction being executed right now, press Esc. Vesicle interrupts the current provider request or tool operation, rebuilds the interrupted projection from durable history, and only then, if the input captured as the FIFO head at the keypress is still the queue head, submits it once as a fresh top-level input. With an empty queue, Esc just interrupts and submits nothing; any draft stays untouched and is never auto-enqueued. Do not use Esc as an ordinary “make this urgent” control: interruption may leave the current turn incomplete.
 
 ## Ask something beside the main turn
 

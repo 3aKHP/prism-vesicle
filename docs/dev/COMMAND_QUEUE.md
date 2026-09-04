@@ -45,6 +45,7 @@ Artifact preview and validation use the tool-round boundary so they observe a co
 | `/agents` list, inspect, or stop | immediate |
 | `/artifact`, `/validate` | queue at tool-round boundary |
 | `/model`, `/compact`, `/stage`, `/new`, `/resume`, `/rewind` | queue at Agent Loop boundary |
+| `/skill <name>`, `/skill refresh` | queue at Agent Loop boundary (bare `/skill` and `--context-only` forms are immediate) |
 | engine, effort, permission, and quality mutations | queue at Agent Loop boundary |
 | `/agents retry` | queue at Agent Loop boundary |
 

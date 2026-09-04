@@ -1,17 +1,25 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { executeFileTool } from "../../../src/core/tools";
 import type { ToolResult } from "../../../src/core/tools";
 import { AssetResolver } from "../../../src/core/runtime/assets";
+import { buildCatalog, loadSkill } from "../../../src/skills";
+import type { LoadedSkill } from "../../../src/skills";
+import { recordActivation, SkillMount } from "../../../src/core/skills";
+import type { ResolvedSkillCatalog } from "../../../src/core/skills";
 import { symlinkCapable } from "../../support/symlink-capability";
 
 let rootDir = "";
+let skillScratch = "";
+let skillSessionId = "";
 
 beforeEach(async () => {
   rootDir = await mkdtemp(join(tmpdir(), "vesicle-file-tools-"));
+  skillScratch = await mkdtemp(join(tmpdir(), "vesicle-file-tools-skills-"));
+  skillSessionId = randomUUID();
   await mkdir(join(rootDir, "workspace"), { recursive: true });
   await mkdir(join(rootDir, "reports"), { recursive: true });
   await mkdir(join(rootDir, "source_materials"), { recursive: true });
@@ -23,6 +31,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(rootDir, { recursive: true, force: true });
+  await rm(skillScratch, { recursive: true, force: true });
 });
 
 describe("file tools v2", () => {
@@ -918,8 +927,160 @@ async function expectTool(name: string, args: Record<string, unknown>, content: 
   return result;
 }
 
-async function expectToolFailure(name: string, args: Record<string, unknown>, content: string): Promise<void> {
-  const result = await executeFileTool(rootDir, call(name, args));
+/** Write one loadable skill outside the project root and load it as `user` scope. */
+async function writeMountedSkill(name: string, files: Record<string, string | Uint8Array>): Promise<LoadedSkill> {
+  const root = join(skillScratch, name);
+  await mkdir(root, { recursive: true });
+  for (const [rel, content] of Object.entries(files)) {
+    const target = join(root, ...rel.split("/"));
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, content);
+  }
+  await writeFile(join(root, "SKILL.md"), `---\nname: ${name}\ndescription: ${name} fixture\n---\n\n# ${name}\n`, "utf8");
+  const loaded = await loadSkill(root, "user");
+  if (!loaded.parsed.ok) throw new Error(`fixture skill failed to load: ${loaded.parsed.diagnostics.map((d) => d.message).join("; ")}`);
+  return loaded;
+}
+
+/** Mount loaded skills as activated in the isolated session. */
+async function mountFor(skills: LoadedSkill[], activated: LoadedSkill[] = skills): Promise<SkillMount> {
+  const catalog: ResolvedSkillCatalog = {
+    catalog: buildCatalog(skills),
+    byName: new Map(skills.map((skill) => [skill.name, skill])),
+  };
+  for (const skill of activated) {
+    if (skill.parsed.ok) recordActivation(skillSessionId, skill.name, skill.parsed.bodySha256);
+  }
+  return new SkillMount(catalog, skillSessionId);
+}
+
+describe("skills read-only mount", () => {
+  test("virtual root discovery lists skills as read-only only when mounted", async () => {
+    const mount = await mountFor([await writeMountedSkill("alpha", { "references/note.md": "text" })]);
+    const mounted = await executeFileTool(rootDir, call("list_directory", { path: "." }), { skillMount: mount });
+    const entries = JSON.parse(mounted.content).entries;
+    expect(entries).toContainEqual({ path: "skills", type: "directory", readOnly: true });
+    // Without a mount the discovery surface is unchanged (regression guard
+    // for isolated runtimes that never wire a catalog).
+    const bare = await executeFileTool(rootDir, call("list_directory", { path: "." }));
+    expect(JSON.parse(bare.content).entries.map((entry: { path: string }) => entry.path)).not.toContain("skills");
+  });
+
+  test("lists and stats the mounted inventory without exposing host paths", async () => {
+    const mount = await mountFor([await writeMountedSkill("alpha", { "references/note.md": "needle here" })]);
+
+    const rootList = await executeFileTool(rootDir, call("list_directory", { path: "skills" }), { skillMount: mount });
+    expect(JSON.parse(rootList.content)).toMatchObject({ status: "ok", directoryCount: 1 });
+    expect(rootList.content).toContain("skills/alpha");
+    expect(rootList.content).not.toContain(skillScratch);
+
+    const skillList = await executeFileTool(rootDir, call("list_directory", { path: "skills/alpha" }), { skillMount: mount });
+    const listed = JSON.parse(skillList.content);
+    expect(listed.entries.map((entry: { path: string }) => entry.path)).toEqual(["skills/alpha/references", "skills/alpha/SKILL.md"]);
+
+    const fileStat = await executeFileTool(rootDir, call("stat_path", { path: "skills/alpha/references/note.md" }), { skillMount: mount });
+    expect(JSON.parse(fileStat.content)).toMatchObject({ path: "skills/alpha/references/note.md", type: "file" });
+
+    const missing = await executeFileTool(rootDir, call("stat_path", { path: "skills/alpha/references/missing.md" }), { skillMount: mount });
+    expect(JSON.parse(missing.content)).toEqual({ path: "skills/alpha/references/missing.md", type: "not_found" });
+  });
+
+  test("reads mounted files with line ranges and rejects byte slices", async () => {
+    const mount = await mountFor([await writeMountedSkill("alpha", { "references/note.md": "one\ntwo\nthree\n" })]);
+
+    const read = await executeFileTool(rootDir, call("read_file", { path: "skills/alpha/references/note.md", startLine: 2, endLine: 3 }), { skillMount: mount });
+    expect(read.ok).toBe(true);
+    expect(read.content).toBe("two\nthree");
+
+    const sliced = await executeFileTool(
+      rootDir,
+      call("read_file", { path: "skills/alpha/references/note.md", offsetBytes: 0, maxBytes: 4 }),
+      { skillMount: mount },
+    );
+    expect(sliced.ok).toBe(false);
+    expect(sliced.content).toContain("not supported for the skills mount");
+  });
+
+  test("greps the mount with skill-scoped paths and match shapes", async () => {
+    const mount = await mountFor([await writeMountedSkill("alpha", { "references/note.md": "needle here\nplain line" })]);
+
+    const content = await executeFileTool(
+      rootDir,
+      call("grep_files", { path: "skills/alpha", pattern: "needle" }),
+      { skillMount: mount },
+    );
+    const parsed = JSON.parse(content.content);
+    expect(parsed).toMatchObject({ outputMode: "content", truncated: false });
+    expect(parsed.matches).toEqual([
+      { path: "skills/alpha/references/note.md", line: 1, text: "needle here" },
+    ]);
+    expect(content.content).not.toContain(skillScratch);
+
+    const fileList = await executeFileTool(
+      rootDir,
+      call("grep_files", { path: "skills", pattern: "needle", outputMode: "files_with_matches" }),
+      { skillMount: mount },
+    );
+    expect(JSON.parse(fileList.content)).toMatchObject({ files: ["skills/alpha/references/note.md"] });
+  });
+
+  test("views images bundled with a mounted skill", async () => {
+    const mount = await mountFor([
+      await writeMountedSkill("alpha", { "assets/diagram.png": Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]) }),
+    ]);
+    const result = await executeFileTool(rootDir, call("view_image", { path: "skills/alpha/assets/diagram.png" }), { skillMount: mount });
+    expect(result.ok).toBe(true);
+    expect(result.content).toContain("Viewed skills/alpha/assets/diagram.png");
+    expect(result.images?.length).toBe(1);
+  });
+
+  test("rejects oversized images before buffering on every view_image surface", async () => {
+    // The pre-flight protects the host from buffering a multi-gigabyte file
+    // before the 20 MiB attachment cap fires; the error must come from the
+    // size check on all three surfaces (project, assets, skills mount).
+    const oversized = Buffer.alloc(20 * 1024 * 1024 + 1, 0x89);
+    await writeFile(join(rootDir, "source_materials", "huge.png"), oversized);
+    await mkdir(join(rootDir, "assets", "imgs"), { recursive: true });
+    await writeFile(join(rootDir, "assets", "imgs", "huge.png"), oversized);
+    const mount = await mountFor([await writeMountedSkill("alpha", { "assets/huge.png": new Uint8Array(oversized) })]);
+
+    const project = await executeFileTool(rootDir, call("view_image", { path: "source_materials/huge.png" }));
+    expect(project.ok).toBe(false);
+    expect(project.content).toContain("exceeds the 20 MiB limit");
+
+    const asset = await executeFileTool(rootDir, call("view_image", { path: "assets/imgs/huge.png" }));
+    expect(asset.ok).toBe(false);
+    expect(asset.content).toContain("exceeds the 20 MiB limit");
+
+    const mounted = await executeFileTool(rootDir, call("view_image", { path: "skills/alpha/assets/huge.png" }), { skillMount: mount });
+    expect(mounted.ok).toBe(false);
+    expect(mounted.content).toContain("exceeds the 20 MiB limit");
+  });
+
+  test("unactivated and absent mounts fail closed with redirects", async () => {
+    const alpha = await writeMountedSkill("alpha", { "references/note.md": "text" });
+    const locked = await mountFor([alpha], []);
+    const unactivated = await executeFileTool(rootDir, call("read_file", { path: "skills/alpha/references/note.md" }), { skillMount: locked });
+    expect(unactivated.ok).toBe(false);
+    expect(unactivated.content).toContain("not active in this session");
+    expect(unactivated.content).toContain('activate_skill("alpha")');
+
+    const absent = await executeFileTool(rootDir, call("grep_files", { path: "skills/alpha", pattern: "text" }));
+    expect(absent.ok).toBe(false);
+    expect(absent.content).toContain("skills/ mount is unavailable");
+  });
+
+  test("write and structure tools reject the read-only mount instructively", async () => {
+    const mount = await mountFor([await writeMountedSkill("alpha", { "references/note.md": "text" })]);
+    const options = { skillMount: mount };
+    await expectToolFailure("write_file", { path: "skills/alpha/references/evil.md", content: "x" }, "read-only mount", options);
+    await expectToolFailure("delete_file", { path: "skills/alpha/references/note.md" }, "read-only mount", options);
+    await expectToolFailure("move_file", { sourcePath: "skills/alpha/references/note.md", targetPath: "workspace/note.md" }, "read-only mount", options);
+  });
+});
+
+async function expectToolFailure(name: string, args: Record<string, unknown>, content: string, options: { skillMount?: SkillMount } = {}): Promise<void> {
+  const result = await executeFileTool(rootDir, call(name, args), options);
   expect(result.ok).toBe(false);
   expect(result.content).toContain(content);
 }

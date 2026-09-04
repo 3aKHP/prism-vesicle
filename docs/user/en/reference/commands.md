@@ -33,7 +33,7 @@ Type a command starting with `/` in the input box; typing `/` opens a candidate 
 | `/reasoning hidden\|collapsed\|expanded` | Control reasoning display (aliases off/preview/on) |
 | `/theme [dark\|light\|default\|auto] [--persist] [--unset-project]` | Switch the interface theme; `default` follows the terminal's own mode, `auto` follows the clock; `--persist` writes `.vesicle/preferences.yaml`, `--unset-project` removes the project preference; with no argument it reports preference/source/resolved mode |
 | `/websearch [on\|off]` | Show or toggle the model's built-in web search; it is available only when the protocol/profile, model capability, and current Engine tool surface all admit it, otherwise the command explains the rejection; the default comes from the model entry's `webSearchDefault` in providers.yaml, and `/new` or resuming a session reverts to it; while enabled, searches run on the provider side, queries leave with the request, and no per-call approval applies — see the Built-in Web Search section of the privacy policy |
-| `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages |
+| `/workspace [path]` | Switch to the Workspace page (project-file workbench); with a path, locates that file or directory in the tree; `Ctrl+O` toggles between the two pages (available while a bottom-surface prompt panel or picker is open; the startup splash and the `/btw` overlay still own the keyboard) |
 
 ## Artifacts
 
@@ -51,7 +51,7 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Show or set the tool approval mode |
 | `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | Show or configure the experimental Semantic Judge; no arguments open guided settings. `off` disables the Judge and retains the profile; `observe`/`rewrite` without a profile use the retained or active provider/model. Selecting Review and revise (or `/quality rewrite`) opens one red confirmation panel — there is no `/quality confirm` second command |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry SubAgent delivery |
-| `/skill [name [task]]` | Activate a Skill; no args opens a picker, `<name> [task]` activates and invokes, `<name> --context-only` loads without invoking |
+| `/skill [refresh \| name [task]]` | Activate a Skill; no args opens a picker, `<name> [task]` activates and invokes, `<name> --context-only` loads without invoking, `refresh` re-freezes the session catalog at the current installation content, reporting Skills that changed (re-activate with `/skill <name>`), were removed, or were newly added; it changes nothing when the catalog already matches |
 
 ## Input-box keys
 
@@ -60,7 +60,7 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 | Enter | Send while idle; queue ordinary messages and deferred commands while the Agent Loop is running |
 | Ctrl+Enter | Newline |
 | Up (running turn, empty box) | Retrieve the latest queued input for editing |
-| Esc | Interrupt the current provider or tool operation; after rebuilding the interrupted session, submit the captured FIFO head once, or just interrupt when the queue is empty |
+| Esc | Interrupt the current provider or tool operation; after rebuilding the interrupted session, submit the captured FIFO head once — only if it is still the queue head — or just interrupt when the queue is empty |
 | Double Esc (empty box, within 800ms) | Open the rewind picker |
 | Double Esc (box has text) | Save the draft and clear it, without sending |
 | Ctrl+V / Alt/Option+V | Paste a clipboard image (only vision-capable models receive it; terminal text paste still inserts text normally) |
@@ -72,9 +72,31 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 
 After a complete tool round, queued messages are added to the active conversation before its next provider request. If the loop completes without another tool boundary, the next queued input is processed immediately. Slash commands declare their own busy-turn behavior: `/help`, `/context`, `/reasoning`, `/theme`, `/workspace`, read-only settings forms, and `/agents` inspection or stop run immediately; `/artifact` and `/validate` wait for the current tool round; configuration changes, pickers, session commands, `/compact`, `/init`, and `/agents retry` wait for the Agent Loop. A picker pauses the remaining queue, and switching or resetting the session clears it.
 
+## Interactive prompt keys
+
+When permission approvals, stop gates, questions, and quality decisions arrive as bottom panels, each panel has two key sets and `Tab` toggles between them:
+
+| Key (options zone) | Action |
+|---|---|
+| ↑ / ↓ / Ctrl+P / Ctrl+N | Move focus between the options |
+| Type / paste directly | Expands the focused confirm option's note input on stop-gate and engine-switch prompts; permission prompts carry notes only on Reject (always-on input). Esc clears the note and returns to the options |
+| Enter | Submit the focused option; a typed note is submitted with the decision (permission Allow takes no note) |
+| Tab / Shift+Tab | Switch to the body zone to read the folded summary / command detail |
+| Esc | Clear the note and move focus to Reject |
+
+| Key (body zone) | Action |
+|---|---|
+| ↑ / ↓ | Scroll the folded body line by line; a bright position row (e.g. `▾ lines 5-8 of 30`) marks the window |
+| Home / End | Jump to the top / bottom |
+| Tab / Enter / Esc | Return to the options zone (Enter in the body zone **never** submits) |
+
+Question prompts wrap their question text with the same budget and scrolling; the quality-decision panel is a fixed option list with no body zone. While the body is folded the panel shows an accent-colored `▸ N lines folded · Tab to read` affordance row, and the rail column beside the body lights up in the brand color when the body zone holds the keyboard and stays dim while the options do — the focused zone is visible at a glance. The panel hint line shows the keys available in the current zone.
+
 ## Workspace page keys
 
 The Workspace page has three focus regions: the file tree, the viewer / editor, and the input box. `F6` / `Shift+F6` cycle between them (the viewer is skipped when no file is open), and `Esc` steps focus back (editor → tree → input box; Markdown source has one extra level: source → preview → tree). Printable shortcuts only act in their focused region and never collide with the input box.
+
+Interactive decision prompts that arrive mid-turn (permission approval, stop gates, questions, quality decisions) do not take over this page's bottom: they collapse to a one-line pending strip above the input box (e.g. `◆ Permission pending · Ctrl+O to answer`), the keyboard stays with the three focus regions, and the workbench is never occluded. Press `Ctrl+O` to see the full prompt on the Chat page and answer it there; until it is answered, Enter in the input box neither sends nor queues — the draft is kept as-is. Pickers and confirms you open yourself (YOLO confirm, migration review, …) still show their full panels at the bottom.
 
 ### File tree and read-only viewer
 

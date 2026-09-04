@@ -66,12 +66,16 @@ Commands:
   setup, launch, doctor, once, prompt, quality, debug, assets, skills, config, dev`;
 
 async function configureTreeSitterRuntime(): Promise<void> {
+  const { configureTreeSitterWorkerPath, registerStrictMarkdownInlineParser } = await import("../tui/tree-sitter-runtime");
   // Compiled executables receive an explicit flat worker entrypoint through
   // the build-time OTUI_TREE_SITTER_WORKER_PATH define. Source/Bun-package
   // runs use the installed OpenTUI worker from node_modules instead.
-  if (isCompiledBinary) return;
-  const { configureTreeSitterWorkerPath } = await import("../tui/tree-sitter-runtime");
-  configureTreeSitterWorkerPath();
+  if (!isCompiledBinary) configureTreeSitterWorkerPath();
+  // The strict double-tilde markdown flavor must be registered before the
+  // first markdown highlight initializes the tree-sitter client. Setup does
+  // not render markdown (its staging surfaces are plain text) and never
+  // reaches this function, so it stays unregistered there.
+  await registerStrictMarkdownInlineParser();
 }
 
 async function launchProject(
@@ -169,6 +173,7 @@ switch (parsed.kind) {
       case "once": {
         const { runPrompt } = await import("../core/agent-loop/run");
         const { loadPermissionSettings } = await import("../config/permissions");
+        const { formatRootCreationFailures } = await import("../core/project/ensure-roots");
         const permissionSettings = await loadPermissionSettings();
         const input = args.join(" ").trim();
         if (!input) {
@@ -179,6 +184,13 @@ switch (parsed.kind) {
         try {
           result = await runPrompt({
             input,
+            // Non-interactive runs have no transcript surface; project-root
+            // creation failures at session birth go to stderr (#291).
+            onEvent: (event) => {
+              if (event.type === "project_roots_warning") {
+                console.error(formatRootCreationFailures(event.failures));
+              }
+            },
             permission: dangerouslySkipPermissions
               ? {
                 mode: "YOLO",

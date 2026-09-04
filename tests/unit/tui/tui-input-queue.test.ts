@@ -59,6 +59,7 @@ describe("TUI input queue", () => {
         sessionId: () => "session-test",
         refreshArtifacts: async () => [],
         listSessions: async () => [],
+        skillCatalogEntries: async () => [],
         listWorkspaceTargets: async () => [],
         busy,
         activeModelCapabilities: () => ({ vision: true }),

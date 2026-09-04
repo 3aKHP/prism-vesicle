@@ -150,6 +150,15 @@ function serializeResponsesInput(
   const input: unknown[] = [];
   const declaredCallIds = new Set(initialCallIds);
   const answeredCallIds = new Set<string>();
+  // function_call_output Items cannot carry images. Tool-result images are
+  // held and flushed as one synthesized user input item after the complete
+  // tool batch, mirroring the OpenAI-compatible chat serializer.
+  let pendingToolImages: NonNullable<VesicleMessage["images"]> = [];
+  const flushToolImages = () => {
+    if (pendingToolImages.length === 0) return;
+    input.push({ role: "user", content: userContent({ role: "user", content: "", images: pendingToolImages }) });
+    pendingToolImages = [];
+  };
   for (const message of messages) {
     if (message.kind === PROVIDER_NATIVE_CHECKPOINT_KIND) {
       const compacted = nativeCompactInput(message.providerState, model, context);
@@ -157,6 +166,7 @@ function serializeResponsesInput(
         input.length = 0;
         declaredCallIds.clear();
         answeredCallIds.clear();
+        pendingToolImages = [];
         for (const item of compacted) {
           if (item.type === "function_call" && typeof item.call_id === "string") declaredCallIds.add(item.call_id);
           if (item.type === "function_call_output" && typeof item.call_id === "string") answeredCallIds.add(item.call_id);
@@ -165,6 +175,7 @@ function serializeResponsesInput(
       }
       continue;
     }
+    if (message.role !== "tool") flushToolImages();
     if (message.role === "assistant" && message.providerState) {
       const native = nativeOutputItems(message.providerState, model, context);
       const nativeCarriesSearch = native?.some((item) =>
@@ -190,6 +201,7 @@ function serializeResponsesInput(
       if (answeredCallIds.has(message.toolCallId)) throw new Error(`OpenAI Responses call_id ${message.toolCallId} was answered more than once.`);
       answeredCallIds.add(message.toolCallId);
       input.push({ type: "function_call_output", call_id: message.toolCallId, output: message.content });
+      pendingToolImages.push(...(message.images ?? []));
       continue;
     }
     if (message.role === "assistant" && message.toolCalls?.length) {
@@ -209,6 +221,7 @@ function serializeResponsesInput(
         : message.content,
     });
   }
+  flushToolImages();
   const unanswered = [...declaredCallIds].find((callId) => !answeredCallIds.has(callId));
   if (unanswered) throw new Error(`OpenAI Responses function call_id ${unanswered} has no result.`);
   return input;

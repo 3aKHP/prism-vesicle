@@ -8,7 +8,7 @@ import type { CommandArgumentCompletion } from "../commands/types";
 import type { Command } from "../commands/types";
 import { commandArgumentHint } from "../commands/options";
 import type { GateFocusTarget } from "../GatePrompt";
-import { GatePrompt, gateComposerIsActive, gateSummaryLineBudget } from "../GatePrompt";
+import { GatePrompt, gateComposerIsActive, gateSummaryLineBudget, type PromptZone } from "../GatePrompt";
 import { PermissionPrompt } from "../PermissionPrompt";
 import { PromptComposer } from "../PromptComposer";
 import { QualityRewritePrompt } from "../QualityRewritePrompt";
@@ -93,6 +93,12 @@ export type BottomSurfaceState = {
   qualityRewriteConfirm?: QualityRewriteConfirmState | null;
   qualityPicker?: QualityPickerState | null;
   model: ModelPickerState | null;
+  /** While the Workspace page is active, the four host-decision prompts
+   * (permission / gate / question / quality) collapse to a one-row pending
+   * strip instead of owning the bottom, so mid-turn arrivals neither occlude
+   * the workbench nor yank its keyboard (#268 item 3). Pickers and the other
+   * confirms keep their full panels on both pages. */
+  suppressDecisionPanels?: boolean;
 };
 
 export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfaceMode {
@@ -100,10 +106,12 @@ export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfa
   // The migration review outranks the session picker it opens over (the
   // picker stays open underneath when the review is cancelled).
   if (state.migrationReview) return { kind: "session-migration", state: state.migrationReview };
-  if (state.permissionRequest) return { kind: "permission", request: state.permissionRequest };
-  if (state.quality) return { kind: "quality", pending: state.quality };
-  if (state.question) return { kind: "question", pending: state.question };
-  if (state.gate) return { kind: "gate", gate: state.gate };
+  if (!state.suppressDecisionPanels) {
+    if (state.permissionRequest) return { kind: "permission", request: state.permissionRequest };
+    if (state.quality) return { kind: "quality", pending: state.quality };
+    if (state.question) return { kind: "question", pending: state.question };
+    if (state.gate) return { kind: "gate", gate: state.gate };
+  }
   if (state.rewind) return { kind: "rewind", picker: state.rewind };
   if (state.branch) return { kind: "branch", picker: state.branch };
   if (state.session) return { kind: "session", picker: state.session };
@@ -112,6 +120,27 @@ export function resolveBottomSurfaceMode(state: BottomSurfaceState): BottomSurfa
   if (state.qualityPicker) return { kind: "quality-picker", picker: state.qualityPicker };
   if (state.model) return { kind: "model", picker: state.model };
   return { kind: "composer" };
+}
+
+/** Short label for the pending-decision strip, or null when the top-of-stack
+ * surface is not one of the four decision prompts the Workspace page strips.
+ * Ranking mirrors the unsuppressed mode resolution so the strip never claims a
+ * prompt that another active surface (yolo, migration) actually covers. */
+export function pendingDecisionPromptLabel(state: BottomSurfaceState): string | null {
+  switch (resolveBottomSurfaceMode({ ...state, suppressDecisionPanels: false }).kind) {
+    case "permission": return "Permission";
+    case "quality": return "Quality decision";
+    case "question": return "Question";
+    case "gate": return "Stop gate";
+    default: return null;
+  }
+}
+
+/** The strip line rendered above the composer while the Workspace page defers
+ * a host decision to the Chat page. Rendering and tests share this exact
+ * string so the affordance stays discoverable. */
+export function pendingDecisionStripLine(label: string, width: number): string {
+  return truncateLine(`◆ ${label} pending · Ctrl+O to answer`, width);
 }
 
 export type BottomSurfaceProps = BottomSurfaceState & {
@@ -126,6 +155,10 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   qualitySelected: number;
   questionFreeformText: string;
   questionFreeformCursor: number;
+  /** Body-reading focus zone of the open decision prompt (#268 item 4). */
+  promptZone?: PromptZone;
+  bodyScrollOffset?: number;
+  onBodyExtent?: (total: number, visible: number) => void;
   modelItems: OptionItem[];
   modelTitle: string;
   skillPickerItems: OptionItem[];
@@ -185,6 +218,9 @@ export function BottomSurface(props: BottomSurfaceProps) {
               feedback={props.gateFeedback}
               feedbackCursor={props.gateFeedbackCursor}
               width={props.layout.width}
+              zone={props.promptZone}
+              bodyScrollOffset={props.bodyScrollOffset}
+              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}
@@ -198,6 +234,9 @@ export function BottomSurface(props: BottomSurfaceProps) {
               width={props.layout.width}
               freeformValue={props.questionFreeformText}
               freeformCursor={props.questionFreeformCursor}
+              zone={props.promptZone}
+              bodyScrollOffset={props.bodyScrollOffset}
+              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}
@@ -230,6 +269,9 @@ export function BottomSurface(props: BottomSurfaceProps) {
                 props.engineSwitchPending ? 1 : 0,
               )}
               showSummaryOption={props.engineSwitchPending}
+              zone={props.promptZone}
+              bodyScrollOffset={props.bodyScrollOffset}
+              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}

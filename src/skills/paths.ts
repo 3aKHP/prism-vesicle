@@ -93,6 +93,14 @@ export function isTextReference(skillRelativePath: string): boolean {
   return false;
 }
 
+/** Largest prefix length ≤ maxBytes that does not split a UTF-8 sequence. */
+export function utf8SafeBoundary(raw: Uint8Array, maxBytes: number): number {
+  let boundary = Math.min(maxBytes, raw.byteLength);
+  // 0b10xxxxxx bytes are UTF-8 continuations; back off to the sequence start.
+  while (boundary > 0 && (raw[boundary]! & 0b1100_0000) === 0b1000_0000) boundary -= 1;
+  return boundary;
+}
+
 /** One regular file under a skill root, as a skill-relative POSIX path. */
 export type SkillFileEntry = { path: string; bytes: number };
 

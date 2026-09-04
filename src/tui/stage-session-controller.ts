@@ -1,4 +1,5 @@
 import { startStageSession, type StartStageSessionOptions, type StartedStageSession } from "../core/stage/bootstrap";
+import { formatRootCreationFailures } from "../core/project/ensure-roots";
 import type { EngineId } from "../core/engine/profile";
 import type { PermissionMode } from "../core/permissions";
 import type { ReasoningTier, VesicleMessage } from "../providers/shared/types";
@@ -66,6 +67,9 @@ export function createStageSessionController(options: StageSessionControllerOpti
     options.setMessages([
       { role: "user", content: commandEcho },
       ...started.warnings.map((warning) => ({ role: "system" as const, content: `Stage card warning: ${warning}` })),
+      ...(started.rootFailures.length > 0
+        ? [{ role: "system" as const, content: formatRootCreationFailures(started.rootFailures) }]
+        : []),
       { id: started.openingRecordUuid, role: "assistant", content: started.opening, kind: "stage-bootstrap-opening", engine: "stage" },
     ]);
     options.setStatus("Stage session ready");

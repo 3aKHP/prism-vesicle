@@ -33,6 +33,7 @@ import { loadSessionSnapshot, type ResumedMessage, type SessionRecord, type Sess
 import {
   catalogNames,
   composeSkillCatalogBlock,
+  eligibleCatalogHashes,
   deriveSessionActivations,
   hydrateSessionActivations,
   isMeaningfulSkillCatalogSnapshot,
@@ -47,6 +48,7 @@ import type { ToolDefinition } from "../tools";
 import { createAssetResolver } from "../runtime/assets";
 import { appendHostContext } from "../prompt/host-context";
 import { composeProjectStateBlock, freezeProjectStateBlock } from "../prompt/project-state";
+import { ensureProjectRoots } from "../project/ensure-roots";
 import { declaresDirectoryQuery } from "../tools/directory-query";
 
 export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopArgs> {
@@ -95,6 +97,15 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     options.sessionId,
     Object.hasOwn(options, "sessionParentUuid") ? { parentUuid: options.sessionParentUuid ?? null } : {},
   );
+  // A brand-new session explicitly creates the model-writable project roots
+  // (#291) so the first project-state observation reads "empty" instead of
+  // "absent". Resumed sessions skip this: a root the user deleted stays absent.
+  if (isNewSession) {
+    const rootFailures = await ensureProjectRoots(rootDir);
+    if (rootFailures.length > 0) {
+      options.onEvent?.({ type: "project_roots_warning", sessionId: session.sessionId, failures: rootFailures });
+    }
+  }
   const proxyPolicy = await resolveProviderProxyPolicy();
   const provider = createProvider(config, { sessionId: session.sessionId, proxyPolicy });
 
@@ -116,7 +127,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
   const skillCatalogSnapshot = snapshotSkillCatalog(frozenSkillCatalog);
   if (snapshot) {
     hydrateSessionActivations(session.sessionId, deriveSessionActivations(snapshot.records));
-    pruneSessionActivations(session.sessionId, new Set(catalogNames(skillCatalog)));
+    pruneSessionActivations(session.sessionId, eligibleCatalogHashes(skillCatalog));
   }
   const skillCatalogBlock = composeSkillCatalogBlock(skillCatalog.catalog);
   systemPrompt = appendHostContext(systemPrompt, skillCatalogBlock);
@@ -239,7 +250,7 @@ export async function bootstrapTurn(options: RunPromptOptions): Promise<RunLoopA
     userRecord = { uuid: options.prePersistedInputUuid };
   } else {
     userRecord = await session.append({
-      role: "user",
+      role: options.inputRecordRole ?? "user",
       content: options.input,
       metadata: {
         ...(options.inputMetadata ?? {}),

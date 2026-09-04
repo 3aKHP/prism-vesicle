@@ -387,13 +387,20 @@ export const skillCommandCompletion: CommandCompletion = {
       stage.query,
       "skills",
       async () => {
-        const { resolveSkillCatalog } = await import("../../core/skills");
-        const catalog = await resolveSkillCatalog(context.rootDir, process.env, { id: context.activeEngine() as import("../../core/engine/profile").EngineId });
-        return catalog.catalog.entries.map((entry) => ({
-          id: entry.name,
-          label: entry.name,
-          detail: `[${entry.scope}] ${entry.description}`,
-        }));
+        // The port serves the session's activatable catalog (#312): the same
+        // freeze-then-snapshot resolution the picker and activation use, so a
+        // drifted or newly installed Skill is never suggested only to fail
+        // with Unknown skill.
+        const entries = await context.skillCatalogEntries();
+        return [
+          // Reserved subcommand (#308), offered before the catalog names it shadows.
+          { id: "refresh", label: "refresh", detail: "Re-freeze the session catalog at the current installation content" },
+          ...entries.map((entry) => ({
+            id: entry.name,
+            label: entry.name,
+            detail: `[${entry.scope}] ${entry.description}`,
+          })),
+        ];
       },
       (item) => `/skill ${item.id} `,
     );
@@ -408,6 +415,9 @@ type SkillStage =
 function classifySkillStage(tokens: { values: string[]; trailingSpace: boolean }): SkillStage {
   if (tokens.values.length === 0) return { kind: "name", query: "" };
   if (tokens.values.length === 1 && !tokens.trailingSpace) return { kind: "name", query: tokens.values[0]! };
+  // `refresh` takes nothing after it: the completed `/skill refresh ` must not
+  // go on offering --context-only, a form run() rejects as a usage error.
+  if (tokens.values[0] === "refresh") return { kind: "invalid" };
   if (tokens.values.length === 1 && tokens.trailingSpace) return { kind: "option", name: tokens.values[0]!, option: "" };
   if (tokens.values.length === 2 && tokens.values[1]!.startsWith("--")) {
     return { kind: "option", name: tokens.values[0]!, option: tokens.values[1]! };

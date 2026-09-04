@@ -146,7 +146,7 @@ The full flow is § Release Lifecycle below. The Release grade adds to it the re
 - The grades are a decision skeleton, not a rigid gate: the author and the reviewer confirm the grade; the graded flow then runs its steps exactly.
 - Bot Review means the GitHub PR-side automatic review (one round). The repository documents no specific bot configuration; follow whatever review mechanism the repository actually has enabled.
 - High-risk domain list (used for Standard vs Huge grading): `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/core/gate`, `src/core/validators`, `src/core/engine`.
-- A DSH implementation of this grading exists as the `prism-vesicle-workflow` and `prism-vesicle-cr` agent presets under `.dsh/agent-presets/` (install with `.dsh/install.sh`); the sections above are written to be executable in any agent environment without it.
+- A DSH implementation of this grading exists as the `prism-vesicle` agent preset under `.dsh/agent-presets/`, which bundles the workflow and CR skills (install with `.dsh/install.sh`); the sections above are written to be executable in any agent environment without it.
 
 ## Iteration Loop
 
@@ -216,7 +216,7 @@ The empty-project smoke runs `debug markdown-runtime`, `assets status`, asset ma
 
 ### Release Lifecycle
 
-1. Freeze `package.json`, `CHANGELOG.md`, release notes, and supported user-facing scope on `release/v<version>-<topic>`. Release notes must link the public Code signing policy and state accurately whether that version's Windows artifacts are signed.
+1. Freeze `package.json`, the `CHANGELOG.md` version section and its structure-paired `CHANGELOG.zh-CN.md` companion (`bun run changelog:check` must pass), and supported user-facing scope on `release/v<version>-<topic>`. The freeze also covers the release-facing documentation stamps: `README.md` and `README.zh-CN.md` channel wording and static Status badge, the advanced user-manual maturity stamps under `docs/user/{en,zh-CN}/advanced/`, and the `STATUS.md` snapshot header. The GitHub Release body is composed at tag time by `scripts/release/compose-notes.ts` from those paired CHANGELOG sections; it carries the bilingual signing disclosure that links the public Code Signing Policy and states the Windows artifacts' signing status.
 2. Run the standard local verification, then open a PR to `main`. PR CI executes the same reusable release build and provides short-lived Linux, Windows, assets-ZIP, and installer artifacts for review and human testing.
 3. Complete independent CR, the opt-in real-provider acceptance test, and any required small-group Windows acceptance. Merge the reviewed release PR to `main`.
 4. Update the local `main` with a fast-forward-only pull and confirm that `HEAD` is the accepted release commit.
@@ -250,7 +250,7 @@ Do not tag `develop` or a release branch. After publication, forward-sync the re
 
 The public [Code Signing Policy](../../CODE_SIGNING_POLICY.md) defines the intended Windows signing scope, maintainer roles, user verification, and incident handling. The [Privacy Policy](../../PRIVACY.md) documents the local and external-service data behavior required for public distribution. Windows signing is deferred until a viable signing provider is in place, with no version deadline.
 
-Until a signing provider is in place, every release is an explicitly disclosed unsigned release for the informed beta test group. The generated GitHub Release notes prepend bilingual channel and known-limit disclosures matching the published version family (beta, release candidate, or stable), followed by a bilingual warning that identifies both Windows artifacts as unsigned, links the code-signing policy, points to `SHA256SUMS.txt`, and tells users not to disable Windows security globally. Release metadata validation authorizes publication through an annotated `v<version>` tag whose commit is on the `main` history and whose version matches `package.json`; it does not pin individual versions, so each new release is a normal tag push rather than a workflow edit. There is no version deadline for adding signing; whenever it is taken up, a release candidate must reuse a signing path already exercised during earlier releases rather than introducing signing for the first time.
+Until a signing provider is in place, every release is an explicitly disclosed unsigned release for the informed beta test group. The GitHub Release body is composed by `scripts/release/compose-notes.ts` from the paired bilingual CHANGELOG: the released version's English section interleaved with its Simplified Chinese companion, bilingual channel and known-limit disclosures only for prereleases and first-of-channel stable releases, a two-line bilingual signing warning that links the code-signing policy and points to `SHA256SUMS.txt`, a one-line MCP deferral pointer, and a trailing Full Changelog link whose compare base is derived deterministically as the immediately preceding published tag of any channel. GitHub's `generate_release_notes` autogen is deliberately absent: for a repository's first non-prerelease it skips prerelease baselines and falls back to the earliest tag, which dumped the full history into the published 1.0.0 body; a sentinel test pins the corrected derivation. Release metadata validation authorizes publication through an annotated `v<version>` tag whose commit is on the `main` history and whose version matches `package.json`; it does not pin individual versions, so each new release is a normal tag push rather than a workflow edit. There is no version deadline for adding signing; whenever it is taken up, a release candidate must reuse a signing path already exercised during earlier releases rather than introducing signing for the first time.
 
 If signing is taken up later, tag push remains the maintainer's command-line publication authorization, but every production signing request must also be manually inspected and approved through the signing provider. The signing implementation must sign and verify the portable PE before installer staging, enable and verify the generated signed uninstaller, then sign and verify the final installer. A failed or unapproved signing request must block publication of the affected Windows artifact; it must never silently fall back to an unsigned file.
 
@@ -390,17 +390,21 @@ The first version is deliberately minimal: five lenses, finder/scorer separation
 
 ## Issue Linking And Closure
 
-GitHub auto-closes an issue only when a supported closing keyword is immediately followed by the issue reference in the PR body or a commit message. Supported forms include `Closes #123`, `Fixes #123`, and `Resolves #123` (also `close`, `closed`, `fix`, `fixed`, `resolve`, `resolved`).
+GitHub auto-closes an issue only when a supported closing keyword is immediately followed by the issue reference in the PR body or a commit message. Supported forms include `Closes #123`, `Fixes #123`, and `Resolves #123` (also `close`, `closed`, `fix`, `fixed`, `resolve`, `resolved`); keywords work inline, not only on a line of their own.
 
-- A PR that resolves an issue must include one explicit line in its body: `Closes #<issue>`.
+- A PR that resolves an issue declares it in its body with a closing keyword (`Closes #<issue>`); a line of its own is the recommended, unambiguous form.
 - Use `Refs #<issue>` or plain `#<issue>` for related work that does not complete the issue.
 - `Implements #<issue>`, `Closes the follow-up in #<issue>`, and issue references in the PR title do not close issues.
 - For staged work, only the final PR uses `Closes #<issue>`; earlier PRs use `Refs #<issue>`.
+- Closing declarations in a PR merged into `develop` take effect when its commits reach `main` through a release PR: the `close-issues` workflow runs `scripts/release/close-bridged-issues.ts` at release-merge time, recovers the constituent PRs from the release commit range (native-merge and squash-merge forms; rebase merges leave no PR reference and are not bridged), scans their bodies plus the release PR body with native inline semantics, and closes each still-open issue with a comment linking both PRs. Release PR bodies no longer need to repeat closing lines — GitHub handles those natively — but repetition keeps working.
 - When an issue is resolved and merged into `develop` but has not yet reached `main`, append a tracking comment at the end of the issue: `This issue has been solved in #<pr-number>.`
+- Issue bodies follow the repository issue templates under `.github/ISSUE_TEMPLATE/`; the memo template is the shape authority for memo issues, and collaborators creating issues through the API or CLI copy that skeleton.
 
 ## PR Body Shape
 
 ```markdown
+Grade: Quick PR
+
 Closes #<issue>
 
 ## Summary
@@ -413,11 +417,14 @@ Closes #<issue>
 - [ ] `bun run typecheck`
 - [ ] `bun test`
 - [ ] `bun run doctor`
+- [ ] Targeted tests / smoke for the change class (see Verification Matrix)
 
 ## Notes / Follow-ups
 
 - ...
 ```
+
+The `Grade` line keeps the applicable grade of the Change Grading Workflow (Quick PR / Standard PR / Huge PR / Hot-Fix) so the review bar is visible on the PR; Release PRs carry their own template instead of the grade line. The default PR template `.github/pull_request_template.md` carries this shape. Release PRs use `.github/PULL_REQUEST_TEMPLATE/release.md`; GitHub offers no PR template chooser, so select it explicitly with `gh pr create --template .github/PULL_REQUEST_TEMPLATE/release.md` or the `?template=` compare-URL parameter.
 
 ## Documentation Sweep
 

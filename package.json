@@ -1,6 +1,6 @@
 {
   "name": "prism-vesicle",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Open-source Agent Harness host and TUI for durable Prism Engine workflows.",
   "license": "MIT",
   "repository": {
@@ -33,7 +33,8 @@
   },
   "overrides": {
     "@babel/core": "7.29.7",
-    "brace-expansion": "5.0.9"
+    "brace-expansion": "5.0.9",
+    "browserslist": "4.28.8"
   },
   "files": [
     "assets/",
@@ -53,6 +54,7 @@
     "docs:check:staged": "bun run scripts/check/check-staged-markdown-wrap.ts",
     "skills:docs:sync": "bun run scripts/check/sync-bundled-skill-references.ts",
     "skills:docs:check": "bun run scripts/check/sync-bundled-skill-references.ts --check",
+    "changelog:check": "bun run scripts/check/check-changelog-pair.ts",
     "smoke:malformed-tool-pty": "bun run scripts/smoke/smoke-malformed-tool-pty.ts",
     "smoke:session-migration-pty": "bun run scripts/smoke/smoke-session-migration-pty.ts",
     "smoke:terminal-title-pty": "bun run scripts/smoke/smoke-terminal-title-pty.ts",
@@ -90,12 +92,12 @@
     "build:installer": "bun run scripts/build/build-installer.ts"
   },
   "dependencies": {
-    "@3akhp/opentui-core": "0.5.3-zv6",
+    "@3akhp/opentui-core": "0.5.10-zv5",
     "@modelcontextprotocol/client": "2.0.0",
     "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
-    "@3akhp/opentui-solid": "0.5.3-zv6",
+    "@3akhp/opentui-solid": "0.5.10-zv5",
     "@biomejs/biome": "2.5.4",
     "@eslint-community/regexpp": "4.12.2",
     "@resvg/resvg-js": "2.6.2",
