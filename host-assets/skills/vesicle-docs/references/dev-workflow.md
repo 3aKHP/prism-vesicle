@@ -148,7 +148,7 @@ The full flow is § Release Lifecycle below. The Release grade adds to it the re
 - The grades are a decision skeleton, not a rigid gate: the author and the reviewer confirm the grade; the graded flow then runs its steps exactly.
 - Bot Review means the GitHub PR-side automatic review (one round). The repository documents no specific bot configuration; follow whatever review mechanism the repository actually has enabled.
 - High-risk domain list (used for Standard vs Huge grading): `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/core/gate`, `src/core/validators`, `src/core/engine`.
-- A DSH implementation of this grading exists as the `prism-vesicle-workflow` and `prism-vesicle-cr` agent presets under `.dsh/agent-presets/` (install with `.dsh/install.sh`); the sections above are written to be executable in any agent environment without it.
+- A DSH implementation of this grading exists as the `prism-vesicle` agent preset under `.dsh/agent-presets/`, which bundles the workflow and CR skills (install with `.dsh/install.sh`); the sections above are written to be executable in any agent environment without it.
 
 ## Iteration Loop
 

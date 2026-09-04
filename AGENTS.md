@@ -104,7 +104,7 @@ These are non-negotiable boundaries; start with `docs/dev/ARCHITECTURE.md` and f
 - Provider adapters convert normalized Vesicle requests to provider wire format and back. They must not read/write project files, mutate sessions, know Prism phases, or execute host tools.
 - Model-visible filesystem tools must stay behind `core/tools` path guards.
 - Filesystem tool paths are project-relative only; absolute paths and `..` escapes are rejected. The opt-in `shell_exec` process tool is the explicit exception: it has host-user authority, is controlled by Tool Permission Runtime, and must never be described as path-guarded or rewind-safe.
-- Write tools are limited to approved roots: `source_materials/`, `workspace/`, `test_runs/`, `novels/`, and `reports/`. `source_materials/` holds imported, researched, or model-generated source material; deployed artifacts belong in the other four roots.
+- Write tools are limited to approved roots: `source_materials/`, `workspace/`, `test_runs/`, `novels/`, `reports/`, and the scratch root `tmp/`. `source_materials/` holds imported, researched, or model-generated source material; deployed artifacts belong in the other four roots.
 - Prompt assets are runtime files under `assets/`; do not hardcode Prism prompts into TypeScript source.
 - Host-specific prompts, coding-agent identities, and tool assumptions must not leak into Prism engine prompts except as explicit negative examples.
 - `request_confirmation` is a workflow gate declared by engine profile `stopGates`, not a generic permission prompt.

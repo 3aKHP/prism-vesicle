@@ -51,7 +51,7 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 | `/permissions [MANUAL\|INERTIA\|MOMENTUM\|YOLO]` | Show or set the tool approval mode |
 | `/quality [off\|observe [provider model [timeout-ms]]\|rewrite [provider model [timeout-ms]]]` | Show or configure the experimental Semantic Judge; no arguments open guided settings. `off` disables the Judge and retains the profile; `observe`/`rewrite` without a profile use the retained or active provider/model. Selecting Review and revise (or `/quality rewrite`) opens one red confirmation panel — there is no `/quality confirm` second command |
 | `/agents [handle\|stop <handle>\|retry]` | List, inspect, interrupt, or retry SubAgent delivery |
-| `/skill [refresh \| name [task]]` | Activate a Skill; no args opens a picker, `<name> [task]` activates and invokes, `<name> --context-only` loads without invoking, `refresh` re-freezes the session catalog at the current installation content |
+| `/skill [refresh \| name [task]]` | Activate a Skill; no args opens a picker, `<name> [task]` activates and invokes, `<name> --context-only` loads without invoking, `refresh` re-freezes the session catalog at the current installation content, reporting Skills that changed (re-activate with `/skill <name>`), were removed, or were newly added; it changes nothing when the catalog already matches |
 
 ## Input-box keys
 
@@ -60,7 +60,7 @@ The Host sidebar lists artifacts in a narrow column. Press `Alt+A` to focus that
 | Enter | Send while idle; queue ordinary messages and deferred commands while the Agent Loop is running |
 | Ctrl+Enter | Newline |
 | Up (running turn, empty box) | Retrieve the latest queued input for editing |
-| Esc | Interrupt the current provider or tool operation; after rebuilding the interrupted session, submit the captured FIFO head once, or just interrupt when the queue is empty |
+| Esc | Interrupt the current provider or tool operation; after rebuilding the interrupted session, submit the captured FIFO head once — only if it is still the queue head — or just interrupt when the queue is empty |
 | Double Esc (empty box, within 800ms) | Open the rewind picker |
 | Double Esc (box has text) | Save the draft and clear it, without sending |
 | Ctrl+V / Alt/Option+V | Paste a clipboard image (only vision-capable models receive it; terminal text paste still inserts text normally) |
