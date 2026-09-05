@@ -79,7 +79,16 @@ async function main() {
     await waitFor("Stop Gate");
     await key("keep-note");
     await key("Tab");
-    await waitFor("Tab/Enter/Esc back");
+    const beforeWheel = await waitFor("Tab/Enter/Esc back");
+    const readingStart = (frame: string) => Number(frame.match(/Home\/End · (\d+)-/)?.[1]);
+    // Feed real SGR mouse reports to the TUI, not tmux's own scroll mode.
+    await key("-l", "\x1b[<65;10;8M");
+    const afterWheel = readingStart(await capture());
+    check(afterWheel > readingStart(beforeWheel), "Mouse wheel did not advance reading");
+    await Bun.sleep(300);
+    check(readingStart(await capture()) === afterWheel, "Mouse wheel position bounced back on a later frame");
+    await key("-l", "\x1b[<64;10;8M");
+    check(readingStart(await capture()) < afterWheel, "Mouse wheel did not scroll reading upward");
     await key("End");
     await waitFor("READING-ROW-35");
     await key("C-o");
@@ -117,7 +126,7 @@ async function main() {
     await key("Enter");
     await waitFor("READING-SMOKE-DONE");
     check(calls === 4, `Unexpected provider call count ${calls}`);
-    console.log("Prompt reading PTY passed: gate, question, shell rejection; 80x24, 80x16, 120x40; Ctrl+O, resize, notes and return isolation.");
+    console.log("Prompt reading PTY passed: gate, question, shell rejection; 80x24, 80x16, 120x40; mouse wheel without snap-back, Ctrl+O, resize, notes and return isolation.");
   } finally {
     if (started) await tmux("kill-session", "-t", session).catch(() => undefined);
     server.stop(true);

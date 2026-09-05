@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.1] - 2026-09-05
 
 ### Changed
 
@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Mouse-wheel scrolling in expanded details no longer snaps back or jitters.** Native wheel movement now updates the shared reading anchor before frame synchronization, keeping the position indicator, arrow keys, resize and reopened details aligned with the scrolled text.
+- **Expanded details render Markdown and show their title once (follow-up to #320).** Gate summaries, question bodies and option descriptions use the shared Markdown renderer, preserving headings, emphasis, lists, tables and code blocks. The title wraps as part of the scrollable content, so long titles remain readable. Scrolling and resize restoration use rendered text positions; permission commands and JSON remain literal text.
 - **The release close-issues bridge skips ordinary issue references in commit subjects.** A trailing `(#N)` now has its resource kind checked before the bridge reads a PR body, so an ordinary issue reference no longer aborts all closure work with a `GET /pulls/N` 404. API failures still fail the workflow rather than silently dropping candidates.
 - **Shell child processes inherit `APPDATA` and `XDG_CONFIG_HOME` (#316).** Invoking `vesicle` through `shell_exec` now preserves standard Windows and custom XDG configuration discovery. Environment-policy version advances to 2: pending version-1 requests remain resumable and rejectable, but allowing them refuses execution; reject the old request and issue a new call. Vesicle-specific configuration overrides remain filtered, and Skill host injection is unchanged.
 

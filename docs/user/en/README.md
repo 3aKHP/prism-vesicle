@@ -55,4 +55,4 @@ Host shell, Output Quality Guard, SubAgents, Stage, MCP tools, Harness Packs, an
 
 ## Manual status
 
-Prism Vesicle's current stable release is `1.1.0`. `vesicle doctor` diagnoses the environment, but it is not a description of every feature. When the manual disagrees with the real interface or command, retain the exact error and use [Troubleshooting](./reference/troubleshooting.md) to report the discrepancy.
+Prism Vesicle's current stable release is `1.1.1`. `vesicle doctor` diagnoses the environment, but it is not a description of every feature. When the manual disagrees with the real interface or command, retain the exact error and use [Troubleshooting](./reference/troubleshooting.md) to report the discrepancy.
