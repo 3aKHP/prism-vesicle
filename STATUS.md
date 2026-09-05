@@ -1,12 +1,12 @@
 # Prism Vesicle Project Status
 
-_Development snapshot date: 2026-09-04. Published package version: 1.0.0 (npm `latest`). This snapshot prepares stable 1.1.0._
+_Development snapshot date: 2026-09-05. Published package version: 1.1.0 (npm `latest`). This snapshot prepares stable 1.1.1._
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
 ## Version & Capabilities
 
-Published package version: **1.0.0** (npm `latest`); this snapshot prepares stable **1.1.0**. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact contents of each published version.
+Published package version: **1.1.0** (npm `latest`); this snapshot prepares stable **1.1.1**. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact contents of each published version.
 
 | Subsystem | Capability | State |
 |-----------|-----------|-------|
