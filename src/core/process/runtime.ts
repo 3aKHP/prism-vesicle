@@ -5,7 +5,7 @@ import {
   type ShellInterpreterPreference,
 } from "./shell-profile";
 
-export const PROCESS_ENV_POLICY_VERSION = 1;
+export const PROCESS_ENV_POLICY_VERSION = 2;
 export const PROCESS_RUNTIME_POLICY_VERSION = 2;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 120_000;
 export const MAX_PROCESS_TIMEOUT_MS = 600_000;
@@ -19,6 +19,8 @@ const inheritedEnvironmentKeys = [
   "COMSPEC",
   "HOME",
   "USERPROFILE",
+  "APPDATA",
+  "XDG_CONFIG_HOME",
   "TEMP",
   "TMP",
   "LANG",

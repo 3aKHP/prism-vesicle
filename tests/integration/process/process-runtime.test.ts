@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   buildProcessEnvironment,
   createProcessExecutionPlan,
@@ -25,10 +26,53 @@ describe("process runtime", () => {
     expect(buildProcessEnvironment({
       PATH: "/bin",
       HOME: "/home/test",
+      APPDATA: "C:\\Users\\test user\\AppData\\Roaming",
+      XDG_CONFIG_HOME: "/home/test user/custom-config",
       PROVIDER_API_KEY: "secret",
       TAVILY_API_KEY: "secret",
-    })).toEqual({ PATH: "/bin", HOME: "/home/test" });
+      VESICLE_CONFIG_DIR: "/caller/config",
+      VESICLE_PROVIDERS_FILE: "/caller/providers.yaml",
+      VESICLE_HOST_CONFIG_DIR: "/caller/host-config",
+      VESICLE_SELF_EXECUTABLE: "/caller/vesicle",
+      VESICLE_SELF_ENTRYPOINT: "/caller/main.ts",
+    })).toEqual({
+      PATH: "/bin",
+      HOME: "/home/test",
+      APPDATA: "C:\\Users\\test user\\AppData\\Roaming",
+      XDG_CONFIG_HOME: "/home/test user/custom-config",
+    });
+    expect(buildProcessEnvironment({ APPDATA: undefined, XDG_CONFIG_HOME: undefined })).toEqual({});
   });
+
+  for (const key of ["APPDATA", "XDG_CONFIG_HOME"] as const) {
+    test(`resolves the user config directory inside a shell child using ${key}`, async () => {
+      const root = await mkdtemp(join(tmpdir(), "vesicle process-"));
+      try {
+        const configHome = join(root, "custom config");
+        const probe = join(root, "config probe.ts");
+        const pathsModule = pathToFileURL(join(import.meta.dir, "../../../src/config/paths.ts")).href;
+        await writeFile(probe, `import { userConfigDirectory } from ${JSON.stringify(pathsModule)};\nconsole.log(JSON.stringify({ directory: userConfigDirectory(), secret: process.env.PROVIDER_API_KEY }));\n`);
+        const quote = (value: string) => process.platform === "win32"
+          ? `'${value.replaceAll("'", "''")}'`
+          : `'${value.replaceAll("'", "'\"'\"'")}'`;
+        const command = `${process.platform === "win32" ? "& " : ""}${quote(process.execPath)} ${quote(probe)}`;
+        const result = await executeProcessPlan(root, createProcessExecutionPlan(command, WINDOWS_SPAWN_PROCESS_TIMEOUT_MS), {
+          env: {
+            ...buildProcessEnvironment(),
+            APPDATA: undefined,
+            XDG_CONFIG_HOME: undefined,
+            [key]: configHome,
+            VESICLE_CONFIG_DIR: join(root, "not inherited"),
+            PROVIDER_API_KEY: "not-inherited-secret",
+          },
+        });
+        expect(result.exitCode).toBe(0);
+        expect(JSON.parse(result.stdout)).toEqual({ directory: join(configHome, "prism-vesicle") });
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }, WINDOWS_SPAWN_TEST_TIMEOUT_MS);
+  }
 
   test("validates and hashes the exact execution plan", () => {
     const call = { id: "call-1", name: "shell_exec", arguments: JSON.stringify({ command: "  pwd  ", timeoutMs: 500 }) };
@@ -38,6 +82,7 @@ describe("process runtime", () => {
     if (process.platform === "win32") expect(plan.executablePath).toMatch(/pwsh\.exe$|powershell\.exe$/i);
     else expect(plan.executablePath).toBe("/bin/sh");
     expect(plan.runtimePolicyVersion).toBe(2);
+    expect(plan.envPolicyVersion).toBe(2);
     expect(plan.runInBackground).toBe(false);
     expect(executionPlanHash(plan)).toHaveLength(64);
     expect(executionPlanHash(createProcessExecutionPlan("pwd", 500, process.platform, true))).not.toBe(executionPlanHash(plan));

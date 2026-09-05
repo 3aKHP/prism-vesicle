@@ -55,6 +55,12 @@
 - 命令结束(正常退出、超时、取消)时,Vesicle 终止受管进程树:Windows 用 `taskkill /T /F`,POSIX 先向进程组发 SIGTERM、250ms 宽限后 SIGKILL。即便 shell 早早退出却留下后台后代,原始进程树也会被清理。
 - **但这不是沙箱。** 一个被批准的命令仍可用平台手段(新会话、外部服务管理器等)在受管树之外创建工作。子进程环境被过滤成白名单(`PATH`/`HOME`/`USERPROFILE`/`TEMP`/`LANG`/`TERM` 等),输出和寿命有界,进程组会被清理——这些都不改变"已批准命令拥有宿主权限"这一事实。
 
+## 子进程配置目录
+
+子进程会继承已设置的 `APPDATA` 和 `XDG_CONFIG_HOME`,因此通过 `shell_exec` 自调用 `vesicle` 时,Windows 标准配置目录和自定义 XDG 配置目录仍可被找到。`VESICLE_CONFIG_DIR`、`VESICLE_PROVIDERS_FILE` 等 Vesicle 专用覆盖变量不会自动继承;使用这些覆盖变量的宿主启动方式不保证 shell 自调用指向相同配置。Skill 脚本继续使用宿主注入的已解析配置目录。
+
+环境策略已升级为版本 2。升级前保留的版本 1 待审批请求仍可恢复和拒绝,但点击允许会因计划变化而拒绝执行。请拒绝旧请求,再让模型发起新的调用。
+
 ## 与回退的关系
 
 shell 改动的文件**不进** Vesicle 的回退检查点账本(回退只覆盖 Vesicle 自有工具的改动)。也就是说 shell 造成的文件变化不保证能 `/rewind`。见[会话与回退](../tutorials/sessions-and-rewind.md)。

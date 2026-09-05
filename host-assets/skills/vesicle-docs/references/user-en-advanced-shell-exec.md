@@ -55,6 +55,12 @@ Two tools control background tasks:
 - When a command ends (normal exit, timeout, cancellation), Vesicle terminates the managed process tree: `taskkill /T /F` on Windows, SIGTERM to the process group on POSIX followed by SIGKILL after a 250ms grace period. Even if the shell exits early but leaves background descendants, the original process tree is cleaned up.
 - **But this is not a sandbox.** An approved command can still use platform facilities (a new session, an external service manager, etc.) to create work outside the managed tree. The child environment is filtered to a whitelist (`PATH`/`HOME`/`USERPROFILE`/`TEMP`/`LANG`/`TERM`, etc.), output and lifetime are bounded, and the process group is cleaned up — none of that changes the fact that an approved command has host authority.
 
+## Child configuration directory
+
+Child processes inherit `APPDATA` and `XDG_CONFIG_HOME` when set, so invoking `vesicle` through `shell_exec` preserves standard Windows and custom XDG configuration discovery. Vesicle-specific overrides such as `VESICLE_CONFIG_DIR` and `VESICLE_PROVIDERS_FILE` are not inherited automatically; a host launched with those overrides does not guarantee that shell self-invocation uses the same configuration. Skill scripts continue to use the resolved configuration directory injected by the host.
+
+The environment policy is now version 2. Pending version-1 approvals saved before upgrading remain resumable and rejectable, but allowing them fails because the execution plan changed. Reject the old request, then ask the model to issue a new call.
+
 ## Relationship to rewind
 
 Files changed by shell are **not** in Vesicle's rewind checkpoint ledger (rewind covers only changes made by Vesicle's own tools). In other words, shell-caused file changes are not guaranteed to `/rewind`. See [Sessions and rewind](../tutorials/sessions-and-rewind.md).
