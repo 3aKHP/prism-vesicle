@@ -55,4 +55,4 @@ Prism Vesicle 是一个在终端里运行 Prism Engine 创作工作流的宿主�
 
 ## 手册状态
 
-Prism Vesicle 当前稳定版为 `1.1.0`。`vesicle doctor` 是环境诊断工具,不是全部功能的说明;手册与实际界面或命令不一致时,请保留报错原文并按[故障排查](./reference/troubleshooting.md)报告差异。
+Prism Vesicle 当前稳定版为 `1.1.1`。`vesicle doctor` 是环境诊断工具,不是全部功能的说明;手册与实际界面或命令不一致时,请保留报错原文并按[故障排查](./reference/troubleshooting.md)报告差异。

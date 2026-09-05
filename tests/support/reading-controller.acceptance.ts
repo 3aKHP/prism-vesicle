@@ -31,11 +31,11 @@ describe("bottom-surface reading", () => {
       expect(h.reader.handleKey(key("tab"))).toBe(true);
       expect(h.reader.expanded()).toBe(true);
       h.reader.handleKey(key("end"));
-      expect(h.reader.start()).toBe(84);
+      expect(h.reader.start()).toBe(83);
       expect(h.reader.handleKey(key(name))).toBe(true);
       expect(h.reader.active()).toBe(false);
       h.reader.handleKey(key("tab", { shift: true }));
-      expect(h.reader.start()).toBe(84);
+      expect(h.reader.start()).toBe(83);
     } finally { h.dispose(); }
   });
 
@@ -116,8 +116,8 @@ describe("bottom-surface reading", () => {
       h.setHeight(12);
       h.reader.handleKey(key("end"));
       expect(h.reader.start() + h.reader.capacity()).toBe(h.reader.rows().length);
+      const lines = readingRows([{ text: "👩‍💻👩‍💻" }], 2);
+      expect(lines.map((line) => line.text)).toEqual(["👩‍💻", "👩‍💻"]);
     } finally { h.dispose(); }
-    const lines = readingRows([{ text: "👩‍💻👩‍💻" }], 2);
-    expect(lines.map((line) => line.text)).toEqual(["👩‍💻", "👩‍💻"]);
   });
 });

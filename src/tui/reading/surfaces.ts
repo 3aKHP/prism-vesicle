@@ -34,6 +34,7 @@ export type ReadingSurfaceOptions = {
 };
 
 const normal = (text: string): ReadingBlock => ({ text });
+const markdown = (text: string): ReadingBlock => ({ text, format: "markdown" });
 const warning = (text: string): ReadingBlock => ({ text, tone: "warning" });
 
 /** Pure projection of already loaded, user-visible fields; never fetches or dumps runtime objects. */
@@ -41,7 +42,7 @@ export function projectReadingSurface(mode: BottomSurfaceMode, options: ReadingS
   const width = Math.max(1, options.width - 4);
   const make = (identity: unknown, key: string, title: string, blocks: ReadingBlock[], reserved: number, enabled = true): ReadingDocument => ({
     kind: mode.kind, identity, key, title,
-    blocks: [normal(title), ...blocks], enabled,
+    blocks: [{ text: title, tone: "title" }, ...blocks], enabled,
     hidden: displayWidth(title) > width || blocks.reduce((count, block) => count + wrapDisplayLines(block.text, width).length, 0) > Math.max(1, options.height - reserved),
   });
   const itemDocument = (identity: unknown, title: string, item: OptionItem | undefined, key: string) => {
@@ -90,7 +91,8 @@ export function projectReadingSurface(mode: BottomSurfaceMode, options: ReadingS
       return document;
     }
     case "gate": {
-      const blocks = [normal(renderGateSummaryText(options.gateSummary ?? mode.gate.summary))];
+      const summary = options.gateSummary ?? mode.gate.summary;
+      const blocks = [markdown(summary)];
       for (const option of mode.gate.options ?? []) blocks.push(normal(`${option.decision}: ${option.label}`));
       const document = make(mode.gate, "gate", `Stop Gate: ${mode.gate.gate}`, blocks, 6, !options.busy);
       const compactSummaryBudget = gateSummaryLineBudget(
@@ -98,13 +100,13 @@ export function projectReadingSurface(mode: BottomSurfaceMode, options: ReadingS
         Boolean(options.gateNoteActive),
         Number(Boolean(options.engineSwitchPending)),
       );
-      document.hidden = displayWidth(document.title) > width || wrapGateSummary(blocks[0]!.text, Math.max(31, width - 1)).length > compactSummaryBudget
+      document.hidden = displayWidth(document.title) > width || wrapGateSummary(renderGateSummaryText(summary), Math.max(31, width - 1)).length > compactSummaryBudget
         || (mode.gate.options ?? []).some((item) => displayWidth(item.label) > width - 4);
       return document;
     }
     case "question": {
       const question = mode.pending.question;
-      const document = make(question, "question", question.header, [normal(question.question), ...question.options.map((item, i) => normal(`${i + 1}. ${item.label} - ${item.description}`))], 4, !options.busy);
+      const document = make(question, "question", question.header, [markdown(question.question), ...question.options.map((item, i) => markdown(`${i + 1}. ${item.label} - ${item.description}`))], 4, !options.busy);
       const composer = question.options[options.questionSelected ?? 0]?.kind === "freeform" ? 2 : 0;
       const shownOptions = Math.max(1, Math.min(question.options.length, options.height - 4 - composer));
       document.hidden = shownOptions < question.options.length || wrapDisplayLines(question.question, width - 1).length > Math.max(1, options.height - 3 - shownOptions - composer)

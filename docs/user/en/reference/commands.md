@@ -87,10 +87,11 @@ All bottom dialogs and pickers offer `Tab` / `Shift+Tab` to read details. This i
 | Key (body zone) | Action |
 |---|---|
 | ↑ / ↓ / Ctrl+P / Ctrl+N | Scroll details line by line; the position indicator shows the visible range |
+| Mouse wheel | Scroll expanded details; the reading position is shared with the arrow keys |
 | Home / End | Jump to the top / bottom |
 | Tab / Shift+Tab / Enter / Esc | Return to the options without submitting, rejecting or clearing a note |
 
-If any details are hidden in the compact panel, reading expands between the app header and footer. Fully visible short content stays compact. Reading is read-only: typing and paste do not edit the original input. Returning preserves your selection, note and cursor; reopening resumes the reading position, and resizing keeps your place in the source text. A new request, confirmation stage or selected item starts fresh. Migration reading includes every finding; session previews remain summaries. Composer completion menus, Workspace-local dialogs and BTW retain their existing interactions.
+If any details are hidden in the compact panel, reading expands between the app header and footer. Fully visible short content stays compact. Expanded titles appear once and wrap with the scrollable content. Gate summaries, question bodies and option descriptions render Markdown; permission commands and JSON remain literal text. Reading is read-only: typing and paste do not edit the original input. Returning preserves your selection, note and cursor; reopening resumes the reading position, and resizing keeps your place in the text. A new request, confirmation stage or selected item starts fresh. Migration reading includes every finding; session previews remain summaries. Composer completion menus, Workspace-local dialogs and BTW retain their existing interactions.
 
 ## Workspace page keys
 
