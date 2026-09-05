@@ -33,7 +33,12 @@ export function ReadingView(props: { controller: ReadingController; width: numbe
   onCleanup(() => renderer.removePostProcessFn(syncLayout));
   createEffect(() => { scrollbox?.scrollTo(reader.start()); });
   return (
-    <box width={props.width} height={props.height} border borderColor={palette.gateBorder} paddingX={1} flexDirection="column" backgroundColor={palette.bg}>
+    <box width={props.width} height={props.height} border borderColor={palette.gateBorder} paddingX={1} flexDirection="column" backgroundColor={palette.bg}
+      onMouseScroll={() => {
+        // Wheel events bubble here after the native scrollbox applies its delta.
+        // Save that position before the next frame restores the reading anchor.
+        if (scrollbox) reader.scrollTo(scrollbox.scrollTop);
+      }}>
       <scrollbox ref={(value: ScrollBoxRenderable) => { scrollbox = value; }} height={reader.capacity()} flexShrink={0}
         scrollX={false} scrollY={true} scrollbarOptions={{ visible: false }} viewportCulling={false}>
         <For each={reader.document()?.blocks}>

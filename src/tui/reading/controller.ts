@@ -93,7 +93,7 @@ export function createReadingController(options: {
     else if (key.name === "end") scroll(rows().length);
     return true;
   }
-  return { active, expanded, rows, start, capacity, handleKey, updateLayout, document: options.document };
+  return { active, expanded, rows, start, capacity, handleKey, updateLayout, scrollTo: scroll, document: options.document };
 }
 
 export type ReadingController = ReturnType<typeof createReadingController>;

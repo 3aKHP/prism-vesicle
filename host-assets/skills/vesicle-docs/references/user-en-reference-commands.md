@@ -89,6 +89,7 @@ All bottom dialogs and pickers offer `Tab` / `Shift+Tab` to read details. This i
 | Key (body zone) | Action |
 |---|---|
 | ↑ / ↓ / Ctrl+P / Ctrl+N | Scroll details line by line; the position indicator shows the visible range |
+| Mouse wheel | Scroll expanded details; the reading position is shared with the arrow keys |
 | Home / End | Jump to the top / bottom |
 | Tab / Shift+Tab / Enter / Esc | Return to the options without submitting, rejecting or clearing a note |
 

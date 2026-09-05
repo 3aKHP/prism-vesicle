@@ -63,6 +63,30 @@ test("Markdown question reading wraps long titles and preserves its text anchor 
     const initial = await captureFrameUntil(setup, (frame) => frame.includes("ANCHOR-0") && !frame.includes("**ANCHOR-0**"));
     expect(initial).toContain("TITLE-END");
     expect(initial.match(/TITLE-END/g)?.length).toBe(1);
+    for (let i = 0; i < 6; i += 1) {
+      const previous = reader.start();
+      await setup.mockMouse.scroll(8, 8, "down");
+      await setup.flush();
+      expect(reader.start()).toBeGreaterThan(previous);
+    }
+    const afterWheel = reader.start();
+    const wheelFrame = setup.captureCharFrame();
+    await setup.renderOnce();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toBe(wheelFrame);
+    await setup.mockMouse.scroll(8, 8, "up");
+    await setup.flush();
+    expect(reader.start()).toBeLessThan(afterWheel);
+    const beforeKey = reader.start();
+    reader.handleKey({ name: "down" });
+    await setup.flush();
+    expect(reader.start()).toBe(beforeKey + 1);
+    const savedWheelPosition = reader.start();
+    reader.handleKey({ name: "escape" });
+    await setup.flush();
+    reader.handleKey({ name: "tab" });
+    await captureFrameUntil(setup, (frame) => /ANCHOR-\d+/.test(frame) && !/\*\*ANCHOR-\d+\*\*/.test(frame));
+    expect(reader.start()).toBe(savedWheelPosition);
     for (let i = 0; i < 40; i += 1) reader.handleKey({ name: "down" });
     await setup.flush();
     const before = setup.captureCharFrame();
@@ -147,6 +171,12 @@ test("expanded permission reading reaches the tail, survives resize, and restore
     reader.handleKey({ name: "tab" });
     await setup.flush();
     expect(setup.renderer.getCursorState().visible).toBe(false);
+    await setup.mockMouse.scroll(8, 6, "down");
+    await setup.flush();
+    expect(reader.start()).toBeGreaterThan(0);
+    const wheelFrame = setup.captureCharFrame();
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).toBe(wheelFrame);
     reader.handleKey({ name: "end" });
     await setup.flush();
     expect(setup.captureCharFrame()).toContain("READABLE-LINE-24");
