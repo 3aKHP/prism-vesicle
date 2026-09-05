@@ -398,6 +398,7 @@ GitHub auto-closes an issue only when a supported closing keyword is immediately
 - For staged work, only the final PR uses `Closes #<issue>`; earlier PRs use `Refs #<issue>`.
 - Closing declarations in a PR merged into `develop` take effect when its commits reach `main` through a release PR: the `close-issues` workflow runs `scripts/release/close-bridged-issues.ts` at release-merge time, recovers the constituent PRs from the release commit range (native-merge and squash-merge forms; rebase merges leave no PR reference and are not bridged), scans their bodies plus the release PR body with native inline semantics, and closes each still-open issue with a comment linking both PRs. Release PR bodies no longer need to repeat closing lines — GitHub handles those natively — but repetition keeps working.
 - When an issue is resolved and merged into `develop` but has not yet reached `main`, append a tracking comment at the end of the issue: `This issue has been solved in #<pr-number>.`
+- A trailing `(#N)` in a commit subject is only a candidate PR reference. The bridge checks its resource kind through GitHub's issues endpoint and skips ordinary issues before reading PR bodies; failed API requests still fail the workflow.
 - Issue bodies follow the repository issue templates under `.github/ISSUE_TEMPLATE/`; the memo template is the shape authority for memo issues, and collaborators creating issues through the API or CLI copy that skeleton.
 
 ## PR Body Shape

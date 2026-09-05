@@ -104,7 +104,7 @@ function requirePullRequest(event: WorkflowEvent): { pr: WorkflowEventPullReques
   return { pr, repo };
 }
 
-async function main(): Promise<number> {
+export async function main(): Promise<number> {
   const eventPath = process.env.GITHUB_EVENT_PATH;
   const token = process.env.GITHUB_TOKEN;
   if (!eventPath || !token) {
@@ -165,6 +165,13 @@ async function main(): Promise<number> {
 
   const constituentBodies: PrBodyLike[] = [];
   for (const number of candidates) {
+    // Ordinary commits can end in an issue reference too. GitHub's issues
+    // endpoint covers both kinds; only PRs carry the `pull_request` marker.
+    const candidate = await api<{ pull_request?: unknown }>(`issues/${number}`);
+    if (!candidate.pull_request) {
+      console.log(`#${number} is an issue, not a PR; skipping.`);
+      continue;
+    }
     const pull = await api<{ number: number; merged: boolean | null; body: string | null }>(`pulls/${number}`);
     if (pull.merged !== true) {
       console.log(`#${number} is not a merged PR; skipping.`);
