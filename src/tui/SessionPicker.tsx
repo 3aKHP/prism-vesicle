@@ -9,10 +9,11 @@ export type SessionPickerProps = {
   sessions: SessionSummary[];
   selected: number;
   width: number;
+  maxVisible?: number;
 };
 
 export function SessionPicker(props: SessionPickerProps) {
-  const visible = () => visibleSessions(props.sessions, props.selected, 5);
+  const visible = () => visibleSessions(props.sessions, props.selected, props.maxVisible ?? 5);
 
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">

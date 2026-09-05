@@ -90,5 +90,5 @@ export function createModelPickerController(options: ModelPickerControllerOption
     }
   }
 
-  return { handleModelPickerKey, modelPicker, modelPickerItems, modelPickerTitle, openModelPicker };
+  return { handleModelPickerKey, modelPicker, modelPickerItems, modelPickerTitle, modelPickerBusy, openModelPicker };
 }

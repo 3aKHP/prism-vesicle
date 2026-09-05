@@ -79,6 +79,7 @@ export function WorkspacePage(props: {
   height: number;
   treeWidth: number;
   compact: boolean;
+  inputSuspended?: boolean;
 }) {
   const c = props.controller;
 
@@ -430,7 +431,7 @@ export function WorkspacePage(props: {
                   controller={c}
                   relPath={relPath}
                   active={() => relPath === c.activeEditorPath() && c.isEditing()}
-                  focused={() => relPath === c.activeEditorPath() && c.focusRegion() === "editor" && c.isEditing()}
+                  focused={() => !props.inputSuspended && relPath === c.activeEditorPath() && c.focusRegion() === "editor" && c.isEditing()}
                 />
               )}
             </For>

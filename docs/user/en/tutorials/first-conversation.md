@@ -73,7 +73,7 @@ After the blueprint, the engine does **not** keep writing on its own — a confi
 - Pick **Confirm** — the engine moves to the next phase.
 - Pick **Reject** (an empty rejection is fine) — the engine asks what to change, then comes back.
 
-Long gate summaries arrive folded (`▸ N lines folded`): press `Tab` to read the full text with `↑/↓`, and `Enter` there only returns to the choices — it never decides. Typing while **Confirm** is focused starts attaching a note to it.
+Long gate summaries arrive folded: press `Tab` to expand reading between the app header and footer, then use `↑/↓` or `Home`/`End` to read the full text. `Tab`, `Enter` and `Esc` there only return to the choices, keeping your note; they never decide. Fully visible short summaries stay compact. Typing while **Confirm** is focused starts attaching a note to it.
 
 > Gates are normal in Vesicle: the blueprint, every writing phase, and some tool calls pause for you. The point is to **keep you in control at every key node**, instead of letting the model write all the way to the end.
 

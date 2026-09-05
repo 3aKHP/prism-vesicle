@@ -34,10 +34,12 @@ export function promptBodyWindow(lines: string[], budget: number, offset: number
   start: number;
   end: number;
   folded: boolean;
+  showIndicator: boolean;
 } {
   const capped = Math.max(1, budget);
-  const visible = Math.max(1, capped - (lines.length > capped ? 1 : 0));
-  return { lines, visible, ...bodyScrollWindow(lines.length, visible, offset) };
+  const showIndicator = capped > 1 && lines.length > capped;
+  const visible = capped - Number(showIndicator);
+  return { lines, visible, showIndicator, ...bodyScrollWindow(lines.length, visible, offset) };
 }
 
 /** Live position row shown at the bottom of a prompt body while the body

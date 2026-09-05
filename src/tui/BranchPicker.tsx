@@ -29,9 +29,9 @@ export function branchPickerPanelHeight(state: BranchPickerState): number {
   return Math.min(14, 8 + optionRows + warningRows);
 }
 
-export function BranchPicker(props: { state: BranchPickerState; width: number }) {
+export function BranchPicker(props: { state: BranchPickerState; width: number; height?: number }) {
   const rows = () => flattenBranchRows(props.state.forks, props.state.expanded);
-  const visible = () => visibleBranchRows(rows(), props.state.selected, branchVisibleRowLimit);
+  const visible = () => visibleBranchRows(rows(), props.state.selected, props.height === undefined ? branchVisibleRowLimit : Math.max(1, props.height - 4));
 
   return (
     <box flexDirection="column" border borderColor={palette.panelBorder} paddingX={1} width="100%" height="100%">

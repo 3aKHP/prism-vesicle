@@ -1,5 +1,5 @@
 import { ThemedText } from "./theme-text";
-import { createEffect, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { TextAttributes } from "@3akhp/opentui-core";
 import type { UserQuestionOption, UserQuestionRequest } from "../core/user-question/types";
 import { type PromptZone, PromptBodyRow, promptBodyZoneHint } from "./GatePrompt";
@@ -11,11 +11,10 @@ export type QuestionPromptProps = {
   question: UserQuestionRequest;
   selected: number;
   width: number;
+  height?: number;
   freeformValue?: string;
   freeformCursor?: number;
   zone?: PromptZone;
-  bodyScrollOffset?: number;
-  onBodyExtent?: (total: number, visible: number) => void;
 };
 
 export function questionComposerIsActive(option: UserQuestionOption | undefined): boolean {
@@ -34,18 +33,18 @@ export function questionPanelMinHeight(question: UserQuestionRequest, selected: 
 
 export function QuestionPrompt(props: QuestionPromptProps) {
   const width = () => Math.max(20, props.width - 4);
+  const composerRows = () => questionComposerIsActive(props.question.options[props.selected]) ? 2 : 0;
+  const optionCapacity = () => props.height === undefined ? props.question.options.length
+    : Math.max(1, Math.min(props.question.options.length, props.height - 4 - composerRows()));
+  const optionStart = () => Math.max(0, Math.min(props.selected - Math.floor(optionCapacity() / 2), props.question.options.length - optionCapacity()));
   // The gutter column is reserved in every zone so toggling zones never
   // reflows the wrapped question text.
   const questionWindow = () => promptBodyWindow(
     wrapDisplayLines(props.question.question, Math.max(20, width() - 1)),
-    questionTextLineBudget,
-    props.bodyScrollOffset ?? 0,
+    props.height === undefined ? questionTextLineBudget : Math.max(1, props.height - 3 - optionCapacity() - composerRows()),
+    0,
   );
-  createEffect(() => {
-    const window = questionWindow();
-    props.onBodyExtent?.(window.lines.length, window.visible);
-  });
-  const rows = (): QuestionRow[] => props.question.options.flatMap((option, index) => [
+  const rows = (): QuestionRow[] => props.question.options.flatMap((option, index) => index < optionStart() || index >= optionStart() + optionCapacity() ? [] : [
     { kind: "option" as const, option, index },
     ...(index === props.selected && questionComposerIsActive(option)
       ? [{ kind: "freeform" as const }]
@@ -56,7 +55,7 @@ export function QuestionPrompt(props: QuestionPromptProps) {
     <box flexDirection="column" border borderColor={palette.gateBorder} paddingX={1} width="100%" height="100%">
       <box flexDirection="row" height={1}>
         <ThemedText content="◆ " fg={palette.gateAccent} wrapMode="none" />
-        <ThemedText content={props.question.header} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
+        <ThemedText content={truncateLine(props.question.header, Math.max(8, width() - 48))} fg={palette.gateAccent} attributes={TextAttributes.BOLD} wrapMode="none" />
         <ThemedText
           content={props.zone === "body" ? `  ${promptBodyZoneHint}` : "  ↑/↓ choose · Enter answer · Tab read"}
           fg={palette.textDim}
@@ -67,7 +66,7 @@ export function QuestionPrompt(props: QuestionPromptProps) {
         <For each={questionWindow().lines.slice(questionWindow().start, questionWindow().end)}>
           {(line) => <PromptBodyRow line={line} zone={props.zone} />}
         </For>
-        <Show when={questionWindow().folded} fallback={<box height={0} />}>
+        <Show when={questionWindow().showIndicator} fallback={<box height={0} />}>
           <PromptBodyRow
             zone={props.zone}
             fg={props.zone === "body" ? palette.textPrimary : palette.gateAccent}
@@ -102,7 +101,7 @@ export function QuestionPrompt(props: QuestionPromptProps) {
                   placeholder="Type your answer..."
                   width={Math.max(12, width() - 4)}
                   maxLines={2}
-                  focused={true}
+                  focused={props.zone !== "body"}
                 />
               </box>
         )}

@@ -157,7 +157,8 @@ describe("tui: permission surfaces", () => {
     setup.renderer.destroy();
 
     expect(frame).toContain("Permission · HOST COMMAND");
-    expect(frame).toContain("lines folded · Tab to read");
+    expect(frame).toContain("echo wide command");
+    expect(frame).toContain("Tab read");
     expect(frame).toContain("Allow once");
     expect(frame).toContain("Reject");
     expect(frame).toContain("Esc reject");

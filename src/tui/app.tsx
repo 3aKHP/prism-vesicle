@@ -57,7 +57,11 @@ import {
   type TokenUsageSummary,
 } from "./telemetry";
 import { displayTranscriptFromSnapshot, isEmptySessionTranscript } from "./session-presenter";
-import { BottomSurface, pendingDecisionPromptLabel, pendingDecisionStripLine } from "./views/BottomSurface";
+import { BottomSurface, pendingDecisionPromptLabel, pendingDecisionStripLine, resolveBottomSurfaceMode, type BottomSurfaceState } from "./views/BottomSurface";
+import { createReadingController } from "./reading/controller";
+import { projectReadingSurface, liveReadingKinds } from "./reading/surfaces";
+import { ReadingOverlay } from "./reading/ReadingView";
+import { gateComposerIsActive } from "./GatePrompt";
 import { createAgentProcessController } from "./agent-process-controller";
 import { createSessionResumeController } from "./session-resume-controller";
 import { createComposerController, createDecisionPendingRefusal } from "./composer-controller";
@@ -323,7 +327,6 @@ export function App(props: AppProps = {}) {
   const {
     activeGateRequest,
     activePermissionRequest,
-    bodyScrollOffset,
     clearGateFeedback,
     clearQuestionFreeform,
     decisionPanelMinHeight,
@@ -342,12 +345,10 @@ export function App(props: AppProps = {}) {
     pendingPermission,
     pendingQualityDecision,
     pendingUserQuestion,
-    promptZone,
     questionFreeformCursor,
     questionFreeformText,
     questionSelected,
     qualitySelected,
-    registerBodyExtent,
     setGateFeedback,
     setGateFeedbackCursor,
     setGateFeedbackKillBuffer,
@@ -1010,7 +1011,7 @@ export function App(props: AppProps = {}) {
   // the Chat page, where Ctrl+O (which outranks every modal) takes the user
   // to answer. `decisionStripped` also releases the layout's gate band so the
   // workbench keeps its rows.
-  const pendingDecisionLabel = createMemo(() => pendingDecisionPromptLabel({
+  const bottomState = createMemo<BottomSurfaceState>(() => ({
     yoloStage: yoloConfirmStage(),
     migrationReview: migrationReview(),
     permissionRequest: activePermissionRequest(),
@@ -1025,6 +1026,7 @@ export function App(props: AppProps = {}) {
     qualityPicker: qualityPicker(),
     model: modelPicker(),
   }));
+  const pendingDecisionLabel = createMemo(() => pendingDecisionPromptLabel(bottomState()));
   const decisionStripped = createMemo(() => workspaceActive() && pendingDecisionLabel() !== null);
 
   const layout = createMemo(() => resolveTuiLayout(
@@ -1062,6 +1064,24 @@ export function App(props: AppProps = {}) {
       ...gate,
       summary: `Quality warning: ${count} target${count === 1 ? "" : "s"} remain unconfirmed.\n\n${gate.summary}`,
     };
+  });
+  const readingHeight = () => Math.max(5, dimensions().height - 3 - layout().footerHeight);
+  const readingDocument = createMemo(() => projectReadingSurface(resolveBottomSurfaceMode({ ...bottomState(), suppressDecisionPanels: decisionStripped() }), {
+      width: dimensions().width, height: layout().bottomHeight - 1, busy: busy(),
+      gateNoteActive: gateComposerIsActive(gateFocus(), gateFeedbackMode()), engineSwitchPending: Boolean(pendingEngineSwitch()),
+      permissionReject: gateFocus() === "reject", questionSelected: questionSelected(), skillBusy: skillPickerController.skillPickerBusy(),
+      modelBusy: composerController.modelPickerBusy(), qualityBusy: qualityPickerController.qualityPickerBusy(),
+      childPermission: Boolean(pendingChildPermission()), gateSummary: gateWithQualityWarning()?.summary,
+      modelTitle: modelPickerTitle(), modelItems: modelPickerItems(),
+      skillTitle: skillPickerTitle(), skillItems: skillPickerItems(),
+      qualityTitle: qualityPickerTitle(), qualityItems: qualityPickerItems(),
+    }));
+  const reading = createReadingController({
+    document: readingDocument,
+    liveKinds: () => liveReadingKinds(bottomState()),
+    width: () => dimensions().width,
+    height: readingHeight,
+    obscured: () => Boolean(sideQuestionController.overlay()),
   });
   const composerPopupMaxRows = createMemo(() => Math.min(8, Math.max(1, layout().bottomHeight - 4)));
 
@@ -1121,6 +1141,8 @@ export function App(props: AppProps = {}) {
     workspaceFocusRegion: workspaceController.focusRegion,
     workspaceEditableSourcePasteActive: workspaceController.editableSourcePasteActive,
     handleWorkspaceKey: workspaceController.handleKey,
+    handleReadingKey: reading.handleKey,
+    readingActive: reading.active,
   });
   /**
    * Slash commands for session management and help. These run locally and
@@ -1409,6 +1431,7 @@ export function App(props: AppProps = {}) {
         </Show>
       </box>
 
+      <box flexDirection="column" flexGrow={1} minHeight={0} visible={!reading.expanded()}>
       <Show when={focusedArtifactPath()} fallback={<box height={0} />}>
         {(path) => <ArtifactFocusPreview
           path={path()}
@@ -1418,7 +1441,7 @@ export function App(props: AppProps = {}) {
         />}
       </Show>
 
-      <box flexDirection="row" flexGrow={1}>
+      <box flexDirection="row" flexGrow={1} minHeight={0} overflow="hidden">
         <Show when={sideQuestionController.overlay()} keyed fallback={<box width={0} />}>
           {(state) => (
             <SideQuestionOverlay
@@ -1479,6 +1502,7 @@ export function App(props: AppProps = {}) {
             prompts remain reachable from either page. */}
         <Show when={!sideQuestionController.overlay() && workspaceActive()} fallback={<box width={0} />}>
           <WorkspacePage
+            inputSuspended={reading.active()}
             controller={workspaceController}
             projectRoot={process.cwd()}
             width={layout().width}
@@ -1535,9 +1559,8 @@ export function App(props: AppProps = {}) {
         qualitySelected={qualitySelected()}
         questionFreeformText={questionFreeformText()}
         questionFreeformCursor={questionFreeformCursor()}
-        promptZone={promptZone()}
-        bodyScrollOffset={bodyScrollOffset()}
-        onBodyExtent={registerBodyExtent}
+        promptZone={reading.active() ? "body" : "options"}
+        readingAvailable={Boolean(reading.document()?.enabled)}
         modelItems={modelPickerItems()}
         modelTitle={modelPickerTitle()}
         skillPickerItems={skillPickerItems()}
@@ -1561,6 +1584,11 @@ export function App(props: AppProps = {}) {
         queuedInputs={queuedInputs()}
         providerConfigReady={providerConfigReady()}
       />
+      </Show>
+      </box>
+      <Show when={reading.expanded()} fallback={<box height={0} />}><box flexGrow={1} minHeight={0} /></Show>
+      <Show when={reading.active()} fallback={<box height={0} />}>
+        <ReadingOverlay controller={reading} width={dimensions().width} height={readingHeight()} />
       </Show>
       <box height={layout().footerHeight} paddingLeft={1}>
         <ThemedText

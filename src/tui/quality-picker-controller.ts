@@ -334,6 +334,7 @@ export function createQualityPickerController(options: {
   }
 
   return {
+    qualityPickerBusy,
     qualityPicker,
     qualityRewriteConfirm,
     qualityPickerItems,
