@@ -4,10 +4,7 @@ import { displayWidth, wrapDisplayLines } from "./format";
 import { palette } from "./theme";
 import type { MigrationReviewState } from "./session-migration-controller";
 
-/** Cap the rendered findings so a pathological report cannot overflow the panel. */
-const maxReportRows = 8;
-
-const stageDescriptions = {
+export const migrationDescriptions = {
   1: "The session was recorded under a different verified Harness baseline. Review the findings before migrating.",
   2: "The session file will be archived and rebound to the new baseline. History keeps its original records.",
 } as const;
@@ -22,7 +19,7 @@ export function migrationIdentityLine(state: MigrationReviewState): string {
 
 export function migrationPanelHeight(state: MigrationReviewState, width: number): number {
   const inner = Math.max(20, width - 4);
-  const descriptions = wrapDisplayLines(stageDescriptions[state.stage], inner).length;
+  const descriptions = wrapDisplayLines(migrationDescriptions[state.stage], inner).length;
   // Budget the actual wrapped report rows: the confirm options and hint must
   // never be clipped below the panel, even with many multi-line findings.
   const report = reportRows(state, inner).length + 1;
@@ -35,11 +32,8 @@ function reportRows(state: MigrationReviewState, innerWidth: number): string[] {
     ...state.report.findings.filter((finding) => finding.severity === "warning"),
   ];
   const rows: string[] = [];
-  for (const finding of ordered.slice(0, maxReportRows)) {
+  for (const finding of ordered) {
     rows.push(...wrapDisplayLines(`${finding.severity === "blocking" ? "✗" : "⚠"} ${finding.message}`, innerWidth));
-  }
-  if (ordered.length > maxReportRows) {
-    rows.push(`… and ${ordered.length - maxReportRows} more finding${ordered.length - maxReportRows === 1 ? "" : "s"}`);
   }
   return rows;
 }
@@ -52,17 +46,20 @@ function migrationHint(state: MigrationReviewState, width: number): string {
     : "↑/↓ · Enter confirm · Esc cancel";
 }
 
-export function MigrationPrompt(props: { state: MigrationReviewState; width: number }) {
+export function MigrationPrompt(props: { state: MigrationReviewState; width: number; height?: number }) {
   const blocking = () => props.state.report.verdict === "blocking";
   const inner = () => Math.max(20, props.width - 4);
+  const body = () => [
+    ...wrapDisplayLines(migrationDescriptions[props.state.stage], inner()),
+    ...reportRows(props.state, inner()),
+  ].slice(0, props.height === undefined ? undefined : Math.max(0, props.height - (blocking() || props.state.busy ? 6 : 7)));
   return (
     <box border borderColor={palette.error} paddingX={1} flexDirection="column" width={props.width} height="100%">
       <ThemedText content={blocking()
         ? "BLOCKED · Session Harness migration"
         : `DANGER · Migrate session Harness baseline (${props.state.stage}/2)`} fg={palette.error} attributes={1} wrapMode="none" />
       <ThemedText content={migrationIdentityLine(props.state)} fg={palette.textPrimary} wrapMode="none" />
-      <For each={wrapDisplayLines(stageDescriptions[props.state.stage], inner())}>{(line) => <ThemedText content={line} fg={palette.error} wrapMode="none" />}</For>
-      <For each={reportRows(props.state, inner())}>{(line) => (
+      <For each={body()}>{(line) => (
         <ThemedText content={line} fg={line.startsWith("✗") ? palette.error : palette.textPrimary} wrapMode="none" />
       )}</For>
       {blocking()

@@ -1,5 +1,5 @@
 import { ThemedText } from "./theme-text";
-import { createEffect, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import type { PermissionRequest } from "../core/permissions";
 import { type GateFocusTarget, type PromptZone, PromptBodyRow, promptBodyZoneHint } from "./GatePrompt";
 import { palette } from "./theme";
@@ -11,9 +11,8 @@ export const permissionPanelHeight = 14;
 /** Options-zone hint shared by rendering and tests (the gate and question
  * prompts export their zone hints from GatePrompt.tsx). */
 export const permissionOptionsZoneHint = "↑/↓ choose · Enter confirm · Tab read · Esc reject";
-const permissionContentRows = permissionPanelHeight - 2;
-const hostAuthorityWarning = "This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
-const skillScriptAuthorityWarning = "This selected Skill script uses structured arguments but may access files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
+export const hostAuthorityWarning = "This command may access project-external files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
+export const skillScriptAuthorityWarning = "This selected Skill script uses structured arguments but may access files and the network with your host-user authority. Its file changes are not guaranteed to rewind.";
 type PermissionPromptKind = "host-command" | "skill-script" | "default";
 
 export type PermissionPromptProps = {
@@ -23,9 +22,8 @@ export type PermissionPromptProps = {
   feedback: string;
   feedbackCursor: number;
   width: number;
+  height?: number;
   zone?: PromptZone;
-  bodyScrollOffset?: number;
-  onBodyExtent?: (total: number, visible: number) => void;
 };
 
 export function PermissionPrompt(props: PermissionPromptProps) {
@@ -43,7 +41,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
     }
   };
   const contentWidth = () => Math.max(20, props.width - 4);
-  const flexibleLineBudget = () => Math.max(2, permissionContentRows
+  const flexibleLineBudget = () => Math.max(1, (props.height ?? permissionPanelHeight) - 2
     - 5
     - (props.request.executionPlan?.executablePath ? 1 : 0)
     - (props.focused === "reject" ? 2 : 0));
@@ -53,21 +51,15 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       : kind() === "skill-script"
         ? skillScriptAuthorityWarning
         : undefined;
-    return warning ? visibleDisplayLines(warning, contentWidth(), flexibleLineBudget() - 1) : [];
+    return warning && flexibleLineBudget() > 1 ? visibleDisplayLines(warning, contentWidth(), flexibleLineBudget() - 1) : [];
   };
-  // Scrollable command/JSON detail (#268 item 4): wrapped once, windowed by
-  // the shared body scroll offset; the gutter column is reserved in every
-  // zone so toggling never reflows.
+  // Compact preview only; the shared reader owns the complete command/JSON.
   const detailLineBudget = () => Math.max(1, flexibleLineBudget() - warningLines().length);
   const detailWindow = () => promptBodyWindow(
     wrapDisplayLines(detail(), Math.max(20, contentWidth() - 1)),
     detailLineBudget(),
-    props.bodyScrollOffset ?? 0,
+    0,
   );
-  createEffect(() => {
-    const window = detailWindow();
-    props.onBodyExtent?.(window.lines.length, window.visible);
-  });
   const title = () => {
     const full = kind() === "host-command"
       ? "Permission required · HOST COMMAND"
@@ -111,7 +103,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
       <For each={detailWindow().lines.slice(detailWindow().start, detailWindow().end)}>
         {(line) => <PromptBodyRow line={line} zone={props.zone} />}
       </For>
-      <Show when={detailWindow().folded} fallback={<box height={0} />}>
+      <Show when={detailWindow().showIndicator} fallback={<box height={0} />}>
         <PromptBodyRow
           zone={props.zone}
           fg={props.zone === "body" ? palette.textPrimary : palette.gateAccent}
@@ -138,7 +130,7 @@ export function PermissionPrompt(props: PermissionPromptProps) {
           placeholder="Optional feedback for the model"
           width={contentWidth()}
           maxLines={2}
-          focused={true}
+          focused={props.zone !== "body"}
         />
       ) : null}
       <ThemedText content={hint()} fg={palette.textDim} wrapMode="none" />

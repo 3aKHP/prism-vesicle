@@ -1,5 +1,5 @@
 import { ThemedText } from "../theme-text";
-import { For, Match, Switch } from "solid-js";
+import { For, Match, Show, Switch } from "solid-js";
 import type { GateRequest } from "../../core/gate/types";
 import type { PermissionRequest } from "../../core/permissions";
 import type { ExperimentalQualityMode } from "../../config/quality";
@@ -155,10 +155,9 @@ export type BottomSurfaceProps = BottomSurfaceState & {
   qualitySelected: number;
   questionFreeformText: string;
   questionFreeformCursor: number;
-  /** Body-reading focus zone of the open decision prompt (#268 item 4). */
+  /** Compact prompt focus decoration; reading state is owned by the shared reader. */
   promptZone?: PromptZone;
-  bodyScrollOffset?: number;
-  onBodyExtent?: (total: number, visible: number) => void;
+  readingAvailable?: boolean;
   modelItems: OptionItem[];
   modelTitle: string;
   skillPickerItems: OptionItem[];
@@ -186,6 +185,7 @@ export type BottomSurfaceProps = BottomSurfaceState & {
 
 export function BottomSurface(props: BottomSurfaceProps) {
   const mode = () => resolveBottomSurfaceMode(props);
+  const panelHeight = () => Math.max(1, props.layout.bottomHeight - (props.readingAvailable ? 1 : 0));
   const queuedRows = () => queuedInputPreviewRows(
     props.queuedInputs,
     props.layout.width - 4,
@@ -193,25 +193,28 @@ export function BottomSurface(props: BottomSurfaceProps) {
     props.busy,
   );
   return (
+    <box flexDirection="column" flexShrink={0} height={props.layout.bottomHeight}>
+    <box flexGrow={1} minHeight={0}>
     <Switch>
       <Match when={mode().kind === "yolo" && mode() as Extract<BottomSurfaceMode, { kind: "yolo" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
-            <YoloPrompt stage={current().stage} focused={props.gateFocus} width={props.layout.width} />
+          <box height={panelHeight()}>
+            <YoloPrompt stage={current().stage} focused={props.gateFocus} width={props.layout.width} height={panelHeight()} />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "session-migration" && mode() as Extract<BottomSurfaceMode, { kind: "session-migration" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
-            <MigrationPrompt state={current().state} width={props.layout.width} />
+          <box height={panelHeight()}>
+            <MigrationPrompt state={current().state} width={props.layout.width} height={panelHeight()} />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "permission" && mode() as Extract<BottomSurfaceMode, { kind: "permission" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <PermissionPrompt
+              height={panelHeight()}
               request={current().request}
               focused={props.gateFocus}
               feedbackMode={props.gateFeedbackMode}
@@ -219,43 +222,40 @@ export function BottomSurface(props: BottomSurfaceProps) {
               feedbackCursor={props.gateFeedbackCursor}
               width={props.layout.width}
               zone={props.promptZone}
-              bodyScrollOffset={props.bodyScrollOffset}
-              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "question" && mode() as Extract<BottomSurfaceMode, { kind: "question" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <QuestionPrompt
+              height={panelHeight()}
               question={current().pending.question}
               selected={props.questionSelected}
               width={props.layout.width}
               freeformValue={props.questionFreeformText}
               freeformCursor={props.questionFreeformCursor}
               zone={props.promptZone}
-              bodyScrollOffset={props.bodyScrollOffset}
-              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "quality" && mode() as Extract<BottomSurfaceMode, { kind: "quality" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <QualityDecisionPrompt
               decision={current().pending.decision}
               selected={props.qualitySelected}
               width={props.layout.width}
-              maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
+              maxVisible={Math.max(1, panelHeight() - 3)}
             />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "gate" && mode() as Extract<BottomSurfaceMode, { kind: "gate" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <GatePrompt
               gate={current().gate}
               focused={props.gateFocus}
@@ -264,71 +264,70 @@ export function BottomSurface(props: BottomSurfaceProps) {
               feedbackCursor={props.gateFeedbackCursor}
               width={props.layout.width}
               maxSummaryLines={gateSummaryLineBudget(
-                props.layout.summaryLines,
+                Math.max(1, panelHeight() - 6),
                 gateComposerIsActive(props.gateFocus, props.gateFeedbackMode),
                 props.engineSwitchPending ? 1 : 0,
               )}
               showSummaryOption={props.engineSwitchPending}
               zone={props.promptZone}
-              bodyScrollOffset={props.bodyScrollOffset}
-              onBodyExtent={props.onBodyExtent}
             />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "rewind" && mode() as Extract<BottomSurfaceMode, { kind: "rewind" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
-            <RewindPicker state={current().picker} width={props.layout.width} />
+          <box height={panelHeight()}>
+            <RewindPicker state={current().picker} width={props.layout.width} height={panelHeight()} />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "branch" && mode() as Extract<BottomSurfaceMode, { kind: "branch" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
-            <BranchPicker state={current().picker} width={props.layout.width} />
+          <box height={panelHeight()}>
+            <BranchPicker state={current().picker} width={props.layout.width} height={panelHeight()} />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "session" && mode() as Extract<BottomSurfaceMode, { kind: "session" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
-            <SessionPicker sessions={current().picker.sessions} selected={current().picker.selected} width={props.layout.width} />
+          <box height={panelHeight()}>
+            <SessionPicker sessions={current().picker.sessions} selected={current().picker.selected} width={props.layout.width} maxVisible={Math.max(1, panelHeight() - 3)} />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "skill-picker" && mode() as Extract<BottomSurfaceMode, { kind: "skill-picker" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <OptionPicker
               title={props.skillPickerTitle}
               items={props.skillPickerItems}
               selected={current().picker.selected}
               width={props.layout.width}
               hint="↑/↓ choose · Enter activate · Esc close"
-              maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
+              maxVisible={Math.max(1, panelHeight() - 3)}
             />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "model" && mode() as Extract<BottomSurfaceMode, { kind: "model" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <OptionPicker
               title={props.modelTitle}
               items={props.modelItems}
               selected={current().picker.selected}
               width={props.layout.width}
               hint="↑/↓ choose · Enter select · Esc back"
-              maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
+              maxVisible={Math.max(1, panelHeight() - 3)}
             />
           </box>
         )}
       </Match>
       <Match when={mode().kind === "quality-rewrite-confirm" && mode() as Extract<BottomSurfaceMode, { kind: "quality-rewrite-confirm" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <QualityRewritePrompt
+              height={panelHeight()}
               stage={current().state.stage}
               focused={current().state.focused}
               providerAlias={current().state.candidate.providerAlias}
@@ -341,14 +340,14 @@ export function BottomSurface(props: BottomSurfaceProps) {
       </Match>
       <Match when={mode().kind === "quality-picker" && mode() as Extract<BottomSurfaceMode, { kind: "quality-picker" }> }>
         {(current) => (
-          <box height={props.layout.bottomHeight}>
+          <box height={panelHeight()}>
             <OptionPicker
               title={props.qualityPickerTitle}
               items={props.qualityPickerItems}
               selected={current().picker.selected}
               width={props.layout.width}
               hint="↑/↓ choose · Enter select · Esc back"
-              maxVisible={Math.max(1, props.layout.bottomHeight - 3)}
+              maxVisible={Math.max(1, panelHeight() - 3)}
             />
           </box>
         )}
@@ -395,6 +394,13 @@ export function BottomSurface(props: BottomSurfaceProps) {
         </box>
       </Match>
     </Switch>
+    </box>
+    <Show when={props.readingAvailable} fallback={<box height={0} />}>
+      <box height={1} flexShrink={0} paddingLeft={1}>
+        <ThemedText content={props.promptZone === "body" ? "Tab/Enter/Esc back" : "Tab read details"} fg={palette.gateAccent} wrapMode="none" />
+      </box>
+    </Show>
+    </box>
   );
 }
 

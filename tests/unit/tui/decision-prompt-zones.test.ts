@@ -12,7 +12,7 @@ function printable(char: string): TuiKeyEvent {
   return key(char, { sequence: char });
 }
 
-describe("decision prompt body zones (#268 item 4): controller key routing", () => {
+describe("decision prompt note ownership", () => {
   function buildController() {
     let dispose!: () => void;
     const submits: string[] = [];
@@ -38,47 +38,6 @@ describe("decision prompt body zones (#268 item 4): controller key routing", () 
     });
     return { ...built, dispose: () => dispose(), submits };
   }
-
-  test("Tab enters the body zone; arrows scroll and clamp against the reported extent", () => {
-    const c = buildController();
-    try {
-      expect(c.promptZone()).toBe("options");
-      expect(c.handleGateKey(key("tab"))).toBe(true);
-      expect(c.promptZone()).toBe("body");
-      c.registerBodyExtent(50, 4);
-      for (let i = 0; i < 3; i += 1) expect(c.handleGateKey(key("down"))).toBe(true);
-      expect(c.bodyScrollOffset()).toBe(3);
-      for (let i = 0; i < 60; i += 1) c.handleGateKey(key("down"));
-      expect(c.bodyScrollOffset()).toBe(46);
-      c.handleGateKey(key("home"));
-      expect(c.bodyScrollOffset()).toBe(0);
-      c.handleGateKey(key("end"));
-      expect(c.bodyScrollOffset()).toBe(46);
-    } finally {
-      c.dispose();
-    }
-  });
-
-  test("Enter never submits from the body zone; it and Esc return to the options zone", () => {
-    const c = buildController();
-    try {
-      c.handleGateKey(key("tab"));
-      c.registerBodyExtent(20, 4);
-      c.handleGateKey(key("end"));
-      const offsetBefore = c.bodyScrollOffset();
-      expect(c.handleGateKey(key("enter"))).toBe(true);
-      expect(c.submits).toEqual([]);
-      expect(c.promptZone()).toBe("options");
-      // The reading position survives the round trip while the prompt stays open.
-      expect(c.bodyScrollOffset()).toBe(offsetBefore);
-      c.handleGateKey(key("tab"));
-      expect(c.handleGateKey(key("escape"))).toBe(true);
-      expect(c.promptZone()).toBe("options");
-      expect(c.submits).toEqual([]);
-    } finally {
-      c.dispose();
-    }
-  });
 
   test("typing on the focused confirm option auto-arms its note and lands there", () => {
     const c = buildController();
@@ -161,48 +120,6 @@ describe("decision prompt body zones (#268 item 4): controller key routing", () 
     }
   });
 
-  test("a new prompt resets the zone and the scroll offset", () => {
-    const c = buildController();
-    try {
-      c.handleGateKey(key("tab"));
-      c.registerBodyExtent(50, 4);
-      c.handleGateKey(key("end"));
-      expect(c.promptZone()).toBe("body");
-      c.setPendingGate(null);
-      c.setPendingUserQuestion({
-        kind: "needs_user_question",
-        question: { header: "Scope", question: "Which?", options: [{ label: "A", description: "a", kind: "model" }] },
-        engine: "etl",
-      } as never);
-      expect(c.promptZone()).toBe("options");
-      expect(c.bodyScrollOffset()).toBe(0);
-    } finally {
-      c.dispose();
-    }
-  });
-
-  test("Tab toggles the body zone from a question freeform composer too", () => {
-    const c = buildController();
-    try {
-      c.setPendingGate(null);
-      c.setPendingUserQuestion({
-        kind: "needs_user_question",
-        question: {
-          header: "Scope",
-          question: "Which?",
-          options: [{ label: "Answer freely", description: "type", kind: "freeform" }],
-        },
-        engine: "etl",
-      } as never);
-      c.setQuestionSelected(0);
-      expect(c.handleQuestionKey(printable("a"))).toBe(true);
-      expect(c.questionFreeformText()).toBe("a");
-      expect(c.handleQuestionKey(key("tab"))).toBe(true);
-      expect(c.promptZone()).toBe("body");
-    } finally {
-      c.dispose();
-    }
-  });
 });
 
 describe("decision prompt body zones: scroll window math", () => {

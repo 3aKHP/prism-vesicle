@@ -32,6 +32,14 @@ const SQUASH_SUBJECT_RE = /\(#(\d+)\)\s*$/;
 
 export type CommitLike = { message: string };
 
+/** The compare endpoint nests the message: entries are `{ sha, commit: { message, ... } }`. */
+export type CompareCommitLike = { commit?: { message?: string } };
+
+/** Map compare-API entries to flat commit messages; missing payloads become empty strings. */
+export function mapCompareCommitMessages(entries: CompareCommitLike[]): CommitLike[] {
+  return entries.map((entry) => ({ message: entry.commit?.message ?? "" }));
+}
+
 /** Constituent PR numbers recoverable from a commit list (native-merge and squash forms). */
 export function extractPrNumbersFromCommits(commits: CommitLike[]): number[] {
   const numbers = new Set<number>();
@@ -96,7 +104,7 @@ function requirePullRequest(event: WorkflowEvent): { pr: WorkflowEventPullReques
   return { pr, repo };
 }
 
-async function main(): Promise<number> {
+export async function main(): Promise<number> {
   const eventPath = process.env.GITHUB_EVENT_PATH;
   const token = process.env.GITHUB_TOKEN;
   if (!eventPath || !token) {
@@ -138,11 +146,11 @@ async function main(): Promise<number> {
   const commits: CommitLike[] = [];
   let total = 0;
   for (let page = 1; page <= 10; page += 1) {
-    const comparison = await api<{ commits?: CommitLike[]; total_commits?: number }>(
+    const comparison = await api<{ commits?: CompareCommitLike[]; total_commits?: number }>(
       `compare/${base}...${head}?per_page=250&page=${page}`,
     );
     total = comparison.total_commits ?? 0;
-    const batch = comparison.commits ?? [];
+    const batch = mapCompareCommitMessages(comparison.commits ?? []);
     commits.push(...batch);
     if (commits.length >= total || batch.length === 0) break;
   }
@@ -157,6 +165,13 @@ async function main(): Promise<number> {
 
   const constituentBodies: PrBodyLike[] = [];
   for (const number of candidates) {
+    // Ordinary commits can end in an issue reference too. GitHub's issues
+    // endpoint covers both kinds; only PRs carry the `pull_request` marker.
+    const candidate = await api<{ pull_request?: unknown }>(`issues/${number}`);
+    if (!candidate.pull_request) {
+      console.log(`#${number} is an issue, not a PR; skipping.`);
+      continue;
+    }
     const pull = await api<{ number: number; merged: boolean | null; body: string | null }>(`pulls/${number}`);
     if (pull.merged !== true) {
       console.log(`#${number} is not a merged PR; skipping.`);

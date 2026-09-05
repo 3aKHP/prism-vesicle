@@ -112,6 +112,7 @@ export function createSkillPickerController(options: SkillPickerControllerOption
     skillPicker,
     skillPickerItems,
     skillPickerTitle,
+    skillPickerBusy,
     openSkillPicker,
   };
 }

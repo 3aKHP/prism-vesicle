@@ -2,7 +2,8 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolvePermission, runPrompt } from "../../../src/core/agent-loop/run";
-import { loadSessionRecords, } from "../../../src/core/session/store";
+import { loadSessionSnapshot, loadSessionRecords, } from "../../../src/core/session/store";
+import { executionPlanHash } from "../../../src/core/tools/shell";
 import { listRewindPoints } from "../../../src/core/rewind/service";
 import { getProcessManager } from "../../../src/core/process/manager";
 import { configureTestProviderEnv, createPromptRoot, restoreAgentLoopTestState, } from "./fixtures/agent-loop";
@@ -157,6 +158,68 @@ describe("agent loop: shell permission", () => {
       permission: { mode: "MOMENTUM", shellExecEnabled: true },
     })).rejects.toThrow("stored shell execution plan does not match");
     expect(await Bun.file(join(rootDir, "workspace", "should-not-exist")).exists()).toBe(false);
+  });
+
+  test.skipIf(process.platform === "win32")("restores an old environment-policy approval but only permits rejection", async () => {
+    const rootDir = await createPromptRoot();
+    globalThis.fetch = (async () => Response.json({
+      id: "chat-old-env-policy",
+      choices: [{ message: { content: "", tool_calls: [{
+        id: "call-old-env-policy",
+        type: "function",
+        function: { name: "shell_exec", arguments: JSON.stringify({ command: "touch workspace/should-not-exist" }) },
+      }] } }],
+    })) as unknown as typeof fetch;
+    const paused = await runPrompt({
+      input: "run it",
+      rootDir,
+      permission: { mode: "MOMENTUM", shellExecEnabled: true },
+    });
+    if (paused.kind !== "needs_permission" || !paused.request.executionPlan) throw new Error("expected shell permission pause");
+
+    // Model the on-disk session from before the environment-policy upgrade,
+    // including its valid old hash, rather than an inconsistent tampered plan.
+    const executionPlan = { ...paused.request.executionPlan, envPolicyVersion: 1 };
+    const oldRequest = { ...paused.request, executionPlan, planHash: executionPlanHash(executionPlan) };
+    const records = await loadSessionRecords(rootDir, paused.sessionId);
+    await writeFile(paused.sessionPath, records.map((record) => JSON.stringify(
+      record.metadata?.kind === "permission-request"
+        ? { ...record, metadata: { ...record.metadata, request: oldRequest } }
+        : record,
+    )).join("\n") + "\n");
+    const restored = await loadSessionSnapshot(rootDir, paused.sessionId);
+    expect(restored.pendingPermission).toEqual(oldRequest);
+    if (!restored.pendingPermission) throw new Error("expected restored permission");
+
+    let followUpRequests = 0;
+    globalThis.fetch = (async () => {
+      followUpRequests += 1;
+      return Response.json({ id: "chat-old-env-rejected", choices: [{ message: { content: "not run" } }] });
+    }) as unknown as typeof fetch;
+    const options = {
+      engine: "etl" as const,
+      rootDir,
+      sessionId: paused.sessionId,
+      messages: restored.messages,
+      request: restored.pendingPermission,
+      remainingToolCalls: paused.remainingToolCalls,
+      permission: { mode: "MOMENTUM" as const, shellExecEnabled: true },
+    };
+    await expect(resolvePermission({
+      ...options,
+      resolution: { decision: "allow_once", resolvedAt: new Date().toISOString() },
+    })).rejects.toThrow("approved shell execution plan changed");
+    expect(followUpRequests).toBe(0);
+    expect((await loadSessionRecords(rootDir, paused.sessionId)).some((record) => record.metadata?.kind === "permission-resolution")).toBe(false);
+
+    const rejected = await resolvePermission({
+      ...options,
+      resolution: { decision: "reject", resolvedAt: new Date().toISOString() },
+    });
+    expect(rejected.kind).toBe("complete");
+    expect(followUpRequests).toBe(1);
+    expect(await Bun.file(join(rootDir, "workspace", "should-not-exist")).exists()).toBe(false);
+    expect((await loadSessionRecords(rootDir, paused.sessionId)).some((record) => record.metadata?.kind === "process-started")).toBe(false);
   });
 
   test.skipIf(process.platform === "win32")("YOLO auto-runs shell_exec while MANUAL pauses read tools", async () => {

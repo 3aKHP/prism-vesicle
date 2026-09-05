@@ -26,11 +26,12 @@ export function resolveTuiLayout(
   const gateMinimum = clamp(decisionMinHeight, 9, 14);
   const pickerMinimum = clamp(pickerMinHeight, 8, 14);
   const pickerMaximum = clamp(Math.max(pickerMaxHeight, pickerMinimum), pickerMinimum, 14);
-  const bottomHeight = hasGate
+  const desiredBottomHeight = hasGate
     ? clamp(Math.floor(height * 0.38), gateMinimum, 14)
     : hasPicker
       ? clamp(Math.floor(height * 0.34), pickerMinimum, pickerMaximum)
       : 3;
+  const bottomHeight = Math.min(desiredBottomHeight, Math.max(3, height - 4));
   // The Workspace page's pending-decision strip (#268 item 3) is a one-row
   // sibling ABOVE this band, not part of it: every bottomHeight consumer
   // sizes the bottom surface itself, so the strip's row is paid from the

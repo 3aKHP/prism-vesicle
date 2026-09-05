@@ -4,7 +4,7 @@
 
 [English](../../en/advanced/shell-exec.md) | 简体中文
 
-> **状态(截至 `1.1.0`):** 🟢 已实现。这是一个拥有宿主用户权限的**非沙箱**能力,默认关闭。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
+> **状态(截至 `1.1.1`):** 🟢 已实现。这是一个拥有宿主用户权限的**非沙箱**能力,默认关闭。成熟度以 [`STATUS.md`](../../../../STATUS.md) 为准。
 >
 > 基础用法(四档权限、`permissions.yaml` 的 `shellExec` 开关、路径守卫)见 [权限与安全模型](../reference/permissions-and-security.md);本页是操作者深潜。
 
@@ -54,6 +54,12 @@
 
 - 命令结束(正常退出、超时、取消)时,Vesicle 终止受管进程树:Windows 用 `taskkill /T /F`,POSIX 先向进程组发 SIGTERM、250ms 宽限后 SIGKILL。即便 shell 早早退出却留下后台后代,原始进程树也会被清理。
 - **但这不是沙箱。** 一个被批准的命令仍可用平台手段(新会话、外部服务管理器等)在受管树之外创建工作。子进程环境被过滤成白名单(`PATH`/`HOME`/`USERPROFILE`/`TEMP`/`LANG`/`TERM` 等),输出和寿命有界,进程组会被清理——这些都不改变"已批准命令拥有宿主权限"这一事实。
+
+## 子进程配置目录
+
+子进程会继承已设置的 `APPDATA` 和 `XDG_CONFIG_HOME`,因此通过 `shell_exec` 自调用 `vesicle` 时,Windows 标准配置目录和自定义 XDG 配置目录仍可被找到。`VESICLE_CONFIG_DIR`、`VESICLE_PROVIDERS_FILE` 等 Vesicle 专用覆盖变量不会自动继承;使用这些覆盖变量的宿主启动方式不保证 shell 自调用指向相同配置。Skill 脚本继续使用宿主注入的已解析配置目录。
+
+环境策略已升级为版本 2。升级前保留的版本 1 待审批请求仍可恢复和拒绝,但点击允许会因计划变化而拒绝执行。请拒绝旧请求,再让模型发起新的调用。
 
 ## 与回退的关系
 

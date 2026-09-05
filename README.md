@@ -19,7 +19,7 @@
 
 Built with Bun and TypeScript, Vesicle connects versioned Harness Packs to DeepSeek V4 and other direct model providers, MCP tools, permission-gated host tools, foreground and background SubAgents, and durable sessions.
 
-> **Stable release:** `1.1.0` is the current stable release. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
+> **Stable release:** `1.1.1` is the current stable release. Windows users can install and configure it through the guided installer without editing YAML. The [user manual](./docs/user/en/README.md), this README, `vesicle doctor`, and the examples under [`docs/examples/`](./docs/examples/) remain the supported references.
 
 New to terminals, API keys, or model providers? Start with the [step-by-step user manual](./docs/user/en/README.md) before following the condensed setup below.
 
@@ -29,7 +29,7 @@ New to terminals, API keys, or model providers? Start with the [step-by-step use
 
 Download `PrismVesicleSetup-<version>-windows-x64.exe` from the matching GitHub Release and open it. The per-user installer does not require administrator access. At completion it launches Prism Vesicle Setup, which can discover OpenAI-compatible models from a Base URL and API key, configure optional Tavily and MCP services, and choose a safe permission preset without manual configuration-file editing. Project selection is optional and applies only to the one-time launch immediately after Setup; Vesicle never stores one global project directory.
 
-The Windows executable and installer for `1.1.0` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
+The Windows executable and installer for `1.1.1` are intentionally not Authenticode-signed. Windows signing is deferred until the project has a stronger basis for a signing provider, with no version deadline. Download only from the official GitHub Release, verify `SHA256SUMS.txt`, and do not disable Windows security features globally. Historical Windows artifacts are also unsigned unless their individual Release notes explicitly state otherwise. Read the [Code Signing Policy](./CODE_SIGNING_POLICY.md) before relying on a signature, and see the [Privacy Policy](./PRIVACY.md) for local storage and external-service data transfers.
 
 The guided installer includes the standalone Windows runtime and complete bundled V10 Harness. Bun is not required for this path. Existing `%APPDATA%\prism-vesicle` configuration and project data are preserved across upgrade and ordinary uninstall. It installs the native `vesicle.exe` command and a per-user Explorer **Open in Prism Vesicle** directory action, with the Prism Vesicle icon carried through the executable, installer, uninstaller, Start Menu, Apps & Features, and Explorer entries. Running the installer again presents **Reinstall / Repair / Uninstall** maintenance choices. To launch from a terminal, make the intended project the current directory:
 
@@ -49,7 +49,7 @@ npm install -g prism-vesicle
 vesicle prompt shape --engine etl
 ```
 
-`1.1.0` publishes to npm's `latest` dist-tag, so the unversioned install command above installs the current stable release. Earlier prerelease builds remain available through the `next` dist-tag and explicit versions.
+`1.1.1` publishes to npm's `latest` dist-tag, so the unversioned install command above installs the current stable release. Earlier prerelease builds remain available through the `next` dist-tag and explicit versions.
 
 The package includes a precompiled TUI entry and the complete read-only `prism-engine-v10` runtime baseline. It does not compile application TSX inside `node_modules` at startup. No project lock or separate Harness installation is required for normal use. Vesicle resolves each logical `assets/...` file through sparse project and user-global overrides, then one complete verified baseline: either a project-pinned managed Harness Pack or the bundled V10 Pack shipped with the active package or standalone release. The Harness owns its declared prompt sections; a restricted host layer supplies the five generic SubAgents and their prompts.
 
