@@ -1,7 +1,7 @@
 import type { BottomSurfaceMode, BottomSurfaceState } from "../views/BottomSurface";
 import type { OptionItem } from "../types";
 import { displayWidth, wrapDisplayLines } from "../format";
-import { renderGateSummaryText, wrapGateSummary } from "../GatePrompt";
+import { gateSummaryLineBudget, renderGateSummaryText, wrapGateSummary } from "../GatePrompt";
 import { hostAuthorityWarning, skillScriptAuthorityWarning } from "../PermissionPrompt";
 import { processShellDisplay } from "../../core/process/runtime";
 import { migrationDescriptions, migrationIdentityLine } from "../MigrationPrompt";
@@ -93,7 +93,12 @@ export function projectReadingSurface(mode: BottomSurfaceMode, options: ReadingS
       const blocks = [normal(renderGateSummaryText(options.gateSummary ?? mode.gate.summary))];
       for (const option of mode.gate.options ?? []) blocks.push(normal(`${option.decision}: ${option.label}`));
       const document = make(mode.gate, "gate", `Stop Gate: ${mode.gate.gate}`, blocks, 6, !options.busy);
-      document.hidden = displayWidth(document.title) > width || wrapGateSummary(blocks[0]!.text, width - 1).length > Math.max(1, options.height - 6 - Number(Boolean(options.gateNoteActive)) - Number(Boolean(options.engineSwitchPending)))
+      const compactSummaryBudget = gateSummaryLineBudget(
+        Math.max(1, options.height - 6),
+        Boolean(options.gateNoteActive),
+        Number(Boolean(options.engineSwitchPending)),
+      );
+      document.hidden = displayWidth(document.title) > width || wrapGateSummary(blocks[0]!.text, Math.max(31, width - 1)).length > compactSummaryBudget
         || (mode.gate.options ?? []).some((item) => displayWidth(item.label) > width - 4);
       return document;
     }
