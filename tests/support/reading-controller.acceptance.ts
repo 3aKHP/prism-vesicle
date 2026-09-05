@@ -31,11 +31,11 @@ describe("bottom-surface reading", () => {
       expect(h.reader.handleKey(key("tab"))).toBe(true);
       expect(h.reader.expanded()).toBe(true);
       h.reader.handleKey(key("end"));
-      expect(h.reader.start()).toBe(84);
+      expect(h.reader.start()).toBe(83);
       expect(h.reader.handleKey(key(name))).toBe(true);
       expect(h.reader.active()).toBe(false);
       h.reader.handleKey(key("tab", { shift: true }));
-      expect(h.reader.start()).toBe(84);
+      expect(h.reader.start()).toBe(83);
     } finally { h.dispose(); }
   });
 

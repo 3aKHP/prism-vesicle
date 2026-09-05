@@ -1,12 +1,95 @@
 import { expect, test } from "bun:test";
 import { testRender } from "@3akhp/opentui-solid";
-import type { TextareaRenderable } from "@3akhp/opentui-core";
+import { TextAttributes, type TextareaRenderable } from "@3akhp/opentui-core";
 import { createMemo, createSignal, Show } from "solid-js";
 import { BottomSurface } from "../../src/tui/views/BottomSurface";
 import { ReadingOverlay } from "../../src/tui/reading/ReadingView";
 import { createReadingController } from "../../src/tui/reading/controller";
 import { projectReadingSurface } from "../../src/tui/reading/surfaces";
 import { readingModes, readingOptions, readingPanelProps } from "./reading-fixtures";
+import { configureTreeSitterWorkerPath } from "../../src/tui/tree-sitter-runtime";
+import { captureFrameUntil } from "./markdown-frame";
+
+configureTreeSitterWorkerPath();
+
+test("expanded gate renders one title and Markdown emphasis, lists, tables and code", async () => {
+  const mode = { kind: "gate" as const, gate: { gate: "blueprint", summary: [
+    "## Blueprint", "", "**Important** and *emphasis*", "", "- Parent", "  - Nested", "",
+    "| Name | Value |", "| --- | --- |", "| Rock | Hard |", "", "```", "literal **code**", "```",
+  ].join("\n") } };
+  let reader!: ReturnType<typeof createReadingController>;
+  const setup = await testRender(() => {
+    reader = createReadingController({
+      document: () => projectReadingSurface(mode, { ...readingOptions, height: 8 }),
+      liveKinds: () => ["gate"], width: () => 80, height: () => 30,
+    });
+    return <ReadingOverlay controller={reader} width={80} height={30} />;
+  }, { width: 80, height: 34 });
+  try {
+    reader.handleKey({ name: "tab" });
+    const frame = await captureFrameUntil(setup, (frame) => frame.includes("Important") && !frame.includes("**Important**"));
+    expect(frame.match(/Stop Gate: blueprint/g)?.length).toBe(1);
+    expect(frame).toContain("Important");
+    expect(frame).not.toContain("**Important**");
+    expect(frame).not.toContain("*emphasis*");
+    expect(frame).not.toContain("| --- | --- |");
+    expect(frame).toContain("Nested");
+    expect(frame).toContain("literal **code**");
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans);
+    expect(spans.some((span) => span.text.includes("Important") && Boolean(span.attributes & TextAttributes.BOLD))).toBe(true);
+  } finally { setup.renderer.destroy(); }
+});
+
+test("Markdown question reading wraps long titles and preserves its text anchor across resize and return", async () => {
+  const questionMode = readingModes.find((mode) => mode.kind === "question")!;
+  const header = `${"Long question title ".repeat(8)}TITLE-END`;
+  const mode = { ...questionMode, pending: { ...questionMode.pending, question: {
+    ...questionMode.pending.question, header,
+    question: Array.from({ length: 30 }, (_, i) => `## Section ${i}\n\n**ANCHOR-${i}** ${"中文 text ".repeat(30)}\n`).join("\n"),
+    options: [{ label: "Choose", description: "**OPTION-TAIL**", kind: "model" as const }],
+  } } };
+  const [width, setWidth] = createSignal(80);
+  const [height, setHeight] = createSignal(20);
+  let reader!: ReturnType<typeof createReadingController>;
+  const setup = await testRender(() => {
+    reader = createReadingController({
+      document: () => projectReadingSurface(mode, { ...readingOptions, width: width(), height: 8 }),
+      liveKinds: () => ["question"], width, height,
+    });
+    return <Show when={reader.expanded()}><ReadingOverlay controller={reader} width={width()} height={height()} /></Show>;
+  }, { width: 80, height: 24 });
+  try {
+    reader.handleKey({ name: "tab" });
+    const initial = await captureFrameUntil(setup, (frame) => frame.includes("ANCHOR-0") && !frame.includes("**ANCHOR-0**"));
+    expect(initial).toContain("TITLE-END");
+    expect(initial.match(/TITLE-END/g)?.length).toBe(1);
+    for (let i = 0; i < 40; i += 1) reader.handleKey({ name: "down" });
+    await setup.flush();
+    const before = setup.captureCharFrame();
+    const anchor = before.match(/ANCHOR-\d+/)?.[0];
+    expect(anchor).toBeDefined();
+    for (const [columns, lines] of [[44, 16], [120, 36], [80, 20]]) {
+      setWidth(columns!); setHeight(lines!); setup.resize(columns!, lines! + 4);
+      await setup.flush();
+      expect(setup.captureCharFrame()).toContain(anchor!);
+    }
+    reader.handleKey({ name: "end" });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("OPTION-TAIL");
+    expect(setup.captureCharFrame()).not.toContain("**OPTION-TAIL**");
+    const atEnd = reader.start();
+    reader.handleKey({ name: "enter" });
+    await setup.flush();
+    expect(reader.active()).toBe(false);
+    reader.handleKey({ name: "tab" });
+    await captureFrameUntil(setup, (frame) => frame.includes("OPTION-TAIL") && !frame.includes("**OPTION-TAIL**"));
+    expect(setup.captureCharFrame()).toContain("OPTION-TAIL");
+    expect(reader.start()).toBe(atEnd);
+    reader.handleKey({ name: "home" });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("TITLE-END");
+  } finally { setup.renderer.destroy(); }
+});
 
 const controls: Record<string, string[]> = {
   permission: ["Allow once", "Reject", "Esc reject"], gate: ["Confirm", "Reject"],

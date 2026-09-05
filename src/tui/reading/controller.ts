@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, type Accessor } from "solid-js";
 import type { TuiKeyEvent } from "../decision-interaction";
-import { readingAnchorIndex, readingRows, type ReadingAnchor, type ReadingDocument } from "./document";
+import { readingAnchorIndex, readingRows, type ReadingAnchor, type ReadingDocument, type ReadingRow } from "./document";
 
 type ReadingState = {
   identity: unknown;
@@ -8,6 +8,7 @@ type ReadingState = {
   active: boolean;
   expanded: boolean;
   anchor: ReadingAnchor;
+  layout?: { width: number; rows: ReadingRow[] };
 };
 
 export function createReadingController(options: {
@@ -45,8 +46,19 @@ export function createReadingController(options: {
   };
   const active = () => !options.obscured?.() && Boolean(options.document()?.enabled && state()?.active);
   const expanded = () => active() && Boolean(state()?.expanded);
-  const rows = createMemo(() => readingRows(options.document()?.blocks ?? [], Math.max(1, options.width() - 4)));
-  const capacity = () => Math.max(1, options.height() - 4);
+  const rows = createMemo(() => state()?.layout?.rows ?? readingRows(options.document()?.blocks ?? [], Math.max(1, options.width() - 4)));
+  const capacity = () => Math.max(1, options.height() - 3);
+  function updateLayout(document: ReadingDocument, width: number, rows: ReadingRow[]): void {
+    const current = state();
+    if (!current || document.identity !== current.identity || document.key !== current.key || document.kind !== options.document()?.kind) return;
+    const previous = current.layout;
+    if (previous?.width === width && previous.rows.length === rows.length && previous.rows.every((row, i) => {
+      const next = rows[i]!;
+      return row.block === next.block && row.node === next.node && row.line === next.line && row.offset === next.offset && row.gap === next.gap;
+    })) return;
+    current.layout = { width, rows };
+    changed();
+  }
   const start = () => Math.min(
     Math.max(0, rows().length - capacity()),
     readingAnchorIndex(rows(), state()?.anchor ?? { block: 0, offset: 0 }),
@@ -55,7 +67,7 @@ export function createReadingController(options: {
     const current = state();
     const row = rows()[Math.max(0, Math.min(index, rows().length - capacity()))];
     if (!current || !row) return;
-    current.anchor = { block: row.block, offset: row.offset };
+    current.anchor = { block: row.block, offset: row.offset, node: row.node, line: row.line, gap: row.gap };
     changed();
   }
   function handleKey(key: TuiKeyEvent): boolean {
@@ -81,7 +93,7 @@ export function createReadingController(options: {
     else if (key.name === "end") scroll(rows().length);
     return true;
   }
-  return { active, expanded, rows, start, capacity, handleKey, document: options.document };
+  return { active, expanded, rows, start, capacity, handleKey, updateLayout, document: options.document };
 }
 
 export type ReadingController = ReturnType<typeof createReadingController>;
