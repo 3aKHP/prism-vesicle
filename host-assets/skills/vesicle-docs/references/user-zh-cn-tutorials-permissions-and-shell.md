@@ -40,7 +40,7 @@ shellInterpreter: auto
   样例见仓库的 [`docs/examples/permissions.yaml`](../../../examples/permissions.yaml)。
 
 - 打开之后,在 MANUAL/INERTIA/MOMENTUM 下**每一次** shell 调用仍会找你确认;只有 YOLO 才不问。
-- `shellInterpreter` 选 shell:`auto`(Linux/WSL 是 `/bin/sh`,Windows 优先 PowerShell 7)、`posix-sh`、`powershell-7`、`windows-powershell-5.1`、`cmd`、`git-bash`。
+- `shellInterpreter` 选 shell:`auto`(Linux/WSL 是 `/bin/sh`,Windows 优先 PowerShell 7)、`posix-sh`、`bash`、`zsh`、`fish`、`nushell`、`powershell-7`、`windows-powershell-5.1`、`cmd`、`git-bash`。
 
 > shell 改动的文件**不保证**能被回退(回退只覆盖 Vesicle 自有工具的改动,见 [会话恢复与回退](./sessions-and-rewind.md))。
 

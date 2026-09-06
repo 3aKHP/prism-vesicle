@@ -41,6 +41,10 @@
 | `auto` | Linux/WSL | `/bin/sh` |
 | `auto` | Windows | 优先 PowerShell 7,只在 PowerShell 家族内降级到 5.1 |
 | `posix-sh` | Linux/WSL | `/bin/sh` |
+| `bash` | Linux/WSL | 不加载用户配置的 Bash |
+| `zsh` | Linux/WSL | 不加载用户启动文件的 Zsh |
+| `fish` | Linux/WSL | 不加载用户配置的 Fish |
+| `nushell` | Linux/WSL、Windows | 不加载用户配置的 Nushell |
 | `powershell-7` | Windows | pwsh;`&&`/`||` 可用 |
 | `windows-powershell-5.1` | Windows | 5.1;**不可**用 `&&`/`||`,改用 `cmd1; if ($?) { cmd2 }` |
 | `cmd` | Windows | `%NAME%` 取环境变量 |

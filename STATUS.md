@@ -45,6 +45,7 @@ Published package version: **1.1.0** (npm `latest`); this snapshot prepares stab
 | Tools | Dual-era Streamable HTTP MCP tools: legacy `initialize` and modern `server/discover` with per-server `auto`/`legacy`/`modern` negotiation | released |
 | Tools | Opt-in MCP tool-output persistence (`mcpOutputPersistence` in `.vesicle/preferences.yaml`): every MCP call's text + images saved under `tmp/mcp-output/<sessionId>/` for re-read via existing file tools; optional `mcpOutputAutoTruncate` sub-toggle replaces oversized inline results with a bounded preview + reference; inline default unchanged | released |
 | Tools | Opt-in `shell_exec` with bounded Process Runtime | released |
+| Tools | Host shell profiles: Linux/WSL Bash, Zsh, Fish, Nushell; Windows Nushell, plus the existing profiles | implemented, unreleased |
 | Tools | Structured Skill scripts with independent `skill_exec` permission class (no `shellExec` gate) | released |
 | Tools | Tool Permission Runtime (`MANUAL` / `INERTIA` / `MOMENTUM` / `YOLO`) | released |
 | Agents | Foreground/background SubAgents with contract-bound Harness delegation | released |

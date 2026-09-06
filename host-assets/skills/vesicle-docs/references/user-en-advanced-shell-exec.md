@@ -41,6 +41,10 @@ Two tools control background tasks:
 | `auto` | Linux/WSL | `/bin/sh` |
 | `auto` | Windows | Prefers PowerShell 7, falls back only within the PowerShell family to 5.1 |
 | `posix-sh` | Linux/WSL | `/bin/sh` |
+| `bash` | Linux/WSL | Bash without user profiles |
+| `zsh` | Linux/WSL | Zsh without user startup files |
+| `fish` | Linux/WSL | Fish without user configuration |
+| `nushell` | Linux/WSL, Windows | Nushell without user configuration |
 | `powershell-7` | Windows | pwsh; `&&`/`||` available |
 | `windows-powershell-5.1` | Windows | 5.1; `&&`/`||` **not** available — use `cmd1; if ($?) { cmd2 }` |
 | `cmd` | Windows | `%NAME%` for environment variables |

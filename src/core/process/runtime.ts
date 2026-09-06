@@ -1,5 +1,6 @@
 import type { ProcessExecutionPlan } from "../permissions";
 import {
+  buildShellInvocation,
   resolveShellProfile,
   shellProfileForPlan,
   type ShellInterpreterPreference,
@@ -365,21 +366,9 @@ export function processShellDisplay(plan: ProcessExecutionPlan): string {
 const POWERSHELL_UTF8_PREFIX = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $OutputEncoding=[Console]::OutputEncoding } catch {}; ";
 
 export function buildProcessCommand(plan: ProcessExecutionPlan): string[] {
+  const invocation = buildShellInvocation(shellProfileForPlan(plan.shell, plan.executablePath), plan.command);
   if (plan.shell === "powershell-7" || plan.shell === "windows-powershell-5.1") {
-    return [
-      plan.executablePath,
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `${POWERSHELL_UTF8_PREFIX}${plan.command}`,
-    ];
+    invocation[5] = `${POWERSHELL_UTF8_PREFIX}${plan.command}`;
   }
-  if (plan.shell === "cmd") {
-    return [plan.executablePath, "/D", "/S", "/C", `chcp 65001>nul & ${plan.command}`];
-  }
-  if (plan.shell === "git-bash") {
-    return [plan.executablePath, "--noprofile", "--norc", "-c", plan.command];
-  }
-  return [plan.executablePath, "-c", plan.command];
+  return invocation;
 }

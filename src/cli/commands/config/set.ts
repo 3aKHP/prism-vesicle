@@ -22,12 +22,13 @@ import { loadExperimentalQualitySettings, writeExperimentalQualitySettings } fro
 import type { ExperimentalQualityMode } from "../../../config/quality";
 import { projectPreferencesPath, readProjectThemePreference, PROJECT_PREFERENCE_KEYS } from "../../../config/project-preferences";
 import { permissionModes } from "../../../core/permissions";
+import { shellInterpreterPreferences, type ShellInterpreterPreference } from "../../../core/process/shell-profile";
 import type { ThemePreference } from "../../../tui/theme";
 
 type SettableFile = "permissions" | "preferences" | "quality" | "settings" | "providers";
 
 const SETTABLE_KEYS: Record<SettableFile, readonly string[]> = {
-  permissions: ["defaultMode", "shellExec"],
+  permissions: ["defaultMode", "shellExec", "shellInterpreter"],
   preferences: PROJECT_PREFERENCE_KEYS,
   quality: ["mode"],
   settings: SETTINGS_KEYS,
@@ -118,13 +119,16 @@ async function setPermissions(key: string, value: string): Promise<SetResult> {
   if (key === "shellExec" && value !== "true" && value !== "false") {
     throw new Error("shellExec must be true or false.");
   }
+  if (key === "shellInterpreter" && !shellInterpreterPreferences.includes(value as ShellInterpreterPreference)) {
+    throw new Error(`Invalid shellInterpreter "${value}". Available: ${shellInterpreterPreferences.join(", ")}.`);
+  }
 
   const current = await loadPermissionSettings();
   const source = [
     "version: 1",
     `defaultMode: ${key === "defaultMode" ? value.toUpperCase() : current.defaultMode}`,
     `shellExec: ${key === "shellExec" ? value : String(current.shellExec)}`,
-    `shellInterpreter: ${current.shellInterpreter}`,
+    `shellInterpreter: ${key === "shellInterpreter" ? value : current.shellInterpreter}`,
     "",
   ].join("\n");
   await atomicWrite(path, source);

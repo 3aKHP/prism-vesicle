@@ -17,6 +17,7 @@ import {
   executionPlanHash,
   parseShellExecPlan,
 } from "../../../src/core/tools/shell";
+import { resolveShellProfile } from "../../../src/core/process/shell-profile";
 
 const WINDOWS_SPAWN_PROCESS_TIMEOUT_MS = 15_000;
 const WINDOWS_SPAWN_TEST_TIMEOUT_MS = 30_000;
@@ -119,6 +120,28 @@ describe("process runtime", () => {
         const result = await executeProcessPlan(
           root,
           createProcessExecutionPlan(command, WINDOWS_SPAWN_PROCESS_TIMEOUT_MS, "win32", false, shellInterpreter),
+        );
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("中文");
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }, WINDOWS_SPAWN_TEST_TIMEOUT_MS);
+  }
+
+  for (const [shellInterpreter, command] of [
+    ["bash", "printf '中文'"],
+    ["zsh", "printf '中文'"],
+    ["fish", "printf '中文'"],
+    ["nushell", "print '中文'"],
+  ] as const) {
+    const available = process.platform !== "win32" && Boolean(resolveShellProfile(shellInterpreter));
+    test.skipIf(!available)(`runs POSIX ${shellInterpreter} with UTF-8 output`, async () => {
+      const root = await mkdtemp(join(tmpdir(), "vesicle-process-"));
+      try {
+        const result = await executeProcessPlan(
+          root,
+          createProcessExecutionPlan(command, WINDOWS_SPAWN_PROCESS_TIMEOUT_MS, process.platform, false, shellInterpreter),
         );
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain("中文");

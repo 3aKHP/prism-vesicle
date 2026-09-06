@@ -38,7 +38,7 @@ shellInterpreter: auto
   See [`docs/examples/permissions.yaml`](../../../examples/permissions.yaml).
 
 - Once enabled, under MANUAL/INERTIA/MOMENTUM **every** shell call still asks for approval; only YOLO skips the ask.
-- `shellInterpreter` picks the shell: `auto` (`/bin/sh` on Linux/WSL, PowerShell 7 preferred on Windows), `posix-sh`, `powershell-7`, `windows-powershell-5.1`, `cmd`, `git-bash`.
+- `shellInterpreter` picks the shell: `auto` (`/bin/sh` on Linux/WSL, PowerShell 7 preferred on Windows), `posix-sh`, `bash`, `zsh`, `fish`, `nushell`, `powershell-7`, `windows-powershell-5.1`, `cmd`, `git-bash`.
 
 > Files changed by shell are **not guaranteed** to rewind (rewind covers only Vesicle's own tool changes; see [Sessions and rewind](./sessions-and-rewind.md)).
 

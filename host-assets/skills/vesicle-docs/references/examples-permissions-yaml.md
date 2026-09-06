@@ -10,6 +10,7 @@ defaultMode: MOMENTUM
 shellExec: false
 
 # auto uses /bin/sh on Linux/WSL. On Windows it prefers PowerShell 7 and falls back only to Windows PowerShell 5.1.
-# Explicit profiles: posix-sh, powershell-7, windows-powershell-5.1, cmd, git-bash.
+# Explicit profiles: posix-sh, bash, zsh, fish, nushell, powershell-7,
+# windows-powershell-5.1, cmd, git-bash.
 # Windows-only and POSIX-only profiles never silently fall back across shell families.
 shellInterpreter: auto

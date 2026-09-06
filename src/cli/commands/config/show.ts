@@ -12,6 +12,7 @@ import { qualitySettingsPath, loadExperimentalQualitySettings } from "../../../c
 import { settingsPath, loadSettings } from "../../../config/settings";
 import { projectPreferencesPath, readProjectThemePreference } from "../../../config/project-preferences";
 import { mcpConfigPathFromEnv, loadMcpConfig } from "../../../mcp/config";
+import { probeNushellProfile, resolveShellProfile } from "../../../core/process/shell-profile";
 
 const SHOW_TARGETS = ["providers", "env", "permissions", "mcp", "quality", "settings", "preferences"] as const;
 type ShowTarget = (typeof SHOW_TARGETS)[number];
@@ -160,11 +161,16 @@ export async function runValidate(): Promise<void> {
 
   try {
     const settings = await loadPermissionSettings();
+    const shell = resolveShellProfile(settings.shellInterpreter);
+    const probe = shell ? await probeNushellProfile(shell) : undefined;
+    const availability = shell
+      ? probe && !probe.ok ? ` (runtime unavailable: ${probe.error})` : ""
+      : ` (runtime unavailable: ${settings.shellInterpreter})`;
     results.push({
       file: "permissions.yaml",
       ok: true,
       detail: settings.exists
-        ? `defaultMode=${settings.defaultMode}, shellExec=${settings.shellExec}, shellInterpreter=${settings.shellInterpreter}`
+        ? `defaultMode=${settings.defaultMode}, shellExec=${settings.shellExec}, shellInterpreter=${settings.shellInterpreter}${availability}`
         : "not configured (using defaults)",
     });
   } catch (error) {
