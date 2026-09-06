@@ -185,7 +185,7 @@ function startProcessSpawn(
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
-    ...(platform === "win32" ? {} : { detached: true }),
+    ...(platform === "win32" ? { windowsHide: true } : { detached: true }),
   });
 
   const stdoutState = createCaptureState();
@@ -329,6 +329,7 @@ async function terminateProcessTree(pid: number, platform: NodeJS.Platform): Pro
       stdout: "ignore",
       stderr: "ignore",
       env: buildProcessEnvironment(),
+      windowsHide: true,
     });
     await taskkill.exited.catch(() => undefined);
     return;
