@@ -7,7 +7,7 @@ import { inspectAssets } from "./assets";
 import { inspectSkills } from "./commands/skills";
 import { readActiveIndex } from "../skills";
 import { loadPermissionSettings } from "../config/permissions";
-import { resolveShellProfile } from "../core/process/shell-profile";
+import { probeNushellProfile, resolveShellProfile } from "../core/process/shell-profile";
 
 export async function runDoctor(): Promise<void> {
   const config = await inspectProviderConfig();
@@ -16,6 +16,7 @@ export async function runDoctor(): Promise<void> {
   const assets = await inspectAssets();
   const permissions = await loadPermissionSettings();
   const shell = resolveShellProfile(permissions.shellInterpreter);
+  const shellProbe = shell ? await probeNushellProfile(shell) : undefined;
   let qualityStatus: string;
   try {
     const quality = await loadExperimentalQualitySettings();
@@ -70,7 +71,7 @@ export async function runDoctor(): Promise<void> {
   console.log(`Permissions: ${permissions.defaultMode}${permissions.exists ? "" : " (defaults)"} (${permissions.path})`);
   console.log(`Semantic Judge: ${qualityStatus}`);
   console.log(`Shell exec: ${permissions.shellExec ? "enabled; permission mode applies" : "disabled"}; interpreter ${
-    shell ? `${shell.displayName} (${shell.executablePath})` : `${permissions.shellInterpreter} unavailable`
+    shell ? `${shell.displayName} (${shell.executablePath})${shellProbe && !shellProbe.ok ? ` unavailable: ${shellProbe.error}` : ""}` : `${permissions.shellInterpreter} unavailable`
   }`);
   for (const layer of assets.layers) {
     console.log(`Assets ${layer.source}: ${layer.present ? `${layer.fileCount} files` : "missing"} (${layer.directory})`);

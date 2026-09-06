@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [1.1.1] - 2026-09-05
 
+### Added
+
+- **Additional host shell profiles (#325).** Linux/WSL `shell_exec` can explicitly use Bash, Zsh, Fish, or Nushell; Windows can use Nushell. Each profile has a fixed non-interactive invocation, independent command guidance, PATH/system discovery, and the existing approval, timeout, output, cancellation, and process-cleanup semantics. `vesicle config set permissions shellInterpreter <profile>` updates the user-level selection.
+
 ### Changed
 
 - **Bottom panels share an expandable, read-only detail view (#315).** `Tab` / `Shift+Tab` reads permission requests (including shell, Skill, MCP and child Agent requests), gates, questions, quality decisions, confirmations and selected picker items. Truncated content expands between the app header and footer; fully visible short content stays compact. Arrow keys / `Ctrl+P,N` and `Home` / `End` scroll; `Tab`, `Enter` and `Esc` only return, preserving the selection, note, cursor and reading position. Terminal resizing keeps the source position, and `Ctrl+O` remains available: model decisions keep the Workspace pending strip, while user-opened dialogs follow the page. Compact panels budget their controls against actual terminal height, and migration reading includes every reported finding.

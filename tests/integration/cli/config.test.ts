@@ -141,6 +141,16 @@ describe("vesicle config CLI", () => {
     });
   });
 
+  test("set permissions shellInterpreter writes and validates the profile", async () => {
+    await withTempProject("vesicle-config-setshell-", async (projectDir, configDir) => {
+      await seedProvidersConfig(configDir);
+      const result = await runCli(["config", "set", "permissions", "shellInterpreter", "zsh"], { cwd: projectDir, configDir });
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, key: "shellInterpreter", value: "zsh", restartRequired: true });
+      expect(await readFile(join(configDir, "permissions.yaml"), "utf8")).toContain("shellInterpreter: zsh");
+    });
+  });
+
   test("add-provider writes providers.yaml and creates .env empty slot", async () => {
     await withTempProject("vesicle-config-addprov-", async (projectDir, configDir) => {
       await seedProvidersConfig(configDir);

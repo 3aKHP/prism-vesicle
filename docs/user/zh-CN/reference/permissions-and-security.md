@@ -40,7 +40,7 @@
 version: 1              # 必填,必须为 1
 defaultMode: MOMENTUM   # MANUAL / INERTIA / MOMENTUM;不可填 YOLO
 shellExec: false        # 是否启用 shell_exec 工具
-shellInterpreter: auto  # auto / posix-sh / powershell-7 / windows-powershell-5.1 / cmd / git-bash
+shellInterpreter: auto  # auto / posix-sh / bash / zsh / fish / nushell / powershell-7 / windows-powershell-5.1 / cmd / git-bash
 ```
 
 未提供此文件时,默认为 `MOMENTUM` + `shellExec: false` + `shellInterpreter: auto`。`defaultMode: YOLO` 会被拒绝——YOLO 只能交互式开启或用进程级开关。
@@ -56,7 +56,7 @@ shellInterpreter: auto  # auto / posix-sh / powershell-7 / windows-powershell-5.
 - 子进程环境被过滤、输出/寿命有上限、进程组会被清理——但这些不改变"已批准命令拥有宿主权限"这一事实。
 - shell 改动的文件**不在**回退检查点账本里,不保证能回退。
 
-`shellInterpreter`:`auto` 在 Linux/WSL 是 `/bin/sh`,Windows 优先 PowerShell 7 并只在 PowerShell 家族内兜底;显式选 `posix-sh`/`cmd`/`git-bash` 等不会跨 shell 家族静默切换。
+`shellInterpreter`:`auto` 在 Linux/WSL 是 `/bin/sh`,Windows 优先 PowerShell 7 并只在 PowerShell 家族内兜底。Linux/WSL 还支持 `bash`、`zsh`、`fish`、`nushell`,Windows 支持 `nushell`;显式选择不会跨 shell 家族静默切换。
 
 > 完整的 Process Runtime(后台任务、解释器档案全集、进程树清理、计划绑定)见 [高级:宿主 Shell](../advanced/shell-exec.md)。
 

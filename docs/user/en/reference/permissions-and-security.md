@@ -40,7 +40,7 @@ An optional file beside `providers.yaml` (or set via `VESICLE_PERMISSIONS_FILE`)
 version: 1              # required, must be 1
 defaultMode: MOMENTUM   # MANUAL / INERTIA / MOMENTUM; not YOLO
 shellExec: false        # whether the shell_exec tool is enabled
-shellInterpreter: auto  # auto / posix-sh / powershell-7 / windows-powershell-5.1 / cmd / git-bash
+shellInterpreter: auto  # auto / posix-sh / bash / zsh / fish / nushell / powershell-7 / windows-powershell-5.1 / cmd / git-bash
 ```
 
 Without this file, the defaults are `MOMENTUM` + `shellExec: false` + `shellInterpreter: auto`. `defaultMode: YOLO` is rejected — YOLO is interactive-only or set with the process-level switch.
@@ -56,7 +56,7 @@ Without this file, the defaults are `MOMENTUM` + `shellExec: false` + `shellInte
 - The child environment is filtered, output and lifetime are bounded, and the process group is cleaned up — but none of that changes the fact that an approved command has host authority.
 - Files changed by shell are **not** in the rewind checkpoint ledger and are not guaranteed to rewind.
 
-`shellInterpreter`: `auto` is `/bin/sh` on Linux/WSL and prefers PowerShell 7 on Windows, falling back only within the PowerShell family; an explicit `posix-sh`/`cmd`/`git-bash` choice never silently switches shell families.
+`shellInterpreter`: `auto` is `/bin/sh` on Linux/WSL and prefers PowerShell 7 on Windows, falling back only within the PowerShell family. Linux/WSL also supports `bash`, `zsh`, `fish`, and `nushell`; Windows supports `nushell`. Explicit choices never silently switch shell families.
 
 > The full Process Runtime (background tasks, the complete interpreter-profile set, process-tree cleanup, plan binding) is in [Advanced: host shell](../advanced/shell-exec.md).
 

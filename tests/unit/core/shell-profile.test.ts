@@ -114,6 +114,17 @@ describe("shell profiles", () => {
     })).toBeUndefined();
   });
 
+  test("resolves POSIX profiles in PATH order and Nushell on Windows", () => {
+    const paths = new Set(["/usr/bin/bash", "/usr/bin/zsh", "/usr/bin/fish", "/usr/bin/nu"]);
+    const which = (command: string) => command === "bash" ? "/usr/bin/bash" : command === "zsh" ? "/usr/bin/zsh" : command === "fish" ? "/usr/bin/fish" : command === "nu" ? "/usr/bin/nu" : undefined;
+    expect(resolveShellProfile("bash", { platform: "linux", which, exists: (path) => paths.has(path) })).toMatchObject({ id: "bash", executablePath: "/usr/bin/bash" });
+    expect(resolveShellProfile("zsh", { platform: "linux", which, exists: (path) => paths.has(path) })).toMatchObject({ id: "zsh", executablePath: "/usr/bin/zsh" });
+    expect(resolveShellProfile("fish", { platform: "linux", which, exists: (path) => paths.has(path) })).toMatchObject({ id: "fish", executablePath: "/usr/bin/fish" });
+    expect(resolveShellProfile("nushell", { platform: "linux", which, exists: (path) => paths.has(path) })).toMatchObject({ id: "nushell", executablePath: "/usr/bin/nu" });
+    const windowsNu = "C:\\Users\\test\\.cargo\\bin\\nu.exe";
+    expect(resolveShellProfile("nushell", { platform: "win32", env: { USERPROFILE: "C:\\Users\\test" }, which: () => undefined, exists: (path) => path === windowsNu })).toMatchObject({ id: "nushell", executablePath: windowsNu });
+  });
+
   test("builds deterministic non-interactive commands for every profile", () => {
     const base = createProcessExecutionPlan("echo ready", 1_000, "linux");
     expect(buildProcessCommand(base)).toEqual(["/bin/sh", "-c", "echo ready"]);
@@ -132,6 +143,18 @@ describe("shell profiles", () => {
     ]);
     expect(buildProcessCommand({ ...base, shell: "git-bash", executablePath: "bash.exe" })).toEqual([
       "bash.exe", "--noprofile", "--norc", "-c", "echo ready",
+    ]);
+    expect(buildProcessCommand({ ...base, shell: "bash", executablePath: "/usr/bin/bash" })).toEqual([
+      "/usr/bin/bash", "--noprofile", "--norc", "-c", "echo ready",
+    ]);
+    expect(buildProcessCommand({ ...base, shell: "zsh", executablePath: "/usr/bin/zsh" })).toEqual([
+      "/usr/bin/zsh", "-f", "-c", "echo ready",
+    ]);
+    expect(buildProcessCommand({ ...base, shell: "fish", executablePath: "/usr/bin/fish" })).toEqual([
+      "/usr/bin/fish", "--no-config", "-c", "echo ready",
+    ]);
+    expect(buildProcessCommand({ ...base, shell: "nushell", executablePath: "/usr/bin/nu" })).toEqual([
+      "/usr/bin/nu", "-n", "-c", "echo ready",
     ]);
   });
 

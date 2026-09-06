@@ -8,6 +8,10 @@
 
 ## [1.1.1] - 2026-09-05
 
+### 新增
+
+- **新增宿主 Shell Profile（#325）。** Linux/WSL 的 `shell_exec` 可显式使用 Bash、Zsh、Fish 或 Nushell；Windows 可使用 Nushell。每个 Profile 都有固定的非交互调用方式、独立命令指导、PATH/系统路径发现，并沿用现有审批、超时、输出、取消和进程清理语义。可用 `vesicle config set permissions shellInterpreter <profile>` 修改用户级选择。
+
 ### Changed
 
 - **底部面板统一支持可展开的只读详情阅读(#315)。** `Tab` / `Shift+Tab` 可阅读权限请求(包括 shell、Skill、MCP 和子 Agent 请求)、停止门、问题、质量决策、确认框及选择器当前条目的详情。截断内容展开到应用页眉与页脚之间,已完整显示的短内容保持紧凑。方向键 / `Ctrl+P,N` 和 `Home` / `End` 滚动;`Tab`、`Enter` 和 `Esc` 只返回,保留选择、备注、光标与阅读位置。终端缩放按原文位置保持阅读进度,`Ctrl+O` 始终可用:模型决策在 Workspace 仍显示待决条,用户主动打开的对话框随页面切换。紧凑面板按终端实际高度为操作控件分配空间,迁移报告阅读覆盖全部检查项。

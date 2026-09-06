@@ -39,7 +39,7 @@ describe("permission settings", () => {
   test("rejects unknown shell interpreter profiles", async () => {
     const dir = await mkdtemp(join(tmpdir(), "vesicle-permissions-"));
     try {
-      await writeFile(join(dir, "permissions.yaml"), "version: 1\ndefaultMode: MOMENTUM\nshellExec: true\nshellInterpreter: fish\n", "utf8");
+      await writeFile(join(dir, "permissions.yaml"), "version: 1\ndefaultMode: MOMENTUM\nshellExec: true\nshellInterpreter: unknown-shell\n", "utf8");
       await expect(loadPermissionSettings({ VESICLE_CONFIG_DIR: dir })).rejects.toThrow("Invalid permissions shellInterpreter");
     } finally {
       await rm(dir, { recursive: true, force: true });
