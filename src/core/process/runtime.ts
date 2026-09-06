@@ -179,13 +179,14 @@ function startProcessSpawn(
   const started = performance.now();
   const baseEnv = buildProcessEnvironment(options.env);
   const env = options.additionalEnv ? { ...baseEnv, ...options.additionalEnv } : baseEnv;
+  const isWindowsCmd = platform === "win32" && command[0]?.toLowerCase().endsWith("\\cmd.exe");
   const child = Bun.spawn(command, {
     cwd: rootDir,
     env,
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
-    ...(platform === "win32" ? { windowsHide: true } : { detached: true }),
+    ...(platform === "win32" ? (isWindowsCmd ? {} : { windowsHide: true }) : { detached: true }),
   });
 
   const stdoutState = createCaptureState();
