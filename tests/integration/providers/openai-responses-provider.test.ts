@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/adapter";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { OpenAIResponsesAdapter, resetResponsesCompactVariantForTest } from "../../../src/providers/openai-responses/adapter";
 import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
-import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody } from "../../../src/providers/openai-responses/request";
+import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesCompactV2Body } from "../../../src/providers/openai-responses/request";
 import { readResponsesStream } from "../../../src/providers/openai-responses/stream";
 import { responseFromResponsesBody } from "../../../src/providers/openai-responses/response";
+import { ProviderError } from "../../../src/providers/shared/errors";
 import {
   providerStateEnvelopeVersion,
   type ProviderStateEnvelope,
@@ -1404,8 +1405,284 @@ describe("OpenAI Responses built-in web search", () => {
   });
 });
 
+describe("OpenAI Responses compact v2 fallback", () => {
+  // The negotiated variant memo is module state shared by every adapter
+  // instance in this bun test process; reset around each case so the v1
+  // tests above never inherit a stale v2 negotiation.
+  beforeEach(() => resetResponsesCompactVariantForTest());
+  afterEach(() => resetResponsesCompactVariantForTest());
+
+  test("builds the inline compaction_trigger body without leaking it into any turn serializer", () => {
+    const body = toResponsesCompactV2Body(compactRequest(), context());
+    expect(body).toEqual({
+      model: "gpt-5.2-codex",
+      input: [{ role: "user", content: "hello" }, { type: "compaction_trigger" }],
+      store: false,
+      stream: false,
+      include: ["reasoning.encrypted_content"],
+    });
+    expect(toResponsesCompactBody(compactRequest(), context())).toEqual({
+      model: "gpt-5.2-codex",
+      input: [{ role: "user", content: "hello" }],
+    });
+    expect(JSON.stringify(toResponsesBody(request(), context(), false, "openai-public"))).not.toContain("compaction_trigger");
+    const marker = {
+      role: "user" as const,
+      content: "",
+      kind: PROVIDER_NATIVE_CHECKPOINT_KIND,
+      providerState: {
+        version: 1 as const,
+        protocol: "openai-responses",
+        providerId: "openai",
+        model: "gpt-5.2-codex",
+        endpointFingerprint: responsesEndpointFingerprint("https://api.openai.com/v1"),
+        payload: { version: 1, profile: "openai-public", compactedInput: [{ type: "compaction", encrypted_content: "opaque" }] },
+      },
+    };
+    expect(JSON.stringify(toResponsesBody({
+      ...request(),
+      messages: [
+        { role: "user" as const, content: "summary", kind: "compact-summary" },
+        marker,
+        { role: "user" as const, content: "continue" },
+      ],
+    }, context(), false, "openai-public"))).not.toContain("compaction_trigger");
+  });
+
+  test("falls back to the inline compaction_trigger turn after a standalone-endpoint 404", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    globalThis.fetch = fallbackCompactFetch(calls, [{ id: "cmp_v2", type: "compaction", encrypted_content: "opaque-v2" }]);
+    try {
+      const result = await new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest());
+      expect(calls.map((call) => call.url)).toEqual([
+        "https://api.openai.com/v1/responses/compact",
+        "https://api.openai.com/v1/responses",
+      ]);
+      expect(calls[0].body).toEqual({ model: "gpt-5.2-codex", input: [{ role: "user", content: "hello" }] });
+      expect(calls[1].body).toEqual({
+        model: "gpt-5.2-codex",
+        input: [{ role: "user", content: "hello" }, { type: "compaction_trigger" }],
+        store: false,
+        stream: false,
+        include: ["reasoning.encrypted_content"],
+      });
+      expect(result.providerState).toMatchObject({
+        protocol: "openai-responses",
+        payload: { version: 1, profile: "openai-public", compactedInput: [{ type: "compaction", encrypted_content: "opaque-v2" }] },
+      });
+      expect(result.usage).toMatchObject({ inputTokens: 12, outputTokens: 3, totalTokens: 15 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("reuses the negotiated v2 variant across fresh adapter instances for the same owner", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    globalThis.fetch = fallbackCompactFetch(calls, [{ id: "cmp_v2", type: "compaction", encrypted_content: "opaque-v2" }]);
+    try {
+      await new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest());
+      await new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest());
+      expect(calls.map((call) => call.url)).toEqual([
+        "https://api.openai.com/v1/responses/compact",
+        "https://api.openai.com/v1/responses",
+        "https://api.openai.com/v1/responses",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("renegotiates per owner: a different model probes the standalone endpoint again", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    globalThis.fetch = fallbackCompactFetch(calls, [{ id: "cmp_v2", type: "compaction", encrypted_content: "opaque-v2" }]);
+    try {
+      await new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest());
+      await new OpenAIResponsesAdapter(compactConfig("gpt-5.5")).compact!(compactRequest("gpt-5.5"));
+      expect(calls.map((call) => call.url)).toEqual([
+        "https://api.openai.com/v1/responses/compact",
+        "https://api.openai.com/v1/responses",
+        "https://api.openai.com/v1/responses/compact",
+        "https://api.openai.com/v1/responses",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("keeps companion output Items from the inline compaction response", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    const window = [
+      { id: "msg_v2", type: "message", role: "user", content: [{ type: "input_text", text: "canonical" }] },
+      { id: "cmp_v2", type: "compaction", encrypted_content: "opaque-v2" },
+    ];
+    globalThis.fetch = fallbackCompactFetch(calls, window);
+    try {
+      const result = await new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest());
+      expect(result.providerState).toMatchObject({
+        payload: { version: 1, profile: "openai-public", compactedInput: window },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("rejects an inline compaction response without its encrypted compaction Item", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    globalThis.fetch = fallbackCompactFetch(calls, [
+      { id: "msg_v2", type: "message", role: "user", content: [{ type: "input_text", text: "not compacted" }] },
+    ]);
+    try {
+      await expect(new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest()))
+        .rejects.toThrow("exactly one encrypted compaction Item");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("propagates non-404 standalone failures without an inline retry", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    globalThis.fetch = mockCompactFetch(calls, () => Response.json({ error: { message: "bad key" } }, { status: 401 }));
+    try {
+      const failure = await captureCompactError(() => new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest()));
+      expect(failure.status).toBe(401);
+      expect(failure.message).toContain("(401)");
+      expect(calls.map((call) => call.url)).toEqual(["https://api.openai.com/v1/responses/compact"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("reports both attempts when the standalone endpoint is missing and the inline retry fails", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    globalThis.fetch = mockCompactFetch(calls, (url) => url.endsWith("/responses/compact")
+      ? standaloneCompactNotFound()
+      : Response.json({ error: { message: "upstream rejected" } }, { status: 401 }));
+    const adapter = new OpenAIResponsesAdapter(compactConfig());
+    try {
+      const failure = await captureCompactError(() => adapter.compact!(compactRequest()));
+      expect(failure.status).toBe(401);
+      expect(failure.message).toContain("(401)");
+      expect(failure.message).toContain("standalone /responses/compact endpoint returned 404");
+      // A failed negotiation must not be memoized: the next attempt probes v1 again.
+      const retry = await captureCompactError(() => adapter.compact!(compactRequest()));
+      expect(retry.status).toBe(401);
+      expect(calls.map((call) => call.url)).toEqual([
+        "https://api.openai.com/v1/responses/compact",
+        "https://api.openai.com/v1/responses",
+        "https://api.openai.com/v1/responses/compact",
+        "https://api.openai.com/v1/responses",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("keeps the capability and subset guards ahead of any negotiation", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    globalThis.fetch = mockCompactFetch(calls, () => {
+      throw new Error("fetch must not be called");
+    });
+    try {
+      await expect(new OpenAIResponsesAdapter({ ...compactConfig(), capabilities: {} }).compact!(compactRequest()))
+        .rejects.toThrow("Remote Responses compaction is not enabled");
+      await expect(new OpenAIResponsesAdapter({ ...compactConfig(), responsesProfile: "mimo-subset-2026-07-30" }).compact!(compactRequest()))
+        .rejects.toThrow("does not support remote Responses compaction");
+      expect(calls).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("replays a v2 compaction product through the native checkpoint window", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: RecordedCompactCall[] = [];
+    const window = [
+      { id: "msg_v2", type: "message", role: "user", content: [{ type: "input_text", text: "canonical" }] },
+      { id: "cmp_v2", type: "compaction", encrypted_content: "opaque-v2" },
+    ];
+    globalThis.fetch = fallbackCompactFetch(calls, window);
+    try {
+      const compacted = await new OpenAIResponsesAdapter(compactConfig()).compact!(compactRequest());
+      const body = toResponsesBody({
+        ...request(),
+        messages: [
+          { role: "user" as const, content: "[conversation summary]\nportable", kind: "compact-summary" },
+          { role: "user" as const, content: "", kind: PROVIDER_NATIVE_CHECKPOINT_KIND, providerState: compacted.providerState },
+          { role: "user" as const, content: "continue" },
+        ],
+      }, context(), true, "openai-public");
+      expect(body.input).toEqual([...window, { role: "user", content: "continue" }]);
+      expect(JSON.stringify(body)).not.toContain("compaction_trigger");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 function request(): VesicleRequest {
   return { id: "req_1", model: { provider: "openai", model: "gpt-5.2-codex" }, system: ["system"], messages: [] };
+}
+
+function compactConfig(model = "gpt-5.2-codex") {
+  return {
+    provider: "openai-responses" as const, providerId: "openai", baseUrl: "https://api.openai.com/v1",
+    model, apiKey: "test-key", responsesProfile: "openai-public" as const,
+    capabilities: { remoteCompact: true },
+  };
+}
+
+function compactRequest(model = "gpt-5.2-codex") {
+  return {
+    id: "compact-request",
+    model: { provider: "openai", model },
+    messages: [{ role: "user" as const, content: "hello" }],
+  };
+}
+
+type RecordedCompactCall = { url: string; body: Record<string, unknown> };
+
+function mockCompactFetch(calls: RecordedCompactCall[], respond: (url: string) => Response): typeof fetch {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> });
+    return respond(url);
+  }) as unknown as typeof fetch;
+}
+
+function standaloneCompactNotFound(): Response {
+  return Response.json({ detail: "Not Found" }, { status: 404 });
+}
+
+function inlineCompactionResponse(output: unknown[]): Response {
+  return Response.json({
+    id: "resp_compact_v2",
+    object: "response",
+    output,
+    usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },
+  });
+}
+
+function fallbackCompactFetch(calls: RecordedCompactCall[], output: unknown[]): typeof fetch {
+  return mockCompactFetch(calls, (url) =>
+    url.endsWith("/responses/compact") ? standaloneCompactNotFound() : inlineCompactionResponse(output));
+}
+
+async function captureCompactError(run: () => Promise<unknown>): Promise<ProviderError> {
+  try {
+    await run();
+  } catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    return error;
+  }
+  throw new Error("expected the compaction call to fail");
 }
 
 function nativeSearchState(): ProviderStateEnvelope {
