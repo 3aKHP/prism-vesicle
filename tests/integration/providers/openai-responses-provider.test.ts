@@ -1449,6 +1449,32 @@ describe("OpenAI Responses compact v2 fallback", () => {
     }, context(), false, "openai-public"))).not.toContain("compaction_trigger");
   });
 
+  test("drops search-coupled Items from the inline compaction window: no declaration travels with it", () => {
+    const body = toResponsesCompactV2Body({
+      id: "compact-request",
+      model: request().model,
+      messages: [
+        {
+          role: "assistant" as const,
+          content: "portable search turn",
+          webSearch: {
+            provider: "openai",
+            queries: ["portable query"],
+            calls: [{ id: "ws_portable", status: "completed", action: { type: "search", query: "portable query" } }],
+          },
+        },
+        { role: "assistant" as const, content: "Native answer.", providerState: nativeSearchState() },
+        { role: "user" as const, content: "continue" },
+      ],
+    }, context());
+    expect(body.input).toEqual([
+      { role: "assistant", content: "portable search turn" },
+      { role: "assistant", content: "Native answer." },
+      { role: "user", content: "continue" },
+      { type: "compaction_trigger" },
+    ]);
+  });
+
   test("falls back to the inline compaction_trigger turn after a standalone-endpoint 404", async () => {
     const originalFetch = globalThis.fetch;
     const calls: RecordedCompactCall[] = [];
