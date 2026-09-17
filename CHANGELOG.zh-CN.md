@@ -6,6 +6,12 @@
 
 本文件是 `CHANGELOG.md` 的简体中文伴生文件;英文版为唯一真源,两者按版本段落一一配对,语义以英文版为准。维护规则:修改 `CHANGELOG.md` 的同一变更必须同步更新本文件对应段落。
 
+## [Unreleased]
+
+### 新增
+
+- **Responses 远程压缩的内联回退（#328）。** 当独立 `/responses/compact` 端点返回 HTTP 404 时,`openai-responses` 适配器会把同一源窗口改为一元 `POST /responses` 请求重试,input 末尾追加 `compaction_trigger` 哨兵项。协商结果按 provider/model/endpoint/profile 属主在进程生命周期内记忆;哨兵项绝不进入会话记录或回放;压缩窗口与信封语义与独立形式完全一致。非 404 的独立端点失败保持原样终止;两种形式都失败时报错同时提及两次尝试。官方 `api.openai.com` 行为不变;新增手动 `test:acceptance:responses:compact-v2` lane 记录第三方后端兼容性。
+
 ## [1.1.1] - 2026-09-05
 
 ### 新增
