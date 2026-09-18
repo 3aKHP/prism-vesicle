@@ -10,7 +10,7 @@ import { isDeepSeekSubsetProfile, isStatelessHttpSubset } from "./profiles";
 import { readResponsesErrorMessage, responseFromResponsesBody } from "./response";
 import { readResponsesStream } from "./stream";
 import type { ResponsesBody, ResponsesCompactBody, ResponsesOutputItem, ResponsesUsage } from "./types";
-import { responsesEndpointFingerprint } from "./owner";
+import { responsesEndpointFingerprint, responsesOwnerKey } from "./owner";
 import { invalidateResponsesWebSocketContinuation, responsesWebSocketSession, responsesWebSocketUrl, type ResponsesSocketFactory } from "./websocket";
 import { parseProviderStateEnvelope, providerStateEnvelopeVersion } from "../shared/state";
 import { validateResponsesCompactItems } from "./items";
@@ -19,7 +19,7 @@ import { usageFromResponses } from "./usage";
 // Negotiated compaction variant per provider/model/endpoint/profile owner.
 // Module-level because createProvider builds a fresh adapter per call; a lost
 // entry only costs one extra 404 probe on the next compaction.
-const compactVariantMemo = new Map<string, "v2">();
+const compactV2Owners = new Set<string>();
 
 export class OpenAIResponsesAdapter implements ProviderAdapter {
   readonly id = "openai-responses";
@@ -60,7 +60,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       });
     }
     const owner = this.compactOwner(request);
-    if (compactVariantMemo.get(owner) === "v2") return this.compactV2(request);
+    if (compactV2Owners.has(owner)) return this.compactV2(request);
     try {
       return await this.compactV1(request);
     } catch (error) {
@@ -69,10 +69,10 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       if (!isStandaloneCompactNotFound(error)) throw error;
       try {
         const result = await this.compactV2(request);
-        compactVariantMemo.set(owner, "v2");
+        compactV2Owners.add(owner);
         return result;
       } catch (fallbackError) {
-        throw annotateCompactV1NotFound(fallbackError);
+        throw withStandaloneCompactNotFoundNote(fallbackError);
       }
     }
   }
@@ -142,14 +142,14 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
   }
 
   private compactOwner(request: ProviderCompactRequest): string {
-    // Same owner composition as the WebSocket session registry: a negotiated
-    // variant never leaks across a provider/model/endpoint/profile switch.
-    return [
+    // A negotiated variant never leaks across a provider/model/endpoint/profile
+    // switch; the key format is owned by responsesOwnerKey.
+    return responsesOwnerKey(
       this.config.providerId,
       request.model.model,
       responsesEndpointFingerprint(this.config.baseUrl),
       this.config.responsesProfile ?? "",
-    ].join("\u0000");
+    );
   }
 
   commitCompact(): void {
@@ -224,7 +224,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     let prewarmUsage: ResponseUsage | undefined;
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
-    const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
+    const owner = responsesOwnerKey(this.config.providerId, stableRequest.model.model, endpointFingerprint, this.webSocketProfile());
     const proxyRoute = this.runtime.proxyPolicy
       ? resolveWebSocketRoute(new URL(responsesWebSocketUrl(this.config.baseUrl)), this.runtime.proxyPolicy)
       : { kind: "direct" as const, reason: "none" as const };
@@ -521,10 +521,13 @@ function isStandaloneCompactNotFound(error: unknown): boolean {
   return error instanceof ProviderError && error.kind === "http_error" && error.status === 404;
 }
 
-function annotateCompactV1NotFound(error: unknown): unknown {
+// The negotiation note leads the message: cleanProviderMessage truncates from
+// the front, so a verbose provider detail must not be able to cut the fact
+// that the standalone endpoint was missing.
+function withStandaloneCompactNotFoundNote(error: unknown): unknown {
   if (!(error instanceof ProviderError)) return error;
   return new ProviderError(
-    `${error.message} (standalone /responses/compact endpoint returned 404 before this inline compaction attempt)`,
+    `Inline compaction failed after the standalone /responses/compact endpoint returned 404: ${error.message}`,
     {
       kind: error.kind,
       providerId: error.providerId,
@@ -538,7 +541,7 @@ function annotateCompactV1NotFound(error: unknown): unknown {
 }
 
 export function resetResponsesCompactVariantForTest(): void {
-  compactVariantMemo.clear();
+  compactV2Owners.clear();
 }
 
 function isRetryableResponsesFailure(error: unknown): boolean {

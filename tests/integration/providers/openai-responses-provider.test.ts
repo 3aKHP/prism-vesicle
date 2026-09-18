@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { OpenAIResponsesAdapter, resetResponsesCompactVariantForTest } from "../../../src/providers/openai-responses/adapter";
 import { responsesEndpointFingerprint } from "../../../src/providers/openai-responses/owner";
 import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesCompactV2Body } from "../../../src/providers/openai-responses/request";
 import { readResponsesStream } from "../../../src/providers/openai-responses/stream";
 import { responseFromResponsesBody } from "../../../src/providers/openai-responses/response";
-import { ProviderError } from "../../../src/providers/shared/errors";
+import { cleanProviderMessage, ProviderError } from "../../../src/providers/shared/errors";
 import {
   providerStateEnvelopeVersion,
   type ProviderStateEnvelope,
@@ -16,6 +16,11 @@ import { closeResponsesWebSocketSession, responsesWebSocketSession } from "../..
 import { bytesFromChunks } from "../../support/providers/sse";
 import captures from "../../fixtures/openai-responses/request-captures-v1.json";
 import { compareStructuredCapture, requireJsonValue } from "../../support/providers/responses-conformance";
+
+// The negotiated compact variant is module state shared by every adapter
+// instance in this bun test process; reset before each test in every describe
+// so no case inherits a stale v2 negotiation by execution order.
+beforeEach(() => resetResponsesCompactVariantForTest());
 
 describe("OpenAI Responses request codec", () => {
   test("matches the frozen Codex HTTP/SSE application request", () => {
@@ -1406,12 +1411,6 @@ describe("OpenAI Responses built-in web search", () => {
 });
 
 describe("OpenAI Responses compact v2 fallback", () => {
-  // The negotiated variant memo is module state shared by every adapter
-  // instance in this bun test process; reset around each case so the v1
-  // tests above never inherit a stale v2 negotiation.
-  beforeEach(() => resetResponsesCompactVariantForTest());
-  afterEach(() => resetResponsesCompactVariantForTest());
-
   test("builds the inline compaction_trigger body without leaking it into any turn serializer", () => {
     const body = toResponsesCompactV2Body(compactRequest(), context());
     expect(body).toEqual({
@@ -1587,15 +1586,20 @@ describe("OpenAI Responses compact v2 fallback", () => {
   test("reports both attempts when the standalone endpoint is missing and the inline retry fails", async () => {
     const originalFetch = globalThis.fetch;
     const calls: RecordedCompactCall[] = [];
+    // Verbose provider detail: cleanProviderMessage truncates from the front,
+    // so the leading negotiation note must survive and the detail may not.
+    const verboseDetail = `upstream rejected: ${"x".repeat(300)}`;
     globalThis.fetch = mockCompactFetch(calls, (url) => url.endsWith("/responses/compact")
       ? standaloneCompactNotFound()
-      : Response.json({ error: { message: "upstream rejected" } }, { status: 401 }));
+      : Response.json({ error: { message: verboseDetail } }, { status: 401 }));
     const adapter = new OpenAIResponsesAdapter(compactConfig());
     try {
       const failure = await captureCompactError(() => adapter.compact!(compactRequest()));
       expect(failure.status).toBe(401);
       expect(failure.message).toContain("(401)");
-      expect(failure.message).toContain("standalone /responses/compact endpoint returned 404");
+      const cleaned = cleanProviderMessage(failure.message);
+      expect(cleaned.startsWith("Inline compaction failed after the standalone /responses/compact endpoint returned 404")).toBe(true);
+      expect(cleaned.length).toBeLessThanOrEqual(240);
       // A failed negotiation must not be memoized: the next attempt probes v1 again.
       const retry = await captureCompactError(() => adapter.compact!(compactRequest()));
       expect(retry.status).toBe(401);
