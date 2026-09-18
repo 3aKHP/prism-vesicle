@@ -100,3 +100,10 @@ export function nativeItemCount(payload: ProviderStateJson | undefined): number 
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return 0;
   return Array.isArray(payload.outputItems) ? payload.outputItems.length : 0;
 }
+
+export function nativeCompactItemCount(payload: ProviderStateJson | undefined): number {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !Array.isArray(payload.compactedInput)) return 0;
+  return payload.compactedInput.filter((item) => (
+    item && typeof item === "object" && !Array.isArray(item) && item.type === "compaction"
+  )).length;
+}

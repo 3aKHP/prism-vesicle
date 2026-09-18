@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { OpenAIResponsesAdapter } from "../../../src/providers/openai-responses/adapter";
 import { closeResponsesWebSocketSession } from "../../../src/providers/openai-responses/websocket";
 import { resolveProviderProxyPolicy } from "../../../src/providers";
-import type { ProviderStateJson } from "../../../src/providers/shared/state";
 import { summarize } from "./support";
 import {
+  nativeCompactItemCount,
   nativeItemCount,
   resolveResponsesAcceptance,
   runResponsesFunctionLoop,
@@ -103,10 +103,3 @@ liveTest("official OpenAI public WebSocket prewarm, continuation, and tool loop"
     closeResponsesWebSocketSession(sessionId);
   }
 }, 120_000);
-
-function nativeCompactItemCount(payload: ProviderStateJson | undefined): number {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !Array.isArray(payload.compactedInput)) return 0;
-  return payload.compactedInput.filter((item) => (
-    item && typeof item === "object" && !Array.isArray(item) && item.type === "compaction"
-  )).length;
-}

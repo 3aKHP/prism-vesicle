@@ -2,9 +2,8 @@ import { expect, test } from "bun:test";
 import { OpenAIResponsesAdapter, resetResponsesCompactVariantForTest } from "../../../src/providers/openai-responses/adapter";
 import { resolveProviderProxyPolicy } from "../../../src/providers";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND } from "../../../src/providers/shared/types";
-import type { ProviderStateJson } from "../../../src/providers/shared/state";
 import { summarize } from "./support";
-import { resolveResponsesAcceptance } from "./responses-support";
+import { nativeCompactItemCount, resolveResponsesAcceptance } from "./responses-support";
 
 // Manual third-party lane for the inline compaction fallback (#328): it
 // targets a real Responses backend WITHOUT the standalone /responses/compact
@@ -17,9 +16,13 @@ import { resolveResponsesAcceptance } from "./responses-support";
 //   BUN_E2E_OPENAI_RESPONSES_V2_MODEL=<model> \
 //   bun run test:acceptance:responses:compact-v2
 //
-// A success here is compatibility evidence only. Official OpenAI acceptance
-// remains the api.openai.com v1 standalone-compaction lane
-// (docs/dev/OPENAI_RESPONSES_CONFORMANCE.md).
+// The lane PROVES the fallback ran: the recorded standalone probe must answer
+// 404 and a POST /responses body must end with the compaction_trigger sentinel.
+// Pointing it at an endpoint that still serves the standalone route (for
+// example api.openai.com) fails the 404 assertion instead of recording false
+// compatibility evidence. A success here is compatibility evidence only.
+// Official OpenAI acceptance remains the api.openai.com v1 standalone
+// compaction lane (docs/dev/OPENAI_RESPONSES_CONFORMANCE.md).
 const precondition = await resolveResponsesAcceptance({
   providerEnv: "BUN_E2E_OPENAI_RESPONSES_V2_PROVIDER",
   modelEnv: "BUN_E2E_OPENAI_RESPONSES_V2_MODEL",
@@ -30,16 +33,24 @@ const proxyPolicy = precondition.config ? await resolveProviderProxyPolicy() : u
 if (!precondition.config) console.log(`[acceptance:openai-responses-compact-v2] unavailable: ${precondition.reason}`);
 const liveTest: typeof test = precondition.config ? test : test.skip;
 
+type RecordedAttempt = { url: string; body: Record<string, unknown>; status: number };
+
 liveTest("backend without standalone compaction negotiates the inline trigger and replays the encrypted window", async () => {
   const config = precondition.config!;
   const adapter = new OpenAIResponsesAdapter({ ...config, responsesTransport: "http" }, { proxyPolicy });
   const codeword = `vesicle-${crypto.randomUUID().slice(0, 8)}`;
   const originalFetch = globalThis.fetch;
-  const urls: string[] = [];
+  const attempts: RecordedAttempt[] = [];
   resetResponsesCompactVariantForTest();
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    urls.push(String(input));
-    return originalFetch(input, init);
+    const url = String(input);
+    const response = await originalFetch(input, init);
+    attempts.push({
+      url,
+      body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+      status: response.status,
+    });
+    return response;
   }) as typeof fetch;
   try {
     const compact = await adapter.compact!({
@@ -47,9 +58,17 @@ liveTest("backend without standalone compaction negotiates the inline trigger an
       model: { provider: config.providerId, model: config.model },
       messages: [{ role: "user", content: `Remember the acceptance codeword ${codeword}.` }],
     });
-    const compacted = compact.providerState?.payload;
-    expect(nativeCompactItemCount(compacted)).toBe(1);
-    expect(urls.some((url) => url.endsWith("/responses/compact"))).toBe(true);
+    expect(nativeCompactItemCount(compact.providerState?.payload)).toBe(1);
+
+    // The evidence owner must observe the fallback, not assume it: a v1
+    // success would leave the probe at 200 and no trigger-bearing turn.
+    const standaloneProbe = attempts.find((attempt) => attempt.url.endsWith("/responses/compact"));
+    expect(standaloneProbe?.status).toBe(404);
+    const inlineTurn = attempts.find((attempt) => attempt.url.endsWith("/responses")
+      && Array.isArray(attempt.body.input)
+      && attempt.body.input.at(-1)?.type === "compaction_trigger");
+    expect(inlineTurn).toBeDefined();
+
     const replay = await adapter.complete({
       id: `acceptance-${crypto.randomUUID()}`,
       model: { provider: config.providerId, model: config.model },
@@ -65,8 +84,8 @@ liveTest("backend without standalone compaction negotiates the inline trigger an
       provider: config.providerId,
       model: config.model,
       endpoint: new URL(config.baseUrl).hostname,
-      probedStandaloneEndpoint: true,
-      negotiatedInlineCompaction: true,
+      standaloneProbeStatus: standaloneProbe?.status,
+      negotiatedInlineCompaction: inlineTurn !== undefined,
       codewordRecalled: replay.content.includes(codeword),
       usagePresent: compact.usage?.totalTokens !== undefined,
       proxyActive: proxyPolicy?.kind !== "direct",
@@ -76,10 +95,3 @@ liveTest("backend without standalone compaction negotiates the inline trigger an
     resetResponsesCompactVariantForTest();
   }
 }, 120_000);
-
-function nativeCompactItemCount(payload: ProviderStateJson | undefined): number {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !Array.isArray(payload.compactedInput)) return 0;
-  return payload.compactedInput.filter((item) => (
-    item && typeof item === "object" && !Array.isArray(item) && item.type === "compaction"
-  )).length;
-}
