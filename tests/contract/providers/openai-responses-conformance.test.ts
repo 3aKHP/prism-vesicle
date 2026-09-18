@@ -105,6 +105,7 @@ describe("OpenAI Responses conformance evidence", () => {
       "deepseek-subset",
       "network-fingerprint",
       "builtin-web-search-admission",
+      "inline-compaction-trigger",
     ]));
     expect(ledger.entries.every((entry) => entry.codex && entry.public && entry.selected && entry.test)).toBe(true);
   });

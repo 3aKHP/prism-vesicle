@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Inline fallback for Responses remote compaction (#328).** When the standalone `/responses/compact` endpoint answers HTTP 404, the `openai-responses` adapter retries the same source window as a unary `POST /responses` request whose input ends with a `compaction_trigger` sentinel. The negotiated variant is remembered per provider/model/endpoint/profile owner for the process lifetime, the trigger never enters session records or replay, and the compacted window and envelope semantics are identical to the standalone form. Any non-404 standalone failure stays terminal, and a failure of both forms reports both attempts. Official `api.openai.com` behavior is unchanged; the new manual `test:acceptance:responses:compact-v2` lane records third-party backend compatibility.
+
 ## [1.1.1] - 2026-09-05
 
 ### Added

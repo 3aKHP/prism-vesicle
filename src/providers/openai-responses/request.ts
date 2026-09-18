@@ -65,6 +65,30 @@ export function toResponsesCompactBody(request: ProviderCompactRequest, context:
   };
 }
 
+/**
+ * Inline compaction fallback for endpoints without the standalone
+ * `/responses/compact` route: a normal unary `POST /responses` whose input
+ * ends with a `compaction_trigger` sentinel. The trigger is appended here,
+ * literally; it must never flow through `serializeResponsesInput` or into
+ * session records, and it is never replayed.
+ */
+export function toResponsesCompactV2Body(request: ProviderCompactRequest, context: RequestContext): Record<string, unknown> {
+  return {
+    model: request.model.model,
+    // The inline form carries no tool declarations, and call Items without
+    // the web_search declaration are a documented rejection shape on the
+    // public /responses route, so search-coupled Items degrade to their
+    // portable projections in the compaction window.
+    input: [
+      ...serializeResponsesInput(request.messages, request.model.model, context, [], false),
+      { type: "compaction_trigger" },
+    ],
+    store: false,
+    stream: false,
+    include: ["reasoning.encrypted_content"],
+  };
+}
+
 export function toResponsesWebSocketMessage(
   request: VesicleRequest,
   context: RequestContext,

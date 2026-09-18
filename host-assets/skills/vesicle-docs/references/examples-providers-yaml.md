@@ -64,6 +64,10 @@ providers:
           tools: true
           reasoningTier: true
           reasoningContent: true
+          # Remote compaction calls /responses/compact and automatically
+          # falls back to an inline compaction_trigger request when that
+          # endpoint answers 404 (for example on Codex subscription relays
+          # without the standalone route). No extra setting is needed.
           remoteCompact: true
           # Model supports the provider-native built-in web search; declaring
           # it only records the capability. The session toggle's default is

@@ -5,16 +5,21 @@ import { defaultUserAgent, openAIResponsesHeaders } from "../shared/headers";
 import type { ProviderProxyPolicy } from "../shared/proxy";
 import { proxyRouteFingerprint, resolveWebSocketRoute } from "../shared/proxy";
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderAdapter, type ProviderCompactRequest, type ProviderCompactResult, type ProviderStreamEvent, type ResponseUsage, type VesicleRequest, type VesicleResponse } from "../shared/types";
-import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesWebSocketMessage, usesResponsesNativeCheckpoint } from "./request";
+import { findResponsesContinuation, toResponsesBody, toResponsesCompactBody, toResponsesCompactV2Body, toResponsesWebSocketMessage, usesResponsesNativeCheckpoint } from "./request";
 import { isDeepSeekSubsetProfile, isStatelessHttpSubset } from "./profiles";
 import { readResponsesErrorMessage, responseFromResponsesBody } from "./response";
 import { readResponsesStream } from "./stream";
-import type { ResponsesBody, ResponsesCompactBody } from "./types";
-import { responsesEndpointFingerprint } from "./owner";
+import type { ResponsesBody, ResponsesCompactBody, ResponsesOutputItem, ResponsesUsage } from "./types";
+import { responsesEndpointFingerprint, responsesOwnerKey } from "./owner";
 import { invalidateResponsesWebSocketContinuation, responsesWebSocketSession, responsesWebSocketUrl, type ResponsesSocketFactory } from "./websocket";
 import { parseProviderStateEnvelope, providerStateEnvelopeVersion } from "../shared/state";
 import { validateResponsesCompactItems } from "./items";
 import { usageFromResponses } from "./usage";
+
+// Negotiated compaction variant per provider/model/endpoint/profile owner.
+// Module-level because createProvider builds a fresh adapter per call; a lost
+// entry only costs one extra 404 probe on the next compaction.
+const compactV2Owners = new Set<string>();
 
 export class OpenAIResponsesAdapter implements ProviderAdapter {
   readonly id = "openai-responses";
@@ -54,6 +59,25 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
+    const owner = this.compactOwner(request);
+    if (compactV2Owners.has(owner)) return this.compactV2(request);
+    try {
+      return await this.compactV1(request);
+    } catch (error) {
+      // Only a missing standalone endpoint (404) falls back to the inline
+      // compaction_trigger form; any other v1 failure stays terminal.
+      if (!isStandaloneCompactNotFound(error)) throw error;
+      try {
+        const result = await this.compactV2(request);
+        compactV2Owners.add(owner);
+        return result;
+      } catch (fallbackError) {
+        throw withStandaloneCompactNotFoundNote(fallbackError);
+      }
+    }
+  }
+
+  private async compactV1(request: ProviderCompactRequest): Promise<ProviderCompactResult> {
     const response = await fetchProvider(`${this.config.baseUrl}/responses/compact`, {
       method: "POST",
       headers: { ...openAIResponsesHeaders(false, this.config.userAgent), ...this.authHeaders() },
@@ -73,7 +97,38 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
         kind: "malformed_response", providerId: this.config.providerId,
       });
     }
-    const compactedInput = validateResponsesCompactItems(body.output, this.config.providerId);
+    return this.compactResult(request, body.output, body.usage);
+  }
+
+  private async compactV2(request: ProviderCompactRequest): Promise<ProviderCompactResult> {
+    const response = await fetchProvider(`${this.config.baseUrl}/responses`, {
+      method: "POST",
+      headers: { ...openAIResponsesHeaders(false, this.config.userAgent), ...this.authHeaders() },
+      body: JSON.stringify(toResponsesCompactV2Body(request, this.requestContext())),
+      signal: request.signal,
+    }, {
+      providerId: this.config.providerId,
+      signal: request.signal,
+      onRetry: request.onRetry,
+      policy: { maxRetries: 5 },
+      proxyPolicy: this.runtime.proxyPolicy,
+    });
+    const body = await response.json().catch(() => undefined) as (ResponsesBody & { object?: string }) | undefined;
+    if (!response.ok) this.throwHttp(response, body?.error?.message);
+    if (!body || body.object !== "response" || !Array.isArray(body.output)) {
+      throw new ProviderError("Provider compaction did not return a canonical output window.", {
+        kind: "malformed_response", providerId: this.config.providerId,
+      });
+    }
+    return this.compactResult(request, body.output, body.usage);
+  }
+
+  private compactResult(
+    request: ProviderCompactRequest,
+    output: ResponsesOutputItem[],
+    usage: ResponsesUsage | undefined,
+  ): ProviderCompactResult {
+    const compactedInput = validateResponsesCompactItems(output, this.config.providerId);
     const providerState = parseProviderStateEnvelope({
       version: providerStateEnvelopeVersion,
       protocol: "openai-responses",
@@ -82,8 +137,19 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
       endpointFingerprint: responsesEndpointFingerprint(this.config.baseUrl),
       payload: { version: 1, profile: this.config.responsesProfile, compactedInput },
     });
-    const usage = usageFromResponses(body.usage);
-    return { providerState, ...(usage ? { usage } : {}) };
+    const parsedUsage = usageFromResponses(usage);
+    return { providerState, ...(parsedUsage ? { usage: parsedUsage } : {}) };
+  }
+
+  private compactOwner(request: ProviderCompactRequest): string {
+    // A negotiated variant never leaks across a provider/model/endpoint/profile
+    // switch; the key format is owned by responsesOwnerKey.
+    return responsesOwnerKey(
+      this.config.providerId,
+      request.model.model,
+      responsesEndpointFingerprint(this.config.baseUrl),
+      this.config.responsesProfile ?? "",
+    );
   }
 
   commitCompact(): void {
@@ -158,7 +224,7 @@ export class OpenAIResponsesAdapter implements ProviderAdapter {
     let prewarmUsage: ResponseUsage | undefined;
     const maxRetries = 5;
     const endpointFingerprint = responsesEndpointFingerprint(this.config.baseUrl);
-    const owner = `${this.config.providerId}\u0000${stableRequest.model.model}\u0000${endpointFingerprint}\u0000${this.webSocketProfile()}`;
+    const owner = responsesOwnerKey(this.config.providerId, stableRequest.model.model, endpointFingerprint, this.webSocketProfile());
     const proxyRoute = this.runtime.proxyPolicy
       ? resolveWebSocketRoute(new URL(responsesWebSocketUrl(this.config.baseUrl)), this.runtime.proxyPolicy)
       : { kind: "direct" as const, reason: "none" as const };
@@ -449,6 +515,33 @@ function snapshotRequest(request: VesicleRequest, providerId: string): VesicleRe
     ...(signal ? { signal } : {}),
     ...(onRetry ? { onRetry } : {}),
   };
+}
+
+function isStandaloneCompactNotFound(error: unknown): boolean {
+  return error instanceof ProviderError && error.kind === "http_error" && error.status === 404;
+}
+
+// The negotiation note leads the message: cleanProviderMessage truncates from
+// the front, so a verbose provider detail must not be able to cut the fact
+// that the standalone endpoint was missing.
+function withStandaloneCompactNotFoundNote(error: unknown): unknown {
+  if (!(error instanceof ProviderError)) return error;
+  return new ProviderError(
+    `Inline compaction failed after the standalone /responses/compact endpoint returned 404: ${error.message}`,
+    {
+      kind: error.kind,
+      providerId: error.providerId,
+      status: error.status,
+      retryable: error.retryable,
+      attempts: error.attempts,
+      code: error.code,
+      cause: error,
+    },
+  );
+}
+
+export function resetResponsesCompactVariantForTest(): void {
+  compactV2Owners.clear();
 }
 
 function isRetryableResponsesFailure(error: unknown): boolean {
