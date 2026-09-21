@@ -53,6 +53,7 @@ export type ResponsesEvent = {
   output_index?: number;
   content_index?: number;
   item?: ResponsesOutputItem;
+  annotation?: ResponsesAnnotation;
   response?: ResponsesBody;
   error?: { message?: string; code?: string };
 };

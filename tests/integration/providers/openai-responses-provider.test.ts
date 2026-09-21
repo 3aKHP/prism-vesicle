@@ -1306,6 +1306,11 @@ describe("OpenAI Responses built-in web search", () => {
       event(0, "response.created", { response: { id: "resp_ann" } }),
       event(1, "response.output_text.annotation.added", { annotation: { type: "url_citation" } }),
     ]), { ...streamContext(), profile: "codex-http-relay" }))).rejects.toThrow("Unsupported semantic Responses event");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.created", { response: { id: "resp_ann" } }),
+      event(1, "response.output_text.annotation.added", { annotation: { type: "file_citation" } }),
+    ]), { ...streamContext(), profile: "openai-public" }))).rejects.toThrow("Unsupported semantic Responses event");
   });
 
   test("replays portable web search calls ahead of the assistant content", () => {

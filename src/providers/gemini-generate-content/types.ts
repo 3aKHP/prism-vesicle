@@ -16,16 +16,23 @@ export type GeminiPart = {
 };
 
 /**
- * Gemini streaming can end a response with a bare empty text part: the
- * documented carrier shape for a trailing thoughtSignature. When `text` is
- * the only field, the part carries no signature, content, or thought. The
- * endpoint does not validate such signature-less non-functionCall parts, but
- * a lossy JSON re-serializer downstream can degrade one into a data-less `{}`
- * part, which the endpoint rejects (`oneof data` must have one initialized
- * field). Empty text parts that do carry a thoughtSignature are kept verbatim.
+ * Single owner of the degenerate-part rule. Gemini streaming can end a
+ * response with a bare empty text part: the documented carrier shape for a
+ * trailing thoughtSignature. Without a signature such a part carries nothing
+ * the endpoint validates, and a lossy JSON re-serializer (a strict relay, in
+ * either direction) can strip the empty string and degrade the part into a
+ * data-less shape the endpoint rejects (`oneof data` must have one
+ * initialized field). The same rejection covers every signature-less part
+ * whose only keys are `text`/`thought` with empty or absent text: `{}` (the
+ * relay already stripped the empty string on the response path),
+ * `{text:"", thought:true}`, and `{thought:true}`. Parts carrying a
+ * `thoughtSignature` string, non-empty text, or any other field are kept
+ * verbatim.
  */
-export function isBareEmptyGeminiTextPart(part: GeminiPart): boolean {
-  return part.text === "" && Object.keys(part).length === 1;
+export function isDatalessGeminiPart(part: GeminiPart): boolean {
+  if (typeof part.thoughtSignature === "string") return false;
+  if (typeof part.text === "string" && part.text !== "") return false;
+  return Object.keys(part).every((key) => key === "text" || key === "thought");
 }
 
 export type GeminiContent = {

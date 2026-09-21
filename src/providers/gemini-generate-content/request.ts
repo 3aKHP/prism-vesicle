@@ -1,5 +1,5 @@
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderThinkingBlock, type ReasoningTier, type VesicleRequest } from "../shared/types";
-import { type GeminiContent, type GeminiPart, isBareEmptyGeminiTextPart } from "./types";
+import { type GeminiContent, type GeminiPart, isDatalessGeminiPart } from "./types";
 
 const defaultMaxOutputTokens = 4096;
 
@@ -86,11 +86,11 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
             })),
           ];
       // A message that serializes to zero parts carries no model-visible
-      // information; omitting the Content keeps the wire free of degenerate
-      // empty text parts. Consecutive same-role Contents already occur in
-      // valid histories (a functionResponse batch followed by a user text
-      // message), and the triggering user message or tool batch always keeps
-      // the tail non-empty.
+      // information; omit the Content instead of emitting a degenerate
+      // empty-text placeholder (rule: isDatalessGeminiPart). Consecutive
+      // same-role Contents already occur in valid histories (a
+      // functionResponse batch followed by a user text message), and the
+      // triggering user message or tool batch keeps the tail non-empty.
       if (parts.length > 0) serialized.push({ role: "model", parts });
       continue;
     }
@@ -141,11 +141,10 @@ function geminiReplayParts(blocks: ProviderThinkingBlock[] | undefined): GeminiP
     if (block.type !== "gemini_part") continue;
     if (!isRecord(block.part)) continue;
     const part = jsonClone(block.part) as GeminiPart;
-    // Bare empty text parts recorded before this filter existed (or left by a
-    // future capture gap) must not reach the wire: a lossy re-serializer
-    // downstream can degrade one into a data-less `{}` part the endpoint
-    // rejects. Signature-carrying empty text parts pass through verbatim.
-    if (isBareEmptyGeminiTextPart(part)) continue;
+    // Data-less parts recorded before this filter existed (or produced by a
+    // relay that stripped the empty string on the response path) must not
+    // reach the wire; see isDatalessGeminiPart.
+    if (isDatalessGeminiPart(part)) continue;
     parts.push(part);
   }
   return parts;

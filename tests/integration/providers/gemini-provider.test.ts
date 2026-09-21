@@ -463,6 +463,29 @@ describe("Gemini generateContent request shaping", () => {
     ]);
   });
 
+  test("drops relay-degraded data-less parts from replay", () => {
+    const body = toGeminiGenerateContentBody({
+      ...request(),
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          thinkingBlocks: [
+            { type: "gemini_part", part: { text: "", thought: true } },
+            { type: "gemini_part", part: {} },
+            { type: "gemini_part", part: { text: "", thoughtSignature: "tail-sig" } },
+          ],
+        },
+        { role: "user", content: "next" },
+      ],
+    });
+
+    expect(body.contents).toEqual([
+      { role: "model", parts: [{ text: "", thoughtSignature: "tail-sig" }] },
+      { role: "user", parts: [{ text: "next" }] },
+    ]);
+  });
+
   test("omits messages that serialize to zero parts instead of emitting an empty text part", () => {
     const body = toGeminiGenerateContentBody({
       ...request(),
@@ -840,6 +863,42 @@ describe("Gemini generateContent adapter", () => {
           },
         ],
         toolCalls: [{ id: "call_1", name: "activate_skill", arguments: "{\"name\":\"update-config\"}" }],
+        finishReason: "STOP",
+      },
+    });
+  });
+
+  test("does not persist relay-degraded data-less parts into thinkingBlocks", async () => {
+    globalThis.fetch = (async () => new Response(sseFromBlocks([
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_1","name":"activate_skill","args":{"name":"update-config"}},"thoughtSignature":"call-sig"}]}}]}',
+      'data: {"candidates":[{"content":{"role":"model","parts":[{},{"text":"","thought":true}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":3,"totalTokenCount":13}}',
+    ]), {
+      headers: { "content-type": "text/event-stream" },
+    })) as unknown as typeof fetch;
+
+    const adapter = new GeminiGenerateContentAdapter({
+      provider: "gemini-generate-content",
+      providerId: "google",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-test",
+      apiKey: "test-key",
+    });
+
+    const events = await collect(adapter.stream!(request()));
+
+    expect(events.at(-1)).toMatchObject({
+      type: "complete",
+      response: {
+        content: "",
+        thinkingBlocks: [
+          {
+            type: "gemini_part",
+            part: {
+              functionCall: { id: "call_1", name: "activate_skill", args: { name: "update-config" } },
+              thoughtSignature: "call-sig",
+            },
+          },
+        ],
         finishReason: "STOP",
       },
     });
