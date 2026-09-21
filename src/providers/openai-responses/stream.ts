@@ -112,7 +112,7 @@ export async function* readResponsesStream(response: Response, context: StreamCo
           && (event.type === "codex.rate_limits"
             || event.type === "codex.response.metadata"
             || event.type === "responsesapi.websocket_timing")) break;
-        if (!isKnownAdditiveEvent(event.type, context.profile)) throw malformed(`Unsupported semantic Responses event: ${event.type}.`, context.providerId);
+        if (!isKnownAdditiveEvent(event, context.profile)) throw malformed(`Unsupported semantic Responses event: ${event.type}.`, context.providerId);
     }
   }
   if (!terminal) throw new ProviderError("Provider stream ended before response.completed.", {
@@ -184,7 +184,8 @@ function parseEvent(payload: string, providerId: string): ResponsesEvent {
   }
 }
 
-function isKnownAdditiveEvent(type: string, profile: ResponsesProfile | undefined): boolean {
+function isKnownAdditiveEvent(event: ResponsesEvent, profile: ResponsesProfile | undefined): boolean {
+  const type = event.type;
   return type === "response.created" || type === "response.in_progress"
     || type === "response.output_item.added" || type === "response.content_part.added"
     || type === "response.content_part.done" || type === "response.output_text.done"
@@ -195,7 +196,8 @@ function isKnownAdditiveEvent(type: string, profile: ResponsesProfile | undefine
     || type === "response.function_call_arguments.done"
     || (supportsResponsesWebSearch(profile) && (type === "response.web_search_call.in_progress"
       || type === "response.web_search_call.searching"
-      || type === "response.web_search_call.completed"));
+      || type === "response.web_search_call.completed"
+      || (type === "response.output_text.annotation.added" && event.annotation?.type === "url_citation")));
 }
 
 function isFatalResponseFailure(code: string | undefined): boolean {

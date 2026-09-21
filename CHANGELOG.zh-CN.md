@@ -12,6 +12,11 @@
 
 - **Responses 远程压缩的内联回退（#328）。** 当独立 `/responses/compact` 端点返回 HTTP 404 时,`openai-responses` 适配器会把同一源窗口改为一元 `POST /responses` 请求重试,input 末尾追加 `compaction_trigger` 哨兵项。协商结果按 provider/model/endpoint/profile 属主在进程生命周期内记忆;哨兵项绝不进入会话记录或回放;压缩窗口与信封语义与独立形式完全一致。非 404 的独立端点失败保持原样终止;两种形式都失败时报错同时提及两次尝试。官方 `api.openai.com` 行为不变;新增手动 `test:acceptance:responses:compact-v2` lane 记录第三方后端兼容性。
 
+### 修复
+
+- **流式 `url_citation` 注释不再导致 web search 轮次失败。** `openai-public` profile 上带搜索依据的回答可能在流式过程中发出 `response.output_text.annotation.added` 事件;该事件此前不在准入列表中,会把整个轮次判为不可解析的响应而中断。现在准入搜索的 profile 在该事件携带 `url_citation` 注释时接受它——其他注释类型保持 fail-closed,引用仍可通过完成响应的 Item 获取;Codex 指纹 profile 与冻结子集对该事件保持 fail-closed。
+- **Gemini `generateContent` 不再发出无签名且无已初始化 data 字段的 part,修复严格中转上游返回的 400。** Gemini 3 流式响应可能在末尾带一个空文本 part——这是官方文档中尾部 `thoughtSignature` 的载体形态——适配器此前把它与带签名的 part 一起原样记录并回放。官方端点容忍 `{"text":""}`（protojson oneof 存在性语义）,但会重序列化 JSON 的中转可能丢弃空字符串,把该 part 退化成无 data 的形状,被端点拒绝（`required oneof field 'data' must have one initialized field`）。现在无签名且只有 `text`/`thought` 键、文本为空或缺失的 part——裸空文本 part 或中转退化出的 `{}`/`{thought:true}`——在捕获与回放两端都会被丢弃（含既有会话中的记录）,携带签名的 part 保持逐字节不变,序列化后 0-part 的消息整体省略而不再以 `{text:""}` 占位。
+
 ## [1.1.1] - 2026-09-05
 
 ### 新增

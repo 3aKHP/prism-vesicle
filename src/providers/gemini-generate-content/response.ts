@@ -3,7 +3,7 @@ import { ProviderError } from "../shared/errors";
 import { displayTextFromThinkingBlocks } from "../shared/thinking";
 import { normalizeResponseUsage } from "../shared/usage";
 import type { ProviderThinkingBlock, VesicleResponse, WebSearchCitation, WebSearchReport } from "../shared/types";
-import type { GeminiGroundingMetadata, GeminiPart, GeminiResponse } from "./types";
+import { type GeminiGroundingMetadata, type GeminiPart, type GeminiResponse, isDatalessGeminiPart } from "./types";
 
 export function responseFromGeminiBody(
   body: GeminiResponse | undefined,
@@ -36,7 +36,9 @@ export function responseFromGeminiParts(args: {
   const toolCalls: ToolCall[] = [];
   const needsReplay = normalizedParts.some((part) => part.thought === true || typeof part.thoughtSignature === "string");
   const thinkingBlocks: ProviderThinkingBlock[] = needsReplay
-    ? normalizedParts.map((part) => ({ type: "gemini_part", part: jsonClone(part) }))
+    ? normalizedParts
+        .filter((part) => !isDatalessGeminiPart(part))
+        .map((part) => ({ type: "gemini_part", part: jsonClone(part) }))
     : [];
 
   for (let index = 0; index < normalizedParts.length; index++) {
