@@ -15,6 +15,19 @@ export type GeminiPart = {
   [key: string]: unknown;
 };
 
+/**
+ * Gemini streaming can end a response with a bare empty text part: the
+ * documented carrier shape for a trailing thoughtSignature. When `text` is
+ * the only field, the part carries no signature, content, or thought. The
+ * endpoint does not validate such signature-less non-functionCall parts, but
+ * a lossy JSON re-serializer downstream can degrade one into a data-less `{}`
+ * part, which the endpoint rejects (`oneof data` must have one initialized
+ * field). Empty text parts that do carry a thoughtSignature are kept verbatim.
+ */
+export function isBareEmptyGeminiTextPart(part: GeminiPart): boolean {
+  return part.text === "" && Object.keys(part).length === 1;
+}
+
 export type GeminiContent = {
   role?: "user" | "model";
   parts?: GeminiPart[];

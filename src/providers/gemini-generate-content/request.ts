@@ -1,5 +1,5 @@
 import { PROVIDER_NATIVE_CHECKPOINT_KIND, type ProviderThinkingBlock, type ReasoningTier, type VesicleRequest } from "../shared/types";
-import type { GeminiContent, GeminiPart } from "./types";
+import { type GeminiContent, type GeminiPart, isBareEmptyGeminiTextPart } from "./types";
 
 const defaultMaxOutputTokens = 4096;
 
@@ -85,7 +85,13 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
               },
             })),
           ];
-      serialized.push({ role: "model", parts: parts.length > 0 ? parts : [{ text: "" }] });
+      // A message that serializes to zero parts carries no model-visible
+      // information; omitting the Content keeps the wire free of degenerate
+      // empty text parts. Consecutive same-role Contents already occur in
+      // valid histories (a functionResponse batch followed by a user text
+      // message), and the triggering user message or tool batch always keeps
+      // the tail non-empty.
+      if (parts.length > 0) serialized.push({ role: "model", parts });
       continue;
     }
 
@@ -93,7 +99,7 @@ function toGeminiContents(messages: VesicleRequest["messages"]): GeminiContent[]
       ...(message.content ? [{ text: message.content }] : []),
       ...geminiImageParts(message.images),
     ];
-    serialized.push({ role: "user", parts: parts.length > 0 ? parts : [{ text: "" }] });
+    if (parts.length > 0) serialized.push({ role: "user", parts });
   }
   flushToolResults();
   return serialized;
@@ -134,7 +140,13 @@ function geminiReplayParts(blocks: ProviderThinkingBlock[] | undefined): GeminiP
   for (const block of blocks ?? []) {
     if (block.type !== "gemini_part") continue;
     if (!isRecord(block.part)) continue;
-    parts.push(jsonClone(block.part) as GeminiPart);
+    const part = jsonClone(block.part) as GeminiPart;
+    // Bare empty text parts recorded before this filter existed (or left by a
+    // future capture gap) must not reach the wire: a lossy re-serializer
+    // downstream can degrade one into a data-less `{}` part the endpoint
+    // rejects. Signature-carrying empty text parts pass through verbatim.
+    if (isBareEmptyGeminiTextPart(part)) continue;
+    parts.push(part);
   }
   return parts;
 }

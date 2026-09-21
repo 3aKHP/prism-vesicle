@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Fixed
 
 - **Streamed `url_citation` annotations no longer fail web search turns.** A search-grounded answer on the `openai-public` profile can emit `response.output_text.annotation.added` while streaming; the event was not on the admitted additive list and aborted the turn as an unparseable response. Search-admitting profiles now accept the event (citations stay available through the completed response Items), while Codex fingerprint profiles and the frozen subsets remain fail-closed against it.
+- **Gemini `generateContent` no longer emits bare empty text parts, fixing 400 responses from strict relay upstreams.** Gemini 3 streaming can end a response with an empty text part — the documented carrier shape for a trailing `thoughtSignature` — and the adapter recorded and replayed it verbatim alongside the signed parts. The official endpoint tolerates `{"text":""}` (protojson oneof presence), but relays that re-serialize JSON can drop the empty string and degrade the part into a data-less `{}` the endpoint rejects (`required oneof field 'data' must have one initialized field`). Signature-less bare empty text parts are now dropped at capture and at replay (including records in pre-existing sessions), empty text parts carrying a signature remain byte-exact, and a message that serializes to zero parts is omitted instead of being sent as a `{text:""}` placeholder.
 
 ## [1.1.1] - 2026-09-05
 

@@ -15,6 +15,7 @@
 ### 修复
 
 - **流式 `url_citation` 注释不再导致 web search 轮次失败。** `openai-public` profile 上带搜索依据的回答可能在流式过程中发出 `response.output_text.annotation.added` 事件;该事件此前不在准入列表中,会把整个轮次判为不可解析的响应而中断。现在准入搜索的 profile 接受该事件（引用仍可通过完成响应的 Item 获取）;Codex 指纹 profile 与冻结子集对该事件保持 fail-closed。
+- **Gemini `generateContent` 不再发出裸空文本 part,修复严格中转上游返回的 400。** Gemini 3 流式响应可能在末尾带一个空文本 part——这是官方文档中尾部 `thoughtSignature` 的载体形态——适配器此前把它与带签名的 part 一起原样记录并回放。官方端点容忍 `{"text":""}`（protojson oneof 存在性语义）,但会重序列化 JSON 的中转可能丢弃空字符串,把该 part 退化成无 data 的 `{}`,被端点拒绝（`required oneof field 'data' must have one initialized field`）。现在无签名的裸空文本 part 在捕获与回放两端都会被丢弃（含既有会话中的记录）,携带签名的空文本 part 保持逐字节不变,序列化后 0-part 的消息整体省略而不再以 `{text:""}` 占位。
 
 ## [1.1.1] - 2026-09-05
 
