@@ -1285,6 +1285,29 @@ describe("OpenAI Responses built-in web search", () => {
     expect(completed.response.webSearch).toMatchObject({ queries: ["streamed query"], calls: [{ id: "ws_1" }] });
   });
 
+  test("admits streamed url_citation annotations only when web search is supported", async () => {
+    const events = await collect(readResponsesStream(responseStream([
+      event(0, "response.created", { response: { id: "resp_ann" } }),
+      event(1, "response.output_text.delta", { delta: "grounded" }),
+      event(2, "response.output_text.annotation.added", {
+        annotation: { type: "url_citation", url: "https://example.com", title: "Example", start_index: 0, end_index: 8 },
+      }),
+      event(3, "response.completed", {
+        response: {
+          id: "resp_ann", status: "completed",
+          output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "grounded", annotations: [{ type: "url_citation", url: "https://example.com" }] }] }],
+          usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+        },
+      }),
+    ]), { ...streamContext(), profile: "openai-public" }));
+    expect(events.find((item) => item.type === "complete")?.type).toBe("complete");
+
+    await expect(collect(readResponsesStream(responseStream([
+      event(0, "response.created", { response: { id: "resp_ann" } }),
+      event(1, "response.output_text.annotation.added", { annotation: { type: "url_citation" } }),
+    ]), { ...streamContext(), profile: "codex-http-relay" }))).rejects.toThrow("Unsupported semantic Responses event");
+  });
+
   test("replays portable web search calls ahead of the assistant content", () => {
     const messages = [
       { role: "user" as const, content: "search please" },

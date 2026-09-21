@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Inline fallback for Responses remote compaction (#328).** When the standalone `/responses/compact` endpoint answers HTTP 404, the `openai-responses` adapter retries the same source window as a unary `POST /responses` request whose input ends with a `compaction_trigger` sentinel. The negotiated variant is remembered per provider/model/endpoint/profile owner for the process lifetime, the trigger never enters session records or replay, and the compacted window and envelope semantics are identical to the standalone form. Any non-404 standalone failure stays terminal, and a failure of both forms reports both attempts. Official `api.openai.com` behavior is unchanged; the new manual `test:acceptance:responses:compact-v2` lane records third-party backend compatibility.
 
+### Fixed
+
+- **Streamed `url_citation` annotations no longer fail web search turns.** A search-grounded answer on the `openai-public` profile can emit `response.output_text.annotation.added` while streaming; the event was not on the admitted additive list and aborted the turn as an unparseable response. Search-admitting profiles now accept the event (citations stay available through the completed response Items), while Codex fingerprint profiles and the frozen subsets remain fail-closed against it.
+
 ## [1.1.1] - 2026-09-05
 
 ### Added

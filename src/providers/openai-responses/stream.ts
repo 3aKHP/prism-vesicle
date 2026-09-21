@@ -195,7 +195,8 @@ function isKnownAdditiveEvent(type: string, profile: ResponsesProfile | undefine
     || type === "response.function_call_arguments.done"
     || (supportsResponsesWebSearch(profile) && (type === "response.web_search_call.in_progress"
       || type === "response.web_search_call.searching"
-      || type === "response.web_search_call.completed"));
+      || type === "response.web_search_call.completed"
+      || type === "response.output_text.annotation.added"));
 }
 
 function isFatalResponseFailure(code: string | undefined): boolean {
