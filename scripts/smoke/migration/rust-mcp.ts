@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import type { RequestObservation } from "../../../tests/support/mcp/loopback";
 import { buildMcpProbe, executeMcpProbe } from "./rust-mcp-command";
 
-await buildMcpProbe();
+const binary = await buildMcpProbe();
 const sandbox = await mkdtemp(join(tmpdir(), "vesicle-mcp-oracle-"));
 const ready = join(sandbox, "ready.json");
 const server = Bun.spawn(["node", "--experimental-strip-types", resolve(import.meta.dir, "rust-mcp-server.ts"), ready], { stdin: "pipe", stdout: "pipe", stderr: "inherit" });
@@ -19,14 +19,14 @@ try {
     await Bun.sleep(20);
   }
   const urls = await Bun.file(ready).json();
-  const observed = await executeMcpProbe(["fixtures", urls.legacy, urls.modern]);
+  const observed = await executeMcpProbe(binary, ["fixtures", urls.legacy, urls.modern]);
   assert.equal(observed.timedOut, false);
   assert.equal(observed.exit, 0, observed.stderr);
   assert.equal(observed.stderr, "");
   const result = JSON.parse(observed.stdout);
 
   const secret = "synthetic-do-not-log";
-  const rejected = await executeMcpProbe(["live", "legacy"], JSON.stringify({ url: urls.legacy, headers: { Authorization: `Bearer ${secret}` } }));
+  const rejected = await executeMcpProbe(binary, ["live", "legacy"], JSON.stringify({ url: urls.legacy, headers: { Authorization: `Bearer ${secret}` } }));
   assert.equal(rejected.exit, 1); assert.equal(rejected.stdout, "");
   assert(!rejected.stderr.includes(secret)); assert(!rejected.stderr.includes(urls.legacy));
   let redirectedRequests = 0;
@@ -37,7 +37,7 @@ try {
   await new Promise<void>((resolve) => redirect.listen(0, "127.0.0.1", resolve));
   try {
     const address = redirect.address() as AddressInfo;
-    const rejected = await executeMcpProbe(["fixtures", `http://127.0.0.1:${address.port}/mcp`, urls.modern]);
+    const rejected = await executeMcpProbe(binary, ["fixtures", `http://127.0.0.1:${address.port}/mcp`, urls.modern]);
     assert.equal(rejected.timedOut, false); assert.equal(rejected.exit, 1); assert.equal(rejected.stdout, "");
     assert.equal(redirectedRequests, 0, "redirect destination must not be contacted by any HTTP method");
   } finally {

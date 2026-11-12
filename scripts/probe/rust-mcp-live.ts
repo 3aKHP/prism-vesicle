@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadMcpConfig } from "../../src/mcp/config";
+import { readLiveBudget, reserveLiveSession } from "./mcp-live-budget";
 import { buildMcpProbe, executeMcpProbe } from "../smoke/migration/rust-mcp-command";
 
 // Explicit, owner-authorized read-only acceptance. Never used by CI. Reuse the
@@ -14,7 +15,8 @@ async function main() {
   assert.equal(status.exitCode, 0); assert.equal(status.stdout.toString().trim(), "", "commit the tested source first");
   const head = Bun.spawnSync(["git", "rev-parse", "HEAD"]);
   assert.equal(head.exitCode, 0); const sourceSha = head.stdout.toString().trim();
-  await buildMcpProbe();
+  const binary = await buildMcpProbe();
+  const binarySha256 = createHash("sha256").update(await readFile(binary)).digest("hex");
   const config = await loadMcpConfig();
   assert(config.configured && config.config.enabled);
   const server = config.config.servers.find((server) => server.id === serverId && server.enabled);
@@ -25,19 +27,14 @@ async function main() {
   const lock = await open(lockPath, "wx");
   try {
     const budgetPath = join(directory, "MCP_LIVE_BUDGET.json");
-    const existing = await readFile(budgetPath, "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return undefined; throw error; });
-    const budget = existing ? JSON.parse(existing) : { schemaVersion: 1, maxSessions: 4, maxRpcReservations: 16, sessionsStarted: 0, rpcReservations: 0 };
-    assert.equal(budget.maxSessions, 4); assert.equal(budget.maxRpcReservations, 16);
-    assert(Number.isInteger(budget.sessionsStarted) && budget.sessionsStarted >= 0 && budget.sessionsStarted <= 4);
-    assert.equal(budget.rpcReservations, budget.sessionsStarted * 4);
+    let budget = await readLiveBudget(budgetPath);
     assert(budget.sessionsStarted <= 2, "two session reservations required; no automatic budget reset");
     let failed = false;
     for (const era of ["legacy", "modern"]) {
-      budget.sessionsStarted++; budget.rpcReservations += 4;
-      await writeFile(budgetPath, `${JSON.stringify(budget, null, 2)}\n`);
+      budget = await reserveLiveSession(budgetPath, budget);
       const startedAt = new Date().toISOString();
       // Credentials cross only this private stdin pipe, never argv or reports.
-      const observed = await executeMcpProbe(["live", era], JSON.stringify({ url: server.url, headers: server.headers }));
+      const observed = await executeMcpProbe(binary, ["live", era], JSON.stringify({ url: server.url, headers: server.headers }));
       let result: unknown; let error: string | undefined;
       if (observed.exit === 0 && !observed.timedOut) {
         const candidate = JSON.parse(observed.stdout);
@@ -53,7 +50,7 @@ async function main() {
         try { const candidate = JSON.parse(observed.stderr).error; error = typeof candidate === "string" && /^probe\.[a-z_]+$/.test(candidate) ? candidate : "probe.process_failed"; }
         catch { error = "probe.process_failed"; }
       }
-      const report = { schemaVersion: 1, sourceSha, serverId, endpointSha256: createHash("sha256").update(server.url).digest("hex"), authorizationPresent: true, era, attempt: budget.sessionsStarted, startedAt, endedAt: new Date().toISOString(), exitCode: observed.exit, timedOut: observed.timedOut, status: error ? "failed" : "passed", result, error };
+      const report = { schemaVersion: 1, sourceSha, binarySha256, serverId, endpointSha256: createHash("sha256").update(server.url).digest("hex"), authorizationPresent: true, era, attempt: budget.sessionsStarted, startedAt, endedAt: new Date().toISOString(), exitCode: observed.exit, timedOut: observed.timedOut, status: error ? "failed" : "passed", result, error };
       await writeFile(join(directory, `MCP-LIVE-${budget.sessionsStarted}-${era}.json`), `${JSON.stringify(report, null, 2)}\n`);
       console.log(JSON.stringify({ era, attempt: budget.sessionsStarted, status: report.status, error }));
     }
