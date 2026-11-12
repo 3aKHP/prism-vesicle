@@ -100,3 +100,7 @@ This document defines durable conversation history, provider projection, file ch
 - Observability does not change provider, process, tool, or session semantics.
 
 Persistent Instructions are deliberately outside session identity; their separate resolution and mutation contract lives in [`PERSISTENT_INSTRUCTIONS.md`](./PERSISTENT_INSTRUCTIONS.md).
+
+## Experimental Rust Inspection
+
+The separate Rust development entry implements a limited read-only record inspection, described in [`RUST_DEVELOPMENT.md`](./RUST_DEVELOPMENT.md#supported-inspection-subset). It can inspect legacy links, nested branch ancestry, physical-order host preferences and retained metadata. It does not implement provider-history projection, migration, attachment materialization, file restoration or continuation, and explicitly rejects unsupported record kinds. The contracts above continue to describe the supported TypeScript runtime and the eventual compatibility requirements, not completed Rust parity.

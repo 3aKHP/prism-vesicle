@@ -111,6 +111,10 @@ jobs:
         if: steps.rust.outputs.enabled == 'true'
         timeout-minutes: 15
         run: bun scripts/check/rust-workspace.ts --install-toolchain
+      - name: Compare read-only Rust session inspection with TS records
+        if: steps.rust.outputs.enabled == 'true'
+        timeout-minutes: 2
+        run: bun scripts/smoke/migration/rust-session.ts
       - uses: actions/upload-artifact@v7
         # The publish caller collects publish-* artifacts into the release.
         # Development binaries must never enter that collection.
