@@ -1,0 +1,3 @@
+{"sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "system", "content": "prompt"}
+{"sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "user", "content": "old question"}
+{"sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "old answer", "metadata": {"providerState": {"version": 1, "protocol": "fixture-responses", "providerId": "fixture-provider", "model": "fixture-model", "endpointFingerprint": "sha256:fixture-endpoint", "payload": {"encrypted": "opaque\n+/=signature", "outputItems": []}}}}

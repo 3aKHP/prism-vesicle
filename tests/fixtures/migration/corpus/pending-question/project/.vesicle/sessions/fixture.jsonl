@@ -1,0 +1,3 @@
+{"uuid": "r0", "parentUuid": null, "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "system", "content": "prompt", "metadata": {"engine": "etl"}}
+{"uuid": "r1", "parentUuid": "r0", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "user", "content": "request"}
+{"uuid": "r2", "parentUuid": "r1", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "pending", "metadata": {"toolCalls": [{"id": "call-pending", "name": "ask_user_question", "arguments": "{\"header\": \"Scope\", \"question\": \"Which scope?\", \"options\": [{\"label\": \"Narrow\", \"description\": \"Minimal\"}, {\"label\": \"Broad\", \"description\": \"Expanded\"}]}"}]}}

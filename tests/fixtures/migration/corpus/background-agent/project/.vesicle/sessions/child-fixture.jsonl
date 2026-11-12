@@ -1,0 +1,2 @@
+{"uuid": "child-s", "parentUuid": null, "sessionId": "child-fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "system", "content": "child prompt", "metadata": {"kind": "subagent-session"}}
+{"uuid": "child-a", "parentUuid": "child-s", "sessionId": "child-fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "synthetic research"}

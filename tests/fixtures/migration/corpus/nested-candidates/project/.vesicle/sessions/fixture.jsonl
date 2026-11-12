@@ -1,0 +1,10 @@
+{"uuid": "s", "parentUuid": null, "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "system", "content": "prompt"}
+{"uuid": "u1", "parentUuid": "s", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "user", "content": "outline"}
+{"uuid": "a", "parentUuid": "u1", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "alpha"}
+{"uuid": "u2a", "parentUuid": "a", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "user", "content": "expand alpha"}
+{"uuid": "a1", "parentUuid": "u2a", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "alpha one"}
+{"uuid": "a2", "parentUuid": "u2a", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "alpha two"}
+{"uuid": "b", "parentUuid": "u1", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "beta"}
+{"uuid": "u2b", "parentUuid": "b", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "user", "content": "expand beta"}
+{"uuid": "b1", "parentUuid": "u2b", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "beta one"}
+{"uuid": "b2", "parentUuid": "u2b", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "beta two"}
