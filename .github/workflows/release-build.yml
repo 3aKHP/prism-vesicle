@@ -60,13 +60,6 @@ jobs:
       - run: bun test
       - name: Check resource probe failure handling
         run: python3 -m unittest discover -s tests/unit/migration -p 'resource_probe_test.py'
-      - id: rust
-        name: Detect Rust verification scope
-        run: bun scripts/check/rust-workspace.ts --detect
-      - name: Verify Rust workspace (when present)
-        if: steps.rust.outputs.enabled == 'true'
-        timeout-minutes: 15
-        run: bun scripts/check/rust-workspace.ts --install-toolchain
       - name: Execute and compare TS migration oracles
         run: |
           bun scripts/smoke/migration/main.ts . "$RUNNER_TEMP/vesicle-oracle-a"
@@ -95,6 +88,40 @@ jobs:
           echo "${MESSAGE}" >> "$GITHUB_STEP_SUMMARY"
       - run: bun run pack:check
       - run: bun run pack:smoke
+
+  rust:
+    name: Rust native checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.checkout_ref }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - id: rust
+        name: Detect Rust verification scope
+        run: bun scripts/check/rust-workspace.ts --detect
+      - name: Verify Rust workspace and native CLI
+        if: steps.rust.outputs.enabled == 'true'
+        timeout-minutes: 15
+        run: bun scripts/check/rust-workspace.ts --install-toolchain
+      - uses: actions/upload-artifact@v7
+        # The publish caller collects publish-* artifacts into the release.
+        # Development binaries must never enter that collection.
+        if: steps.rust.outputs.enabled == 'true' && inputs.artifact_prefix == 'ci'
+        with:
+          name: ${{ inputs.artifact_prefix }}-rust-dev-${{ matrix.os }}
+          path: |
+            target/debug/vesicle-rust-dev
+            target/debug/vesicle-rust-dev.exe
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
 
   linux:
     name: Linux ELF release smoke

@@ -6,6 +6,7 @@ bun.lockb
 dist/
 /build/
 coverage/
+/target/
 /prism-vesicle
 /prism-vesicle.exe
 /prism-vesicle-cross-windows-x64.exe

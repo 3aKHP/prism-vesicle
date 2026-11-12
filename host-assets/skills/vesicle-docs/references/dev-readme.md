@@ -50,6 +50,7 @@ Promotion flows in one direction. An internal conclusion becomes public only by 
 
 | Document | Responsibility |
 |----------|----------------|
+| [`RUST_DEVELOPMENT.md`](./RUST_DEVELOPMENT.md) | Experimental Rust workspace, development entry, verification and current limitations |
 | [`COMMAND_COMPLETION.md`](./COMMAND_COMPLETION.md) | Slash-command argument-completion contract |
 | [`COMMAND_QUEUE.md`](./COMMAND_QUEUE.md) | Slash-command scheduling while the Agent Loop is busy |
 | [`QUALITY_BENCHMARK.md`](./QUALITY_BENCHMARK.md) | Developer-only Semantic Judge measurement, limits, recovery, and evidence boundary |
