@@ -16,6 +16,7 @@ const casesBytes = await readFile(join(fixtures, "cases.json"));
 const cases = parseCorpus(JSON.parse(casesBytes.toString()));
 await mkdir(output);
 const results: Array<{ id: string; status: string; resultHash: string; manifestHash: string }> = [];
+let complete = false;
 try {
   for (const scenario of cases) {
     assert(/^[a-z0-9-]+$/.test(scenario.id) && /^[a-z0-9-]+$/.test(scenario.sessionId));
@@ -45,6 +46,8 @@ try {
     results.push({ id: scenario.id, status: "passed", resultHash: sha256(bytes), manifestHash: sha256(manifestBytes) });
     console.log(`${scenario.id}: ${assertions.length} assertions passed`);
   }
+  assert.equal(await baselineSha(source), tsSha, "source checkout changed during corpus execution");
+  complete = true;
 } finally {
-  await writeFile(join(output, "RUN.json"), `${JSON.stringify({ schemaVersion: 1, tsSha, rustSha: null, casesHash: sha256(casesBytes), expectedCases: cases.map((item) => item.id), results }, null, 2)}\n`);
+  await writeFile(join(output, "RUN.json"), `${JSON.stringify({ schemaVersion: 1, status: complete ? "passed" : "failed", tsSha, rustSha: null, casesHash: sha256(casesBytes), expectedCases: cases.map((item) => item.id), results }, null, 2)}\n`);
 }

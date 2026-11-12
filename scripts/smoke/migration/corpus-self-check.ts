@@ -11,7 +11,7 @@ assert(source, "Usage: bun scripts/smoke/migration/corpus-self-check.ts <complet
 await validateCorpusRun(resolve(source));
 const temporary = await mkdtemp(join(tmpdir(), "vesicle-corpus-corruption-"));
 try {
-  for (const corruption of ["raw-tree", "rehashed-observation", "wrong-sha", "skipped", "missing-case", "weakened-scenario"]) {
+  for (const corruption of ["raw-tree", "rehashed-observation", "wrong-sha", "skipped", "missing-case", "weakened-scenario", "failed-run"]) {
     const root = join(temporary, corruption);
     await cp(resolve(source), root, { recursive: true });
     const runPath = join(root, "RUN.json");
@@ -23,6 +23,8 @@ try {
       await writeFile(join(folder, "project/.vesicle/sessions/fixture.jsonl"), "damaged\n");
     } else if (corruption === "missing-case") {
       run.results.pop();
+    } else if (corruption === "failed-run") {
+      run.status = "failed";
     } else {
       if (corruption === "rehashed-observation") {
         const file = join(folder, "observation.json");

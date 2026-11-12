@@ -12,6 +12,7 @@ export async function validateCorpusRun(root: string) {
   const cases = parseCorpus(JSON.parse(casesBytes.toString()));
   const run = JSON.parse(await readFile(join(root, "RUN.json"), "utf8"));
   assert.equal(run.schemaVersion, 1);
+  assert.equal(run.status, "passed", "corpus run did not complete its final provenance checks");
   assert.equal(run.rustSha, null);
   assert.match(run.tsSha, /^[0-9a-f]{40}$/);
   assert.equal(run.casesHash, sha256(casesBytes));
