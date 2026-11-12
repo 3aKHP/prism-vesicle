@@ -191,3 +191,38 @@ fn malformed_or_unbounded_provider_envelopes_fail_without_interpreting_payloads(
     record["metadata"]["providerState"]["version"] = serde_json::from_str("1.0").unwrap();
     assert!(inspect(&record.to_string(), None).is_ok());
 }
+
+#[test]
+fn literal_serializer_tags_remain_objects_in_metadata_and_provider_payloads() {
+    let opaque = json!({"$serde_json::private::Number":"123","other":[{"$serde_json::private::RawValue":"false"}]});
+    let mut record: Value =
+        serde_json::from_str(fixture("legacy-linear").lines().last().unwrap()).unwrap();
+    record["metadata"]["providerState"]["payload"] = opaque.clone();
+    record["metadata"]["opaque"] = json!({"$serde_json::private::Number":"123"});
+    let result = inspect(&record.to_string(), None).unwrap();
+    assert_eq!(
+        result["records"][0]["metadata"]["providerState"]["payload"],
+        opaque
+    );
+    assert_eq!(
+        result["activeBranch"][0]["metadata"]["opaque"],
+        json!({"$serde_json::private::Number":"123"})
+    );
+}
+
+#[test]
+fn candidate_markers_require_a_content_leaf_and_its_owning_user_turn() {
+    for (leaf, fork) in [
+        (Value::Null, json!("missing")),
+        (json!("a2"), json!("missing")),
+        (json!("a2"), json!("u1")),
+        (json!("s"), json!("u1")),
+    ] {
+        let marker = json!({"uuid":"select","parentUuid":leaf,"sessionId":"fixture","ts":"now","role":"system","content":"","metadata":{"kind":"candidate-selection","forkPointUuid":fork,"selectedLeafUuid":leaf}});
+        let input = format!("{}{marker}\n", fixture("nested-candidates"));
+        assert_eq!(
+            inspect(&input, None).unwrap_err().code,
+            "session.invalid_selection"
+        );
+    }
+}

@@ -69,6 +69,13 @@ try {
   await inspect(sandbox, undefined, "session.regular_file_required");
   await inspect(join(sandbox, "missing.jsonl"), undefined, "session.read_failed");
   results.push({ scenario: "bounded-file-errors", status: "passed" });
+  await writeFile(path, new Uint8Array([0xff]));
+  await inspect(path, undefined, "session.invalid_utf8");
+  const literal = { sessionId: "s", ts: "now", role: "user", content: "opaque", metadata: { opaque: { "$serde_json::private::Number": "123" } } };
+  await writeFile(path, JSON.stringify(literal));
+  const result = await inspect(path);
+  assert.deepEqual(result.records[0].metadata, literal.metadata);
+  results.push({ scenario: "opaque-object-preserved", status: "passed" });
 } finally { await rm(sandbox, { recursive: true, force: true }); }
 
 assert.deepEqual(await treeManifest(corpus), before, "entire original corpus tree must remain unchanged");

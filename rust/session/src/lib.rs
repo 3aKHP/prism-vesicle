@@ -1,6 +1,7 @@
 //! Read-only inspection of a deliberately limited subset of durable JSONL.
 //! This is not provider history, a resume operation, or file restoration.
 
+mod json;
 mod preferences;
 mod provider_state;
 mod records;

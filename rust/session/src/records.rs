@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
@@ -6,7 +6,7 @@ use crate::{InspectError, provider_state};
 
 pub(super) fn parse(input: &str) -> Result<Vec<Value>, InspectError> {
     let mut records = Vec::new();
-    let mut ids = HashSet::new();
+    let mut ids = HashMap::new();
     let mut session_id = None;
     let mut previous = Value::Null;
     for (line, text) in input.lines().enumerate() {
@@ -19,7 +19,7 @@ pub(super) fn parse(input: &str) -> Result<Vec<Value>, InspectError> {
                 error
             })?;
         let uuid = record["uuid"].as_str().expect("normalized UUID");
-        if ids.contains(uuid) {
+        if ids.contains_key(uuid) {
             return Err(InspectError {
                 code: "session.duplicate_uuid",
                 line: Some(line + 1),
@@ -28,14 +28,18 @@ pub(super) fn parse(input: &str) -> Result<Vec<Value>, InspectError> {
         // Append-only links point backward. Reject unsupported forward links as
         // well as missing parents/cycles, even on an unselected branch.
         if let Some(parent) = record["parentUuid"].as_str()
-            && !ids.contains(parent)
+            && !ids.contains_key(parent)
         {
             return Err(InspectError {
                 code: "session.invalid_parent",
                 line: Some(line + 1),
             });
         }
-        ids.insert(uuid.to_owned());
+        validate_selection(&record, &records, &ids).map_err(|mut error| {
+            error.line = Some(line + 1);
+            error
+        })?;
+        ids.insert(uuid.to_owned(), records.len());
         previous = record["uuid"].clone();
         records.push(record);
     }
@@ -51,8 +55,7 @@ fn normalize(
     previous: &Value,
     session_id: &mut Option<String>,
 ) -> Result<Value, InspectError> {
-    let mut value: Value =
-        serde_json::from_str(text).map_err(|_| InspectError::new("session.invalid_json"))?;
+    let mut value = crate::json::parse(text, 0)?;
     let record = value
         .as_object_mut()
         .ok_or_else(|| InspectError::new("session.invalid_record"))?;
@@ -120,7 +123,14 @@ fn normalize(
                 return Err(InspectError::new("session.unsupported_kind"));
             }
             if kind == "candidate-selection"
-                && (!metadata.get("forkPointUuid").is_some_and(Value::is_string)
+                && (metadata
+                    .get("forkPointUuid")
+                    .and_then(Value::as_str)
+                    .is_none_or(|id| id.is_empty())
+                    || metadata
+                        .get("selectedLeafUuid")
+                        .and_then(Value::as_str)
+                        .is_none_or(|id| id.is_empty())
                     || metadata.get("selectedLeafUuid") != record.get("parentUuid"))
             {
                 return Err(InspectError::new("session.invalid_selection"));
@@ -131,6 +141,33 @@ fn normalize(
         }
     }
     Ok(value)
+}
+
+fn validate_selection(
+    record: &Value,
+    records: &[Value],
+    ids: &HashMap<String, usize>,
+) -> Result<(), InspectError> {
+    if record["metadata"]["kind"] != "candidate-selection" {
+        return Ok(());
+    }
+    let invalid = || InspectError::new("session.invalid_selection");
+    let mut cursor = record["parentUuid"].as_str().ok_or_else(invalid)?;
+    let leaf = &records[*ids.get(cursor).ok_or_else(invalid)?];
+    if leaf["role"] == "system" {
+        return Err(invalid());
+    }
+    loop {
+        let ancestor = &records[*ids.get(cursor).ok_or_else(invalid)?];
+        if ancestor["role"] == "user" {
+            return if ancestor["uuid"] == record["metadata"]["forkPointUuid"] {
+                Ok(())
+            } else {
+                Err(invalid())
+            };
+        }
+        cursor = ancestor["parentUuid"].as_str().ok_or_else(invalid)?;
+    }
 }
 
 pub(super) fn branch(records: &[Value], head: Option<&str>) -> Result<Vec<Value>, InspectError> {
