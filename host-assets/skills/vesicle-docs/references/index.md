@@ -98,6 +98,7 @@ Version-matched public documentation snapshot for the vesicle-docs Skill.
 - `docs/dev/QUALITY_BENCHMARK.md` → `references/dev-quality_benchmark.md` — Semantic Judge Benchmarking [en]
 - `docs/dev/QUALITY_GUARD.md` → `references/dev-quality_guard.md` — Output Quality Guard [en]
 - `docs/dev/README.md` → `references/dev-readme.md` — Public Developer Documentation [en]
+- `docs/dev/RUST_DEVELOPMENT.md` → `references/dev-rust_development.md` — Rust Development [en]
 - `docs/dev/SESSIONS.md` → `references/dev-sessions.md` — Session And Context Runtime Contract [en]
 - `docs/dev/SETUP.md` → `references/dev-setup.md` — Guided Setup And Installer [en]
 - `docs/dev/SKILLS.md` → `references/dev-skills.md` — Skills Runtime [en]

@@ -103,3 +103,7 @@ Installer, onboarding, model-discovery, configuration-write, and project-launch 
 | [`brand/VISUAL_LANGUAGE.md`](../../brand/VISUAL_LANGUAGE.md) | Brand aesthetic, palette of record, motion grammar, and anti-patterns |
 
 Each contract has one owner. Other documents should summarize only what their audience needs and link to that owner instead of repeating detailed rules.
+
+## Experimental Rust Development
+
+The root Cargo workspace currently contains `rust/cli`, an independent development command dispatcher. See [`RUST_DEVELOPMENT.md`](./RUST_DEVELOPMENT.md) for its limited implemented surface. The TypeScript runtime above remains the supported product. Introduce Rust domain modules when they have behavior to own: provider adapters translate normalized protocol data, session code owns persistence/projection, host code orchestrates, and TUI consumes host commands/events without owning persistence or permissions. No empty domain crates or TS subprocess backend are required to establish these boundaries.

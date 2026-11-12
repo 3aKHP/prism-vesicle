@@ -4,6 +4,10 @@ _Development snapshot date: 2026-09-05. Published package version: 1.1.0 (npm `l
 
 > This is the authoritative current implementation inventory: capability state, tool surface, validators, verification, and known limits. Behavioral contracts live in [`docs/dev/`](./docs/dev/README.md) and the user manual under [`docs/user/`](./docs/user/); each section below links to the authoritative source rather than duplicating it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the root-document responsibility split.
 
+## Experimental Rust Development
+
+A separate, non-published Cargo workspace provides `vesicle-rust-dev` with help/version and rejection of unsupported arguments. Linux and native Windows CI compile and launch it through integration tests. It has no provider, session or TUI runtime yet and does not replace the TypeScript product or its release artifacts. See [`docs/dev/RUST_DEVELOPMENT.md`](./docs/dev/RUST_DEVELOPMENT.md).
+
 ## Version & Capabilities
 
 Repository package version: **1.1.1**; the Unreleased section of the changelog records changes after that baseline. The `State` column tracks the current development contract rather than the latest public artifact: `released` = enabled by default and intended for the next accepted candidate; `experimental` = shipped for explicit opt-in while real-provider acceptance remains incomplete, or while a passing gate awaits graduation into a released candidate; `deferred` = not included (see [Known Limits & Deferred Work](#known-limits--deferred-work)). See [`CHANGELOG.md`](./CHANGELOG.md) and the public GitHub Release for the exact contents of each published version.

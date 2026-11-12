@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Independent Rust development workspace.** A pinned toolchain and locked, non-published development CLI establish a separate entry with help/version and explicit unsupported-command errors. Linux and native Windows CI run formatting, Clippy and tests that launch the native executable; existing TypeScript entry points and release packages remain the supported product.
+
 - **Explicit migration preservation catalogue.** Source-backed CLI, contextual TUI keys, tool schemas, configuration, provider/profile/transport combinations, durable records, assets and platform requirements map to independently reviewable scenarios. Fixed scan dispositions detect later drift; definitions and future acceptance lanes remain distinct from observed success. Infrastructure evidence has separate ownership from Rust preservation requirements, while human gates still require observed candidate evidence.
 
 - **Synthetic session compatibility corpus.** Retained original trees and independent expectations cover legacy and branched history, candidate snapshots, compaction, attachments, migration and frozen Skills, pending interactions, background tasks and quality decisions. Isolated TS readers preserve original data, and CI rejects corrupted or incomplete replay evidence.
