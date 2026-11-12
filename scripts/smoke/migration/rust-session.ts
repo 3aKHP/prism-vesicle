@@ -10,8 +10,8 @@ const corpus = resolve("tests/fixtures/migration/corpus");
 const before = await treeManifest(corpus);
 const results: Array<{ scenario: string; status: "passed" }> = [];
 
-async function inspect(path: string, head?: string, error?: string) {
-  const command = [binary, "inspect-session", path, ...(head ? ["--head", head] : [])];
+async function inspect(path: string, head?: string, error?: string, project?: string) {
+  const command = [binary, ...(project ? ["verify-attachments", project] : ["inspect-session"]), path, ...(head ? ["--head", head] : [])];
   const child = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; child.kill(); }, 10_000);
@@ -29,7 +29,7 @@ async function inspect(path: string, head?: string, error?: string) {
     const result = JSON.parse(stdout);
     assert.equal(result.schemaVersion, 1);
     assert.equal(result.mode, "read-only-inspection");
-    assert.equal(result.attachmentsVerified, false);
+    assert.equal(result.attachmentsVerified, project !== undefined);
     return result;
   } finally { clearTimeout(timer); }
 }
@@ -38,6 +38,7 @@ for (const [name, heads] of [
   ["legacy-linear", [undefined]],
   ["nested-candidates", [undefined, "a2", "b2"]],
   ["attachment", [undefined]],
+  ["migration-skill-host-state", [undefined, "r2"]],
 ] as const) {
   const path = join(corpus, name, "project/.vesicle/sessions/fixture.jsonl");
   const raw = (await readFile(path, "utf8")).split(/\r?\n/).filter((line) => line.trim()).map((line) => JSON.parse(line));
@@ -50,15 +51,36 @@ for (const [name, heads] of [
   }
 }
 
+// Reuse S0's independently specified expectations, previously exercised against
+// the real TS reader, instead of deriving expected identity from Rust output.
+const definitions = await Bun.file(join(corpus, "cases.json")).json();
+const migration = definitions.cases.find((item: { id: string }) => item.id === "migration-skill-host-state");
+for (const head of [undefined, "r2"]) {
+  const result = await inspect(join(corpus, "migration-skill-host-state/project/.vesicle/sessions/fixture.jsonl"), head);
+  for (const field of ["harness", "skillCatalogSnapshot"]) {
+    const expected = migration.assertions.find((item: { path: string[] }) => item.path[1] === "r2" && item.path[3] === field);
+    assert(expected, `independent S0 expectation missing for ${field}`);
+    assert.deepEqual(result.hostState[field], expected.equals);
+  }
+}
+results.push({ scenario: "physical-migration-identity-and-skills", status: "passed" });
+
 for (const [name, error] of [
   ["malformed-json", "session.invalid_record"],
   ["unsupported-provider-state", "session.unsupported_provider_state"],
   ["compact-state", "session.unsupported_kind"],
-  ["migration-skill-host-state", "session.unsupported_kind"],
+  ["malformed-migration", "session.invalid_migration"],
   ["pending-gate", "session.unsupported_tool_history"],
 ]) {
   await inspect(join(corpus, name!, "project/.vesicle/sessions/fixture.jsonl"), undefined, error);
   results.push({ scenario: `${name}:rejected`, status: "passed" });
+}
+
+for (const [name, error] of [["attachment", undefined], ["missing-attachment", "attachment.read_failed"], ["corrupt-attachment", "attachment.size_mismatch"]] as const) {
+  const project = join(corpus, name, "project");
+  const result = await inspect(join(project, ".vesicle/sessions/fixture.jsonl"), undefined, error, project);
+  if (!error) assert.deepEqual(result.attachmentVerification, { references: 1, files: 1, bytes: 68 });
+  results.push({ scenario: `${name}:integrity`, status: "passed" });
 }
 
 const sandbox = await mkdtemp(join(tmpdir(), "vesicle-rust-inspection-"));

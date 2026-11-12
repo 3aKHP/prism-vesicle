@@ -4,7 +4,7 @@ use std::process::ExitCode;
 
 mod session_inspection;
 
-const HELP: &str = "vesicle-rust-dev — Rust development entry\n\nUsage: vesicle-rust-dev [--help | --version]\n       vesicle-rust-dev inspect-session FILE [--head UUID]\n\nSession inspection is read-only; attachments are not verified.\nThis prototype has no interactive or provider runtime yet.\nUse the existing vesicle command for supported workflows.\n";
+const HELP: &str = "vesicle-rust-dev — Rust development entry\n\nUsage: vesicle-rust-dev [--help | --version]\n       vesicle-rust-dev inspect-session FILE [--head UUID]\n       vesicle-rust-dev verify-attachments PROJECT FILE [--head UUID]\n\nBoth commands are read-only; inspect-session does not verify attachments.\nThis prototype has no interactive or provider runtime yet.\nUse the existing vesicle command for supported workflows.\n";
 const VERSION: &str = concat!("vesicle-rust-dev ", env!("CARGO_PKG_VERSION"), "\n");
 
 fn main() -> ExitCode {
@@ -20,6 +20,16 @@ fn main() -> ExitCode {
                 && head.to_str().is_some_and(|head| !head.is_empty()) =>
         {
             session_inspection::read(path, head.to_str())
+        }
+        [command, project, path] if command == "verify-attachments" => {
+            session_inspection::verify(project, path, None)
+        }
+        [command, project, path, flag, head]
+            if command == "verify-attachments"
+                && flag == "--head"
+                && head.to_str().is_some_and(|head| !head.is_empty()) =>
+        {
+            session_inspection::verify(project, path, head.to_str())
         }
         _ => {
             let _ = writeln!(

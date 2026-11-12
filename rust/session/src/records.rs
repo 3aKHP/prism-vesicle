@@ -112,6 +112,8 @@ fn normalize(
                     kind.as_str(),
                     Some(
                         "candidate-selection"
+                            | "session-migration"
+                            | "skill-catalog"
                             | "provider-switch"
                             | "engine-switch"
                             | "thinking-switch"

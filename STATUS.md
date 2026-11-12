@@ -6,7 +6,7 @@ _Development snapshot date: 2026-09-05. Published package version: 1.1.0 (npm `l
 
 ## Experimental Rust Development
 
-A separate, non-published Cargo workspace provides `vesicle-rust-dev` with help/version and bounded, read-only `inspect-session FILE [--head UUID]`. It normalizes legacy links, selects nested ancestry and projects physical-order host preferences while retaining opaque metadata and attachment references. Unsupported record kinds fail explicitly; attachment bytes, migration, provider history and file restoration are not verified. Linux and native Windows CI launch the binary and compare the supported record subset with TS. It does not replace the TypeScript product or its release artifacts. See [`docs/dev/RUST_DEVELOPMENT.md`](./docs/dev/RUST_DEVELOPMENT.md).
+A separate, non-published Cargo workspace provides `vesicle-rust-dev` with help/version and bounded, read-only `inspect-session FILE [--head UUID]`. It normalizes legacy links, selects nested ancestry and projects physical-order host preferences plus persisted migration/Skill identity while retaining opaque metadata. Explicit `verify-attachments PROJECT FILE` checks attachment reference paths, size, SHA-256 and media signatures. Unsupported record kinds fail explicitly; installed Harness/Skill bodies, migration transactions, provider history and file restoration remain unimplemented. Linux and native Windows CI launch the binary and compare the supported record subset with TS. It does not replace the TypeScript product or its release artifacts. See [`docs/dev/RUST_DEVELOPMENT.md`](./docs/dev/RUST_DEVELOPMENT.md).
 
 ## Version & Capabilities
 
