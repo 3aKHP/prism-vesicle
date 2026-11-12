@@ -10,6 +10,8 @@
 
 ### 新增
 
+- **新增明确的迁移保留清单。** 基于源码的 CLI、TUI 按键上下文、工具 schema、配置、provider/profile/transport 组合、持久记录、资产与平台要求映射到可独立审阅的场景。固定扫描归属用于检测后续漂移；定义及未来验收路径与实际通过证据分开记录。基础设施证据与 Rust 能力保留要求分别归属，人工门仍须绑定实际观察的候选证据。
+
 - **新增合成会话兼容语料。** 原始文件树和独立预期覆盖旧式与分支历史、候选快照、压缩、附件、迁移及冻结 Skill、未决交互、后台任务和质量决定。隔离 TS 读取器保持原件不变，CI 拒绝损坏或不完整的回放证据。
 - **新增可保留的 TS 发布资源测量脚本。** 有界 Linux/WSL PTY 脚本记录二进制体积、暖启动命令与交互耗时、进程树内存、流式输出、取消及合成长历史恢复，并保留原始证据。仅使用本地 provider，明确列出未测的平台和冷缓存场景。
 - **新增 Rust 审查和 CI 路由。** 任意层级的 Rust 源码及构建输入变更都需要五视角深度审查，包括小改动和删除。CI 拒绝不完整或未纳入的工作区；存在固定工具链的根工作区时执行格式、Clippy 和锁定依赖的测试，尚无 Rust 时明确跳过。
@@ -18,6 +20,8 @@
 - **Responses 远程压缩的内联回退（#328）。** 当独立 `/responses/compact` 端点返回 HTTP 404 时,`openai-responses` 适配器会把同一源窗口改为一元 `POST /responses` 请求重试,input 末尾追加 `compaction_trigger` 哨兵项。协商结果按 provider/model/endpoint/profile 属主在进程生命周期内记忆;哨兵项绝不进入会话记录或回放;压缩窗口与信封语义与独立形式完全一致。非 404 的独立端点失败保持原样终止;两种形式都失败时报错同时提及两次尝试。官方 `api.openai.com` 行为不变;新增手动 `test:acceptance:responses:compact-v2` lane 记录第三方后端兼容性。
 
 ### 修复
+
+- **修正基线文档。** 会话契约明确首条系统记录保存组合后的身份提示词正文，命令手册补全包括自动会话标题在内的两项用户设置。运行时行为不变。
 
 - **修复依赖安全审计发现。** 将 MCP client 升级到 2.3.0，并锁定已修复的 glob、minimatch、brace-expansion、Zod 和 Seroval 传递依赖。MCP HTTP 重定向现在仅允许同源或同一主机默认端口间的 HTTP 到 HTTPS 升级，避免将自定义认证头和请求体发送到重定向后的第三方来源；原来依赖跨源重定向的部署应直接配置最终服务器 URL。legacy 和 modern 协商继续受支持。
 - **流式 `url_citation` 注释不再导致 web search 轮次失败。** `openai-public` profile 上带搜索依据的回答可能在流式过程中发出 `response.output_text.annotation.added` 事件;该事件此前不在准入列表中,会把整个轮次判为不可解析的响应而中断。现在准入搜索的 profile 在该事件携带 `url_citation` 注释时接受它——其他注释类型保持 fail-closed,引用仍可通过完成响应的 Item 获取;Codex 指纹 profile 与冻结子集对该事件保持 fail-closed。

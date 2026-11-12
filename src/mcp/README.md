@@ -62,7 +62,7 @@ The first delivery is tools-only:
 - Both eras normalize into the same `ToolDefinition`, `ToolCall`, `ToolResult`, permission, Engine-scope, alias, result-delivery, and session-event boundaries.
 - Supported inline PNG/JPEG/GIF/WebP images are strictly validated and enter the attachment path only for vision-capable models.
 - Resource, audio, URL/link, and unknown result items are omitted with bounded diagnostics. They are not fetched, injected, or promoted into a wider scope (see #177).
-- `input_required` (modern MRTR) is rejected with a stable unsupported-capability error — no retry or side effect.
+- `input_required` (modern MRTR) is rejected rather than reported as a successful tool result; the host starts no MRTR input flow or retry of that rejected result. Error representation depends on whether the SDK rejects it or the host normalization fallback handles it.
 - Automatic `subscriptions/listen` is not enabled.
 
 ## Error classification

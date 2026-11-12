@@ -1,0 +1,314 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "118620cad4fe4c2d11c568386942fa365e786cf6",
+  "validators": [
+    {
+      "name": "character-card",
+      "capabilityId": "CAP-VALIDATOR-CHARACTER-CARD",
+      "targetStage": "S2",
+      "source": "src/core/validators/character-card.ts",
+      "sourceHash": "3d9d31ec8cb072645727aa0580d92c7c724e3fbcb609f22c1039eff8dd2eaf3a",
+      "behavior": "Recognize leading Module A frontmatter or its seven body sections, then validate required string fields and ordered sections.",
+      "requiredTopLevelFields": [
+        "name",
+        "archetype",
+        "age_gender",
+        "inventory"
+      ],
+      "requiredBodySections": [
+        "Visual Cortex",
+        "Biography",
+        "Cognitive Stack",
+        "Instinct Protocol",
+        "Persona Topology",
+        "Narrative Engine",
+        "World Context"
+      ],
+      "recognitionAndBoundary": "Ordinary prose/horizontal-rule reports are not misclassified; malformed recognized cards still receive diagnostics.",
+      "assertions": [
+        "Matching valid content has no errors; malformed matching content reports the relevant error.",
+        "Warnings remain separate from errors and ordinary turn validation is advisory.",
+        "Automatic turn validation and artifact validation use the shared applicability registry."
+      ]
+    },
+    {
+      "name": "scenario-card",
+      "capabilityId": "CAP-VALIDATOR-SCENARIO-CARD",
+      "targetStage": "S2",
+      "source": "src/core/validators/scenario-card.ts",
+      "sourceHash": "948b84c582fc54274914c38924893499ef0bbc8f48e39d658eaece7ca3a96e79",
+      "behavior": "Recognize Module B frontmatter and validate tags, a single-line world state, three to five beats and beat fields.",
+      "requiredTopLevelFields": [
+        "scenario_name",
+        "tags",
+        "world_state",
+        "beat_map"
+      ],
+      "requiredBodySections": [],
+      "recognitionAndBoundary": "Beat label/variant_config/pivot_condition are nonempty; tension_target is integer0..100; duplicate/unknown fields and malformed beat structure are diagnosed.",
+      "assertions": [
+        "Matching valid content has no errors; malformed matching content reports the relevant error.",
+        "Warnings remain separate from errors and ordinary turn validation is advisory.",
+        "Automatic turn validation and artifact validation use the shared applicability registry."
+      ]
+    },
+    {
+      "name": "runtime-packet",
+      "capabilityId": "CAP-VALIDATOR-RUNTIME-PACKET",
+      "targetStage": "S2",
+      "source": "src/core/validators/runtime-packet.ts",
+      "sourceHash": "a64f9766813eb20500fabd1acbd0916da585bc097d59741189eeddad745adfd8",
+      "behavior": "Recognize Neural Chain/Beat packet markers and validate the existing Runtime packet contract.",
+      "requiredTopLevelFields": [],
+      "requiredBodySections": [],
+      "recognitionAndBoundary": "Do not apply packet validation to unrecognized ordinary prose; preserve advisory findings and hidden-chain/HUD checks.",
+      "assertions": [
+        "Matching valid content has no errors; malformed matching content reports the relevant error.",
+        "Warnings remain separate from errors and ordinary turn validation is advisory.",
+        "Automatic turn validation and artifact validation use the shared applicability registry."
+      ]
+    },
+    {
+      "name": "evaluate-report",
+      "capabilityId": "CAP-VALIDATOR-EVALUATE-REPORT",
+      "targetStage": "S2",
+      "source": "src/core/validators/evaluate-report.ts",
+      "sourceHash": "a2fe81e72d897b63aa74b6350837f2608323297202e8007a5d77a854f959aef6",
+      "behavior": "Recognize Neuro-Integrity Report or Overall Verdict and validate the Evaluate report contract.",
+      "requiredTopLevelFields": [],
+      "requiredBodySections": [],
+      "recognitionAndBoundary": "A short summary pointing to a report file does not become an invalid inline report merely because the Engine declares this validator.",
+      "assertions": [
+        "Matching valid content has no errors; malformed matching content reports the relevant error.",
+        "Warnings remain separate from errors and ordinary turn validation is advisory.",
+        "Automatic turn validation and artifact validation use the shared applicability registry."
+      ]
+    }
+  ],
+  "metricSignals": [
+    {
+      "id": "em_dash_per_100_chars",
+      "capabilityId": "CAP-QUALITY-METRIC-EM-DASH-PER-100-CHARS",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "experimental-em-dash-metric",
+        "clean-orchestrator-prose"
+      ],
+      "expectedCases": [
+        {
+          "name": "experimental-em-dash-metric",
+          "expectedRuleIds": [
+            "zh-f3-emdash-density"
+          ]
+        },
+        {
+          "name": "clean-orchestrator-prose",
+          "expectedRuleIds": []
+        }
+      ]
+    },
+    {
+      "id": "period_per_100_chars",
+      "capabilityId": "CAP-QUALITY-METRIC-PERIOD-PER-100-CHARS",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "document-metric-metaphor-density-hit",
+        "document-metric-structural-content-pass"
+      ],
+      "expectedCases": [
+        {
+          "name": "document-metric-metaphor-density-hit",
+          "expectedRuleIds": [
+            "zh-f3-metaphor-density",
+            "zh-f3-period-density"
+          ]
+        },
+        {
+          "name": "document-metric-structural-content-pass",
+          "expectedRuleIds": []
+        }
+      ]
+    },
+    {
+      "id": "micro_action_per_1000_chars",
+      "capabilityId": "CAP-QUALITY-METRIC-MICRO-ACTION-PER-1000-CHARS",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "document-metric-micro-action-density-hit",
+        "document-metric-micro-action-dialogue-and-low-density-pass"
+      ],
+      "expectedCases": [
+        {
+          "name": "document-metric-micro-action-density-hit",
+          "expectedRuleIds": [
+            "zh-f3-micro-action-density"
+          ]
+        },
+        {
+          "name": "document-metric-micro-action-dialogue-and-low-density-pass",
+          "expectedRuleIds": []
+        }
+      ]
+    },
+    {
+      "id": "action_list_verbs_per_paragraph",
+      "capabilityId": "CAP-QUALITY-METRIC-ACTION-LIST-VERBS-PER-PARAGRAPH",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "document-metric-action-list-density-hit",
+        "document-metric-action-list-with-state-change-pass",
+        "document-metric-action-list-ascii-comma-pass"
+      ],
+      "expectedCases": [
+        {
+          "name": "document-metric-action-list-density-hit",
+          "expectedRuleIds": [
+            "zh-f3-action-list-density"
+          ]
+        },
+        {
+          "name": "document-metric-action-list-with-state-change-pass",
+          "expectedRuleIds": []
+        },
+        {
+          "name": "document-metric-action-list-ascii-comma-pass",
+          "expectedRuleIds": []
+        }
+      ]
+    },
+    {
+      "id": "cliche_per_1000_chars",
+      "capabilityId": "CAP-QUALITY-METRIC-CLICHE-PER-1000-CHARS",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "document-metric-cliche-density-hit",
+        "document-metric-cliche-quoted-and-low-density-pass",
+        "document-metric-unclosed-quote-does-not-mask-tail"
+      ],
+      "expectedCases": [
+        {
+          "name": "document-metric-cliche-density-hit",
+          "expectedRuleIds": [
+            "zh-f3-cliche-density"
+          ]
+        },
+        {
+          "name": "document-metric-cliche-quoted-and-low-density-pass",
+          "expectedRuleIds": []
+        },
+        {
+          "name": "document-metric-unclosed-quote-does-not-mask-tail",
+          "expectedRuleIds": [
+            "zh-f3-cliche-density"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "metaphor_markers_per_1000_chars",
+      "capabilityId": "CAP-QUALITY-METRIC-METAPHOR-MARKERS-PER-1000-CHARS",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "document-metric-metaphor-visible-denominator-and-overlap",
+        "document-metric-metaphor-quoted-and-low-density-pass"
+      ],
+      "expectedCases": [
+        {
+          "name": "document-metric-metaphor-visible-denominator-and-overlap",
+          "expectedRuleIds": [
+            "zh-f3-metaphor-density"
+          ],
+          "expectedMetrics": [
+            {
+              "ruleId": "zh-f3-metaphor-density",
+              "signal": "metaphor_markers_per_1000_chars",
+              "value": 200,
+              "threshold": 3,
+              "tolerance": 0.0001
+            }
+          ]
+        },
+        {
+          "name": "document-metric-metaphor-quoted-and-low-density-pass",
+          "expectedRuleIds": []
+        }
+      ]
+    },
+    {
+      "id": "reasoning_chain_per_1000_chars",
+      "capabilityId": "CAP-QUALITY-METRIC-REASONING-CHAIN-PER-1000-CHARS",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "document-metric-reasoning-chain-density-hit",
+        "document-metric-reasoning-domain-terms-without-chain-pass"
+      ],
+      "expectedCases": [
+        {
+          "name": "document-metric-reasoning-chain-density-hit",
+          "expectedRuleIds": [
+            "zh-f3-reasoning-chain-density"
+          ]
+        },
+        {
+          "name": "document-metric-reasoning-domain-terms-without-chain-pass",
+          "expectedRuleIds": []
+        }
+      ]
+    },
+    {
+      "id": "abstract_summary_per_1000_chars",
+      "capabilityId": "CAP-QUALITY-METRIC-ABSTRACT-SUMMARY-PER-1000-CHARS",
+      "targetStage": "S3",
+      "source": "src/core/quality/metrics.ts",
+      "fixture": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "contract": "Use rule-pack thresholds and protected ranges; retain actual counts/normalization and an inconclusive result when work budget prevents assessment.",
+      "caseNames": [
+        "document-metric-abstract-summary-density-hit",
+        "document-metric-abstract-summary-all-quote-pairs-pass"
+      ],
+      "expectedCases": [
+        {
+          "name": "document-metric-abstract-summary-density-hit",
+          "expectedRuleIds": [
+            "zh-f3-abstract-summary-density"
+          ]
+        },
+        {
+          "name": "document-metric-abstract-summary-all-quote-pairs-pass",
+          "expectedRuleIds": []
+        }
+      ]
+    }
+  ],
+  "languageAdvisory": {
+    "source": "src/core/validators/artifact-language-policy.ts",
+    "ruleId": "zh-f1-not-x-but-y",
+    "behavior": "Module A/B language-pattern matches add advisory warnings; they do not silently become schema errors."
+  },
+  "limitations": [
+    "Pure validator functions do not access files; callers own artifact reading and applicability.",
+    "Unknown declared validator names are explicit errors, distinct from advisory findings.",
+    "Quality Guard delivery policy and experimental Judge are separate from ordinary artifact-validator advisory behavior."
+  ]
+}

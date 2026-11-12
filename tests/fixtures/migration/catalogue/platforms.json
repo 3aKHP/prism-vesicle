@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "authority": "Preserve existing user-observable channels/platform paths. TS dependency and build mechanics below describe the baseline only, not required Rust internals.",
+  "npm": [
+    {
+      "platform": "linux",
+      "architecture": "x64",
+      "libc": "glibc",
+      "channel": "npm global or local",
+      "nativePackage": "@3akhp/opentui-core-linux-x64",
+      "nativeVersion": "0.5.10-zv5",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "native CI consumer passed",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "compatible Bun and platform-native optional dependency available",
+      "evidence": {
+        "pr": 341,
+        "headSha": "0abf2bac6f26514aa69ce721ec921fa0f044eae2",
+        "mergeSha": "d3a70f79eb5b9dbd2c3f0fe934208b06fd33aefd",
+        "runId": 43263708737,
+        "url": "https://github.com/3aKHP/prism-vesicle/actions/runs/43263708737",
+        "jobId": 131341497316,
+        "boundary": "Exact npm-tarball consumer on the named native runner; source lane includes Linux PTY startup."
+      }
+    },
+    {
+      "platform": "linux",
+      "architecture": "arm64",
+      "libc": "glibc",
+      "channel": "npm global or local",
+      "nativePackage": "@3akhp/opentui-core-linux-arm64",
+      "nativeVersion": "0.5.10-zv5",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "declared dependency/loader path; no current-stage execution evidence",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "compatible Bun and platform-native optional dependency available"
+    },
+    {
+      "platform": "linux",
+      "architecture": "x64",
+      "libc": "musl",
+      "channel": "npm global or local",
+      "nativePackage": "@3akhp/opentui-core-linux-x64-musl",
+      "nativeVersion": "0.5.10-zv5",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "declared dependency/loader path; no current-stage execution evidence",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "OPENTUI_LIBC=musl"
+    },
+    {
+      "platform": "linux",
+      "architecture": "arm64",
+      "libc": "musl",
+      "channel": "npm global or local",
+      "nativePackage": "@3akhp/opentui-core-linux-arm64-musl",
+      "nativeVersion": "0.5.10-zv5",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "declared dependency/loader path; no current-stage execution evidence",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "OPENTUI_LIBC=musl"
+    },
+    {
+      "platform": "darwin",
+      "architecture": "x64",
+      "libc": null,
+      "channel": "npm global or local",
+      "nativePackage": "@opentui/core-darwin-x64",
+      "nativeVersion": "0.5.10",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "declared dependency/loader path; no current-stage execution evidence",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "compatible Bun and platform-native optional dependency available"
+    },
+    {
+      "platform": "darwin",
+      "architecture": "arm64",
+      "libc": null,
+      "channel": "npm global or local",
+      "nativePackage": "@opentui/core-darwin-arm64",
+      "nativeVersion": "0.5.10",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "declared dependency/loader path; no current-stage execution evidence",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "compatible Bun and platform-native optional dependency available"
+    },
+    {
+      "platform": "win32",
+      "architecture": "x64",
+      "libc": null,
+      "channel": "npm global or local",
+      "nativePackage": "@3akhp/opentui-core-win32-x64",
+      "nativeVersion": "0.5.10-zv5",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "native CI consumer passed",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "compatible Bun and platform-native optional dependency available",
+      "evidence": {
+        "pr": 341,
+        "headSha": "0abf2bac6f26514aa69ce721ec921fa0f044eae2",
+        "mergeSha": "d3a70f79eb5b9dbd2c3f0fe934208b06fd33aefd",
+        "runId": 43263708737,
+        "url": "https://github.com/3aKHP/prism-vesicle/actions/runs/43263708737",
+        "jobId": 131342949476,
+        "boundary": "Exact npm-tarball consumer on the named native runner; source lane includes Linux PTY startup."
+      }
+    },
+    {
+      "platform": "win32",
+      "architecture": "arm64",
+      "libc": null,
+      "channel": "npm global or local",
+      "nativePackage": "@3akhp/opentui-core-win32-arm64",
+      "nativeVersion": "0.5.10-zv5",
+      "sourceAnchors": [
+        "package.json",
+        "bun.lock",
+        "bin/vesicle.mjs",
+        "scripts/build/build-npm-package.ts"
+      ],
+      "currentEvidence": "declared dependency/loader path; no current-stage execution evidence",
+      "rustAcceptanceStage": "S5",
+      "capabilityId": "CAP-DIST-NPM",
+      "tsRuntimeRequirement": "Bun >=1.3.14 and the listed native optional dependency",
+      "tsDependencyCondition": "compatible Bun and platform-native optional dependency available"
+    }
+  ],
+  "standalone": [
+    {
+      "id": "portable-linux",
+      "platform": "linux-x64",
+      "artifact": "prism-vesicle-linux-x64-<version> plus prism-vesicle-assets-<version>.zip",
+      "runtime": "bundled runtime; no external Bun required",
+      "evidence": "native Linux release CI",
+      "capabilityId": "CAP-DIST-LINUX",
+      "evidenceReference": {
+        "pr": 341,
+        "headSha": "0abf2bac6f26514aa69ce721ec921fa0f044eae2",
+        "mergeSha": "d3a70f79eb5b9dbd2c3f0fe934208b06fd33aefd",
+        "runId": 43263708737,
+        "url": "https://github.com/3aKHP/prism-vesicle/actions/runs/43263708737",
+        "jobId": 131342949378
+      }
+    },
+    {
+      "id": "portable-windows",
+      "platform": "win32-x64",
+      "artifact": "prism-vesicle-windows-x64-<version>.exe plus assets ZIP",
+      "runtime": "bundled runtime; no external Bun required",
+      "evidence": "native Windows release CI; cross-build is diagnostic only",
+      "capabilityId": "CAP-DIST-WINDOWS",
+      "evidenceReference": {
+        "pr": 341,
+        "headSha": "0abf2bac6f26514aa69ce721ec921fa0f044eae2",
+        "mergeSha": "d3a70f79eb5b9dbd2c3f0fe934208b06fd33aefd",
+        "runId": 43263708737,
+        "url": "https://github.com/3aKHP/prism-vesicle/actions/runs/43263708737",
+        "jobId": 131342949476
+      }
+    },
+    {
+      "id": "windows-installer",
+      "platform": "Windows x64compatible",
+      "artifact": "PrismVesicleSetup-<version>-windows-x64.exe",
+      "runtime": "per-user native executable, bundled Harness, Explorer/PATH integration",
+      "evidence": "native install/upgrade/uninstall CI; human appearance/IME acceptance remains separate",
+      "capabilityId": "CAP-DIST-INSTALLER",
+      "evidenceReference": {
+        "pr": 341,
+        "headSha": "0abf2bac6f26514aa69ce721ec921fa0f044eae2",
+        "mergeSha": "d3a70f79eb5b9dbd2c3f0fe934208b06fd33aefd",
+        "runId": 43263708737,
+        "url": "https://github.com/3aKHP/prism-vesicle/actions/runs/43263708737",
+        "jobId": 131342949476
+      }
+    }
+  ],
+  "nonChannels": [
+    {
+      "name": "Windows cross-compiled PE",
+      "reason": "Explicitly named non-release diagnostic artifact in build-exe.ts"
+    },
+    {
+      "name": "cargo install / brew / scoop",
+      "reason": "No existing first-party delivery channel; not silently required as baseline functionality"
+    }
+  ],
+  "limitations": [
+    "Eight optional native package variants do not prove eight tested consumer platforms.",
+    "Darwin packages use upstream0.5.10 rather than fork0.5.10-zv5; runtime equivalence requires native evidence.",
+    "Musl selects a dependency path explicitly; compatible Bun and libc environment remain prerequisites.",
+    "Public standalone builds currently target only Linux x64 and Windows x64."
+  ],
+  "tsImplementationNotes": [
+    "TS npm uses a Bun shebang launcher. Preservation requires the installed command and behavior, not retaining Bun in a future runtime.",
+    "TS standalone builds embed a parser worker and require a drive-letter Windows build workspace. Future rendering implementations need equivalent diagnostics/rendering behavior, not that worker architecture."
+  ]
+}

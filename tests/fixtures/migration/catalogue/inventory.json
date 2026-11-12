@@ -1,0 +1,6682 @@
+{
+  "schemaVersion": 1,
+  "tsBaselineSha": "118620cad4fe4c2d11c568386942fa365e786cf6",
+  "sourceFiles": 696,
+  "entries": 1840,
+  "capabilityOwned": 1707,
+  "nonCapabilities": 133,
+  "unclassified": [],
+  "rule": "Fixed dispositions for this scanned source SHA only. Never auto-admit future entries with these authoring rules; scan/diff sends added or changed source hashes to review. Internal discriminants tied to an owning capability are not a requirement to preserve TS enum spelling or internal architecture.",
+  "sourceOwnership": [
+    {
+      "source": ".github/workflows/ci.yml",
+      "capabilityIds": [
+        "CAP-DIST-PUBLICATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": ".github/workflows/close-issues.yml",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Repository issue housekeeping, not a shipped runtime or distribution capability."
+    },
+    {
+      "source": ".github/workflows/release-build.yml",
+      "capabilityIds": [
+        "CAP-DIST-PUBLICATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": ".github/workflows/release.yml",
+      "capabilityIds": [
+        "CAP-DIST-PUBLICATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/agents/chapter-reviewer.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/agents/continuity-editor.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/agents/scene-writer.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/engines/dyad.profile.yaml",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/engines/etl.profile.yaml",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/engines/evaluate.profile.yaml",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/engines/runtime.profile.yaml",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/engines/stage.profile.yaml",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/engines/weaver-orch.profile.yaml",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/engines/weaver.profile.yaml",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prism-driver/adapter.json",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES",
+        "CAP-ENGINE-DECLARATIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prism-driver/contract.json",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES",
+        "CAP-ENGINE-DECLARATIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompt-context-ledger.json",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/agents/chapter-reviewer.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/agents/continuity-editor.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/agents/quality/anti-ai-flavor.generation-brief.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/agents/quality/anti-ai-flavor.review-brief.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/agents/scene-writer.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/engines/dyad.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/engines/etl.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/engines/evaluate.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/engines/runtime.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/engines/stage.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/engines/weaver-orch.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/engines/weaver.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/host/authoring.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/host/consumer-stage.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/host/review.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/host/runtime.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/prompts/host/writing.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/THIRD_PARTY_NOTICES.md",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/calibration/detector.jsonl",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/calibration/guidance-pairs.jsonl",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/calibration/host-conformance.jsonl",
+      "capabilityIds": [
+        "CAP-QUALITY-METRIC-ABSTRACT-SUMMARY-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-ACTION-LIST-VERBS-PER-PARAGRAPH",
+        "CAP-QUALITY-METRIC-CLICHE-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-EM-DASH-PER-100-CHARS",
+        "CAP-QUALITY-METRIC-METAPHOR-MARKERS-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-MICRO-ACTION-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-PERIOD-PER-100-CHARS",
+        "CAP-QUALITY-METRIC-REASONING-CHAIN-PER-1000-CHARS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/calibration/judge.jsonl",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/data/cn-antislop-candidates.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/data/semantic-rewrite-policy.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/detector-rules.en-US.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/detector-rules.zh-CN.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/guidance.zh-CN.md",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/judge-rubric.zh-CN.md",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/judge-rules.zh-CN.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/manifest.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/review-brief.zh-CN.md",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/benchmark-report.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/calibration-annotation.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/calibration-blind-case.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/calibration-case.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/calibration-label.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/candidate-evaluation.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/detector-rules.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/held-out-freeze.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/host-conformance-case.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/judge-result.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/judge-rules.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/rewrite-case.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/rule-pack.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/quality/anti-ai-flavor/schemas/semantic-rewrite-policy.schema.json",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/specs/schema_character.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/specs/schema_dlc.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/specs/schema_outline.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/specs/schema_persona_prompt_compatible.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/specs/schema_persona_prompt_immersive.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/specs/schema_scenario.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/specs/schema_story_bible.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/templates/tpl_module_a.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/templates/tpl_module_b.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/templates/tpl_outline.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/templates/tpl_persona_prompt_compatible.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/templates/tpl_persona_prompt_immersive.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/templates/tpl_stage_context.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "assets/templates/tpl_story_bible.md",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "bin/vesicle.mjs",
+      "capabilityIds": [
+        "CAP-DIST-NPM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "bun.lock",
+      "capabilityIds": [
+        "CAP-DIST-NPM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "docs/examples/mcp.yaml",
+      "capabilityIds": [
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "docs/examples/permissions.yaml",
+      "capabilityIds": [
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "docs/examples/provider.env.example",
+      "capabilityIds": [
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "docs/examples/providers.yaml",
+      "capabilityIds": [
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "docs/examples/quality.yaml",
+      "capabilityIds": [
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "harness-manifest.json",
+      "capabilityIds": [
+        "CAP-ASSET-MANIFEST"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/agents/explore.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/agents/general.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/agents/plan.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/agents/research.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/agents/reviewer.agent.yaml",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/agents/base.md",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/agents/explore.md",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/agents/general.md",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/agents/plan.md",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/agents/research.md",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/agents/reviewer.md",
+      "capabilityIds": [
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/shared/init-project.md",
+      "capabilityIds": [
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/shared/side-question.md",
+      "capabilityIds": [
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/prompts/shared/vesicle-base.md",
+      "capabilityIds": [
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/novel-outline-v3/SKILL.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/novel-outline-v3/references/ledgers.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/novel-outline-v3/references/templates.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/novel-outline-v3/references/tension_model.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/skillify/SKILL.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/skillify/scripts/publish_skill.ps1",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/skillify/scripts/publish_skill.sh",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/update-config/SKILL.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/update-config/scripts/update_config.ps1",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/update-config/scripts/update_config.sh",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/SKILL.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-architecture.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-assets.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-audit_drift.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-command_completion.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-command_queue.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-openai_responses_conformance.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-persistent_instructions.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-providers.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-quality_benchmark.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-quality_guard.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-sessions.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-setup.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-skills.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-stage.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-style.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-subagents.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-tools.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-tui.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-user_agency_and_risk_disclosure.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/dev-workflow.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/examples-mcp-yaml.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/examples-permissions-yaml.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/examples-provider-env-example.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/examples-providers-yaml.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/examples-quality-yaml.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/index.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/root-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-engines.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-harness-packs.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-mcp.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-quality-guard.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-shell-exec.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-skills.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-stage.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-advanced-subagents.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-checksums-and-signing.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-cli-commands.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-commands.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-configuration.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-permissions-and-security.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-troubleshooting.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-reference-update-uninstall-migrate.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-start-linux-portable.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-start-npm.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-start-windows-installer.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-start-windows-portable.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-first-character-card.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-first-conversation.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-first-scenario-card.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-permissions-and-shell.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-persistent-instructions.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-sessions-and-rewind.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-skills-and-subagents.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-web-search-and-images.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-work-while-running.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-en-tutorials-workspace-page.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-engines.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-harness-packs.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-mcp.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-quality-guard.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-shell-exec.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-skills.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-stage.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-advanced-subagents.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-checksums-and-signing.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-cli-commands.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-commands.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-configuration.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-permissions-and-security.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-troubleshooting.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-reference-update-uninstall-migrate.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-start-linux-portable.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-start-npm.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-start-windows-installer.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-start-windows-portable.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-first-character-card.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-first-conversation.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-first-scenario-card.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-permissions-and-shell.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-persistent-instructions.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-readme.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-sessions-and-rewind.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-skills-and-subagents.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-web-search-and-images.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-work-while-running.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "host-assets/skills/vesicle-docs/references/user-zh-cn-tutorials-workspace-page.md",
+      "capabilityIds": [
+        "CAP-FIRSTPARTY-DOCS",
+        "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "installer/PrismVesicle.iss",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "installer/README.md",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "installer/languages/ChineseSimplified.isl",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "installer/languages/LICENSE-Inno-Setup.txt",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "package.json",
+      "capabilityIds": [
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/build/build-assets.ts",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER",
+        "CAP-DIST-LINUX",
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION",
+        "CAP-DIST-WINDOWS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/build/build-exe.ts",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER",
+        "CAP-DIST-LINUX",
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION",
+        "CAP-DIST-WINDOWS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/build/build-installer.ts",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER",
+        "CAP-DIST-LINUX",
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION",
+        "CAP-DIST-WINDOWS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/build/build-npm-package.ts",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER",
+        "CAP-DIST-LINUX",
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION",
+        "CAP-DIST-WINDOWS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/build/build-windows-icon.ts",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER",
+        "CAP-DIST-LINUX",
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION",
+        "CAP-DIST-WINDOWS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/build/stage-windows-installer.ts",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER",
+        "CAP-DIST-LINUX",
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION",
+        "CAP-DIST-WINDOWS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/build/windows-version.ts",
+      "capabilityIds": [
+        "CAP-DIST-INSTALLER",
+        "CAP-DIST-LINUX",
+        "CAP-DIST-NPM",
+        "CAP-DIST-PUBLICATION",
+        "CAP-DIST-WINDOWS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "scripts/smoke/migration/compare.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/corpus-compare.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/corpus-contract.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/corpus-self-check.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/corpus-worker.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/corpus.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/harness.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/main.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/normalize.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/self-check.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/migration/worker.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-binary.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-compact-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-malformed-tool-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-npm-package.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-prompt-reading-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-session-migration-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-skill-first-input-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-skillify-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-terminal-title-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-tmp-scratch-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-windows-installer.ps1",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-workspace-paste-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/smoke-workspace-status-pty.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "scripts/smoke/support/pty-smoke.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Developer acceptance fixture/runner; not a model or user runtime entry. Its exercised product behavior remains in the capability/scenario denominator."
+    },
+    {
+      "source": "src/cli/args.ts",
+      "capabilityIds": [
+        "CAP-CLI-HELP",
+        "CAP-CLI-LAUNCH-BARE",
+        "CAP-CLI-VERSION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/assets.ts",
+      "capabilityIds": [
+        "CAP-CLI-ASSETS-INIT",
+        "CAP-CLI-ASSETS-INSTALL",
+        "CAP-CLI-ASSETS-MATERIALIZE",
+        "CAP-CLI-ASSETS-ROLLBACK",
+        "CAP-CLI-ASSETS-STATUS",
+        "CAP-CLI-ASSETS-USE",
+        "CAP-CLI-ASSETS-VERIFY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/README.md",
+      "capabilityIds": [
+        "CAP-CLI-HELP",
+        "CAP-CLI-LAUNCH",
+        "CAP-CLI-LAUNCH-BARE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/add-mcp.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-ADD-MCP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/add-model.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-ADD-MODEL"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/add.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-ADD-PROVIDER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/env.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-ENV-REMOVE",
+        "CAP-CLI-CONFIG-ENV-SET-EMPTY",
+        "CAP-CLI-CONFIG-ENV-SET-PROXY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/index.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-PATH",
+        "CAP-CLI-CONFIG-VALIDATE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/remove-mcp.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-REMOVE-MCP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/remove.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-REMOVE-MODEL",
+        "CAP-CLI-CONFIG-REMOVE-PROVIDER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/set.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-SET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/show.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-SHOW"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/config/unset.ts",
+      "capabilityIds": [
+        "CAP-CLI-CONFIG-UNSET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/prompt-dump.ts",
+      "capabilityIds": [
+        "CAP-CLI-PROMPT-DUMP",
+        "CAP-CLI-PROMPT-SHAPE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/quality-benchmark.ts",
+      "capabilityIds": [
+        "CAP-CLI-QUALITY-BENCHMARK"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/authoring.ts",
+      "capabilityIds": [
+        "CAP-CLI-SKILLS-COPY-TEMPLATE",
+        "CAP-CLI-SKILLS-CREATE",
+        "CAP-CLI-SKILLS-DISABLE",
+        "CAP-CLI-SKILLS-ENABLE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/draft.ts",
+      "capabilityIds": [
+        "CAP-CLI-SKILLS-PUBLISH-DRAFT",
+        "CAP-CLI-SKILLS-VALIDATE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/index.ts",
+      "capabilityIds": [
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/inventory.ts",
+      "capabilityIds": [
+        "CAP-CLI-SKILLS-INSPECT",
+        "CAP-CLI-SKILLS-LIST"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/lifecycle.ts",
+      "capabilityIds": [
+        "CAP-CLI-SKILLS-INSTALL",
+        "CAP-CLI-SKILLS-ROLLBACK",
+        "CAP-CLI-SKILLS-UNINSTALL",
+        "CAP-CLI-SKILLS-UPDATE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/source/archive.ts",
+      "capabilityIds": [
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/source/github.ts",
+      "capabilityIds": [
+        "CAP-ENV-GITHUB_TOKEN"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/source/index.ts",
+      "capabilityIds": [
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/source/local.ts",
+      "capabilityIds": [
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/source/selection.ts",
+      "capabilityIds": [
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/commands/skills/source/types.ts",
+      "capabilityIds": [
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/doctor.ts",
+      "capabilityIds": [
+        "CAP-CLI-DOCTOR"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/launch.ts",
+      "capabilityIds": [
+        "CAP-CLI-HELP",
+        "CAP-CLI-LAUNCH",
+        "CAP-CLI-LAUNCH-BARE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/main.ts",
+      "capabilityIds": [
+        "CAP-CLI-DEBUG-MARKDOWN-RUNTIME",
+        "CAP-CLI-DEBUG-TUI-BOOTSTRAP",
+        "CAP-CLI-DEV",
+        "CAP-CLI-LAUNCH",
+        "CAP-CLI-ONCE",
+        "CAP-CLI-SETUP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/project-target.ts",
+      "capabilityIds": [
+        "CAP-CLI-HELP",
+        "CAP-CLI-LAUNCH",
+        "CAP-CLI-LAUNCH-BARE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/cli/runtime.ts",
+      "capabilityIds": [
+        "CAP-CLI-HELP",
+        "CAP-CLI-LAUNCH",
+        "CAP-CLI-LAUNCH-BARE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/atomic-write.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-DIRECTORY",
+        "CAP-CONFIG-DISCOVERY",
+        "CAP-CONFIG-ENV-STRUCTURE",
+        "CAP-CONFIG-REGISTRY-TRANSACTION",
+        "CAP-CONFIG-SECRETS",
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/env.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-DIRECTORY",
+        "CAP-CONFIG-DISCOVERY",
+        "CAP-CONFIG-ENV-STRUCTURE",
+        "CAP-CONFIG-REGISTRY-TRANSACTION",
+        "CAP-CONFIG-SECRETS",
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/file-read.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-DIRECTORY",
+        "CAP-CONFIG-DISCOVERY",
+        "CAP-CONFIG-ENV-STRUCTURE",
+        "CAP-CONFIG-REGISTRY-TRANSACTION",
+        "CAP-CONFIG-SECRETS",
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/paths.ts",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_CONFIG_DIR",
+        "CAP-ENV-VESICLE_HOST_CONFIG_DIR"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/permissions.ts",
+      "capabilityIds": [
+        "CAP-CFG-PERMISSIONS-YAML-DEFAULTMODE",
+        "CAP-CFG-PERMISSIONS-YAML-SHELLEXEC",
+        "CAP-CFG-PERMISSIONS-YAML-SHELLINTERPRETER",
+        "CAP-CFG-PERMISSIONS-YAML-VERSION",
+        "CAP-ENV-VESICLE_PERMISSIONS_FILE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/project-preferences.ts",
+      "capabilityIds": [
+        "CAP-CFG--VESICLE/PREFERENCES-YAML-MCPOUTPUTAUTOTRUNCATE",
+        "CAP-CFG--VESICLE/PREFERENCES-YAML-MCPOUTPUTPERSISTENCE",
+        "CAP-CFG--VESICLE/PREFERENCES-YAML-THEME",
+        "CAP-CFG--VESICLE/PREFERENCES-YAML-VERSION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/provider-source-edit.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-DIRECTORY",
+        "CAP-CONFIG-DISCOVERY",
+        "CAP-CONFIG-ENV-STRUCTURE",
+        "CAP-CONFIG-REGISTRY-TRANSACTION",
+        "CAP-CONFIG-SECRETS",
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/providers.ts",
+      "capabilityIds": [
+        "CAP-CFG-PROVIDERS-YAML-DEFAULT-MODEL",
+        "CAP-CFG-PROVIDERS-YAML-DEFAULT-PROVIDER",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-APIKEYENV",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-AUTHMETHOD",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-BASEURL",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-DEFAULTMODEL",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-BUILTINWEBSEARCH",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-MAXTOKENS",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-REASONINGCONTENT",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-REASONINGTIER",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-REMOTECOMPACT",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-STREAMING",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-TEMPERATURE",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-TOOLS",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-VISION",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-GENERATION-MAXTOKENS",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-GENERATION-TEMPERATURE",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-ID",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-AUTOCOMPACT-ENABLED",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-AUTOCOMPACT-RESERVEOUTPUTTOKENS",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-AUTOCOMPACT-THRESHOLD",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-CONTEXTWINDOW",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-MAXOUTPUTTOKENS",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-WEBSEARCHDEFAULT",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-PROTOCOL",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-RESPONSESPROFILE",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-RESPONSESTRANSPORT",
+        "CAP-CFG-PROVIDERS-YAML-PROVIDERS-ID-USERAGENT",
+        "CAP-ENV-VESICLE_PROVIDERS_FILE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/quality.ts",
+      "capabilityIds": [
+        "CAP-CFG-QUALITY-YAML-JUDGETIMEOUTMS",
+        "CAP-CFG-QUALITY-YAML-MODE",
+        "CAP-CFG-QUALITY-YAML-MODELID",
+        "CAP-CFG-QUALITY-YAML-PROVIDERALIAS",
+        "CAP-CFG-QUALITY-YAML-VERSION",
+        "CAP-ENV-VESICLE_QUALITY_FILE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/settings.ts",
+      "capabilityIds": [
+        "CAP-CFG-SETTINGS-YAML-EDITOR",
+        "CAP-CFG-SETTINGS-YAML-SESSIONTITLE",
+        "CAP-CFG-SETTINGS-YAML-VERSION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/yaml-line-reader.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-DIRECTORY",
+        "CAP-CONFIG-DISCOVERY",
+        "CAP-CONFIG-ENV-STRUCTURE",
+        "CAP-CONFIG-REGISTRY-TRANSACTION",
+        "CAP-CONFIG-SECRETS",
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/config/yaml-writer.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-DIRECTORY",
+        "CAP-CONFIG-DISCOVERY",
+        "CAP-CONFIG-ENV-STRUCTURE",
+        "CAP-CONFIG-REGISTRY-TRANSACTION",
+        "CAP-CONFIG-SECRETS",
+        "CAP-CONFIG-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/agent-manager.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/assistant-recorder.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/background-process.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/continuation-context.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/delegation-decision.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/engine-switch-continuation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/gate-continuation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/generation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/interaction-pause.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/mid-turn-compaction.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/permission-continuation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/permission-validation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/provider-round.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/quality-artifact-refresh.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/quality-continuation-bootstrap.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/quality-continuation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/quality-decision-settlement.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/quality-round-evaluation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/quality-round-recording.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/quality-round-state.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/regenerate.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/run.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/session-init.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/session-migration-preflight.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/tool-result-recorder.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/tool-round-executor.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/tool-round-planner.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/tool-surface.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/turn-bootstrap.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/turn-finalizer.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/turn-loop.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/types.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agent-loop/web-search-state.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-ENGINE-SWITCH",
+        "CAP-INTERACTION-GATE",
+        "CAP-INTERACTION-QUESTION",
+        "CAP-INTERACTION-RESTORE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-LOOP-DURABILITY",
+        "CAP-LOOP-FAILURE",
+        "CAP-LOOP-GUARDS",
+        "CAP-LOOP-TOOL-ROUNDS",
+        "CAP-LOOP-USAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/child-bootstrap.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/child-provider-round.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/child-run-durability.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/child-runner.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/child-tool-executor.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/execution-scheduler.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/handle-allocator.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/manager.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/path-ownership.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/profile.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/scheduler.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/store.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/tool-scope.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/tools.ts",
+      "capabilityIds": [
+        "CAP-TOOL-INTERRUPT-AGENT",
+        "CAP-TOOL-LIST-AGENTS",
+        "CAP-TOOL-SEND-MESSAGE",
+        "CAP-TOOL-SPAWN-AGENT",
+        "CAP-TOOL-WAIT-AGENT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/agents/types.ts",
+      "capabilityIds": [
+        "CAP-AGENT-CONTROL",
+        "CAP-AGENT-DURABILITY",
+        "CAP-AGENT-EXECUTION",
+        "CAP-AGENT-PERMISSIONS",
+        "CAP-AGENT-PROFILES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/artifacts/workbench.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-OPS-REVISION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/attachments/store.ts",
+      "capabilityIds": [
+        "CAP-ATTACHMENT-ADDRESSING",
+        "CAP-ATTACHMENT-MATERIALIZATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/branch/service.ts",
+      "capabilityIds": [
+        "CAP-CANDIDATE-TREE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/checkpoints/candidate-files.ts",
+      "capabilityIds": [
+        "CAP-REWIND-CHECKPOINTS",
+        "CAP-REWIND-EXEMPTIONS",
+        "CAP-REWIND-MODES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/checkpoints/file-history.ts",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_DISABLE_FILE_CHECKPOINTING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/compact/auto-compact.ts",
+      "capabilityIds": [
+        "CAP-COMPACT-AUTO-BUDGET",
+        "CAP-COMPACT-PAIRED-TAIL",
+        "CAP-COMPACT-PORTABLE",
+        "CAP-COMPACT-TRANSACTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/compact/checkpoint-installer.ts",
+      "capabilityIds": [
+        "CAP-COMPACT-AUTO-BUDGET",
+        "CAP-COMPACT-PAIRED-TAIL",
+        "CAP-COMPACT-PORTABLE",
+        "CAP-COMPACT-TRANSACTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/compact/context-budget.ts",
+      "capabilityIds": [
+        "CAP-COMPACT-AUTO-BUDGET",
+        "CAP-COMPACT-PAIRED-TAIL",
+        "CAP-COMPACT-PORTABLE",
+        "CAP-COMPACT-TRANSACTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/compact/replacement-builder.ts",
+      "capabilityIds": [
+        "CAP-COMPACT-AUTO-BUDGET",
+        "CAP-COMPACT-PAIRED-TAIL",
+        "CAP-COMPACT-PORTABLE",
+        "CAP-COMPACT-TRANSACTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/compact/service.ts",
+      "capabilityIds": [
+        "CAP-COMPACT-AUTO-BUDGET",
+        "CAP-COMPACT-PAIRED-TAIL",
+        "CAP-COMPACT-PORTABLE",
+        "CAP-COMPACT-TRANSACTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/compact/summary-generator.ts",
+      "capabilityIds": [
+        "CAP-COMPACT-AUTO-BUDGET",
+        "CAP-COMPACT-PAIRED-TAIL",
+        "CAP-COMPACT-PORTABLE",
+        "CAP-COMPACT-TRANSACTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/engine/profile.ts",
+      "capabilityIds": [
+        "CAP-ENGINE-DECLARATIONS",
+        "CAP-ENGINE-HANDOFF",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/engine/switch.ts",
+      "capabilityIds": [
+        "CAP-TOOL-REQUEST-ENGINE-SWITCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/engine/transition.ts",
+      "capabilityIds": [
+        "CAP-ENGINE-DECLARATIONS",
+        "CAP-ENGINE-HANDOFF",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/gate/types.ts",
+      "capabilityIds": [
+        "CAP-TOOL-REQUEST-CONFIRMATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/activation.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/capability.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/driver.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/index.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/install.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/manifest.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/runtime.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/types.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/harness/verify.ts",
+      "capabilityIds": [
+        "CAP-ASSET-INSTALL",
+        "CAP-ASSET-MANIFEST",
+        "CAP-ASSET-MATERIALIZE",
+        "CAP-ASSET-OVERLAY",
+        "CAP-ASSET-SELECTION",
+        "CAP-ASSET-STATUS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/init/index.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-INIT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/init/scanner.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-INIT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/init/service.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-INIT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/compose.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-BOUNDARY",
+        "CAP-INSTRUCTION-FREEZE",
+        "CAP-INSTRUCTION-INIT",
+        "CAP-INSTRUCTION-MUTATION",
+        "CAP-INSTRUCTION-REWIND-EXCLUSION",
+        "CAP-INSTRUCTION-SCOPES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/index.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-BOUNDARY",
+        "CAP-INSTRUCTION-FREEZE",
+        "CAP-INSTRUCTION-INIT",
+        "CAP-INSTRUCTION-MUTATION",
+        "CAP-INSTRUCTION-REWIND-EXCLUSION",
+        "CAP-INSTRUCTION-SCOPES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/instruction-context.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-BOUNDARY",
+        "CAP-INSTRUCTION-FREEZE",
+        "CAP-INSTRUCTION-INIT",
+        "CAP-INSTRUCTION-MUTATION",
+        "CAP-INSTRUCTION-REWIND-EXCLUSION",
+        "CAP-INSTRUCTION-SCOPES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/loader.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-BOUNDARY",
+        "CAP-INSTRUCTION-FREEZE",
+        "CAP-INSTRUCTION-INIT",
+        "CAP-INSTRUCTION-MUTATION",
+        "CAP-INSTRUCTION-REWIND-EXCLUSION",
+        "CAP-INSTRUCTION-SCOPES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/paths.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-BOUNDARY",
+        "CAP-INSTRUCTION-FREEZE",
+        "CAP-INSTRUCTION-INIT",
+        "CAP-INSTRUCTION-MUTATION",
+        "CAP-INSTRUCTION-REWIND-EXCLUSION",
+        "CAP-INSTRUCTION-SCOPES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/store.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-BOUNDARY",
+        "CAP-INSTRUCTION-FREEZE",
+        "CAP-INSTRUCTION-INIT",
+        "CAP-INSTRUCTION-MUTATION",
+        "CAP-INSTRUCTION-REWIND-EXCLUSION",
+        "CAP-INSTRUCTION-SCOPES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/tools.ts",
+      "capabilityIds": [
+        "CAP-TOOL-READ-INSTRUCTIONS",
+        "CAP-TOOL-UPDATE-INSTRUCTIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/instructions/types.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-BOUNDARY",
+        "CAP-INSTRUCTION-FREEZE",
+        "CAP-INSTRUCTION-INIT",
+        "CAP-INSTRUCTION-MUTATION",
+        "CAP-INSTRUCTION-REWIND-EXCLUSION",
+        "CAP-INSTRUCTION-SCOPES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/permissions/broker.ts",
+      "capabilityIds": [
+        "CAP-PERMISSION-BINDING",
+        "CAP-PERMISSION-MODES",
+        "CAP-PERMISSION-YOLO-LIFETIME"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/permissions/index.ts",
+      "capabilityIds": [
+        "CAP-PERMISSION-BINDING",
+        "CAP-PERMISSION-MODES",
+        "CAP-PERMISSION-YOLO-LIFETIME"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/permissions/policy.ts",
+      "capabilityIds": [
+        "CAP-PERMISSION-BINDING",
+        "CAP-PERMISSION-MODES",
+        "CAP-PERMISSION-YOLO-LIFETIME"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/permissions/request.ts",
+      "capabilityIds": [
+        "CAP-PERMISSION-BINDING",
+        "CAP-PERMISSION-MODES",
+        "CAP-PERMISSION-YOLO-LIFETIME"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/permissions/types.ts",
+      "capabilityIds": [
+        "CAP-PERMISSION-BINDING",
+        "CAP-PERMISSION-MODES",
+        "CAP-PERMISSION-YOLO-LIFETIME"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/process/completion-scheduler.ts",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND",
+        "CAP-PROCESS-CLEANUP",
+        "CAP-PROCESS-EXECUTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/process/manager.ts",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND",
+        "CAP-PROCESS-CLEANUP",
+        "CAP-PROCESS-EXECUTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/process/runtime.ts",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND",
+        "CAP-PROCESS-CLEANUP",
+        "CAP-PROCESS-EXECUTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/process/shell-profile.ts",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND",
+        "CAP-PROCESS-CLEANUP",
+        "CAP-PROCESS-EXECUTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/process/shutdown.ts",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND",
+        "CAP-PROCESS-CLEANUP",
+        "CAP-PROCESS-EXECUTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/project/directory-observation.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/project/ensure-roots.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/project/path-index.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/project/roots.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/prompt/host-context.ts",
+      "capabilityIds": [
+        "CAP-ENGINE-PROMPT-COMPOSITION",
+        "CAP-INSTRUCTION-FREEZE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/prompt/loader.ts",
+      "capabilityIds": [
+        "CAP-ENGINE-PROMPT-COMPOSITION",
+        "CAP-INSTRUCTION-FREEZE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/prompt/project-state.ts",
+      "capabilityIds": [
+        "CAP-ENGINE-PROMPT-COMPOSITION",
+        "CAP-INSTRUCTION-FREEZE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/benchmark.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/detector.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/guard.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/index.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/judge.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/loader.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/metrics.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-METRIC-ABSTRACT-SUMMARY-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-ACTION-LIST-VERBS-PER-PARAGRAPH",
+        "CAP-QUALITY-METRIC-CLICHE-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-EM-DASH-PER-100-CHARS",
+        "CAP-QUALITY-METRIC-METAPHOR-MARKERS-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-MICRO-ACTION-PER-1000-CHARS",
+        "CAP-QUALITY-METRIC-PERIOD-PER-100-CHARS",
+        "CAP-QUALITY-METRIC-REASONING-CHAIN-PER-1000-CHARS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/policy.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-POLICY-ELIGIBILITY",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/targets.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/quality/types.ts",
+      "capabilityIds": [
+        "CAP-QUALITY-BENCHMARK",
+        "CAP-QUALITY-DECISIONS",
+        "CAP-QUALITY-DETECTOR",
+        "CAP-QUALITY-JUDGE",
+        "CAP-QUALITY-OPTIONAL-STATE",
+        "CAP-QUALITY-REWRITE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/rewind/service.ts",
+      "capabilityIds": [
+        "CAP-REWIND-CHECKPOINTS",
+        "CAP-REWIND-MODES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/rewind/summarize.ts",
+      "capabilityIds": [
+        "CAP-REWIND-CHECKPOINTS",
+        "CAP-REWIND-MODES"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/runtime/assets.ts",
+      "capabilityIds": [
+        "CAP-ASSET-OVERLAY",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/runtime/engine-assets.ts",
+      "capabilityIds": [
+        "CAP-ASSET-OVERLAY",
+        "CAP-ENGINE-PROMPT-COMPOSITION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/runtime/self-invocation.ts",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_SELF_ENTRYPOINT",
+        "CAP-ENV-VESICLE_SELF_EXECUTABLE",
+        "CAP-FIRSTPARTY-SKILLIFY",
+        "CAP-FIRSTPARTY-UPDATE-CONFIG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/append-store.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/compact-checkpoint.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/execution-identity.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/history-projector.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/interaction-recovery.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/provider-history-repair.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/quality-recovery.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/record-model.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/segmentation.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/selection.ts",
+      "capabilityIds": [
+        "CAP-CANDIDATE-FILE-RESTORE",
+        "CAP-CANDIDATE-RECOVERY",
+        "CAP-CANDIDATE-REGENERATE",
+        "CAP-CANDIDATE-TREE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/session-migration.ts",
+      "capabilityIds": [
+        "CAP-MIGRATION-ARCHIVE",
+        "CAP-MIGRATION-FAIL-CLOSED",
+        "CAP-MIGRATION-PREFLIGHT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/store.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/title-projection.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/title.ts",
+      "capabilityIds": [
+        "CAP-TITLE-DURABLE",
+        "CAP-TITLE-GENERATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/session/web-search-report.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-BRANCH-PROJECTION",
+        "CAP-SESSION-DISCOVERY",
+        "CAP-SESSION-HOST-STATE",
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/side-question/reference.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/side-question/service.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/side-question/types.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/activation-derivation.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/activation-state.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/catalog-context.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/catalog-refresh.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/catalog-snapshot.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/catalog-sources.ts",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_HOST_ASSETS_DIR"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/catalog.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/compaction.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/draft-publisher.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/host-activation.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/index.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/mount.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/tools/activated-skill.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/tools/activation.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/tools/arguments.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/tools/definitions.ts",
+      "capabilityIds": [
+        "CAP-TOOL-ACTIVATE-SKILL",
+        "CAP-TOOL-READ-SKILL-RESOURCE",
+        "CAP-TOOL-RUN-SKILL-SCRIPT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/tools/index.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/tools/resource.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/tools/script.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/skills/types.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-SCRIPTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/stage/bootstrap.ts",
+      "capabilityIds": [
+        "CAP-STAGE-BOOTSTRAP",
+        "CAP-STAGE-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/stage/types.ts",
+      "capabilityIds": [
+        "CAP-STAGE-BOOTSTRAP",
+        "CAP-STAGE-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/arguments.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS",
+        "CAP-WEB-HOST-TOOLS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/directory-query.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS",
+        "CAP-WEB-HOST-TOOLS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/file/definitions.ts",
+      "capabilityIds": [
+        "CAP-TOOL-APPEND-FILE",
+        "CAP-TOOL-COPY-FILE",
+        "CAP-TOOL-CREATE-DIRECTORY",
+        "CAP-TOOL-CREATE-FILE",
+        "CAP-TOOL-DELETE-DIRECTORY",
+        "CAP-TOOL-DELETE-FILE",
+        "CAP-TOOL-GREP-FILES",
+        "CAP-TOOL-LIST-DIRECTORY",
+        "CAP-TOOL-MOVE-DIRECTORY",
+        "CAP-TOOL-MOVE-FILE",
+        "CAP-TOOL-READ-FILE",
+        "CAP-TOOL-REPLACE-IN-FILE",
+        "CAP-TOOL-STAT-PATH",
+        "CAP-TOOL-VIEW-IMAGE",
+        "CAP-TOOL-WRITE-FILE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/file/handler-contract.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/file/mutation-handlers.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/file/mutation-operations.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/file/path-policy.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/file/query-operations.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/file/read-handlers.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/fs.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS",
+        "CAP-WEB-HOST-TOOLS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/index.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS",
+        "CAP-WEB-HOST-TOOLS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/shell.ts",
+      "capabilityIds": [
+        "CAP-TOOL-SHELL-EXEC",
+        "CAP-TOOL-SHELL-OUTPUT",
+        "CAP-TOOL-SHELL-STOP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/types.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS",
+        "CAP-WEB-HOST-TOOLS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web.ts",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-FILES-READ-BOUNDS",
+        "CAP-FILES-VIRTUAL-ROOTS",
+        "CAP-WEB-HOST-TOOLS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/definitions.ts",
+      "capabilityIds": [
+        "CAP-TOOL-WEB-CRAWL",
+        "CAP-TOOL-WEB-FETCH",
+        "CAP-TOOL-WEB-MAP",
+        "CAP-TOOL-WEB-RESEARCH",
+        "CAP-TOOL-WEB-SEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/fetch.ts",
+      "capabilityIds": [
+        "CAP-WEB-HOST-TOOLS",
+        "CAP-WEB-NATIVE-SEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/map-crawl.ts",
+      "capabilityIds": [
+        "CAP-WEB-HOST-TOOLS",
+        "CAP-WEB-NATIVE-SEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/normalization.ts",
+      "capabilityIds": [
+        "CAP-WEB-HOST-TOOLS",
+        "CAP-WEB-NATIVE-SEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/research.ts",
+      "capabilityIds": [
+        "CAP-WEB-HOST-TOOLS",
+        "CAP-WEB-NATIVE-SEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/search.ts",
+      "capabilityIds": [
+        "CAP-WEB-HOST-TOOLS",
+        "CAP-WEB-NATIVE-SEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/tavily-client.ts",
+      "capabilityIds": [
+        "CAP-ENV-TAVILY_API_KEY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/tools/web/types.ts",
+      "capabilityIds": [
+        "CAP-WEB-HOST-TOOLS",
+        "CAP-WEB-NATIVE-SEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/user-question/types.ts",
+      "capabilityIds": [
+        "CAP-TOOL-ASK-USER-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/artifact-language-policy.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-CHARACTER-CARD",
+        "CAP-VALIDATOR-EVALUATE-REPORT",
+        "CAP-VALIDATOR-RUNTIME-PACKET",
+        "CAP-VALIDATOR-SCENARIO-CARD"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/character-card.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-CHARACTER-CARD"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/document-structure.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-CHARACTER-CARD",
+        "CAP-VALIDATOR-EVALUATE-REPORT",
+        "CAP-VALIDATOR-RUNTIME-PACKET",
+        "CAP-VALIDATOR-SCENARIO-CARD"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/evaluate-report.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-EVALUATE-REPORT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/index.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-CHARACTER-CARD",
+        "CAP-VALIDATOR-EVALUATE-REPORT",
+        "CAP-VALIDATOR-RUNTIME-PACKET",
+        "CAP-VALIDATOR-SCENARIO-CARD"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/registry.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-CHARACTER-CARD",
+        "CAP-VALIDATOR-EVALUATE-REPORT",
+        "CAP-VALIDATOR-RUNTIME-PACKET",
+        "CAP-VALIDATOR-SCENARIO-CARD"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/runtime-packet.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-RUNTIME-PACKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/scenario-card.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-SCENARIO-CARD"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/core/validators/types.ts",
+      "capabilityIds": [
+        "CAP-VALIDATOR-CHARACTER-CARD",
+        "CAP-VALIDATOR-EVALUATE-REPORT",
+        "CAP-VALIDATOR-RUNTIME-PACKET",
+        "CAP-VALIDATOR-SCENARIO-CARD"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/README.md",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/client.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/config-edit.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/config-entry.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/config.ts",
+      "capabilityIds": [
+        "CAP-CFG-MCP-YAML-ENABLED",
+        "CAP-CFG-MCP-YAML-SERVERS-ID",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-ENABLED",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-ENABLEDENGINES",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-EXCLUDETOOLS",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-HEADERS",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-INCLUDETOOLS",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-NEGOTIATION",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-PROTOCOLVERSION",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-SUPPORTEDPROTOCOLVERSIONS",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-TIMEOUTSECONDS",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-TOOLPREFIX",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-TRANSPORT",
+        "CAP-CFG-MCP-YAML-SERVERS-ID-URL",
+        "CAP-ENV-VESICLE_MCP_FILE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/connection.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-MRTR-REJECTION",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/output-persistence.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/registry.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/result-delivery.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/mcp/types.ts",
+      "capabilityIds": [
+        "CAP-MCP-LIFECYCLE",
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-PERSISTENCE",
+        "CAP-MCP-RESULTS",
+        "CAP-MCP-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/anthropic-messages/adapter.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-ANTHROPIC-MESSAGES-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/anthropic-messages/invariants.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-ANTHROPIC-MESSAGES-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/anthropic-messages/request.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-ANTHROPIC-MESSAGES-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/anthropic-messages/response.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-ANTHROPIC-MESSAGES-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/anthropic-messages/stream.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-ANTHROPIC-MESSAGES-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/anthropic-messages/types.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-ANTHROPIC-MESSAGES-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/anthropic-messages/usage.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-ANTHROPIC-MESSAGES-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/gemini-generate-content/adapter.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-GEMINI-GENERATE-CONTENT-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/gemini-generate-content/invariants.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-GEMINI-GENERATE-CONTENT-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/gemini-generate-content/request.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-GEMINI-GENERATE-CONTENT-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/gemini-generate-content/response.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-GEMINI-GENERATE-CONTENT-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/gemini-generate-content/stream.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-GEMINI-GENERATE-CONTENT-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/gemini-generate-content/types.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-GEMINI-GENERATE-CONTENT-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/index.ts",
+      "capabilityIds": [
+        "CAP-SESSION-PROVIDER-STATE",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/lifecycle.ts",
+      "capabilityIds": [
+        "CAP-LOOP-CANCELLATION",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-chat/adapter.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-OPENAI-CHAT-COMPATIBLE-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-chat/invariants.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-OPENAI-CHAT-COMPATIBLE-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-chat/request.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-OPENAI-CHAT-COMPATIBLE-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-chat/response.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-OPENAI-CHAT-COMPATIBLE-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-chat/stream.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-OPENAI-CHAT-COMPATIBLE-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-chat/types.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-OPENAI-CHAT-COMPATIBLE-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-chat/usage.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-OPENAI-CHAT-COMPATIBLE-HTTP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/adapter.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/items.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/owner.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/profiles.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/request.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/response.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/stream.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/types.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/usage.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/openai-responses/websocket.ts",
+      "capabilityIds": [
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-HTTP",
+        "CAP-PROVIDER-CODEX-BETA-2026-02-06-WEBSOCKET",
+        "CAP-PROVIDER-CODEX-HTTP-RELAY-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-07-31-HTTP",
+        "CAP-PROVIDER-DEEPSEEK-SUBSET-2026-08-19-HTTP",
+        "CAP-PROVIDER-MIMO-SUBSET-2026-07-30-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-HTTP",
+        "CAP-PROVIDER-OPENAI-PUBLIC-WEBSOCKET"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/attempt-commit.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/errors.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/fetch.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/headers.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/proxy.ts",
+      "capabilityIds": [
+        "CAP-ENV-HTTPS_PROXY",
+        "CAP-ENV-HTTP_PROXY",
+        "CAP-ENV-NO_PROXY",
+        "CAP-ENV-VESICLE_PROVIDER_PROXY",
+        "CAP-ENV-http_proxy",
+        "CAP-ENV-https_proxy",
+        "CAP-ENV-no_proxy"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/retry-label.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/sse.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/state.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/thinking.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/types.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/usage.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/providers/shared/web-search-support.ts",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY",
+        "CAP-TRANSPORT-RETRY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/app.tsx",
+      "capabilityIds": [
+        "CAP-SETUP-GUIDED",
+        "CAP-SETUP-THEME-PLATFORM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/config-writer.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-REGISTRY-TRANSACTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/index.tsx",
+      "capabilityIds": [
+        "CAP-SETUP-GUIDED",
+        "CAP-SETUP-THEME-PLATFORM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/mcp-test.ts",
+      "capabilityIds": [
+        "CAP-SETUP-GUIDED",
+        "CAP-SETUP-THEME-PLATFORM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/model-discovery.ts",
+      "capabilityIds": [
+        "CAP-CONFIG-DISCOVERY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/setup-effects.ts",
+      "capabilityIds": [
+        "CAP-SETUP-GUIDED",
+        "CAP-SETUP-THEME-PLATFORM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/setup-state.ts",
+      "capabilityIds": [
+        "CAP-SETUP-GUIDED",
+        "CAP-SETUP-THEME-PLATFORM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/setup/setup-views.tsx",
+      "capabilityIds": [
+        "CAP-SETUP-GUIDED",
+        "CAP-SETUP-THEME-PLATFORM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/shared/cancellation.ts",
+      "capabilityIds": [
+        "CAP-LOOP-CANCELLATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/shared/xml-escape.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-SIDE-QUESTION",
+        "CAP-PROCESS-BACKGROUND"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/README.md",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/bundle.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/catalog.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/create.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/disabled.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/discovery.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/index.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/loader.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/parser.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/paths.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/repo.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/sqlite-mutex.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/store.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/skills/types.ts",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION",
+        "CAP-SKILL-AUTHORING",
+        "CAP-SKILL-CATALOG",
+        "CAP-SKILL-FREEZE",
+        "CAP-SKILL-PARSER",
+        "CAP-SKILL-SCRIPTS",
+        "CAP-SKILL-STORE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/BranchPicker.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/GatePrompt.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/MigrationPrompt.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/PermissionPrompt.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/PromptComposer.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/QualityDecisionPrompt.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/QualityRewritePrompt.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/QuestionPrompt.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/RewindPicker.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/SessionPicker.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/YoloPrompt.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/agent-command.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/agent-delivery.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/agent-process-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/agent-view.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/app.tsx",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_REDUCED_MOTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/artifact-focus.ts",
+      "capabilityIds": [
+        "CAP-KEY-056"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/branch/controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/brand-mark.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/clipboard.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/command-completion-controller.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-KEY-058"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/command-scheduler.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-QUEUE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/agents.ts",
+      "capabilityIds": [
+        "CAP-TUI-AGENTS",
+        "CAP-TUI-BTW",
+        "CAP-TUI-STAGE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/argument-completion.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/builtin.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/dispatch.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/engine.ts",
+      "capabilityIds": [
+        "CAP-TUI-ENGINE",
+        "CAP-TUI-INSTRUCTIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/help.ts",
+      "capabilityIds": [
+        "CAP-TUI-HELP"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/match.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/options.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/permissions.ts",
+      "capabilityIds": [
+        "CAP-TUI-PERMISSIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/provider.ts",
+      "capabilityIds": [
+        "CAP-TUI-CONTEXT",
+        "CAP-TUI-EFFORT",
+        "CAP-TUI-MODEL",
+        "CAP-TUI-REASONING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/quality.ts",
+      "capabilityIds": [
+        "CAP-TUI-QUALITY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/render.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/selection.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/session.ts",
+      "capabilityIds": [
+        "CAP-TUI-BRANCH",
+        "CAP-TUI-COMPACT",
+        "CAP-TUI-INIT",
+        "CAP-TUI-NEW",
+        "CAP-TUI-RESUME",
+        "CAP-TUI-REWIND",
+        "CAP-TUI-TITLE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/skills.ts",
+      "capabilityIds": [
+        "CAP-TUI-SKILL"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/theme.ts",
+      "capabilityIds": [
+        "CAP-TUI-THEME"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/types.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-COMPLETION",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-COMMAND-QUEUE",
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/websearch.ts",
+      "capabilityIds": [
+        "CAP-TUI-WEBSEARCH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/commands/workspace.ts",
+      "capabilityIds": [
+        "CAP-TUI-ARTIFACT",
+        "CAP-TUI-VALIDATE",
+        "CAP-TUI-WORKSPACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/composer-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/composer-history.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/composer-layout.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/composer.ts",
+      "capabilityIds": [
+        "CAP-CHAT-UNICODE",
+        "CAP-KEY-059",
+        "CAP-KEY-060"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/debug-log.ts",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_DEBUG_LOG"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/decision-continuations.ts",
+      "capabilityIds": [
+        "CAP-PANEL-DECISIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/decision-controller.ts",
+      "capabilityIds": [
+        "CAP-PANEL-DECISIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/decision-interaction.ts",
+      "capabilityIds": [
+        "CAP-PANEL-DECISIONS"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/double-press.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/engine-switch-continuation.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/format.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/gate-continuation.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/index.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/input-queue.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-QUEUE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/input-routing.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-COMMAND-ESC-TAKEOVER",
+        "CAP-KEY-001",
+        "CAP-KEY-002",
+        "CAP-KEY-003",
+        "CAP-KEY-004",
+        "CAP-KEY-005",
+        "CAP-KEY-006",
+        "CAP-KEY-007",
+        "CAP-KEY-008",
+        "CAP-KEY-009",
+        "CAP-KEY-010",
+        "CAP-KEY-011",
+        "CAP-KEY-012",
+        "CAP-KEY-013",
+        "CAP-KEY-014",
+        "CAP-KEY-015",
+        "CAP-KEY-016",
+        "CAP-KEY-017",
+        "CAP-KEY-018",
+        "CAP-KEY-019",
+        "CAP-KEY-020",
+        "CAP-KEY-021",
+        "CAP-KEY-022",
+        "CAP-KEY-023",
+        "CAP-KEY-024",
+        "CAP-KEY-025",
+        "CAP-KEY-026",
+        "CAP-KEY-027",
+        "CAP-KEY-028",
+        "CAP-KEY-029",
+        "CAP-KEY-030",
+        "CAP-KEY-031",
+        "CAP-KEY-032",
+        "CAP-KEY-033",
+        "CAP-KEY-034",
+        "CAP-KEY-035",
+        "CAP-KEY-036",
+        "CAP-KEY-037",
+        "CAP-KEY-038",
+        "CAP-KEY-039",
+        "CAP-KEY-040",
+        "CAP-KEY-041",
+        "CAP-KEY-042",
+        "CAP-KEY-043",
+        "CAP-KEY-044",
+        "CAP-KEY-045",
+        "CAP-KEY-046",
+        "CAP-KEY-047",
+        "CAP-KEY-048",
+        "CAP-KEY-049",
+        "CAP-KEY-050",
+        "CAP-KEY-051",
+        "CAP-KEY-052",
+        "CAP-KEY-053",
+        "CAP-KEY-054",
+        "CAP-KEY-055",
+        "CAP-PANEL-ARBITRATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/keymap.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Unused legacy keymap stub; no imports. Actual public routing is input-routing.ts and context-specific controllers."
+    },
+    {
+      "source": "src/tui/layout.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/markdown-display.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/markdown-formatting.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/markdown-runtime-diagnostic.ts",
+      "capabilityIds": [
+        "CAP-ENV-OPENTUI_LIBC"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/model-picker-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/permission-continuation.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/prompt-escape.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-ESC-TAKEOVER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/provider-config-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/quality-decision-continuation.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/quality-decision-state.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/quality-picker-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/queued-work-controller.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-QUEUE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/reading/ReadingView.tsx",
+      "capabilityIds": [
+        "CAP-PANEL-ARBITRATION",
+        "CAP-PANEL-DECISIONS",
+        "CAP-PANEL-READING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/reading/controller.ts",
+      "capabilityIds": [
+        "CAP-PANEL-ARBITRATION",
+        "CAP-PANEL-DECISIONS",
+        "CAP-PANEL-READING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/reading/document.ts",
+      "capabilityIds": [
+        "CAP-PANEL-ARBITRATION",
+        "CAP-PANEL-DECISIONS",
+        "CAP-PANEL-READING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/reading/layout.ts",
+      "capabilityIds": [
+        "CAP-PANEL-ARBITRATION",
+        "CAP-PANEL-DECISIONS",
+        "CAP-PANEL-READING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/reading/surfaces.ts",
+      "capabilityIds": [
+        "CAP-PANEL-ARBITRATION",
+        "CAP-PANEL-DECISIONS",
+        "CAP-PANEL-READING"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/rewind/controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/session-actions-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/session-identity-coordinator.ts",
+      "capabilityIds": [
+        "CAP-SESSION-HOST-STATE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/session-migration-controller.ts",
+      "capabilityIds": [
+        "CAP-MIGRATION-ARCHIVE",
+        "CAP-MIGRATION-PREFLIGHT"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/session-preferences-controller.ts",
+      "capabilityIds": [
+        "CAP-ENGINE-HANDOFF",
+        "CAP-SESSION-HOST-STATE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/session-presenter.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/session-resume-controller.ts",
+      "capabilityIds": [
+        "CAP-INTERACTION-RESTORE",
+        "CAP-SESSION-DISCOVERY"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/side-question-controller.ts",
+      "capabilityIds": [
+        "CAP-COMMAND-SIDE-QUESTION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/skill-picker-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/skills/session-activation.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/stage-message-content.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/stage-message-interaction.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/stage-session-controller.ts",
+      "capabilityIds": [
+        "CAP-STAGE-BOOTSTRAP",
+        "CAP-STAGE-SURFACE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/startup-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/telemetry.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/terminal-title.ts",
+      "capabilityIds": [
+        "CAP-CHAT-LAYOUT",
+        "CAP-ENV-VESICLE_DISABLE_TERMINAL_TITLE",
+        "CAP-ENV-VESICLE_TERMINAL_TITLE",
+        "CAP-TITLE-DURABLE"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/theme-preference-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/theme-runtime.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/theme-text.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/theme.ts",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_THEME"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/tool-render.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/tool-summary.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/tree-sitter-runtime.ts",
+      "capabilityIds": [
+        "CAP-ENV-OTUI_TREE_SITTER_WORKER_PATH"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/turn-anchors.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/turn-cancellation.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/turn-controller-options.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/turn-controller.ts",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY",
+        "CAP-CANDIDATE-REGENERATE",
+        "CAP-LOOP-CANCELLATION",
+        "CAP-PROCESS-BACKGROUND"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/turn-focus-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/turn-result-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/types.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/user-question-continuation.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/views/BottomSurface.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/views/EmptyHero.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/views/MessageStream.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/views/README.md",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/views/SideQuestionOverlay.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/views/Sidebar.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/web-search-controller.ts",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/AgentCard.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/ArgumentMenu.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/ArtifactCard.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/ArtifactFocusPreview.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/BrandMark.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/CommandMenu.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/MarkdownContent.tsx",
+      "capabilityIds": [
+        "CAP-ENV-VESICLE_MARKDOWN_RENDERER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/Message.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/OptionPicker.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/PanelLine.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/README.md",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/ReasoningBlock.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/Splash.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/StageMessageContent.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/widgets/ToolCard.tsx",
+      "capabilityIds": [
+        "CAP-CHAT-COMPOSER",
+        "CAP-CHAT-LAYOUT",
+        "CAP-CHAT-STREAM"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/buffer-io.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/buffer-owner.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/controller.ts",
+      "capabilityIds": [
+        "CAP-KEY-057",
+        "CAP-KEY-063"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/external-editor-owner.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/external-editor-runtime.ts",
+      "capabilityIds": [
+        "CAP-ENV-EDITOR",
+        "CAP-ENV-VESICLE_EDITOR",
+        "CAP-ENV-VISUAL",
+        "CAP-KEY-063",
+        "CAP-WORKSPACE-OPS-EXTERNAL-EDITOR"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/file-operation-owner.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-OPS-EXTERNAL-EDITOR",
+        "CAP-WORKSPACE-OPS-MANAGEMENT",
+        "CAP-WORKSPACE-OPS-REVISION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/file-operations.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/index.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/input-router.ts",
+      "capabilityIds": [
+        "CAP-KEY-062"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/paths.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/status.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/tree-data.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/tree-owner.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/types.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/validation-owner.ts",
+      "capabilityIds": [
+        "CAP-KEY-061",
+        "CAP-WORKSPACE-VALIDATION"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/validation.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/tui/workspace/view.tsx",
+      "capabilityIds": [
+        "CAP-WORKSPACE-DISK-CONFLICT",
+        "CAP-WORKSPACE-EDITOR",
+        "CAP-WORKSPACE-TREE",
+        "CAP-WORKSPACE-VALIDATION",
+        "CAP-WORKSPACE-VIEWER"
+      ],
+      "nonCapabilityReason": null
+    },
+    {
+      "source": "src/types/opentui-solid-preload.d.ts",
+      "capabilityIds": [],
+      "nonCapabilityReason": "Type-only declaration for the TS development loader, not a separate product entry."
+    }
+  ]
+}

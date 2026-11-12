@@ -58,7 +58,8 @@ export function parseEvidence(value: unknown): EvidenceBundle {
   hash(root.tsBaselineSha, 40, "tsBaselineSha");
   hash(root.candidateSha, 40, "candidateSha");
   rows(root.capabilities, "capabilities", (r, at) => {
-    keys(r, ["id", "domain", "behavior", "anchors", "introducedAt", "tsStatus", "targetStage", "scenarioIds", "conditions", "implementation", "verificationIds", "rustStatus"], at);
+    keys(r, ["id", "kind", "domain", "behavior", "anchors", "introducedAt", "tsStatus", "targetStage", "scenarioIds", "conditions", "implementation", "verificationIds", "rustStatus"], at);
+    if (r.kind !== undefined) choice(r.kind, ["preservation", "infrastructure"], `${at}.kind`);
     fields(r, ["domain", "behavior", "introducedAt"], at);
     lists(r, ["anchors", "scenarioIds", "conditions", "implementation", "verificationIds"], at);
     choice(r.tsStatus, ["implemented", "experimental"], `${at}.tsStatus`);

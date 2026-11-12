@@ -1,0 +1,946 @@
+{
+  "schemaVersion": 1,
+  "status": "Required future lanes, not executed evidence",
+  "lanes": [
+    {
+      "id": "SC-MCP-MRTR-REJECTION",
+      "capabilityIds": [
+        "CAP-MCP-MRTR-REJECTION"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Synthetic modern tools/call returns resultType=input_required. Exercise both SDK admission and host normalization fallback.",
+      "action": "Call once and capture request count, normalized result and follow-up traffic.",
+      "assertions": [
+        "No successful tool result is reported.",
+        "No MRTR input flow or retry is started.",
+        "Fallback normalizer returns isError=true with invalid-response; SDK may reject as UnsupportedResultType."
+      ],
+      "negativeCase": "An unsupported result is accepted or starts extra interactions.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-QUALITY-POLICY-ELIGIBILITY",
+      "capabilityIds": [
+        "CAP-QUALITY-POLICY-ELIGIBILITY"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Policy active, target runtime.prose, protocol openai-chat-compatible, model fixture-model; blocking rule fixture-rule, minimum confidence0.8. Findings: judge fixture-rule confidence0.8; judge fixture-rule0.79; detector fixture-rule1.0; judge other-rule1.0.",
+      "action": "Evaluate the exact valid case, absent/inactive policy, invalid Judge status, unmatched target and unmatched model.",
+      "assertions": [
+        "Valid active scoped case is eligible with only the confidence0.8 judge fixture-rule finding.",
+        "Absent/inactive policy or unmatched target/model yields observe and no findings.",
+        "Invalid Judge status under active policy yields inconclusive and no findings.",
+        "Evaluation performs no provider call, rewrite or session mutation."
+      ],
+      "negativeCase": "Threshold equality is rejected, detector findings become semantic blockers, or pure eligibility invokes rewriting.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-COMPOSER-GRAPHEME",
+      "capabilityIds": [
+        "CAP-CHAT-UNICODE"
+      ],
+      "requiredStage": "S4",
+      "kind": "offline",
+      "inputDescription": "Text 你好👩🏽‍💻é𠮷 has UTF-16 length13 and grapheme boundaries [0,1,2,9,11,13].",
+      "action": "Move left/right and Backspace/Delete at each boundary, wrap at narrow width and round-trip text paste.",
+      "assertions": [
+        "Cursor edits do not split surrogate pairs, combining sequences or the ZWJ cluster.",
+        "Saved/submitted text preserves the exact Unicode sequence unless the selected whole grapheme was deleted.",
+        "Visual wrapping and cursor movement keep the selected grapheme boundary rather than treating UTF-16 offsets as terminal cells."
+      ],
+      "negativeCase": "A cluster is split, a code unit is lost or wrapped movement corrupts the saved text.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-NATIVE-CJK-IME",
+      "capabilityIds": [
+        "CAP-CHAT-UNICODE"
+      ],
+      "requiredStage": "S4",
+      "kind": "native",
+      "inputDescription": "Real Windows Terminal plus supported POSIX terminal; Chinese IME; Chat composer, Workspace editable source and Setup text input.",
+      "action": "Compose 你好, cancel one composition, commit another, paste 你好👩🏽‍💻é𠮷, resize and save/reload a synthetic file.",
+      "assertions": [
+        "Composition commit inserts text once and cancelling does not submit a prompt.",
+        "Committed/saved UTF-8 bytes round-trip exactly.",
+        "Cursor, selection and wrapped display remain readable at80columns; environment and actual key events are retained."
+      ],
+      "negativeCase": "PTY-injected UTF-8 alone is substituted for a native IME observation.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 180
+      }
+    },
+    {
+      "id": "SC-QUALITY-UTF16-OFFSETS",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Text 😀空气中弥漫着雨味。 with the published literal detector; separate text 短句 with protected range [0,10].",
+      "action": "Evaluate both candidates through the detector.",
+      "assertions": [
+        "Literal finding evidence is 空气中弥漫着 with UTF-16 start2/end8.",
+        "Out-of-range protected span fails with an actionable outside-normalized-candidate error."
+      ],
+      "negativeCase": "Offsets are counted as Unicode scalar indices or invalid protected ranges silently mask prose.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-MCP-LIVE-LEGACY",
+      "capabilityIds": [
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-SURFACE",
+        "CAP-MCP-LIFECYCLE"
+      ],
+      "requiredStage": "S3",
+      "kind": "live",
+      "inputDescription": "An existing configured dedicated/read-only Streamable HTTP server using initialize with pinned supported legacy protocol revision. Credentials remain private; exact server/tool selector recorded in local evidence.",
+      "action": "Connect, paginate tools/list, invoke one authorized harmless tool with bounded arguments, cancel a separate bounded test call if the lane supports cancellation.",
+      "assertions": [
+        "Observed negotiated era and revision match the selected server.",
+        "Discovered schema and result normalize to the same host tool boundary.",
+        "Configured scopes and error redaction remain in effect; missing server or permitted test tool is unavailable."
+      ],
+      "negativeCase": "A different era, mock server or skipped service substitutes for real server evidence.",
+      "limits": {
+        "maxToolCallsPerRun": 2,
+        "maxToolsListPagesPerRun": 3,
+        "maxHttpRequestsPerRun": 18,
+        "maxRequestSeconds": 30,
+        "maxLaneSeconds": 120,
+        "maxRepairReruns": 2,
+        "totalToolCallsIncludingReruns": 6,
+        "totalHttpRequestsIncludingReruns": 54,
+        "totalLaneSecondsIncludingReruns": 360
+      }
+    },
+    {
+      "id": "SC-MCP-LIVE-MODERN",
+      "capabilityIds": [
+        "CAP-MCP-NEGOTIATION",
+        "CAP-MCP-SURFACE",
+        "CAP-MCP-LIFECYCLE"
+      ],
+      "requiredStage": "S3",
+      "kind": "live",
+      "inputDescription": "An existing configured dedicated/read-only Streamable HTTP server using server/discover with2026-07-28. Credentials remain private; exact server/tool selector recorded in local evidence.",
+      "action": "Connect, paginate tools/list, invoke one authorized harmless tool with bounded arguments, cancel a separate bounded test call if the lane supports cancellation.",
+      "assertions": [
+        "Observed negotiated era and revision match the selected server.",
+        "Discovered schema and result normalize to the same host tool boundary.",
+        "Configured scopes and error redaction remain in effect; missing server or permitted test tool is unavailable."
+      ],
+      "negativeCase": "A different era, mock server or skipped service substitutes for real server evidence.",
+      "limits": {
+        "maxToolCallsPerRun": 2,
+        "maxToolsListPagesPerRun": 3,
+        "maxHttpRequestsPerRun": 18,
+        "maxRequestSeconds": 30,
+        "maxLaneSeconds": 120,
+        "maxRepairReruns": 2,
+        "totalToolCallsIncludingReruns": 6,
+        "totalHttpRequestsIncludingReruns": 54,
+        "totalLaneSecondsIncludingReruns": 360
+      }
+    },
+    {
+      "id": "SC-PROXY-LIVE",
+      "capabilityIds": [
+        "CAP-TRANSPORT-PROXY"
+      ],
+      "requiredStage": "S3",
+      "kind": "live",
+      "inputDescription": "Existing authorized HTTP CONNECT proxy and one configured HTTP/WS-capable provider; separate deterministic407/no-proxy fixtures.",
+      "action": "Send one bounded HTTP turn and one WebSocket turn through the proxy; keep route class and transport evidence without proxy credentials/host in public logs.",
+      "assertions": [
+        "Both selected transports actually use the configured route.",
+        "Explicit proxy is not bypassed by NO_PROXY; inherited bypass follows documented grammar.",
+        "407 is terminal for its attempt class and logs/events contain no proxy URL or credentials."
+      ],
+      "negativeCase": "A direct or HTTP fallback connection is counted as proof of proxied WebSocket.",
+      "limits": {
+        "maxGenerationCalls": 2,
+        "maxTokensPerCall": 64,
+        "maxCallSeconds": 30,
+        "maxRepairReruns": 2,
+        "totalGenerationCallsIncludingReruns": 6
+      }
+    },
+    {
+      "id": "SC-TAVILY-LIVE",
+      "capabilityIds": [
+        "CAP-WEB-HOST-TOOLS"
+      ],
+      "requiredStage": "S3",
+      "kind": "live",
+      "inputDescription": "Existing Tavily key and dedicated public test URL/query; tools.json exact search/extract/crawl/map/research schema.",
+      "action": "Exercise each existing authorized lane with the smallest bounded read-only query and retain normalized output or explicit unavailable status.",
+      "assertions": [
+        "Each of the five tools reaches the intended service operation when its environment is available.",
+        "Credential absence remains unavailable; native search suppresses duplicate host search only in the declared Engine/profile context."
+      ],
+      "negativeCase": "A single successful search is used to claim all five tool APIs passed.",
+      "limits": {
+        "maxToolInvocationsPerRun": 5,
+        "maxHttpRequestsPerRun": 20,
+        "maxResearchPollRequestsPerRun": 3,
+        "maxRepairReruns": 2,
+        "totalToolInvocationsIncludingReruns": 15,
+        "totalHttpRequestsIncludingReruns": 60,
+        "maxCallSeconds": 30,
+        "maxLaneSeconds": 180,
+        "totalLaneSecondsIncludingReruns": 540,
+        "outputLimit": "smallest supported per-tool output limit; abort and report unavailable if polling or HTTP/lane ceiling is reached before required observations"
+      }
+    },
+    {
+      "id": "SC-WINDOWS-FILE-BOUNDARY",
+      "capabilityIds": [
+        "CAP-FILES-PATH-GUARD",
+        "CAP-REWIND-CHECKPOINTS",
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "native",
+      "inputDescription": "Native Windows test project with nested empty directories, Unicode paths, sentinel outside root, symlink/junction escapes and existing destination.",
+      "action": "Attempt guarded reads/writes through link escapes; perform atomic replacement, checkpoint and restore nested topology under cancellation/error injection.",
+      "assertions": [
+        "Outside sentinel bytes remain unchanged and escapes are rejected.",
+        "Successful restore reproduces file bytes, absence and empty-directory topology.",
+        "Failed replacement/restore reports partial state and preserves recoverable source/backups; no success is fabricated."
+      ],
+      "negativeCase": "WSL path semantics or a cross-compiled binary substitutes for native junction/rename behavior.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-MIGRATION-FAULT-INTERRUPT",
+      "capabilityIds": [
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Copy of candidate-file-history/attachment corpus with retained original tree manifest; fault after staged copy but before activation.",
+      "action": "Execute copy/import or activation transaction at the stated barrier, then restart and inspect both original and destination manifests.",
+      "assertions": [
+        "Source tree remains byte-identical; restart exposes original or complete verified destination, never partial activation.",
+        "Logs identify the failed phase and no original history is truncated."
+      ],
+      "negativeCase": "Only a reader error is tested while transaction failure and rollback side effects remain unchecked.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-MIGRATION-FAULT-LOCK-CONFLICT",
+      "capabilityIds": [
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Copy of candidate-file-history/attachment corpus with retained original tree manifest; fault while a second process holds the documented activation/install lock.",
+      "action": "Execute copy/import or activation transaction at the stated barrier, then restart and inspect both original and destination manifests.",
+      "assertions": [
+        "Conflicting transaction refuses/waits within a bound and cannot overwrite the lock holder state.",
+        "Logs identify the failed phase and no original history is truncated."
+      ],
+      "negativeCase": "Only a reader error is tested while transaction failure and rollback side effects remain unchecked.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-MIGRATION-FAULT-DISK-WRITE-FAILURE",
+      "capabilityIds": [
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Copy of candidate-file-history/attachment corpus with retained original tree manifest; fault inject write/rename failure before commit, including archive/attachment staging.",
+      "action": "Execute copy/import or activation transaction at the stated barrier, then restart and inspect both original and destination manifests.",
+      "assertions": [
+        "Original session and adjacent resources remain intact; staging is recoverable/cleaned and failure is actionable.",
+        "Logs identify the failed phase and no original history is truncated."
+      ],
+      "negativeCase": "Only a reader error is tested while transaction failure and rollback side effects remain unchecked.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-MIGRATION-FAULT-OLD-PROCESS-CONCURRENT",
+      "capabilityIds": [
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Copy of candidate-file-history/attachment corpus with retained original tree manifest; fault hold the TS source session open while importing/upgrading its isolated copy.",
+      "action": "Execute copy/import or activation transaction at the stated barrier, then restart and inspect both original and destination manifests.",
+      "assertions": [
+        "The old process remains on its original data; incompatible concurrent writes cannot silently merge or corrupt either authority.",
+        "Logs identify the failed phase and no original history is truncated."
+      ],
+      "negativeCase": "Only a reader error is tested while transaction failure and rollback side effects remain unchecked.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-MIGRATION-FAULT-ROLLBACK-NEW-ARTIFACT",
+      "capabilityIds": [
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Copy of candidate-file-history/attachment corpus with retained original tree manifest; fault create a new destination artifact after a failed candidate activation and before rollback.",
+      "action": "Execute copy/import or activation transaction at the stated barrier, then restart and inspect both original and destination manifests.",
+      "assertions": [
+        "Rollback does not delete or overwrite the newer user artifact; conflict is explicit and original backup remains available.",
+        "Logs identify the failed phase and no original history is truncated."
+      ],
+      "negativeCase": "Only a reader error is tested while transaction failure and rollback side effects remain unchecked.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-MIGRATION-FAULT-MISSING-ATTACHMENT",
+      "capabilityIds": [
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Copy of candidate-file-history/attachment corpus with retained original tree manifest; fault remove a referenced attachment from the copied source before preflight.",
+      "action": "Execute copy/import or activation transaction at the stated barrier, then restart and inspect both original and destination manifests.",
+      "assertions": [
+        "Preflight refuses unsafe activation and preserves original JSONL/remaining resource tree.",
+        "Logs identify the failed phase and no original history is truncated."
+      ],
+      "negativeCase": "Only a reader error is tested while transaction failure and rollback side effects remain unchecked.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-legacy-linear",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-PROVIDER-STATE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/legacy-linear and cases.json selected case legacy-linear.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/contents = [\"old question\", \"old answer\"]",
+        "Exact views/default/snapshot/messages/1/providerState = {\"endpointFingerprint\": \"sha256:fixture-endpoint\", \"model\": \"fixture-model\", \"payload\": {\"encrypted\": \"opaque\\n+/=signature\", \"outputItems\": []}, \"protocol\": \"fixture-responses\", \"providerId\": \"fixture-provider\", \"version\": 1}",
+        "Exact recordCount = 3",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-nested-candidates",
+      "capabilityIds": [
+        "CAP-CANDIDATE-TREE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/nested-candidates and cases.json selected case nested-candidates.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/contents = [\"outline\", \"beta\", \"expand beta\", \"beta two\"]",
+        "Exact views/a2/contents = [\"outline\", \"alpha\", \"expand alpha\", \"alpha two\"]",
+        "Exact candidateTree/0/candidates/0/rootUuid = \"a\"",
+        "Exact candidateTree/0/candidates/0/fork/candidates/1/rootUuid = \"a2\"",
+        "Exact candidateTree/0/candidates/1/fork/candidates/1/rootUuid = \"b2\"",
+        "Exact recordCount = 10",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-compact-state",
+      "capabilityIds": [
+        "CAP-COMPACT-PORTABLE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/compact-state and cases.json selected case compact-state.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/contents = [\"[conversation summary]\\nEarlier work.\", \"retained answer\", \"new question\", \"new answer\"]",
+        "Exact views/default/snapshot/messages/1/providerState = {\"endpointFingerprint\": \"sha256:fixture-endpoint\", \"model\": \"fixture-model\", \"payload\": {\"encrypted\": \"opaque\\n+/=signature\", \"outputItems\": []}, \"protocol\": \"fixture-responses\", \"providerId\": \"fixture-provider\", \"version\": 1}",
+        "Exact recordCount = 6",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-unsupported-compact-version",
+      "capabilityIds": [
+        "CAP-COMPACT-PORTABLE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/unsupported-compact-version and cases.json selected case unsupported-compact-version.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Expected reader failure: {\"messageIncludes\": \"version 99 is not supported\", \"name\": \"Error\"}",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-malformed-json",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND",
+        "CAP-SESSION-PROVIDER-STATE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/malformed-json and cases.json selected case malformed-json.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Expected reader failure: {\"name\": \"SyntaxError\"}",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-attachment",
+      "capabilityIds": [
+        "CAP-ATTACHMENT-MATERIALIZATION"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/attachment and cases.json selected case attachment.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/messages/0/images = [{\"bytes\": 68, \"filename\": \"synthetic.png\", \"id\": \"img_637f66e34e99\", \"mediaType\": \"image/png\", \"path\": \".vesicle/attachments/637f66e34e99be0b59ed7f800503edc085a03ac8d65b7ca30a7187d3d7ce0f42.png\", \"sha256\": \"637f66e34e99be0b59ed7f800503edc085a03ac8d65b7ca30a7187d3d7ce0f42\", \"source\": \"clipboard\"}]",
+        "Exact materializedHashes = [\"637f66e34e99be0b59ed7f800503edc085a03ac8d65b7ca30a7187d3d7ce0f42\"]",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-missing-attachment",
+      "capabilityIds": [
+        "CAP-ATTACHMENT-MATERIALIZATION"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/missing-attachment and cases.json selected case missing-attachment.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Expected reader failure: {\"code\": \"ENOENT\"}",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-corrupt-attachment",
+      "capabilityIds": [
+        "CAP-ATTACHMENT-MATERIALIZATION"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/corrupt-attachment and cases.json selected case corrupt-attachment.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Expected reader failure: {\"messageIncludes\": \"Image attachment changed on disk\", \"name\": \"Error\"}",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-migration-skill-host-state",
+      "capabilityIds": [
+        "CAP-SKILL-FREEZE"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/migration-skill-host-state and cases.json selected case migration-skill-host-state.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/harness = {\"adapterHash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"adapterId\": \"vesicle-v1\", \"adapterVersion\": \"1.2.0\", \"manifestSha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"packId\": \"prism-engine-v10\", \"packVersion\": \"10.3.3\", \"sourceCommit\": \"synthetic-fixture\"}",
+        "Exact views/r2/snapshot/harness = {\"adapterHash\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"adapterId\": \"vesicle-v1\", \"adapterVersion\": \"1.2.0\", \"manifestSha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"packId\": \"prism-engine-v10\", \"packVersion\": \"10.3.3\", \"sourceCommit\": \"synthetic-fixture\"}",
+        "Exact views/r2/snapshot/skillCatalogSnapshot = {\"catalogHash\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\", \"diagnosticsCount\": 0, \"entries\": [{\"bodySha256\": \"55258974a5d4a4391f9c1c0d840740aebc6e4d1ac870c58ebbb5ee955f1986b4\", \"name\": \"fixture-skill\", \"scope\": \"project\"}], \"omittedCount\": 0}",
+        "Exact views/default/contents = [\"pre-migration question\", \"regenerated pre-migration answer\"]",
+        "Exact views/r2/contents = [\"pre-migration question\", \"pre-migration answer\"]",
+        "Exact skillFiles/0/bodySha256 = \"55258974a5d4a4391f9c1c0d840740aebc6e4d1ac870c58ebbb5ee955f1986b4\"",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-pending-gate",
+      "capabilityIds": [
+        "CAP-INTERACTION-RESTORE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/pending-gate and cases.json selected case pending-gate.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/pendingGate/toolCallId = \"call-pending\"",
+        "Exact views/default/snapshot/pendingGate/gate/gate = \"blueprint-confirmation\"",
+        "Exact views/default/contents = [\"request\", \"pending\"]",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-pending-question",
+      "capabilityIds": [
+        "CAP-INTERACTION-RESTORE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/pending-question and cases.json selected case pending-question.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/pendingUserQuestion/toolCallId = \"call-pending\"",
+        "Exact views/default/snapshot/pendingUserQuestion/question/header = \"Scope\"",
+        "Exact views/default/contents = [\"request\", \"pending\"]",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-pending-engine-switch",
+      "capabilityIds": [
+        "CAP-INTERACTION-RESTORE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/pending-engine-switch and cases.json selected case pending-engine-switch.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/pendingEngineSwitch/toolCallId = \"call-pending\"",
+        "Exact views/default/snapshot/pendingEngineSwitch/request/targetEngine = \"runtime\"",
+        "Exact views/default/contents = [\"request\", \"pending\"]",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-pending-permission",
+      "capabilityIds": [
+        "CAP-INTERACTION-RESTORE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/pending-permission and cases.json selected case pending-permission.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/pendingPermission/id = \"permission-shell\"",
+        "Exact views/default/snapshot/permissionMode = \"MOMENTUM\"",
+        "Exact views/default/contents = [\"run synthetic\", \"\"]",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-indeterminate-process",
+      "capabilityIds": [
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/indeterminate-process and cases.json selected case indeterminate-process.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/messages/2/kind = \"process-indeterminate\"",
+        "Exact views/default/snapshot/messages/2/toolOk = false",
+        "Exact views/default/snapshot/messages/2/toolCallId = \"call-shell\"",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-pending-quality",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/pending-quality and cases.json selected case pending-quality.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/pendingQualityRewrite/producer = \"runtime\"",
+        "Exact views/default/snapshot/pendingQualityRewrite/attempts = 1",
+        "Exact views/default/snapshot/pendingQualityRewrite/candidateParts = [\"synthetic pending prose\"]",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-background-agent",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/background-agent and cases.json selected case background-agent.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact agents/0/handle = \"researcher-1\"",
+        "Exact agents/0/status = \"completed\"",
+        "Exact inbox/0/state = \"acknowledged\"",
+        "Exact inbox/0/content = \"synthetic research\"",
+        "Exact views/default/snapshot/messages/3/kind = \"subagent-results\"",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-background-process",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/background-process and cases.json selected case background-process.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/messages/2/toolProcessEvent/status = \"completed\"",
+        "Exact views/default/snapshot/messages/2/toolProcessEvent/stdoutTail = \"done\"",
+        "Exact views/default/snapshot/messages/3/role = \"user\"",
+        "Exact views/default/snapshot/messages/3/kind = \"background-process-results\"",
+        "Exact processes/0/notified = true",
+        "Exact processes/0/status = \"completed\"",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-candidate-file-history",
+      "capabilityIds": [
+        "CAP-CANDIDATE-FILE-RESTORE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/candidate-file-history and cases.json selected case candidate-file-history.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/contents = [\"Write the synthetic candidate artifact.\", \"\", \"{\\\"ok\\\":true,\\\"result\\\":\\\"Wrote workspace/candidate.txt\\\"}\", \"Candidate alpha.\"]",
+        "Exact candidateBundles/0/version = 2",
+        "Exact candidateBundles/1/version = 2",
+        "Exact candidateBundles/0/files/workspace/candidate.txt/backup = \"b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060\"",
+        "Exact candidateBundles/1/files/workspace/candidate.txt/backup = \"f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad\"",
+        "Exact recordCount = 17",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-quality-decision",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/quality-decision and cases.json selected case quality-decision.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/pendingQualityDecision/request/id = \"quality-fixture\"",
+        "Exact views/default/snapshot/pendingQualityDecision/candidate/content = \"synthetic pending prose\"",
+        "Exact views/default/contents = [\"draft\"]",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-quality-accepted",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/quality-accepted and cases.json selected case quality-accepted.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/snapshot/qualityWarnings/0/targets/0/resolution = \"accepted-by-user\"",
+        "Exact views/default/pendingQuality = false",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-unsupported-provider-state",
+      "capabilityIds": [
+        "CAP-SESSION-PROVIDER-STATE"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/unsupported-provider-state and cases.json selected case unsupported-provider-state.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Expected reader failure: {\"messageIncludes\": \"version 99 is not supported\", \"name\": \"Error\"}",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-optional-quality-state",
+      "capabilityIds": [
+        "CAP-QUALITY-OPTIONAL-STATE"
+      ],
+      "requiredStage": "S3",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/optional-quality-state and cases.json selected case optional-quality-state.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Exact views/default/pendingQuality = false",
+        "Exact views/default/contents = [\"draft\"]",
+        "Exact views/default/snapshot/qualityWarnings/0/id = \"quality-fixture\"",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-PRESERVE-CORPUS-malformed-migration",
+      "capabilityIds": [
+        "CAP-MIGRATION-FAIL-CLOSED"
+      ],
+      "requiredStage": "S2",
+      "kind": "offline",
+      "inputDescription": "Immutable tests/fixtures/migration/corpus/malformed-migration and cases.json selected case malformed-migration.",
+      "action": "Run the candidate reader against a fresh copy and compare specified projections/errors and complete tree manifests.",
+      "assertions": [
+        "Expected reader failure: {\"messageIncludes\": \"identity must be an object\", \"name\": \"Error\"}",
+        "Original and copied source trees are unchanged by reading."
+      ],
+      "negativeCase": "TS reader success is used as evidence that the candidate implementation passed.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-H1-PREPARE",
+      "capabilityIds": [
+        "CAP-EVIDENCE-H1"
+      ],
+      "requiredStage": "S1",
+      "kind": "offline",
+      "inputDescription": "Candidate binaries/checksums, repeatable task steps, expected artifacts, automated results and an unfilled observation form.",
+      "action": "Prepare a self-contained observation package and verify every referenced candidate/input artifact hash.",
+      "assertions": [
+        "Package identifies exact candidate commit and artifact, environment, steps and expected results.",
+        "Observation status remains pending until a named human performs the task."
+      ],
+      "negativeCase": "A written checklist or screenshot is treated as observed human acceptance.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-H1-OBSERVE",
+      "capabilityIds": [
+        "CAP-EVIDENCE-H1"
+      ],
+      "requiredStage": "S1",
+      "kind": "human",
+      "inputDescription": "The prepared package plus a native candidate selected at the boundary.",
+      "action": "On the exact native Windows prototype, perform Chinese IME input, streaming/cancel, permission/gate resume and editor suspend/restore; record the owner continue/change decision.",
+      "assertions": [
+        "Observer identifies the executed binary hash/commit and actual native terminal.",
+        "Chinese input and process recovery are directly observed; defects and continue/change decision are explicit."
+      ],
+      "negativeCase": "Missing observer, wrong candidate or unexecuted steps are marked passed.",
+      "limits": {
+        "paidCalls": "Only the separately bounded owner-authorized task plan; no automatic execution in S0."
+      }
+    },
+    {
+      "id": "SC-H4-PREPARE",
+      "capabilityIds": [
+        "CAP-EVIDENCE-H4"
+      ],
+      "requiredStage": "S4",
+      "kind": "offline",
+      "inputDescription": "Candidate binaries/checksums, repeatable task steps, expected artifacts, automated results and an unfilled observation form.",
+      "action": "Prepare a self-contained observation package and verify every referenced candidate/input artifact hash.",
+      "assertions": [
+        "Package identifies exact candidate commit and artifact, environment, steps and expected results.",
+        "Observation status remains pending until a named human performs the task."
+      ],
+      "negativeCase": "A written checklist or screenshot is treated as observed human acceptance.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-H4-OBSERVE",
+      "capabilityIds": [
+        "CAP-EVIDENCE-H4"
+      ],
+      "requiredStage": "S4",
+      "kind": "human",
+      "inputDescription": "The prepared package plus a native candidate selected at the boundary.",
+      "action": "On the exact full-product candidate, complete a Chinese drafting/editing task across Chat, Workspace, decisions, Skill/Agent usage and restart; inspect en/zh-CN and accessibility behavior.",
+      "assertions": [
+        "Observer records completed task artifacts and unresolved UX/CJK/IME defects.",
+        "Pending decisions, file editing, keyboard page ownership and localization are directly observed."
+      ],
+      "negativeCase": "Missing observer, wrong candidate or unexecuted steps are marked passed.",
+      "limits": {
+        "paidCalls": "Only the separately bounded owner-authorized task plan; no automatic execution in S0."
+      }
+    },
+    {
+      "id": "SC-H5-PREPARE",
+      "capabilityIds": [
+        "CAP-EVIDENCE-H5"
+      ],
+      "requiredStage": "S5",
+      "kind": "offline",
+      "inputDescription": "Candidate binaries/checksums, repeatable task steps, expected artifacts, automated results and an unfilled observation form.",
+      "action": "Prepare a self-contained observation package and verify every referenced candidate/input artifact hash.",
+      "assertions": [
+        "Package identifies exact candidate commit and artifact, environment, steps and expected results.",
+        "Observation status remains pending until a named human performs the task."
+      ],
+      "negativeCase": "A written checklist or screenshot is treated as observed human acceptance.",
+      "limits": {
+        "paidCalls": 0,
+        "timeoutSeconds": 60
+      }
+    },
+    {
+      "id": "SC-H5-OBSERVE",
+      "capabilityIds": [
+        "CAP-EVIDENCE-H5"
+      ],
+      "requiredStage": "S5",
+      "kind": "human",
+      "inputDescription": "The prepared package plus a native candidate selected at the boundary.",
+      "action": "Install, upgrade, repair and uninstall the exact release candidate on native Windows, inspect data preservation and resource results, and record owner decisions on performance tradeoffs, migration period and release version.",
+      "assertions": [
+        "Installed candidate hashes match the automation package and retained user data survives the lifecycle.",
+        "Owner observations and explicit performance/migration/version decisions are recorded; no tag or publication is performed."
+      ],
+      "negativeCase": "Missing observer, wrong candidate or unexecuted steps are marked passed.",
+      "limits": {
+        "paidCalls": "Only the separately bounded owner-authorized task plan; no automatic execution in S0."
+      }
+    }
+  ]
+}

@@ -52,7 +52,9 @@ function checkReferences(bundle: EvidenceBundle, baseline: BaselineEntry[]): str
   }
   for (const cap of caps.values()) {
     if (!cap.anchors.length || !cap.conditions.length || !cap.scenarioIds.length) errors.push(`${cap.id}: missing anchors, conditions or scenarios`);
-    if (due(cap.targetStage, bundle.stage) && cap.rustStatus !== "verified") errors.push(`${cap.id}: due capability is ${cap.rustStatus}`);
+    if (cap.kind === "infrastructure") {
+      if (cap.rustStatus !== "not_started") errors.push(`${cap.id}: infrastructure must not claim Rust implementation status`);
+    } else if (due(cap.targetStage, bundle.stage) && cap.rustStatus !== "verified") errors.push(`${cap.id}: due capability is ${cap.rustStatus}`);
     if (cap.rustStatus === "verified" && (!cap.implementation.length || !cap.verificationIds.length)) errors.push(`${cap.id}: verified without implementation/evidence`);
     for (const id of cap.scenarioIds) {
       const scenario = scenarios.get(id);
@@ -67,6 +69,8 @@ function checkReferences(bundle: EvidenceBundle, baseline: BaselineEntry[]): str
   }
   for (const s of scenarios.values()) {
     if (!s.assertions.length || !s.capabilityIds.length) errors.push(`${s.id}: missing assertions or capabilities`);
+    const infrastructure = s.capabilityIds.filter((id) => caps.get(id)?.kind === "infrastructure");
+    if (infrastructure.length && infrastructure.length !== s.capabilityIds.length) errors.push(`${s.id}: infrastructure and preservation ownership must be separate`);
     for (const id of s.capabilityIds) if (!caps.get(id)?.scenarioIds.includes(s.id)) errors.push(`${s.id}: missing reciprocal capability ${id}`);
   }
   for (const v of verifications.values()) if (!scenarios.has(v.scenarioId)) errors.push(`${v.id}: unknown scenario ${v.scenarioId}`);
@@ -97,7 +101,14 @@ async function checkVerification(v: Verification, bundle: EvidenceBundle, root: 
     return;
   }
   if (v.exitCode !== 0 || v.gapReason !== null) throw new Error(`${v.id}: passed with failure, skipped execution or gap`);
-  if (bundle.stage !== "S0" && v.rustSha !== candidate) throw new Error(`${v.id}: missing candidate evidence`);
+  const scenario = bundle.scenarios.find((s) => s.id === v.scenarioId);
+  // Infrastructure observations cannot prove a ported feature. Human evidence
+  // always names its observed candidate, even when owned by an acceptance CAP.
+  const infrastructure = scenario && scenario.kind !== "human" && scenario.capabilityIds.length > 0
+    && scenario.capabilityIds.every((id) => bundle.capabilities.find((c) => c.id === id)?.kind === "infrastructure");
+  // A preparation/CI observation may name a real candidate (already checked
+  // above). Allowing TS-only infrastructure evidence does not discard provenance.
+  if (!infrastructure && bundle.stage !== "S0" && v.rustSha !== candidate) throw new Error(`${v.id}: missing candidate evidence`);
   const required = bundle.scenarios.find((s) => s.id === v.scenarioId)?.assertions ?? [];
   if (required.some((a) => !v.assertions.includes(a))) throw new Error(`${v.id}: required assertion missing`);
   // The producer's result is independent of the verifier's bookkeeping. A skipped

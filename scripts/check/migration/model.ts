@@ -4,6 +4,8 @@ export type VerificationStatus = "passed" | "failed" | "skipped" | "unavailable"
 export interface HashedFile { path: string; sha256: string }
 export interface Capability {
   id: string;
+  /** Defaults to preservation. Infrastructure records acceptance work, not a Rust feature. */
+  kind?: "preservation" | "infrastructure";
   domain: string;
   behavior: string;
   anchors: string[];
