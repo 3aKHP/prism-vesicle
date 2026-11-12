@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust/cli", "rust/session"]
+members = ["rust/cli", "rust/session", "rust/attachments"]
 resolver = "3"
 
 [workspace.package]
@@ -14,3 +14,4 @@ unsafe_code = "forbid"
 
 [workspace.dependencies]
 serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "raw_value"] }
+sha2 = "=0.11.1"

@@ -1,6 +1,8 @@
 //! Read-only inspection of a deliberately limited subset of durable JSONL.
 //! This is not provider history, a resume operation, or file restoration.
 
+mod host_state;
+mod identity;
 mod json;
 mod preferences;
 mod provider_state;
@@ -31,6 +33,7 @@ pub fn inspect(input: &str, head: Option<&str>) -> Result<Value, InspectError> {
     let records = records::parse(input)?;
     let branch = records::branch(&records, head)?;
     let preferences = preferences::project(&records);
+    let host_state = host_state::project(&records, preferences.clone())?;
     Ok(json!({
         "schemaVersion": 1,
         "mode": "read-only-inspection",
@@ -38,5 +41,6 @@ pub fn inspect(input: &str, head: Option<&str>) -> Result<Value, InspectError> {
         "records": records,
         "activeBranch": branch,
         "hostPreferences": preferences,
+        "hostState": host_state,
     }))
 }

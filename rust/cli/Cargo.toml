@@ -16,3 +16,4 @@ workspace = true
 [dependencies]
 serde_json.workspace = true
 vesicle-session = { path = "../session" }
+vesicle-attachments = { path = "../attachments" }

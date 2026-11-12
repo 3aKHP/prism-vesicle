@@ -105,7 +105,7 @@ fn unknown_formats_and_malformed_data_do_not_produce_partial_success() {
             "session.unsupported_provider_state",
         ),
         ("compact-state", "session.unsupported_kind"),
-        ("migration-skill-host-state", "session.unsupported_kind"),
+        ("malformed-migration", "session.invalid_migration"),
         ("pending-gate", "session.unsupported_tool_history"),
     ] {
         assert_eq!(
@@ -114,6 +114,100 @@ fn unknown_formats_and_malformed_data_do_not_produce_partial_success() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn migrated_identity_and_frozen_catalog_survive_older_branch_selection() {
+    let input = fixture("migration-skill-host-state");
+    let records: Vec<Value> = input
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let result = inspect(&input, Some("r2")).unwrap();
+    assert_eq!(
+        contents(&result),
+        ["pre-migration question", "pre-migration answer"]
+    );
+    assert_eq!(result["hostState"]["harness"]["packVersion"], "10.3.3");
+    assert_eq!(
+        result["hostState"]["skillCatalogSnapshot"]["entries"][0]["bodySha256"],
+        "55258974a5d4a4391f9c1c0d840740aebc6e4d1ac870c58ebbb5ee955f1986b4"
+    );
+    assert_eq!(result["records"][0]["metadata"], records[0]["metadata"]);
+    assert_eq!(result["records"][3]["metadata"], records[3]["metadata"]);
+    let header = inspect(input.lines().next().unwrap(), None).unwrap();
+    assert_eq!(header["hostState"]["harness"]["packVersion"], "10.3.2");
+}
+
+#[test]
+fn required_migration_errors_fail_but_bad_optional_catalogs_do_not_erase_state() {
+    let input = fixture("migration-skill-host-state");
+    let records: Vec<Value> = input
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for (field, invalid) in [
+        ("from", json!({})),
+        ("to", json!({})),
+        ("archivePath", json!("")),
+        (
+            "preflight",
+            json!({"verdict":"blocking","warningCount":0,"layers":[]}),
+        ),
+    ] {
+        let mut changed = records.clone();
+        changed[3]["metadata"]["migration"][field] = invalid;
+        let changed = changed
+            .iter()
+            .map(Value::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            inspect(&changed, Some("r2")).unwrap_err().code,
+            "session.invalid_migration",
+            "{field}"
+        );
+    }
+    let invalid = json!({"uuid":"bad-skills","parentUuid":"branch","sessionId":"fixture","ts":"now","role":"system","content":"","metadata":{"kind":"skill-catalog","skills":{"catalogHash":"bad","entries":[{"name":"x","scope":"invalid","bodySha256":"bad"}],"omittedCount":0,"diagnosticsCount":0}}});
+    let result = inspect(&format!("{input}{invalid}\n"), Some("r2")).unwrap();
+    assert_eq!(
+        result["hostState"]["skillCatalogSnapshot"]["catalogHash"],
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    );
+    assert_eq!(
+        result["records"].as_array().unwrap().last().unwrap()["metadata"]["skills"]["catalogHash"],
+        "bad"
+    );
+}
+
+#[test]
+fn header_identity_rejects_unknown_fields_and_invalid_persisted_patterns() {
+    let original: Value = serde_json::from_str(
+        fixture("migration-skill-host-state")
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    for (field, value) in [
+        ("unknown", json!("x")),
+        ("packId", json!("../pack")),
+        ("packVersion", json!("1.2")),
+        ("manifestSha256", json!("A".repeat(64))),
+    ] {
+        let mut record = original.clone();
+        record["metadata"]["harness"][field] = value;
+        assert_eq!(
+            inspect(&record.to_string(), None).unwrap_err().code,
+            "session.invalid_harness_identity"
+        );
+    }
+    let mut record = original;
+    record["metadata"]["harness"]["packVersion"] = json!("01.2.3-rc.1");
+    assert!(
+        inspect(&record.to_string(), None).is_ok(),
+        "persisted TS pattern allows leading zeroes"
+    );
 }
 
 #[test]
