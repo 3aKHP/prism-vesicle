@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceSha": "2bc4f9075214f72d7f930dd0dba173f1768afc2c",
+  "sourceSha": "118620cad4fe4c2d11c568386942fa365e786cf6",
   "authority": "Complete literal ToolDefinition schema templates from the pinned TS source; runtime bindings, availability and permission scope are explicit.",
   "runtimeBindings": {
     "frozen-session-skill-catalog.names": "Replace the $runtimeArray marker with names from the active frozen Skill catalog. The marker is inventory notation, never provider wire JSON."
@@ -615,7 +615,7 @@
       "source": "src/core/instructions/tools.ts",
       "line": 35,
       "sourceHash": "40151d844b6f9d2dd0d865ee0a7eae47535e3e3a19aab0204f0b189494055549",
-      "description": "Read one Persistent Instruction target (VESICLE.md or VESICLE.<engine>.md at the project root, or the same names beside the user provider config). Use scope=user|project and engine=all|<engine>. Returns the content, size, and hash, and whether it is selected for the active Engine. An absent target returns exists=false. Use this for explicit, user-requested persistent workflow management \u2014 not for ordinary play.",
+      "description": "Read one Persistent Instruction target (VESICLE.md or VESICLE.<engine>.md at the project root, or the same names beside the user provider config). Use scope=user|project and engine=all|<engine>. Returns the content, size, and hash, and whether it is selected for the active Engine. An absent target returns exists=false. Use this for explicit, user-requested persistent workflow management — not for ordinary play.",
       "parametersTemplate": {
         "type": "object",
         "properties": {
@@ -981,7 +981,7 @@
           },
           "runInBackground": {
             "type": "boolean",
-            "description": "Run the command in the background and return a task id immediately. Vesicle delivers progress in the TUI, and hands the completed result back to the conversation automatically \u2014 at the next round while a turn is active, or by opening a continuation between turns \u2014 so no polling is needed."
+            "description": "Run the command in the background and return a task id immediately. Vesicle delivers progress in the TUI, and hands the completed result back to the conversation automatically — at the next round while a turn is active, or by opening a continuation between turns — so no polling is needed."
           }
         },
         "required": [
@@ -1008,7 +1008,7 @@
       "source": "src/core/tools/shell.ts",
       "line": 59,
       "sourceHash": "398141f891e7fac4625a76c6879324d605f5a1b5d0e3e21629893ae0cb2acdbe",
-      "description": "Read the current output and status of a background shell task. Vesicle also delivers completion to the conversation automatically \u2014 at the next round while a turn is active, or as a continuation between turns \u2014 so polling is unnecessary.",
+      "description": "Read the current output and status of a background shell task. Vesicle also delivers completion to the conversation automatically — at the next round while a turn is active, or as a continuation between turns — so polling is unnecessary.",
       "parametersTemplate": {
         "type": "object",
         "properties": {
@@ -1163,7 +1163,7 @@
       "source": "src/core/instructions/tools.ts",
       "line": 53,
       "sourceHash": "40151d844b6f9d2dd0d865ee0a7eae47535e3e3a19aab0204f0b189494055549",
-      "description": "Write or delete one Persistent Instruction target (scope=user|project, engine=all|<engine>). Replaces or removes the whole target file; an empty content string is an explicit empty override. Optional ifMatchSha256 ('absent' or a 64-hex hash) guards concurrent edits; omit it for an intentional overwrite. A successful mutation records one previous state under instruction-backups, but /rewind does not restore Persistent Instructions; recovery from that backup is manual. The summary is a one-line human reason. Use this only for explicit, user-requested persistent workflow management \u2014 not to change host capabilities or modify ordinary play.",
+      "description": "Write or delete one Persistent Instruction target (scope=user|project, engine=all|<engine>). Replaces or removes the whole target file; an empty content string is an explicit empty override. Optional ifMatchSha256 ('absent' or a 64-hex hash) guards concurrent edits; omit it for an intentional overwrite. A successful mutation records one previous state under instruction-backups, but /rewind does not restore Persistent Instructions; recovery from that backup is manual. The summary is a one-line human reason. Use this only for explicit, user-requested persistent workflow management — not to change host capabilities or modify ordinary play.",
       "parametersTemplate": {
         "type": "object",
         "properties": {
