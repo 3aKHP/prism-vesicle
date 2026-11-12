@@ -195,6 +195,8 @@ Doctor 只检查路由选择,不会尝试证明代理或供应商实际可达;�
 也可以用 `vesicle config add-mcp --json '<entry>'` 添加服务器,或 `vesicle config remove-mcp <server-id>` 移除;最后一个服务器被移除时删除整个 `mcp.yaml`。这两个命令都不会接收密钥,而是创建/保留 `.env` 槽位供你手工填写。用法见 [MCP 工具](../advanced/mcp.md)。
 
 
+HTTP 重定向允许同源（协议、主机和端口均相同），也允许同一主机在默认端口之间从 HTTP 升级到 HTTPS。其他跨源重定向会被拒绝，避免转发认证头和请求体；请直接配置最终 URL。
+
 Vesicle 支持双纪元 Streamable HTTP MCP 工具兼容:同一个 Vesicle 进程可以同时连接 legacy(`initialize` 协商)和 modern(`server/discover` 协商)的 MCP 服务器。每个服务器可设 `negotiation`:
 
 - `legacy`(默认,缺省值):只走 `initialize` 路径,不发 modern 探测。

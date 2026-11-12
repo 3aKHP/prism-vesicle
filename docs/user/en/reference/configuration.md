@@ -193,6 +193,8 @@ Start from [`docs/examples/mcp.yaml`](../../../examples/mcp.yaml). Each server c
 You can also add servers with `vesicle config add-mcp --json '<entry>'` and remove them with `vesicle config remove-mcp <server-id>`; removing the last server deletes the whole `mcp.yaml`. Neither command accepts secrets—they create or preserve `.env` slots for you to fill in manually. See [MCP tools](../advanced/mcp.md).
 
 
+HTTP redirects permit the same origin (scheme, host and port) and a same-host HTTP-to-HTTPS upgrade between default ports. For other cross-origin redirects, configure the final server URL directly; Vesicle rejects those redirects to avoid forwarding authentication headers and request bodies.
+
 Vesicle supports dual-era Streamable HTTP MCP tools: one Vesicle process can connect to both legacy (`initialize` handshake) and modern (`server/discover`) MCP servers concurrently. Each server can set `negotiation`:
 
 - `legacy` (default when absent): uses the `initialize` path only, no modern probe.
