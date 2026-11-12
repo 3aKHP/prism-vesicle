@@ -217,6 +217,12 @@ The reusable workflow is the single owner of the release gates:
 
 The empty-project smoke runs `debug markdown-runtime`, `assets status`, asset materialization, and `prompt shape --engine etl` from outside the release directory. The Windows installer smoke additionally verifies the native `vesicle.exe` command, Explorer integration, legacy-launcher cleanup, exact PATH ownership, and preservation of user/project data.
 
+### Rust verification applicability
+
+The reusable CI detects tracked Rust source and build inputs anywhere in the checkout with `bun scripts/check/rust-workspace.ts --detect`. With none, the execution step is visibly skipped; this is not a passing Cargo test. The current TS checkout has no Rust business workspace.
+
+Introducing Rust requires a tracked root `Cargo.toml`, `Cargo.lock`, and `rust-toolchain.toml` with an exact stable version and explicit `rustfmt`/`clippy` components. All tracked crate manifests must belong to that root workspace; the runner rejects unlisted crates instead of letting `--workspace` silently omit them. A different layout must update this contract and its runner in the same reviewed change. Once present, `bun scripts/check/rust-workspace.ts` uses `rustup run <pin>` for the compiler and every Cargo invocation, verifies the compiler version, then runs Cargo metadata with the lockfile, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --all-targets --locked`. Install the pinned toolchain with rustfmt and Clippy before local verification, or explicitly pass `--install-toolchain` as CI does. The [rustup toolchain selection](https://rust-lang.github.io/rustup/overrides.html) overrides directory/environment defaults; Cargo is selected from that distribution without incorrectly requiring its independently versioned component number to equal rustc. The Linux CI execution is bounded to 15 minutes; later native-platform acceptance remains separate from this compiler/test lane.
+
 ### Release Lifecycle
 
 1. Freeze `package.json`, the `CHANGELOG.md` version section and its structure-paired `CHANGELOG.zh-CN.md` companion (`bun run changelog:check` must pass), and supported user-facing scope on `release/v<version>-<topic>`. The freeze also covers the release-facing documentation stamps: `README.md` and `README.zh-CN.md` channel wording and static Status badge, the advanced user-manual maturity stamps under `docs/user/{en,zh-CN}/advanced/`, and the `STATUS.md` snapshot header. The GitHub Release body is composed at tag time by `scripts/release/compose-notes.ts` from those paired CHANGELOG sections; it carries the bilingual signing disclosure that links the public Code Signing Policy and states the Windows artifacts' signing status.
@@ -360,14 +366,16 @@ Run Tier 2 only when the high-risk trigger fires. The trigger mirrors the "Rapid
 scripts/check/deep-cr-trigger.sh <base>     # base defaults to develop
 ```
 
-`trigger = CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH)`:
+`trigger = RUST_CHANGE || (CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH))` (an unresolved base also refuses the Tier 1 exemption):
+
+- **RUST_CHANGE** — any committed change to `*.rs`, `Cargo.toml`, `Cargo.lock`, `rust-toolchain`, `rust-toolchain.toml`, or a `.cargo/` file at any depth. Additions, deletions and renames all count. Until a reviewed Rust domain map exists, every such change enters Tier 2 regardless of size, and all five lenses inspect the Rust/build diff as well as their TS prefixes. Unknown crate names cannot bypass review.
 
 - **CATEGORY_MATCH** — at least one changed file is under a high-risk domain: `src/providers`, `src/core/tools`, `src/core/session`, `src/core/checkpoints`, `src/core/prompt`, `assets/prompts`, `assets/engines`, `src/core/gate`, `src/core/validators`, `src/core/engine`. (TUI changes use Tier 1 — Tier 2 has no TUI lens.)
 - **CROSS_BOUNDARY** — the change touches 2 or more of those distinct domains.
 - **SIZE_FLOOR** — 8 or more changed files, or 300 or more net diff lines.
 - **RELEASE_BRANCH** — the branch is `release/*` or `main`, or the base is `main` (or a `v*` tag).
 
-Everything else stays on Tier 1. `/deep-cr` runs the gate itself; when it reports `trigger:false` it stops and recommends Tier 1 rather than spending the Tier 2 budget.
+Other resolvable diffs stay on Tier 1. `/deep-cr` runs the gate itself; when it reports `trigger:false` it stops and recommends Tier 1 rather than spending the Tier 2 budget.
 
 ### What Tier 2 does
 

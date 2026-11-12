@@ -21,7 +21,9 @@ description: >-
 
 Tier 2 触发条件（`scripts/check/deep-cr-trigger.sh <base>`，只读、输出 JSON）：
 
-`trigger = CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH)`
+`trigger = RUST_CHANGE || (CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH))`
+
+- RUST_CHANGE：任意目录中的 `.rs`、Cargo manifest/lock、rust-toolchain 或 `.cargo/` 输入变更，包含删除和重命名；无论大小都由五视角审查，未知 crate 不能绕过。无法解析 base 时也不得授予 Tier 1 豁免。
 
 - CATEGORY_MATCH：变更触及高风险域（`src/providers`、`src/core/tools`、`src/core/session`、
   `src/core/checkpoints`、`src/core/prompt`、`assets/prompts`、`assets/engines`、
