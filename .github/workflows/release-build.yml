@@ -58,6 +58,18 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun test
+      - name: Execute and compare TS migration oracles
+        run: |
+          bun scripts/smoke/migration/main.ts . "$RUNNER_TEMP/vesicle-oracle-a"
+          bun scripts/smoke/migration/main.ts . "$RUNNER_TEMP/vesicle-oracle-b"
+          bun scripts/smoke/migration/compare.ts "$RUNNER_TEMP/vesicle-oracle-a" "$RUNNER_TEMP/vesicle-oracle-b"
+          bun scripts/smoke/migration/self-check.ts "$RUNNER_TEMP/vesicle-oracle-a"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ inputs.artifact_prefix }}-migration-oracles
+          path: ${{ runner.temp }}/vesicle-oracle-*
+          retention-days: ${{ inputs.retention_days }}
       - id: audit
         run: bun audit
       - name: Audit failure guidance

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "tool-loop": {
+    "prompt": "Write the synthetic note, then report completion.",
+    "responses": [
+      {"content": "", "tool": {"id": "write-note", "name": "write_file", "arguments": {"path": "workspace/note.txt", "content": "alpha\n"}}},
+      {"content": "Note written."}
+    ],
+    "expected": {"requests": 2, "file": "workspace/note.txt", "content": "alpha\n", "reply": "Note written."}
+  },
+  "gate": {
+    "prompt": "Prepare the synthetic blueprint and wait for confirmation.",
+    "responses": [
+      {"content": "Blueprint ready.", "tool": {"id": "confirm-blueprint", "name": "request_confirmation", "arguments": {"gate": "blueprint-confirmation", "summary": "Synthetic baseline blueprint"}}},
+      {"content": "Blueprint confirmed."}
+    ],
+    "expected": {"requests": 2, "gate": "blueprint-confirmation", "reply": "Blueprint confirmed."}
+  },
+  "candidate": {
+    "prompt": "Write the synthetic candidate artifact.",
+    "responses": [
+      {"content": "", "tool": {"id": "write-alpha", "name": "write_file", "arguments": {"path": "workspace/candidate.txt", "content": "alpha\n"}}},
+      {"content": "Candidate alpha."},
+      {"content": "", "tool": {"id": "write-beta", "name": "write_file", "arguments": {"path": "workspace/candidate.txt", "content": "beta\n"}}},
+      {"content": "Candidate beta."}
+    ],
+    "expected": {"requests": 4, "file": "workspace/candidate.txt", "content": "alpha\n", "activeReply": "Candidate alpha.", "inactiveReply": "Candidate beta."}
+  },
+  "config": {"model": "oracle-alt", "invalidModel": "not-in-catalog", "comment": "# preserve this comment"},
+  "path-guard": {"path": "../outside.txt", "content": "must not escape", "sentinel": "unchanged\n"}
+}
