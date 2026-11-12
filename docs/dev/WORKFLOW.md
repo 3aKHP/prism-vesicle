@@ -206,6 +206,7 @@ The reusable workflow is the single owner of the release gates:
 - frozen Bun install
 - package-version validation
 - Biome lint, typecheck, deterministic tests, dependency audit, and npm allowlist check
+- process-separated TS migration oracles with retained wire/session/file evidence, repeatability comparison and corruption rejection (see [`tests/fixtures/migration/README.md`](../../tests/fixtures/migration/README.md))
 - exact-tarball global-prefix and local-lockfile npm installs with no warnings, clean dependency trees, a clean production audit, package asset/parser diagnostics, and Linux PTY TUI startup from both the invocation cwd and an explicit project directory
 - Linux ELF build and empty-project release-shape smoke
 - Windows exact-tarball npm install/runtime diagnostics plus a bounded real TUI bootstrap, PE build, focused Windows runtime tests, and empty-project release-shape smoke

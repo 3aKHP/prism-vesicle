@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { sha256 } from "./check";
 import type { BaselineEntry } from "./model";
+import { scanSurfaces } from "./surfaces";
 
 /** File-level backstop: even an entry missed by a domain extractor creates drift. */
 export async function scanBaseline(root: string): Promise<BaselineEntry[]> {
@@ -9,13 +10,14 @@ export async function scanBaseline(root: string): Promise<BaselineEntry[]> {
   const [output, stderr, exit] = await Promise.all([new Response(process.stdout).text(), new Response(process.stderr).text(), process.exited]);
   if (exit !== 0) throw new Error(`baseline scan failed: ${stderr}`);
   const paths = output.split("\0").filter(Boolean).sort();
-  return Promise.all(paths.map(async (source) => ({
-    id: `FILE:${source}`,
-    source,
-    sourceHash: sha256(await readFile(resolve(root, source))),
-    capabilityIds: [],
-    nonCapabilityReason: null,
-  })));
+  const entries = await Promise.all(paths.map(async (source): Promise<BaselineEntry[]> => {
+    const bytes = await readFile(resolve(root, source));
+    const file: BaselineEntry = { id: `FILE:${source}`, source, sourceHash: sha256(bytes), capabilityIds: [], nonCapabilityReason: null };
+    if (!/^src\/.*\.tsx?$/.test(source)) return [file];
+    const surfaces = scanSurfaces(source, bytes.toString("utf8"));
+    return [file, ...surfaces.map(({ id, source, sourceHash, capabilityIds, nonCapabilityReason }) => ({ id, source, sourceHash, capabilityIds, nonCapabilityReason }))];
+  }));
+  return entries.flat().sort((a, b) => a.id.localeCompare(b.id));
 }
 
 export function baselineDelta(previous: BaselineEntry[], current: BaselineEntry[]) {

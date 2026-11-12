@@ -261,6 +261,8 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 ## Verification
 
+The development-only [migration evidence tooling](./tests/fixtures/migration/README.md) enumerates source entry candidates and exercises five TS facade/CLI scenarios through isolated processes. Classification of all capabilities and Rust parity are separate acceptance work; successful TS observations do not imply a Rust implementation.
+
 Standard checks:
 
 ```bash
