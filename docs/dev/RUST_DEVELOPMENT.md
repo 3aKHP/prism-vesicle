@@ -43,3 +43,7 @@ The verification script selects the pinned compiler explicitly and rejects track
 The session library uses [serde_json 1.0.154](https://docs.rs/serde_json/1.0.154/serde_json/) with `arbitrary_precision` to avoid rounding opaque JSON numbers. Containers are decoded through borrowed `raw_value` children so literal object keys cannot collide with serde's private numeric tag; nesting is bounded below 128 levels. The attachment verifier uses [RustCrypto sha2 0.11.1](https://docs.rs/sha2/0.11.1/sha2/) for streaming SHA-256. Direct versions are pinned in the workspace and transitive versions/checksums in `Cargo.lock`; it introduces no TUI, network or provider SDK dependency.
 
 These checks establish a usable build, command-entry boundary and the documented read-only inspection subset. They do not establish provider streaming, history compatibility, candidate restoration, terminal editing, native Windows filesystem/process behavior, performance or release readiness. Those require their own implementations and observable acceptance evidence.
+
+## MCP SDK Probe
+
+A separate development executable and deterministic/live lanes test the official Rust SDK against both MCP protocol eras. See [`RUST_MCP_PROBE.md`](./RUST_MCP_PROBE.md) for protocol oracles, credential handling, limits and unimplemented product integration. It does not add MCP execution to the session inspector.

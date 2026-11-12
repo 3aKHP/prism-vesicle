@@ -48,6 +48,7 @@ Promotion flows in one direction. An internal conclusion becomes public only by 
 
 | Document | Responsibility |
 |----------|----------------|
+| [`RUST_MCP_PROBE.md`](./RUST_MCP_PROBE.md) | Development-only dual-era SDK probe, native wire oracle and bounded live acceptance |
 | [`RUST_DEVELOPMENT.md`](./RUST_DEVELOPMENT.md) | Experimental Rust workspace, development entry, verification and current limitations |
 | [`COMMAND_COMPLETION.md`](./COMMAND_COMPLETION.md) | Slash-command argument-completion contract |
 | [`COMMAND_QUEUE.md`](./COMMAND_QUEUE.md) | Slash-command scheduling while the Agent Loop is busy |

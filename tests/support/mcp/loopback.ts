@@ -19,6 +19,8 @@ export type RequestObservation = {
   nameHeader?: string;
   paramKeys: string[];
   hasMetaEnvelope: boolean;
+  toolName?: string;
+  cancelledRequestId?: unknown;
 };
 
 export type FixtureCounts = {
@@ -29,6 +31,8 @@ export type FixtureCounts = {
 export type LoopbackFixtureOptions = {
   mode: "legacy" | "modern";
   toolName?: string;
+  /** Adds deterministic error and in-flight cancellation cases for SDK probes. */
+  probeBehavior?: boolean;
 };
 
 export type LoopbackFixture = {
@@ -36,6 +40,7 @@ export type LoopbackFixture = {
   url: string;
   observations: RequestObservation[];
   counts: FixtureCounts;
+  closedRequestIds: unknown[];
   close: () => Promise<void>;
 };
 
@@ -51,6 +56,9 @@ export async function createLoopbackFixture(options: LoopbackFixtureOptions): Pr
   const toolName = options.toolName ?? "ping";
   const mode = options.mode;
   let sessionId: string | undefined;
+  const pending = new Map<unknown, ServerResponse>();
+  const closedRequestIds: unknown[] = [];
+  const cancellationWaiters: Array<() => void> = [];
 
   const server = createServer((req, res) => {
     if (req.method === "GET") {
@@ -96,7 +104,15 @@ export async function createLoopbackFixture(options: LoopbackFixtureOptions): Pr
         ...(nh ? { nameHeader: nh } : {}),
         paramKeys: Object.keys(params),
         hasMetaEnvelope: isRecord(meta),
+        ...(typeof params.name === "string" ? { toolName: params.name } : {}),
+        ...(method === "notifications/cancelled" ? { cancelledRequestId: params.requestId } : {}),
       });
+
+      if (options.probeBehavior && method === "notifications/cancelled") {
+        pending.get(params.requestId)?.end();
+        pending.delete(params.requestId);
+        res.writeHead(202); res.end(); return;
+      }
 
       if (mode === "legacy" && method === "initialize") {
         sessionId = `session-${Date.now()}`;
@@ -114,6 +130,8 @@ export async function createLoopbackFixture(options: LoopbackFixtureOptions): Pr
       }
       if (mode === "modern" && method === "server/discover") {
         respondJson(res, parsed.id, {
+          // Required by the published 2026-07-28 Result schema, including discovery.
+          resultType: "complete",
           supportedVersions: ["2026-07-28"],
           capabilities: { tools: {} },
           ttlMs: 0,
@@ -132,14 +150,42 @@ export async function createLoopbackFixture(options: LoopbackFixtureOptions): Pr
         return;
       }
       if (method === "tools/list") {
-        respondJson(res, parsed.id, {
+        const reply = () => respondJson(res, parsed.id, {
           ...(mode === "modern" ? { resultType: "complete", ttlMs: 0, cacheScope: "private" } : {}),
           tools: [{ name: toolName, description: "Test tool", inputSchema: { type: "object" } }],
         });
+        // A second list is a causal barrier: it cannot succeed while the
+        // cancelled response is still open, even if client shutdown follows.
+        if (options.probeBehavior && pending.size > 0) {
+          let completed = false;
+          const timer = setTimeout(() => { if (!completed) { completed = true; respondJson(res, parsed.id, {}, undefined, { code: -32603, message: "pending request was not cancelled" }); } }, 1500);
+          cancellationWaiters.push(() => { if (!completed) { completed = true; clearTimeout(timer); reply(); } });
+        } else reply();
         return;
       }
       if (method === "tools/call") {
         counts.toolCalls += 1;
+        if (options.probeBehavior && params.name === "slow") {
+          pending.set(parsed.id, res);
+          res.writeHead(200, { "Content-Type": "text/event-stream" });
+          res.write(": pending\n\n");
+          // Heartbeats let the HTTP server observe a disconnected peer even
+          // while the synthetic operation has no result data to send.
+          const heartbeat = setInterval(() => res.write(": pending\n\n"), 25);
+          res.on("close", () => { clearInterval(heartbeat); pending.delete(parsed.id); closedRequestIds.push(parsed.id); for (const reply of cancellationWaiters.splice(0)) reply(); });
+          return;
+        }
+        if (options.probeBehavior && params.name === "rpc-error") {
+          respondJson(res, parsed.id, {}, undefined, { code: -32602, message: "fixture failure" });
+          return;
+        }
+        if (options.probeBehavior && params.name === "tool-error") {
+          respondJson(res, parsed.id, {
+            ...(mode === "modern" ? { resultType: "complete", ttlMs: 0, cacheScope: "private" } : {}),
+            content: [{ type: "text", text: "fixture tool error" }], isError: true,
+          });
+          return;
+        }
         respondJson(res, parsed.id, {
           ...(mode === "modern" ? { resultType: "complete", ttlMs: 0, cacheScope: "private" } : {}),
           content: [{ type: "text", text: `${mode} result from ${toolName}` }],
@@ -158,6 +204,7 @@ export async function createLoopbackFixture(options: LoopbackFixtureOptions): Pr
         url: `http://127.0.0.1:${addr.port}/mcp`,
         observations,
         counts,
+        closedRequestIds,
         close: () => new Promise<void>((r) => server.close(() => r())),
       });
     });
